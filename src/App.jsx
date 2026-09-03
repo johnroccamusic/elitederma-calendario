@@ -17277,6 +17277,536 @@ function ManigliaRidimensionaOrizzontale({ cursore = "ew-resize", onPointerDown,
     />
   );
 }
+
+// ---------- Riepilogo amministrativo di una classe ----------
+// Il pannello completo — incassi, altri incassi al corso, costi della
+// classe, vendite al corso, riepilogo cash — con dentro tutto quello che
+// si puo' modificare. Vive qui, e non dentro la scheda del corso, perche'
+// lo aprono in due posti: la scheda del corso e "Prossime contabilità".
+// Essendo uno solo, non c'e' modo che i due mostrino cose diverse.
+function PannelloRiepilogoAmministrativo({
+  corsoData, iscritti, spese, venditeShop, prodottiShop,
+  corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel,
+  costiCategorie, costiSottocategorie, ricarica, onMessaggio, onIntestazione,
+}) {
+  const setMsg = onMessaggio || (() => {});
+  const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id);
+  // "Costi della classe": una riga per ogni spesa vera in "spese" con
+  // classe_id = questa classe (non più limitata a una per categoria).
+  // Overlay ottimistico sulle modifiche appena salvate — senza,
+  // ogni modifica a una cella resterebbe "indietro" finché non arriva
+  // il refresh completo di fetchDati (40+ query, percepibile come lento)
+  const [speseClasseOverride, setSpeseClasseOverride] = useState({});
+  const [speseClasseNuove, setSpeseClasseNuove] = useState([]);
+  const [speseClasseRimosse, setSpeseClasseRimosse] = useState(new Set());
+  const speseClasseReali = (spese || []).filter((s) => s.classe_id === corsoData.id);
+  const idsSpeseClasseReali = new Set(speseClasseReali.map((s) => s.id));
+  const speseClasse = [...speseClasseReali, ...speseClasseNuove.filter((s) => !idsSpeseClasseReali.has(s.id))]
+    .filter((s) => !speseClasseRimosse.has(s.id))
+    .map((s) => (speseClasseOverride[s.id] ? { ...s, ...speseClasseOverride[s.id] } : s));
+  async function salvaCampiSpesaClasse(id, campi) {
+    setSpeseClasseOverride((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), ...campi } }));
+    const { error } = await supabase.from("spese").update(campi).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["spese"]);
+  }
+  async function aggiungiRigaCostoClasse(categoriaId, sottocategoriaId, descrizione) {
+    const { data, error } = await supabase.from("spese").insert({
+      tipo_ambito: "classe", classe_id: corsoData.id,
+      categoria_id: categoriaId, sottocategoria_id: sottocategoriaId,
+      descrizione: descrizione || null, imponibile: 0, totale: 0,
+    }).select().single();
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setSpeseClasseNuove((prev) => [...prev, data]);
+    setSceltaCategoriaCosto(false);
+    ricarica(["spese"]);
+  }
+  async function rimuoviRigaCostoClasse(id) {
+    if (!window.confirm("Vuoi eliminare questa voce di costo?")) return;
+    setSpeseClasseRimosse((prev) => new Set(prev).add(id));
+    const { error } = await supabase.from("spese").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["spese"]);
+  }
+  // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
+  const [costiExtra, setCostiExtra] = useState(
+    Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "", categoria: c.categoria || "", sottovoce: c.sottovoce || "" })) : []
+  );
+  const [salvandoCosti, setSalvandoCosti] = useState(false);
+  const [sceltaCategoriaCosto, setSceltaCategoriaCosto] = useState(false);
+  // "Altri incassi al corso": prodotti venduti in più durante il corso
+  // (non le quote di iscrizione), scelti dal magazzino — ognuno con
+  // quantità, importo e metodo (contribuisce a Contanti o Pos)
+  const [incassiExtra, setIncassiExtra] = useState(
+    Array.isArray(corsoData.incassi_extra) ? corsoData.incassi_extra.map((c) => ({ prodotto_id: c.prodotto_id || "", quantita: c.quantita != null ? String(c.quantita) : "1", valore: c.valore != null ? String(c.valore) : "", metodo: c.metodo || "Contanti" })) : []
+  );
+
+  // Vendite al corso: i prodotti venduti agli allievi durante il corso —
+  // sono incassi veri, fatti in aula, e il contante finisce nella stessa
+  // busta del resto. Restano un blocco a sé perché non sono quote del
+  // corso: si registrano dal POS, uno per uno, nel momento in cui si incassa
+  const venditeAlCorso = (venditeShop || []).filter((v) => v.corso_data_id === corsoData.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio");
+  const righeVenditeAlCorso = (() => {
+    const mappa = {};
+    venditeAlCorso.forEach((v) => {
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+        const chiave = r.prodotto_id || r.nome || "—";
+        if (!mappa[chiave]) mappa[chiave] = { chiave, nome: r.nome || "—", quantita: 0, totale: 0 };
+        mappa[chiave].quantita += r.quantita || 0;
+        mappa[chiave].totale = round2(mappa[chiave].totale + (r.totale_riga || 0));
+      });
+    });
+    return Object.values(mappa).sort((a, b) => b.totale - a.totale);
+  })();
+
+  // sovrascrittura ottimistica dello split Bonifico/Cash di una riga
+  // (master/location/assistente): "ricarica" rifà l'intero fetchDati,
+  // troppo lento per sentirsi immediato su un blur
+  const [splitOverride, setSplitOverride] = useState({});
+  async function salvaSplitRiga(tabella, rigaId, campi) {
+    setSplitOverride((m) => ({ ...m, [rigaId]: { ...(m[rigaId] || {}), ...campi } }));
+    const { error } = await supabase.from(tabella).update(campi).eq("id", rigaId);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica([tabella]);
+  }
+
+  // i 3 flag B/Cash/1-2 vicino a ogni riga "Costo Master": si escludono a
+  // vicenda perché derivano dallo stesso split bonifico/cash della riga,
+  // non da uno stato a parte — B = tutto a bonifico, C = tutto cash, 1/2
+  // (il default finché nessuno sceglie) = metà e metà. Un pareggio dei
+  // due importi diverso da questi 3 casi (es. modificato a mano nei campi
+  // Bonifico/Cash della riga) non fa risultare nessun flag spuntato.
+  function modalitaSplitMaster(r) {
+    if (!r.totale) return "1/2";
+    const frazioneBonifico = r.bonifico / r.totale;
+    if (Math.abs(frazioneBonifico - 1) < 0.005) return "B";
+    if (Math.abs(frazioneBonifico) < 0.005) return "C";
+    if (Math.abs(frazioneBonifico - 0.5) < 0.01) return "1/2";
+    return null;
+  }
+  function impostaSplitMaster(r, modalita) {
+    const bonifico = modalita === "B" ? r.totale : modalita === "C" ? 0 : round2(r.totale / 2);
+    const cash = round2(r.totale - bonifico);
+    salvaSplitRiga(r.tabella, r.rigaId, { quota_bonifico: bonifico, quota_cash: cash });
+  }
+
+  // righe "Costi della classe" (Compenso Master, Costo Location, Costo
+  // Alloggio, Compenso Assistenti, Quota venditore, Commissione ricerca
+  // modelle): stesso calcolo puro riusato dallo Scadenziario per tutti i
+  // corsi conclusi — vedi calcolaRigheSpeseCorso, subito sopra SchedaData.
+  const [giorniPresenzaOverride, setGiorniPresenzaOverride] = useState({});
+  async function salvaGiorniPresenza(rigaId, giorni) {
+    setGiorniPresenzaOverride((m) => ({ ...m, [rigaId]: giorni }));
+    const { error } = await supabase.from("corsi_date_docenti").update({ giorni_presenza: giorni }).eq("id", rigaId);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["corsi_date_docenti"]);
+  }
+  const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
+    calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel }, { splitOverride, giorniPresenzaOverride });
+  // Tutti i conti della classe vengono da contiRiepilogoClasse, la stessa
+  // funzione che alimenta "Prossime contabilità": qui dentro non ci sono
+  // piu' formule proprie, cosi' i due posti non possono divergere. Gli
+  // ingressi sono quelli "vivi" della scheda — spese e voci libere con le
+  // correzioni appena fatte, non ancora ricaricate dal database.
+  const contiClasse = contiRiepilogoClasse({
+    incassiExtra, listaIscritti, venditeAlCorso,
+    speseClasse, costiExtra, righeSpeseTutte, totaleSpeseAutomaticheClasse,
+  });
+  const {
+    incassoLordo: incassoLordoClasse, incassoNetto: incassoNettoClasse, iva: ivaClasse,
+    cashPrimaDelCorso: cashPrimaDelCorsoClasse, contoCorrente: contoCorrenteClasse,
+    incassiExtraContanti, incassiExtraPos,
+    contanti: contantiClasse, pos: posClasse, daIncassare: daIncassareClasse,
+    venditeContanti: venditeAlCorsoContanti, venditePos: venditeAlCorsoPos, venditeTotale: venditeAlCorsoTotale,
+    totaleCosti: totaleCostiClasse, risultato: risultatoClasse,
+    totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse,
+  } = contiClasse;
+
+  // solo le categorie legate a UNA classe hanno senso nel "+" del
+  // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
+  // solo da "+ Nuova operazione" nella dashboard)
+  const categorieRiepilogo = (costiCategorie || []).filter((c) => !CHIAVI_ESCLUSE_RIEPILOGO.includes(c.id)).sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+  // le voci "libere" (costiExtra) restano visibili/modificabili se già
+  // esistenti, ma non se ne creano più di nuove: "Aggiungi spesa" (sotto)
+  // crea direttamente una riga vera nella tabella "Costi della classe",
+  // con categoria/sotto-categoria già scelta dal menu invece di un
+  // titolo scritto a mano
+  function modificaVoceCosto(idx, campo, valore) {
+    setCostiExtra((prev) => prev.map((c, i) => (i === idx ? { ...c, [campo]: valore } : c)));
+  }
+  function rimuoviVoceCosto(idx) {
+    setCostiExtra((prev) => prev.filter((_, i) => i !== idx));
+  }
+  // "Altri incassi": ogni riga parte dal prodotto scelto — l'importo si
+  // pre-compila dal prezzo del prodotto (per quantità 1) ma resta libero,
+  // per gestire sconti o prezzi diversi da quello di listino
+  function aggiungiVoceIncasso() {
+    setIncassiExtra((prev) => [...prev, { prodotto_id: "", quantita: "1", valore: "", metodo: "Contanti" }]);
+  }
+  function modificaVoceIncasso(idx, campo, valore) {
+    setIncassiExtra((prev) => prev.map((c, i) => {
+      if (i !== idx) return c;
+      const aggiornata = { ...c, [campo]: valore };
+      if (campo === "prodotto_id" || campo === "quantita") {
+        const prodotto = (prodottiShop || []).find((p) => p.id === aggiornata.prodotto_id);
+        if (prodotto && prodotto.prezzo_vendita != null) aggiornata.valore = String(round2(prodotto.prezzo_vendita * (parseNum(aggiornata.quantita) || 1)));
+      }
+      return aggiornata;
+    }));
+  }
+  function rimuoviVoceIncasso(idx) {
+    setIncassiExtra((prev) => prev.filter((_, i) => i !== idx));
+  }
+  async function salvaCostiClasse() {
+    setSalvandoCosti(true);
+    const { error } = await supabase.from("corsi_date").update({
+      costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore), categoria: c.categoria || null, sottovoce: c.sottovoce || null })),
+      incassi_extra: incassiExtra.filter((c) => c.prodotto_id !== "" || c.valore !== "").map((c) => ({ prodotto_id: c.prodotto_id || null, quantita: parseNum(c.quantita) || 1, valore: parseNum(c.valore), metodo: c.metodo })),
+    }).eq("id", corsoData.id);
+    setSalvandoCosti(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Costi salvati.");
+    ricarica(["corsi_date"]);
+  }
+  // l'intestazione con la freccia chiude il pannello dentro la scheda del
+  // corso; nell'elenco delle contabilita' non c'e' niente da chiudere e
+  // resta ferma
+  const costiAperto = true;
+  const setCostiAperto = () => { onIntestazione?.(); };
+
+  return (
+          <div style={{ ...cardStyle, padding: 0, overflow: "hidden", boxShadow: "0 16px 30px -16px rgba(14,27,51,0.25)" }}>
+            <div
+              onClick={() => setCostiAperto((v) => !v)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "18px 20px", cursor: "pointer" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+                <div style={{ width: 42, height: 42, flexShrink: 0, borderRadius: "50%", border: `1px solid ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD }}>
+                  <IconaRiepilogoCircolare size={20} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Riepilogo amministrativo</div>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Incassi, costi e saldo della classe</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: costiAperto ? "rotate(180deg)" : "none" }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            </div>
+
+            {costiAperto && (
+              <div style={{ padding: "0 20px 20px" }}>
+                <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Incassi</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 14, overflowX: "auto" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaPortafoglio /></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Lordo (iva incl.)</div>
+                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {incassoLordoClasse}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Netto (iva escl.)</div>
+                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {incassoNettoClasse}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaLibroContabile /></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>IVA</div>
+                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {ivaClasse}</div>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Di cui</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 22, overflowX: "auto" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Conto corrente</div>
+                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contoCorrenteClasse}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Contanti pagati fisicamente al corso">
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash al corso</div>
+                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Acconti o quote pre corso pagati in contanti">
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Quota cash già incassata prima del corso</div>
+                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {cashPrimaDelCorsoClasse}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Altri incassi al corso</div>
+                  <button
+                    type="button" onClick={aggiungiVoceIncasso}
+                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
+                  >
+                    + Aggiungi
+                  </button>
+                </div>
+                {incassiExtra.length === 0 ? (
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Prodotti venduti in più durante il corso, oltre alle quote di iscrizione.</div>
+                ) : (
+                  <div style={{ marginBottom: 12 }}>
+                    {incassiExtra.map((voce, idx) => (
+                      <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
+                        <div style={{ flex: "2 1 160px", minWidth: 0 }}>
+                          <Field label="Prodotto">
+                            <select style={inputStyle} value={voce.prodotto_id} onChange={(e) => modificaVoceIncasso(idx, "prodotto_id", e.target.value)}>
+                              <option value="">— scegli dal magazzino —</option>
+                              {(prodottiShop || []).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                            </select>
+                          </Field>
+                        </div>
+                        <div style={{ flex: "0 1 80px", minWidth: 0 }}>
+                          <Field label="Qtà"><input type="number" min="1" style={inputStyle} value={voce.quantita} onChange={(e) => modificaVoceIncasso(idx, "quantita", e.target.value)} /></Field>
+                        </div>
+                        <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                          <Field label="Importo"><input style={inputStyle} inputMode="decimal" value={voce.valore} onChange={(e) => modificaVoceIncasso(idx, "valore", e.target.value)} /></Field>
+                        </div>
+                        <div style={{ flex: "1 1 130px", minWidth: 0, display: "flex", gap: 12, alignItems: "center", ...fontBody, fontSize: 13, color: NAVY, paddingBottom: 10 }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                            <input type="radio" name={`incasso-metodo-${idx}`} checked={voce.metodo === "Contanti"} onChange={() => modificaVoceIncasso(idx, "metodo", "Contanti")} />
+                            Contanti
+                          </label>
+                          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                            <input type="radio" name={`incasso-metodo-${idx}`} checked={voce.metodo === "Pos"} onChange={() => modificaVoceIncasso(idx, "metodo", "Pos")} />
+                            Pos
+                          </label>
+                        </div>
+                        <button
+                          onClick={() => rimuoviVoceIncasso(idx)}
+                          title="Rimuovi voce"
+                          style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6" /><path d="M14 11v6" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Costi della classe</div>
+                  <div style={{ position: "relative" }}>
+                    <button
+                      type="button" onClick={() => setSceltaCategoriaCosto((v) => !v)}
+                      style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
+                    >
+                      Aggiungi spesa
+                    </button>
+                    {sceltaCategoriaCosto && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 260, maxHeight: 320, overflowY: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)" }}
+                      >
+                        {categorieRiepilogo.map((cat) => (
+                          <div key={cat.id}>
+                            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 12px 4px", background: BG }}>{cat.nome}</div>
+                            {sottocategorieDiCategoria(costiSottocategorie, cat.id).map((v) => (
+                              <button
+                                key={v.id}
+                                onClick={() => aggiungiRigaCostoClasse(cat.id, v.id, v.nome)}
+                                style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", color: NAVY }}
+                              >
+                                {v.nome}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {righeSpeseTutte.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+                      <div style={{ flex: "2 1 170px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Voce</div>
+                      <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale</div>
+                      <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Bonifico</div>
+                      <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cash</div>
+                      <div style={{ flex: "0 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Giorni</div>
+                    </div>
+                    {righeSpeseTutte.map((r) => {
+                      // "location" e "alloggio" non hanno più uno split libero: seguono
+                      // in blocco la tendina scelta in Assegnazione Master ("Pagamento
+                      // sede"/"Tipo di pagamento"), quindi qui sono sola lettura.
+                      const bloccato = r.tipo === "location" || r.tipo === "alloggio";
+                      const campoBonifico = r.tipo === "venditore" ? "quota_venditore_bonifico" : r.tipo === "modelle" ? "commissione_modelle_bonifico" : "quota_bonifico";
+                      const campoCash = r.tipo === "venditore" ? "quota_venditore_cash" : r.tipo === "modelle" ? "commissione_modelle_cash" : "quota_cash";
+                      return (
+                        <div key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
+                          <div style={{ flex: "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ ...campoCompattoStyle, fontSize: 11, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</div>
+                            {r.tipo === "alloggio" && r.pagato && (
+                              <span title="Hotel pagato" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
+                            )}
+                          </div>
+                          <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                            <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
+                          </div>
+                          <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                            {bloccato ? (
+                              <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.bonifico}</div>
+                            ) : (
+                              <input style={campoCompattoStyle} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: v }); }} />
+                            )}
+                          </div>
+                          <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                            {bloccato ? (
+                              <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.cash}</div>
+                            ) : (
+                              <input style={campoCompattoStyle} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
+                            )}
+                          </div>
+                          <div style={{ flex: "0 1 90px", minWidth: 0 }}>
+                            {r.giorni != null && (
+                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>−</button>
+                                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, minWidth: 26, textAlign: "center", whiteSpace: "nowrap" }}>{r.giorni}gg</span>
+                                <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>+</button>
+                              </div>
+                            )}
+                            {r.tipo === "master" && (() => {
+                              const modalita = modalitaSplitMaster(r);
+                              return (
+                                <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                                  {["B", "C", "1/2"].map((chiave) => (
+                                    <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà e metà"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer" }}>
+                                      <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalita === chiave ? NAVY : MUTED }}>{chiave}</span>
+                                      <input
+                                        type="checkbox"
+                                        checked={modalita === chiave}
+                                        onChange={() => impostaSplitMaster(r, chiave)}
+                                        style={{ width: 13, height: 13, cursor: "pointer", margin: 0 }}
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {speseClasse.length === 0 ? (
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Nessuna spesa registrata per questa classe.</div>
+                ) : (
+                  <div style={{ marginBottom: 12 }}>
+                    {speseClasse.map((spesa) => (
+                      <RigaCostoClasse
+                        key={spesa.id}
+                        spesa={spesa}
+                        onSalva={(campi) => salvaCampiSpesaClasse(spesa.id, campi)}
+                        onElimina={() => rimuoviRigaCostoClasse(spesa.id)}
+                        costiCategorie={costiCategorie}
+                        costiSottocategorie={costiSottocategorie}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {costiExtra.map((voce, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
+                    <div style={{ flex: "2 1 140px", minWidth: 0 }}>
+                      {voce.categoria && (
+                        <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>
+                          {sottocategoriaCostoDi(costiSottocategorie, voce.sottovoce)?.nome || categoriaCostoDi(costiCategorie, voce.categoria)?.nome || voce.categoria}
+                        </div>
+                      )}
+                      <Field label="Voce di costo"><input style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Titolo" value={voce.titolo} onChange={(e) => modificaVoceCosto(idx, "titolo", e.target.value.toUpperCase())} /></Field>
+                    </div>
+                    <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                      <Field label="Importo"><input style={inputStyle} inputMode="decimal" value={voce.valore} onChange={(e) => modificaVoceCosto(idx, "valore", e.target.value)} /></Field>
+                    </div>
+                    <button
+                      onClick={() => rimuoviVoceCosto(idx)}
+                      title="Rimuovi voce"
+                      style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" /><path d="M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+
+                {venditeAlCorso.length > 0 && (
+                  <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 4 }}>Vendite al corso</div>
+                    <div style={{ ...fontBody, fontSize: 12, color: MUTED, textAlign: "center", marginBottom: 12 }}>
+                      Prodotti venduti agli allievi durante il corso. Il contante entra nella busta insieme al resto.
+                    </div>
+                    {righeVenditeAlCorso.map((r) => (
+                      <div key={r.chiave} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 13, color: NAVY, padding: "5px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                        <span>{r.nome} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
+                        <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>€ {r.totale}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 14, marginTop: 14 }}>
+                      <div style={{ padding: "12px 18px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, textAlign: "center" }}>
+                        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Contanti</div>
+                        <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoContanti}</div>
+                      </div>
+                      <div style={{ padding: "12px 18px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, textAlign: "center" }}>
+                        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>POS</div>
+                        <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoPos}</div>
+                      </div>
+                      <div style={{ padding: "12px 18px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, textAlign: "center" }}>
+                        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Totale vendite</div>
+                        <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoTotale}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 16 }}>Riepilogo Cash</div>
+                  <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", gap: 14 }}>
+                    <div style={{ padding: "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash incassato al corso</div>
+                      <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
+                    </div>
+                    <div style={{ padding: "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Totale Cash da pagare</div>
+                      <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCashDaPagareClasse}</div>
+                    </div>
+                    <div style={{ padding: "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash pulito in busta</div>
+                      <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY }}>€ {cassaContantiClasse}</div>
+                      {venditeAlCorsoContanti > 0 && (
+                        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4, whiteSpace: "nowrap" }}>di cui € {venditeAlCorsoContanti} di vendite</div>
+                      )}
+                    </div>
+                    <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={{ alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+  );
+}
+
 function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -17440,55 +17970,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // chiuso perché, se sempre aperto, intralcia la normale gestione
   // contabilità (spuntare incassato, aprire schede...)
   const [costiAperto, setCostiAperto] = useState(sottoVistaIniziale?.costiAperto ?? false);
-  // "Costi della classe": una riga per ogni spesa vera in "spese" con
-  // classe_id = questa classe (non più limitata a una per categoria).
-  // Overlay ottimistico sulle modifiche appena salvate — senza,
-  // ogni modifica a una cella resterebbe "indietro" finché non arriva
-  // il refresh completo di fetchDati (40+ query, percepibile come lento)
-  const [speseClasseOverride, setSpeseClasseOverride] = useState({});
-  const [speseClasseNuove, setSpeseClasseNuove] = useState([]);
-  const [speseClasseRimosse, setSpeseClasseRimosse] = useState(new Set());
-  const speseClasseReali = (spese || []).filter((s) => s.classe_id === corsoData.id);
-  const idsSpeseClasseReali = new Set(speseClasseReali.map((s) => s.id));
-  const speseClasse = [...speseClasseReali, ...speseClasseNuove.filter((s) => !idsSpeseClasseReali.has(s.id))]
-    .filter((s) => !speseClasseRimosse.has(s.id))
-    .map((s) => (speseClasseOverride[s.id] ? { ...s, ...speseClasseOverride[s.id] } : s));
-  async function salvaCampiSpesaClasse(id, campi) {
-    setSpeseClasseOverride((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), ...campi } }));
-    const { error } = await supabase.from("spese").update(campi).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["spese"]);
-  }
-  async function aggiungiRigaCostoClasse(categoriaId, sottocategoriaId, descrizione) {
-    const { data, error } = await supabase.from("spese").insert({
-      tipo_ambito: "classe", classe_id: corsoData.id,
-      categoria_id: categoriaId, sottocategoria_id: sottocategoriaId,
-      descrizione: descrizione || null, imponibile: 0, totale: 0,
-    }).select().single();
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setSpeseClasseNuove((prev) => [...prev, data]);
-    setSceltaCategoriaCosto(false);
-    ricarica(["spese"]);
-  }
-  async function rimuoviRigaCostoClasse(id) {
-    if (!window.confirm("Vuoi eliminare questa voce di costo?")) return;
-    setSpeseClasseRimosse((prev) => new Set(prev).add(id));
-    const { error } = await supabase.from("spese").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["spese"]);
-  }
-  // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
-  const [costiExtra, setCostiExtra] = useState(
-    Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "", categoria: c.categoria || "", sottovoce: c.sottovoce || "" })) : []
-  );
-  const [salvandoCosti, setSalvandoCosti] = useState(false);
-  const [sceltaCategoriaCosto, setSceltaCategoriaCosto] = useState(false);
-  // "Altri incassi al corso": prodotti venduti in più durante il corso
-  // (non le quote di iscrizione), scelti dal magazzino — ognuno con
-  // quantità, importo e metodo (contribuisce a Contanti o Pos)
-  const [incassiExtra, setIncassiExtra] = useState(
-    Array.isArray(corsoData.incassi_extra) ? corsoData.incassi_extra.map((c) => ({ prodotto_id: c.prodotto_id || "", quantita: c.quantita != null ? String(c.quantita) : "1", valore: c.valore != null ? String(c.valore) : "", metodo: c.metodo || "Contanti" })) : []
-  );
 
   // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
   // quale iscritto in modifica, contabilità aperta o no): è così che i
@@ -17609,133 +18090,9 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // del master in aula — per questo il riepilogo costi si basa solo su
   // questi importi, non sul totale generale della classe
 
-  // Vendite al corso: i prodotti venduti agli allievi durante il corso —
-  // sono incassi veri, fatti in aula, e il contante finisce nella stessa
-  // busta del resto. Restano un blocco a sé perché non sono quote del
-  // corso: si registrano dal POS, uno per uno, nel momento in cui si incassa
-  const venditeAlCorso = (venditeShop || []).filter((v) => v.corso_data_id === corsoData.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio");
-  const righeVenditeAlCorso = (() => {
-    const mappa = {};
-    venditeAlCorso.forEach((v) => {
-      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
-        const chiave = r.prodotto_id || r.nome || "—";
-        if (!mappa[chiave]) mappa[chiave] = { chiave, nome: r.nome || "—", quantita: 0, totale: 0 };
-        mappa[chiave].quantita += r.quantita || 0;
-        mappa[chiave].totale = round2(mappa[chiave].totale + (r.totale_riga || 0));
-      });
-    });
-    return Object.values(mappa).sort((a, b) => b.totale - a.totale);
-  })();
 
-  // sovrascrittura ottimistica dello split Bonifico/Cash di una riga
-  // (master/location/assistente): "ricarica" rifà l'intero fetchDati,
-  // troppo lento per sentirsi immediato su un blur
-  const [splitOverride, setSplitOverride] = useState({});
-  async function salvaSplitRiga(tabella, rigaId, campi) {
-    setSplitOverride((m) => ({ ...m, [rigaId]: { ...(m[rigaId] || {}), ...campi } }));
-    const { error } = await supabase.from(tabella).update(campi).eq("id", rigaId);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica([tabella]);
-  }
 
-  // i 3 flag B/Cash/1-2 vicino a ogni riga "Costo Master": si escludono a
-  // vicenda perché derivano dallo stesso split bonifico/cash della riga,
-  // non da uno stato a parte — B = tutto a bonifico, C = tutto cash, 1/2
-  // (il default finché nessuno sceglie) = metà e metà. Un pareggio dei
-  // due importi diverso da questi 3 casi (es. modificato a mano nei campi
-  // Bonifico/Cash della riga) non fa risultare nessun flag spuntato.
-  function modalitaSplitMaster(r) {
-    if (!r.totale) return "1/2";
-    const frazioneBonifico = r.bonifico / r.totale;
-    if (Math.abs(frazioneBonifico - 1) < 0.005) return "B";
-    if (Math.abs(frazioneBonifico) < 0.005) return "C";
-    if (Math.abs(frazioneBonifico - 0.5) < 0.01) return "1/2";
-    return null;
-  }
-  function impostaSplitMaster(r, modalita) {
-    const bonifico = modalita === "B" ? r.totale : modalita === "C" ? 0 : round2(r.totale / 2);
-    const cash = round2(r.totale - bonifico);
-    salvaSplitRiga(r.tabella, r.rigaId, { quota_bonifico: bonifico, quota_cash: cash });
-  }
 
-  // righe "Costi della classe" (Compenso Master, Costo Location, Costo
-  // Alloggio, Compenso Assistenti, Quota venditore, Commissione ricerca
-  // modelle): stesso calcolo puro riusato dallo Scadenziario per tutti i
-  // corsi conclusi — vedi calcolaRigheSpeseCorso, subito sopra SchedaData.
-  const [giorniPresenzaOverride, setGiorniPresenzaOverride] = useState({});
-  async function salvaGiorniPresenza(rigaId, giorni) {
-    setGiorniPresenzaOverride((m) => ({ ...m, [rigaId]: giorni }));
-    const { error } = await supabase.from("corsi_date_docenti").update({ giorni_presenza: giorni }).eq("id", rigaId);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["corsi_date_docenti"]);
-  }
-  const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
-    calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel }, { splitOverride, giorniPresenzaOverride });
-  // Tutti i conti della classe vengono da contiRiepilogoClasse, la stessa
-  // funzione che alimenta "Prossime contabilità": qui dentro non ci sono
-  // piu' formule proprie, cosi' i due posti non possono divergere. Gli
-  // ingressi sono quelli "vivi" della scheda — spese e voci libere con le
-  // correzioni appena fatte, non ancora ricaricate dal database.
-  const contiClasse = contiRiepilogoClasse({
-    incassiExtra, listaIscritti, venditeAlCorso,
-    speseClasse, costiExtra, righeSpeseTutte, totaleSpeseAutomaticheClasse,
-  });
-  const {
-    incassoLordo: incassoLordoClasse, incassoNetto: incassoNettoClasse, iva: ivaClasse,
-    cashPrimaDelCorso: cashPrimaDelCorsoClasse, contoCorrente: contoCorrenteClasse,
-    incassiExtraContanti, incassiExtraPos,
-    contanti: contantiClasse, pos: posClasse, daIncassare: daIncassareClasse,
-    venditeContanti: venditeAlCorsoContanti, venditePos: venditeAlCorsoPos, venditeTotale: venditeAlCorsoTotale,
-    totaleCosti: totaleCostiClasse, risultato: risultatoClasse,
-    totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse,
-  } = contiClasse;
-
-  // solo le categorie legate a UNA classe hanno senso nel "+" del
-  // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
-  // solo da "+ Nuova operazione" nella dashboard)
-  const categorieRiepilogo = (costiCategorie || []).filter((c) => !CHIAVI_ESCLUSE_RIEPILOGO.includes(c.id)).sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
-  // le voci "libere" (costiExtra) restano visibili/modificabili se già
-  // esistenti, ma non se ne creano più di nuove: "Aggiungi spesa" (sotto)
-  // crea direttamente una riga vera nella tabella "Costi della classe",
-  // con categoria/sotto-categoria già scelta dal menu invece di un
-  // titolo scritto a mano
-  function modificaVoceCosto(idx, campo, valore) {
-    setCostiExtra((prev) => prev.map((c, i) => (i === idx ? { ...c, [campo]: valore } : c)));
-  }
-  function rimuoviVoceCosto(idx) {
-    setCostiExtra((prev) => prev.filter((_, i) => i !== idx));
-  }
-  // "Altri incassi": ogni riga parte dal prodotto scelto — l'importo si
-  // pre-compila dal prezzo del prodotto (per quantità 1) ma resta libero,
-  // per gestire sconti o prezzi diversi da quello di listino
-  function aggiungiVoceIncasso() {
-    setIncassiExtra((prev) => [...prev, { prodotto_id: "", quantita: "1", valore: "", metodo: "Contanti" }]);
-  }
-  function modificaVoceIncasso(idx, campo, valore) {
-    setIncassiExtra((prev) => prev.map((c, i) => {
-      if (i !== idx) return c;
-      const aggiornata = { ...c, [campo]: valore };
-      if (campo === "prodotto_id" || campo === "quantita") {
-        const prodotto = (prodottiShop || []).find((p) => p.id === aggiornata.prodotto_id);
-        if (prodotto && prodotto.prezzo_vendita != null) aggiornata.valore = String(round2(prodotto.prezzo_vendita * (parseNum(aggiornata.quantita) || 1)));
-      }
-      return aggiornata;
-    }));
-  }
-  function rimuoviVoceIncasso(idx) {
-    setIncassiExtra((prev) => prev.filter((_, i) => i !== idx));
-  }
-  async function salvaCostiClasse() {
-    setSalvandoCosti(true);
-    const { error } = await supabase.from("corsi_date").update({
-      costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore), categoria: c.categoria || null, sottovoce: c.sottovoce || null })),
-      incassi_extra: incassiExtra.filter((c) => c.prodotto_id !== "" || c.valore !== "").map((c) => ({ prodotto_id: c.prodotto_id || null, quantita: parseNum(c.quantita) || 1, valore: parseNum(c.valore), metodo: c.metodo })),
-    }).eq("id", corsoData.id);
-    setSalvandoCosti(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setMsg("Costi salvati.");
-    ricarica(["corsi_date"]);
-  }
 
   // sblocca (con lo stesso codice amministratore, chiesto una sola volta
   // a sessione) e attiva un pannello protetto — riusata sia per
@@ -19231,335 +19588,14 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
       )}
 
       {vista === "lista" && costiAperto && (
-        <div style={{ ...cardStyle, padding: 0, overflow: "hidden", boxShadow: "0 16px 30px -16px rgba(14,27,51,0.25)" }}>
-          <div
-            onClick={() => setCostiAperto((v) => !v)}
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "18px 20px", cursor: "pointer" }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
-              <div style={{ width: 42, height: 42, flexShrink: 0, borderRadius: "50%", border: `1px solid ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD }}>
-                <IconaRiepilogoCircolare size={20} />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Riepilogo amministrativo</div>
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Incassi, costi e saldo della classe</div>
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: costiAperto ? "rotate(180deg)" : "none" }}>
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </div>
-          </div>
-
-          {costiAperto && (
-            <div style={{ padding: "0 20px 20px" }}>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Incassi</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 14, overflowX: "auto" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaPortafoglio /></div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Lordo (iva incl.)</div>
-                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {incassoLordoClasse}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Netto (iva escl.)</div>
-                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {incassoNettoClasse}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaLibroContabile /></div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>IVA</div>
-                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {ivaClasse}</div>
-                  </div>
-                </div>
-              </div>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Di cui</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 22, overflowX: "auto" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Conto corrente</div>
-                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contoCorrenteClasse}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Contanti pagati fisicamente al corso">
-                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash al corso</div>
-                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Acconti o quote pre corso pagati in contanti">
-                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Quota cash già incassata prima del corso</div>
-                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {cashPrimaDelCorsoClasse}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-                <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Altri incassi al corso</div>
-                <button
-                  type="button" onClick={aggiungiVoceIncasso}
-                  style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
-                >
-                  + Aggiungi
-                </button>
-              </div>
-              {incassiExtra.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Prodotti venduti in più durante il corso, oltre alle quote di iscrizione.</div>
-              ) : (
-                <div style={{ marginBottom: 12 }}>
-                  {incassiExtra.map((voce, idx) => (
-                    <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
-                      <div style={{ flex: "2 1 160px", minWidth: 0 }}>
-                        <Field label="Prodotto">
-                          <select style={inputStyle} value={voce.prodotto_id} onChange={(e) => modificaVoceIncasso(idx, "prodotto_id", e.target.value)}>
-                            <option value="">— scegli dal magazzino —</option>
-                            {(prodottiShop || []).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                          </select>
-                        </Field>
-                      </div>
-                      <div style={{ flex: "0 1 80px", minWidth: 0 }}>
-                        <Field label="Qtà"><input type="number" min="1" style={inputStyle} value={voce.quantita} onChange={(e) => modificaVoceIncasso(idx, "quantita", e.target.value)} /></Field>
-                      </div>
-                      <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-                        <Field label="Importo"><input style={inputStyle} inputMode="decimal" value={voce.valore} onChange={(e) => modificaVoceIncasso(idx, "valore", e.target.value)} /></Field>
-                      </div>
-                      <div style={{ flex: "1 1 130px", minWidth: 0, display: "flex", gap: 12, alignItems: "center", ...fontBody, fontSize: 13, color: NAVY, paddingBottom: 10 }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                          <input type="radio" name={`incasso-metodo-${idx}`} checked={voce.metodo === "Contanti"} onChange={() => modificaVoceIncasso(idx, "metodo", "Contanti")} />
-                          Contanti
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                          <input type="radio" name={`incasso-metodo-${idx}`} checked={voce.metodo === "Pos"} onChange={() => modificaVoceIncasso(idx, "metodo", "Pos")} />
-                          Pos
-                        </label>
-                      </div>
-                      <button
-                        onClick={() => rimuoviVoceIncasso(idx)}
-                        title="Rimuovi voce"
-                        style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                          <path d="M10 11v6" /><path d="M14 11v6" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-                <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Costi della classe</div>
-                <div style={{ position: "relative" }}>
-                  <button
-                    type="button" onClick={() => setSceltaCategoriaCosto((v) => !v)}
-                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
-                  >
-                    Aggiungi spesa
-                  </button>
-                  {sceltaCategoriaCosto && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 260, maxHeight: 320, overflowY: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)" }}
-                    >
-                      {categorieRiepilogo.map((cat) => (
-                        <div key={cat.id}>
-                          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 12px 4px", background: BG }}>{cat.nome}</div>
-                          {sottocategorieDiCategoria(costiSottocategorie, cat.id).map((v) => (
-                            <button
-                              key={v.id}
-                              onClick={() => aggiungiRigaCostoClasse(cat.id, v.id, v.nome)}
-                              style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", color: NAVY }}
-                            >
-                              {v.nome}
-                            </button>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {righeSpeseTutte.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-                    <div style={{ flex: "2 1 170px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Voce</div>
-                    <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale</div>
-                    <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Bonifico</div>
-                    <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cash</div>
-                    <div style={{ flex: "0 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Giorni</div>
-                  </div>
-                  {righeSpeseTutte.map((r) => {
-                    // "location" e "alloggio" non hanno più uno split libero: seguono
-                    // in blocco la tendina scelta in Assegnazione Master ("Pagamento
-                    // sede"/"Tipo di pagamento"), quindi qui sono sola lettura.
-                    const bloccato = r.tipo === "location" || r.tipo === "alloggio";
-                    const campoBonifico = r.tipo === "venditore" ? "quota_venditore_bonifico" : r.tipo === "modelle" ? "commissione_modelle_bonifico" : "quota_bonifico";
-                    const campoCash = r.tipo === "venditore" ? "quota_venditore_cash" : r.tipo === "modelle" ? "commissione_modelle_cash" : "quota_cash";
-                    return (
-                      <div key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
-                        <div style={{ flex: "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                          <div style={{ ...campoCompattoStyle, fontSize: 11, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</div>
-                          {r.tipo === "alloggio" && r.pagato && (
-                            <span title="Hotel pagato" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
-                          )}
-                        </div>
-                        <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-                          <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
-                        </div>
-                        <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-                          {bloccato ? (
-                            <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.bonifico}</div>
-                          ) : (
-                            <input style={campoCompattoStyle} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: v }); }} />
-                          )}
-                        </div>
-                        <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-                          {bloccato ? (
-                            <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.cash}</div>
-                          ) : (
-                            <input style={campoCompattoStyle} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
-                          )}
-                        </div>
-                        <div style={{ flex: "0 1 90px", minWidth: 0 }}>
-                          {r.giorni != null && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>−</button>
-                              <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, minWidth: 26, textAlign: "center", whiteSpace: "nowrap" }}>{r.giorni}gg</span>
-                              <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>+</button>
-                            </div>
-                          )}
-                          {r.tipo === "master" && (() => {
-                            const modalita = modalitaSplitMaster(r);
-                            return (
-                              <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                                {["B", "C", "1/2"].map((chiave) => (
-                                  <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà e metà"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer" }}>
-                                    <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalita === chiave ? NAVY : MUTED }}>{chiave}</span>
-                                    <input
-                                      type="checkbox"
-                                      checked={modalita === chiave}
-                                      onChange={() => impostaSplitMaster(r, chiave)}
-                                      style={{ width: 13, height: 13, cursor: "pointer", margin: 0 }}
-                                    />
-                                  </label>
-                                ))}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {speseClasse.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Nessuna spesa registrata per questa classe.</div>
-              ) : (
-                <div style={{ marginBottom: 12 }}>
-                  {speseClasse.map((spesa) => (
-                    <RigaCostoClasse
-                      key={spesa.id}
-                      spesa={spesa}
-                      onSalva={(campi) => salvaCampiSpesaClasse(spesa.id, campi)}
-                      onElimina={() => rimuoviRigaCostoClasse(spesa.id)}
-                      costiCategorie={costiCategorie}
-                      costiSottocategorie={costiSottocategorie}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {costiExtra.map((voce, idx) => (
-                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
-                  <div style={{ flex: "2 1 140px", minWidth: 0 }}>
-                    {voce.categoria && (
-                      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>
-                        {sottocategoriaCostoDi(costiSottocategorie, voce.sottovoce)?.nome || categoriaCostoDi(costiCategorie, voce.categoria)?.nome || voce.categoria}
-                      </div>
-                    )}
-                    <Field label="Voce di costo"><input style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Titolo" value={voce.titolo} onChange={(e) => modificaVoceCosto(idx, "titolo", e.target.value.toUpperCase())} /></Field>
-                  </div>
-                  <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-                    <Field label="Importo"><input style={inputStyle} inputMode="decimal" value={voce.valore} onChange={(e) => modificaVoceCosto(idx, "valore", e.target.value)} /></Field>
-                  </div>
-                  <button
-                    onClick={() => rimuoviVoceCosto(idx)}
-                    title="Rimuovi voce"
-                    style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                      <path d="M10 11v6" /><path d="M14 11v6" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-
-              {venditeAlCorso.length > 0 && (
-                <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 4 }}>Vendite al corso</div>
-                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, textAlign: "center", marginBottom: 12 }}>
-                    Prodotti venduti agli allievi durante il corso. Il contante entra nella busta insieme al resto.
-                  </div>
-                  {righeVenditeAlCorso.map((r) => (
-                    <div key={r.chiave} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 13, color: NAVY, padding: "5px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                      <span>{r.nome} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
-                      <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>€ {r.totale}</span>
-                    </div>
-                  ))}
-                  <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 14, marginTop: 14 }}>
-                    <div style={{ padding: "12px 18px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, textAlign: "center" }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Contanti</div>
-                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoContanti}</div>
-                    </div>
-                    <div style={{ padding: "12px 18px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, textAlign: "center" }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>POS</div>
-                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoPos}</div>
-                    </div>
-                    <div style={{ padding: "12px 18px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, textAlign: "center" }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Totale vendite</div>
-                      <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoTotale}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 16 }}>Riepilogo Cash</div>
-                <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", gap: 14 }}>
-                  <div style={{ padding: "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash incassato al corso</div>
-                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
-                  </div>
-                  <div style={{ padding: "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Totale Cash da pagare</div>
-                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCashDaPagareClasse}</div>
-                  </div>
-                  <div style={{ padding: "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash pulito in busta</div>
-                    <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY }}>€ {cassaContantiClasse}</div>
-                    {venditeAlCorsoContanti > 0 && (
-                      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4, whiteSpace: "nowrap" }}>di cui € {venditeAlCorsoContanti} di vendite</div>
-                    )}
-                  </div>
-                  <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={{ alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <PannelloRiepilogoAmministrativo
+          corsoData={corsoData} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
+          corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
+          assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+          ricarica={ricarica} onMessaggio={setMsg}
+          onIntestazione={() => setCostiAperto(false)}
+        />
       )}
 
       {vista === "form" && (
@@ -21451,8 +21487,9 @@ function VistaBiglietti({ param, tipo }) {
 // linguaggio delle schede master — targhetta della data del colore del
 // corso, nome e citta', e il tasto per entrare nella classe.
 function PaginaProssimeContabilita({
-  corsi, corsiDate, location, iscritti, spese, venditeShop, corsiDateDocenti,
+  corsi, corsiDate, location, iscritti, spese, venditeShop, prodottiShop, corsiDateDocenti,
   master, masterCorsi, assistente, assistenteCorsi, leva, hotel,
+  costiCategorie, costiSottocategorie, ricarica,
   onApriClasse, onBack, titolo = "Prossime contabilità",
 }) {
   const isMobile = useIsMobile();
@@ -21546,28 +21583,18 @@ function PaginaProssimeContabilita({
                 ))}
               </div>
 
-              {/* le stesse voci del riepilogo dentro la scheda del corso:
-                  da avere al corso, costi della classe, risultato e il
-                  cash che deve trovarsi in busta */}
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: 12 }}>
-                {[
-                  { etichetta: "Da avere al corso", valore: fmtEuroErp(conti.daIncassare), tinta: conti.daIncassare > 0 ? "#C0392B" : "#2E7D32", sotto: conti.daIncassare > 0 ? `contanti ${fmtEuroErp(conti.contanti)} · POS ${fmtEuroErp(conti.pos)}` : null },
-                  { etichetta: "Costi della classe", valore: fmtEuroErp(conti.totaleCosti), tinta: NAVY },
-                  { etichetta: "Risultato", valore: fmtEuroErp(conti.risultato), tinta: conti.risultato < 0 ? "#C0392B" : "#2E7D32" },
-                  { etichetta: "Cash pulito in busta", valore: fmtEuroErp(conti.cassaContanti), tinta: conti.cassaContanti < 0 ? "#C0392B" : NAVY, sotto: conti.venditeContanti > 0 ? `di cui ${fmtEuroErp(conti.venditeContanti)} di vendite` : null },
-                ].map((v) => (
-                  <div key={v.etichetta}>
-                    <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{v.etichetta}</div>
-                    <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: v.tinta }}>{v.valore}</div>
-                    {v.sotto && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{v.sotto}</div>}
-                  </div>
-                ))}
+              {/* il riepilogo amministrativo vero, non un riassunto: e' lo
+                  stesso componente che si apre dentro la scheda del corso,
+                  con gli stessi campi modificabili */}
+              <div style={{ marginTop: 14 }}>
+                <PannelloRiepilogoAmministrativo
+                  corsoData={cd} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
+                  corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
+                  assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
+                  costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+                  ricarica={ricarica}
+                />
               </div>
-              {conti.venditeTotale > 0 && (
-                <div style={{ marginTop: 10, ...fontBody, fontSize: 12, color: MUTED }}>
-                  Vendite al corso: <b style={{ color: NAVY }}>{fmtEuroErp(conti.venditeTotale)}</b> — contanti {fmtEuroErp(conti.venditeContanti)} · POS {fmtEuroErp(conti.venditePos)}
-                </div>
-              )}
             </div>
           );
         })}
@@ -46389,7 +46416,7 @@ export default function App() {
     // tasto Advisor, che infatti il pallino lo mostrava
     // gli stessi dati che servono al riepilogo dentro la scheda del corso:
     // i conti sono gli stessi, quindi gli ingredienti anche
-    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie"],
+    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop"],
     normative: [],
     ritornoalcorso: ["normative_testi"],
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
@@ -47865,9 +47892,11 @@ export default function App() {
       {view === "prossimecontabilita" && (
         <PaginaProssimeContabilita
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
-          spese={spese} venditeShop={venditeShop} corsiDateDocenti={corsiDateDocenti}
+          spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop} corsiDateDocenti={corsiDateDocenti}
           master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
           leva={leva} hotel={hotel}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+          ricarica={fetchDati}
           onApriClasse={(cd) => apriData(cd)}
           onBack={() => setView("gestionedate")}
         />
