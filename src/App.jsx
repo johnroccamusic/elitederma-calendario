@@ -29090,11 +29090,17 @@ function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onAp
 // non stanno più una sopra l'altra, si guarda una vista alla volta —
 // stesso stile/componente della barra di sopra, colore neutro perché qui
 // non sono pagine diverse, solo due modi di guardare la stessa pagina
-function TogglePerOperatoreProdotto({ vista, onOperatore, onProdotto }) {
+function TogglePerOperatoreProdotto({ vista, onCronologico, onOperatore, onProdotto }) {
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-      <SchedaTabAmministrazione attivo={vista === "operatore"} onClick={onOperatore} Icona={IconaPersonaSemplice} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per operatore</SchedaTabAmministrazione>
+      {/* il cronologico viene per primo: la domanda che ci si fa aprendo
+          queste pagine e' "cosa e' successo", e la risposta e' l'elenco
+          delle vendite in ordine di tempo. I raggruppamenti vengono dopo */}
+      {onCronologico && (
+        <SchedaTabAmministrazione attivo={vista === "cronologico"} onClick={onCronologico} Icona={IconaCalendarioCard} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Cronologico</SchedaTabAmministrazione>
+      )}
       <SchedaTabAmministrazione attivo={vista === "prodotto"} onClick={onProdotto} Icona={IconaScatolaErp} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per prodotto</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={vista === "operatore"} onClick={onOperatore} Icona={IconaPersonaSemplice} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per operatore</SchedaTabAmministrazione>
     </div>
   );
 }
@@ -29257,7 +29263,10 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
   });
   const righeOperatori = Object.values(perOperatore).map((o) => ({ ...o, incasso: round2(o.incasso) })).sort((a, b) => b.incasso - a.incasso);
 
-  const [vista, setVista] = useState("prodotto");
+  const [vista, setVista] = useState("cronologico");
+  // l'elenco in ordine di tempo, dal piu' recente: le righe sono gia'
+  // filtrate sul canale e sul periodo scelto
+  const righeCronologiche = [...righeCanale].sort((a, b) => String(b.data_ordine || "").localeCompare(String(a.data_ordine || "")));
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -29282,7 +29291,48 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
           <RiquadroKpi compatto={isMobile} etichetta="Pezzi (netti)" valore={kpi.pezzi} />
         </div>
 
-        <TogglePerOperatoreProdotto vista={vista} onOperatore={() => setVista("operatore")} onProdotto={() => setVista("prodotto")} />
+        <TogglePerOperatoreProdotto
+          vista={vista}
+          onCronologico={() => setVista("cronologico")}
+          onOperatore={() => setVista("operatore")}
+          onProdotto={() => setVista("prodotto")}
+        />
+
+        {vista === "cronologico" && (
+          <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+            {righeCronologiche.length === 0 ? (
+              <div style={{ padding: 20, ...fontBody, fontSize: 13, color: MUTED }}>Nessuna vendita nel periodo selezionato.</div>
+            ) : righeCronologiche.map((v) => {
+              const prodotti = Array.isArray(v.prodotti) ? v.prodotti : [];
+              const pezzi = prodotti.reduce((s, r) => s + (r.quantita || 0), 0);
+              const reso = v.tipo_movimento && v.tipo_movimento !== "vendita";
+              return (
+                <div key={v.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap", padding: "12px 16px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", minWidth: 84 }}>
+                    {v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}
+                  </span>
+                  <span style={{ flex: "1 1 220px", minWidth: 0 }}>
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, display: "block" }}>
+                      {v.cliente_nome || "—"}
+                      {v.numero_ordine ? <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 400, color: MUTED }}> · ordine {v.numero_ordine}</span> : null}
+                      {reso && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", marginLeft: 6 }}>{v.tipo_movimento.toUpperCase()}</span>}
+                    </span>
+                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "block", lineHeight: 1.4 }}>
+                      {prodotti.map((r) => `${r.quantita || 1}× ${r.nome || "—"}`).join(" · ") || "—"}
+                    </span>
+                    {v.operatore_nome && (
+                      <span style={{ ...fontBody, fontSize: 11.5, color: GOLD, fontWeight: 700, display: "block" }}>{toTitleCase(v.operatore_nome)}</span>
+                    )}
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{pezzi} pz</span>
+                  <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: (v.totale || 0) < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap", minWidth: 84, textAlign: "right" }}>
+                    {fmtEuroErp2(v.totale || 0)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {vista === "operatore" && (
           <TabellaOperatoriVenditeProdotti
