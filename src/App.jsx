@@ -6273,7 +6273,9 @@ function PaginaDashboardVenditori({
   const [customDa, setCustomDa] = useState("");
   const [customA, setCustomA] = useState("");
   const [espansoChiusurePerCorso, setEspansoChiusurePerCorso] = useState(false);
-  const [tabDashboardVenditore, setTabDashboardVenditore] = useState("performance"); // performance | corsi | iscrizioni
+  // si apre sul calendario dei corsi: chi entra qui nove volte su dieci
+  // deve iscrivere qualcuno, non guardare le proprie commissioni
+  const [tabDashboardVenditore, setTabDashboardVenditore] = useState("corsi"); // corsi | performance | iscrizioni
   const [meseClassifica, setMeseClassifica] = useState(() => { const o = new Date(); return { anno: o.getFullYear(), mese: o.getMonth() }; });
   const [classificaCorsiCompleta, setClassificaCorsiCompleta] = useState(false);
   const [classificaTicketCompleta, setClassificaTicketCompleta] = useState(false);
@@ -6539,18 +6541,6 @@ function PaginaDashboardVenditori({
           <>
             <div style={{ display: "flex", flexDirection: "row", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
               <button
-                onClick={() => setTabDashboardVenditore("performance")}
-                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
-              >
-                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaFrecciaTrend size={isMobile ? 20 : 24} color={GOLD} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
-                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>}
-                </div>
-              </button>
-              <button
                 onClick={() => setTabDashboardVenditore("corsi")}
                 style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
               >
@@ -6563,6 +6553,18 @@ function PaginaDashboardVenditori({
                     <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
                   </div>
                   {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, fontStyle: "italic" }}>Tutti i corsi in programmazione</div>}
+                </div>
+              </button>
+              <button
+                onClick={() => setTabDashboardVenditore("performance")}
+                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
+              >
+                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaFrecciaTrend size={isMobile ? 20 : 24} color={GOLD} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
+                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>}
                 </div>
               </button>
               <button
@@ -12198,7 +12200,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
@@ -12285,6 +12287,9 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 5 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { overflowX: "auto" } : {}) }}>
           <Button onClick={() => setMostraAggiungiCorso(true)} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Aggiungi Corso</Button>
           <Button variant="ghost" onClick={onApriUltimeIscrizioni} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Ultime iscrizioni</Button>
+          {onApriProssimeContabilita && (
+            <Button variant="ghost" onClick={onApriProssimeContabilita} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Prossime contabilità</Button>
+          )}
           {numeroAccontiInAttesa > 0 ? (
             <>
               <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
@@ -16582,6 +16587,7 @@ const TASTI_HOME = [
 // password — vedi apriViewProtetta
 const AREA_MADRE_VISTA = {
   ritornoalcorso: ["normative"],
+  prossimecontabilita: ["gestionedate"],
   amministrazione: ["erp"],
   catalogocategoriecosti: ["erp"],
   riconciliazione: ["erp"],
@@ -21492,6 +21498,157 @@ function VistaBiglietti({ param, tipo }) {
         <div style={{ fontSize: 11, color: MUTED, marginTop: 20, textAlign: "center" }}>
           Pagina di sola lettura — Elitederma Academy
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ---------- Prossime contabilità ----------
+// I conti di una classe, calcolati fuori dalla scheda del corso con le
+// stesse formule del "Riepilogo amministrativo": la somma dei totali e
+// degli imponibili VERI scritti su ogni allievo (acconto, pre corso,
+// saldo e le loro righe extra), piu' le modelle e gli incassi extra
+// dell'edizione. Niente scorporo IVA inventato: l'IVA e' la differenza
+// fra quello che si e' incassato e l'imponibile dichiarato.
+const METODI_CASH_CONTABILITA = new Set(["Contanti", "Cash no iva"]);
+function quotePagateDiIscritto(i) {
+  const quote = [];
+  ["acconto", "precorso", "saldo"].forEach((prefisso) => {
+    const metodo = i[`${prefisso}_metodo`];
+    if (!metodo) return;
+    quote.push({ fase: prefisso, totale: totQuota(i, prefisso), imponibile: i[`${prefisso}_imponibile`] || 0, metodo });
+  });
+  ["acconto", "precorso"].forEach((prefisso) => {
+    (Array.isArray(i[`${prefisso}_extra`]) ? i[`${prefisso}_extra`] : []).forEach((r) => {
+      if (!r.metodo) return;
+      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      quote.push({ fase: prefisso, totale: round2((r.totale || 0) + interessi), imponibile: r.imponibile || 0, metodo: r.metodo });
+    });
+  });
+  return quote;
+}
+function contabilitaDiClasse(cd, iscrittiEdizione) {
+  const incassiExtra = Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [];
+  const quote = (iscrittiEdizione || []).flatMap(quotePagateDiIscritto);
+  const lordo = round2(
+    quote.reduce((s, q) => s + q.totale, 0)
+    + (iscrittiEdizione || []).reduce((s, i) => s + modelleTotaleDi(i), 0)
+    + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+  );
+  const netto = round2(quote.reduce((s, q) => s + q.imponibile, 0));
+  const incassiExtraContanti = round2(incassiExtra.filter((c) => c.metodo === "Contanti").reduce((s, c) => s + parseNum(c.valore), 0));
+  const incassiExtraPos = round2(incassiExtra.filter((c) => c.metodo === "Pos").reduce((s, c) => s + parseNum(c.valore), 0));
+  // "da incassare al corso": saldi in contanti o POS ancora da riscuotere
+  // piu' le modelle, che si pagano in aula
+  const contanti = round2((iscrittiEdizione || []).reduce((s, i) => s + ((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
+  const pos = round2((iscrittiEdizione || []).reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
+  return {
+    lordo, netto, iva: round2(lordo - netto),
+    contanti, pos, daIncassare: round2(contanti + pos),
+    costiExtra: round2(costoClasseErp(cd)),
+    allievi: (iscrittiEdizione || []).length,
+  };
+}
+
+// La pagina "Prossime contabilità": i riepiloghi amministrativi di tutte
+// le classi in ordine cronologico, uno sotto l'altro, con lo stesso
+// linguaggio delle schede master — targhetta della data del colore del
+// corso, nome e citta', e il tasto per entrare nella classe.
+function PaginaProssimeContabilita({ corsi, corsiDate, location, iscritti, onApriClasse, onBack, titolo = "Prossime contabilità" }) {
+  const isMobile = useIsMobile();
+  const oggi = dataOggiStr();
+  // dai corsi finiti da poco (che sono quelli ancora da chiudere) in
+  // avanti: un corso di sei mesi fa la sua contabilita' l'ha gia' vista
+  const [mostraTutti, setMostraTutti] = useState(false);
+  const dallaData = mostraTutti ? "0000-00-00" : addGiorni(oggi, -45);
+  const righe = useMemo(() => {
+    const corsoPerId = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+    const locPerId = Object.fromEntries((location || []).map((l) => [l.id, l]));
+    return (corsiDate || [])
+      .filter((cd) => (cd.data_fine || cd.data_inizio || "") >= dallaData)
+      .sort((a, b) => String(a.data_inizio).localeCompare(String(b.data_inizio)))
+      .map((cd) => {
+        const iscrittiEdizione = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
+        return { cd, corso: corsoPerId[cd.corso_id] || null, loc: locPerId[cd.location_id] || null, conti: contabilitaDiClasse(cd, iscrittiEdizione) };
+      });
+  }, [corsi, corsiDate, location, iscritti, dallaData]);
+
+  const totali = righe.reduce((acc, r) => ({
+    lordo: acc.lordo + r.conti.lordo, daIncassare: acc.daIncassare + r.conti.daIncassare, allievi: acc.allievi + r.conti.allievi,
+  }), { lordo: 0, daIncassare: 0, allievi: 0 });
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ marginBottom: 10 }}><TastoLivelloPrecedente titolo="Gestione corsi" onClick={onBack} /></div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 24 : 30, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
+          I conti di ogni classe in ordine di data: quanto è già entrato, quanto resta da incassare in aula.
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+          <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>
+            <b>{righe.length}</b> {righe.length === 1 ? "classe" : "classi"} · <b>{totali.allievi}</b> allievi · incassato <b>{fmtEuroErp(totali.lordo)}</b> · da incassare <b style={{ color: totali.daIncassare > 0 ? "#C0392B" : "#2E7D32" }}>{fmtEuroErp(totali.daIncassare)}</b>
+          </span>
+          <Button variant="ghost" onClick={() => setMostraTutti((v) => !v)}>
+            {mostraTutti ? "Solo dalle ultime settimane" : "Vedi anche i corsi passati"}
+          </Button>
+        </div>
+
+        {righe.length === 0 ? (
+          <div style={{ ...cardStyle, ...fontBody, fontSize: 13.5, color: MUTED }}>Nessuna classe in questo periodo.</div>
+        ) : righe.map(({ cd, corso, loc, conti }) => {
+          const coloreCorso = corso?.colore || NAVY;
+          const { numero, sotto } = etichettaIntervalloGiorni(cd.data_inizio, cd.data_fine);
+          const inCorso = oggi >= cd.data_inizio && oggi <= cd.data_fine;
+          const terminato = oggi > cd.data_fine;
+          return (
+            <div key={cd.id} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: isMobile ? 14 : 16, marginBottom: 14, background: "#fff" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
+                  <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
+                    <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numero}</div>
+                    {sotto && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sotto}</div>}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{corso?.nome || "—"}</div>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  {inCorso && <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#2E7D32" }}>IN CORSO</span>}
+                  {!inCorso && terminato && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED }}>Terminato</span>}
+                  <Button variant="ghost" onClick={() => onApriClasse(cd)}>Vedi classe ›</Button>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: 12 }}>
+                {[
+                  { etichetta: "Allievi", valore: String(conti.allievi), tinta: NAVY },
+                  { etichetta: "Incassato lordo", valore: fmtEuroErp(conti.lordo), tinta: NAVY },
+                  { etichetta: "Imponibile", valore: fmtEuroErp(conti.netto), tinta: NAVY },
+                  { etichetta: "IVA", valore: fmtEuroErp(conti.iva), tinta: MUTED },
+                ].map((v) => (
+                  <div key={v.etichetta} style={{ borderLeft: `3px solid ${GOLD}`, paddingLeft: 10 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{v.etichetta}</div>
+                    <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: v.tinta }}>{v.valore}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+                  Da incassare in aula: <b style={{ color: conti.daIncassare > 0 ? "#C0392B" : "#2E7D32" }}>{fmtEuroErp(conti.daIncassare)}</b>
+                  {conti.daIncassare > 0 && <> — contanti {fmtEuroErp(conti.contanti)} · POS {fmtEuroErp(conti.pos)}</>}
+                </span>
+                {conti.costiExtra > 0 && (
+                  <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Costi della classe: <b style={{ color: NAVY }}>{fmtEuroErp(conti.costiExtra)}</b></span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -46230,6 +46387,7 @@ export default function App() {
     // prodotti in memoria il conto e' sempre zero, e il tasto non lampeggia
     // mai. E' la stessa tabella che carica l'hub della logistica per il suo
     // tasto Advisor, che infatti il pallino lo mostrava
+    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti"],
     normative: [],
     ritornoalcorso: ["normative_testi"],
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
@@ -47244,6 +47402,7 @@ export default function App() {
           ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
           onApriIscritto={(i) => { setViewPrimaDiScheda("gestionedate"); apriIscritto(i); }}
           onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
+          onApriProssimeContabilita={() => setView("prossimecontabilita")}
           onApriVerificaAcconti={() => setView("verificaacconti")}
           numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
           ricercaDateGestione={ricercaDateGestione} setRicercaDateGestione={setRicercaDateGestione}
@@ -47698,6 +47857,14 @@ export default function App() {
           ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
           ricarica={fetchDati} onBack={() => setView("home")}
           titolo={etichettaTasto("home", "agenda", "Agenda")}
+        />
+      )}
+
+      {view === "prossimecontabilita" && (
+        <PaginaProssimeContabilita
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
+          onApriClasse={(cd) => apriData(cd)}
+          onBack={() => setView("gestionedate")}
         />
       )}
 
