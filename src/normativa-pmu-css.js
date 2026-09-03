@@ -103,4 +103,19 @@ export const CSS_NORMATIVA_PMU = `
 .mappa-pmu .testata-sezione:hover h2,.mappa-pmu .testata-sezione:hover h3{color:var(--est)}
 .mappa-pmu section.region.chiudibile{padding:14px 0}
 .mappa-pmu section.block.chiudibile{padding:16px 0}
+/* Da telefono l'indice non sta di fianco (non c'e' spazio) e neanche
+   sopra tutto steso: e' il menu a tendina dei siti, quadratino con le
+   righe in alto a sinistra, si tocca e scende la lista. */
+.mappa-pmu .menu-mobile{display:none}
+@media(max-width:1039px){
+  .mappa-pmu .menu-mobile{display:block;position:sticky;top:6px;z-index:5;margin:0 0 16px}
+  .mappa-pmu .tasto-menu{display:inline-flex;align-items:center;gap:10px;font-family:var(--body);font-size:14px;font-weight:600;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
+  .mappa-pmu .tasto-menu svg{display:block}
+  .mappa-pmu .pannello-menu{display:none;margin-top:8px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:6px 14px 10px;max-height:62vh;overflow:auto;box-shadow:0 14px 30px rgba(0,0,0,.12)}
+  .mappa-pmu .menu-mobile.aperto .pannello-menu{display:block}
+  .mappa-pmu .pannello-menu .grp{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);margin:14px 0 2px}
+  .mappa-pmu .pannello-menu .grp:first-child{margin-top:6px}
+  .mappa-pmu .pannello-menu a{display:block;padding:9px 0;text-decoration:none;color:var(--ink);font-size:15px;border-bottom:1px solid var(--line)}
+  .mappa-pmu .pannello-menu a:last-child{border-bottom:none}
+}
 `;

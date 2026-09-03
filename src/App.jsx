@@ -23087,7 +23087,26 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
     const radice = rifDocumento.current;
     if (!radice) return undefined;
 
-    // 1. ogni sezione parte chiusa, con la sua intestazione cliccabile:
+    // 1. da telefono l'indice diventa un menu a tendina: le stesse voci
+    //    della colonna laterale, dentro un pannello che si apre col
+    //    quadratino a righe in alto a sinistra
+    const laterale = radice.querySelector("nav.side");
+    if (laterale && !radice.querySelector(".menu-mobile")) {
+      const menu = document.createElement("div");
+      menu.className = "menu-mobile";
+      menu.innerHTML = `
+        <button type="button" class="tasto-menu" aria-label="Indice delle sezioni">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+          Indice
+        </button>
+        <div class="pannello-menu">${laterale.innerHTML}</div>`;
+      const contenitore = radice.querySelector(".layout") || radice.querySelector(".wrap");
+      if (contenitore) contenitore.parentNode.insertBefore(menu, contenitore);
+    }
+
+    // 2. ogni sezione parte chiusa, con la sua intestazione cliccabile:
     //    aperte tutte insieme erano trenta schermate di testo in fila
     const sezioni = radice.querySelectorAll("section.block, section.region");
     sezioni.forEach((sez) => {
@@ -23110,14 +23129,19 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
       if (sez) sez.classList.remove("chiudibile");
     }
     function suClic(e) {
+      const tastoMenu = e.target.closest(".tasto-menu");
+      if (tastoMenu && radice.contains(tastoMenu)) {
+        tastoMenu.parentElement.classList.toggle("aperto");
+        return;
+      }
       const testata = e.target.closest(".testata-sezione");
       if (testata && radice.contains(testata)) {
         testata.parentElement.classList.toggle("chiudibile");
         return;
       }
-      // 2. l'indice laterale: senza intercettarlo il browser cambia
-      //    l'indirizzo e l'app, che ascolta quel cambiamento per il tasto
-      //    "indietro", usciva dalla pagina
+      // 3. l'indice (laterale o a tendina): senza intercettarlo il
+      //    browser cambia l'indirizzo e l'app, che ascolta quel
+      //    cambiamento per il tasto "indietro", usciva dalla pagina
       const link = e.target.closest('a[href^="#"]');
       if (!link || !radice.contains(link)) return;
       e.preventDefault();
@@ -23125,6 +23149,9 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
       const bersaglio = radice.querySelector(`#${CSS.escape(id)}`);
       if (!bersaglio) return;
       apriSezione(bersaglio.closest("section"));
+      // scelta la voce, la tendina si richiude: e' un menu, non un pannello
+      const menuAperto = radice.querySelector(".menu-mobile.aperto");
+      if (menuAperto) menuAperto.classList.remove("aperto");
       bersaglio.scrollIntoView({ behavior: "smooth", block: "start" });
     }
     radice.addEventListener("click", suClic);
