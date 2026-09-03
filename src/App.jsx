@@ -29090,7 +29090,7 @@ function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onAp
 // non stanno più una sopra l'altra, si guarda una vista alla volta —
 // stesso stile/componente della barra di sopra, colore neutro perché qui
 // non sono pagine diverse, solo due modi di guardare la stessa pagina
-function TogglePerOperatoreProdotto({ vista, onCronologico, onOperatore, onProdotto }) {
+function TogglePerOperatoreProdotto({ vista, onCronologico, onOperatore, onProdotto, onCoupon }) {
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
       {/* il cronologico viene per primo: la domanda che ci si fa aprendo
@@ -29101,6 +29101,94 @@ function TogglePerOperatoreProdotto({ vista, onCronologico, onOperatore, onProdo
       )}
       <SchedaTabAmministrazione attivo={vista === "prodotto"} onClick={onProdotto} Icona={IconaScatolaErp} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per prodotto</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={vista === "operatore"} onClick={onOperatore} Icona={IconaPersonaSemplice} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per operatore</SchedaTabAmministrazione>
+      {onCoupon && (
+        <SchedaTabAmministrazione attivo={vista === "coupon"} onClick={onCoupon} Icona={IconaTileCoupon} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per codice promozionale</SchedaTabAmministrazione>
+      )}
+    </div>
+  );
+}
+
+// L'elenco dei codici promozionali cosi' come sta su WooCommerce: e' uno
+// specchio, non una seconda anagrafica — il padrone del dato resta il
+// sito, qui si guarda insieme alle vendite senza doverci uscire.
+function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ultimaSincronizzazione }) {
+  const [ricerca, setRicerca] = useState("");
+  const [soloAttivi, setSoloAttivi] = useState(false);
+  const oggi = dataOggiStr();
+  const filtrate = righe
+    .filter((c) => {
+      if (!soloAttivi) return true;
+      const scaduto = c.data_scadenza && c.data_scadenza < oggi;
+      const esaurito = c.limite_uso != null && (c.usati || 0) >= c.limite_uso;
+      return !scaduto && !esaurito;
+    })
+    .filter((c) => {
+      const q = ricerca.trim().toLowerCase();
+      if (!q) return true;
+      return [c.codice, c.descrizione].some((v) => String(v || "").toLowerCase().includes(q));
+    });
+  const etichettaTipo = (t) => (t === "percent" ? "Sconto in percentuale" : t === "fixed_cart" ? "Sconto fisso sul carrello" : t === "fixed_product" ? "Sconto fisso per prodotto" : (t || "—"));
+  const thStyle = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, padding: "10px 12px", textAlign: "left", borderBottom: `2px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" };
+  const tdStyle = { ...fontBody, fontSize: 12.5, color: NAVY, padding: "10px 12px", borderTop: `1px solid ${CREAM_BORDER}`, verticalAlign: "top" };
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca codice o descrizione…" />
+        <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+          <input type="checkbox" checked={soloAttivi} onChange={(e) => setSoloAttivi(e.target.checked)} />
+          Solo quelli ancora spendibili
+        </label>
+        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {ultimaSincronizzazione && (
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+              Aggiornato il {new Date(ultimaSincronizzazione).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
+            </span>
+          )}
+          <Button variant="ghost" onClick={onSincronizza} disabled={sincronizzando}>{sincronizzando ? "Scarico da WooCommerce…" : "Aggiorna da WooCommerce"}</Button>
+        </span>
+      </div>
+      <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: isMobile ? 720 : undefined }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Codice</th>
+                <th style={thStyle}>Tipo di codice promozionale</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>Importo</th>
+                <th style={thStyle}>Descrizione</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>Uso / Limite</th>
+                <th style={thStyle}>Data di scadenza</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrate.length === 0 ? (
+                <tr><td colSpan={6} style={{ ...tdStyle, color: MUTED, textAlign: "center", padding: 20 }}>
+                  {righe.length === 0 ? "Nessun codice scaricato: premi \"Aggiorna da WooCommerce\"." : "Nessun codice trovato."}
+                </td></tr>
+              ) : filtrate.map((c) => {
+                const scaduto = c.data_scadenza && c.data_scadenza < oggi;
+                const esaurito = c.limite_uso != null && (c.usati || 0) >= c.limite_uso;
+                return (
+                  <tr key={c.woo_coupon_id}>
+                    <td style={{ ...tdStyle, fontWeight: 700, whiteSpace: "nowrap", opacity: scaduto || esaurito ? 0.55 : 1 }}>{c.codice}</td>
+                    <td style={{ ...tdStyle, color: MUTED, whiteSpace: "nowrap" }}>{etichettaTipo(c.tipo_sconto)}</td>
+                    <td style={{ ...tdStyle, fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>
+                      {c.importo == null ? "—" : c.tipo_sconto === "percent" ? `${Number(c.importo).toLocaleString("it-IT")}%` : fmtEuroErp2(Number(c.importo))}
+                    </td>
+                    <td style={{ ...tdStyle, color: MUTED, maxWidth: 280 }}>{c.descrizione || "—"}</td>
+                    <td style={{ ...tdStyle, textAlign: "center", whiteSpace: "nowrap", color: esaurito ? "#C0392B" : NAVY, fontWeight: esaurito ? 700 : 400 }}>
+                      {(c.usati || 0)} / {c.limite_uso != null ? c.limite_uso : "∞"}
+                    </td>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap", color: scaduto ? "#C0392B" : MUTED }}>
+                      {c.data_scadenza ? `${fmtData(c.data_scadenza)}${scaduto ? " · scaduto" : ""}` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -29217,7 +29305,7 @@ function TabellaProdottiVenditeProdotti({ righe, isMobile, messaggioVuoto, piePa
 // pagina madre (Prodotto/Pezzi netti/Ricavo netto): niente elenco ordini,
 // niente incasso/IVA, niente "Recupera ordini mancanti" — quel dettaglio
 // vive già, per intero, nella sezione Magazzino/Shop
-function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
+function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, origine, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
@@ -29264,6 +29352,17 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
   const righeOperatori = Object.values(perOperatore).map((o) => ({ ...o, incasso: round2(o.incasso) })).sort((a, b) => b.incasso - a.incasso);
 
   const [vista, setVista] = useState("cronologico");
+  // i codici promozionali arrivano da WooCommerce e si aggiornano a
+  // richiesta: sono decine, cambiano di rado, e scaricarli a ogni
+  // apertura della pagina sarebbe fatica sprecata
+  const [sincronizzandoCoupon, setSincronizzandoCoupon] = useState(false);
+  async function sincronizzaCouponWoo() {
+    setSincronizzandoCoupon(true);
+    const { data, error } = await supabase.functions.invoke("woo-sync-coupon");
+    setSincronizzandoCoupon(false);
+    if (error || data?.errore) { window.alert("Non sono riuscito a scaricarli: " + (data?.errore || error.message)); return; }
+    await ricarica(["woo_coupon"]);
+  }
   // l'elenco in ordine di tempo, dal piu' recente: le righe sono gia'
   // filtrate sul canale e sul periodo scelto
   const righeCronologiche = [...righeCanale].sort((a, b) => String(b.data_ordine || "").localeCompare(String(a.data_ordine || "")));
@@ -29296,7 +29395,17 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
           onCronologico={() => setVista("cronologico")}
           onOperatore={() => setVista("operatore")}
           onProdotto={() => setVista("prodotto")}
+          onCoupon={origine === "woocommerce" ? () => setVista("coupon") : undefined}
         />
+
+        {vista === "coupon" && (
+          <TabellaCouponWoo
+            righe={wooCoupon || []} isMobile={isMobile}
+            sincronizzando={sincronizzandoCoupon}
+            onSincronizza={sincronizzaCouponWoo}
+            ultimaSincronizzazione={(wooCoupon || [])[0]?.ts_sincronizzato}
+          />
+        )}
 
         {vista === "cronologico" && (
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
@@ -46057,6 +46166,7 @@ export default function App() {
   // verso Gestione modelle invece che verso una lista mai mostrata
   const [riordiniInCorso, setRiordiniInCorso] = useState([]);
   const [normativeTesti, setNormativeTesti] = useState([]);
+  const [wooCoupon, setWooCoupon] = useState([]);
   // i prodotti con un ordine gia' partito: non devono piu' suonare
   const prodottiGiaOrdinati = useMemo(
     () => new Set((riordiniInCorso || []).filter((r) => r.stato === "ordinato").map((r) => r.prodotto_id)),
@@ -46387,6 +46497,7 @@ export default function App() {
     citta: async () => setCitta((await supabase.from("citta").select("*").order("nome")).data || []),
     riordini_in_corso: async () => setRiordiniInCorso((await supabase.from("riordini_in_corso").select("*").order("data_ordine", { ascending: false })).data || []),
     normative_testi: async () => setNormativeTesti((await supabase.from("normative_testi").select("*")).data || []),
+    woo_coupon: async () => setWooCoupon((await supabase.from("woo_coupon").select("*").order("data_creazione", { ascending: false })).data || []),
   };
 
   // "ricarica" (passata come prop dappertutto): senza argomenti rifà
@@ -46502,7 +46613,7 @@ export default function App() {
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_regola_base", "punti_master_periodi_speciali", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
-    statvenditeshop: ["vendite_shop"],
+    statvenditeshop: ["vendite_shop", "woo_coupon"],
     statvenditealbanco: ["vendite_shop"],
     statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
@@ -47675,7 +47786,8 @@ export default function App() {
 
       {view === "statvenditeshop" && (
         <PaginaStatisticheVenditeCanale
-          venditeShop={venditeShop} origine="woocommerce" onBack={() => setView("statistichevenditeprodotti")}
+          venditeShop={venditeShop} wooCoupon={wooCoupon} ricarica={fetchDati}
+          origine="woocommerce" onBack={() => setView("statistichevenditeprodotti")}
           onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
         />
       )}
