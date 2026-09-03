@@ -17306,8 +17306,9 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   const [dermografo, setDermografo] = useState("");
   // dermografo comprato a parte: la domanda compare solo se il pacchetto
   // scelto lo dichiara (kit_definizioni.dermografo_a_parte). "gia_pagato"
-  // chiude lì; "con_corso" apre il conto di quella vendita — listino di
-  // magazzino, sconto riservato all'allievo, e la quota con i suoi metodi
+  // e "omaggio_corso" chiudono lì; "con_corso" apre il conto di quella
+  // vendita — listino di magazzino, sconto riservato all'allievo, e la
+  // quota con i suoi metodi
   const [dermografoScelta, setDermografoScelta] = useState("");
   const [dermografoPagamento, setDermografoPagamento] = useState("");
   const [dermografoConsegna, setDermografoConsegna] = useState("");
@@ -17493,8 +17494,10 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   const dermografoAParte = !!kitScelto?.dermografo_a_parte;
   // "no" e "ha il suo" chiudono la questione; solo tekna/horus aprono il
   // pagamento. "Acquista e paga da sito" (valore gia_pagato) esce da qui:
-  // quella vendita la registra lo shop. Solo "lo paga con il corso" apre
-  // il conto su questa scheda
+  // quella vendita la registra lo shop; "Offerto, incluso nel corso"
+  // (omaggio_corso) nemmeno: il dermografo si consegna e si scarica dal
+  // magazzino, ma non c'e' niente da incassare. Solo "lo paga con il
+  // corso" apre il conto su questa scheda
   const dermografoComprato = dermografoScelta === "tekna" || dermografoScelta === "horus";
   const dermografoDaPagare = dermografoComprato && dermografoPagamento === "con_corso";
   const prezzoListinoDermografo = dermografoComprato ? listinoLordoDermografo(dermografoScelta) : null;
@@ -19969,6 +19972,10 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                             <option value="">— scegli —</option>
                             <option value="gia_pagato">Acquista e paga da sito</option>
                             <option value="con_corso">Lo paga con il corso</option>
+                            {/* omaggio: il dermografo va consegnato e scaricato
+                                dal magazzino come gli altri, ma non si paga —
+                                nessun conto si apre su questa scheda */}
+                            <option value="omaggio_corso">Offerto, incluso nel corso</option>
                           </select>
                         </Field>
                       </div>
