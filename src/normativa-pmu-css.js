@@ -142,10 +142,15 @@ export const CSS_NORMATIVA_PMU = `
    righe in alto a sinistra, si tocca e scende la lista. */
 .mappa-pmu .menu-mobile{display:none}
 @media(max-width:1039px){
-  .mappa-pmu .menu-mobile{display:block;position:sticky;top:6px;z-index:5;margin:0 0 16px}
-  .mappa-pmu .tasto-menu{display:inline-flex;align-items:center;gap:10px;font-family:var(--body);font-size:14px;font-weight:600;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
+  /* La barra dell'indice sta in cima alla pagina e ci resta: e' il menu
+     del documento, non una voce che si incontra scorrendo. Margini
+     negativi per andare da bordo a bordo, fondo pieno perche' il testo
+     non le passi sotto trasparente. */
+  .mappa-pmu .menu-mobile{display:block;position:sticky;top:0;z-index:20;margin:0 -20px 18px;padding:10px 20px;background:var(--bg);border-bottom:1px solid var(--line)}
+  .mappa-pmu .tasto-menu{display:flex;width:100%;align-items:center;gap:10px;font-family:var(--body);font-size:15px;font-weight:600;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left}
+  .mappa-pmu .tasto-menu .freccia-menu{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink2)}
   .mappa-pmu .tasto-menu svg{display:block}
-  .mappa-pmu .pannello-menu{display:none;margin-top:8px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:6px 14px 10px;max-height:62vh;overflow:auto;box-shadow:0 14px 30px rgba(0,0,0,.12)}
+  .mappa-pmu .pannello-menu{display:none;margin-top:8px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:6px 14px 10px;max-height:60vh;overflow:auto;box-shadow:0 14px 30px rgba(0,0,0,.18)}
   .mappa-pmu .menu-mobile.aperto .pannello-menu{display:block}
   .mappa-pmu .pannello-menu .grp{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);margin:14px 0 2px}
   .mappa-pmu .pannello-menu .grp:first-child{margin-top:6px}

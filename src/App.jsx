@@ -23113,11 +23113,15 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
-          Indice
+          Indice delle sezioni
+          <span class="freccia-menu">▾</span>
         </button>
         <div class="pannello-menu">${laterale.innerHTML}</div>`;
-      const contenitore = radice.querySelector(".layout") || radice.querySelector(".wrap");
-      if (contenitore) contenitore.parentNode.insertBefore(menu, contenitore);
+      // in testa alla pagina, prima del titolo: e' un menu, e un menu sta
+      // in cima. Prima veniva inserito appena sopra le sezioni e lo si
+      // incontrava a meta' pagina, scorrendo
+      const guscio = radice.querySelector(".wrap");
+      if (guscio) guscio.insertBefore(menu, guscio.firstChild);
     }
 
     // 2. ogni sezione parte chiusa, con la sua intestazione cliccabile:
