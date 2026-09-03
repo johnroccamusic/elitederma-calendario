@@ -99,8 +99,8 @@ export const CSS_NORMATIVA_PMU = `
 .mappa-pmu .col li{font-size:15px}
 .mappa-pmu .col .hours{font-family:var(--disp);font-size:30px;line-height:1;margin:2px 0 10px;font-variant-numeric:tabular-nums}
 .mappa-pmu .col .hours small{font-family:var(--mono);font-size:12px;color:var(--ink2);margin-left:6px;letter-spacing:.04em}
-/* "Risposta al telefono": il riquadro che si legge per primo quando
-   squilla il telefono, con il filetto scuro di fianco */
+/* il riquadro con il filetto colorato di fianco: oggi lo usa la
+   "Regola d'oro: la SCIA" in cima alla strada del tatuatore */
 .mappa-pmu .phone{margin:0 0 18px;padding:16px 18px;border-radius:6px;background:var(--bg2);border:1px solid var(--line);border-left:4px solid var(--ink)}
 .mappa-pmu .phone h4{margin-bottom:6px}
 .mappa-pmu .phone p{margin:0;font-size:16px;max-width:none}
