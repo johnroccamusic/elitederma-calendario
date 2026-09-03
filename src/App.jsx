@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { regioneDaCitta } from "./comuni-regioni";
+import { CSS_NORMATIVA_PMU } from "./normativa-pmu-css";
+import { HTML_NORMATIVA_PMU } from "./normativa-pmu-html";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
@@ -16587,6 +16589,7 @@ const TASTI_HOME = [
 // password — vedi apriViewProtetta
 const AREA_MADRE_VISTA = {
   ritornoalcorso: ["normative"],
+  mappanormativepmu: ["normative"],
   prossimecontabilita: ["gestionedate"],
   amministrazione: ["erp"],
   catalogocategoriecosti: ["erp"],
@@ -23026,11 +23029,50 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
   );
 }
 
+
+// "Mappa normative regionali": il documento sul trucco permanente in
+// Italia, regione per regione. E' un documento, non una schermata: il
+// testo e il suo foglio di stile stanno in due file a parte
+// (normativa-pmu-html.js e normativa-pmu-css.js) e qui vengono solo
+// montati. Cosi' aggiornarlo quando cambia una norma non significa
+// mettere le mani nell'applicazione.
+//
+// Lo stile e' quello originale, con una sola differenza: e' tutto
+// racchiuso dentro ".mappa-pmu". Senza, le regole su body e sui colori
+// del tema avrebbero cambiato l'aspetto dell'intera app.
+function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" }) {
+  const isMobile = useIsMobile();
+  // i caratteri del documento (Fraunces, Source Sans 3, IBM Plex Mono) si
+  // caricano solo quando la pagina si apre: sono suoi, non dell'app
+  useEffect(() => {
+    const id = "font-normativa-pmu";
+    if (document.getElementById(id)) return undefined;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap";
+    document.head.appendChild(link);
+    return undefined;
+  }, []);
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "16px 12px 60px" : "8px 20px 60px" }}>
+      <div style={{ maxWidth: 1220, margin: "0 auto" }}>
+        <div style={{ marginBottom: 8 }}><TastoLivelloPrecedente titolo="Normative" onClick={onBack} /></div>
+        <style>{CSS_NORMATIVA_PMU}</style>
+        {/* il documento e' HTML gia' scritto: si monta com'e', dentro il
+            contenitore che ne delimita lo stile */}
+        <div className="mappa-pmu" dangerouslySetInnerHTML={{ __html: HTML_NORMATIVA_PMU }} />
+      </div>
+    </div>
+  );
+}
+
 // "Normative": l'area delle regole che l'accademia deve rispettare e dei
 // documenti che le accompagnano. Per ora ospita un solo argomento —
 // "Ritorno al Corso" — ed e' fatta con la stessa griglia di tessere delle
 // altre aree, cosi' aggiungerne altri e' solo una riga in piu'.
-function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onBack, titolo = "Normative" }) {
+function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onApriMappaNormative, onBack, titolo = "Normative" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -23047,6 +23089,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
           onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "ritornoalcorso", title: "Ritorno al Corso", descrizione: "Le regole per chi torna a frequentare un corso già fatto.", Icona: IconaTileNormative, attivo: true, onClick: onApriRitornoAlCorso || (() => {}) },
+            { chiave: "mappanormativepmu", title: "Mappa normative regionali", descrizione: "Cosa serve per esercitare il trucco permanente, regione per regione.", Icona: IconaPin, attivo: true, onClick: onApriMappaNormative || (() => {}) },
           ]}
         />
       </div>
@@ -46631,6 +46674,7 @@ export default function App() {
     prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop"],
     normative: [],
     ritornoalcorso: ["normative_testi"],
+    mappanormativepmu: [],
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
@@ -48122,9 +48166,14 @@ export default function App() {
           colonneTasti={layoutTasti.normative?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("normative", { colonne: n })}
           etichetteTasti={layoutTasti.normative?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("normative", chiave, testo)}
           onApriRitornoAlCorso={() => setView("ritornoalcorso")}
+          onApriMappaNormative={() => setView("mappanormativepmu")}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "normative", "Normative")}
         />
+      )}
+
+      {view === "mappanormativepmu" && (
+        <PaginaMappaNormativePmu onBack={() => setView("normative")} />
       )}
 
       {view === "ritornoalcorso" && (
