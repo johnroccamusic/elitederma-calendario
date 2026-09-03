@@ -30439,51 +30439,58 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Da gestire oggi</div>
               {totSegnalazioni > 0 && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 10, padding: "2px 9px" }}>{totSegnalazioni}</span>}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(6, minmax(0,1fr))", gap: 10, alignItems: "stretch" }}>
+            {/* Sei tessere con la stessa impalcatura: intestazione alta
+                due righe (anche quando il titolo ne occupa una sola), poi
+                il numero, poi la nota appoggiata in fondo. Cosi' i sei
+                numeri stanno tutti sulla stessa linea invece di ballare
+                a seconda di quanto e' lungo il titolo sopra.
+                Da telefono tre per riga, due righe: sei tessere in una
+                schermata sola, senza scorrere */}
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0,1fr))" : "repeat(6, minmax(0,1fr))", gap: isMobile ? 8 : 10, alignItems: "stretch" }}>
               {[
-                { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", n: sottoScorta.length },
-                { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", n: fermi.length },
-                { chiave: "senzacosto", Icona: IconaScatolaErp, tinta: GOLD, etichetta: "Senza costo di acquisto", n: senzaCosto.length },
-              ].map((c) => (
-                <button
-                  key={c.chiave}
-                  onClick={() => setFiltroRapido(c.chiave)}
-                  style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12, padding: "16px 18px", borderRadius: 16, border: `1px solid ${filtroRapido === c.chiave ? GOLD : CREAM_BORDER}`, background: filtroRapido === c.chiave ? BG : "#fff", cursor: "pointer", textAlign: "left", minHeight: 118 }}
-                >
-                  <span style={{ display: "flex", alignItems: "center", gap: 9, ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>
-                    <span style={{ display: "inline-flex", flexShrink: 0, color: c.tinta }}><c.Icona size={18} color={c.tinta} /></span>{c.etichetta}
-                  </span>
-                  <span style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
-                    <span>
-                      <span style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{c.n}</span>
-                      <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>prodotti</span>
+                { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
+                { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", valore: fermi.length, unita: "prodotti", filtro: true },
+                { chiave: "senzacosto", Icona: IconaScatolaErp, tinta: GOLD, etichetta: "Senza costo di acquisto", valore: senzaCosto.length, unita: "prodotti", filtro: true },
+                { chiave: "totale", Icona: IconaScatolaErp, tinta: GOLD, etichetta: "Stock totale", maiuscolo: true, valore: stockTotaleGenerale, unita: "pezzi", nota: "100% del totale" },
+                { chiave: "online", Icona: IconaCarrelloPos, tinta: GOLD, etichetta: "In vendita online", maiuscolo: true, valore: stockPubblicato, unita: "pezzi", nota: `${pctPubblicato.toLocaleString("it-IT")}% del totale, su ${prodottiPubblicati.length} prodotti` },
+                { chiave: "congelato", Icona: IconaScudoSicurezza, tinta: GOLD, etichetta: "Riservati dalla soglia", maiuscolo: true, valore: stockCongelato, unita: "pezzi", nota: "Sotto la soglia di riordino i kit non attingono: restano allo shop" },
+              ].map((c) => {
+                const scelto = c.filtro && filtroRapido === c.chiave;
+                const corpo = (
+                  <>
+                    <span style={{ display: "flex", alignItems: "flex-start", gap: 8, minHeight: isMobile ? 30 : 34 }}>
+                      <span style={{ display: "inline-flex", flexShrink: 0, color: c.tinta, marginTop: 1 }}><c.Icona size={isMobile ? 15 : 18} color={c.tinta} /></span>
+                      <span style={{
+                        ...fontBody, fontSize: isMobile ? 10 : (c.maiuscolo ? 10.5 : 12.5), fontWeight: 700, color: NAVY, lineHeight: 1.25,
+                        ...(c.maiuscolo ? { textTransform: "uppercase", letterSpacing: 0.6 } : {}),
+                      }}>{c.etichetta}</span>
                     </span>
-                    <IconaChevronDestra size={16} color={MUTED} />
-                  </span>
-                </button>
-              ))}
-              {/* il valore stimato del magazzino non sta più qui: è un dato
-                  economico, e vive nelle Statistiche totali vendite prodotti */}
-              {/* i tre numeri del magazzino: stessa forma delle tessere
-                  accanto — icona ed etichetta in cima, numero grande, e
-                  sotto la riga che lo spiega */}
-              {[
-                { chiave: "totale", Icona: IconaScatolaErp, etichetta: "Stock totale", valore: stockTotaleGenerale, nota: "100% del totale" },
-                { chiave: "online", Icona: IconaCarrelloPos, etichetta: "In vendita online", valore: stockPubblicato, nota: `${pctPubblicato.toLocaleString("it-IT")}% del totale, su ${prodottiPubblicati.length} prodotti` },
-                { chiave: "congelato", Icona: IconaScudoSicurezza, etichetta: "Riservati dalla soglia", valore: stockCongelato, nota: "Sotto la soglia di riordino i kit non attingono: restano allo shop" },
-              ].map((k) => (
-                <div key={k.chiave} style={{ ...cardStyle, marginBottom: 0, padding: "16px 18px", borderRadius: 16, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 10, minHeight: 118 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                    <span style={{ display: "inline-flex", flexShrink: 0, color: GOLD }}><k.Icona size={18} color={GOLD} /></span>
-                    <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.25 }}>{k.etichetta}</span>
-                  </span>
-                  <span>
-                    <span style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{k.valore.toLocaleString("it-IT")}</span>
-                    <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>pezzi</span>
-                  </span>
-                  <span style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.4 }}>{k.nota}</span>
-                </div>
-              ))}
+                    <span style={{ display: "block", marginTop: isMobile ? 6 : 10 }}>
+                      <span style={{ ...fontDisplay, fontSize: isMobile ? 22 : 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{c.valore.toLocaleString("it-IT")}</span>
+                      <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, color: MUTED }}>{c.unita}</span>
+                    </span>
+                    {/* la nota si appoggia in fondo: cosi' una tessera con
+                        due righe di spiegazione resta alta come le altre */}
+                    {c.nota && !isMobile && (
+                      <span style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.4, marginTop: "auto", paddingTop: 8 }}>{c.nota}</span>
+                    )}
+                  </>
+                );
+                const stile = {
+                  display: "flex", flexDirection: "column", padding: isMobile ? "10px 12px" : "16px 18px", borderRadius: 16,
+                  border: `1px solid ${scelto ? GOLD : CREAM_BORDER}`, background: scelto ? BG : "#fff",
+                  textAlign: "left", minHeight: isMobile ? 96 : 132, position: "relative",
+                };
+                if (!c.filtro) return <div key={c.chiave} style={stile}>{corpo}</div>;
+                return (
+                  <button key={c.chiave} onClick={() => setFiltroRapido(c.chiave)} style={{ ...stile, cursor: "pointer" }}>
+                    {corpo}
+                    <span style={{ position: "absolute", right: isMobile ? 10 : 14, bottom: isMobile ? 10 : 14, display: "inline-flex" }}>
+                      <IconaChevronDestra size={isMobile ? 13 : 16} color={MUTED} />
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
