@@ -7276,11 +7276,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     let puntiTotale = 0, puntiCorsi = 0, puntiPersonale = 0;
     const perGruppo = {};
     righe.forEach((v) => {
-      const punti = puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase);
+      const infoCoupon = v.codice_coupon ? couponPerCodice[v.codice_coupon.toLowerCase()] : null;
+      const punti = puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase, infoCoupon);
       const contaComeVendita = (v.totale || 0) > 0;
       puntiTotale += punti;
       if (contaComeVendita) venditeTotale += 1;
-      const infoCoupon = v.codice_coupon ? couponPerCodice[v.codice_coupon.toLowerCase()] : null;
       if (infoCoupon?.corsi_date_id) { if (contaComeVendita) venditeCorsi += 1; puntiCorsi += punti; }
       else if (infoCoupon) { if (contaComeVendita) venditePersonale += 1; puntiPersonale += punti; }
       const chiave = v.codice_coupon ? v.codice_coupon.toUpperCase() : "__pos_senza_referral__";
@@ -7360,7 +7360,29 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
           {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
         </div>
-        {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Area master</div>}
+        {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 10 }}>Area master</div>}
+
+        {/* Il referral code personale, subito sotto il nome: e' la prima
+            cosa che una master cerca quando entra qui, e finora doveva
+            chiederlo. E' lo stesso codice creato in "Genera referral
+            code" — quello legato a lei e non a una singola edizione */}
+        {masterSel && (() => {
+          const suo = (coupon || []).find((c) => c.master_id === masterSel.id && !c.corsi_date_id);
+          if (!suo) return null;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 18, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 14px", width: "fit-content", maxWidth: "100%" }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Il tuo referral code personale è:</span>
+              <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1 }}>{suo.codice}</span>
+              <button
+                onClick={() => { try { navigator.clipboard.writeText(String(suo.codice || "").toUpperCase()); } catch (e) { /* niente appunti: si legge e si copia a mano */ } }}
+                title="Copia il codice"
+                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
+              >
+                copia
+              </button>
+            </div>
+          );
+        })()}
 
         {masterSel && puntiMasterImpostazioni && (
           <div style={{ marginBottom: 20 }}>
@@ -23878,10 +23900,18 @@ function regolaPuntiMasterApplicabile(dataLocale, periodiSpeciali, regoleBase) {
 // troncamento verso lo zero, applicato qui riga per riga (mai su un totale
 // già sommato): un reso/annullamento/cambio POS ha già il totale negativo,
 // quindi la stessa formula produce punti negativi senza bisogno di un caso a parte
-function puntiMasterDiVendita(v, periodiSpeciali, regoleBase) {
+// "couponDellaVendita" e' il referral code con cui la vendita e' stata
+// fatta: se quel codice ha una sua regola punti (punti_valore /
+// punti_ogni_euro) comanda quella, altrimenti vale la regola generale
+// della raccolta. Cosi' si puo' premiare di piu' un codice senza
+// cambiare la raccolta per tutti.
+function puntiMasterDiVendita(v, periodiSpeciali, regoleBase, couponDellaVendita) {
   const dataLocale = dataLocaleRomaPuntiMaster(v.data_ordine);
   if (!dataLocale) return 0;
-  const regola = regolaPuntiMasterApplicabile(dataLocale, periodiSpeciali, regoleBase);
+  const regolaCodice = couponDellaVendita && couponDellaVendita.punti_valore != null && Number(couponDellaVendita.punti_ogni_euro) > 0
+    ? { punti: Number(couponDellaVendita.punti_valore), euro: Number(couponDellaVendita.punti_ogni_euro) }
+    : null;
+  const regola = regolaCodice || regolaPuntiMasterApplicabile(dataLocale, periodiSpeciali, regoleBase);
   if (!regola || !(regola.euro > 0)) return 0;
   const fattore = regola.punti / regola.euro;
   if (v.origine === "woocommerce") {
@@ -24120,6 +24150,36 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   }
   const masterOrdinate = useMemo(() => [...(master || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "")), [master]);
 
+  // Quanti punti vale un euro venduto CON QUEL codice. Se non si scrive
+  // niente vale la regola generale della raccolta: qui si mette solo
+  // l'eccezione, cosi' un codice puo' premiare di piu' senza cambiare le
+  // regole per tutti.
+  const [puntiCodiceAperto, setPuntiCodiceAperto] = useState(null); // { coupon, master }
+  const [puntiValore, setPuntiValore] = useState("");
+  const [puntiOgniEuro, setPuntiOgniEuro] = useState("");
+  const [salvandoPuntiCodice, setSalvandoPuntiCodice] = useState(false);
+  function apriPuntiCodice(c, m) {
+    setPuntiCodiceAperto({ coupon: c, master: m });
+    setPuntiValore(c.punti_valore != null ? String(c.punti_valore) : "");
+    setPuntiOgniEuro(c.punti_ogni_euro != null ? String(c.punti_ogni_euro) : "");
+  }
+  async function salvaPuntiCodice(azzera) {
+    const c = puntiCodiceAperto?.coupon;
+    if (!c) return;
+    let valore = null, ogniEuro = null;
+    if (!azzera) {
+      valore = parseNum(puntiValore);
+      ogniEuro = parseNum(puntiOgniEuro);
+      if (!(valore > 0) || !(ogniEuro > 0)) { window.alert("Scrivi quanti punti e ogni quanti euro, tutti e due maggiori di zero."); return; }
+    }
+    setSalvandoPuntiCodice(true);
+    const { error } = await supabase.from("coupon").update({ punti_valore: valore, punti_ogni_euro: ogniEuro }).eq("id", c.id);
+    setSalvandoPuntiCodice(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setPuntiCodiceAperto(null);
+    ricarica(["coupon"]);
+  }
+
   // ---------- tab "Gestione Premi" ----------
   const regolaBaseAperta = useMemo(() => (puntiMasterRegolaBase || []).find((r) => r.data_fine == null) || null, [puntiMasterRegolaBase]);
   const regolaBaseStorico = useMemo(() => [...(puntiMasterRegolaBase || [])].filter((r) => r.data_fine != null).sort((a, b) => b.data_inizio.localeCompare(a.data_inizio)), [puntiMasterRegolaBase]);
@@ -24219,11 +24279,14 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     if (!puntiMasterImpostazioni) return [];
     return (master || []).map((m) => {
       const venditeMaster = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
-      const punti = venditeMaster.reduce((s, v) => s + puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase), 0);
+      const punti = venditeMaster.reduce((s, v) => {
+        const info = v.codice_coupon ? (coupon || []).find((c) => (c.codice || "").toLowerCase() === v.codice_coupon.toLowerCase()) : null;
+        return s + puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase, info);
+      }, 0);
       const euro = round2(venditeMaster.reduce((s, v) => s + (v.totale || 0), 0));
       return { master: m, punti, euro };
     }).filter((r) => r.punti !== 0 || r.euro !== 0).sort((a, b) => b.punti - a.punti);
-  }, [master, venditeShop, puntiMasterImpostazioni, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase]);
+  }, [master, venditeShop, puntiMasterImpostazioni, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase, coupon]);
 
   // ---------- tab "Generazione automatica" ----------
   const [regoleForm, setRegoleForm] = useState(null);
@@ -24414,9 +24477,20 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                 <div key={m.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{toTitleCase(m.nome)}</div>
                   {esistente ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{esistente.codice}</span>
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: (ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).colore, borderRadius: 20, padding: "2px 9px" }}>{(ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).testo}</span>
+                      {/* quanto vale questo codice nella raccolta punti:
+                          scritto sul tasto, cosi' si legge senza aprirlo */}
+                      <button
+                        onClick={() => apriPuntiCodice(esistente, m)}
+                        title="Quanti punti guadagna la master per ogni euro venduto con questo codice"
+                        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: esistente.punti_valore != null ? NAVY : MUTED, background: esistente.punti_valore != null ? "#FDF8EC" : "#fff", border: `1px solid ${esistente.punti_valore != null ? GOLD : CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+                      >
+                        {esistente.punti_valore != null && esistente.punti_ogni_euro
+                          ? `${esistente.punti_valore} punti ogni ${esistente.punti_ogni_euro} €`
+                          : "Punti: regola generale"}
+                      </button>
                     </div>
                   ) : codiceProposto[m.id] ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -24431,6 +24505,42 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               );
             })}
           </div>
+        )}
+
+        {puntiCodiceAperto && (
+          <Modal
+            title={`Punti del codice ${String(puntiCodiceAperto.coupon.codice || "").toUpperCase()}`}
+            onClose={() => setPuntiCodiceAperto(null)}
+            maxWidth={440}
+          >
+            <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.55, marginBottom: 14 }}>
+              Quanti punti guadagna <b>{toTitleCase(puntiCodiceAperto.master.nome)}</b> per ogni vendita fatta con questo codice.
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 120px" }}>
+                <Field label="Punti"><input style={inputStyle} inputMode="decimal" value={puntiValore} onChange={(e) => setPuntiValore(e.target.value)} placeholder="1" /></Field>
+              </div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, paddingBottom: 22 }}>ogni</div>
+              <div style={{ flex: "1 1 120px" }}>
+                <Field label="Euro venduti"><input style={inputStyle} inputMode="decimal" value={puntiOgniEuro} onChange={(e) => setPuntiOgniEuro(e.target.value)} placeholder="10" /></Field>
+              </div>
+            </div>
+            {parseNum(puntiValore) > 0 && parseNum(puntiOgniEuro) > 0 && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "10px 12px", marginTop: 10 }}>
+                Una vendita da 100 € con questo codice vale <b>{Math.trunc(100 * (parseNum(puntiValore) / parseNum(puntiOgniEuro)))} punti</b>.
+              </div>
+            )}
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 10, lineHeight: 1.45 }}>
+              Lasciando vuoto vale la <b>regola generale</b> della raccolta{regolaBaseAperta ? ` (${regolaBaseAperta.punti} punti ogni ${regolaBaseAperta.euro} €)` : ""}. I punti si ricalcolano da soli sulle vendite già fatte con questo codice: non sono un saldo salvato.
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+              <Button onClick={() => salvaPuntiCodice(false)} disabled={salvandoPuntiCodice}>{salvandoPuntiCodice ? "Salvo…" : "Salva"}</Button>
+              {puntiCodiceAperto.coupon.punti_valore != null && (
+                <Button variant="ghost" onClick={() => salvaPuntiCodice(true)} disabled={salvandoPuntiCodice}>Torna alla regola generale</Button>
+              )}
+              <Button variant="ghost" onClick={() => setPuntiCodiceAperto(null)}>Annulla</Button>
+            </div>
+          </Modal>
         )}
 
         {tab === "automatica" && (
