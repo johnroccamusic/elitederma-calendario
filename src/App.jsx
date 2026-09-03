@@ -30445,33 +30445,26 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               ))}
               {/* il valore stimato del magazzino non sta più qui: è un dato
                   economico, e vive nelle Statistiche totali vendite prodotti */}
-              <RiquadroKpi
-                aSinistra
-                etichetta="Stock totale"
-                valore={<>{stockTotaleGenerale.toLocaleString("it-IT")}</>}
-                nota="100% del totale"
-                icona={<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z" /><path d="m3.3 7.3 8.7 4.9 8.7-4.9" /><path d="M12 12.2V21" /></svg>}
-              >
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: -2 }}>pezzi</div>
-              </RiquadroKpi>
-              <RiquadroKpi
-                aSinistra
-                etichetta="In vendita online"
-                valore={<>{stockPubblicato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
-                nota={`${pctPubblicato.toLocaleString("it-IT")}% del totale, su ${prodottiPubblicati.length} prodotti`}
-                icona={<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h3l2.6 12.4a1.6 1.6 0 0 0 1.6 1.3h8.5a1.6 1.6 0 0 0 1.6-1.3L22 7H6" /></svg>}
-              >
-                <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", width: "100%", margin: "2px 0" }}>
-                  <div style={{ height: "100%", width: `${pctPubblicato}%`, background: GOLD, borderRadius: 3 }} />
+              {/* i tre numeri del magazzino: stessa forma delle tessere
+                  accanto — icona ed etichetta in cima, numero grande, e
+                  sotto la riga che lo spiega */}
+              {[
+                { chiave: "totale", Icona: IconaScatolaErp, etichetta: "Stock totale", valore: stockTotaleGenerale, nota: "100% del totale" },
+                { chiave: "online", Icona: IconaCarrelloPos, etichetta: "In vendita online", valore: stockPubblicato, nota: `${pctPubblicato.toLocaleString("it-IT")}% del totale, su ${prodottiPubblicati.length} prodotti` },
+                { chiave: "congelato", Icona: IconaScudoSicurezza, etichetta: "Riservati dalla soglia", valore: stockCongelato, nota: "Sotto la soglia di riordino i kit non attingono: restano allo shop" },
+              ].map((k) => (
+                <div key={k.chiave} style={{ ...cardStyle, marginBottom: 0, padding: "16px 18px", borderRadius: 16, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 10, minHeight: 118 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    <span style={{ display: "inline-flex", flexShrink: 0, color: GOLD }}><k.Icona size={18} color={GOLD} /></span>
+                    <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.25 }}>{k.etichetta}</span>
+                  </span>
+                  <span>
+                    <span style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{k.valore.toLocaleString("it-IT")}</span>
+                    <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>pezzi</span>
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.4 }}>{k.nota}</span>
                 </div>
-              </RiquadroKpi>
-              <RiquadroKpi
-                aSinistra
-                etichetta="Riservati dalla soglia"
-                valore={<>{stockCongelato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
-                nota="Sotto la soglia di riordino i kit non attingono: restano allo shop"
-                icona={<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></svg>}
-              />
+              ))}
             </div>
           </div>
         )}
@@ -30482,21 +30475,39 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           const colore = ritardi || critico ? "#C0392B" : daOrdinare ? "#B8860B" : "#2E7D32";
           const sfondo = ritardi || critico ? "#FBE4E1" : daOrdinare ? "#FBF1D9" : "#E3F3E5";
           return (
-            <button
-              onClick={onApriAdvisor}
-              style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "12px 16px", marginBottom: 22, borderRadius: 12, border: `1px solid ${colore}44`, background: sfondo, cursor: "pointer" }}
+            <div
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap", padding: "12px 16px", marginBottom: 22, borderRadius: 16, border: `1px solid ${colore}44`, background: sfondo }}
             >
-              <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, minWidth: 0 }}>
-                <b style={{ color: colore }}>Advisor</b>{" — "}
-                {risultato.modalita === "senza_date"
-                  ? "nessun corso futuro in calendario: nessuna previsione possibile"
-                  : critico
-                    ? `autonomia fino al ${fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))}, poi un corso resta scoperto`
-                    : `copri tutti i ${risultato.edizioniConsiderate} corsi in calendario`}
-                {daOrdinare > 0 && <> · <b>{daOrdinare}</b> prodotti da ordinare{ritardi > 0 ? `, ${ritardi} in ritardo` : ""}</>}
-              </span>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>apri ›</span>
-            </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", minWidth: 0 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                  <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#fff", border: `1px solid ${colore}44`, display: "inline-flex", alignItems: "center", justifyContent: "center", color: colore }}>
+                    <IconaTileLampadina size={18} color={colore} />
+                  </span>
+                  <span style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY }}>Advisor</span>
+                </span>
+                <span style={{ width: 1, height: 22, background: `${colore}44`, flexShrink: 0 }} />
+                {/* le tre notizie separate da un pallino: prima era una frase
+                    sola e i numeri ci si perdevano dentro */}
+                <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>
+                  <span>
+                    {risultato.modalita === "senza_date"
+                      ? "Nessun corso futuro in calendario"
+                      : critico
+                        ? <>Autonomia fino al <b>{fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))}</b></>
+                        : <>Copri tutti i {risultato.edizioniConsiderate} corsi in calendario</>}
+                  </span>
+                  {critico && <><span style={{ color: MUTED }}>•</span><span>Un corso resta scoperto</span></>}
+                  {daOrdinare > 0 && <><span style={{ color: MUTED }}>•</span><span><b>{daOrdinare}</b> prodotti da ordinare</span></>}
+                  {ritardi > 0 && <><span style={{ color: MUTED }}>•</span><span style={{ color: "#C0392B", fontWeight: 700 }}>{ritardi} in ritardo</span></>}
+                </span>
+              </div>
+              <button
+                onClick={onApriAdvisor}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${colore}44`, borderRadius: 12, padding: "9px 16px", cursor: "pointer", flexShrink: 0 }}
+              >
+                Apri advisor <IconaChevronDestra size={14} color={MUTED} />
+              </button>
+            </div>
           );
         })()}
 
