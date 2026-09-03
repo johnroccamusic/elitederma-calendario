@@ -23125,6 +23125,18 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
       sez.classList.add("chiudibile");
     });
 
+    // 3. ogni cella della tabella si porta dietro il nome della sua
+    //    colonna: da telefono le righe diventano schede e senza
+    //    l'etichetta i numeri non direbbero di cosa parlano
+    radice.querySelectorAll("table").forEach((tabella) => {
+      const intestazioni = [...tabella.querySelectorAll("thead th")].map((th) => th.textContent.trim());
+      tabella.querySelectorAll("tbody tr").forEach((riga) => {
+        [...riga.children].forEach((cella, i) => {
+          if (intestazioni[i] && !cella.getAttribute("data-etichetta")) cella.setAttribute("data-etichetta", intestazioni[i]);
+        });
+      });
+    });
+
     function apriSezione(sez) {
       if (sez) sez.classList.remove("chiudibile");
     }
@@ -23139,7 +23151,7 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
         testata.parentElement.classList.toggle("chiudibile");
         return;
       }
-      // 3. l'indice (laterale o a tendina): senza intercettarlo il
+      // 4. l'indice (laterale o a tendina): senza intercettarlo il
       //    browser cambia l'indirizzo e l'app, che ascolta quel
       //    cambiamento per il tasto "indietro", usciva dalla pagina
       const link = e.target.closest('a[href^="#"]');

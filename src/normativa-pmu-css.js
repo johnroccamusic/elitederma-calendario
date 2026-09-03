@@ -5,7 +5,9 @@
 // di tutta l'app, non solo di questa pagina.
 export const CSS_NORMATIVA_PMU = `
 .mappa-pmu{
-  --bg:#FAF7F3; --bg2:#F1ECE5; --ink:#221D1A; --ink2:#5C534D; --line:#E2D9CF;
+  /* avorio, non bianco: e' la stessa carta del resto dell'app (#F7F3E9
+     per il foglio, #EFE9DC per i riquadri) */
+  --bg:#F7F3E9; --bg2:#EFE9DC; --ink:#221D1A; --ink2:#5C534D; --line:#E2D9CF;
   --est:#8C3B4A; --est-soft:#F6E6E9; --alt:#2F5D62; --alt-soft:#E1EEEF;
   --warn:#9A6A12; --warn-soft:#F8EDD3; --ok:#3F6B3A; --ok-soft:#E4EFE1;
   --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -55,9 +57,27 @@ export const CSS_NORMATIVA_PMU = `
 .mappa-pmu .card p,.mappa-pmu .card li{font-size:15px}
 .mappa-pmu .card ul{padding-left:18px}
 .mappa-pmu .tablewrap{overflow-x:auto;margin-top:18px;border:1px solid var(--line);border-radius:6px}
-.mappa-pmu table{border-collapse:collapse;width:100%;min-width:980px;font-size:14px}
-.mappa-pmu th,.mappa-pmu td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
-.mappa-pmu th{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);background:var(--bg2);position:sticky;top:0}
+/* la tabella sta nella larghezza che ha: prima pretendeva 980px e sul
+   monitor finiva tagliata a meta', con lo scorrimento orizzontale che
+   nessuno vedeva */
+.mappa-pmu table{border-collapse:collapse;width:100%;font-size:13px;table-layout:fixed}
+.mappa-pmu th,.mappa-pmu td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.mappa-pmu th{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);background:var(--bg2);position:sticky;top:0}
+.mappa-pmu td.hrs{white-space:normal}
+.mappa-pmu td.reg{white-space:normal}
+/* sotto i 1000px le righe diventano schede: una regione per blocco, ogni
+   valore con la sua etichetta. Una tabella a sette colonne su un telefono
+   non si legge in nessun modo */
+@media(max-width:999px){
+  .mappa-pmu .tablewrap{border:none;border-radius:0}
+  .mappa-pmu table,.mappa-pmu tbody,.mappa-pmu tr,.mappa-pmu td{display:block;width:auto}
+  .mappa-pmu thead{display:none}
+  .mappa-pmu tbody tr{border:1px solid var(--line);border-radius:8px;background:var(--bg2);padding:10px 12px;margin-bottom:10px}
+  .mappa-pmu tbody td{border-bottom:none;padding:5px 0}
+  .mappa-pmu tbody td::before{content:attr(data-etichetta);display:block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin-bottom:2px}
+  .mappa-pmu tbody td.reg{font-size:16px;font-weight:700}
+  .mappa-pmu tbody td.reg::before{display:none}
+}
 .mappa-pmu tbody tr:last-child td{border-bottom:none}
 .mappa-pmu td.reg{font-weight:600;white-space:nowrap}
 .mappa-pmu td.hrs{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
