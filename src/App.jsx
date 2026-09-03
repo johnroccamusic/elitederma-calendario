@@ -23079,14 +23079,67 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
     return undefined;
   }, []);
 
+  // Il documento e' HTML gia' scritto: qui si monta e poi lo si rende
+  // vivo — sezioni che si aprono a richiesta e indice che porta al punto
+  // giusto senza uscire dalla pagina.
+  const rifDocumento = React.useRef(null);
+  useEffect(() => {
+    const radice = rifDocumento.current;
+    if (!radice) return undefined;
+
+    // 1. ogni sezione parte chiusa, con la sua intestazione cliccabile:
+    //    aperte tutte insieme erano trenta schermate di testo in fila
+    const sezioni = radice.querySelectorAll("section.block, section.region");
+    sezioni.forEach((sez) => {
+      if (sez.querySelector(":scope > .testata-sezione")) return;
+      const testata = document.createElement("div");
+      testata.className = "testata-sezione";
+      const freccia = document.createElement("span");
+      freccia.className = "freccia";
+      freccia.textContent = "▸";
+      testata.appendChild(freccia);
+      // il titolo della sezione (il .head delle regioni, l'h2 dei blocchi)
+      // diventa il tasto che la apre
+      const intestazione = sez.querySelector(":scope > .head") || sez.querySelector(":scope > h2");
+      if (intestazione) testata.appendChild(intestazione);
+      sez.insertBefore(testata, sez.firstChild);
+      sez.classList.add("chiudibile");
+    });
+
+    function apriSezione(sez) {
+      if (sez) sez.classList.remove("chiudibile");
+    }
+    function suClic(e) {
+      const testata = e.target.closest(".testata-sezione");
+      if (testata && radice.contains(testata)) {
+        testata.parentElement.classList.toggle("chiudibile");
+        return;
+      }
+      // 2. l'indice laterale: senza intercettarlo il browser cambia
+      //    l'indirizzo e l'app, che ascolta quel cambiamento per il tasto
+      //    "indietro", usciva dalla pagina
+      const link = e.target.closest('a[href^="#"]');
+      if (!link || !radice.contains(link)) return;
+      e.preventDefault();
+      const id = link.getAttribute("href").slice(1);
+      const bersaglio = radice.querySelector(`#${CSS.escape(id)}`);
+      if (!bersaglio) return;
+      apriSezione(bersaglio.closest("section"));
+      bersaglio.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    radice.addEventListener("click", suClic);
+    return () => radice.removeEventListener("click", suClic);
+  }, []);
+
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "16px 12px 60px" : "8px 20px 60px" }}>
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ marginBottom: 8 }}><TastoLivelloPrecedente titolo="Normative" onClick={onBack} /></div>
         <style>{CSS_NORMATIVA_PMU}</style>
-        {/* il documento e' HTML gia' scritto: si monta com'e', dentro il
-            contenitore che ne delimita lo stile */}
-        <div className="mappa-pmu" dangerouslySetInnerHTML={{ __html: HTML_NORMATIVA_PMU }} />
+        {/* data-theme="light": il documento nasceva con un tema scuro
+            automatico, che dentro un'app tutta chiara diventava una pagina
+            nera in mezzo al crema */}
+        <div ref={rifDocumento} className="mappa-pmu" data-theme="light" dangerouslySetInnerHTML={{ __html: HTML_NORMATIVA_PMU }} />
       </div>
     </div>
   );

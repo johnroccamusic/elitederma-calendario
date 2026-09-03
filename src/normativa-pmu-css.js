@@ -13,18 +13,6 @@ export const CSS_NORMATIVA_PMU = `
   --disp:'Fraunces',Georgia,'Times New Roman',serif;
   background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;
 }
-@media (prefers-color-scheme: dark){
-  .mappa-pmu:not([data-theme="light"]){
-    --bg:#171416; --bg2:#211D20; --ink:#EDE6DF; --ink2:#B4A99F; --line:#3A3236;
-    --est:#E0919F; --est-soft:#3A2429; --alt:#8CC4C8; --alt-soft:#1E3436;
-    --warn:#E3B45C; --warn-soft:#3A2E17; --ok:#9CC894; --ok-soft:#22301F;
-  }
-}
-.mappa-pmu[data-theme="dark"]{
-  --bg:#171416; --bg2:#211D20; --ink:#EDE6DF; --ink2:#B4A99F; --line:#3A3236;
-  --est:#E0919F; --est-soft:#3A2429; --alt:#8CC4C8; --alt-soft:#1E3436;
-  --warn:#E3B45C; --warn-soft:#3A2E17; --ok:#9CC894; --ok-soft:#22301F;
-}
 .mappa-pmu *{box-sizing:border-box}
 .mappa-pmu a{color:inherit;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .mappa-pmu a:hover{text-decoration-color:currentColor}
@@ -104,4 +92,15 @@ export const CSS_NORMATIVA_PMU = `
 @media(min-width:760px){.mappa-pmu .check{columns:2}}
 .mappa-pmu .check li{break-inside:avoid}
 .mappa-pmu footer{padding:36px 0 0;font-size:13.5px;color:var(--ink2);max-width:72ch}
+/* Ogni sezione si apre solo quando la si chiede. Tutte aperte insieme
+   erano trenta schermate di testo in fila: si trovava qualcosa solo
+   scorrendo. Chiuse, la pagina diventa un indice. */
+.mappa-pmu section.chiudibile > *:not(.testata-sezione){display:none}
+.mappa-pmu .testata-sezione{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;padding:2px 0}
+.mappa-pmu .testata-sezione .freccia{font-family:var(--mono);font-size:13px;color:var(--ink2);flex:0 0 auto;transition:transform 120ms ease}
+.mappa-pmu section:not(.chiudibile) > .testata-sezione .freccia{transform:rotate(90deg)}
+.mappa-pmu .testata-sezione > *{margin-bottom:0}
+.mappa-pmu .testata-sezione:hover h2,.mappa-pmu .testata-sezione:hover h3{color:var(--est)}
+.mappa-pmu section.region.chiudibile{padding:14px 0}
+.mappa-pmu section.block.chiudibile{padding:16px 0}
 `;
