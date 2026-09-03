@@ -1018,6 +1018,28 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
   );
 }
 
+function IconaGriglia({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+function IconaScaricaGiu({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12" /><path d="M7 11l5 5 5-5" /><path d="M4 20h16" />
+    </svg>
+  );
+}
+function IconaAllarmeTriangolo({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3.5 2.5 20h19z" /><path d="M12 9v5M12 17h.01" />
+    </svg>
+  );
+}
 function IconaPiuCerchiato({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
@@ -22658,7 +22680,7 @@ const NORMATIVA_RITORNO_AL_CORSO = [
 // In modalita' programmatore ogni blocco si apre cliccandoci sopra e si
 // riscrive li' dentro; quello che si salva lo vedono tutti, perche' sta
 // sul database e non nel browser di chi ha scritto.
-function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, assicuraTabelle, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative" }) {
+function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative" }) {
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   const riga = (testi || []).find((t) => t.chiave === chiave) || null;
@@ -22666,8 +22688,6 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, assicuraTabelle
   const [bozza, setBozza] = useState("");
   const [salvando, setSalvando] = useState(false);
   const seminato = React.useRef(false);
-
-  useEffect(() => { assicuraTabelle?.(["normative_testi"]); }, [assicuraTabelle]);
 
   // prima apertura: il testo di partenza finisce sul database, cosi' da
   // quel momento e' modificabile come tutto il resto
@@ -30330,32 +30350,64 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         {/* il tasto dice sempre dove porta: tornando da una scheda aperta
             da un avviso porta all'elenco, non fuori dalla pagina */}
-        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo={vistaPrimaDellaScheda ? "Gestione magazzino" : (titoloIndietro || "Gestione magazzino e shop")} onClick={tornaIndietro} /></div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <Button variant="ghost" onClick={onApriAdvisor}>Advisor ›</Button>
-            <Button variant="ghost" onClick={() => mostraVista("categorie")}>Gestisci categorie</Button>
-            <Button onClick={() => apriSchedaProdotto({ nuovo: true })}>+ Nuovo prodotto</Button>
-            {/* il nome vecchio ("Sincronizza catalogo") non diceva in che
-                direzione andasse la sincronizzazione, e la direzione è una
-                sola: dal sito verso qui. Stock e prezzi non si toccano — li
-                decide l'app, il sito ne è lo specchio */}
+        {/* La testata: a sinistra dove sono, a destra le tre azioni. Prima
+            titolo e tasti stavano sulla stessa riga e si spingevano a
+            vicenda; qui i comandi hanno una riga loro, sopra, e il titolo
+            resta grande e da solo */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <span style={{ width: 44, height: 44, borderRadius: "50%", border: `1px solid ${GOLD}`, background: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <IconaScatolaErp size={20} color={GOLD} />
+            </span>
+            <TastoLivelloPrecedente titolo={vistaPrimaDellaScheda ? "Gestione magazzino" : (titoloIndietro || "Gestione magazzino e shop")} onClick={tornaIndietro} />
           </div>
-            <div style={{ textAlign: "right", maxWidth: 300 }}>
-              <Button variant="ghost" onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Importo dal sito…" : "Importa catalogo dal sito"}</Button>
-              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 4, lineHeight: 1.35 }}>
-                Da usare solo se hai creato un prodotto direttamente su WooCommerce: riporta indietro nomi, categorie e immagini dal sito.
-              </div>
-              {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button
+              onClick={onApriAdvisor}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "11px 18px", cursor: "pointer" }}
+            >
+              Advisor <IconaChevronDestra size={14} color={MUTED} />
+            </button>
+            <button
+              onClick={() => mostraVista("categorie")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "11px 18px", cursor: "pointer" }}
+            >
+              <IconaGriglia size={16} color={NAVY} /> Gestisci categorie
+            </button>
+            <button
+              onClick={() => apriSchedaProdotto({ nuovo: true })}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "12px 20px", cursor: "pointer" }}
+            >
+              + Nuovo prodotto
+            </button>
           </div>
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>
-          {vistaProdotti === "elenco"
-            ? "Magazzino fisico e shop online insieme. Clicca sul nome per aprire la scheda del prodotto, sullo stock totale per aggiornare il magazzino."
-            : "Gli stessi prodotti ordinati per categoria dello shop. Clicca un prodotto per aprirne la scheda completa."}
+
+        {/* titolo a sinistra, importazione dal sito a destra: due cose che
+            non c'entrano l'una con l'altra, e mescolate si leggevano male */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap", marginBottom: 22 }}>
+          <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 26 : 36, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{titolo}</div>
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED, lineHeight: 1.6, maxWidth: 520 }}>
+              {vistaProdotti === "elenco"
+                ? "Magazzino fisico e shop online insieme. Clicca sul nome per aprire la scheda del prodotto, sullo stock totale per aggiornare il magazzino."
+                : "Gli stessi prodotti ordinati per categoria dello shop. Clicca un prodotto per aprirne la scheda completa."}
+            </div>
+          </div>
+          <div style={{ flex: "0 1 340px", textAlign: "right" }}>
+            <button
+              onClick={sincronizzaCatalogo}
+              disabled={sincronizzando}
+              style={{ display: "inline-flex", alignItems: "center", gap: 10, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "11px 18px", cursor: sincronizzando ? "default" : "pointer", opacity: sincronizzando ? 0.6 : 1 }}
+            >
+              {sincronizzando ? "Importo dal sito…" : "Importa catalogo dal sito"}
+              <IconaScaricaGiu size={15} color={MUTED} />
+            </button>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+              Da usare solo se hai creato un prodotto direttamente su WooCommerce: riporta indietro nomi, categorie e immagini dal sito. Stock e prezzi non si toccano — li decide l'app.
+            </div>
+            {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
+          </div>
         </div>
 
         {/* "Da gestire oggi": sei tessere su una riga sola, subito sotto al
@@ -30370,20 +30422,24 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             </div>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(6, minmax(0,1fr))", gap: 10, alignItems: "stretch" }}>
               {[
-                { chiave: "sottoscorta", segno: "⚠️", etichetta: "Prodotti sotto scorta", n: sottoScorta.length },
-                { chiave: "fermi", segno: "⏱", etichetta: "Fermi da oltre 90 giorni", n: fermi.length },
-                { chiave: "senzacosto", segno: "📋", etichetta: "Senza costo di acquisto", n: senzaCosto.length },
+                { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", n: sottoScorta.length },
+                { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", n: fermi.length },
+                { chiave: "senzacosto", Icona: IconaScatolaErp, tinta: GOLD, etichetta: "Senza costo di acquisto", n: senzaCosto.length },
               ].map((c) => (
                 <button
                   key={c.chiave}
                   onClick={() => setFiltroRapido(c.chiave)}
-                  style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 10, padding: "12px 14px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === c.chiave ? BG : "#fff", cursor: "pointer", textAlign: "left", minHeight: 96 }}
+                  style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12, padding: "16px 18px", borderRadius: 16, border: `1px solid ${filtroRapido === c.chiave ? GOLD : CREAM_BORDER}`, background: filtroRapido === c.chiave ? BG : "#fff", cursor: "pointer", textAlign: "left", minHeight: 118 }}
                 >
-                  <span style={{ display: "flex", alignItems: "flex-start", gap: 7, ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>
-                    <span aria-hidden="true" style={{ flexShrink: 0 }}>{c.segno}</span>{c.etichetta}
+                  <span style={{ display: "flex", alignItems: "center", gap: 9, ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>
+                    <span style={{ display: "inline-flex", flexShrink: 0, color: c.tinta }}><c.Icona size={18} color={c.tinta} /></span>{c.etichetta}
                   </span>
-                  <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textAlign: "right" }}>
-                    {c.n} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>›</span>
+                  <span style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
+                    <span>
+                      <span style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{c.n}</span>
+                      <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>prodotti</span>
+                    </span>
+                    <IconaChevronDestra size={16} color={MUTED} />
                   </span>
                 </button>
               ))}
@@ -46225,14 +46281,23 @@ export default function App() {
     if (!ok || loading) return;
     const richieste = TABELLE_PER_VIEW[view] || [];
     const mancanti = richieste.filter((t) => !tabelleCaricate.has(t));
-    if (mancanti.length === 0) return;
+    // niente da caricare: l'attesa va comunque chiusa. Se un'altra parte
+    // dell'app (assicuraTabelle) carica la stessa tabella mentre questo
+    // caricamento e' in corso, il primo giro viene annullato e il secondo
+    // trova la lista vuota: senza questa riga "Caricamento…" restava li'
+    // per sempre e l'app sembrava piantata
+    if (mancanti.length === 0) { setCaricandoSezione(false); return; }
     let annullato = false;
     setCaricandoSezione(true);
-    fetchDati(mancanti).then(() => {
-      if (annullato) return;
-      setTabelleCaricate((prev) => new Set([...prev, ...mancanti]));
-      setCaricandoSezione(false);
-    });
+    fetchDati(mancanti)
+      .then(() => {
+        if (annullato) return;
+        setTabelleCaricate((prev) => new Set([...prev, ...mancanti]));
+        setCaricandoSezione(false);
+      })
+      // e se il caricamento fallisce, meglio una pagina vuota che una
+      // schermata di attesa infinita
+      .catch(() => { if (!annullato) setCaricandoSezione(false); });
     return () => { annullato = true; };
   }, [view, ok, loading, tabelleCaricate]);
 
@@ -47616,7 +47681,6 @@ export default function App() {
           testi={normativeTesti}
           testoIniziale={NORMATIVA_RITORNO_AL_CORSO}
           ricarica={fetchDati}
-          assicuraTabelle={assicuraTabelle}
           onBack={() => setView("normative")}
           titolo="Ritorno al Corso"
         />
