@@ -29154,9 +29154,17 @@ function TogglePerOperatoreProdotto({ vista, onCronologico, onOperatore, onProdo
 // L'elenco dei codici promozionali cosi' come sta su WooCommerce: e' uno
 // specchio, non una seconda anagrafica — il padrone del dato resta il
 // sito, qui si guarda insieme alle vendite senza doverci uscire.
-function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ultimaSincronizzazione }) {
+function TabellaCouponWoo({ righe, venditeShop, isMobile, sincronizzando, onSincronizza, ultimaSincronizzazione }) {
   const [ricerca, setRicerca] = useState("");
   const [soloAttivi, setSoloAttivi] = useState(false);
+  // il codice aperto (mostra i singoli utilizzi) e l'ordine di cui si sta
+  // guardando il carrello
+  const [couponAperto, setCouponAperto] = useState(null);
+  const [carrelloAperto, setCarrelloAperto] = useState(null);
+  const venditaPerId = useMemo(
+    () => Object.fromEntries((venditeShop || []).map((v) => [v.id, v])),
+    [venditeShop]
+  );
   const oggi = dataOggiStr();
   // in cima quelli usati di recente: un elenco di codici e' interessante
   // per quello che si e' mosso, non per l'ordine in cui e' stato creato
@@ -29202,6 +29210,7 @@ function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ulti
                 <th style={thStyle}>Codice</th>
                 <th style={thStyle}>Tipo di codice promozionale</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Importo</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>Spesa scontata</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Sconto applicato</th>
                 <th style={thStyle}>Descrizione</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Uso / Limite</th>
@@ -29210,14 +29219,17 @@ function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ulti
             </thead>
             <tbody>
               {filtrate.length === 0 ? (
-                <tr><td colSpan={8} style={{ ...tdStyle, color: MUTED, textAlign: "center", padding: 20 }}>
+                <tr><td colSpan={9} style={{ ...tdStyle, color: MUTED, textAlign: "center", padding: 20 }}>
                   {righe.length === 0 ? "Nessun codice scaricato: premi \"Aggiorna da WooCommerce\"." : "Nessun codice trovato."}
                 </td></tr>
               ) : filtrate.map((c) => {
                 const scaduto = c.data_scadenza && c.data_scadenza < oggi;
                 const esaurito = c.limite_uso != null && (c.usati || 0) >= c.limite_uso;
+                const utilizzi = Array.isArray(c.utilizzi) ? c.utilizzi : [];
+                const aperto = couponAperto === c.woo_coupon_id;
                 return (
-                  <tr key={c.woo_coupon_id}>
+                  <React.Fragment key={c.woo_coupon_id}>
+                  <tr>
                     {/* quando e' stato speso davvero: WooCommerce dice solo
                         quante volte, la data la sanno i nostri ordini */}
                     <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
@@ -29235,6 +29247,36 @@ function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ulti
                     <td style={{ ...tdStyle, fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>
                       {c.importo == null ? "—" : c.tipo_sconto === "percent" ? `${Number(c.importo).toLocaleString("it-IT")}%` : fmtEuroErp2(Number(c.importo))}
                     </td>
+                    {/* Su quale spesa e' stato applicato lo sconto, in
+                        quella data. Si clicca: con un solo utilizzo apre
+                        subito il carrello di quell'ordine, con piu'
+                        utilizzi apre l'elenco delle volte, ognuna con il
+                        suo carrello */}
+                    <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+                      {utilizzi.length === 0 ? <span style={{ color: MUTED }}>—</span> : (
+                        <button
+                          onClick={() => {
+                            if (utilizzi.length === 1) {
+                              const u = utilizzi[0];
+                              setCarrelloAperto({ utilizzo: u, vendita: venditaPerId[u.vendita_id] || null });
+                            } else {
+                              setCouponAperto(aperto ? null : c.woo_coupon_id);
+                            }
+                          }}
+                          title={utilizzi.length === 1 ? "Vedi il carrello di questo ordine" : "Vedi ogni singolo utilizzo con il suo carrello"}
+                          style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, textAlign: "right" }}
+                        >
+                          {utilizzi.length === 1
+                            ? fmtEuroErp2(Number(utilizzi[0].spesa) || 0)
+                            : fmtEuroErp2(Number(c.incasso_ordini) || 0)}
+                          {utilizzi.length > 1 && (
+                            <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, textDecoration: "none" }}>
+                              su {utilizzi.length} ordini {aperto ? "▾" : "▸"}
+                            </span>
+                          )}
+                        </button>
+                      )}
+                    </td>
                     {/* quanto ha tolto davvero: un 15% vale una cifra
                         diversa a ogni ordine, e il valore nominale del
                         coupon non lo dice */}
@@ -29242,26 +29284,104 @@ function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ulti
                       {(c.ordini_con_codice || 0) > 0 ? (
                         <>
                           <span style={{ fontWeight: 700, color: "#C0392B" }}>− {fmtEuroErp2(Number(c.sconto_totale) || 0)}</span>
-                          <span style={{ display: "block", ...fontBody, fontSize: 11, color: MUTED }}>
-                            su {fmtEuroErp2(Number(c.incasso_ordini) || 0)} di ordini
-                          </span>
                         </>
                       ) : <span style={{ color: MUTED }}>—</span>}
                     </td>
                     <td style={{ ...tdStyle, color: MUTED, maxWidth: 280 }}>{c.descrizione || "—"}</td>
                     <td style={{ ...tdStyle, textAlign: "center", whiteSpace: "nowrap", color: esaurito ? "#C0392B" : NAVY, fontWeight: esaurito ? 700 : 400 }}>
-                      {(c.usati || 0)} / {c.limite_uso != null ? c.limite_uso : "∞"}
+                      {/* il conteggio apre l'elenco dei singoli utilizzi:
+                          quante volte da solo non dice per quanto */}
+                      {utilizzi.length > 0 ? (
+                        <button
+                          onClick={() => setCouponAperto(aperto ? null : c.woo_coupon_id)}
+                          title={aperto ? "Nascondi gli utilizzi" : "Vedi ogni singolo utilizzo"}
+                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: esaurito ? "#C0392B" : NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
+                        >
+                          {(c.usati || 0)} / {c.limite_uso != null ? c.limite_uso : "∞"} {aperto ? "▾" : "▸"}
+                        </button>
+                      ) : (
+                        <>{(c.usati || 0)} / {c.limite_uso != null ? c.limite_uso : "∞"}</>
+                      )}
                     </td>
                     <td style={{ ...tdStyle, whiteSpace: "nowrap", color: scaduto ? "#C0392B" : MUTED }}>
                       {c.data_scadenza ? `${fmtData(c.data_scadenza)}${scaduto ? " · scaduto" : ""}` : "—"}
                     </td>
                   </tr>
+                  {aperto && (
+                    <tr>
+                      <td colSpan={9} style={{ ...tdStyle, background: BG, padding: "10px 14px" }}>
+                        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                          Ogni volta che è stato usato
+                        </div>
+                        {utilizzi.map((u, i) => (
+                          <div key={u.vendita_id || i} style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", padding: "6px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, minWidth: 88 }}>{u.data ? fmtData(u.data) : "—"}</span>
+                            <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, flex: "1 1 180px", minWidth: 0 }}>
+                              {u.cliente || "—"}
+                              {u.numero_ordine ? <span style={{ color: MUTED }}> · ordine {u.numero_ordine}</span> : null}
+                            </span>
+                            {/* la spesa e' sottolineata perche' si apre: il
+                                carrello di quell'ordine, cosa e' stato
+                                comprato con quel codice */}
+                            <button
+                              onClick={() => setCarrelloAperto({ utilizzo: u, vendita: venditaPerId[u.vendita_id] || null })}
+                              title="Vedi il carrello di questo ordine"
+                              style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, whiteSpace: "nowrap" }}
+                            >
+                              {fmtEuroErp2(Number(u.spesa) || 0)}
+                            </button>
+                            <span style={{ ...fontBody, fontSize: 12, color: "#C0392B", whiteSpace: "nowrap" }}>− {fmtEuroErp2(Number(u.sconto) || 0)} di sconto</span>
+                          </div>
+                        ))}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {carrelloAperto && (
+        <Modal
+          title={`Carrello · ordine ${carrelloAperto.utilizzo.numero_ordine || "—"}`}
+          onClose={() => setCarrelloAperto(null)}
+          maxWidth={520}
+        >
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>
+            {carrelloAperto.utilizzo.cliente || "—"} · {carrelloAperto.utilizzo.data ? fmtData(carrelloAperto.utilizzo.data) : "—"}
+          </div>
+          {(() => {
+            const prodotti = Array.isArray(carrelloAperto.vendita?.prodotti) ? carrelloAperto.vendita.prodotti : [];
+            if (prodotti.length === 0) {
+              return (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+                  Di questo ordine non ho le righe del carrello fra i dati caricati.
+                </div>
+              );
+            }
+            return prodotti.map((r, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ fontWeight: 700 }}>{r.quantita || 1}×</span> {r.nome || "—"}
+                </span>
+                <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{fmtEuroErp2(r.totale_riga || 0)}</span>
+              </div>
+            ));
+          })()}
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: "#C0392B" }}>
+              <span>Sconto del codice</span><span>− {fmtEuroErp2(Number(carrelloAperto.utilizzo.sconto) || 0)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 6 }}>
+              <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Spesa</span>
+              <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(Number(carrelloAperto.utilizzo.spesa) || 0)}</span>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
