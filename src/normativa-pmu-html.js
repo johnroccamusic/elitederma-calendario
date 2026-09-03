@@ -150,7 +150,6 @@ export const HTML_NORMATIVA_PMU = String.raw`
         <li><strong>Corso igienico-sanitario regionale</strong> dove esiste (AUSL 14-16 h in Emilia-Romagna, 90 h in Umbria, 60 h a Trento, ASP in Sicilia). Toglie la contestazione più facile, quella igienica.</li>
         <li><strong>SCIA di tatuaggio artistico e cosmetico</strong>, sul modulo unificato "attività di tatuaggio e piercing" del SUAP. Il PMU è tatuaggio a minore profondità (ISS, Consiglio di Stato): la SCIA di tatuaggio lo copre, non serve una SCIA "di dermopigmentazione" e non va mai usata la parola "estetica". Nella relazione della SCIA l'attività si descrive come "tatuaggio artistico e cosmetico": è vero, resta dentro la categoria tatuaggio e non trasforma la pratica in una richiesta di licenza estetica. La parola "dermopigmentazione" non va scritta nella SCIA. Non scrivere il falso e non praticare attività che la SCIA non copre: la difesa regge solo se ciò che si fa è ciò che si è dichiarato.</li>
         <li><strong>Il meccanismo della SCIA lavora a favore.</strong> La SCIA non viene "accettata" o "respinta": l'attività parte il giorno stesso. Il Comune ha 60 giorni per verificare e, se ritiene che manchi un requisito, deve emettere un divieto motivato (o chiedere di conformarsi). Passati i 60 giorni senza atti, la posizione si consolida: il Comune può intervenire solo in autotutela, entro 12 mesi e con una motivazione di interesse pubblico (art. 19 e 21-nonies L. 241/1990). Un eventuale divieto nei 60 giorni è un atto formale, pulito, da impugnare con il kit: è esattamente la strada che il parere MGT descrive. Un'attività scoperta perché non coperta dalla SCIA, invece, è "attività senza SCIA": chiusura, sanzione e nessuna difesa.</li>
-        <li><strong>Formazione tecnica PMU documentata</strong> con attestato e programma ore: il Consiglio di Stato ammette i tatuatori "correttamente formati", non chiunque.</li>
         <li><strong>Titolo rafforzativo</strong> di una regione verde (Lazio 800 h, Puglia o Calabria 90 h): non è riconosciuto automaticamente, ma davanti a un Comune o a un TAR pesa molto più di un corso privato.</li>
         <li><strong>Kit di difesa pronto</strong>: sentenza 1930/2024, TAR Lazio 3861/2023, parere MGT del 07/04/2025, definizione ISS. Se arriva una diffida: istanza in autotutela al Comune entro pochi giorni (è così che è finita nel caso lombardo citato dal Sindacato), poi ricorso al TAR entro 60 giorni se serve.</li>
         <li><strong>Una parola da non usare allo sportello: "dermopigmentazione" come attività a sé.</strong> Nelle regioni grigie gli uffici, sentendo "dermopigmentazione" o "trucco permanente", rispondono in automatico "serve l'estetista", perché associano la parola alla scheda 23. La pratica è una SCIA di tatuaggio, l'insegna è "studio di tatuaggio", il listino può elencare il tatuaggio cosmetico fra le prestazioni. Non è nascondere: è chiamare la cosa con il nome della categoria giuridica in cui la mettono ISS e Consiglio di Stato. Chiedere allo sportello "posso fare dermopigmentazione senza essere estetista?" equivale a chiedere un parere che sarà negativo e resterà agli atti.</li>
@@ -268,7 +267,7 @@ export const HTML_NORMATIVA_PMU = String.raw`
       <div class="lbl">La strada</div>
       <ul>
         <li>Nessun atto regionale esclude il PMU dal tatuaggio né lo riserva all'estetista; la Regione non chiede requisiti professionali ai tatuatori (Consiglio Valle 2021). Contro c'è solo il parere MISE 2018, indebolito dalla sentenza 1930/2024.</li>
-        <li>Percorso: SCIA al SUAP con la SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", parere USL sui locali, formazione tecnica PMU documentata, meglio con un corso igienico-sanitario di una regione vicina (Piemonte 90 h) e un titolo rafforzativo di regione verde.</li>
+        <li>Percorso: SCIA al SUAP con la SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", parere USL sui locali, meglio con un corso igienico-sanitario di una regione vicina (Piemonte 90 h) e un titolo rafforzativo di regione verde.</li>
         <li>Proposta di legge regionale del 2024 mai approvata: la Regione potrebbe ancora disciplinare, in un senso o nell'altro.</li>
       </ul>
       <div class="lbl">Rischio</div>
@@ -407,7 +406,7 @@ export const HTML_NORMATIVA_PMU = String.raw`
       <div class="lbl">La strada</div>
       <ul>
         <li>Nessun atto provinciale riserva il PMU all'estetista; il corso obbligatorio è lo stesso per tutti e l'avviso annuale di iscrizione cita espressamente il trucco permanente fra i destinatari. Contro c'è solo il parere MISE 2018.</li>
-        <li>Percorso: corso 60 ore, iscrizione nel registro operatori formati, idoneità APSS dei locali, SCIA al SUAP con la SCIA di tatuaggio (artistico e cosmetico), formazione tecnica documentata.</li>
+        <li>Percorso: corso 60 ore, iscrizione nel registro operatori formati, idoneità APSS dei locali, SCIA al SUAP con la SCIA di tatuaggio (artistico e cosmetico).</li>
       </ul>
       <div class="lbl">Rischio</div>
       <ul><li>Medio: diffida o sanzione amministrativa (art. 12 L. 1/1990). Risposta: autotutela con la 1930/2024, poi TAR. Esito non garantito.</li></ul>
@@ -457,7 +456,7 @@ export const HTML_NORMATIVA_PMU = String.raw`
       <div class="lbl">La strada</div>
       <ul>
         <li>La DGR 465/2007 non esclude il PMU dal tatuaggio e non lo riserva a nessuno; la nota regionale 2015 dice cosa deve fare l'estetista, non cosa non può fare il tatuatore. Contro c'è solo il parere MISE 2018, indebolito dalla 1930/2024. L'interrogazione regionale n. 1369 chiede alla Giunta di chiarire: la Regione potrebbe includere il PMU nel tatuaggio.</li>
-        <li>Percorso: corso AUSL (14-16 h), SCIA telematica con la SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", sede fissa con locale ≥10 m², formazione tecnica PMU documentata, titolo rafforzativo di regione verde.</li>
+        <li>Percorso: corso AUSL (14-16 h), SCIA telematica con la SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", sede fissa con locale ≥10 m², titolo rafforzativo di regione verde.</li>
       </ul>
       <div class="lbl">Rischio</div>
       <ul><li>Medio-basso: sanzioni comunali contenute (fino a 500 €, sospensione fino a 20 giorni) e possibile art. 12 L. 1/1990. Risposta: autotutela con la 1930/2024, poi TAR. Esito non garantito.</li></ul>
@@ -511,7 +510,7 @@ export const HTML_NORMATIVA_PMU = String.raw`
       <div class="lbl">La strada</div>
       <ul>
         <li>Nessuna legge regionale e nessun atto che riservi il PMU all'estetista: il corso da 90 ore "non ha finalità abilitante" ma è lo stesso per tutti. Contro c'è solo il parere MISE 2018. La proposta di legge del 2021 (mai approvata) mostra che la Regione può ancora disciplinare.</li>
-        <li>Percorso: corso 90 ore, idoneità USL, SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", formazione tecnica documentata, titolo rafforzativo di regione verde.</li>
+        <li>Percorso: corso 90 ore, idoneità USL, SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", titolo rafforzativo di regione verde.</li>
       </ul>
       <div class="lbl">Rischio</div>
       <ul><li>Medio: diffida o sanzione amministrativa (art. 12 L. 1/1990). Risposta: autotutela con la 1930/2024, poi TAR. Esito non garantito.</li></ul>
@@ -613,7 +612,7 @@ export const HTML_NORMATIVA_PMU = String.raw`
       <div class="lbl">La strada</div>
       <ul>
         <li>Il regolamento del 2004 non menziona il PMU né lo riserva a nessuno. Contro c'è solo il parere MISE 2018. Ore del corso e sanzioni non reperite: chiederle ad ASReM.</li>
-        <li>Percorso: corso regionale, certificato di idoneità sanitaria ASReM, SCIA di tatuaggio con responsabile tecnico, attività dichiarata "tatuaggio artistico e cosmetico", formazione tecnica documentata, titolo rafforzativo (il corso 90 ore Puglia è il più vicino).</li>
+        <li>Percorso: corso regionale, certificato di idoneità sanitaria ASReM, SCIA di tatuaggio con responsabile tecnico, attività dichiarata "tatuaggio artistico e cosmetico", titolo rafforzativo (il corso 90 ore Puglia è il più vicino).</li>
       </ul>
       <div class="lbl">Rischio</div>
       <ul><li>Medio: provvedimenti comunali e art. 12 L. 1/1990. Risposta: autotutela con la 1930/2024, poi TAR.</li></ul>
@@ -686,7 +685,7 @@ export const HTML_NORMATIVA_PMU = String.raw`
       <div class="lbl">La strada</div>
       <ul>
         <li>Nessun atto regionale su tatuaggio o PMU: nessun requisito, nessun divieto. Contro c'è solo il parere MISE 2018. Il corso "Operatore di tatuaggio e piercing" da 124 ore nel Catalogo regionale è facoltativo ma utile come prova di formazione.</li>
-        <li>Percorso: SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", requisiti igienici ASP secondo le circolari 1998, formazione tecnica documentata, corso igienico-sanitario di una regione vicina (Puglia 90 h, Calabria 90 h) come rafforzativo.</li>
+        <li>Percorso: SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", requisiti igienici ASP secondo le circolari 1998, corso igienico-sanitario di una regione vicina (Puglia 90 h, Calabria 90 h) come rafforzativo.</li>
       </ul>
       <div class="lbl">Rischio</div>
       <ul><li>Medio: provvedimenti comunali e art. 12 L. 1/1990. Risposta: autotutela con la 1930/2024, poi TAR.</li></ul>
@@ -735,7 +734,7 @@ export const HTML_NORMATIVA_PMU = String.raw`
       <div class="lbl">La strada</div>
       <ul>
         <li>Il D.A. 2003 non menziona il PMU e non lo riserva a nessuno; contro c'è il parere MISE 2018 e, in alcuni Comuni (es. Floridia), un regolamento che elenca il "trucco semipermanente" fra le attività dell'estetista: lì il rischio sale.</li>
-        <li>Percorso: corso ASP (60-90 h), nulla osta tecnico-sanitario ASP, SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", formazione tecnica documentata, titolo rafforzativo di regione verde (Calabria o Puglia 90 h). Minori: vietato sotto i 18.</li>
+        <li>Percorso: corso ASP (60-90 h), nulla osta tecnico-sanitario ASP, SCIA di tatuaggio, attività dichiarata "tatuaggio artistico e cosmetico", titolo rafforzativo di regione verde (Calabria o Puglia 90 h). Minori: vietato sotto i 18.</li>
       </ul>
       <div class="lbl">Rischio</div>
       <ul><li>Medio, alto nei Comuni con regolamento che cita il trucco semipermanente fra le attività estetiche. Risposta: autotutela con la 1930/2024, poi TAR.</li></ul>
