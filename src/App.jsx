@@ -21494,16 +21494,23 @@ function PaginaProssimeContabilita({
 }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
-  // dai corsi finiti da poco (che sono quelli ancora da chiudere) in
-  // avanti: un corso di sei mesi fa la sua contabilita' l'ha gia' vista
-  const [mostraTutti, setMostraTutti] = useState(false);
-  const dallaData = mostraTutti ? "0000-00-00" : addGiorni(oggi, -45);
+  // Due elenchi separati: quello che deve ancora succedere e lo storico.
+  // Un corso finito la sua contabilita' l'ha gia' vista: se resta in mezzo
+  // agli altri, ogni volta bisogna scorrerlo per arrivare a quelli veri.
+  const [tab, setTab] = useState("inarrivo"); // inarrivo | storico
   const righe = useMemo(() => {
     const corsoPerId = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
     const locPerId = Object.fromEntries((location || []).map((l) => [l.id, l]));
     return (corsiDate || [])
-      .filter((cd) => (cd.data_fine || cd.data_inizio || "") >= dallaData)
-      .sort((a, b) => String(a.data_inizio).localeCompare(String(b.data_inizio)))
+      .filter((cd) => {
+        const fine = cd.data_fine || cd.data_inizio || "";
+        // il giorno stesso del corso resta fra quelli in arrivo: la
+        // contabilita' si chiude a fine giornata, non a mezzanotte
+        return tab === "storico" ? fine < oggi : fine >= oggi;
+      })
+      .sort((a, b) => (tab === "storico"
+        ? String(b.data_inizio).localeCompare(String(a.data_inizio))
+        : String(a.data_inizio).localeCompare(String(b.data_inizio))))
       .map((cd) => {
         const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
         const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
@@ -21518,7 +21525,16 @@ function PaginaProssimeContabilita({
         });
         return { cd, corso: corsoPerId[cd.corso_id] || null, loc: locPerId[cd.location_id] || null, conti };
       });
-  }, [corsi, corsiDate, location, iscritti, spese, venditeShop, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, hotel, dallaData]);
+  }, [corsi, corsiDate, location, iscritti, spese, venditeShop, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, hotel, tab, oggi]);
+
+  const quanti = useMemo(() => {
+    let inarrivo = 0, storico = 0;
+    (corsiDate || []).forEach((cd) => {
+      const fine = cd.data_fine || cd.data_inizio || "";
+      if (fine >= oggi) inarrivo += 1; else storico += 1;
+    });
+    return { inarrivo, storico };
+  }, [corsiDate, oggi]);
 
   const totali = righe.reduce((acc, r) => ({
     lordo: acc.lordo + r.conti.incassoLordo, daIncassare: acc.daIncassare + r.conti.daIncassare, allievi: acc.allievi + r.conti.allievi,
@@ -21530,20 +21546,23 @@ function PaginaProssimeContabilita({
         <div style={{ marginBottom: 10 }}><TastoLivelloPrecedente titolo="Gestione corsi" onClick={onBack} /></div>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 24 : 30, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
-          I conti di ogni classe in ordine di data: quanto è già entrato, quanto resta da incassare in aula.
+          I conti di ogni classe in ordine di data: quanto è già entrato, quanto resta da incassare in aula. I corsi finiti stanno nello storico.
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
           <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>
             <b>{righe.length}</b> {righe.length === 1 ? "classe" : "classi"} · <b>{totali.allievi}</b> allievi · incassato <b>{fmtEuroErp(totali.lordo)}</b> · da incassare <b style={{ color: totali.daIncassare > 0 ? "#C0392B" : "#2E7D32" }}>{fmtEuroErp(totali.daIncassare)}</b>
           </span>
-          <Button variant="ghost" onClick={() => setMostraTutti((v) => !v)}>
-            {mostraTutti ? "Solo dalle ultime settimane" : "Vedi anche i corsi passati"}
-          </Button>
+          <span style={{ display: "inline-flex", gap: 6, marginLeft: "auto" }}>
+            <TabPillola attivo={tab === "inarrivo"} onClick={() => setTab("inarrivo")}>In arrivo ({quanti.inarrivo})</TabPillola>
+            <TabPillola attivo={tab === "storico"} onClick={() => setTab("storico")}>Storico ({quanti.storico})</TabPillola>
+          </span>
         </div>
 
         {righe.length === 0 ? (
-          <div style={{ ...cardStyle, ...fontBody, fontSize: 13.5, color: MUTED }}>Nessuna classe in questo periodo.</div>
+          <div style={{ ...cardStyle, ...fontBody, fontSize: 13.5, color: MUTED }}>
+            {tab === "storico" ? "Nessun corso passato." : "Nessun corso in programma: le contabilità da chiudere sono nello storico."}
+          </div>
         ) : righe.map(({ cd, corso, loc, conti }) => {
           const coloreCorso = corso?.colore || NAVY;
           const { numero, sotto } = etichettaIntervalloGiorni(cd.data_inizio, cd.data_fine);
