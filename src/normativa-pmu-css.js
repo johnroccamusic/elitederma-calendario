@@ -9,7 +9,7 @@ export const CSS_NORMATIVA_PMU = `
      per il foglio, #EFE9DC per i riquadri) */
   --bg:#F7F3E9; --bg2:#EFE9DC; --ink:#221D1A; --ink2:#5C534D; --line:#E2D9CF;
   --est:#8C3B4A; --est-soft:#F6E6E9; --alt:#2F5D62; --alt-soft:#E1EEEF;
-  --warn:#9A6A12; --warn-soft:#F8EDD3; --ok:#3F6B3A; --ok-soft:#E4EFE1;
+  --warn:#9A6A12; --warn-soft:#F8EDD3; --ok:#3F6B3A; --ok-soft:#E4EFE1; --no:#A3342B; --no-soft:#F7E2DF;
   --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
   --body:'Source Sans 3','Segoe UI',system-ui,sans-serif;
   --disp:'Fraunces',Georgia,'Times New Roman',serif;
@@ -86,6 +86,7 @@ export const CSS_NORMATIVA_PMU = `
 .mappa-pmu .pill.alt{background:var(--alt-soft);color:var(--alt)}
 .mappa-pmu .pill.warn{background:var(--warn-soft);color:var(--warn)}
 .mappa-pmu .pill.ok{background:var(--ok-soft);color:var(--ok)}
+.mappa-pmu .pill.no{background:var(--no-soft);color:var(--no)}
 .mappa-pmu .region{padding:40px 0;border-bottom:1px solid var(--line);scroll-margin-top:120px}
 .mappa-pmu .region .head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;margin-bottom:6px}
 .mappa-pmu .region .norm{font-family:var(--mono);font-size:13px;color:var(--ink2);margin:0 0 18px;max-width:none}
@@ -98,6 +99,19 @@ export const CSS_NORMATIVA_PMU = `
 .mappa-pmu .col li{font-size:15px}
 .mappa-pmu .col .hours{font-family:var(--disp);font-size:30px;line-height:1;margin:2px 0 10px;font-variant-numeric:tabular-nums}
 .mappa-pmu .col .hours small{font-family:var(--mono);font-size:12px;color:var(--ink2);margin-left:6px;letter-spacing:.04em}
+/* "Risposta al telefono": il riquadro che si legge per primo quando
+   squilla il telefono, con il filetto scuro di fianco */
+.mappa-pmu .phone{margin:0 0 18px;padding:16px 18px;border-radius:6px;background:var(--bg2);border:1px solid var(--line);border-left:4px solid var(--ink)}
+.mappa-pmu .phone h4{margin-bottom:6px}
+.mappa-pmu .phone p{margin:0;font-size:16px;max-width:none}
+/* il verdetto grande: SI verde, NO rosso, zona grigia ambra */
+.mappa-pmu .verdict{font-family:var(--disp);font-size:28px;line-height:1.1;margin:2px 0 10px}
+.mappa-pmu .verdict.si{color:var(--ok)} .mappa-pmu .verdict.no{color:var(--no)} .mappa-pmu .verdict.forse{color:var(--warn)}
+.mappa-pmu .verdict small{display:block;font-family:var(--mono);font-size:12px;color:var(--ink2);letter-spacing:.04em;margin-top:6px;font-weight:400}
+.mappa-pmu .col .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:12px 0 4px}
+.mappa-pmu .mob{margin-top:16px;padding:14px 18px;border-radius:6px;background:var(--alt-soft);border:1px solid transparent}
+.mappa-pmu .mob h4{color:var(--alt)}
+.mappa-pmu .mob p{margin:0;font-size:15px;max-width:none}
 .mappa-pmu .notes{margin-top:16px;padding:14px 18px;border-radius:6px;background:var(--warn-soft);border:1px solid transparent}
 .mappa-pmu .notes h4{color:var(--warn)}
 .mappa-pmu .notes ul{margin:0;padding-left:18px}
