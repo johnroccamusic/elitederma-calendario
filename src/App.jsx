@@ -10643,6 +10643,29 @@ function RigaPasswordMenu({ valoreDiDefault, onSalva }) {
   );
 }
 
+// Doppio clic sull'intestazione di una colonna: se ce l'hanno tutti lo
+// toglie a tutti, altrimenti lo dà a tutti. Sedici caselle per venti
+// righe sono trecento clic, e chi configura i permessi di solito ragiona
+// per colonne ("questo tasto lo vedono tutti"), non per caselle.
+async function permessoATuttaLaColonna({ chiave, etichetta, righe, leggiPermessi, scrivi, ricarica, tabella }) {
+  const conPermesso = righe.filter((r) => (leggiPermessi(r) || []).includes(chiave));
+  const accendere = conPermesso.length < righe.length;
+  const testo = accendere
+    ? `Dare "${etichetta}" a tutti (${righe.length})?`
+    : `Togliere "${etichetta}" a tutti (${righe.length})?`;
+  if (!window.confirm(testo)) return;
+  const esiti = await Promise.all(righe.map((r) => {
+    const attuali = leggiPermessi(r) || [];
+    const nuovi = accendere ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
+    // chi non cambia non si riscrive: meno scritture, meno rumore
+    if (nuovi.length === attuali.length && accendere === attuali.includes(chiave)) return Promise.resolve({ error: null });
+    return scrivi(r, nuovi);
+  }));
+  const errore = esiti.find((e) => e?.error);
+  if (errore) window.alert("Errore: " + errore.error.message);
+  await ricarica([tabella]);
+}
+
 // una riga della tabella "Gestione utenti": nome + password (si salvano
 // da soli appena si clicca fuori dal campo, come la password Master) e un
 // quadratino per ogni tasto della home (TASTI_HOME) — spuntarlo/togliere
@@ -10660,6 +10683,9 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   // aspetta il giro di rete + ricarica di tutti i dati dell'app prima di
   // vedere la casella cambiare, altrimenti c'è una latenza percepibile)
   const [permessiLocali, setPermessiLocali] = useState(utente.permessi || []);
+  // se i permessi cambiano da fuori (doppio clic sull'intestazione della
+  // colonna, che li scrive per tutti insieme) la casella deve seguirli
+  useEffect(() => { setPermessiLocali(utente.permessi || []); }, [utente.permessi]);
   const sistema = !!utente.chiave_sistema;
 
   async function persist(campi) {
@@ -10903,6 +10929,17 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
     { chiave: "azioni", larghezza: 44 },
   ];
   const larghezzaTabellaUtenti = colonneUtenti.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
+  function colonnaPerTutti(chiave, etichetta) {
+    return permessoATuttaLaColonna({
+      chiave, etichetta, righe, tabella: "utenti_app", ricarica,
+      leggiPermessi: (u) => u.permessi,
+      // le righe di sistema possono non esistere ancora sul database:
+      // alla prima scrittura si creano, esattamente come fa la casella
+      scrivi: (u, nuovi) => (u.id
+        ? supabase.from("utenti_app").update({ permessi: nuovi }).eq("id", u.id)
+        : supabase.from("utenti_app").insert({ nome: u.nome, password: u.password, chiave_sistema: u.chiave_sistema || null, permessi: nuovi })),
+    });
+  }
 
   return (
     <div>
@@ -10932,8 +10969,26 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
                 <th style={{ ...thStyle, textAlign: "center" }}>Amministratore{maniglia("amministratore", larghezzaDi("amministratore", 78))}</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario{maniglia("solocalendario", larghezzaDi("solocalendario", 78))}</th>
-                {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}</th>)}
-                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}</th>)}
+                {TASTI_HOME.map((t) => (
+                  <th
+                    key={t.chiave}
+                    onDoubleClick={() => colonnaPerTutti(t.chiave, t.etichetta)}
+                    title="Doppio clic: dà o toglie questo permesso a tutti"
+                    style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}
+                  >
+                    {t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}
+                  </th>
+                ))}
+                {agende.map((a) => (
+                  <th
+                    key={a.id}
+                    onDoubleClick={() => colonnaPerTutti(`agenda_${a.id}`, `Agenda: ${a.nome}`)}
+                    title="Doppio clic: dà o toglie questo permesso a tutti"
+                    style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}
+                  >
+                    Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}
+                  </th>
+                ))}
                 <th style={thStyle}></th>
               </tr>
             </thead>
@@ -10975,6 +11030,7 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
   const isMobile = useIsMobile();
   const [password, setPassword] = useState(masterRec.password || "");
   const [permessiLocali, setPermessiLocali] = useState(masterRec.permessi || []);
+  useEffect(() => { setPermessiLocali(masterRec.permessi || []); }, [masterRec.permessi]);
   async function persist(campi) {
     return supabase.from("master").update(campi).eq("id", masterRec.id);
   }
@@ -11091,6 +11147,13 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
   ];
   const larghezzaTabellaMaster = colonneMaster.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
+  function colonnaPerTutti(chiave, etichetta) {
+    return permessoATuttaLaColonna({
+      chiave, etichetta, righe: masterOrdinate, tabella: "master", ricarica,
+      leggiPermessi: (m) => m.permessi,
+      scrivi: (m, nuovi) => supabase.from("master").update({ permessi: nuovi }).eq("id", m.id),
+    });
+  }
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password Master</div>
@@ -11112,8 +11175,16 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome master{maniglia("nome", larghezzaDi("nome", 140))}</ThOrdina>
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 84))}</th>
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
-                {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}</th>)}
-                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}</th>)}
+                {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => (
+                  <th key={t.chiave} onDoubleClick={() => colonnaPerTutti(t.chiave, t.etichetta)} title="Doppio clic: dà o toglie questo permesso a tutte" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
+                    {t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}
+                  </th>
+                ))}
+                {agende.map((a) => (
+                  <th key={a.id} onDoubleClick={() => colonnaPerTutti(`agenda_${a.id}`, `Agenda: ${a.nome}`)} title="Doppio clic: dà o toglie questo permesso a tutte" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
+                    Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -11135,6 +11206,7 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
 function RigaTabellaVenditore({ venditore, agende, ricarica }) {
   const isMobile = useIsMobile();
   const [permessiLocali, setPermessiLocali] = useState(venditore.permessi || []);
+  useEffect(() => { setPermessiLocali(venditore.permessi || []); }, [venditore.permessi]);
   const [password, setPassword] = useState(venditore.password || "");
   async function toggleTasto(chiave, checked) {
     const attuali = permessiLocali;
@@ -11220,6 +11292,13 @@ function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
   ];
   const larghezzaTabellaVenditori = colonneVenditori.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
+  function colonnaPerTutti(chiave, etichetta) {
+    return permessoATuttaLaColonna({
+      chiave, etichetta, righe: venditoriOrdinati, tabella: "venditori", ricarica,
+      leggiPermessi: (v) => v.permessi,
+      scrivi: (v, nuovi) => supabase.from("venditori").update({ permessi: nuovi }).eq("id", v.id),
+    });
+  }
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password venditori</div>
@@ -11240,8 +11319,16 @@ function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
               <tr>
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome venditore{maniglia("nome", larghezzaDi("nome", 140))}</ThOrdina>
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 140))}</th>
-                {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}</th>)}
-                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}</th>)}
+                {TASTI_HOME.map((t) => (
+                  <th key={t.chiave} onDoubleClick={() => colonnaPerTutti(t.chiave, t.etichetta)} title="Doppio clic: dà o toglie questo permesso a tutti" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
+                    {t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}
+                  </th>
+                ))}
+                {agende.map((a) => (
+                  <th key={a.id} onDoubleClick={() => colonnaPerTutti(`agenda_${a.id}`, `Agenda: ${a.nome}`)} title="Doppio clic: dà o toglie questo permesso a tutti" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
+                    Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
