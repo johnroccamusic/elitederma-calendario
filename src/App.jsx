@@ -17608,11 +17608,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // corso arrivano prima, con bonifico/sito, e non passano dalle mani
   // del master in aula — per questo il riepilogo costi si basa solo su
   // questi importi, non sul totale generale della classe
-  const incassiExtraContanti = round2(incassiExtra.filter((c) => c.metodo === "Contanti").reduce((s, c) => s + parseNum(c.valore), 0));
-  const incassiExtraPos = round2(incassiExtra.filter((c) => c.metodo === "Pos").reduce((s, c) => s + parseNum(c.valore), 0));
-  const contantiClasse = round2(listaIscritti.reduce((s, i) => s + ((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
-  const posClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
-  const daIncassareClasse = round2(contantiClasse + posClasse);
 
   // Vendite al corso: i prodotti venduti agli allievi durante il corso —
   // sono incassi veri, fatti in aula, e il contante finisce nella stessa
@@ -17631,57 +17626,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     });
     return Object.values(mappa).sort((a, b) => b.totale - a.totale);
   })();
-  const venditeAlCorsoContanti = round2(venditeAlCorso.filter((v) => v.metodo_pagamento === "contanti").reduce((s, v) => s + (v.totale || 0), 0));
-  const venditeAlCorsoPos = round2(venditeAlCorso.filter((v) => v.metodo_pagamento !== "contanti").reduce((s, v) => s + (v.totale || 0), 0));
-  const venditeAlCorsoTotale = round2(venditeAlCorsoContanti + venditeAlCorsoPos);
-
-  // Incassi lordo/netto/di cui: non più uno scorporo IVA generico, ma la
-  // somma dei VERI campi "totale" (con IVA) e "imponibile" (senza IVA)
-  // già presenti sulla scheda di ogni allievo, per tutte e tre le fasi
-  // di pagamento (acconto, pre corso, saldo) e le loro righe extra —
-  // stesso principio già usato da totQuota() per acconto/precorso.
-  // "Cash"/"Cash prima del corso" e "Conto corrente" leggono il metodo
-  // di ciascuna fase: "Contanti" e "Cash no iva" sono la famiglia cash,
-  // tutto il resto (Sito/Bonifico/Pos/Rate) è conto corrente.
-  const METODI_CASH_RIEPILOGO = new Set(["Contanti", "Cash no iva"]);
-  function quotePagateDi(i) {
-    const quote = [];
-    ["acconto", "precorso", "saldo"].forEach((prefisso) => {
-      const metodo = i[`${prefisso}_metodo`];
-      if (!metodo) return;
-      quote.push({ fase: prefisso, totale: totQuota(i, prefisso), imponibile: i[`${prefisso}_imponibile`] || 0, metodo });
-    });
-    (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r) => {
-      if (!r.metodo) return;
-      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
-      quote.push({ fase: "acconto", totale: round2((r.totale || 0) + interessi), imponibile: r.imponibile || 0, metodo: r.metodo });
-    });
-    (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r) => {
-      if (!r.metodo) return;
-      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
-      quote.push({ fase: "precorso", totale: round2((r.totale || 0) + interessi), imponibile: r.imponibile || 0, metodo: r.metodo });
-    });
-    return quote;
-  }
-  const tutteLeQuoteClasse = listaIscritti.flatMap(quotePagateDi);
-  // il "totale con iva" di ogni fase è un dato vero della scheda; per
-  // modelle e "altri incassi al corso" non esiste un imponibile tracciato
-  // separatamente, quindi restano dentro il lordo ma non vengono
-  // scorporati nel netto (evita di inventare un numero non tracciato)
-  const incassoLordoClasse = round2(
-    tutteLeQuoteClasse.reduce((s, q) => s + q.totale, 0)
-    + listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0)
-    + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
-  );
-  const incassoNettoClasse = round2(tutteLeQuoteClasse.reduce((s, q) => s + q.imponibile, 0));
-  const ivaClasse = round2(incassoLordoClasse - incassoNettoClasse);
-  const cashPrimaDelCorsoClasse = round2(
-    tutteLeQuoteClasse.filter((q) => q.fase !== "saldo" && METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)
-  );
-  const contoCorrenteClasse = round2(
-    tutteLeQuoteClasse.filter((q) => !METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)
-    + incassiExtraPos
-  );
 
   // sovrascrittura ottimistica dello split Bonifico/Cash di una riga
   // (master/location/assistente): "ricarica" rifà l'intero fetchDati,
@@ -17727,26 +17671,24 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   }
   const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
     calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel }, { splitOverride, giorniPresenzaOverride });
-  const totaleCostiClasse = round2(
-    totaleSpeseAutomaticheClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
-    costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
-  );
-  const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
-  // Totale Cash da pagare: somma di tutta la colonna Cash della tabella
-  // spese (righe automatiche + spese reali)
-  const totaleCashDaPagareClasse = round2(
-    righeSpeseTutte.reduce((s, r) => s + (r.cash || 0), 0)
-    + speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
-  );
-  // "Cash pulito in busta": solo il cash incassato FISICAMENTE al corso
-  // (non il cash prima del corso, che non è nella busta consegnata quel
-  // giorno) meno tutto il Cash da pagare della tabella spese — può
-  // risultare negativo se le spese cash superano il cash incassato al
-  // corso, e in tal caso serve integrare da un'altra fonte
-  // nella busta finisce anche il contante delle vendite fatte in aula: è
-  // denaro incassato al corso come il resto, e chi la riceve deve trovarci
-  // dentro la stessa cifra che l'app dichiara
-  const cassaContantiClasse = round2(contantiClasse + venditeAlCorsoContanti - totaleCashDaPagareClasse);
+  // Tutti i conti della classe vengono da contiRiepilogoClasse, la stessa
+  // funzione che alimenta "Prossime contabilità": qui dentro non ci sono
+  // piu' formule proprie, cosi' i due posti non possono divergere. Gli
+  // ingressi sono quelli "vivi" della scheda — spese e voci libere con le
+  // correzioni appena fatte, non ancora ricaricate dal database.
+  const contiClasse = contiRiepilogoClasse({
+    incassiExtra, listaIscritti, venditeAlCorso,
+    speseClasse, costiExtra, righeSpeseTutte, totaleSpeseAutomaticheClasse,
+  });
+  const {
+    incassoLordo: incassoLordoClasse, incassoNetto: incassoNettoClasse, iva: ivaClasse,
+    cashPrimaDelCorso: cashPrimaDelCorsoClasse, contoCorrente: contoCorrenteClasse,
+    incassiExtraContanti, incassiExtraPos,
+    contanti: contantiClasse, pos: posClasse, daIncassare: daIncassareClasse,
+    venditeContanti: venditeAlCorsoContanti, venditePos: venditeAlCorsoPos, venditeTotale: venditeAlCorsoTotale,
+    totaleCosti: totaleCostiClasse, risultato: risultatoClasse,
+    totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse,
+  } = contiClasse;
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
   // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
@@ -21504,58 +21446,15 @@ function VistaBiglietti({ param, tipo }) {
 }
 
 
-// ---------- Prossime contabilità ----------
-// I conti di una classe, calcolati fuori dalla scheda del corso con le
-// stesse formule del "Riepilogo amministrativo": la somma dei totali e
-// degli imponibili VERI scritti su ogni allievo (acconto, pre corso,
-// saldo e le loro righe extra), piu' le modelle e gli incassi extra
-// dell'edizione. Niente scorporo IVA inventato: l'IVA e' la differenza
-// fra quello che si e' incassato e l'imponibile dichiarato.
-const METODI_CASH_CONTABILITA = new Set(["Contanti", "Cash no iva"]);
-function quotePagateDiIscritto(i) {
-  const quote = [];
-  ["acconto", "precorso", "saldo"].forEach((prefisso) => {
-    const metodo = i[`${prefisso}_metodo`];
-    if (!metodo) return;
-    quote.push({ fase: prefisso, totale: totQuota(i, prefisso), imponibile: i[`${prefisso}_imponibile`] || 0, metodo });
-  });
-  ["acconto", "precorso"].forEach((prefisso) => {
-    (Array.isArray(i[`${prefisso}_extra`]) ? i[`${prefisso}_extra`] : []).forEach((r) => {
-      if (!r.metodo) return;
-      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
-      quote.push({ fase: prefisso, totale: round2((r.totale || 0) + interessi), imponibile: r.imponibile || 0, metodo: r.metodo });
-    });
-  });
-  return quote;
-}
-function contabilitaDiClasse(cd, iscrittiEdizione) {
-  const incassiExtra = Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [];
-  const quote = (iscrittiEdizione || []).flatMap(quotePagateDiIscritto);
-  const lordo = round2(
-    quote.reduce((s, q) => s + q.totale, 0)
-    + (iscrittiEdizione || []).reduce((s, i) => s + modelleTotaleDi(i), 0)
-    + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
-  );
-  const netto = round2(quote.reduce((s, q) => s + q.imponibile, 0));
-  const incassiExtraContanti = round2(incassiExtra.filter((c) => c.metodo === "Contanti").reduce((s, c) => s + parseNum(c.valore), 0));
-  const incassiExtraPos = round2(incassiExtra.filter((c) => c.metodo === "Pos").reduce((s, c) => s + parseNum(c.valore), 0));
-  // "da incassare al corso": saldi in contanti o POS ancora da riscuotere
-  // piu' le modelle, che si pagano in aula
-  const contanti = round2((iscrittiEdizione || []).reduce((s, i) => s + ((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
-  const pos = round2((iscrittiEdizione || []).reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
-  return {
-    lordo, netto, iva: round2(lordo - netto),
-    contanti, pos, daIncassare: round2(contanti + pos),
-    costiExtra: round2(costoClasseErp(cd)),
-    allievi: (iscrittiEdizione || []).length,
-  };
-}
-
 // La pagina "Prossime contabilità": i riepiloghi amministrativi di tutte
 // le classi in ordine cronologico, uno sotto l'altro, con lo stesso
 // linguaggio delle schede master — targhetta della data del colore del
 // corso, nome e citta', e il tasto per entrare nella classe.
-function PaginaProssimeContabilita({ corsi, corsiDate, location, iscritti, onApriClasse, onBack, titolo = "Prossime contabilità" }) {
+function PaginaProssimeContabilita({
+  corsi, corsiDate, location, iscritti, spese, venditeShop, corsiDateDocenti,
+  master, masterCorsi, assistente, assistenteCorsi, leva, hotel,
+  onApriClasse, onBack, titolo = "Prossime contabilità",
+}) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   // dai corsi finiti da poco (che sono quelli ancora da chiudere) in
@@ -21569,13 +21468,23 @@ function PaginaProssimeContabilita({ corsi, corsiDate, location, iscritti, onApr
       .filter((cd) => (cd.data_fine || cd.data_inizio || "") >= dallaData)
       .sort((a, b) => String(a.data_inizio).localeCompare(String(b.data_inizio)))
       .map((cd) => {
-        const iscrittiEdizione = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
-        return { cd, corso: corsoPerId[cd.corso_id] || null, loc: locPerId[cd.location_id] || null, conti: contabilitaDiClasse(cd, iscrittiEdizione) };
+        const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
+        const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
+          calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel }, {});
+        const conti = contiRiepilogoClasse({
+          incassiExtra: Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [],
+          listaIscritti,
+          venditeAlCorso: (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio"),
+          speseClasse: (spese || []).filter((x) => x.classe_id === cd.id),
+          costiExtra: Array.isArray(cd.costi_extra) ? cd.costi_extra : [],
+          righeSpeseTutte, totaleSpeseAutomaticheClasse,
+        });
+        return { cd, corso: corsoPerId[cd.corso_id] || null, loc: locPerId[cd.location_id] || null, conti };
       });
-  }, [corsi, corsiDate, location, iscritti, dallaData]);
+  }, [corsi, corsiDate, location, iscritti, spese, venditeShop, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, hotel, dallaData]);
 
   const totali = righe.reduce((acc, r) => ({
-    lordo: acc.lordo + r.conti.lordo, daIncassare: acc.daIncassare + r.conti.daIncassare, allievi: acc.allievi + r.conti.allievi,
+    lordo: acc.lordo + r.conti.incassoLordo, daIncassare: acc.daIncassare + r.conti.daIncassare, allievi: acc.allievi + r.conti.allievi,
   }), { lordo: 0, daIncassare: 0, allievi: 0 });
 
   return (
@@ -21626,8 +21535,8 @@ function PaginaProssimeContabilita({ corsi, corsiDate, location, iscritti, onApr
               <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: 12 }}>
                 {[
                   { etichetta: "Allievi", valore: String(conti.allievi), tinta: NAVY },
-                  { etichetta: "Incassato lordo", valore: fmtEuroErp(conti.lordo), tinta: NAVY },
-                  { etichetta: "Imponibile", valore: fmtEuroErp(conti.netto), tinta: NAVY },
+                  { etichetta: "Lordo (iva incl.)", valore: fmtEuroErp(conti.incassoLordo), tinta: NAVY },
+                  { etichetta: "Netto (iva escl.)", valore: fmtEuroErp(conti.incassoNetto), tinta: NAVY },
                   { etichetta: "IVA", valore: fmtEuroErp(conti.iva), tinta: MUTED },
                 ].map((v) => (
                   <div key={v.etichetta} style={{ borderLeft: `3px solid ${GOLD}`, paddingLeft: 10 }}>
@@ -21637,21 +21546,112 @@ function PaginaProssimeContabilita({ corsi, corsiDate, location, iscritti, onApr
                 ))}
               </div>
 
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
-                  Da incassare in aula: <b style={{ color: conti.daIncassare > 0 ? "#C0392B" : "#2E7D32" }}>{fmtEuroErp(conti.daIncassare)}</b>
-                  {conti.daIncassare > 0 && <> — contanti {fmtEuroErp(conti.contanti)} · POS {fmtEuroErp(conti.pos)}</>}
-                </span>
-                {conti.costiExtra > 0 && (
-                  <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Costi della classe: <b style={{ color: NAVY }}>{fmtEuroErp(conti.costiExtra)}</b></span>
-                )}
+              {/* le stesse voci del riepilogo dentro la scheda del corso:
+                  da avere al corso, costi della classe, risultato e il
+                  cash che deve trovarsi in busta */}
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: 12 }}>
+                {[
+                  { etichetta: "Da avere al corso", valore: fmtEuroErp(conti.daIncassare), tinta: conti.daIncassare > 0 ? "#C0392B" : "#2E7D32", sotto: conti.daIncassare > 0 ? `contanti ${fmtEuroErp(conti.contanti)} · POS ${fmtEuroErp(conti.pos)}` : null },
+                  { etichetta: "Costi della classe", valore: fmtEuroErp(conti.totaleCosti), tinta: NAVY },
+                  { etichetta: "Risultato", valore: fmtEuroErp(conti.risultato), tinta: conti.risultato < 0 ? "#C0392B" : "#2E7D32" },
+                  { etichetta: "Cash pulito in busta", valore: fmtEuroErp(conti.cassaContanti), tinta: conti.cassaContanti < 0 ? "#C0392B" : NAVY, sotto: conti.venditeContanti > 0 ? `di cui ${fmtEuroErp(conti.venditeContanti)} di vendite` : null },
+                ].map((v) => (
+                  <div key={v.etichetta}>
+                    <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{v.etichetta}</div>
+                    <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: v.tinta }}>{v.valore}</div>
+                    {v.sotto && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{v.sotto}</div>}
+                  </div>
+                ))}
               </div>
+              {conti.venditeTotale > 0 && (
+                <div style={{ marginTop: 10, ...fontBody, fontSize: 12, color: MUTED }}>
+                  Vendite al corso: <b style={{ color: NAVY }}>{fmtEuroErp(conti.venditeTotale)}</b> — contanti {fmtEuroErp(conti.venditeContanti)} · POS {fmtEuroErp(conti.venditePos)}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
     </div>
   );
+}
+
+
+// ---------- I conti di una classe ----------
+// Tutti i numeri del "Riepilogo amministrativo", in un posto solo: li usa
+// la scheda del corso (dove si modificano) e li usa "Prossime contabilità"
+// (dove si leggono e basta). Se un giorno si aggiunge una voce, si
+// aggiunge qui e compare in tutte e due — e nessuno dei due posti puo'
+// applicare una regola sua.
+//
+// Prende in ingresso dati GIA' risolti (le spese della classe, le voci
+// libere, le righe di spesa automatiche) perche' la scheda del corso ci
+// lavora sopra in tempo reale con le sue correzioni ottimistiche: le
+// formule stanno qui, i valori li porta chi chiama.
+const METODI_CASH_RIEPILOGO = new Set(["Contanti", "Cash no iva"]);
+function quotePagateDiIscritto(i) {
+  const quote = [];
+  ["acconto", "precorso", "saldo"].forEach((prefisso) => {
+    const metodo = i[`${prefisso}_metodo`];
+    if (!metodo) return;
+    quote.push({ fase: prefisso, totale: totQuota(i, prefisso), imponibile: i[`${prefisso}_imponibile`] || 0, metodo });
+  });
+  ["acconto", "precorso"].forEach((prefisso) => {
+    (Array.isArray(i[`${prefisso}_extra`]) ? i[`${prefisso}_extra`] : []).forEach((r) => {
+      if (!r.metodo) return;
+      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      quote.push({ fase: prefisso, totale: round2((r.totale || 0) + interessi), imponibile: r.imponibile || 0, metodo: r.metodo });
+    });
+  });
+  return quote;
+}
+function contiRiepilogoClasse({
+  incassiExtra = [], listaIscritti = [], venditeAlCorso = [],
+  speseClasse = [], costiExtra = [], righeSpeseTutte = [], totaleSpeseAutomaticheClasse = 0,
+}) {
+  // Incassi lordo/netto: la somma dei VERI campi "totale" (con IVA) e
+  // "imponibile" (senza IVA) di ogni fase, piu' modelle e incassi extra.
+  // L'IVA e' la differenza, non uno scorporo inventato.
+  const tutteLeQuote = listaIscritti.flatMap(quotePagateDiIscritto);
+  const incassoLordo = round2(
+    tutteLeQuote.reduce((s, q) => s + q.totale, 0)
+    + listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0)
+    + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+  );
+  const incassoNetto = round2(tutteLeQuote.reduce((s, q) => s + q.imponibile, 0));
+  const incassiExtraContanti = round2(incassiExtra.filter((c) => c.metodo === "Contanti").reduce((s, c) => s + parseNum(c.valore), 0));
+  const incassiExtraPos = round2(incassiExtra.filter((c) => c.metodo === "Pos").reduce((s, c) => s + parseNum(c.valore), 0));
+  // "Da avere al corso": gli unici importi incassati fisicamente il giorno
+  // del corso — acconto e pre corso arrivano prima e non passano dalle
+  // mani del master in aula
+  const contanti = round2(listaIscritti.reduce((s, i) => s + ((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
+  const pos = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
+  const venditeContanti = round2(venditeAlCorso.filter((v) => v.metodo_pagamento === "contanti").reduce((s, v) => s + (v.totale || 0), 0));
+  const venditePos = round2(venditeAlCorso.filter((v) => v.metodo_pagamento !== "contanti").reduce((s, v) => s + (v.totale || 0), 0));
+  const totaleCosti = round2(
+    totaleSpeseAutomaticheClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0)
+    + costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+  );
+  const totaleCashDaPagare = round2(
+    righeSpeseTutte.reduce((s, r) => s + (r.cash || 0), 0)
+    + speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
+  );
+  const daIncassare = round2(contanti + pos);
+  return {
+    incassoLordo, incassoNetto, iva: round2(incassoLordo - incassoNetto),
+    cashPrimaDelCorso: round2(tutteLeQuote.filter((q) => q.fase !== "saldo" && METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)),
+    contoCorrente: round2(tutteLeQuote.filter((q) => !METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0) + incassiExtraPos),
+    incassiExtraContanti, incassiExtraPos,
+    contanti, pos, daIncassare,
+    venditeContanti, venditePos, venditeTotale: round2(venditeContanti + venditePos),
+    totaleCosti, risultato: round2(daIncassare - totaleCosti),
+    totaleCashDaPagare,
+    // "Cash pulito in busta": il cash incassato FISICAMENTE al corso (piu'
+    // il contante delle vendite fatte in aula) meno tutto il cash da
+    // pagare. Puo' venire negativo, e allora va integrato da altrove
+    cassaContanti: round2(contanti + venditeContanti - totaleCashDaPagare),
+    allievi: listaIscritti.length,
+  };
 }
 
 // ---------- ERP: dashboard direzionale ----------
@@ -46387,7 +46387,9 @@ export default function App() {
     // prodotti in memoria il conto e' sempre zero, e il tasto non lampeggia
     // mai. E' la stessa tabella che carica l'hub della logistica per il suo
     // tasto Advisor, che infatti il pallino lo mostrava
-    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti"],
+    // gli stessi dati che servono al riepilogo dentro la scheda del corso:
+    // i conti sono gli stessi, quindi gli ingredienti anche
+    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie"],
     normative: [],
     ritornoalcorso: ["normative_testi"],
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
@@ -47863,6 +47865,9 @@ export default function App() {
       {view === "prossimecontabilita" && (
         <PaginaProssimeContabilita
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
+          spese={spese} venditeShop={venditeShop} corsiDateDocenti={corsiDateDocenti}
+          master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
+          leva={leva} hotel={hotel}
           onApriClasse={(cd) => apriData(cd)}
           onBack={() => setView("gestionedate")}
         />
