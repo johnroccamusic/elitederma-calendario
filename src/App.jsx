@@ -31490,13 +31490,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // sommare: un bundle/vetrina con conta_magazzino=false falserebbe la
   // somma (non è un pezzo fisico in più, è un modo di venderne altri)
   const prodottiConMagazzino = prodottiConStato.filter((p) => p.conta_magazzino !== false);
-  const stockTotaleGenerale = prodottiConMagazzino.reduce((s, p) => s + (p.stockTotale || 0), 0);
-  const prodottiPubblicati = prodottiConMagazzino.filter((p) => pubblicatoSuShop(p));
-  const stockPubblicato = prodottiPubblicati.reduce((s, p) => s + (p.stockTotale || 0), 0);
-  const pctPubblicato = stockTotaleGenerale > 0 ? Math.round((stockPubblicato / stockTotaleGenerale) * 1000) / 10 : 0;
-  // i pezzi che i corsi non possono toccare: la soglia di riordino di ogni
-  // prodotto è riserva dello shop, non disponibilità per i kit
-  const stockCongelato = prodottiConMagazzino.reduce((s, p) => s + Math.min(p.stockTotale || 0, Math.max(0, p.soglia_riordino || 0)), 0);
 
   let prodottiVisti = prodottiConStato;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
@@ -31646,21 +31639,20 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Da gestire oggi</div>
               {totSegnalazioni > 0 && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 10, padding: "2px 9px" }}>{totSegnalazioni}</span>}
             </div>
-            {/* Sei tessere con la stessa impalcatura: intestazione alta
+            {/* Tre tessere con la stessa impalcatura: intestazione alta
                 due righe (anche quando il titolo ne occupa una sola), poi
-                il numero, poi la nota appoggiata in fondo. Cosi' i sei
+                il numero, poi la nota appoggiata in fondo. Cosi' i tre
                 numeri stanno tutti sulla stessa linea invece di ballare
                 a seconda di quanto e' lungo il titolo sopra.
-                Da telefono tre per riga, due righe: sei tessere in una
-                schermata sola, senza scorrere */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0,1fr))" : "repeat(6, minmax(0,1fr))", gap: isMobile ? 8 : 10, alignItems: "stretch" }}>
+                Erano sei: le tre di destra (stock totale, in vendita
+                online, riservati dalla soglia) erano numeri da guardare,
+                non cose da fare, e "Da gestire oggi" e' un elenco di cose
+                da fare */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 10, alignItems: "stretch" }}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
                 { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", valore: fermi.length, unita: "prodotti", filtro: true },
                 { chiave: "senzacosto", Icona: IconaScatolaErp, tinta: GOLD, etichetta: "Senza costo di acquisto", valore: senzaCosto.length, unita: "prodotti", filtro: true },
-                { chiave: "totale", Icona: IconaScatolaErp, tinta: GOLD, etichetta: "Stock totale", maiuscolo: true, valore: stockTotaleGenerale, unita: "pezzi", nota: "100% del totale" },
-                { chiave: "online", Icona: IconaCarrelloPos, tinta: GOLD, etichetta: "In vendita online", maiuscolo: true, valore: stockPubblicato, unita: "pezzi", nota: `${pctPubblicato.toLocaleString("it-IT")}% del totale, su ${prodottiPubblicati.length} prodotti` },
-                { chiave: "congelato", Icona: IconaScudoSicurezza, tinta: GOLD, etichetta: "Riservati dalla soglia", maiuscolo: true, valore: stockCongelato, unita: "pezzi", nota: "Sotto la soglia di riordino i kit non attingono: restano allo shop" },
               ].map((c) => {
                 const scelto = c.filtro && filtroRapido === c.chiave;
                 const corpo = (
