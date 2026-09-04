@@ -32433,7 +32433,11 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
       {prodottiFornitore.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun prodotto collegato a questo fornitore.</div>
       ) : (
-        <div style={{ maxHeight: dentroModale ? "60vh" : 420, overflowY: "auto", marginBottom: 12 }}>
+        /* nessuna barra di scorrimento interna: l'elenco si mostra tutto
+           intero, cosi' i prodotti in fondo si vedono scorrendo la pagina
+           (o la finestra) come una cosa sola, invece di restare nascosti
+           dentro un riquadro alto quanto mezzo schermo */
+        <div style={{ marginBottom: 12 }}>
           {prodottiFornitore.map((p) => {
             const scelto = Number(quantita[p.id]) > 0;
             const manca = mancanzaDi(p);
