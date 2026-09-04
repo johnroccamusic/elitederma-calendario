@@ -31243,13 +31243,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     const righe = (sintesiAdvisor.piano?.daOrdinare || []).filter((r) => r.perData && !giaOrdinatiMag.has(r.prodotto.id));
     return [...righe].sort((a, b) => (a.perData.giorni ?? 0) - (b.perData.giorni ?? 0));
   }, [sintesiAdvisor, giaOrdinatiMag]);
-  // la finestra "Ordina": vale per la tabella dei prodotti e per gli
-  // avvisi, quindi lo stato sta qui e non dentro l'una o gli altri
-  const [ordinaProdotto, setOrdinaProdotto] = useState(null); // { prodotto, quantitaSuggerita }
-  function apriOrdine(prodotto, quantitaSuggerita) {
-    if (giaOrdinatiMag.has(prodotto.id)) { window.alert("Questo prodotto risulta gia' ordinato: e' in attesa di ricezione."); return; }
-    setOrdinaProdotto({ prodotto, quantitaSuggerita });
-  }
   // dalla tabella si parte da un prodotto ma si finisce sull'ordine del
   // suo fornitore: si apre in una finestra perche' la tabella sta in
   // fondo alla pagina, mentre il pannello degli avvisi sta in cima
@@ -31470,7 +31463,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             avvisi={avvisiMagazzino}
             bloccanti={bloccanti}
             quantiGiaOrdinati={quantiGiaOrdinati}
-            onOrdina={apriOrdine}
             etichettaEdizione={etichettaEdizioneMag}
             onApriAdvisor={onApriAdvisor}
             immaginePerProdotto={immaginePerProdottoMagazzino}
@@ -31726,15 +31718,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           </Modal>
         );
       })()}
-      {ordinaProdotto && (
-        <ModaleSegnaOrdinato
-          prodotto={ordinaProdotto.prodotto}
-          fornitore={(fornitori || []).find((f) => f.id === ordinaProdotto.prodotto.fornitore_id) || null}
-          quantitaSuggerita={ordinaProdotto.quantitaSuggerita}
-          onChiudi={() => setOrdinaProdotto(null)}
-          onFatto={() => ricarica(["riordini_in_corso"])}
-        />
-      )}
       {prodottoIspezionato && prodottoIspezionato.isVetrina && (
         <ModaleIspezioneVetrina
           vetrina={prodottoIspezionato}
@@ -32236,70 +32219,6 @@ function quantitaDaProporre(p) {
   return manca > 0 ? manca : 1;
 }
 
-// la finestra dell'ordine: il fornitore con il suo numero (si ordina
-// telefonando, quindi il numero deve stare qui e non due pagine piu' in
-// la'), quanti pezzi si sono ordinati davvero e la conferma
-function ModaleSegnaOrdinato({ prodotto, fornitore, quantitaSuggerita, onChiudi, onFatto }) {
-  const proposta = quantitaSuggerita != null && quantitaSuggerita > 0 ? Math.round(quantitaSuggerita) : quantitaDaProporre(prodotto);
-  const [quantita, setQuantita] = useState(String(proposta));
-  const [salvando, setSalvando] = useState(false);
-  const etichetta = { ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 };
-  async function conferma() {
-    const q = Math.round(Number(String(quantita).replace(",", ".")));
-    if (!Number.isFinite(q) || q <= 0) { window.alert("Scrivi quanti pezzi hai ordinato."); return; }
-    if (!window.confirm(DOMANDA_ORDINATO)) return;
-    setSalvando(true);
-    const esito = await scriviRiordiniInCorso([{ prodotto, quantita: q }]);
-    setSalvando(false);
-    if (esito.errore) { window.alert("Non sono riuscito a segnarlo come ordinato: " + esito.errore.message); return; }
-    if (esito.scritti === 0) window.alert("Questo prodotto risultava gia' ordinato: lo trovi fra quelli in attesa di ricezione.");
-    await onFatto?.();
-    onChiudi();
-  }
-  return (
-    <Modal title={`Ordina — ${prodotto.nome}`} onClose={onChiudi} maxWidth={430}>
-      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "10px 12px", marginBottom: 14, background: BG }}>
-        <div style={etichetta}>Fornitore</div>
-        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginTop: 2 }}>{fornitore?.nome || "— nessun fornitore collegato —"}</div>
-        {fornitore?.telefono && (
-          <a href={`tel:${String(fornitore.telefono).replace(/\s+/g, "")}`} style={{ display: "inline-block", marginTop: 6, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>
-            {fornitore.telefono}
-          </a>
-        )}
-        {fornitore?.email && (
-          <a href={`mailto:${fornitore.email}`} style={{ display: "block", marginTop: 3, ...fontBody, fontSize: 12.5, color: MUTED, wordBreak: "break-all" }}>
-            {fornitore.email}
-          </a>
-        )}
-        {!fornitore?.telefono && !fornitore?.email && fornitore && (
-          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 4 }}>Nessun recapito in anagrafica.</div>
-        )}
-      </div>
-      <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.5, marginBottom: 12 }}>
-        In magazzino adesso ce ne sono <b>{prodotto.quantita || 0}</b>
-        {prodotto.soglia_riordino != null ? <>, la scorta minima è {prodotto.soglia_riordino}</> : null}.
-      </div>
-      <label style={{ ...etichetta, display: "block", marginBottom: 6 }}>Quantità ordinata</label>
-      <input
-        style={{ ...inputStyle, width: 140 }}
-        inputMode="numeric"
-        autoFocus
-        value={quantita}
-        onChange={(e) => setQuantita(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") conferma(); }}
-      />
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.45 }}>
-        Il prodotto passa fra quelli <b>in attesa di ricezione</b> e smette di comparire negli avvisi. Il magazzino non si tocca adesso:
-        si carica quando la merce arriva, con i pezzi che arrivano davvero.
-      </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-        <Button onClick={conferma} disabled={salvando}>{salvando ? "Segno…" : "Segna come ordinato"}</Button>
-        <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
-      </div>
-    </Modal>
-  );
-}
-
 function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiudi, dentroModale, onOrdinato }) {
   const [quantita, setQuantita] = useState(suggerimenti || {});
   const [generando, setGenerando] = useState(false);
@@ -32479,7 +32398,7 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
     </div>
   );
 }
-function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0, etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, onOrdina, fornitoreApertoId, onAggiorna }) {
+function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0, etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId, onAggiorna }) {
   const daAprire = avvisi.filter((a) => a.tipo === "apri_pacco");
   const daRiordinare = avvisi.filter((a) => a.tipo !== "apri_pacco");
   // dei prodotti che bloccano un corso se ne mostrano i primi: sono
@@ -32670,22 +32589,13 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
                     {onApriScheda && (
                       <button onClick={() => onApriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Apri scheda</button>
                     )}
-                    {onOrdina && (
-                      <button
-                        onClick={() => onOrdina(p, r.quantitaSuggerita != null && r.quantitaSuggerita > 0 ? r.quantitaSuggerita : undefined)}
-                        title="Segna questo prodotto come ordinato al fornitore"
-                        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-                      >
-                        Ordina
-                      </button>
-                    )}
                     {onOrdineFornitore && p.fornitore_id && (
                       <button
                         onClick={() => onOrdineFornitore(p)}
-                        title="Apri l'ordine di questo fornitore, con gli altri suoi prodotti in esaurimento"
+                        title="Apri l'ordine di questo fornitore: spunti i suoi prodotti da ordinare e dichiari l'ordine"
                         style={{ ...fontBody, fontSize: 11, fontWeight: 700, lineHeight: 1.25, color: fornitoreApertoId === p.fornitore_id ? "#fff" : NAVY, background: fornitoreApertoId === p.fornitore_id ? NAVY : "#fff", border: `1px solid ${fornitoreApertoId === p.fornitore_id ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "6px 10px", cursor: "pointer", maxWidth: 150, whiteSpace: "normal" }}
                       >
-                        Associa con altri prodotti dello stesso fornitore
+                        Associa e ordina
                       </button>
                     )}
                   </span>
@@ -32770,25 +32680,16 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
                             {onApriScheda ? (
                               <button onClick={() => onApriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Apri scheda</button>
                             ) : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>—</span>}
-                            {onOrdina && (
-                              <button
-                                onClick={() => onOrdina(p)}
-                                title="Segna questo prodotto come ordinato al fornitore"
-                                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-                              >
-                                Ordina
-                              </button>
-                            )}
                             {/* l'ordine si fa al fornitore, non al singolo
                                 prodotto: da qui si apre il suo ordine, con
                                 accanto tutto il resto che sta finendo */}
                             {onOrdineFornitore && p.fornitore_id && (
                               <button
                                 onClick={() => onOrdineFornitore(p)}
-                                title="Apri l'ordine di questo fornitore, con gli altri suoi prodotti in esaurimento"
+                                title="Apri l'ordine di questo fornitore: spunti i suoi prodotti da ordinare e dichiari l'ordine"
                                 style={{ ...fontBody, fontSize: 11, fontWeight: 700, lineHeight: 1.25, color: fornitoreApertoId === p.fornitore_id ? "#fff" : NAVY, background: fornitoreApertoId === p.fornitore_id ? NAVY : "#fff", border: `1px solid ${fornitoreApertoId === p.fornitore_id ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "6px 10px", cursor: "pointer", maxWidth: 150, whiteSpace: "normal" }}
                               >
-                                Associa con altri prodotti dello stesso fornitore
+                                Associa e ordina
                               </button>
                             )}
                           </span>
@@ -33723,6 +33624,25 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
       .filter((x) => x.prodotto)
       .sort((a, b) => String(a.riordino.data_ordine).localeCompare(String(b.riordino.data_ordine)));
   }, [riordiniInCorso, prodottiShop]);
+  // ...e raccolti per fornitore: la merce arriva a pacchi, un pacco e' di
+  // un fornitore solo. I gruppi restano in ordine di attesa: in cima
+  // quello che aspetta da piu' tempo
+  const inAttesaPerFornitore = useMemo(() => {
+    const gruppi = new Map();
+    inAttesaDiRicezione.forEach((x) => {
+      const idFornitore = x.riordino.fornitore_id || x.prodotto.fornitore_id || "__senza__";
+      if (!gruppi.has(idFornitore)) {
+        gruppi.set(idFornitore, {
+          chiave: idFornitore,
+          nome: fornitorePerId[idFornitore]?.nome || "Senza fornitore",
+          telefono: fornitorePerId[idFornitore]?.telefono || "",
+          righe: [],
+        });
+      }
+      gruppi.get(idFornitore).righe.push(x);
+    });
+    return [...gruppi.values()];
+  }, [inAttesaDiRicezione, fornitorePerId]);
   const dueColonneOrdini = !isMobile && inAttesaDiRicezione.length > 0 && !fornitoreOrdineId;
   // corsi futuri: prima gli scoperti, poi i coperti, ognuno in ordine di
   // data. L'elenco arriva gia' cronologico, quindi basta un ordinamento
@@ -34230,7 +34150,20 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
             titolo={`In attesa di ricezione (${inAttesaDiRicezione.length})`}
             sotto="Ordini già partiti. Quando la merce arriva premi Ricevuto e scrivi quanti pezzi sono davvero arrivati: il sistema li carica in magazzino."
           />
-          {inAttesaDiRicezione.map(({ riordino, prodotto }) => {
+          {inAttesaPerFornitore.map((gruppo) => (
+          <div key={gruppo.chiave}>
+            {/* il titolo del fornitore: sotto ci stanno tutti i suoi
+                prodotti in viaggio, col numero da chiamare se tardano */}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", padding: "14px 0 4px", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 2 }}>
+              <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{gruppo.nome}</span>
+              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                {gruppo.righe.length} {gruppo.righe.length === 1 ? "prodotto" : "prodotti"}
+              </span>
+              {gruppo.telefono && (
+                <a href={`tel:${String(gruppo.telefono).replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginLeft: "auto" }}>{gruppo.telefono}</a>
+              )}
+            </div>
+          {gruppo.righe.map(({ riordino, prodotto }) => {
             const giorniDaOrdine = giorniTra(String(riordino.data_ordine), oggi);
             return (
               <div key={riordino.id} style={{ ...rigaStyle, alignItems: "center", padding: "10px 0" }}>
@@ -34250,7 +34183,6 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                   <div style={{ fontSize: 12, color: MUTED }}>
                     Ordinato il {fmtData(riordino.data_ordine)}
                     {giorniDaOrdine > 0 ? ` — ${giorniDaOrdine} giorn${giorniDaOrdine === 1 ? "o" : "i"} fa` : " — oggi"}
-                    {riordino.fornitore_id && fornitorePerId[riordino.fornitore_id]?.nome ? ` · ${fornitorePerId[riordino.fornitore_id].nome}` : ""}
                     {" · "}in magazzino adesso {prodotto.quantita || 0}
                   </div>
                 </div>
@@ -34277,6 +34209,8 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               </div>
             );
           })}
+          </div>
+          ))}
         </div>
       )}
       </div>
