@@ -31643,11 +31643,33 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 online, riservati dalla soglia) erano numeri da guardare,
                 non cose da fare, e "Da gestire oggi" e' un elenco di cose
                 da fare */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 10, alignItems: "stretch" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 8 : 10, alignItems: "stretch" }}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
                 { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", valore: fermi.length, unita: "prodotti", filtro: true },
                 { chiave: "senzacosto", Icona: IconaScatolaErp, tinta: GOLD, etichetta: "Senza costo di acquisto", valore: senzaCosto.length, unita: "prodotti", filtro: true },
+                // L'Advisor come quarta tessera invece che come striscia
+                // sotto: e' una cosa da fare come le altre tre, e stava
+                // occupando una fascia intera per dire tre numeri. Il
+                // colore lo decide lo stato, come faceva la striscia:
+                // rosso se c'e' un ritardo o un corso scoperto, ambra se
+                // c'e' solo da ordinare, verde se e' tutto coperto
+                (() => {
+                  const { risultato, daOrdinare, ritardi } = sintesiAdvisor;
+                  const critico = !!risultato.dataCriticaComplessiva;
+                  const tinta = ritardi || critico ? "#C0392B" : daOrdinare ? "#B8860B" : "#2E7D32";
+                  const copertura = risultato.modalita === "senza_date"
+                    ? "Nessun corso futuro in calendario"
+                    : critico
+                      ? `Autonomia fino al ${fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))} · un corso resta scoperto`
+                      : `Copri tutti i ${risultato.edizioniConsiderate} corsi in calendario`;
+                  return {
+                    chiave: "advisor", Icona: IconaTileLampadina, tinta, etichetta: "Advisor",
+                    valore: daOrdinare, unita: daOrdinare === 1 ? "prodotto da ordinare" : "prodotti da ordinare",
+                    nota: ritardi > 0 ? `${copertura} · ${ritardi} in ritardo` : copertura,
+                    azione: onApriAdvisor, sfondo: `${tinta}12`, bordo: `${tinta}44`,
+                  };
+                })(),
               ].map((c) => {
                 const scelto = c.filtro && filtroRapido === c.chiave;
                 const corpo = (
@@ -31672,12 +31694,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 );
                 const stile = {
                   display: "flex", flexDirection: "column", padding: isMobile ? "10px 12px" : "16px 18px", borderRadius: 16,
-                  border: `1px solid ${scelto ? GOLD : CREAM_BORDER}`, background: scelto ? BG : "#fff",
+                  border: `1px solid ${c.bordo || (scelto ? GOLD : CREAM_BORDER)}`, background: c.sfondo || (scelto ? BG : "#fff"),
                   textAlign: "left", minHeight: isMobile ? 96 : 132, position: "relative",
                 };
-                if (!c.filtro) return <div key={c.chiave} style={stile}>{corpo}</div>;
+                if (!c.filtro && !c.azione) return <div key={c.chiave} style={stile}>{corpo}</div>;
                 return (
-                  <button key={c.chiave} onClick={() => setFiltroRapido(c.chiave)} style={{ ...stile, cursor: "pointer" }}>
+                  <button key={c.chiave} onClick={c.azione || (() => setFiltroRapido(c.chiave))} style={{ ...stile, cursor: "pointer" }}>
                     {corpo}
                     <span style={{ position: "absolute", right: isMobile ? 10 : 14, bottom: isMobile ? 10 : 14, display: "inline-flex" }}>
                       <IconaChevronDestra size={isMobile ? 13 : 16} color={MUTED} />
@@ -31688,48 +31710,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             </div>
           </div>
         )}
-
-        {(() => {
-          const { risultato, daOrdinare, ritardi } = sintesiAdvisor;
-          const critico = !!risultato.dataCriticaComplessiva;
-          const colore = ritardi || critico ? "#C0392B" : daOrdinare ? "#B8860B" : "#2E7D32";
-          const sfondo = ritardi || critico ? "#FBE4E1" : daOrdinare ? "#FBF1D9" : "#E3F3E5";
-          return (
-            <div
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap", padding: "12px 16px", marginBottom: 22, borderRadius: 16, border: `1px solid ${colore}44`, background: sfondo }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", minWidth: 0 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                  <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#fff", border: `1px solid ${colore}44`, display: "inline-flex", alignItems: "center", justifyContent: "center", color: colore }}>
-                    <IconaTileLampadina size={18} color={colore} />
-                  </span>
-                  <span style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY }}>Advisor</span>
-                </span>
-                <span style={{ width: 1, height: 22, background: `${colore}44`, flexShrink: 0 }} />
-                {/* le tre notizie separate da un pallino: prima era una frase
-                    sola e i numeri ci si perdevano dentro */}
-                <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>
-                  <span>
-                    {risultato.modalita === "senza_date"
-                      ? "Nessun corso futuro in calendario"
-                      : critico
-                        ? <>Autonomia fino al <b>{fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))}</b></>
-                        : <>Copri tutti i {risultato.edizioniConsiderate} corsi in calendario</>}
-                  </span>
-                  {critico && <><span style={{ color: MUTED }}>•</span><span>Un corso resta scoperto</span></>}
-                  {daOrdinare > 0 && <><span style={{ color: MUTED }}>•</span><span><b>{daOrdinare}</b> prodotti da ordinare</span></>}
-                  {ritardi > 0 && <><span style={{ color: MUTED }}>•</span><span style={{ color: "#C0392B", fontWeight: 700 }}>{ritardi} in ritardo</span></>}
-                </span>
-              </div>
-              <button
-                onClick={onApriAdvisor}
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${colore}44`, borderRadius: 12, padding: "9px 16px", cursor: "pointer", flexShrink: 0 }}
-              >
-                Apri advisor <IconaChevronDestra size={14} color={MUTED} />
-              </button>
-            </div>
-          );
-        })()}
 
         {vistaProdotti === "elenco" && (<>
         {/* gli avvisi ora stanno a sinistra: sono la parte che chiede un
