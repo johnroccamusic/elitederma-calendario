@@ -48082,6 +48082,20 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  // Alt + rotellina: su diversi browser sfoglia avanti e indietro nella
+  // cronologia, e basta tenere premuto Alt mentre si scorre un elenco per
+  // ritrovarsi fuori dalla pagina con il lavoro a meta'. Dentro l'app quel
+  // gesto non serve a niente, quindi si annulla. "passive: false" e'
+  // indispensabile: senza, il browser considera l'ascoltatore incapace di
+  // fermare l'evento e preventDefault non ha alcun effetto
+  useEffect(() => {
+    function annullaAltRotellina(e) {
+      if (e.altKey) e.preventDefault();
+    }
+    window.addEventListener("wheel", annullaAltRotellina, { passive: false });
+    return () => window.removeEventListener("wheel", annullaAltRotellina);
+  }, []);
+
 
   // quanti pacchi aspettano: gli ordini dello shop in lavorazione più le
   // spedizioni vendute al banco non ancora partite. È il numero rosso sul
