@@ -11812,7 +11812,7 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Ancora niente da mostrare.</div>
         ) : (
           <div style={{ display: "flex", alignItems: "stretch", gap: 18 }}>
-            <div style={{ flex: "0 0 120px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ flex: "0 0 120px", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
               {srcLogo
                 ? <img src={srcLogo} alt="" style={{ maxWidth: "100%", maxHeight: 76, objectFit: "contain" }} />
                 : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>nessun logo</span>}
@@ -32547,11 +32547,16 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
         }
       }
 
-      // il logo a sinistra, la linea, i dati a destra
+      // il logo a sinistra, la linea, i dati a destra. Il logo si appoggia
+      // alla linea da 3 mm di distanza qualunque sia la sua forma: se
+      // fosse centrato nel suo riquadro, uno stretto resterebbe lontano e
+      // uno largo attaccato
+      const MM = 72 / 25.4;
       const X_LOGO = 50;
-      const LARGHEZZA_LOGO = 125;
       const X_LINEA = 195;
       const X_TESTO = 215;
+      const STACCO_LOGO = 3 * MM;
+      const LARGHEZZA_LOGO = X_LINEA - STACCO_LOGO - X_LOGO;
       const yAltoIntestazione = A4[1] - 58;
       let yRiga = yAltoIntestazione;
       righeIntestazione.forEach((riga, i) => {
@@ -32567,7 +32572,7 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
         const scala = Math.min(LARGHEZZA_LOGO / logo.width, 62 / logo.height);
         const larghezza = logo.width * scala;
         const altezza = logo.height * scala;
-        pagina.drawImage(logo, { x: X_LOGO + (LARGHEZZA_LOGO - larghezza) / 2, y: yAltoIntestazione - altezza, width: larghezza, height: altezza });
+        pagina.drawImage(logo, { x: X_LINEA - STACCO_LOGO - larghezza, y: yAltoIntestazione - altezza, width: larghezza, height: altezza });
         altezzaLogo = altezza;
       }
       // la linea separa: se da una parte non c'e' niente, non c'e' niente
