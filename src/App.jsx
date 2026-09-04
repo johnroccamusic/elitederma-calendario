@@ -32753,6 +32753,10 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
   // stock" a "di cosa sono a zero" — un prodotto a zero con il corso fra un
   // mese non e' urgente oggi, ma e' quello che si ordina insieme al resto.
   const [ordineBloccanti, setOrdineBloccanti] = useState("corso");
+  // il pannello parte chiuso: in cima alla pagina resta la barra con i
+  // numeri, che e' quello che si guarda ogni volta, e l'elenco lungo si
+  // apre quando lo si vuole davvero leggere
+  const [avvisiAperti, setAvvisiAperti] = useState(false);
   // l'ora dell'ultima lettura: parte da quando il pannello si apre e si
   // riscrive a ogni aggiornamento chiesto a mano
   const [istanteLettura, setIstanteLettura] = useState(() => new Date());
@@ -32851,6 +32855,7 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
         </div>
       )}
 
+      {avvisiAperti && (<>
       {avvisi.length === 0 && bloccanti.length === 0 && (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "0 18px 18px" }}>
           {quantiGiaOrdinati > 0
@@ -33104,6 +33109,29 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
           <b>Sfusi disponibili</b>: pezzi già aperti, pronti all'uso · <b>Pacchi sigillati</b>: confezioni integre da aprire
         </div>
       )}
+      </>)}
+      {/* la linguetta sotto la barra, come quella del dock: la freccia
+          guarda in giu' quando c'e' da aprire e in su quando c'e' da
+          richiudere */}
+      <button
+        onClick={() => setAvvisiAperti((v) => !v)}
+        aria-label={avvisiAperti ? "Chiudi gli avvisi" : "Apri gli avvisi"}
+        title={avvisiAperti ? "Chiudi gli avvisi" : "Apri gli avvisi"}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          width: "100%", padding: "7px 0", cursor: "pointer",
+          background: BG, border: "none", borderTop: `1px solid ${CREAM_BORDER}`, color: MUTED,
+        }}
+      >
+        {!avvisiAperti && (
+          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.3 }}>
+            Vedi i {avvisi.length + bloccanti.length} avvisi
+          </span>
+        )}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points={avvisiAperti ? "6 15 12 9 18 15" : "6 9 12 15 18 9"} />
+        </svg>
+      </button>
     </div>
   );
 }
