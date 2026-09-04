@@ -40653,6 +40653,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [salvandoOrdineVetrina, setSalvandoOrdineVetrina] = useState(false);
   const [msgOrdineVetrina, setMsgOrdineVetrina] = useState("");
   const prodottoTrascinatoRef = React.useRef(null);
+  const formToccatoRef = React.useRef(false);
   // le due finestre del salvataggio: la conferma parte subito, l'avviso
   // di errore arriva dopo, se il lavoro in background non e' andato
   const [confermaSalvataggio, setConfermaSalvataggio] = useState(null);
@@ -40872,8 +40873,19 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setCollassate((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }
 
-  function apriProdotto(p) {
-    setProdottoForm({
+  // categorie e immagini di ogni prodotto, sempre nella versione appena
+  // caricata: datiFormDaProdotto puo' essere chiamata da un salvataggio
+  // partito prima dell'ultima ricarica, e le mappe della sua chiusura
+  // sarebbero quelle di allora
+  const mappeProdottoRef = React.useRef(null);
+  mappeProdottoRef.current = { categorieIdPerProdotto, immaginiPerProdotto };
+
+  // i valori della scheda letti da una riga di prodotti_shop: serve anche
+  // dopo un salvataggio, per rimettere in pagina quello che e' finito
+  // davvero nel database
+  function datiFormDaProdotto(p) {
+    const { categorieIdPerProdotto: categoriePer, immaginiPerProdotto: immaginiPer } = mappeProdottoRef.current;
+    return {
       id: p.id,
       nome: p.nome,
       descrizioneBreve: p.descrizione_breve || "",
@@ -40913,9 +40925,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       lottoMinimo: p.lotto_minimo_ordine != null ? String(p.lotto_minimo_ordine) : "",
       quantitaRiordino: p.quantita_riordino != null ? String(p.quantita_riordino) : "",
       wooProductId: p.woo_product_id || null,
-      categorieIds: categorieIdPerProdotto[p.id] || [],
-      immagini: (immaginiPerProdotto[p.id] || []).map((im) => ({ chiave: im.id, url: im.url, wooImageId: im.woo_image_id })),
-    });
+      categorieIds: categoriePer[p.id] || [],
+      immagini: (immaginiPer[p.id] || []).map((im) => ({ chiave: im.id, url: im.url, wooImageId: im.woo_image_id })),
+    };
+  }
+
+  function apriProdotto(p) {
+    setProdottoForm(datiFormDaProdotto(p));
+    formToccatoRef.current = false;
     setComponenti([]);
     setCopiaAperta(false); setSelezionatiCopia({}); setMsgCopia("");
     setMsgErrore(""); setMsgSuccesso("");
@@ -41296,7 +41313,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       solo_offline: !!f.soloOffline,
       escludi_vendita_diretta: !!f.nonSulPos,
     };
-    if (calcolo.prezzoNetto != null) campi.prezzo_vendita = calcolo.prezzoNetto;
+    // anche il vuoto e' una modifica: scrivendo solo quando c'e' un
+    // numero, cancellare il prezzo di vendita non lo cancellava e alla
+    // riapertura tornava quello di prima
+    campi.prezzo_vendita = calcolo.prezzoNetto;
     const { error } = await supabase.from("prodotti_shop").update(campi).eq("id", prodottoId);
     if (error) return error.message;
     if (f.tipoProdotto === "bundle" || f.componentiAccompagnano) {
@@ -41449,10 +41469,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // poi non andasse, se ne accorge dall'avviso rosso qui sotto
     setErroreSalvataggio(null);
     setConfermaSalvataggio({ nome: f.nome.trim(), nuovo: !f.id });
+    // da qui quello che c'e' nella scheda e' esattamente quello che si sta
+    // salvando: se nessuno ci scrive piu', a fine salvataggio si potra'
+    // rimettere in pagina la riga vera senza cancellare niente
+    formToccatoRef.current = false;
     const chiave = `${f.id || "nuovo"}-${f.nome}-${Date.now()}`;
     setLavoriInCorso((prec) => [...prec, { chiave, nome: f.nome.trim() }]);
     eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot)
-      .then((esito) => {
+      .then(async (esito) => {
         setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
         if (esito?.errore) {
           setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: esito.errore, form: f }]);
@@ -41471,7 +41495,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
           return f.id ? prev : { ...prev, id: esito.idProdotto };
         });
-        ricarica(esito.tabelle);
+        await ricarica(esito.tabelle);
+        // Il salvataggio va in background: chi chiude la scheda e riapre
+        // subito lo stesso prodotto lo riapre dai dati di prima, e vede
+        // tornare i valori vecchi — sembra che la modifica non abbia retto
+        // mentre nel database c'e' gia' quella nuova. Qui, se la scheda e'
+        // ancora ferma su quel prodotto e nessuno ci ha piu' scritto, si
+        // rimette in pagina la riga vera
+        if (!formToccatoRef.current && esito.idProdotto) {
+          const { data: riga } = await supabase.from("prodotti_shop").select("*").eq("id", esito.idProdotto).maybeSingle();
+          if (riga) setProdottoForm((prev) => (prev && prev.id === riga.id && !formToccatoRef.current ? datiFormDaProdotto(riga) : prev));
+        }
       })
       .catch((e) => {
         setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
@@ -41522,7 +41556,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   function aggiungiComponente() { setComponenti((prev) => [...prev, { componenteId: "", quantita: "1" }]); }
   function rimuoviComponente(i) { setComponenti((prev) => prev.filter((_, idx) => idx !== i)); }
   function cambiaComponente(i, campo, valore) { setComponenti((prev) => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valore } : c))); }
-  function aggiornaForm(campi) { setProdottoForm((f) => ({ ...f, ...campi })); }
+  // true da quando qualcuno scrive nella scheda: serve a non riscrivergli
+  // sotto le mani quello che ha appena digitato
+  function aggiornaForm(campi) { formToccatoRef.current = true; setProdottoForm((f) => ({ ...f, ...campi })); }
   function nomiCategorie(ids) {
     return (ids || []).map((id) => `"${(categorieProdotti || []).find((c) => c.id === id)?.nome || "?"}"`).join(", ");
   }
