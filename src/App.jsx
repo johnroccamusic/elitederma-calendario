@@ -41672,10 +41672,19 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           )}
         </div>
       )}
-      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+      {/* a griglia e non a elenco: quattro riquadri per riga somigliano a
+          come i prodotti stanno sullo shop, e riordinare una vetrina
+          guardando le foto e' un altro mestiere che leggere dei nomi */}
+      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto", display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, minmax(0, 1fr))`, gap: 8, alignContent: "start" }}>
         {(inRiordino ? prodottiInRiordino : prodottiFiltrati).map((p) => {
           const immagini = immaginiPerProdotto[p.id] || [];
           const selezionato = prodottoForm?.id === p.id;
+          // una variante senza codice del sito non è un prodotto
+          // "mancante": si vende dentro la vetrina, dirlo "Non su Woo"
+          // faceva sembrare un errore quello che è il suo modo di stare
+          const eVariante = p.tipo_prodotto === "variante" && !p.woo_product_id;
+          const etichetta = eVariante ? "Variante" : !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : p.stato === "private" ? "Privato" : "Online";
+          const colori = eVariante ? { bg: "#E7EEF5", fg: "#3B6FA0" } : !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : p.stato === "private" ? { bg: "#E7EEF5", fg: "#3B6FA0" } : { bg: "#E6F2E8", fg: "#2E7D32" };
           return (
             <div
               key={p.id}
@@ -41685,30 +41694,27 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               onDragEnd={inRiordino ? () => { prodottoTrascinatoRef.current = null; } : undefined}
               onDragOver={inRiordino ? (e) => e.preventDefault() : undefined}
               onDrop={inRiordino ? (e) => { e.preventDefault(); spostaProdottoVetrina(prodottoTrascinatoRef.current, p.id); prodottoTrascinatoRef.current = null; } : undefined}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, cursor: inRiordino ? "grab" : "pointer", background: selezionato && !inRiordino ? "#FBF3E4" : "#FAF8F2", border: selezionato && !inRiordino ? `1px solid ${GOLD}` : `1px solid ${CREAM_BORDER}` }}
+              title={p.nome}
+              style={{ position: "relative", display: "flex", flexDirection: "column", aspectRatio: "1 / 1", padding: 6, borderRadius: 10, overflow: "hidden", cursor: inRiordino ? "grab" : "pointer", background: selezionato && !inRiordino ? "#FBF3E4" : "#FAF8F2", border: selezionato && !inRiordino ? `1px solid ${GOLD}` : `1px solid ${CREAM_BORDER}` }}
             >
-              {inRiordino && <span style={{ color: MUTED, fontSize: 14, lineHeight: 1, userSelect: "none", flexShrink: 0 }}>⠿</span>}
-              <div style={{ width: 40, height: 40, borderRadius: 8, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                {immagini[0] ? <img src={immagini[0].url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: MUTED }}><IconaImmagineShop size={16} /></span>}
-                {immagini.length > 1 && <span style={{ position: "absolute", bottom: -1, right: -1, ...fontBody, fontSize: 9, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 8, padding: "1px 4px" }}>{immagini.length}</span>}
+              <div style={{ flex: 1, minHeight: 0, borderRadius: 8, background: BG, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                {immagini[0]
+                  ? <img src={immagini[0].url} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  : <span style={{ color: MUTED }}><IconaImmagineShop size={20} /></span>}
+                {immagini.length > 1 && <span style={{ position: "absolute", bottom: 3, right: 3, ...fontBody, fontSize: 9, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 8, padding: "1px 5px" }}>{immagini.length}</span>}
+                {inRiordino && <span style={{ position: "absolute", top: 3, left: 3, color: NAVY, background: "rgba(255,255,255,0.85)", borderRadius: 6, fontSize: 12, lineHeight: 1, padding: "3px 4px", userSelect: "none" }}>⠿</span>}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
-                <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}</div>
+              {/* il nome sta su due righe e poi si taglia: in un riquadro
+                  quadrato non c'e' spazio per i nomi lunghi degli aghi */}
+              <div style={{ ...fontBody, fontSize: 10, fontWeight: 600, color: NAVY, marginTop: 5, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.nome}</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, marginTop: 2 }}>
+                <span style={{ ...fontBody, fontSize: 10, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}</span>
+                <span style={{ ...fontBody, fontSize: 8, fontWeight: 700, padding: "2px 5px", borderRadius: 8, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>
               </div>
-              {(() => {
-                // una variante senza codice del sito non è un prodotto
-                // "mancante": si vende dentro la vetrina, dirlo "Non su Woo"
-                // faceva sembrare un errore quello che è il suo modo di stare
-                const eVariante = p.tipo_prodotto === "variante" && !p.woo_product_id;
-                const etichetta = eVariante ? "Variante" : !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : p.stato === "private" ? "Privato" : "Online";
-                const colori = eVariante ? { bg: "#E7EEF5", fg: "#3B6FA0" } : !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : p.stato === "private" ? { bg: "#E7EEF5", fg: "#3B6FA0" } : { bg: "#E6F2E8", fg: "#2E7D32" };
-                return <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>;
-              })()}
             </div>
           );
         })}
-        {prodottiFiltrati.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessun prodotto.</div>}
+        {(inRiordino ? prodottiInRiordino : prodottiFiltrati).length === 0 && <div style={{ gridColumn: "1 / -1", ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessun prodotto.</div>}
       </div>
       <button onClick={nuovoProdotto} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "10px 10px", cursor: "pointer", marginTop: 10 }}>+ Nuovo prodotto</button>
     </div>
