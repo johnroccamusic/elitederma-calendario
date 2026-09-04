@@ -40672,6 +40672,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // mentre WooCommerce risponde, e l'esito compare nella striscia in alto
   const [lavoriInCorso, setLavoriInCorso] = useState([]);
   const [lavoriFalliti, setLavoriFalliti] = useState([]);
+  // riordino della vetrina: la sequenza in lavorazione, finche' non si
+  // salva. Null = non si sta riordinando
+  const [ordineVetrinaBozza, setOrdineVetrinaBozza] = useState(null);
+  const [salvandoOrdineVetrina, setSalvandoOrdineVetrina] = useState(false);
+  const [msgOrdineVetrina, setMsgOrdineVetrina] = useState("");
+  const prodottoTrascinatoRef = React.useRef(null);
   // le due finestre del salvataggio: la conferma parte subito, l'avviso
   // di errore arriva dopo, se il lavoro in background non e' andato
   const [confermaSalvataggio, setConfermaSalvataggio] = useState(null);
@@ -40806,6 +40812,56 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     online: prodottiBase.filter((p) => isOnlineWoo(p)).length,
     bozze: prodottiBase.filter((p) => !isOnlineWoo(p)).length,
   };
+
+  // La vetrina di una categoria: solo i prodotti che il cliente vede
+  // davvero sul sito, nell'ordine vero del sito. Le categorie dell'app
+  // contengono anche consumabili interni, componenti dei kit e prodotti
+  // senza prezzo: qui non compaiono, perche' riordinare una cosa che sullo
+  // shop non c'e' non vuol dire niente. A parita' di posizione decide il
+  // nome, come fa WooCommerce quando i menu_order sono uguali
+  const prodottiVetrina = prodottiBase
+    .filter((p) => isOnlineWoo(p))
+    .sort((a, b) => (a.ordine_vetrina ?? 0) - (b.ordine_vetrina ?? 0) || a.nome.localeCompare(b.nome));
+  const inRiordino = ordineVetrinaBozza != null;
+  const prodottiInRiordino = inRiordino
+    ? ordineVetrinaBozza.map((id) => prodottiVetrina.find((p) => p.id === id)).filter(Boolean)
+    : prodottiVetrina;
+  // cambiando categoria un riordino a meta' non ha piu' senso: le
+  // posizioni erano di un'altra vetrina
+  useEffect(() => { setOrdineVetrinaBozza(null); setMsgOrdineVetrina(""); }, [categoriaSelId]);
+
+  function spostaProdottoVetrina(daId, aId) {
+    if (!daId || daId === aId) return;
+    setOrdineVetrinaBozza((prec) => {
+      const lista = [...(prec || [])];
+      const partenza = lista.indexOf(daId);
+      if (partenza < 0) return prec;
+      lista.splice(partenza, 1);
+      const arrivo = lista.indexOf(aId);
+      lista.splice(arrivo < 0 ? lista.length : arrivo, 0, daId);
+      return lista;
+    });
+  }
+
+  async function salvaOrdineVetrina() {
+    if (!ordineVetrinaBozza) return;
+    setSalvandoOrdineVetrina(true);
+    setMsgOrdineVetrina("");
+    // posizioni distanziate di dieci: cosi' domani si puo' infilare un
+    // prodotto in mezzo senza rinumerare tutta la categoria
+    const posizioni = ordineVetrinaBozza.map((id, indice) => ({ prodottoId: id, posizione: (indice + 1) * 10 }));
+    const { data: sessione } = await supabase.auth.getSession();
+    const { data, error } = await supabase.functions.invoke("woo-ordina-prodotti", {
+      body: { posizioni },
+      headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
+    });
+    setSalvandoOrdineVetrina(false);
+    if (error) { setMsgOrdineVetrina("Errore: " + error.message); return; }
+    if (data?.errore) { setMsgOrdineVetrina("Errore: " + data.errore); return; }
+    setOrdineVetrinaBozza(null);
+    setMsgOrdineVetrina(`Ordine salvato sullo shop: ${data?.aggiornati ?? 0} prodotti.`);
+    ricarica(["prodotti_shop"]);
+  }
 
   function categorieAppiattite() {
     const righe = [];
@@ -41575,12 +41631,63 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           </button>
         ))}
       </div>
+      {/* il riordino vale per una categoria per volta, e la ricerca e'
+          globale: mentre si cerca non si sta guardando una vetrina */}
+      {categoriaSelezionata && !ricerca.trim() && (
+        <div style={{ marginBottom: 10 }}>
+          {!inRiordino ? (
+            <button
+              onClick={() => { setMsgOrdineVetrina(""); setOrdineVetrinaBozza(prodottiVetrina.map((p) => p.id)); }}
+              disabled={prodottiVetrina.length < 2}
+              title={prodottiVetrina.length < 2 ? "Serve almeno un paio di prodotti online in questa categoria" : "Trascina i prodotti nell'ordine in cui devono comparire sullo shop"}
+              style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "6px 11px", borderRadius: 14, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: prodottiVetrina.length < 2 ? MUTED : NAVY, cursor: prodottiVetrina.length < 2 ? "default" : "pointer" }}
+            >
+              ⠿ Ordina la vetrina ({prodottiVetrina.length})
+            </button>
+          ) : (
+            <div style={{ background: "#FBF3E4", border: `1px solid ${GOLD}55`, borderRadius: 10, padding: "8px 10px" }}>
+              <div style={{ ...fontBody, fontSize: 11, color: NAVY, lineHeight: 1.45, marginBottom: 8 }}>
+                Trascina i prodotti nell'ordine in cui devono comparire sullo shop. Il primo in alto e' il primo che vede il cliente.
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button
+                  onClick={salvaOrdineVetrina}
+                  disabled={salvandoOrdineVetrina}
+                  style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "6px 11px", borderRadius: 14, border: "none", background: NAVY, color: "#fff", cursor: salvandoOrdineVetrina ? "default" : "pointer" }}
+                >
+                  {salvandoOrdineVetrina ? "Salvo sullo shop…" : "Salva l'ordine"}
+                </button>
+                <button
+                  onClick={() => { setOrdineVetrinaBozza(null); setMsgOrdineVetrina(""); }}
+                  disabled={salvandoOrdineVetrina}
+                  style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "6px 11px", borderRadius: 14, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}
+                >
+                  Annulla
+                </button>
+              </div>
+            </div>
+          )}
+          {msgOrdineVetrina && (
+            <div style={{ ...fontBody, fontSize: 11, color: msgOrdineVetrina.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 6 }}>{msgOrdineVetrina}</div>
+          )}
+        </div>
+      )}
       <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-        {prodottiFiltrati.map((p) => {
+        {(inRiordino ? prodottiInRiordino : prodottiFiltrati).map((p) => {
           const immagini = immaginiPerProdotto[p.id] || [];
           const selezionato = prodottoForm?.id === p.id;
           return (
-            <div key={p.id} onClick={() => apriProdotto(p)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#FAF8F2", border: selezionato ? `1px solid ${GOLD}` : `1px solid ${CREAM_BORDER}` }}>
+            <div
+              key={p.id}
+              onClick={inRiordino ? undefined : () => apriProdotto(p)}
+              draggable={inRiordino}
+              onDragStart={inRiordino ? () => { prodottoTrascinatoRef.current = p.id; } : undefined}
+              onDragEnd={inRiordino ? () => { prodottoTrascinatoRef.current = null; } : undefined}
+              onDragOver={inRiordino ? (e) => e.preventDefault() : undefined}
+              onDrop={inRiordino ? (e) => { e.preventDefault(); spostaProdottoVetrina(prodottoTrascinatoRef.current, p.id); prodottoTrascinatoRef.current = null; } : undefined}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, cursor: inRiordino ? "grab" : "pointer", background: selezionato && !inRiordino ? "#FBF3E4" : "#FAF8F2", border: selezionato && !inRiordino ? `1px solid ${GOLD}` : `1px solid ${CREAM_BORDER}` }}
+            >
+              {inRiordino && <span style={{ color: MUTED, fontSize: 14, lineHeight: 1, userSelect: "none", flexShrink: 0 }}>⠿</span>}
               <div style={{ width: 40, height: 40, borderRadius: 8, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                 {immagini[0] ? <img src={immagini[0].url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: MUTED }}><IconaImmagineShop size={16} /></span>}
                 {immagini.length > 1 && <span style={{ position: "absolute", bottom: -1, right: -1, ...fontBody, fontSize: 9, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 8, padding: "1px 4px" }}>{immagini.length}</span>}

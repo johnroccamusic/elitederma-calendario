@@ -131,6 +131,10 @@ Deno.serve(async (req) => {
         descrizione: p.description || null,
         descrizione_breve: p.short_description || null,
         stato: p.status || "publish",
+        // l'ordine con cui il prodotto compare dentro la categoria sullo
+        // shop: qui la verita' e' quella del sito, non la nostra — chi
+        // riordina da WordPress deve poter continuare a farlo
+        ordine_vetrina: typeof p.menu_order === "number" ? p.menu_order : 0,
         attivo: true,
         ts_sync: new Date().toISOString(),
       }));
