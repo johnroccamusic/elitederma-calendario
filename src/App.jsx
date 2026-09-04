@@ -11804,24 +11804,24 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
           ))}
         </div>
       </div>
-      {/* come finira' in cima alla proforma: i dati a sinistra, la linea,
-          il logo a destra — le righe lasciate vuote non lasciano buchi */}
+      {/* come finira' in cima alla proforma: il logo a sinistra, la linea,
+          i dati a destra — le righe lasciate vuote non lasciano buchi */}
       <div style={{ marginTop: 14, padding: "16px 18px", background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10 }}>
         <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Come si vedrà sulla proforma</div>
         {righePiene.length === 0 && !srcLogo ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Ancora niente da mostrare.</div>
         ) : (
           <div style={{ display: "flex", alignItems: "stretch", gap: 18 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {righePiene.map((riga, i) => (
-                <div key={i} style={{ ...fontBody, fontSize: i === 0 ? 14 : 12.5, fontWeight: i === 0 ? 700 : 400, color: NAVY, lineHeight: 1.55, overflowWrap: "anywhere" }}>{riga}</div>
-              ))}
-            </div>
-            <div style={{ width: 1, background: CREAM_BORDER, flexShrink: 0 }} />
             <div style={{ flex: "0 0 120px", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {srcLogo
                 ? <img src={srcLogo} alt="" style={{ maxWidth: "100%", maxHeight: 76, objectFit: "contain" }} />
                 : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>nessun logo</span>}
+            </div>
+            <div style={{ width: 1, background: CREAM_BORDER, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {righePiene.map((riga, i) => (
+                <div key={i} style={{ ...fontBody, fontSize: i === 0 ? 14 : 12.5, fontWeight: i === 0 ? 700 : 400, color: NAVY, lineHeight: 1.55, overflowWrap: "anywhere" }}>{riga}</div>
+              ))}
             </div>
           </div>
         )}
@@ -32547,12 +32547,16 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
         }
       }
 
-      const X_LINEA = 400;
+      // il logo a sinistra, la linea, i dati a destra
+      const X_LOGO = 50;
+      const LARGHEZZA_LOGO = 125;
+      const X_LINEA = 195;
+      const X_TESTO = 215;
       const yAltoIntestazione = A4[1] - 58;
       let yRiga = yAltoIntestazione;
       righeIntestazione.forEach((riga, i) => {
         const corpo = i === 0 ? 13 : 9.5;
-        pagina.drawText(riga, { x: 50, y: yRiga - corpo, size: corpo, font: i === 0 ? grassetto : normale });
+        pagina.drawText(riga, { x: X_TESTO, y: yRiga - corpo, size: corpo, font: i === 0 ? grassetto : normale });
         yRiga -= corpo + (i === 0 ? 7 : 4.5);
       });
       const altezzaTesto = yAltoIntestazione - yRiga;
@@ -32560,10 +32564,10 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
       if (logo) {
         // il logo si adatta al suo riquadro mantenendo le proporzioni,
         // qualunque sia la forma del file caricato
-        const scala = Math.min(125 / logo.width, 62 / logo.height);
+        const scala = Math.min(LARGHEZZA_LOGO / logo.width, 62 / logo.height);
         const larghezza = logo.width * scala;
         const altezza = logo.height * scala;
-        pagina.drawImage(logo, { x: X_LINEA + 20 + (125 - larghezza) / 2, y: yAltoIntestazione - altezza, width: larghezza, height: altezza });
+        pagina.drawImage(logo, { x: X_LOGO + (LARGHEZZA_LOGO - larghezza) / 2, y: yAltoIntestazione - altezza, width: larghezza, height: altezza });
         altezzaLogo = altezza;
       }
       // la linea separa: se da una parte non c'e' niente, non c'e' niente
