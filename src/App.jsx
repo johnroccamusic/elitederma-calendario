@@ -30244,8 +30244,8 @@ const COLONNE_MAGAZZINO = [
   { label: "Unità di misura", campo: null, larghezza: 52 },
   { label: "Stock", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 60 },
   { label: "Soglia riordino", campo: "soglia_riordino", direzioneIniziale: "desc", larghezza: 58 },
-  { label: "Non sul POS", campo: null, larghezza: 64 },
-  { label: "Solo offline", campo: null, larghezza: 64 },
+  { label: "No POS", campo: null, larghezza: 64 },
+  { label: "No shop", campo: null, larghezza: 64 },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 72 },
   { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84 },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
@@ -30259,6 +30259,16 @@ const COLONNE_MAGAZZINO = [
   { label: "", campo: null, larghezza: 34 },
   { label: "Ordina", campo: null, larghezza: 116 },
 ];
+
+// le colonne rinominate: ordine, larghezze e nomi personalizzati sono
+// salvati per etichetta, quindi cambiare il titolo di una colonna
+// significherebbe perdere quello che l'utente ci ha gia' sistemato sopra
+// — la colonna finirebbe in fondo alla tabella, larga come al primo
+// giorno. Qui il vecchio nome continua a valere per quel che e' salvato
+const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop" };
+const COLONNE_MAGAZZINO_NOME_VECCHIO = Object.fromEntries(
+  Object.entries(COLONNE_MAGAZZINO_RINOMINATE).map(([vecchio, nuovo]) => [nuovo, vecchio])
+);
 
 function fmtDataIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
 
@@ -30651,12 +30661,12 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           )}
         </td>
     ),
-    "Non sul POS": (
+    "No POS": (
         <td style={tdStyle} title={p.forzatoEscludi ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Esclude questo prodotto dalla vendita diretta (POS e shop online)"}>
           <input type="checkbox" checked={p.forzatoEscludi || !!p.escludi_vendita_diretta} disabled={p.forzatoEscludi} onChange={(e) => salvaFlagEscludiVenditaDiretta(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoEscludi ? "default" : "pointer" }} />
         </td>
     ),
-    "Solo offline": (
+    "No shop": (
         <td style={tdStyle} title={p.forzatoSoloOffline ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Il prodotto non viene mai creato/aggiornato su WooCommerce, anche con un prezzo"}>
           <input type="checkbox" checked={p.forzatoSoloOffline || !!p.solo_offline} disabled={p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoSoloOffline ? "default" : "pointer" }} />
         </td>
@@ -30958,7 +30968,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const colonneMagazzino = useMemo(() => {
     const perEtichetta = new Map(COLONNE_MAGAZZINO.map((c) => [c.label, c]));
     const ordinate = (Array.isArray(ordineColonne) ? ordineColonne : [])
-      .map((label) => perEtichetta.get(label))
+      .map((label) => perEtichetta.get(COLONNE_MAGAZZINO_RINOMINATE[label] || label))
       .filter(Boolean);
     const gia = new Set(ordinate.map((c) => c.label));
     return [...ordinate, ...COLONNE_MAGAZZINO.filter((c) => !gia.has(c.label))];
@@ -30976,7 +30986,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     etichette.splice(arrivo < 0 ? etichette.length : arrivo, 0, daEtichetta);
     setOrdineColonne(etichette);
   }
-  function etichettaColonna(label) { return etichetteColonne[label] || label; }
+  function etichettaColonna(label) { return etichetteColonne[label] || etichetteColonne[COLONNE_MAGAZZINO_NOME_VECCHIO[label]] || label; }
   function rinominaColonna(e, label) {
     if (ruoloUtente !== "programmatore" || !label) return;
     e.preventDefault();
@@ -30988,7 +30998,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     setEtichetteColonne(aggiornate);
   }
 
-  function larghezzaDi(etichetta, larghezzaDefault) { return larghezze[etichetta] ?? larghezzaDefault; }
+  function larghezzaDi(etichetta, larghezzaDefault) { return larghezze[etichetta] ?? larghezze[COLONNE_MAGAZZINO_NOME_VECCHIO[etichetta]] ?? larghezzaDefault; }
   const ridimensionamentoRef = React.useRef(null);
   function iniziaRidimensionamento(e, etichetta, larghezzaAttuale) {
     e.preventDefault();
