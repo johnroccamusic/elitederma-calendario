@@ -31472,6 +31472,34 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
         {/* titolo, scelta della vista e vista a categorie stanno fuori dai
             due rami: sono il timone di entrambe */}
         <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Dettaglio prodotti</div>
+        {/* due righe, non una: sopra la ricerca (che si prende metà dello
+            spazio) con categorie e fornitori a destra, sotto la scelta
+            della vista con i filtri di stato all'altro capo. Prima stavano
+            tutti in fila e, appena la finestra si stringeva, andavano a
+            capo dove capitava */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          {/* categoria, fornitore e ricerca valgono per tutte e due le
+              viste: nella vista a categorie pilotano l'albero e il suo elenco */}
+          <CampoRicerca
+            value={ricercaProdotto}
+            onChange={(e) => setRicercaProdotto(e.target.value)}
+            placeholder="Cerca prodotto…"
+            style={{ flex: "1 1 260px", minWidth: 200, maxWidth: isMobile ? "100%" : "50%" }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+              <option value="">Tutte le categorie</option>
+              {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={fornitoreSel} onChange={(e) => setFornitoreSel(e.target.value)}>
+              <option value="">Tutti i fornitori</option>
+              {[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")).map((f) => (
+                <option key={f.id} value={f.id}>{f.nome}</option>
+              ))}
+              <option value="__nessuno">— senza fornitore —</option>
+            </select>
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             {/* la scelta della vista sta qui, appoggiata all'elenco che
@@ -31490,20 +31518,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 </button>
               ))}
             </div>
-            {/* categoria e ricerca valgono per tutte e due le viste: nella
-                vista a categorie pilotano l'albero e il suo elenco */}
-            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
-              <option value="">Tutte le categorie</option>
-              {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={fornitoreSel} onChange={(e) => setFornitoreSel(e.target.value)}>
-              <option value="">Tutti i fornitori</option>
-              {[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")).map((f) => (
-                <option key={f.id} value={f.id}>{f.nome}</option>
-              ))}
-              <option value="__nessuno">— senza fornitore —</option>
-            </select>
-            <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
             {/* compare solo quando c'è davvero qualcosa da azzerare: un tasto
                 sempre presente e quasi sempre inutile è solo rumore. Toglie
                 in un colpo ricerca, categoria, fornitore e filtro di stato —
@@ -31520,17 +31534,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </button>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
-              {/* questi filtri leggono lo stato del magazzino, cosa che solo
-                  la tabella sa mostrare: sceglierne uno riporta all'elenco
-                  invece di restare un tasto che non fa niente */}
-              {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
-                <button key={f.v} onClick={() => { setFiltroRapido(f.v); cambiaVistaAMano("elenco"); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
-                  {f.l}
-                </button>
-              ))}
-            </div>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
+            {/* questi filtri leggono lo stato del magazzino, cosa che solo
+                la tabella sa mostrare: sceglierne uno riporta all'elenco
+                invece di restare un tasto che non fa niente */}
+            {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
+              <button key={f.v} onClick={() => { setFiltroRapido(f.v); cambiaVistaAMano("elenco"); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                {f.l}
+              </button>
+            ))}
           </div>
         </div>
 
