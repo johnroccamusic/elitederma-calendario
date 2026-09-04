@@ -785,6 +785,15 @@ function IconaFormeRiga({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+function IconaIntestazioneRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="1.5" />
+      <path d="M7.5 7h9M7.5 10h6" />
+      <path d="M7.5 14.5h9M7.5 17.5h9" opacity="0.45" />
+    </svg>
+  );
+}
 function IconaPacchettoRiga({ size = 18, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -11680,7 +11689,149 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
+// L'intestazione della societa': le righe che vanno in cima ai documenti,
+// nell'ordine in cui si leggono. Nome, le due righe dell'indirizzo e due
+// righe libere, per quello che ognuno ci mette (partita IVA, telefono,
+// email). Sta in una riga sola del database, come l'aliquota IVA di
+// default: non e' un elenco, e' un blocco di testo con dei posti fissi
+const RIGHE_INTESTAZIONE_SOCIETA = [
+  { campo: "nome", etichetta: "Nome", placeholder: "es. Accademia Elitederma" },
+  { campo: "indirizzo", etichetta: "Indirizzo", placeholder: "es. Via Roma 12" },
+  { campo: "indirizzo_2", etichetta: "Indirizzo — seconda riga", placeholder: "es. 20100 Milano (MI)" },
+  { campo: "riga_4", etichetta: "Altra riga", placeholder: "es. P.IVA 01234567890" },
+  { campo: "riga_5", etichetta: "Altra riga", placeholder: "es. tel. 02 1234567" },
+];
+
+function IntestazioneSocieta({ intestazione, ricarica }) {
+  function daRiga(dati) {
+    return Object.fromEntries(RIGHE_INTESTAZIONE_SOCIETA.map((r) => [r.campo, dati?.[r.campo] || ""]));
+  }
+  const [valori, setValori] = useState(() => daRiga(intestazione));
+  const [msg, setMsg] = useState("");
+  // il logo appena scelto si vede subito, senza aspettare il giro
+  // caricamento -> salvataggio -> ricarica
+  const [anteprimaLogo, setAnteprimaLogo] = useState(null);
+  const [caricandoLogo, setCaricandoLogo] = useState(false);
+  // il ricarica che segue un salvataggio rimanda indietro la riga appena
+  // scritta: se arrivasse mentre si sta gia' scrivendo nella riga dopo,
+  // la cancellerebbe sotto le dita. Da quando si tocca un campo comanda
+  // quello che c'e' scritto qui
+  const modificatoLocalmenteRef = React.useRef(false);
+  useEffect(() => {
+    if (!modificatoLocalmenteRef.current) setValori(daRiga(intestazione));
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [intestazione]);
+
+  // si salva uscendo dal campo, come l'aliquota IVA di default: nessun
+  // tasto "Salva" da ricordarsi prima di chiudere la finestra
+  async function salva(campo) {
+    const valore = (valori[campo] || "").trim();
+    if (valore === (intestazione?.[campo] || "")) return;
+    modificatoLocalmenteRef.current = true;
+    const { error } = await supabase.from("intestazione_societa").update({ [campo]: valore || null }).eq("id", true);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Salvato.");
+    ricarica(["intestazione_societa"]);
+  }
+
+  const righePiene = RIGHE_INTESTAZIONE_SOCIETA.map((r) => (valori[r.campo] || "").trim()).filter(Boolean);
+  const srcLogo = anteprimaLogo || (intestazione?.logo_path ? supabase.storage.from("intestazione-societa").getPublicUrl(intestazione.logo_path).data.publicUrl : null);
+
+  // PNG o JPG e basta: sono i due formati che il generatore di PDF sa
+  // incorporare: un SVG o un WEBP passerebbe il caricamento e poi farebbe
+  // fallire la proforma, che e' il momento peggiore per accorgersene
+  async function caricaLogo(file) {
+    if (!file) return;
+    if (!["image/png", "image/jpeg"].includes(file.type)) { setMsg("Il logo dev'essere un PNG o un JPG."); return; }
+    setAnteprimaLogo(URL.createObjectURL(file));
+    setCaricandoLogo(true);
+    try {
+      const percorso = `logo-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+      const { error } = await supabase.storage.from("intestazione-societa").upload(percorso, file);
+      if (error) throw error;
+      const { error: erroreRiga } = await supabase.from("intestazione_societa").update({ logo_path: percorso }).eq("id", true);
+      if (erroreRiga) throw erroreRiga;
+      setMsg("Logo caricato.");
+      ricarica(["intestazione_societa"]);
+    } catch (e) {
+      setAnteprimaLogo(null);
+      setMsg("Errore nel caricamento del logo: " + e.message);
+    }
+    setCaricandoLogo(false);
+  }
+
+  async function togliLogo() {
+    if (!window.confirm("Togliere il logo dall'intestazione?")) return;
+    const { error } = await supabase.from("intestazione_societa").update({ logo_path: null }).eq("id", true);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setAnteprimaLogo(null);
+    setMsg("Logo tolto.");
+    ricarica(["intestazione_societa"]);
+  }
+
+  return (
+    <>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: "0 0 170px", minWidth: 170 }}>
+          <Field label="Logo della società">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 118, border: `1px dashed ${CREAM_BORDER}`, borderRadius: 10, background: "#fff", overflow: "hidden", marginBottom: 8 }}>
+              {srcLogo ? (
+                <img src={srcLogo} alt="Logo della società" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+              ) : (
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, textAlign: "center", padding: "0 10px" }}>Nessun logo</span>
+              )}
+            </div>
+            <CampoFileTrascinabile accept="image/png,image/jpeg" style={{ ...inputStyle, width: "100%" }} onChange={(e) => caricaLogo(e.target.files?.[0] || null)} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 6 }}>
+              <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>{caricandoLogo ? "Carico…" : "PNG o JPG"}</span>
+              {srcLogo && (
+                <button onClick={togliLogo} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Togli</button>
+              )}
+            </div>
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 240px", minWidth: 220 }}>
+          {RIGHE_INTESTAZIONE_SOCIETA.map((r, i) => (
+            <Field key={r.campo} label={r.etichetta}>
+              <input
+                value={valori[r.campo]}
+                placeholder={r.placeholder}
+                onChange={(e) => { modificatoLocalmenteRef.current = true; setMsg(""); setValori((prev) => ({ ...prev, [r.campo]: e.target.value })); }}
+                onBlur={() => salva(r.campo)}
+                style={{ ...inputStyle, ...(i === 0 ? { fontWeight: 700 } : null) }}
+              />
+            </Field>
+          ))}
+        </div>
+      </div>
+      {/* come finira' in cima alla proforma: i dati a sinistra, la linea,
+          il logo a destra — le righe lasciate vuote non lasciano buchi */}
+      <div style={{ marginTop: 14, padding: "16px 18px", background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10 }}>
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Come si vedrà sulla proforma</div>
+        {righePiene.length === 0 && !srcLogo ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Ancora niente da mostrare.</div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "stretch", gap: 18 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {righePiene.map((riga, i) => (
+                <div key={i} style={{ ...fontBody, fontSize: i === 0 ? 14 : 12.5, fontWeight: i === 0 ? 700 : 400, color: NAVY, lineHeight: 1.55, overflowWrap: "anywhere" }}>{riga}</div>
+              ))}
+            </div>
+            <div style={{ width: 1, background: CREAM_BORDER, flexShrink: 0 }} />
+            <div style={{ flex: "0 0 120px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {srcLogo
+                ? <img src={srcLogo} alt="" style={{ maxWidth: "100%", maxHeight: 76, objectFit: "contain" }} />
+                : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>nessun logo</span>}
+            </div>
+          </div>
+        )}
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+    </>
+  );
+}
+
+function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -11712,6 +11863,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
   const [showMagazziniModal, setShowMagazziniModal] = useState(false);
+  const [showIntestazioneModal, setShowIntestazioneModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
   // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
@@ -11725,7 +11877,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     if (vistaCorsiModal !== "griglia") { registraInterceptaIndietro(() => setVistaCorsiModal("griglia")); return () => registraInterceptaIndietro(null); }
     const modaliAperti = [
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
-      [showMagazziniModal, setShowMagazziniModal],
+      [showMagazziniModal, setShowMagazziniModal], [showIntestazioneModal, setShowIntestazioneModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
@@ -11733,7 +11885,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     registraInterceptaIndietro(null);
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
-    showCorsoModal, showTipiModellaModal, showMagazziniModal,
+    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal,
     showTargetMasterModal, showTargetVenditoriModal,
   ]);
 
@@ -11935,6 +12087,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       voci: [
         { chiave: "diplomi", etichetta: "Setting diplomi", Icona: IconaDiplomaRiga, onClick: onApriFontDiplomi },
         { chiave: "loghi", etichetta: "Setting loghi", Icona: IconaFormeRiga, onClick: onApriSettingLoghi },
+        { chiave: "intestazione", etichetta: "Intestazione società", Icona: IconaIntestazioneRiga, onClick: () => setShowIntestazioneModal(true) },
         { chiave: "kit", etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
       ],
     },
@@ -12216,6 +12369,13 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
               <span style={{ ...fontBody, fontSize: 13.5, color: NAVY }}>{toTitleCase(l.nome)}</span>
             </label>
           ))}
+        </Modal>
+      )}
+
+      {showIntestazioneModal && (
+        <Modal title="Intestazione società" onClose={() => setShowIntestazioneModal(false)}>
+          <div style={subStyle}>Le righe che vanno in cima ai documenti, una sotto l'altra come si vogliono leggere. Si salvano da sole uscendo dal campo; quelle lasciate vuote non compaiono.</div>
+          <IntestazioneSocieta intestazione={intestazioneSocieta} ricarica={ricarica} />
         </Modal>
       )}
 
@@ -32366,10 +32526,62 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
         y -= quanto;
         if (y < 70) { pagina = doc.addPage(A4); y = A4[1] - 60; }
       };
+      // l'intestazione della societa' (Setting > Documenti e brand): i
+      // dati a sinistra, una linea verticale, il logo a destra. Si legge
+      // qui e non da un prop perche' e' una riga sola e questo pannello
+      // si apre da quattro punti diversi dell'app
+      const { data: intestazione } = await supabase.from("intestazione_societa").select("*").maybeSingle();
+      const righeIntestazione = RIGHE_INTESTAZIONE_SOCIETA
+        .map((r) => String(intestazione?.[r.campo] || "").trim())
+        .filter(Boolean);
+      let logo = null;
+      if (intestazione?.logo_path) {
+        try {
+          const { data: pubblico } = supabase.storage.from("intestazione-societa").getPublicUrl(intestazione.logo_path);
+          const bytesLogo = await (await fetch(pubblico.publicUrl)).arrayBuffer();
+          logo = /\.jpe?g$/i.test(intestazione.logo_path) ? await doc.embedJpg(bytesLogo) : await doc.embedPng(bytesLogo);
+        } catch {
+          // un logo che non si scarica non deve impedire di fare l'ordine:
+          // la proforma esce lo stesso, con i soli dati
+          logo = null;
+        }
+      }
+
+      const X_LINEA = 400;
+      const yAltoIntestazione = A4[1] - 58;
+      let yRiga = yAltoIntestazione;
+      righeIntestazione.forEach((riga, i) => {
+        const corpo = i === 0 ? 13 : 9.5;
+        pagina.drawText(riga, { x: 50, y: yRiga - corpo, size: corpo, font: i === 0 ? grassetto : normale });
+        yRiga -= corpo + (i === 0 ? 7 : 4.5);
+      });
+      const altezzaTesto = yAltoIntestazione - yRiga;
+      let altezzaLogo = 0;
+      if (logo) {
+        // il logo si adatta al suo riquadro mantenendo le proporzioni,
+        // qualunque sia la forma del file caricato
+        const scala = Math.min(125 / logo.width, 62 / logo.height);
+        const larghezza = logo.width * scala;
+        const altezza = logo.height * scala;
+        pagina.drawImage(logo, { x: X_LINEA + 20 + (125 - larghezza) / 2, y: yAltoIntestazione - altezza, width: larghezza, height: altezza });
+        altezzaLogo = altezza;
+      }
+      // la linea separa: se da una parte non c'e' niente, non c'e' niente
+      // da separare e resterebbe un trattino verticale per aria
+      if (righeIntestazione.length > 0 && logo) {
+        pagina.drawLine({ start: { x: X_LINEA, y: yAltoIntestazione }, end: { x: X_LINEA, y: yAltoIntestazione - Math.max(altezzaTesto, altezzaLogo) }, thickness: 0.7 });
+      }
+      const altezzaIntestazione = Math.max(altezzaTesto, altezzaLogo);
+      y = altezzaIntestazione > 0 ? yAltoIntestazione - altezzaIntestazione - 34 : yAltoIntestazione;
+
       scrivi("PROFORMA D'ORDINE", { size: 18, font: grassetto });
       nuovaRiga(26);
-      scrivi("Accademia Elitederma", { size: 11, font: grassetto });
-      nuovaRiga();
+      // finche' l'intestazione non e' compilata resta scritto il nome di
+      // sempre, invece di una proforma senza chi la manda
+      if (altezzaIntestazione === 0) {
+        scrivi("Accademia Elitederma", { size: 11, font: grassetto });
+        nuovaRiga();
+      }
       scrivi(`Fornitore: ${fornitore?.nome || "—"}`);
       nuovaRiga();
       if (fornitore?.email) { scrivi(`Email: ${fornitore.email}`); nuovaRiga(); }
@@ -47042,6 +47254,7 @@ export default function App() {
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   const [bundleComponenti, setBundleComponenti] = useState([]);
   const [impostazioniIva, setImpostazioniIva] = useState(null);
+  const [intestazioneSocieta, setIntestazioneSocieta] = useState(null);
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
   // obiettivi individuali (Target Master/Venditori, Impostazioni > Vendite
   // prodotti) sulle vendite POS: incasso, quantità di prodotto, o entrambi
@@ -47210,6 +47423,7 @@ export default function App() {
     categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
     bundle_componenti: async () => setBundleComponenti((await supabase.from("bundle_componenti").select("*")).data || []),
     impostazioni_iva: async () => setImpostazioniIva((await supabase.from("impostazioni_iva").select("*").maybeSingle()).data || { aliquota_default: 22 }),
+    intestazione_societa: async () => setIntestazioneSocieta((await supabase.from("intestazione_societa").select("*").maybeSingle()).data || {}),
     prodotti_shop: async () => setProdottiShop((await supabase.from("prodotti_shop").select("*").order("nome")).data || []),
     prodotti_categorie: async () => setProdottiCategorie((await supabase.from("prodotti_categorie").select("*")).data || []),
     prodotti_immagini: async () => setProdottiImmagini((await supabase.from("prodotti_immagini").select("*")).data || []),
@@ -47395,7 +47609,7 @@ export default function App() {
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva"],
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
@@ -48398,7 +48612,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni ruoloUtente={ruoloUtente} corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
+        <Impostazioni ruoloUtente={ruoloUtente} corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} intestazioneSocieta={intestazioneSocieta} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
       )}
 
       {view === "gestionedate" && (
