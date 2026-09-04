@@ -34473,7 +34473,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
             {fornitoreId !== "__nessuno" && (
               <button
                 onClick={() => (fornitoreOrdineId === fornitoreId ? setFornitoreOrdineId(null) : apriOrdineFornitore(fornitoreId, righe))}
-                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: fornitoreOrdineId === fornitoreId ? "#fff" : NAVY, background: fornitoreOrdineId === fornitoreId ? NAVY : "#fff", border: `1px solid ${fornitoreOrdineId === fornitoreId ? NAVY : CREAM_BORDER}`, borderRadius: 14, padding: "7px 12px", cursor: "pointer", marginTop: 8 }}
+                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: fornitoreOrdineId === fornitoreId ? "#fff" : NAVY, background: fornitoreOrdineId === fornitoreId ? NAVY : "#fff", border: `1px solid ${fornitoreOrdineId === fornitoreId ? NAVY : CREAM_BORDER}`, borderRadius: 14, padding: "7px 12px", cursor: "pointer", display: "block", margin: "8px auto 0" }}
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <IconaPiuCerchiato size={16} color={fornitoreOrdineId === fornitoreId ? "#fff" : GOLD} />
