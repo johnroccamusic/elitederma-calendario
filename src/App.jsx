@@ -32603,15 +32603,30 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
 
       // il logo a sinistra, la linea, i dati a destra. Il logo parte dal
       // margine, in colonna con la P di "PROFORMA D'ORDINE" qui sotto, e
-      // il suo riquadro si ferma comunque a 3 mm dalla linea: un logo
-      // largo si rimpicciolisce invece di andarci contro
+      // il resto lo insegue: la linea si mette a 3 mm dal bordo del logo e
+      // i dati subito dopo la linea. Con le colonne a posizione fissa un
+      // logo stretto lasciava mezzo foglio di buco in mezzo
       const MM = 72 / 25.4;
       const X_LOGO = 50;
-      const X_LINEA = 195;
-      const X_TESTO = 215;
       const STACCO_LOGO = 3 * MM;
-      const LARGHEZZA_LOGO = X_LINEA - STACCO_LOGO - X_LOGO;
+      const STACCO_TESTO = 5 * MM;
       const yAltoIntestazione = A4[1] - 58;
+
+      let altezzaLogo = 0;
+      let larghezzaLogo = 0;
+      if (logo) {
+        // il logo si adatta al suo riquadro mantenendo le proporzioni,
+        // qualunque sia la forma del file caricato
+        const scala = Math.min(150 / logo.width, 62 / logo.height);
+        larghezzaLogo = logo.width * scala;
+        altezzaLogo = logo.height * scala;
+        pagina.drawImage(logo, { x: X_LOGO, y: yAltoIntestazione - altezzaLogo, width: larghezzaLogo, height: altezzaLogo });
+      }
+      // senza logo non c'e' niente a cui appoggiarsi: i dati partono dal
+      // margine, come farebbero da soli
+      const X_LINEA = logo ? X_LOGO + larghezzaLogo + STACCO_LOGO : X_LOGO;
+      const X_TESTO = logo ? X_LINEA + STACCO_TESTO : X_LOGO;
+
       let yRiga = yAltoIntestazione;
       righeIntestazione.forEach((riga, i) => {
         const corpo = i === 0 ? 13 : 9.5;
@@ -32619,16 +32634,6 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
         yRiga -= corpo + (i === 0 ? 7 : 4.5);
       });
       const altezzaTesto = yAltoIntestazione - yRiga;
-      let altezzaLogo = 0;
-      if (logo) {
-        // il logo si adatta al suo riquadro mantenendo le proporzioni,
-        // qualunque sia la forma del file caricato
-        const scala = Math.min(LARGHEZZA_LOGO / logo.width, 62 / logo.height);
-        const larghezza = logo.width * scala;
-        const altezza = logo.height * scala;
-        pagina.drawImage(logo, { x: X_LOGO, y: yAltoIntestazione - altezza, width: larghezza, height: altezza });
-        altezzaLogo = altezza;
-      }
       // la linea separa: se da una parte non c'e' niente, non c'e' niente
       // da separare e resterebbe un trattino verticale per aria
       if (righeIntestazione.length > 0 && logo) {
