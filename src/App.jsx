@@ -11801,7 +11801,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     setModColoreCorso(c.colore);
     setModPostiCorso(String(c.posti_max));
     setModCategoriaCorso(c.categoria || "");
-    setDiplomaCorsoModifica(null);
     const giorniEsistenti = (corsiGiorni || []).filter((g) => g.corso_id === c.id).sort((a, b) => a.numero_giorno - b.numero_giorno);
     setDurataCorsoModifica(giorniEsistenti.length > 0 ? String(giorniEsistenti.length) : "");
     setGiorniCorsoModifica(giorniEsistenti.map((g) => ({
@@ -11820,7 +11819,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   }
   function apriNuovoCorso() {
     setNomeCorso(""); setColore("#4A90D9"); setPostiMax(10); setCategoriaCorso("");
-    setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setTipiModellaSelCorso([]);
+    setDurataCorso(""); setGiorniCorso([]); setTipiModellaSelCorso([]);
     setMsg("");
     setVistaCorsiModal("nuovo");
   }
