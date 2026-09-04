@@ -40641,6 +40641,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [lavoriFalliti, setLavoriFalliti] = useState([]);
   // riordino della vetrina: la sequenza in lavorazione, finche' non si
   // salva. Null = non si sta riordinando
+  // quanti prodotti per riga: 1 e' l'elenco a righe di prima, da 2 in su
+  // sono riquadri quadrati. Sta con le altre preferenze di vista, come le
+  // larghezze delle colonne
+  const [colonneVetrina, setColonneVetrina] = useLayoutCondiviso("gestioneShop_colonneVetrina", 4);
+  const MAX_COLONNE_VETRINA = 5;
+  // il valore salvato non comanda da solo: se domani cambiasse il massimo,
+  // o arrivasse un numero storto, la griglia deve restare una griglia
+  const colonneEffettive = Math.min(Math.max(1, Math.trunc(Number(colonneVetrina)) || 4), MAX_COLONNE_VETRINA);
   const [ordineVetrinaBozza, setOrdineVetrinaBozza] = useState(null);
   const [salvandoOrdineVetrina, setSalvandoOrdineVetrina] = useState(false);
   const [msgOrdineVetrina, setMsgOrdineVetrina] = useState("");
@@ -41639,10 +41647,29 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           )}
         </div>
       )}
-      {/* a griglia e non a elenco: quattro riquadri per riga somigliano a
-          come i prodotti stanno sullo shop, e riordinare una vetrina
-          guardando le foto e' un altro mestiere che leggere dei nomi */}
-      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto", display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, minmax(0, 1fr))`, gap: 8, alignContent: "start" }}>
+      {/* quanti prodotti per riga lo decide chi guarda: a 1 e' l'elenco a
+          righe, con nome e prezzo in linea; da 2 in su sono riquadri
+          quadrati, che somigliano a come i prodotti stanno sullo shop e
+          rendono il riordino un altro mestiere che leggere dei nomi */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginBottom: 8 }}>
+        <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>{colonneEffettive === 1 ? "a righe" : `${colonneEffettive} per riga`}</span>
+        {[{ segno: "−", passo: -1, titolo: "Meno colonne" }, { segno: "+", passo: 1, titolo: "Più colonne" }].map((t) => {
+          const prossimo = colonneEffettive + t.passo;
+          const spento = prossimo < 1 || prossimo > MAX_COLONNE_VETRINA;
+          return (
+            <button
+              key={t.segno}
+              onClick={() => setColonneVetrina(prossimo)}
+              disabled={spento}
+              title={t.titolo}
+              style={{ width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: spento ? CREAM_BORDER : NAVY, cursor: spento ? "default" : "pointer", padding: 0 }}
+            >
+              {t.segno}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto", display: "grid", gridTemplateColumns: `repeat(${colonneEffettive}, minmax(0, 1fr))`, gap: 8, alignContent: "start" }}>
         {(inRiordino ? prodottiInRiordino : prodottiFiltrati).map((p) => {
           const immagini = immaginiPerProdotto[p.id] || [];
           const selezionato = prodottoForm?.id === p.id;
@@ -41652,18 +41679,41 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           const eVariante = p.tipo_prodotto === "variante" && !p.woo_product_id;
           const etichetta = eVariante ? "Variante" : !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : p.stato === "private" ? "Privato" : "Online";
           const colori = eVariante ? { bg: "#E7EEF5", fg: "#3B6FA0" } : !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : p.stato === "private" ? { bg: "#E7EEF5", fg: "#3B6FA0" } : { bg: "#E6F2E8", fg: "#2E7D32" };
+          const prezzo = prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—";
+          // gli stessi gesti in tutte e due le forme: si apre cliccando,
+          // si sposta trascinando mentre si riordina la vetrina
+          const comuni = {
+            onClick: inRiordino ? undefined : () => apriProdotto(p),
+            draggable: inRiordino,
+            onDragStart: inRiordino ? () => { prodottoTrascinatoRef.current = p.id; } : undefined,
+            onDragEnd: inRiordino ? () => { prodottoTrascinatoRef.current = null; } : undefined,
+            onDragOver: inRiordino ? (e) => e.preventDefault() : undefined,
+            onDrop: inRiordino ? (e) => { e.preventDefault(); spostaProdottoVetrina(prodottoTrascinatoRef.current, p.id); prodottoTrascinatoRef.current = null; } : undefined,
+            title: p.nome,
+          };
+          const sfondo = selezionato && !inRiordino ? "#FBF3E4" : "#FAF8F2";
+          const bordo = `1px solid ${selezionato && !inRiordino ? GOLD : CREAM_BORDER}`;
+          const puntatore = inRiordino ? "grab" : "pointer";
+
+          if (colonneEffettive === 1) {
+            return (
+              <div key={p.id} {...comuni} style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, cursor: puntatore, background: sfondo, border: bordo }}>
+                {inRiordino && <span style={{ color: MUTED, fontSize: 14, lineHeight: 1, userSelect: "none", flexShrink: 0 }}>⠿</span>}
+                <div style={{ width: 40, height: 40, borderRadius: 8, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                  {immagini[0] ? <img src={immagini[0].url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: MUTED }}><IconaImmagineShop size={16} /></span>}
+                  {immagini.length > 1 && <span style={{ position: "absolute", bottom: -1, right: -1, ...fontBody, fontSize: 9, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 8, padding: "1px 4px" }}>{immagini.length}</span>}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
+                  <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{prezzo}</div>
+                </div>
+                <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>
+              </div>
+            );
+          }
+
           return (
-            <div
-              key={p.id}
-              onClick={inRiordino ? undefined : () => apriProdotto(p)}
-              draggable={inRiordino}
-              onDragStart={inRiordino ? () => { prodottoTrascinatoRef.current = p.id; } : undefined}
-              onDragEnd={inRiordino ? () => { prodottoTrascinatoRef.current = null; } : undefined}
-              onDragOver={inRiordino ? (e) => e.preventDefault() : undefined}
-              onDrop={inRiordino ? (e) => { e.preventDefault(); spostaProdottoVetrina(prodottoTrascinatoRef.current, p.id); prodottoTrascinatoRef.current = null; } : undefined}
-              title={p.nome}
-              style={{ position: "relative", display: "flex", flexDirection: "column", aspectRatio: "1 / 1", padding: 6, borderRadius: 10, overflow: "hidden", cursor: inRiordino ? "grab" : "pointer", background: selezionato && !inRiordino ? "#FBF3E4" : "#FAF8F2", border: selezionato && !inRiordino ? `1px solid ${GOLD}` : `1px solid ${CREAM_BORDER}` }}
-            >
+            <div key={p.id} {...comuni} style={{ position: "relative", display: "flex", flexDirection: "column", aspectRatio: "1 / 1", padding: 6, borderRadius: 10, overflow: "hidden", cursor: puntatore, background: sfondo, border: bordo }}>
               <div style={{ flex: 1, minHeight: 0, borderRadius: 8, background: BG, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                 {immagini[0]
                   ? <img src={immagini[0].url} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
@@ -41675,7 +41725,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                   quadrato non c'e' spazio per i nomi lunghi degli aghi */}
               <div style={{ ...fontBody, fontSize: 10, fontWeight: 600, color: NAVY, marginTop: 5, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.nome}</div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, marginTop: 2 }}>
-                <span style={{ ...fontBody, fontSize: 10, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}</span>
+                <span style={{ ...fontBody, fontSize: 10, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prezzo}</span>
                 <span style={{ ...fontBody, fontSize: 8, fontWeight: 700, padding: "2px 5px", borderRadius: 8, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>
               </div>
             </div>
