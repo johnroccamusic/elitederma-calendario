@@ -40672,6 +40672,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // mentre WooCommerce risponde, e l'esito compare nella striscia in alto
   const [lavoriInCorso, setLavoriInCorso] = useState([]);
   const [lavoriFalliti, setLavoriFalliti] = useState([]);
+  // il nome del prodotto appena creato: finche' c'e', la finestra di
+  // conferma resta aperta
+  const [prodottoCreatoNome, setProdottoCreatoNome] = useState(null);
   // copia dei dati di scorta e riordino su più prodotti in un colpo solo
   const [copiaAperta, setCopiaAperta] = useState(false);
   const [filtroCopia, setFiltroCopia] = useState("");
@@ -41418,6 +41421,13 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: esito.errore, form: f }]);
           return;
         }
+        // un prodotto nuovo si conferma con una finestra, non con la
+        // striscia in alto: e' l'unica volta in cui una cosa nasce, e la
+        // striscia si puo' non vedere se nel frattempo si e' scorsa la
+        // scheda o si e' usato "Salva e esci". Il nome e' li' dentro
+        // perche' il salvataggio dura qualche secondo e la conferma puo'
+        // arrivare quando si sta gia' guardando altro
+        if (!f.id) setProdottoCreatoNome(f.nome.trim());
         // il messaggio nella scheda solo se è ancora aperta SULLO STESSO
         // prodotto: nel frattempo si può averne aperto un altro, e un
         // "salvato" sulla scheda sbagliata è peggio di nessun messaggio
@@ -42555,6 +42565,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             if (ok) setModaleVoceMenu(null);
           }}
         />
+      )}
+      {prodottoCreatoNome && (
+        <Modal title="Prodotto creato" onClose={() => setProdottoCreatoNome(null)} maxWidth={420}>
+          <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginTop: 6 }}>
+            GRAZIE, il nuovo prodotto è stato salvato.
+          </div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8 }}>{prodottoCreatoNome}</div>
+          <Button onClick={() => setProdottoCreatoNome(null)} style={{ width: "100%", marginTop: 18 }}>Chiudi</Button>
+        </Modal>
       )}
     </div>
   );
