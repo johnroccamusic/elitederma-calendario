@@ -32825,6 +32825,7 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
   }
 
   return (
+    <div>
     <div style={{ ...cardStyle, marginBottom: 0, padding: 0, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "16px 18px 12px" }}>
         <div>
@@ -33110,28 +33111,26 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
         </div>
       )}
       </>)}
-      {/* la linguetta sotto la barra, come quella del dock: la freccia
-          guarda in giu' quando c'e' da aprire e in su quando c'e' da
-          richiudere */}
-      <button
-        onClick={() => setAvvisiAperti((v) => !v)}
-        aria-label={avvisiAperti ? "Chiudi gli avvisi" : "Apri gli avvisi"}
-        title={avvisiAperti ? "Chiudi gli avvisi" : "Apri gli avvisi"}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          width: "100%", padding: "7px 0", cursor: "pointer",
-          background: BG, border: "none", borderTop: `1px solid ${CREAM_BORDER}`, color: MUTED,
-        }}
-      >
-        {!avvisiAperti && (
-          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.3 }}>
-            Vedi i {avvisi.length + bloccanti.length} avvisi
-          </span>
-        )}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points={avvisiAperti ? "6 15 12 9 18 15" : "6 9 12 15 18 9"} />
-        </svg>
-      </button>
+    </div>
+    {/* la linguetta sporge sotto la card, come quella del dock: piccola e
+        centrata, non una fascia larga quanto la pagina. Quanti siano gli
+        avvisi lo dicono gia' le pastiglie qui sopra, quindi qui basta la
+        freccia — in giu' per aprire, in su per richiudere */}
+    <button
+      onClick={() => setAvvisiAperti((v) => !v)}
+      aria-label={avvisiAperti ? "Chiudi gli avvisi" : `Apri i ${avvisi.length + bloccanti.length} avvisi`}
+      title={avvisiAperti ? "Chiudi gli avvisi" : `Apri i ${avvisi.length + bloccanti.length} avvisi`}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: 74, height: 20, margin: "0 auto", cursor: "pointer", padding: 0,
+        background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderTop: "none",
+        borderRadius: "0 0 12px 12px", color: MUTED,
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points={avvisiAperti ? "6 15 12 9 18 15" : "6 9 12 15 18 9"} />
+      </svg>
+    </button>
     </div>
   );
 }
