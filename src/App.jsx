@@ -31486,11 +31486,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     return { risultato, piano, daOrdinare: piano.daOrdinare.length, ritardi, urgenti };
   }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop]);
 
-  // i totali aggregati contano solo chi ha davvero un magazzino da
-  // sommare: un bundle/vetrina con conta_magazzino=false falserebbe la
-  // somma (non è un pezzo fisico in più, è un modo di venderne altri)
-  const prodottiConMagazzino = prodottiConStato.filter((p) => p.conta_magazzino !== false);
-
   let prodottiVisti = prodottiConStato;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
   // "senza fornitore" e' una scelta utile quanto le altre: sono i prodotti
