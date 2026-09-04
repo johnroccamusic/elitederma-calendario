@@ -166,6 +166,34 @@ function useColonneRidimensionabili(chiave) {
   return { larghezzaDi, maniglia };
 }
 
+// la maniglia fra due colonne: invisibile finche' non ci passi sopra col
+// mouse, poi si accende una lineetta scura sul bordo. Senza quel segno
+// una colonna stretta sembrava non averla proprio
+function ManigliaColonna({ lato = "destra", onInizia, onMuovi, onFine }) {
+  const [sopra, setSopra] = useState(false);
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.stopPropagation()}
+      onPointerDown={onInizia}
+      onPointerMove={onMuovi}
+      onPointerUp={onFine}
+      onPointerCancel={onFine}
+      onMouseEnter={() => setSopra(true)}
+      onMouseLeave={() => setSopra(false)}
+      title="Trascina per stringere o allargare la colonna"
+      style={{
+        position: "absolute", top: 0, bottom: 0, [lato === "destra" ? "right" : "left"]: 0,
+        width: 11, cursor: "col-resize", touchAction: "none", zIndex: 4,
+        display: "flex", justifyContent: lato === "destra" ? "flex-end" : "flex-start",
+      }}
+    >
+      <div style={{ width: 2, background: sopra ? NAVY : "transparent" }} />
+    </div>
+  );
+}
+
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
 // nomi personalizzati delle colonne di "Dettaglio prodotti": stanno
@@ -31613,7 +31641,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               <colgroup>{COLONNE_MAGAZZINO.map((col) => <col key={col.label} style={{ width: larghezzaDi(col.label, col.larghezza) }} />)}</colgroup>
               <thead>
                 <tr>
-                  {COLONNE_MAGAZZINO.map((col) => (
+                  {COLONNE_MAGAZZINO.map((col, indiceCol) => (
                     <th
                       key={col.label}
                       onClick={() => ordinaPer(col.campo)}
@@ -31622,19 +31650,27 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                       style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative" }}
                     >
                       {etichettaColonna(col.label)}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => iniziaRidimensionamento(e, col.label, larghezzaDi(col.label, col.larghezza))}
-                        onPointerMove={muoviRidimensionamento}
-                        onPointerUp={fineRidimensionamento}
-                        onPointerCancel={fineRidimensionamento}
-                        // la maniglia sta tutta dentro la sua colonna.
-                        // Sporgendo di 4px sulla colonna accanto, meta' di
-                        // essa finiva coperta dall'intestazione successiva
-                        // (stessa quota, disegnata dopo) e sulle colonne
-                        // strette come S/R restava un filo di 4px da
-                        // prendere: sembrava non averla proprio
-                        style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
+                      {/* la maniglia sta tutta dentro la sua colonna:
+                          sporgendo sulla colonna accanto meta' di essa
+                          finiva coperta dall'intestazione successiva.
+                          Quella a sinistra allarga o stringe la colonna
+                          PRECEDENTE: e' il gesto con cui si tira S/R verso
+                          sinistra, e chi lo cerca lo cerca li' */}
+                      {indiceCol > 0 && (() => {
+                        const precedente = COLONNE_MAGAZZINO[indiceCol - 1];
+                        return (
+                          <ManigliaColonna
+                            lato="sinistra"
+                            onInizia={(e) => iniziaRidimensionamento(e, precedente.label, larghezzaDi(precedente.label, precedente.larghezza))}
+                            onMuovi={muoviRidimensionamento}
+                            onFine={fineRidimensionamento}
+                          />
+                        );
+                      })()}
+                      <ManigliaColonna
+                        onInizia={(e) => iniziaRidimensionamento(e, col.label, larghezzaDi(col.label, col.larghezza))}
+                        onMuovi={muoviRidimensionamento}
+                        onFine={fineRidimensionamento}
                       />
                     </th>
                   ))}
