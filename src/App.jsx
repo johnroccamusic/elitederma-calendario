@@ -14429,8 +14429,42 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   // scrittura fosse fallita, il segno torna indietro da solo
   const [mattina, setMattina] = useState(!!modella.mattina);
   const [pomeriggio, setPomeriggio] = useState(!!modella.pomeriggio);
-  useEffect(() => { setMattina(!!modella.mattina); }, [modella.mattina]);
-  useEffect(() => { setPomeriggio(!!modella.pomeriggio); }, [modella.pomeriggio]);
+  // MAT e POM si scrivono SEMPRE insieme, in un colpo solo. Spuntandoli
+  // uno dopo l'altro partivano due salvataggi che leggevano l'elenco degli
+  // slot nello stesso istante: il secondo lo riscriveva senza la spunta
+  // appena messa dal primo, ed e' cosi' che il turno "spesso non si
+  // salvava". Stessa trappola gia' vista con nome e telefono.
+  const timerTurni = React.useRef(null);
+  const attesaTurni = React.useRef(false);
+  const turniInCorso = React.useRef(false);
+  const turniDaScrivere = React.useRef(null);
+  // durante l'attesa la spunta non si riallinea al dato del server: quello
+  // e' ancora il vecchio, e la vedremmo tornare indietro da sola
+  useEffect(() => { if (!attesaTurni.current && !timerTurni.current) setMattina(!!modella.mattina); }, [modella.mattina]);
+  useEffect(() => { if (!attesaTurni.current && !timerTurni.current) setPomeriggio(!!modella.pomeriggio); }, [modella.pomeriggio]);
+  // se la riga sparisce (si cambia pagina) mentre l'attesa e' ancora in
+  // corso, il turno si scrive comunque invece di perdersi
+  useEffect(() => () => {
+    if (timerTurni.current) { clearTimeout(timerTurni.current); turniDaScrivere.current?.(); }
+  }, []);
+  const turniDaSalvare = mattina !== !!modella.mattina || pomeriggio !== !!modella.pomeriggio;
+  function fermaTimerTurni() {
+    if (timerTurni.current) { clearTimeout(timerTurni.current); timerTurni.current = null; }
+    turniDaScrivere.current = null;
+  }
+  async function salvaTurni(m, p) {
+    fermaTimerTurni();
+    attesaTurni.current = true;
+    try { await onSalva({ mattina: m, pomeriggio: p }); } finally { attesaTurni.current = false; }
+  }
+  // la spunta si muove subito; la scrittura aspetta un attimo, giusto il
+  // tempo di spuntare anche l'altra casella e mandarle insieme
+  function cambiaTurno(m, p) {
+    setMattina(m); setPomeriggio(p);
+    fermaTimerTurni();
+    turniDaScrivere.current = () => onSalva({ mattina: m, pomeriggio: p });
+    timerTurni.current = setTimeout(() => { timerTurni.current = null; turniDaScrivere.current = null; salvaTurni(m, p); }, 900);
+  }
 
   // altri posti modella dello STESSO allievo (mai di un altro): compaiono
   // solo se ce n'è più di uno in totale, e solo se il chiamante sa dirci
@@ -14517,12 +14551,33 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                 campo Tel. che altrimenti veniva mozzato */}
             <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>
               MAT
-              <input type="checkbox" checked={mattina} onChange={(e) => { setMattina(e.target.checked); onSalva("mattina", e.target.checked); }} />
+              <input type="checkbox" checked={mattina} onChange={(e) => cambiaTurno(e.target.checked, pomeriggio)} />
             </label>
             <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>
               POM
-              <input type="checkbox" checked={pomeriggio} onChange={(e) => { setPomeriggio(e.target.checked); onSalva("pomeriggio", e.target.checked); }} />
+              <input type="checkbox" checked={pomeriggio} onChange={(e) => cambiaTurno(mattina, e.target.checked)} />
             </label>
+            {/* il tasto resta in vista finche' il database non ha
+                confermato il turno: se si vede, quella spunta non e'
+                ancora salvata. Si salva al primo contatto come il
+                Conferma del nome — su iPad e Android il dito che esce da
+                un campo fa riassestare la pagina e il click non arriva */}
+            {turniDaSalvare && (
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  turniInCorso.current = true;
+                  salvaTurni(mattina, pomeriggio);
+                  setTimeout(() => { turniInCorso.current = false; }, 700);
+                }}
+                onClick={() => { if (!turniInCorso.current) salvaTurni(mattina, pomeriggio); }}
+                title="Salva subito MAT/POM"
+                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 9, padding: "7px 12px", cursor: "pointer", flexShrink: 0, touchAction: "manipulation", alignSelf: "center" }}
+              >
+                Conferma
+              </button>
+            )}
           </>
         )}
         <input
@@ -20634,7 +20689,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
               {riepilogo}
               {testataAssegnaModelle}
               <div style={subStyle}>
-                Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono: si salva da solo, non serve premere Salva.
+                Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono, poi premi Conferma. Finché vedi il tasto Conferma quella riga non è ancora salvata.
               </div>
 
               {iscrittiVisibili.length === 0 && (
@@ -20683,7 +20738,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
             {riepilogo}
             {testataAssegnaModelle}
             <div style={subStyle}>
-              Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono: si salva da solo, non serve premere Salva.
+              Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono, poi premi Conferma. Finché vedi il tasto Conferma quella riga non è ancora salvata.
             </div>
 
             {giorniRilevantiModelle.map((g) => {
