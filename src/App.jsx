@@ -30228,7 +30228,7 @@ const COLONNE_MAGAZZINO = [
   // lotto minimo è facoltativo: non fanno colore
   { label: "S/R", campo: "riordinoCompleto", direzioneIniziale: "asc", larghezza: 40 },
   { label: "", campo: null, larghezza: 34 },
-  { label: "Ordina", campo: null, larghezza: 78 },
+  { label: "Ordina", campo: null, larghezza: 116 },
 ];
 
 function fmtDataIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -30710,9 +30710,10 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           </button>
         )}
       </td>
-      {/* "Ordina": si telefona al fornitore e si dichiara l'ordine, senza
-          passare dall'Advisor. Se un ordine per questo prodotto e' gia'
-          aperto il tasto lo dice e non si ripete */}
+      {/* "Associa e ordina": si parte da questo prodotto ma si apre
+          l'ordine del suo fornitore, con gli altri suoi articoli davanti —
+          al fornitore si telefona una volta sola. L'ordine si dichiara da
+          li' dentro, dove ci sono le quantita' */}
       <td style={{ ...tdStyle, textAlign: "center" }}>
         {p.conta_magazzino === false ? (
           <span style={{ ...fontBody, fontSize: 11, color: "#D8D3C6" }}>—</span>
@@ -30721,10 +30722,10 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         ) : (
           <button
             onClick={() => onOrdina?.(p)}
-            title="Segna questo prodotto come ordinato al fornitore"
-            style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}
+            title="Apri l'ordine di questo fornitore con questo prodotto gia' spuntato, e da li' dichiara l'ordine"
+            style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "5px 8px", cursor: "pointer", whiteSpace: "normal" }}
           >
-            Ordina
+            Associa e ordina
           </button>
         )}
       </td>
@@ -31221,6 +31222,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     if (giaOrdinatiMag.has(prodotto.id)) { window.alert("Questo prodotto risulta gia' ordinato: e' in attesa di ricezione."); return; }
     setOrdinaProdotto({ prodotto, quantitaSuggerita });
   }
+  // dalla tabella si parte da un prodotto ma si finisce sull'ordine del
+  // suo fornitore: si apre in una finestra perche' la tabella sta in
+  // fondo alla pagina, mentre il pannello degli avvisi sta in cima
+  const [ordineDaTabella, setOrdineDaTabella] = useState(null); // { fornitoreId, suggerimenti }
+  function apriAssociaEOrdina(p) {
+    if (giaOrdinatiMag.has(p.id)) { window.alert("Questo prodotto risulta gia' ordinato: e' in attesa di ricezione."); return; }
+    if (!p.fornitore_id) { window.alert("Questo prodotto non ha un fornitore collegato: aprilo con un clic sul nome e assegnaglielo."); return; }
+    setOrdineDaTabella({ fornitoreId: p.fornitore_id, suggerimenti: { [p.id]: quantitaDaProporre(p) } });
+  }
   // quanti sono in viaggio: si dice, o sparirebbero senza spiegazione
   const quantiGiaOrdinati = useMemo(
     () => (sintesiAdvisor.piano?.daOrdinare || []).filter((r) => giaOrdinatiMag.has(r.prodotto.id)).length,
@@ -31632,7 +31642,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriOrdine} ordineAperto={giaOrdinatiMag.has(p.id)} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -31665,6 +31675,21 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       {apriConfezioneBoxId && (
         <ModaleApriConfezione boxId={apriConfezioneBoxId} prodottiShop={prodottiShop} onClose={() => setApriConfezioneBoxId(null)} ricarica={ricarica} />
       )}
+      {ordineDaTabella && (() => {
+        const f = (fornitori || []).find((x) => x.id === ordineDaTabella.fornitoreId) || null;
+        return (
+          <Modal title={f?.nome || "Ordine fornitore"} onClose={() => setOrdineDaTabella(null)}>
+            <PannelloOrdineFornitore
+              fornitore={f}
+              prodottiShop={prodottiShop}
+              suggerimenti={ordineDaTabella.suggerimenti}
+              onChiudi={() => setOrdineDaTabella(null)}
+              onOrdinato={() => ricarica(["riordini_in_corso"])}
+              dentroModale
+            />
+          </Modal>
+        );
+      })()}
       {ordinaProdotto && (
         <ModaleSegnaOrdinato
           prodotto={ordinaProdotto.prodotto}
@@ -32346,6 +32371,16 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 2 }}>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fornitore?.nome || "Fornitore"}</div>
           <button onClick={onChiudi} title="Chiudi" style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 16, padding: 2 }}>✕</button>
+        </div>
+      )}
+      {(fornitore?.telefono || fornitore?.email) && (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+          {fornitore?.telefono && (
+            <a href={`tel:${String(fornitore.telefono).replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{fornitore.telefono}</a>
+          )}
+          {fornitore?.email && (
+            <a href={`mailto:${fornitore.email}`} style={{ ...fontBody, fontSize: 12, color: MUTED, wordBreak: "break-all" }}>{fornitore.email}</a>
+          )}
         </div>
       )}
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>
