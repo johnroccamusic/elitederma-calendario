@@ -40672,9 +40672,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // mentre WooCommerce risponde, e l'esito compare nella striscia in alto
   const [lavoriInCorso, setLavoriInCorso] = useState([]);
   const [lavoriFalliti, setLavoriFalliti] = useState([]);
-  // il nome del prodotto appena creato: finche' c'e', la finestra di
-  // conferma resta aperta
-  const [prodottoCreatoNome, setProdottoCreatoNome] = useState(null);
+  // le due finestre del salvataggio: la conferma parte subito, l'avviso
+  // di errore arriva dopo, se il lavoro in background non e' andato
+  const [confermaSalvataggio, setConfermaSalvataggio] = useState(null);
+  const [erroreSalvataggio, setErroreSalvataggio] = useState(null);
   // copia dei dati di scorta e riordino su più prodotti in un colpo solo
   const [copiaAperta, setCopiaAperta] = useState(false);
   const [filtroCopia, setFiltroCopia] = useState("");
@@ -41412,6 +41413,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // In entrambi i casi l'esito arriva nella striscia in alto: se
     // qualcosa non va, il prodotto è nominato e la scheda si riapre com'era
     if (esciDopo) chiudiSchedaProdotto();
+    // la conferma si da' subito, senza aspettare WooCommerce: da qui in
+    // poi e' un lavoro in background, e chi salva puo' andare avanti. Se
+    // poi non andasse, se ne accorge dall'avviso rosso qui sotto
+    setErroreSalvataggio(null);
+    setConfermaSalvataggio({ nome: f.nome.trim(), nuovo: !f.id });
     const chiave = `${f.id || "nuovo"}-${f.nome}-${Date.now()}`;
     setLavoriInCorso((prec) => [...prec, { chiave, nome: f.nome.trim() }]);
     eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot)
@@ -41419,15 +41425,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
         if (esito?.errore) {
           setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: esito.errore, form: f }]);
+          // la conferma data prima era una promessa: qui si ritira
+          setConfermaSalvataggio(null);
+          setErroreSalvataggio(f.nome.trim());
           return;
         }
-        // un prodotto nuovo si conferma con una finestra, non con la
-        // striscia in alto: e' l'unica volta in cui una cosa nasce, e la
-        // striscia si puo' non vedere se nel frattempo si e' scorsa la
-        // scheda o si e' usato "Salva e esci". Il nome e' li' dentro
-        // perche' il salvataggio dura qualche secondo e la conferma puo'
-        // arrivare quando si sta gia' guardando altro
-        if (!f.id) setProdottoCreatoNome(f.nome.trim());
         // il messaggio nella scheda solo se è ancora aperta SULLO STESSO
         // prodotto: nel frattempo si può averne aperto un altro, e un
         // "salvato" sulla scheda sbagliata è peggio di nessun messaggio
@@ -41443,6 +41445,8 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       .catch((e) => {
         setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
         setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: String(e?.message || e), form: f }]);
+        setConfermaSalvataggio(null);
+        setErroreSalvataggio(f.nome.trim());
       });
   }
 
@@ -42566,13 +42570,25 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           }}
         />
       )}
-      {prodottoCreatoNome && (
-        <Modal title="Prodotto creato" onClose={() => setProdottoCreatoNome(null)} maxWidth={420}>
-          <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginTop: 6 }}>
-            GRAZIE, il nuovo prodotto è stato salvato.
+      {/* una sola finestra per volta: l'errore prende il posto della
+          conferma, perche' e' quello che smentisce */}
+      {erroreSalvataggio ? (
+        <Modal title="Salvataggio non riuscito" onClose={() => setErroreSalvataggio(null)} maxWidth={430}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#C0392B", marginTop: 6, lineHeight: 1.4 }}>
+            Il salvataggio del prodotto {erroreSalvataggio} non è andato a buon fine, verifica e ripeti l'operazione.
           </div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8 }}>{prodottoCreatoNome}</div>
-          <Button onClick={() => setProdottoCreatoNome(null)} style={{ width: "100%", marginTop: 18 }}>Chiudi</Button>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
+            L'avviso in cima alla pagina dice cosa non ha funzionato e riapre la scheda com'era, senza riscrivere niente.
+          </div>
+          <Button onClick={() => setErroreSalvataggio(null)} style={{ width: "100%", marginTop: 18 }}>Chiudi</Button>
+        </Modal>
+      ) : confermaSalvataggio && (
+        <Modal title={confermaSalvataggio.nuovo ? "Prodotto creato" : "Prodotto salvato"} onClose={() => setConfermaSalvataggio(null)} maxWidth={420}>
+          <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginTop: 6, lineHeight: 1.4 }}>
+            GRAZIE, {confermaSalvataggio.nuovo ? "il nuovo prodotto è stato salvato." : "il prodotto è stato salvato."}
+          </div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8 }}>{confermaSalvataggio.nome}</div>
+          <Button onClick={() => setConfermaSalvataggio(null)} style={{ width: "100%", marginTop: 18 }}>Chiudi</Button>
         </Modal>
       )}
     </div>
