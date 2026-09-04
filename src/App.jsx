@@ -32639,8 +32639,11 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
       if (righeIntestazione.length > 0 && logo) {
         pagina.drawLine({ start: { x: X_LINEA, y: yAltoIntestazione }, end: { x: X_LINEA, y: yAltoIntestazione - Math.max(altezzaTesto, altezzaLogo) }, thickness: 0.7 });
       }
+      // l'aria fra l'intestazione e il titolo: e' quella che fa leggere le
+      // due cose come separate invece che come un unico blocco appiccicato
+      const STACCO_TITOLO = 20 * MM;
       const altezzaIntestazione = Math.max(altezzaTesto, altezzaLogo);
-      y = altezzaIntestazione > 0 ? yAltoIntestazione - altezzaIntestazione - 34 : yAltoIntestazione;
+      y = altezzaIntestazione > 0 ? yAltoIntestazione - altezzaIntestazione - STACCO_TITOLO : yAltoIntestazione;
 
       scrivi("PROFORMA D'ORDINE", { size: 18, font: grassetto });
       nuovaRiga(26);
