@@ -199,6 +199,8 @@ const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
 // nomi personalizzati delle colonne di "Dettaglio prodotti": stanno
 // accanto alle larghezze, che sono già una preferenza di chi guarda
 const CHIAVE_ETICHETTE_MAGAZZINO = "gestioneMagazzino_etichetteColonne";
+// l'ordine in cui stanno le colonne, spostabile trascinando i titoli
+const CHIAVE_ORDINE_MAGAZZINO = "gestioneMagazzino_ordineColonne";
 // quanto spazio prende la colonna di sinistra ("Da gestire oggi") rispetto
 // agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
 const CHIAVE_DIVISIONE_MAGAZZINO = "gestioneMagazzino_divisioneColonne";
@@ -30512,7 +30514,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
   );
 }
 
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne }) {
   // prezzo di vendita e costo di acquisto non sono più modificabili da
   // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
   // anche cosa mandare a WooCommerce (il lordo, mai il netto)
@@ -30583,180 +30585,220 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   // della riga sopra. Stretta e allineata a destra, come si leggono i numeri
   const cellInputStyle = { ...inputStyle, width: 46, padding: "4px 6px", fontSize: 11, textAlign: "right" };
 
+  // ogni cella con il nome della sua colonna: la riga si compone
+  // seguendo l'ordine scelto nell'intestazione, che chi guarda puo'
+  // cambiare trascinando i titoli
+  const celle = {
+    "Prodotto": (
+        <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdTesto, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
+          <span
+            title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
+            style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
+          />
+          <span style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
+        </td>
+    ),
+    "Fornitore": (
+        <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: p.nomeFornitore ? NAVY : MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeFornitore || "—"}</td>
+    ),
+    "Categoria": (
+        <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
+    ),
+    "Unità di misura": (
+        <td style={tdStyle}>
+          <input style={{ ...cellInputStyle, width: 36, textAlign: "center" }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
+        </td>
+    ),
+    "Stock": (
+        <td style={tdStyle}>
+          {p.giacenza_propria === false ? (
+            <div
+              onClick={p.isBundle || p.isVetrina ? () => onApriIspezione(p) : undefined}
+              title={p.isBundle ? "Tocca per vedere da cosa dipende questa disponibilità" : p.isVetrina ? "Tocca per vedere le varianti collegate" : "Nessuna giacenza propria: non si conta"}
+              style={{
+                ...fontBody, fontStyle: "italic", fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 3,
+                cursor: p.isBundle || p.isVetrina ? "pointer" : "default", textDecoration: p.isBundle || p.isVetrina ? "underline dotted" : "none",
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
+              </svg>
+              {p.isVetrina ? `${p.variantiCollegate.length} variant${p.variantiCollegate.length === 1 ? "e" : "i"}` : p.stockTotale == null ? "∞" : p.stockTotale}
+            </div>
+          ) : (
+            <>
+              <input
+                style={{ ...cellInputStyle, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY }}
+                inputMode="numeric" value={stockTotaleInput} title="Pezzi in stock: scrivi il numero giusto per correggerlo"
+                onChange={(e) => setStockTotaleInput(e.target.value)}
+                onBlur={salvaStockTotale}
+                onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+              />
+              {p.sfusoCollegato && (
+                <div title={`Pezzi singoli già aperti sull'altro scaffale (${p.sfusoCollegato.nome})`} style={{ ...fontBody, fontSize: 9.5, color: MUTED, whiteSpace: "nowrap", marginTop: 2 }}>
+                  (+{p.sfusoCollegato.stock} sfusi)
+                </div>
+              )}
+            </>
+          )}
+        </td>
+    ),
+    "Soglia riordino": (
+        <td style={tdStyle}>
+          {p.giacenza_propria === false ? (
+            <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
+          ) : (
+            <input style={cellInputStyle} inputMode="numeric" value={scortaMin} onChange={(e) => setScortaMin(e.target.value)} onBlur={salvaScortaMin} placeholder="—" />
+          )}
+        </td>
+    ),
+    "Non sul POS": (
+        <td style={tdStyle} title={p.forzatoEscludi ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Esclude questo prodotto dalla vendita diretta (POS e shop online)"}>
+          <input type="checkbox" checked={p.forzatoEscludi || !!p.escludi_vendita_diretta} disabled={p.forzatoEscludi} onChange={(e) => salvaFlagEscludiVenditaDiretta(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoEscludi ? "default" : "pointer" }} />
+        </td>
+    ),
+    "Solo offline": (
+        <td style={tdStyle} title={p.forzatoSoloOffline ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Il prodotto non viene mai creato/aggiornato su WooCommerce, anche con un prezzo"}>
+          <input type="checkbox" checked={p.forzatoSoloOffline || !!p.solo_offline} disabled={p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoSoloOffline ? "default" : "pointer" }} />
+        </td>
+    ),
+    /* stato e avvisi ("Riordina dal fornitore", "Apri confezione") al
+    centro della loro colonna: erano schiacciati a sinistra sotto un
+    titolo centrato */
+    "Stato": (
+        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+          {p.conta_magazzino === false ? (
+            <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 8, padding: "2px 6px" }}>Illimitato</span>
+          ) : p.boxCollegato && (p.esaurito || p.sottoScorta) && p.boxCollegato.inMagazzino > 0 ? (
+            // sfuso sotto soglia ma con pacchi sigillati disponibili: la mossa
+            // giusta non è riordinare dal fornitore, è aprire un pacco
+            <button
+              onClick={() => onApriConfezione(p.boxCollegato.id)}
+              title={`Sfusi sotto soglia, ma in magazzino ci sono ${p.boxCollegato.inMagazzino} pacchi sigillati di "${p.boxCollegato.nome}": aprine uno`}
+              style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#B8860B", background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
+            >
+              Apri un pacco →
+            </button>
+          ) : p.boxCollegato && (p.esaurito || p.sottoScorta) ? (
+            <span title={`Sfusi sotto soglia e nessun pacco sigillato di "${p.boxCollegato.nome}" in magazzino: da riordinare`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
+              Riordina dal fornitore
+            </span>
+          ) : p.bundle_con_giacenza_fisica && (p.esaurito || p.sottoScorta) ? (
+            // il box sigillato ha una SUA soglia di riordino (Scorta min. sulla
+            // riga): quando i pacchi scendono sotto, l'avviso è già di riordino
+            // dal produttore — senza aspettare che finiscano del tutto
+            <span title={`Pacchi sigillati ${p.esaurito ? "esauriti" : "sotto la soglia di riordino"}: riordina dal produttore`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
+              Riordina dal fornitore
+            </span>
+          ) : (
+            <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "2px 6px" }}>
+              {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
+            </span>
+          )}
+          {p.bundle_con_giacenza_fisica && p.prodotto_sfuso_id && (
+            <div style={{ marginTop: 3 }}>
+              <button
+                onClick={() => onApriConfezione(p.id)}
+                title="Apri una o più confezioni: i pezzi passano dallo scaffale dei sigillati a quello degli sfusi"
+                style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
+              >
+                Apri confezione
+              </button>
+            </div>
+          )}
+        </td>
+    ),
+    "Prezzo vendita (IVA incl.)": (
+        <td style={{ ...tdStyle }} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
+          <span style={{ ...fontBody, fontSize: 11, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
+            {prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}
+            {!p.iva_verificata && (
+              <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 12, lineHeight: 1 }}>⚠</span>
+            )}
+          </span>
+        </td>
+    ),
+    "Costo acquisto": (
+        <td style={tdStyle} title={p.isBundle ? "Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" : "Si modifica solo dalla scheda prodotto (clic sul nome)"}>
+          <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 11, color: p.isBundle ? MUTED : NAVY }}>
+            {p.costo_acquisto != null ? fmtEuroErp2(p.costo_acquisto) : "—"}
+          </span>
+        </td>
+    ),
+    "Margine %": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+    ),
+    "Venduto": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
+    ),
+    "S/R": (
+        <td style={{ ...tdStyle, textAlign: "center" }}>
+          {p.giacenza_propria === false || p.conta_magazzino === false ? (
+            <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
+          ) : (() => {
+            const mancanoSR = [
+              p.soglia_riordino == null ? "soglia di riordino" : null,
+              p.lead_time_giorni == null ? "tempo di consegna" : null,
+              !p.fornitore_id ? "fornitore" : null,
+            ].filter(Boolean);
+            return (
+              <span
+                title={mancanoSR.length ? `Manca: ${mancanoSR.join(", ")}` : "Scorta e riordino completi"}
+                style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: mancanoSR.length ? "#C0392B" : "#2E7D32" }}
+              />
+            );
+          })()}
+        </td>
+    ),
+    /* il cestino c'è solo per i prodotti mai venduti: cancellare un
+    prodotto con uno storico spezzerebbe le vendite che lo citano,
+    quindi lì non si offre nemmeno l'opzione */
+    "": (
+        <td style={{ ...tdStyle, textAlign: "center" }}>
+          {(p.quantitaVenduta || 0) > 0 ? (
+            <span title={`Ha uno storico di vendite (${p.quantitaVenduta} pezzi): non si può cancellare`} style={{ ...fontBody, fontSize: 11, color: "#D8D3C6" }}>—</span>
+          ) : (
+            <button
+              onClick={() => onElimina(p)}
+              title="Cancella definitivamente questo prodotto"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 1, color: "#C0392B", opacity: 0.75 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18" /><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+              </svg>
+            </button>
+          )}
+        </td>
+    ),
+    /* "Associa e ordina": si parte da questo prodotto ma si apre
+    l'ordine del suo fornitore, con gli altri suoi articoli davanti —
+    al fornitore si telefona una volta sola. L'ordine si dichiara da
+    li' dentro, dove ci sono le quantita' */
+    "Ordina": (
+        <td style={{ ...tdStyle, textAlign: "center" }}>
+          {p.conta_magazzino === false ? (
+            <span style={{ ...fontBody, fontSize: 11, color: "#D8D3C6" }}>—</span>
+          ) : ordineAperto ? (
+            <span title="Ordine gia' dichiarato: e' in attesa di ricezione" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 8, padding: "3px 7px", whiteSpace: "nowrap" }}>Ordinato</span>
+          ) : (
+            <button
+              onClick={() => onOrdina?.(p)}
+              title="Apri l'ordine di questo fornitore con questo prodotto gia' spuntato, e da li' dichiara l'ordine"
+              style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "5px 8px", cursor: "pointer", whiteSpace: "normal" }}
+            >
+              Associa e ordina
+            </button>
+          )}
+        </td>
+    ),
+  };
   return (
     <tr>
-      <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdTesto, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
-        <span
-          title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
-          style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
-        />
-        <span style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
-      </td>
-      <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: p.nomeFornitore ? NAVY : MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeFornitore || "—"}</td>
-      <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
-      <td style={tdStyle}>
-        <input style={{ ...cellInputStyle, width: 36, textAlign: "center" }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
-      </td>
-      <td style={tdStyle}>
-        {p.giacenza_propria === false ? (
-          <div
-            onClick={p.isBundle || p.isVetrina ? () => onApriIspezione(p) : undefined}
-            title={p.isBundle ? "Tocca per vedere da cosa dipende questa disponibilità" : p.isVetrina ? "Tocca per vedere le varianti collegate" : "Nessuna giacenza propria: non si conta"}
-            style={{
-              ...fontBody, fontStyle: "italic", fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 3,
-              cursor: p.isBundle || p.isVetrina ? "pointer" : "default", textDecoration: p.isBundle || p.isVetrina ? "underline dotted" : "none",
-            }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-              <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
-            </svg>
-            {p.isVetrina ? `${p.variantiCollegate.length} variant${p.variantiCollegate.length === 1 ? "e" : "i"}` : p.stockTotale == null ? "∞" : p.stockTotale}
-          </div>
-        ) : (
-          <>
-            <input
-              style={{ ...cellInputStyle, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY }}
-              inputMode="numeric" value={stockTotaleInput} title="Pezzi in stock: scrivi il numero giusto per correggerlo"
-              onChange={(e) => setStockTotaleInput(e.target.value)}
-              onBlur={salvaStockTotale}
-              onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
-            />
-            {p.sfusoCollegato && (
-              <div title={`Pezzi singoli già aperti sull'altro scaffale (${p.sfusoCollegato.nome})`} style={{ ...fontBody, fontSize: 9.5, color: MUTED, whiteSpace: "nowrap", marginTop: 2 }}>
-                (+{p.sfusoCollegato.stock} sfusi)
-              </div>
-            )}
-          </>
-        )}
-      </td>
-      <td style={tdStyle}>
-        {p.giacenza_propria === false ? (
-          <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
-        ) : (
-          <input style={cellInputStyle} inputMode="numeric" value={scortaMin} onChange={(e) => setScortaMin(e.target.value)} onBlur={salvaScortaMin} placeholder="—" />
-        )}
-      </td>
-      <td style={tdStyle} title={p.forzatoEscludi ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Esclude questo prodotto dalla vendita diretta (POS e shop online)"}>
-        <input type="checkbox" checked={p.forzatoEscludi || !!p.escludi_vendita_diretta} disabled={p.forzatoEscludi} onChange={(e) => salvaFlagEscludiVenditaDiretta(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoEscludi ? "default" : "pointer" }} />
-      </td>
-      <td style={tdStyle} title={p.forzatoSoloOffline ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Il prodotto non viene mai creato/aggiornato su WooCommerce, anche con un prezzo"}>
-        <input type="checkbox" checked={p.forzatoSoloOffline || !!p.solo_offline} disabled={p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoSoloOffline ? "default" : "pointer" }} />
-      </td>
-      {/* stato e avvisi ("Riordina dal fornitore", "Apri confezione") al
-          centro della loro colonna: erano schiacciati a sinistra sotto un
-          titolo centrato */}
-      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-        {p.conta_magazzino === false ? (
-          <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 8, padding: "2px 6px" }}>Illimitato</span>
-        ) : p.boxCollegato && (p.esaurito || p.sottoScorta) && p.boxCollegato.inMagazzino > 0 ? (
-          // sfuso sotto soglia ma con pacchi sigillati disponibili: la mossa
-          // giusta non è riordinare dal fornitore, è aprire un pacco
-          <button
-            onClick={() => onApriConfezione(p.boxCollegato.id)}
-            title={`Sfusi sotto soglia, ma in magazzino ci sono ${p.boxCollegato.inMagazzino} pacchi sigillati di "${p.boxCollegato.nome}": aprine uno`}
-            style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#B8860B", background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
-          >
-            Apri un pacco →
-          </button>
-        ) : p.boxCollegato && (p.esaurito || p.sottoScorta) ? (
-          <span title={`Sfusi sotto soglia e nessun pacco sigillato di "${p.boxCollegato.nome}" in magazzino: da riordinare`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
-            Riordina dal fornitore
-          </span>
-        ) : p.bundle_con_giacenza_fisica && (p.esaurito || p.sottoScorta) ? (
-          // il box sigillato ha una SUA soglia di riordino (Scorta min. sulla
-          // riga): quando i pacchi scendono sotto, l'avviso è già di riordino
-          // dal produttore — senza aspettare che finiscano del tutto
-          <span title={`Pacchi sigillati ${p.esaurito ? "esauriti" : "sotto la soglia di riordino"}: riordina dal produttore`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
-            Riordina dal fornitore
-          </span>
-        ) : (
-          <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "2px 6px" }}>
-            {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
-          </span>
-        )}
-        {p.bundle_con_giacenza_fisica && p.prodotto_sfuso_id && (
-          <div style={{ marginTop: 3 }}>
-            <button
-              onClick={() => onApriConfezione(p.id)}
-              title="Apri una o più confezioni: i pezzi passano dallo scaffale dei sigillati a quello degli sfusi"
-              style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
-            >
-              Apri confezione
-            </button>
-          </div>
-        )}
-      </td>
-      <td style={{ ...tdStyle }} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
-        <span style={{ ...fontBody, fontSize: 11, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
-          {prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}
-          {!p.iva_verificata && (
-            <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 12, lineHeight: 1 }}>⚠</span>
-          )}
-        </span>
-      </td>
-      <td style={tdStyle} title={p.isBundle ? "Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" : "Si modifica solo dalla scheda prodotto (clic sul nome)"}>
-        <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 11, color: p.isBundle ? MUTED : NAVY }}>
-          {p.costo_acquisto != null ? fmtEuroErp2(p.costo_acquisto) : "—"}
-        </span>
-      </td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
-      <td style={{ ...tdStyle, textAlign: "center" }}>
-        {p.giacenza_propria === false || p.conta_magazzino === false ? (
-          <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
-        ) : (() => {
-          const mancanoSR = [
-            p.soglia_riordino == null ? "soglia di riordino" : null,
-            p.lead_time_giorni == null ? "tempo di consegna" : null,
-            !p.fornitore_id ? "fornitore" : null,
-          ].filter(Boolean);
-          return (
-            <span
-              title={mancanoSR.length ? `Manca: ${mancanoSR.join(", ")}` : "Scorta e riordino completi"}
-              style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: mancanoSR.length ? "#C0392B" : "#2E7D32" }}
-            />
-          );
-        })()}
-      </td>
-      {/* il cestino c'è solo per i prodotti mai venduti: cancellare un
-          prodotto con uno storico spezzerebbe le vendite che lo citano,
-          quindi lì non si offre nemmeno l'opzione */}
-      <td style={{ ...tdStyle, textAlign: "center" }}>
-        {(p.quantitaVenduta || 0) > 0 ? (
-          <span title={`Ha uno storico di vendite (${p.quantitaVenduta} pezzi): non si può cancellare`} style={{ ...fontBody, fontSize: 11, color: "#D8D3C6" }}>—</span>
-        ) : (
-          <button
-            onClick={() => onElimina(p)}
-            title="Cancella definitivamente questo prodotto"
-            style={{ background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 1, color: "#C0392B", opacity: 0.75 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6h18" /><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6M14 11v6" />
-            </svg>
-          </button>
-        )}
-      </td>
-      {/* "Associa e ordina": si parte da questo prodotto ma si apre
-          l'ordine del suo fornitore, con gli altri suoi articoli davanti —
-          al fornitore si telefona una volta sola. L'ordine si dichiara da
-          li' dentro, dove ci sono le quantita' */}
-      <td style={{ ...tdStyle, textAlign: "center" }}>
-        {p.conta_magazzino === false ? (
-          <span style={{ ...fontBody, fontSize: 11, color: "#D8D3C6" }}>—</span>
-        ) : ordineAperto ? (
-          <span title="Ordine gia' dichiarato: e' in attesa di ricezione" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 8, padding: "3px 7px", whiteSpace: "nowrap" }}>Ordinato</span>
-        ) : (
-          <button
-            onClick={() => onOrdina?.(p)}
-            title="Apri l'ordine di questo fornitore con questo prodotto gia' spuntato, e da li' dichiara l'ordine"
-            style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "5px 8px", cursor: "pointer", whiteSpace: "normal" }}
-          >
-            Associa e ordina
-          </button>
-        )}
-      </td>
+      {(colonne || COLONNE_MAGAZZINO).map((col) => (
+        <React.Fragment key={col.label}>{celle[col.label]}</React.Fragment>
+      ))}
     </tr>
   );
 }
@@ -30909,6 +30951,32 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // nel suo browser (vedi useLayoutCondiviso)
   const [larghezze, setLarghezze] = useLayoutCondiviso(CHIAVE_LARGHEZZE_MAGAZZINO, {});
   const [etichetteColonne, setEtichetteColonne] = useLayoutCondiviso(CHIAVE_ETICHETTE_MAGAZZINO, {});
+  // l'ordine delle colonne, come l'ha lasciato chi le ha spostate. Si
+  // parte sempre dall'elenco vero: quello salvato dice solo la sequenza,
+  // e una colonna aggiunta dopo (o tolta dal codice) non puo' rompere la
+  // tabella — le sconosciute si buttano, le mancanti tornano in coda
+  const [ordineColonne, setOrdineColonne] = useLayoutCondiviso(CHIAVE_ORDINE_MAGAZZINO, []);
+  const colonneMagazzino = useMemo(() => {
+    const perEtichetta = new Map(COLONNE_MAGAZZINO.map((c) => [c.label, c]));
+    const ordinate = (Array.isArray(ordineColonne) ? ordineColonne : [])
+      .map((label) => perEtichetta.get(label))
+      .filter(Boolean);
+    const gia = new Set(ordinate.map((c) => c.label));
+    return [...ordinate, ...COLONNE_MAGAZZINO.filter((c) => !gia.has(c.label))];
+  }, [ordineColonne]);
+  // trascinamento di un titolo: la colonna presa e quella sotto il dito
+  const [colonnaTrascinata, setColonnaTrascinata] = useState(null);
+  const [colonnaSopra, setColonnaSopra] = useState(null);
+  function spostaColonna(daEtichetta, aEtichetta) {
+    if (!daEtichetta || daEtichetta === aEtichetta) return;
+    const etichette = colonneMagazzino.map((c) => c.label);
+    const partenza = etichette.indexOf(daEtichetta);
+    if (partenza < 0) return;
+    etichette.splice(partenza, 1);
+    const arrivo = etichette.indexOf(aEtichetta);
+    etichette.splice(arrivo < 0 ? etichette.length : arrivo, 0, daEtichetta);
+    setOrdineColonne(etichette);
+  }
   function etichettaColonna(label) { return etichetteColonne[label] || label; }
   function rinominaColonna(e, label) {
     if (ruoloUtente !== "programmatore" || !label) return;
@@ -30968,7 +31036,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     if (!campo) return;
     setOrdinamento((prev) => (prev.campo === campo ? { campo, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: COLONNE_MAGAZZINO.find((c) => c.campo === campo)?.direzioneIniziale || "desc" }));
   }
-  const larghezzaTabellaMagazzino = COLONNE_MAGAZZINO.reduce((tot, col) => tot + larghezzaDi(col.label, col.larghezza), 0);
+  const larghezzaTabellaMagazzino = colonneMagazzino.reduce((tot, col) => tot + larghezzaDi(col.label, col.larghezza), 0);
   // La divisione fra le due colonne (riquadri a sinistra, avvisi a destra):
   // si trascina con la maniglia verticale in mezzo, come il bordo di una
   // colonna di Excel, e resta com'è stata messa.
@@ -31630,16 +31698,28 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: larghezzaTabellaMagazzino, borderCollapse: "collapse", tableLayout: "fixed" }}>
-              <colgroup>{COLONNE_MAGAZZINO.map((col) => <col key={col.label} style={{ width: larghezzaDi(col.label, col.larghezza) }} />)}</colgroup>
+              <colgroup>{colonneMagazzino.map((col) => <col key={col.label} style={{ width: larghezzaDi(col.label, col.larghezza) }} />)}</colgroup>
               <thead>
                 <tr>
-                  {COLONNE_MAGAZZINO.map((col, indiceCol) => (
+                  {colonneMagazzino.map((col, indiceCol) => (
                     <th
                       key={col.label}
+                      // il titolo si prende e si porta dove serve: la
+                      // colonna lo segue, celle comprese, e l'ordine
+                      // resta salvato. Le maniglie di ridimensionamento
+                      // fermano il trascinamento sul nascere
+                      // (preventDefault sul pointerdown), quindi le due
+                      // cose non si pestano i piedi
+                      draggable
+                      onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", col.label); setColonnaTrascinata(col.label); }}
+                      onDragOver={(e) => { if (colonnaTrascinata && colonnaTrascinata !== col.label) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setColonnaSopra(col.label); } }}
+                      onDragLeave={() => setColonnaSopra((attuale) => (attuale === col.label ? null : attuale))}
+                      onDrop={(e) => { e.preventDefault(); spostaColonna(colonnaTrascinata || e.dataTransfer.getData("text/plain"), col.label); setColonnaTrascinata(null); setColonnaSopra(null); }}
+                      onDragEnd={() => { setColonnaTrascinata(null); setColonnaSopra(null); }}
                       onClick={() => ordinaPer(col.campo)}
                       onContextMenu={(e) => rinominaColonna(e, col.label)}
-                      title={col.campo ? (ruoloUtente === "programmatore" ? "Clicca per ordinare · tasto destro per rinominare" : "Clicca per ordinare") : undefined}
-                      style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative" }}
+                      title={`${col.campo ? (ruoloUtente === "programmatore" ? "Clicca per ordinare · tasto destro per rinominare · " : "Clicca per ordinare · ") : ""}trascina il titolo per spostare la colonna`}
+                      style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, borderLeft: colonnaSopra === col.label ? `2px solid ${NAVY}` : "2px solid transparent", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative", opacity: colonnaTrascinata === col.label ? 0.45 : 1 }}
                     >
                       {etichettaColonna(col.label)}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
                       {/* la maniglia sta tutta dentro la sua colonna:
@@ -31649,7 +31729,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                           PRECEDENTE: e' il gesto con cui si tira S/R verso
                           sinistra, e chi lo cerca lo cerca li' */}
                       {indiceCol > 0 && (() => {
-                        const precedente = COLONNE_MAGAZZINO[indiceCol - 1];
+                        const precedente = colonneMagazzino[indiceCol - 1];
                         return (
                           <ManigliaColonna
                             lato="sinistra"
@@ -31670,10 +31750,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
-                  <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
+                  <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
                 )}
               </tbody>
             </table>
