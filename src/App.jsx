@@ -3065,6 +3065,61 @@ async function scaricaBytesStorage(bucket, percorso) {
   return new Uint8Array(await risposta.arrayBuffer());
 }
 
+// Un file di logo porta quasi sempre un bordo vuoto suo — bianco o
+// trasparente — che nell'immagine non si vede ma occupa spazio. Stampato
+// com'e', il disegno non parte mai davvero dal margine e resta rientrato
+// rispetto al testo che gli sta sotto. Qui il bordo si misura pixel per
+// pixel e si taglia via, cosi' "allineato a sinistra" allinea il disegno
+// e non la sua cornice invisibile.
+async function bytesLogoSenzaBordi(bucket, percorso) {
+  const bytes = await scaricaBytesStorage(bucket, percorso);
+  const formatoOriginale = /\.jpe?g$/i.test(percorso) ? "jpg" : "png";
+  const url = URL.createObjectURL(new Blob([bytes]));
+  try {
+    const img = new Image();
+    await new Promise((risolvi, rifiuta) => {
+      img.onload = risolvi;
+      img.onerror = () => rifiuta(new Error("immagine logo non valida"));
+      img.src = url;
+    });
+    const tela = document.createElement("canvas");
+    tela.width = img.naturalWidth;
+    tela.height = img.naturalHeight;
+    const ctx = tela.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    const dati = ctx.getImageData(0, 0, tela.width, tela.height).data;
+    let sx = tela.width, sy = tela.height, dx = -1, dy = -1;
+    for (let y = 0; y < tela.height; y++) {
+      for (let x = 0; x < tela.width; x++) {
+        const i = (y * tela.width + x) * 4;
+        // quasi bianco e quasi trasparente contano come vuoto: un JPG non
+        // ha trasparenza e il suo sfondo arriva come bianco sporco
+        if (dati[i + 3] < 12 || (dati[i] > 244 && dati[i + 1] > 244 && dati[i + 2] > 244)) continue;
+        if (x < sx) sx = x;
+        if (x > dx) dx = x;
+        if (y < sy) sy = y;
+        if (y > dy) dy = y;
+      }
+    }
+    const larghezza = dx - sx + 1;
+    const altezza = dy - sy + 1;
+    // niente da togliere (o immagine tutta vuota): meglio l'originale
+    if (dx < 0 || (larghezza === tela.width && altezza === tela.height)) return { bytes, formato: formatoOriginale };
+    const ritagliata = document.createElement("canvas");
+    ritagliata.width = larghezza;
+    ritagliata.height = altezza;
+    ritagliata.getContext("2d").drawImage(tela, sx, sy, larghezza, altezza, 0, 0, larghezza, altezza);
+    const blob = await new Promise((risolvi) => ritagliata.toBlob(risolvi, "image/png"));
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), formato: "png" };
+  } catch {
+    // se il ritaglio non riesce il logo si stampa com'e': meglio con il
+    // bordo che senza logo
+    return { bytes, formato: formatoOriginale };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function dataOggiStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -11812,7 +11867,7 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Ancora niente da mostrare.</div>
         ) : (
           <div style={{ display: "flex", alignItems: "stretch", gap: 18 }}>
-            <div style={{ flex: "0 0 120px", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+            <div style={{ flex: "0 0 120px", display: "flex", alignItems: "center", justifyContent: "flex-start" }}>
               {srcLogo
                 ? <img src={srcLogo} alt="" style={{ maxWidth: "100%", maxHeight: 76, objectFit: "contain" }} />
                 : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>nessun logo</span>}
@@ -32537,9 +32592,8 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
       let logo = null;
       if (intestazione?.logo_path) {
         try {
-          const { data: pubblico } = supabase.storage.from("intestazione-societa").getPublicUrl(intestazione.logo_path);
-          const bytesLogo = await (await fetch(pubblico.publicUrl)).arrayBuffer();
-          logo = /\.jpe?g$/i.test(intestazione.logo_path) ? await doc.embedJpg(bytesLogo) : await doc.embedPng(bytesLogo);
+          const { bytes: bytesLogo, formato } = await bytesLogoSenzaBordi("intestazione-societa", intestazione.logo_path);
+          logo = formato === "jpg" ? await doc.embedJpg(bytesLogo) : await doc.embedPng(bytesLogo);
         } catch {
           // un logo che non si scarica non deve impedire di fare l'ordine:
           // la proforma esce lo stesso, con i soli dati
@@ -32547,10 +32601,10 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
         }
       }
 
-      // il logo a sinistra, la linea, i dati a destra. Il logo si appoggia
-      // alla linea da 3 mm di distanza qualunque sia la sua forma: se
-      // fosse centrato nel suo riquadro, uno stretto resterebbe lontano e
-      // uno largo attaccato
+      // il logo a sinistra, la linea, i dati a destra. Il logo parte dal
+      // margine, in colonna con la P di "PROFORMA D'ORDINE" qui sotto, e
+      // il suo riquadro si ferma comunque a 3 mm dalla linea: un logo
+      // largo si rimpicciolisce invece di andarci contro
       const MM = 72 / 25.4;
       const X_LOGO = 50;
       const X_LINEA = 195;
@@ -32572,7 +32626,7 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
         const scala = Math.min(LARGHEZZA_LOGO / logo.width, 62 / logo.height);
         const larghezza = logo.width * scala;
         const altezza = logo.height * scala;
-        pagina.drawImage(logo, { x: X_LINEA - STACCO_LOGO - larghezza, y: yAltoIntestazione - altezza, width: larghezza, height: altezza });
+        pagina.drawImage(logo, { x: X_LOGO, y: yAltoIntestazione - altezza, width: larghezza, height: altezza });
         altezzaLogo = altezza;
       }
       // la linea separa: se da una parte non c'e' niente, non c'e' niente
