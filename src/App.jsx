@@ -17330,38 +17330,6 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // che l'amministratore compili qualunque altro campo del pannello
   const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
 
-  // Dettaglio della riga "Quota venditore": chi ha venduto in questa classe
-  // e quanto ha maturato. Il legame iscritto -> venditore e' il campo
-  // `tutor` confrontato per nome, lo stesso che usa la statistica venditori
-  // (vedi `chiusure`).
-  //
-  // Li' pero' le "vecchie iscrizioni" e le date fuori periodo vengono
-  // escluse, perche' quella pagina misura il venduto di un mese. Qui no:
-  // questo elenco sta sotto un totale e deve sommare esattamente a quello.
-  // Un dettaglio che non torna con il totale sopra e' peggio di nessun
-  // dettaglio. Per lo stesso motivo chi ha una quota ma nessun tutor
-  // scritto finisce in una voce sua invece di sparire.
-  // Le caselle della tabella costi sul telefono: stesso vestito, corpo e
-  // imbottitura ridotti quanto basta a far stare cinque colonne in riga.
-  const campoCompattoQui = isMobile
-    ? { ...campoCompattoStyle, padding: "5px 4px", fontSize: 10.5 }
-    : campoCompattoStyle;
-
-  const quoteVenditoreDettaglio = (() => {
-    const perVenditore = new Map();
-    listaIscritti.forEach((i) => {
-      const quota = i.quota_venditore || 0;
-      if (!quota) return;
-      const nome = (i.tutor || "").trim();
-      const chiave = nome.toUpperCase() || "__senza__";
-      const voce = perVenditore.get(chiave) || { nome: nome || "Senza venditore", totale: 0, quanti: 0, senzaNome: !nome };
-      voce.totale = round2(voce.totale + quota);
-      voce.quanti += 1;
-      perVenditore.set(chiave, voce);
-    });
-    return [...perVenditore.values()].sort((a, b) => b.totale - a.totale);
-  })();
-
   // riga "Quota venditore": stesso formato delle altre righe della
   // tabella spese (in linea con Compenso Master/Costo location/Quota
   // assistenti, non più un box a sé) — Totale calcolato dalle quote di
@@ -17669,6 +17637,38 @@ function PannelloRiepilogoAmministrativo({
   const setMsg = onMessaggio || (() => {});
   const isMobile = useIsMobile();
   const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id);
+
+  // Le caselle della tabella costi sul telefono: stesso vestito, corpo e
+  // imbottitura ridotti quanto basta a far stare cinque colonne in riga.
+  const campoCompattoQui = isMobile
+    ? { ...campoCompattoStyle, padding: "5px 4px", fontSize: 10.5 }
+    : campoCompattoStyle;
+
+  // Dettaglio della riga "Quota venditore": chi ha venduto in questa classe
+  // e quanto ha maturato. Il legame iscritto -> venditore e' il campo
+  // `tutor` confrontato per nome, lo stesso che usa la statistica venditori
+  // (vedi `chiusure`).
+  //
+  // Li' pero' le "vecchie iscrizioni" e le date fuori periodo vengono
+  // escluse, perche' quella pagina misura il venduto di un mese. Qui no:
+  // questo elenco sta sotto un totale e deve sommare esattamente a quello.
+  // Un dettaglio che non torna con il totale sopra e' peggio di nessun
+  // dettaglio. Per lo stesso motivo chi ha una quota ma nessun tutor
+  // scritto finisce in una voce sua invece di sparire.
+  const quoteVenditoreDettaglio = (() => {
+    const perVenditore = new Map();
+    listaIscritti.forEach((i) => {
+      const quota = i.quota_venditore || 0;
+      if (!quota) return;
+      const nome = (i.tutor || "").trim();
+      const chiave = nome.toUpperCase() || "__senza__";
+      const voce = perVenditore.get(chiave) || { nome: nome || "Senza venditore", totale: 0, quanti: 0, senzaNome: !nome };
+      voce.totale = round2(voce.totale + quota);
+      voce.quanti += 1;
+      perVenditore.set(chiave, voce);
+    });
+    return [...perVenditore.values()].sort((a, b) => b.totale - a.totale);
+  })();
   // "Costi della classe": una riga per ogni spesa vera in "spese" con
   // classe_id = questa classe (non più limitata a una per categoria).
   // Overlay ottimistico sulle modifiche appena salvate — senza,
