@@ -478,6 +478,23 @@ function fmtData(d) {
   return `${day}/${m}/${y}`;
 }
 
+// vendite_shop.data_ordine e' un istante UTC (il date_created_gmt di Woo): per
+// mostrare l'ora in cui il cliente ha davvero comprato va riportata al fuso
+// italiano, altrimenti un ordine delle 23:30 di sera compare come 21:30.
+// Giorno e ora escono dalla stessa conversione di proposito: separarli
+// vorrebbe dire, negli ordini a cavallo della mezzanotte, stampare una data
+// e un'ora che si contraddicono.
+function dataOraRoma(dataIso) {
+  if (!dataIso) return null;
+  const parti = new Intl.DateTimeFormat("it-IT", {
+    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date(dataIso));
+  const p = Object.fromEntries(parti.map((x) => [x.type, x.value]));
+  if (!p.year || !p.hour) return null;
+  return { data: `${p.day}/${p.month}/${p.year}`, ora: `${p.hour}:${p.minute}` };
+}
+
 // Supabase Storage rifiuta le chiavi con lettere accentate o altri
 // caratteri non ASCII ("Invalid key") — i nomi dei file caricati
 // dall'utente (es. "Hennè.pdf") vanno sempre ripuliti prima di entrare
@@ -17254,7 +17271,11 @@ function BottonePulsanteScheda({ p }) {
           padding: "10px 10px", borderRadius: 14, border: "none", cursor: p.disabled ? "default" : "pointer",
           background: "transparent", color: NAVY, opacity: p.disabled ? 0.5 : 1,
           textTransform: "uppercase", letterSpacing: 0.3,
-          flex: "1 1 0", minWidth: 0, boxSizing: "border-box",
+          // base 0 voleva dire "stai su una riga comunque": con quattro o
+          // cinque tile su un telefono restavano ~50px a testa e l'etichetta
+          // andava a capo lettera per lettera. Con una base vera il wrap del
+          // contenitore entra in funzione e su desktop crescono come prima.
+          flex: "1 1 88px", minWidth: 0, boxSizing: "border-box",
         }}
       >
         <span style={{ width: 46, height: 46, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: p.attivo ? "0 4px 12px rgba(14,27,51,0.25)" : "none" }}>
@@ -17280,7 +17301,7 @@ function BottonePulsanteScheda({ p }) {
         background: "#fff",
         color: NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
-        flex: "1 1 0", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
+        flex: "1 1 130px", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
       }}
     >
       <p.Icona size={16} color={GOLD} />
@@ -17614,6 +17635,7 @@ function PannelloRiepilogoAmministrativo({
   costiCategorie, costiSottocategorie, ricarica, onMessaggio, onIntestazione,
 }) {
   const setMsg = onMessaggio || (() => {});
+  const isMobile = useIsMobile();
   const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id);
   // "Costi della classe": una riga per ogni spesa vera in "spese" con
   // classe_id = questa classe (non più limitata a una per categoria).
@@ -17823,7 +17845,7 @@ function PannelloRiepilogoAmministrativo({
             {costiAperto && (
               <div style={{ padding: "0 20px 20px" }}>
                 <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Incassi</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 14, overflowX: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 10 : 14, marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                     <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaPortafoglio /></div>
                     <div style={{ minWidth: 0 }}>
@@ -17847,7 +17869,7 @@ function PannelloRiepilogoAmministrativo({
                   </div>
                 </div>
                 <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Di cui</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 22, overflowX: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 10 : 14, marginBottom: 22 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                     <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
                     <div style={{ minWidth: 0 }}>
@@ -19826,12 +19848,16 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
               ].filter(Boolean);
               return (
                 <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: `${spaziIscrizioni.dateBoxPaddingV}px 14px`, marginBottom: spaziIscrizioni.dopoDateBox }}>
-                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 10 }}>
+                  {/* tre colonne stanno larghe su desktop, ma su un telefono
+                      da 360px lascerebbero ~35px di testo a cella: "MARIANNA
+                      SILVESTRI" ci andava a capo una lettera per riga. Sotto
+                      i 700px le celle si impilano */}
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${celleIntestazione.length}, 1fr)`, gap: 10 }}>
                     {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
                       // il divisore è più scuro del bordo della card: separa tre
                       // dati accostati, e un filo crema su fondo crema non li
                       // teneva distinti
-                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid #D5C9AF` : "none" }}>
+                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, paddingLeft: !isMobile && idx > 0 ? 14 : 0, borderLeft: !isMobile && idx > 0 ? `1px solid #D5C9AF` : "none", paddingTop: isMobile && idx > 0 ? 10 : 0, borderTop: isMobile && idx > 0 ? `1px solid #D5C9AF` : "none" }}>
                         <span style={{ width: 38, height: 38, borderRadius: 11, background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           <Icona size={20} color={GOLD} />
                         </span>
@@ -19859,7 +19885,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                   {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("dopoSecondari")}
-                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, flexWrap: "nowrap" }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, flexWrap: "wrap" }}>
                   {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("paddingBottom")}
@@ -21215,14 +21241,17 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                       prima che esistessero flexbox e grid - lo sfondo
                       della colonna sinistra deve arrivare fino in fondo
                       alla scheda, non fermarsi al suo contenuto.
-                      minWidth+overflowX sul contenitore: sotto quella
-                      soglia la scheda scorre lateralmente invece di
-                      schiacciare le 2 colonne e diventare illeggibile
-                      su cellulare */}
-                  <div style={{ overflowX: "auto" }}>
-                  <div style={{ display: "table", width: "100%", minWidth: 580, tableLayout: "fixed" }}>
+                      minWidth+overflowX sul contenitore: fra i 580px e la
+                      larghezza piena la scheda scorre lateralmente invece di
+                      schiacciare le 2 colonne. Sul telefono nemmeno quello
+                      bastava - 580px dentro 330px vuol dire leggere meta'
+                      scheda per volta - quindi li' le colonne si impilano,
+                      e con una colonna sola il motivo del display:table
+                      (tenerle alte uguali) non esiste piu' */}
+                  <div style={{ overflowX: isMobile ? "visible" : "auto" }}>
+                  <div style={{ display: isMobile ? "block" : "table", width: "100%", minWidth: isMobile ? 0 : 580, tableLayout: "fixed" }}>
                     {/* colonna sinistra: anagrafica e ricontatto */}
-                    <div style={{ display: "table-cell", position: "relative", width: "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: 20 }}>
+                    <div style={{ display: isMobile ? "block" : "table-cell", position: "relative", width: isMobile ? "auto" : "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: 20 }}>
                       <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 4 }}>{idx + 1}.</div>
                         <div style={{ ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
@@ -21269,7 +21298,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                     </div>
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
-                    <div style={{ display: "table-cell", width: "66.667%", verticalAlign: "top", padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
+                    <div style={{ display: isMobile ? "block" : "table-cell", width: isMobile ? "auto" : "66.667%", verticalAlign: "top", padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
                       <RiepilogoVenditaIscritto i={i} isMobile={isMobile} mostraQuotaVenditore={true} />
 
                       {/* "Da incassare" resta dentro la colonna bianca,
@@ -28675,8 +28704,14 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
         </div>
         {/* niente pastiglia di stato: lo dicono i sei tasti in fondo alla
             scheda, e ripeterlo qui e' solo una riga in piu' da leggere */}
+        {/* data e ora dell'ordine: l'ora dice se il pacco e' arrivato prima
+            o dopo la chiusura del banco, e fra due ordini dello stesso giorno
+            dice quale e' venuto prima */}
         <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
-          {vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}
+          {(() => {
+            const q = dataOraRoma(vendita?.data_ordine);
+            return q ? `${q.data} · ${q.ora}` : "—";
+          })()}
         </span>
         {/* lo sconto sta qui in cima e non fra i totali: è la cosa che
             cambia il conto, e va vista subito insieme al numero d'ordine */}
