@@ -19468,13 +19468,17 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
       setMsg("Questa data non ha ancora un link master: ricarica la pagina e riprova.");
       return;
     }
-    const etichetta = slugify([
-      "contabilita",
-      corso?.nome,
-      loc?.nome,
-      fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine),
-    ].filter(Boolean).join(" "));
-    const url = `${window.location.origin}${window.location.pathname}?corso=${etichetta}&master=${corsoData.token_master}`;
+    // "corso" e "quando" non sono uno slug ma il testo vero, codificato:
+    // sono quello che /api/anteprima scrive nei meta tag, e un titolo
+    // ricavato da uno slug ("contabilita trico base roma 6 7 settembre")
+    // non si puo' piu' rimettere in ordine. Nella barra dell'indirizzo il
+    // browser li mostra decodificati, quindi il link resta leggibile.
+    const titolo = `Contabilità ${(corso?.nome || "").toUpperCase()}${loc?.nome ? ` · ${loc.nome.toUpperCase()}` : ""}`;
+    const quando = fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine);
+    const url = `${window.location.origin}${window.location.pathname}`
+      + `?corso=${encodeURIComponent(titolo)}`
+      + `&quando=${encodeURIComponent(quando)}`
+      + `&master=${corsoData.token_master}`;
     setLinkMaster(url);
   }
 
