@@ -21725,7 +21725,7 @@ function VistaMaster({ param }) {
   return (
     <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
-        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"}</div>
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"}</div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
           {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`} — richiesta pagamenti
         </div>
