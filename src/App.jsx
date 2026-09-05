@@ -17297,6 +17297,7 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
 // va a capo su due righe (mai il tasto stesso), così i 4 tasti oro
 // restano sempre affiancati sulla stessa riga anche su schermi stretti
 function BottonePulsanteScheda({ p }) {
+  const isMobile = useIsMobile();
   // le tile primarie (Iscrivi/Contabilità classe/Riepilogo amministrativo/
   // Assegna modelle) hanno un layout diverso dai pulsanti secondari (Esci/
   // Modifica date/Stampa...): icona in un cerchio sopra, etichetta sotto,
@@ -17307,8 +17308,8 @@ function BottonePulsanteScheda({ p }) {
         onClick={p.onClick}
         disabled={p.disabled}
         style={{
-          ...fontDisplay, fontWeight: 700, fontSize: 11.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-          padding: "10px 10px", borderRadius: 14, border: "none", cursor: p.disabled ? "default" : "pointer",
+          ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 8.5 : 11.5, display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? 4 : 6,
+          padding: isMobile ? "8px 2px" : "10px 10px", borderRadius: 14, border: "none", cursor: p.disabled ? "default" : "pointer",
           background: "transparent", color: NAVY, opacity: p.disabled ? 0.5 : 1,
           textTransform: "uppercase", letterSpacing: 0.3,
           // base 0 voleva dire "stai su una riga comunque": con quattro o
@@ -17318,12 +17319,12 @@ function BottonePulsanteScheda({ p }) {
           flex: "1 1 88px", minWidth: 0, boxSizing: "border-box",
         }}
       >
-        <span style={{ width: 46, height: 46, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: p.attivo ? "0 4px 12px rgba(14,27,51,0.25)" : "none" }}>
-          <p.Icona size={20} color={p.attivo ? "#fff" : NAVY} />
+        <span style={{ width: isMobile ? 34 : 46, height: isMobile ? 34 : 46, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: p.attivo ? "0 4px 12px rgba(14,27,51,0.25)" : "none" }}>
+          <p.Icona size={isMobile ? 16 : 20} color={p.attivo ? "#fff" : NAVY} />
         </span>
-        <span style={{ whiteSpace: "normal", lineHeight: 1.2, textAlign: "center" }}>{p.etichetta}</span>
+        <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", overflowWrap: "anywhere" }}>{p.etichetta}</span>
         {/* la barretta oro dice quale pannello è aperto senza dover leggere */}
-        <span style={{ width: 34, height: 3, borderRadius: 2, background: p.attivo ? GOLD : "transparent" }} />
+        <span style={{ width: isMobile ? 22 : 34, height: 3, borderRadius: 2, background: p.attivo ? GOLD : "transparent" }} />
       </button>
     );
   }
@@ -20001,7 +20002,10 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                   {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("dopoSecondari")}
-                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, flexWrap: "wrap" }}>
+                {/* tutte in linea sul telefono: sono cinque al massimo, e
+                    una griglia con una colonna per tile le tiene larghe
+                    uguale senza che l'etichetta piu' lunga ne allarghi una */}
+                <div style={{ position: "relative", display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? `repeat(${primari.length}, minmax(0, 1fr))` : undefined, alignItems: "stretch", gap: isMobile ? 4 : 8, flexWrap: isMobile ? undefined : "wrap" }}>
                   {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("paddingBottom")}
