@@ -80,6 +80,20 @@ class ConfineErrori extends React.Component {
   }
 }
 
+// Le tre pagine pubbliche dell'app - il link per la master, la ricerca
+// modelle e i biglietti di viaggio - sono fatte apposta per chi non ha, e
+// non deve avere, un account. Il gate le lascia passare: a difenderle e' il
+// token nell'indirizzo, non il login. Senza questa deroga App.jsx non
+// verrebbe nemmeno importato, e chi riceve il link troverebbe il form
+// "Area riservata allo staff".
+const PARAMETRI_PUBBLICI = ["master", "modelle", "biglietti"];
+
+function rottaPubblica() {
+  if (typeof window === "undefined") return false;
+  const query = new URLSearchParams(window.location.search);
+  return PARAMETRI_PUBBLICI.some((nome) => !!query.get(nome));
+}
+
 export default function Accesso() {
   const [sessione, setSessione] = useState(null);
   const [caricamento, setCaricamento] = useState(true);
@@ -118,7 +132,7 @@ export default function Accesso() {
     return <Schermata><div style={{ color: NAVY, opacity: 0.6 }}>Caricamento…</div></Schermata>;
   }
 
-  if (!sessione) {
+  if (!sessione && !rottaPubblica()) {
     return (
       <Schermata>
         <form

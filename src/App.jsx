@@ -19412,11 +19412,15 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     ricarica(["iscritti"]);
   }
 
+  // il link non descrive piu' la classe: la nomina con il token che sta
+  // sulla riga di corsi_date. Rigenerare quel token in database revoca
+  // tutti i link gia' mandati per questa data, senza toccare le altre
   function generaLinkMaster() {
-    const [aaaa, mm, gg] = corsoData.data_inizio.split("-");
-    const dataLeggibile = `${gg}-${mm}-${aaaa}`;
-    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), dataLeggibile].filter(Boolean).join("/");
-    const url = `${window.location.origin}${window.location.pathname}?master=${leggibile}`;
+    if (!corsoData?.token_master) {
+      setMsg("Questa data non ha ancora un link master: ricarica la pagina e riprova.");
+      return;
+    }
+    const url = `${window.location.origin}${window.location.pathname}?master=${corsoData.token_master}`;
     setLinkMaster(url);
   }
 
@@ -21498,43 +21502,42 @@ function VistaMaster({ param }) {
   const [errore, setErrore] = useState(false);
   const isMobile = useIsMobile();
 
+  // Il link porta un token, non piu' corso/citta'/data: quello vecchio era
+  // fatto di tre cose che chiunque indovina. E la pagina non interroga piu'
+  // le tabelle - passa da master_vista, che conosce solo la classe di quel
+  // token e restituisce solo i campi disegnati qui sotto.
   useEffect(() => {
     async function carica() {
-      const parti = decodeURIComponent(param || "").split("/");
-      const [slugCorso, slugCitta, dataLeggibile] = parti;
-      const match = (dataLeggibile || "").match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-      if (!slugCorso || !slugCitta || !match) { setErrore(true); return; }
-      const dataIso = `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
-
-      const [{ data: corsi }, { data: location }] = await Promise.all([
-        supabase.from("corsi").select("*"),
-        supabase.from("location").select("*"),
-      ]);
-      const corso = (corsi || []).find((c) => slugify(c.nome) === slugCorso);
-      const loc = (location || []).find((l) => slugify(l.nome) === slugCitta);
-      if (!corso || !loc) { setErrore(true); return; }
-
-      const { data: cd } = await supabase
-        .from("corsi_date")
-        .select("*")
-        .eq("corso_id", corso.id)
-        .eq("location_id", loc.id)
-        .eq("data_inizio", dataIso)
-        .maybeSingle();
-      if (!cd) { setErrore(true); return; }
-
-      const { data: iscritti } = await supabase.from("iscritti").select("*").eq("corso_data_id", cd.id).order("ts");
-      setDati({ cd, corso, loc, iscritti: iscritti || [] });
+      const token = decodeURIComponent(param || "").trim();
+      if (!token) { setErrore(true); return; }
+      const { data, error } = await supabase.rpc("master_vista", { p_token: token });
+      if (error || !data) { setErrore(true); return; }
+      setDati({
+        cd: data.corso_data,
+        corso: data.corso,
+        loc: data.location,
+        iscritti: data.iscritti || [],
+      });
     }
     carica();
   }, [param]);
 
+  // l'unica scrittura che il link concede. La funzione rifiuta un iscritto
+  // che non sia di questa classe, quindi la spunta non puo' sconfinare;
+  // torna false anche se il token e' scaduto o rigenerato, e in quel caso
+  // la casella resta com'era invece di mentire
   async function toggleIncassato(i) {
-    const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
-    if (error) return;
+    const token = decodeURIComponent(param || "").trim();
+    const nuovoValore = !i.incassato;
+    const { data, error } = await supabase.rpc("master_segna_incassato", {
+      p_token: token,
+      p_iscritto: i.id,
+      p_valore: nuovoValore,
+    });
+    if (error || data !== true) return;
     setDati((prev) => ({
       ...prev,
-      iscritti: prev.iscritti.map((x) => (x.id === i.id ? { ...x, incassato: !x.incassato } : x)),
+      iscritti: prev.iscritti.map((x) => (x.id === i.id ? { ...x, incassato: nuovoValore } : x)),
     }));
   }
 
