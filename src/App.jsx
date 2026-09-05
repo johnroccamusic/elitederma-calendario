@@ -17087,7 +17087,11 @@ function rigaPagamentoIscritto(label, valore, metodo, isMobile, daPagare = false
   return (
     <>
       <div style={{ ...cella, fontWeight: daPagare ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis" }}>{isMobile && labelBreve ? labelBreve : label}</div>
-      <div style={{ ...cella, fontWeight: 700, textAlign: isMobile ? "right" : "left" }}>{valore}</div>
+      {/* la cifra e' il dato che si cerca guardando questa scheda: sul
+          telefono sta tre punti sopra al resto della riga. Puo' crescere
+          senza rischi perche' l'unica colonna elastica e' quella
+          dell'etichetta: a stringersi e' sempre la descrizione */}
+      <div style={{ ...cella, fontWeight: 700, textAlign: isMobile ? "right" : "left", ...(isMobile ? { fontSize: 14.5 } : {}) }}>{valore}</div>
       <div style={{ ...cella, textAlign: "right" }}>{metodo}</div>
     </>
   );
