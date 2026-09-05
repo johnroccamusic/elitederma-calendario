@@ -19475,7 +19475,13 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     // browser li mostra decodificati, quindi il link resta leggibile.
     const titolo = `Contabilità ${(corso?.nome || "").toUpperCase()}${loc?.nome ? ` · ${loc.nome.toUpperCase()}` : ""}`;
     const quando = fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine);
-    const url = `${window.location.origin}${window.location.pathname}`
+    // "/m" e non "/": su Vercel le rewrites scattano solo quando nessun
+    // file statico corrisponde, e "/" corrisponde sempre a index.html -
+    // la riscrittura verso /api/anteprima non veniva mai presa in
+    // considerazione. "/m" non e' un file, quindi ci arriva. L'app si
+    // carica lo stesso (la funzione restituisce l'index.html vero) e
+    // legge "master" dalla query come prima.
+    const url = `${window.location.origin}/m`
       + `?corso=${encodeURIComponent(titolo)}`
       + `&quando=${encodeURIComponent(quando)}`
       + `&master=${corsoData.token_master}`;

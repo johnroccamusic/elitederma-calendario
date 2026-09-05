@@ -43,8 +43,8 @@ export default async function handler(req, res) {
 
   try {
     // "/index.html" non passa da questa funzione: la riscrittura in
-    // vercel.json vale solo per "/" con il parametro "master", quindi non
-    // si rientra qui e non si innesca un giro infinito.
+    // vercel.json vale solo per "/m", quindi non si rientra qui e non si
+    // innesca un giro infinito.
     const risposta = await fetch(`https://${host}/index.html`);
     if (!risposta.ok) throw new Error(`index.html: ${risposta.status}`);
     let html = await risposta.text();
