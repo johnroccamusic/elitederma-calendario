@@ -21562,12 +21562,20 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
             </div>
             );
           })}
-          {/* contorni dei posti ancora liberi in classe: si vedono sempre,
+          {/* Contorni dei posti ancora liberi in classe: si vedono sempre,
               anche a zero iscritti, per rendere subito visibile quanto
-              spazio resta senza dover leggere il numero in alto */}
-          {liberi > 0 && Array.from({ length: liberi }).map((_, idx) => (
+              spazio resta senza dover leggere il numero in alto.
+              Su desktop stanno accanto alla lista e costano poco; sul
+              telefono sei posti liberi erano ~400px di vuoto fra l'ultimo
+              allievo e i tasti in fondo, che finivano fuori vista. Li' il
+              conto lo fa una riga sola: lo stesso dato, senza il muro. */}
+          {liberi > 0 && (isMobile ? (
+            <div style={{ border: `1px dashed ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 14px", marginBottom: 10, ...fontBody, fontSize: 12.5, color: MUTED, textAlign: "center" }}>
+              {liberi} post{liberi === 1 ? "o libero" : "i liberi"}
+            </div>
+          ) : Array.from({ length: liberi }).map((_, idx) => (
             <div key={`posto-libero-${idx}`} style={{ border: `1px dashed ${CREAM_BORDER}`, borderRadius: 14, padding: 16, marginBottom: 10, minHeight: 24 }} />
-          ))}
+          )))}
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
 
           {mostraGestione && (
