@@ -6177,7 +6177,7 @@ function SezioneDateCorsi({
       {isMobile && (
         <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" style={{ marginBottom: 12 }} />
       )}
-      <div ref={rigaFiltriRef} style={{ display: "flex", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 5 : 8, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", minWidth: 0, ...(isMobile ? { fontSize: fontFiltri } : {}) }}>
+      <div ref={rigaFiltriRef} style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 5 : 8, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", minWidth: 0, ...(isMobile ? { fontSize: fontFiltri } : {}) }}>
         {!isMobile && (
           <div style={{ flex: "1 1 200px", minWidth: 160 }}>
             <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" />
@@ -6212,7 +6212,7 @@ function SezioneDateCorsi({
           style={isMobile ? {
             ...fontBody, fontSize: 10.5, fontWeight: 600, padding: "6px 8px 7px", borderRadius: 10,
             border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
-            cursor: "pointer", flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+            cursor: "pointer", flex: "1 1 0", minWidth: 0, aspectRatio: "1 / 1", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
           } : {
             ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
             border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
@@ -6220,14 +6220,14 @@ function SezioneDateCorsi({
           }}
         >
           <IconaCalendarioCard size={isMobile ? 17 : 16} color="currentColor" />
-          <span style={isMobile ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" } : undefined}>Cronologico</span>
+          <span style={isMobile ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", overflowWrap: "anywhere" } : undefined}>Cronologico</span>
         </button>
         <button
           onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
           style={isMobile ? {
             ...fontBody, fontSize: 10.5, fontWeight: 600, padding: "6px 8px 7px", borderRadius: 10,
             border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY,
-            cursor: "pointer", flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+            cursor: "pointer", flex: "1 1 0", minWidth: 0, aspectRatio: "1 / 1", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
           } : {
             ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
             border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY,
@@ -6235,7 +6235,7 @@ function SezioneDateCorsi({
           }}
         >
           <IconaResetCircolare size={isMobile ? 17 : 16} color="currentColor" />
-          <span style={isMobile ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" } : undefined}>Reset filtri</span>
+          <span style={isMobile ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", overflowWrap: "anywhere" } : undefined}>Reset filtri</span>
         </button>
       </div>
       </>
@@ -15525,7 +15525,8 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
           ...fontBody, fontWeight: 600, fontSize: 10.5, padding: "6px 8px 7px", borderRadius: 10,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
-          width: "100%", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+          width: "100%", minWidth: 0, aspectRatio: "1 / 1", overflow: "hidden",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
         } : {
           ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 10,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
@@ -15535,7 +15536,7 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
       >
         {Icona && <Icona size={compatto ? 17 : 16} color="currentColor" />}
         <span style={compatto
-          ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }
+          ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }
           : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 170 }
         }>{valore ? etichettaAttiva : etichetta}</span>
       </button>
