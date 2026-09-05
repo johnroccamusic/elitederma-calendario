@@ -21532,7 +21532,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                             </span>
                             <span style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap" }}>{daIncassare} €</span>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: coloreIncasso }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, fontWeight: i.incassato ? 400 : 700, color: coloreIncasso }}>
                             <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
                             {i.incassato ? "Incassato" : "Incassa"}
                           </div>
@@ -21791,7 +21791,7 @@ function VistaMaster({ param }) {
                     </div>
                     <div style={{ ...fontBody, fontSize: 26, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>{daIncassare} €</div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, color: colore, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, fontWeight: i.incassato ? 400 : 700, color: colore, flexShrink: 0 }}>
                     <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
                     {i.incassato ? "Incassato" : "Incassa"}
                   </div>
