@@ -95,12 +95,26 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   la firma HMAC. È il pattern da estendere a Stripe, WhatsApp ed email.
 - **`.env` non è mai stato committato**, `.gitignore` corretto, nessuna chiave nella
   storia git. Il repository è però **pubblico** su GitHub.
-- **Vercel**: `ssoProtection` attiva con `deploymentType: all_except_custom_domains`;
-  password protection e trusted IP disattivate. È l'unica barriera che oggi
-  impedisce di scaricare il bundle, e quindi la chiave anon — e **non si applica ai
-  domini personalizzati**: collegarne uno la annulla. Spegnere l'SSO prima di aver
-  chiuso le policy significa pubblicare una chiave che scrive su tutto il database.
-  L'ordine è: policy prima, SSO dopo.
+- **L'SSO di Vercel risulta attivo nelle impostazioni ma non blocca.** L'API dice
+  `ssoProtection: enabled`, `deploymentType: all_except_custom_domains`. Provato
+  davvero, il 5 settembre 2026, con una `curl` senza cookie né sessione:
+
+  ```
+  GET https://elitederma-calendario.vercel.app/  ->  200, index.html vero
+  GET /assets/index-CZlCCs46.js                  ->  200, 2,2 MB
+  ```
+
+  Dentro quel bundle c'è la chiave pubblicabile del progetto Supabase
+  (`sb_publishable_…`). Chiunque conosca l'indirizzo la scarica in due comandi.
+
+  **Messo insieme al punto sulle policy, questo significa che oggi chiunque su
+  internet può leggere e scrivere l'intero database** — anagrafiche, pagamenti,
+  allegati degli allievi. Non è un rischio teorico: la chiave è pubblica e le
+  policy dicono `to anon using (true) with check (true)`.
+
+  La versione precedente di questo file dava l'SSO come "l'unica barriera". Non
+  è una barriera: non c'è. Chiudere le policy non è più un passo di igiene, è
+  la cosa che manca.
 
 Regola operativa: dati di allievi (nome, residenza, email, pagamenti) sono materia
 GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del merge.
