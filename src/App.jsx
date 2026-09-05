@@ -21380,27 +21380,35 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                           l'altro per chiamarlo. */}
                       {isMobile ? (
                         <>
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0, whiteSpace: "nowrap" }}>
-                            <span onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, cursor: "pointer", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {/* Il nome e' la cosa che si cerca scorrendo la
+                              classe, quindi e' grande e non viene mai
+                              troncato. Tutor, telefono e WhatsApp gli stanno
+                              accanto se ci stanno, altrimenti scendono sotto:
+                              a un nome di questo corpo e a un telefono
+                              leggibile la larghezza di un telefono non basta
+                              sempre, e fra tagliare un nome e usare una riga
+                              in piu' e' meglio la riga in piu'. */}
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, flexWrap: "wrap", rowGap: 2 }}>
+                            <span onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ ...fontBody, fontSize: 26, fontWeight: 700, color: NAVY, cursor: "pointer", lineHeight: 1.15 }}>
                               {idx + 1}. {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
                             </span>
-                            {i.tutor && <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>· {i.tutor}</span>}
+                            {i.tutor && <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0 }}>· {i.tutor}</span>}
                             {i.telefono && (
-                              <>
-                                <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 11, color: MUTED, textDecoration: "underline", flexShrink: 0 }}>{i.telefono}</a>
-                                <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-                                  <IconaWhatsapp size={15} />
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 15, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                                <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
+                                  <IconaWhatsapp size={30} />
                                 </a>
-                              </>
+                              </span>
                             )}
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
                             <span style={{ ...fontBody, fontSize: 11.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
                             <input
+                              maxLength={5}
                               defaultValue={(i.note_ricontatto || "").toUpperCase()}
-                              placeholder="Note"
                               onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
-                              style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, fontSize: 10, padding: "4px 6px", textTransform: "uppercase" }}
+                              style={{ ...inputStyle, width: "6ch", flex: "0 0 auto", fontSize: 12, padding: "4px 6px", textAlign: "center", textTransform: "uppercase" }}
                             />
                             <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
                               <span onClick={() => toggleRicontattato(i)} title="Non ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
