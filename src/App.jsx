@@ -6153,7 +6153,7 @@ function SezioneDateCorsi({
           {!nascondiTitolo && (
             <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12, textAlign: "center", textTransform: "uppercase" }}>{titolo || "Corsi in programmazione"}</div>
           )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? 4 : 10, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: 12, ...(isMobile ? { overflowX: "auto" } : {}) }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "space-between", gap: isMobile ? 6 : 10, flexWrap: "wrap", marginBottom: 12 }}>
             <div style={{ display: "flex", gap: isMobile ? 3 : 6, flexShrink: 0 }}>
               <TabPillola compatto={isMobile} attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>Programmati ({numeroInProgrammazione})</TabPillola>
               <TabPillola compatto={isMobile} attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Passati</TabPillola>
@@ -12567,7 +12567,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
     <>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>{titolo}</div>
       {!soloLettura && (
-        <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 5 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { overflowX: "auto" } : {}) }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 6 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: "wrap" }}>
           <Button onClick={() => setMostraAggiungiCorso(true)} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Aggiungi Corso</Button>
           <Button variant="ghost" onClick={onApriUltimeIscrizioni} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Ultime iscrizioni</Button>
           {onApriProssimeContabilita && (
