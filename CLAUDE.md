@@ -41,16 +41,45 @@ supabase-*.sql           75 script di setup storici, cumulativi e idempotenti
 scomposizione va fatta a fette verificabili, una alla volta.
 
 I 75 file `supabase-*.sql` alla radice sono la storia degli interventi sul
-database, non lo stato attuale. **Lo stato attuale è il database**: 51 tabelle,
-tutte con RLS. Le migrazioni nuove vanno in `supabase/migrations/` con timestamp.
+database, non lo stato attuale. **Lo stato attuale è il database**: 101 tabelle,
+99 con RLS attiva. Le due senza sono `corsi_kit_prodotti_anellini_sostituiti` e
+`corsi_kit_prodotti_dermografi_rimossi`. Le migrazioni nuove vanno in
+`supabase/migrations/` con timestamp.
 
-## 4. Sicurezza — stato al 15/08/2026
+Attenzione: lo storico remoto delle migrazioni **non** coincide con la cartella
+locale. Non usare `supabase db push` — rieseguirebbe migrazioni già applicate.
+Per una migrazione nuova: file in `supabase/migrations/` come traccia, ed
+esecuzione mirata (MCP o editor SQL) sul database.
 
-Verificato:
+## 4. Sicurezza — stato al 05/09/2026
 
-- **Le 51 policy erano tutte `for all to anon using (true) with check (true)`**:
-  RLS attiva ma senza alcun filtro. Corretto dalla migrazione
-  `20260815120000_rls_solo_staff_autenticato.sql` → ora `to authenticated`.
+Verificato interrogando il database e Vercel, non leggendo i file:
+
+- **Le policy sono ancora aperte all'utente anonimo.** Delle 98 policy di
+  `public`: 83 sono `for all to anon using (true) with check (true)`, 11 valgono
+  per `anon` e `authenticated` insieme, 1 è un `select` per `anon`, e solo 3 sono
+  riservate a `authenticated`. In pratica **95 su 98 permettono a un anonimo di
+  leggere e scrivere**.
+
+  La migrazione `20260815120000_rls_solo_staff_autenticato.sql` esiste e portava
+  tutto a `to authenticated`, ma è stata annullata da
+  `20260815120001_rollback_rls_anon.sql`, che le sta accanto. La versione
+  precedente di questo file dava per fatto il lockdown: non lo era.
+
+  La chiave anon sta nel bundle. Finché queste policy restano così, l'unica cosa
+  che impedisce a chiunque di scrivere sul database è che il bundle non sia
+  scaricabile — cioè l'SSO di Vercel. Vedi l'ultimo punto.
+- **Le pagine pubbliche non passano più dalle tabelle.** Il link per la master
+  (`?master=<token>`) nomina la classe con un token di 64 caratteri su
+  `corsi_date.token_master`, e legge tramite due funzioni `security definer`:
+  `master_vista` (solo i campi che la pagina disegna, solo quella classe) e
+  `master_segna_incassato` (unica scrittura, vincolata a `corso_data_id`).
+  Su entrambe l'esecuzione è revocata a `public`.
+  `?modelle=` e `?biglietti=` **non** hanno ancora questo trattamento: leggono
+  ancora le tabelle con la chiave anon.
+- **`Accesso.jsx` è il gate vero, non l'SSO.** Finché non c'è una sessione
+  Supabase, `App.jsx` non viene nemmeno importato. Le tre rotte pubbliche
+  (`master`, `modelle`, `biglietti`) sono l'unica deroga.
 - **`VITE_ACCESS_CODE` e `VITE_ADMIN_CODE` finiscono nel bundle pubblico.** In
   Vite tutto ciò che inizia con `VITE_` è visibile. `ADMIN_CODE` ha anche un
   fallback in chiaro nel sorgente (`"ED26"`). Da eliminare quando i ruoli
@@ -66,9 +95,12 @@ Verificato:
   la firma HMAC. È il pattern da estendere a Stripe, WhatsApp ed email.
 - **`.env` non è mai stato committato**, `.gitignore` corretto, nessuna chiave nella
   storia git. Il repository è però **pubblico** su GitHub.
-- **Vercel**: protezione SSO attiva su tutti i domini `*.vercel.app`, nessun dominio
-  personalizzato. È l'unica barriera che oggi impedisce di scaricare il bundle — e
-  **non si applica ai domini personalizzati**: collegarne uno la annulla.
+- **Vercel**: `ssoProtection` attiva con `deploymentType: all_except_custom_domains`;
+  password protection e trusted IP disattivate. È l'unica barriera che oggi
+  impedisce di scaricare il bundle, e quindi la chiave anon — e **non si applica ai
+  domini personalizzati**: collegarne uno la annulla. Spegnere l'SSO prima di aver
+  chiuso le policy significa pubblicare una chiave che scrive su tutto il database.
+  L'ordine è: policy prima, SSO dopo.
 
 Regola operativa: dati di allievi (nome, residenza, email, pagamenti) sono materia
 GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del merge.
