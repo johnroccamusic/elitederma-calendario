@@ -12567,6 +12567,14 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
 
   const intestazioneGestioneCorsi = (
     <>
+      {/* la via di ritorno: qui non c'era, e da Gestione corsi si usciva
+          solo con il tasto indietro del telefono. Stesso tasto delle altre
+          pagine, stessa posizione */}
+      {onBack && (
+        <div style={{ marginBottom: 10 }}>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+        </div>
+      )}
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>{titolo}</div>
       {!soloLettura && (
         <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 6 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: "wrap" }}>
