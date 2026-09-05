@@ -21534,7 +21534,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: coloreIncasso }}>
                             <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
-                            Incassato
+                            {i.incassato ? "Incassato" : "Incassa"}
                           </div>
                         </div>
                       )}
@@ -21793,7 +21793,7 @@ function VistaMaster({ param }) {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, color: colore, flexShrink: 0 }}>
                     <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
-                    Incassato
+                    {i.incassato ? "Incassato" : "Incassa"}
                   </div>
                 </div>
               </div>
