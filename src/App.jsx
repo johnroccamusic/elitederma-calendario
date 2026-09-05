@@ -17138,7 +17138,15 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
         );
       })()}
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr) auto auto" : "1fr 9ch 9ch", columnGap: isMobile ? 8 : 14 }}>
+      {/* Le due colonne di destra hanno una larghezza minima invece di essere
+          "auto": nella pagina del link master ogni allievo e' una scheda a se',
+          quindi una griglia a se', e con colonne dimensionate sul contenuto
+          gli importi cadevano a altezze diverse da una scheda all'altra —
+          impossibile scorrere la classe con l'occhio in colonna. Il minimo le
+          allinea; "auto" come massimo evita che una cifra lunga venga tagliata,
+          al prezzo di sfalsare quella sola scheda invece di troncare un
+          numero. */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr) minmax(76px, auto) minmax(66px, auto)" : "1fr 9ch 9ch", columnGap: isMobile ? 8 : 14 }}>
         {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
           <div style={{ gridColumn: "1 / -1", fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Pagamenti</div>
         )}
