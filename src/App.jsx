@@ -21367,7 +21367,49 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                   <div style={{ overflowX: isMobile ? "visible" : "auto" }}>
                   <div style={{ display: isMobile ? "block" : "table", width: "100%", minWidth: isMobile ? 0 : 580, tableLayout: "fixed" }}>
                     {/* colonna sinistra: anagrafica e ricontatto */}
-                    <div style={{ display: isMobile ? "block" : "table-cell", position: "relative", width: isMobile ? "auto" : "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: 20 }}>
+                    <div style={{ display: isMobile ? "block" : "table-cell", position: "relative", width: isMobile ? "auto" : "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: isMobile ? 12 : 20 }}>
+                      {/* Sul telefono questa intestazione occupava sette
+                          righe: numero, nome, tutor, note, telefono, un
+                          divisore, "Ricontattato" e sotto ancora un riquadro
+                          di note alto due righe. Prima di arrivare ai soldi
+                          bisognava scorrere mezza schermata per ogni allievo.
+                          Qui sta in due righe: chi e' e come si chiama, poi
+                          il ricontatto. A stringersi quando lo spazio manca e'
+                          il nome, con i puntini: tutor e telefono servono
+                          interi, uno per capire di chi e' il cliente e
+                          l'altro per chiamarlo. */}
+                      {isMobile ? (
+                        <>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0, whiteSpace: "nowrap" }}>
+                            <span onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, cursor: "pointer", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {idx + 1}. {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+                            </span>
+                            {i.tutor && <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>· {i.tutor}</span>}
+                            {i.telefono && (
+                              <>
+                                <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 11, color: MUTED, textDecoration: "underline", flexShrink: 0 }}>{i.telefono}</a>
+                                <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+                                  <IconaWhatsapp size={15} />
+                                </a>
+                              </>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                            <span style={{ ...fontBody, fontSize: 11.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
+                            <input
+                              defaultValue={(i.note_ricontatto || "").toUpperCase()}
+                              placeholder="Note"
+                              onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
+                              style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, fontSize: 10, padding: "4px 6px", textTransform: "uppercase" }}
+                            />
+                            <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                              <span onClick={() => toggleRicontattato(i)} title="Non ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
+                              <span onClick={() => toggleRicontattato(i)} title="Ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                      <>
                       <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 4 }}>{idx + 1}.</div>
                         <div style={{ ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
@@ -21399,6 +21441,8 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                         onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
                         style={{ ...inputStyle, marginTop: 10, fontSize: 8, textTransform: "uppercase", resize: "vertical", width: "100%", boxSizing: "border-box" }}
                       />
+                      </>
+                      )}
 
                       {i.richiede_fattura && (
                         <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#fff", border: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, color: NAVY, lineHeight: 1.6 }}>
