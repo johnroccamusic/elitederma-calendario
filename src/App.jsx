@@ -21689,59 +21689,64 @@ function VistaMaster({ param }) {
           const aPosto = i.incassato || daIncassare === 0;
           const colore = aPosto ? "#2E7D32" : "#C0392B";
           return (
-            <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
-              <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 2, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 6 }}>
-                <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
-                <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
-                {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
-                {i.telefono && (
-                  <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 12 }}>
-                    · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
-                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
-                      <IconaWhatsapp size={22} />
-                    </a>
+            // stessa scheda della Contabilita' classe, senza gli attrezzi
+            // che qui non servono (stampa, modifica, sposta, elimina): la
+            // master ritrova l'impaginazione che lo staff ha gia' in mano,
+            // testata grigia con chi e' l'allievo, corpo bianco con i soldi
+            <div key={i.id} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, overflow: "hidden", marginBottom: 10 }}>
+              <div style={{ background: "#F6F6F8", padding: 12, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, flexWrap: "wrap", rowGap: 2 }}>
+                  <span style={{ ...fontBody, fontSize: 26, fontWeight: 700, color: NAVY, lineHeight: 1.15 }}>
+                    {idx + 1}. {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
                   </span>
-                )}
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 13, color: NAVY }}>Ricontattato: {i.ricontattato ? "Sì" : "No"}</span>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)" }} />
-                  <span style={{ width: 12, height: 12, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)" }} />
+                  {i.tutor && <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0 }}>· {i.tutor}</span>}
+                  {i.telefono && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 15, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                      <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
+                        <IconaWhatsapp size={30} />
+                      </a>
+                    </span>
+                  )}
+                </div>
+                {/* il semaforo e la nota qui si leggono e basta: l'unica cosa
+                    che il link concede di cambiare e' l'incassato */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <span style={{ ...fontBody, fontSize: 11.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
+                  {i.note_ricontatto && (
+                    <span style={{ ...fontBody, fontSize: 12, color: NAVY, textTransform: "uppercase", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "4px 8px", flexShrink: 0 }}>
+                      {i.note_ricontatto}
+                    </span>
+                  )}
+                  <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                    <span title="Non ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)" }} />
+                    <span title="Ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)" }} />
+                  </div>
                 </div>
               </div>
-              {i.note_ricontatto && <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontStyle: "italic" }}>"{i.note_ricontatto}"</div>}
 
-              <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 14, color: NAVY }}>
+              <div style={{ padding: 12, ...fontBody, fontSize: 14, color: NAVY }}>
                 <RiepilogoVenditaIscritto i={i} isMobile={isMobile} mostraQuotaVenditore={false} />
                 {i.note && (
                   <div style={{ paddingTop: 10, marginTop: 4, borderTop: `1px solid ${CREAM_BORDER}` }}>
                     <b style={{ color: NAVY }}>Note:</b> {i.note}
                   </div>
                 )}
-              </div>
 
-              <div
-                onClick={() => toggleIncassato(i)}
-                style={{
-                  marginTop: 10,
-                  padding: "12px 14px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: aPosto ? "#E8F5E9" : "#FDECEC",
-                  border: `1px solid ${colore}`,
-                  borderRadius: 8,
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{ fontSize: 15, fontWeight: 700, color: colore }}>
-                  {i.incassato ? `INCASSATO ${daIncassare} €` : `DA INCASSARE ${daIncassare} €`}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: colore }}>
-                  <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
-                  incassato
+                <div
+                  onClick={() => toggleIncassato(i)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 14, marginTop: 4, borderTop: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: colore, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      {i.incassato ? "Incassato" : "Da incassare"}
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 26, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>{daIncassare} €</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, color: colore, flexShrink: 0 }}>
+                    <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
+                    Incassato
+                  </div>
                 </div>
               </div>
             </div>
