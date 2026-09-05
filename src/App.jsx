@@ -19452,15 +19452,28 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     ricarica(["iscritti"]);
   }
 
-  // il link non descrive piu' la classe: la nomina con il token che sta
-  // sulla riga di corsi_date. Rigenerare quel token in database revoca
-  // tutti i link gia' mandati per questa data, senza toccare le altre
+  // A nominare la classe e' il token, che sta sulla riga di corsi_date:
+  // rigenerarlo in database revoca tutti i link gia' mandati per questa
+  // data, senza toccare le altre.
+  //
+  // Davanti al token pero' c'e' anche un pezzo leggibile - il corso, la
+  // sede, le date - perche' un indirizzo di soli 64 caratteri casuali,
+  // incollato in una chat, non dice a chi lo riceve di che corso si tratta,
+  // e chi ne ha tre aperti non li distingue. Quel pezzo e' solo un'etichetta:
+  // l'app non lo legge, e cambiarlo o toglierlo non apre e non chiude
+  // niente. La riservatezza resta tutta nel token.
   function generaLinkMaster() {
     if (!corsoData?.token_master) {
       setMsg("Questa data non ha ancora un link master: ricarica la pagina e riprova.");
       return;
     }
-    const url = `${window.location.origin}${window.location.pathname}?master=${corsoData.token_master}`;
+    const etichetta = slugify([
+      "contabilita",
+      corso?.nome,
+      loc?.nome,
+      fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine),
+    ].filter(Boolean).join(" "));
+    const url = `${window.location.origin}${window.location.pathname}?corso=${etichetta}&master=${corsoData.token_master}`;
     setLinkMaster(url);
   }
 
@@ -21558,6 +21571,13 @@ function VistaMaster({ param }) {
         loc: data.location,
         iscritti: data.iscritti || [],
       });
+      // la linguetta del browser diceva solo "Elitederma": con tre link
+      // aperti non si capiva quale fosse quale
+      const periodo = data.corso_data?.data_inizio
+        ? fmtIntervalloEsteso(data.corso_data.data_inizio, data.corso_data.data_fine)
+        : "";
+      document.title = ["Contabilità", data.corso?.nome, data.location?.nome, periodo]
+        .filter(Boolean).join(" · ");
     }
     carica();
   }, [param]);
