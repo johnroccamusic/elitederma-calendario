@@ -6177,7 +6177,7 @@ function SezioneDateCorsi({
       {isMobile && (
         <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" style={{ marginBottom: 12 }} />
       )}
-      <div ref={rigaFiltriRef} style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 8, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", minWidth: 0, ...(isMobile ? { fontSize: fontFiltri, overflowX: "auto" } : {}) }}>
+      <div ref={rigaFiltriRef} style={{ display: "flex", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 5 : 8, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", minWidth: 0, ...(isMobile ? { fontSize: fontFiltri } : {}) }}>
         {!isMobile && (
           <div style={{ flex: "1 1 200px", minWidth: 160 }}>
             <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" />
@@ -6212,7 +6212,7 @@ function SezioneDateCorsi({
           style={isMobile ? {
             ...fontBody, fontSize: 10.5, fontWeight: 600, padding: "6px 8px 7px", borderRadius: 10,
             border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
-            cursor: "pointer", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, width: 62,
+            cursor: "pointer", flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
           } : {
             ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
             border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
@@ -6227,7 +6227,7 @@ function SezioneDateCorsi({
           style={isMobile ? {
             ...fontBody, fontSize: 10.5, fontWeight: 600, padding: "6px 8px 7px", borderRadius: 10,
             border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY,
-            cursor: "pointer", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, width: 62,
+            cursor: "pointer", flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
           } : {
             ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
             border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY,
@@ -15518,14 +15518,14 @@ function CampoFileTrascinabile({ style, onChange, ...resto }) {
 // sia in Home che in Gestione date
 function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota, compatto, Icona }) {
   return (
-    <div style={{ position: "relative", flex: "0 0 auto", minWidth: 0, display: "flex" }}>
+    <div style={{ position: "relative", flex: compatto ? "1 1 0" : "0 0 auto", minWidth: 0, display: "flex" }}>
       <button
         onClick={onToggle}
         style={compatto ? {
           ...fontBody, fontWeight: 600, fontSize: 10.5, padding: "6px 8px 7px", borderRadius: 10,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
-          width: 62, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+          width: "100%", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
         } : {
           ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 10,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
