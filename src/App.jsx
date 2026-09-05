@@ -17330,6 +17330,38 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // che l'amministratore compili qualunque altro campo del pannello
   const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
 
+  // Dettaglio della riga "Quota venditore": chi ha venduto in questa classe
+  // e quanto ha maturato. Il legame iscritto -> venditore e' il campo
+  // `tutor` confrontato per nome, lo stesso che usa la statistica venditori
+  // (vedi `chiusure`).
+  //
+  // Li' pero' le "vecchie iscrizioni" e le date fuori periodo vengono
+  // escluse, perche' quella pagina misura il venduto di un mese. Qui no:
+  // questo elenco sta sotto un totale e deve sommare esattamente a quello.
+  // Un dettaglio che non torna con il totale sopra e' peggio di nessun
+  // dettaglio. Per lo stesso motivo chi ha una quota ma nessun tutor
+  // scritto finisce in una voce sua invece di sparire.
+  // Le caselle della tabella costi sul telefono: stesso vestito, corpo e
+  // imbottitura ridotti quanto basta a far stare cinque colonne in riga.
+  const campoCompattoQui = isMobile
+    ? { ...campoCompattoStyle, padding: "5px 4px", fontSize: 10.5 }
+    : campoCompattoStyle;
+
+  const quoteVenditoreDettaglio = (() => {
+    const perVenditore = new Map();
+    listaIscritti.forEach((i) => {
+      const quota = i.quota_venditore || 0;
+      if (!quota) return;
+      const nome = (i.tutor || "").trim();
+      const chiave = nome.toUpperCase() || "__senza__";
+      const voce = perVenditore.get(chiave) || { nome: nome || "Senza venditore", totale: 0, quanti: 0, senzaNome: !nome };
+      voce.totale = round2(voce.totale + quota);
+      voce.quanti += 1;
+      perVenditore.set(chiave, voce);
+    });
+    return [...perVenditore.values()].sort((a, b) => b.totale - a.totale);
+  })();
+
   // riga "Quota venditore": stesso formato delle altre righe della
   // tabella spese (in linea con Compenso Master/Costo location/Quota
   // assistenti, non più un box a sé) — Totale calcolato dalle quote di
@@ -17845,50 +17877,50 @@ function PannelloRiepilogoAmministrativo({
             {costiAperto && (
               <div style={{ padding: "0 20px 20px" }}>
                 <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Incassi</div>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 10 : 14, marginBottom: 14 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaPortafoglio /></div>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 8 : 14, marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 0 : 10, minWidth: 0 }}>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaPortafoglio /></div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Lordo (iva incl.)</div>
-                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {incassoLordoClasse}</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>Lordo (iva incl.)</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14.5 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {incassoLordoClasse}</div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 0 : 10, minWidth: 0 }}>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Netto (iva escl.)</div>
-                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {incassoNettoClasse}</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>Netto (iva escl.)</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14.5 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {incassoNettoClasse}</div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaLibroContabile /></div>
+                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 0 : 10, minWidth: 0 }}>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaLibroContabile /></div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>IVA</div>
-                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {ivaClasse}</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>IVA</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14.5 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {ivaClasse}</div>
                     </div>
                   </div>
                 </div>
                 <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Di cui</div>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 10 : 14, marginBottom: 22 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 8 : 14, marginBottom: 22 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 0 : 10, minWidth: 0 }}>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Conto corrente</div>
-                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contoCorrenteClasse}</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>Conto corrente</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14.5 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {contoCorrenteClasse}</div>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Contanti pagati fisicamente al corso">
-                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash al corso</div>
-                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>Cash al corso</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14.5 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {contantiClasse}</div>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Acconti o quote pre corso pagati in contanti">
-                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                    <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Quota cash già incassata prima del corso</div>
-                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {cashPrimaDelCorsoClasse}</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, lineHeight: 1.2 }}>Quota cash già incassata prima del corso</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14.5 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {cashPrimaDelCorsoClasse}</div>
                     </div>
                   </div>
                 </div>
@@ -17982,12 +18014,12 @@ function PannelloRiepilogoAmministrativo({
                 </div>
                 {righeSpeseTutte.length > 0 && (
                   <div style={{ marginBottom: 8 }}>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-                      <div style={{ flex: "2 1 170px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Voce</div>
-                      <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale</div>
-                      <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Bonifico</div>
-                      <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cash</div>
-                      <div style={{ flex: "0 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Giorni</div>
+                    <div style={{ display: "flex", gap: isMobile ? 4 : 8, marginBottom: 4 }}>
+                      <div style={{ flex: isMobile ? "2 1 88px" : "2 1 170px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Voce</div>
+                      <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Totale</div>
+                      <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Bonifico</div>
+                      <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Cash</div>
+                      <div style={{ flex: isMobile ? "0 1 46px" : "0 1 90px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Giorni</div>
                     </div>
                     {righeSpeseTutte.map((r) => {
                       // "location" e "alloggio" non hanno più uno split libero: seguono
@@ -17997,31 +18029,32 @@ function PannelloRiepilogoAmministrativo({
                       const campoBonifico = r.tipo === "venditore" ? "quota_venditore_bonifico" : r.tipo === "modelle" ? "commissione_modelle_bonifico" : "quota_bonifico";
                       const campoCash = r.tipo === "venditore" ? "quota_venditore_cash" : r.tipo === "modelle" ? "commissione_modelle_cash" : "quota_cash";
                       return (
-                        <div key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
-                          <div style={{ flex: "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                            <div style={{ ...campoCompattoStyle, fontSize: 11, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</div>
+                        <React.Fragment key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash}>
+                        <div style={{ display: "flex", gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
+                          <div style={{ flex: isMobile ? "2 1 88px" : "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ ...campoCompattoQui, fontSize: 11, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</div>
                             {r.tipo === "alloggio" && r.pagato && (
                               <span title="Hotel pagato" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
                             )}
                           </div>
-                          <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-                            <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
+                          <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0 }}>
+                            <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
                           </div>
-                          <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                          <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0 }}>
                             {bloccato ? (
-                              <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.bonifico}</div>
+                              <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.bonifico}</div>
                             ) : (
-                              <input style={campoCompattoStyle} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: v }); }} />
+                              <input style={campoCompattoQui} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: v }); }} />
                             )}
                           </div>
-                          <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                          <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0 }}>
                             {bloccato ? (
-                              <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.cash}</div>
+                              <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.cash}</div>
                             ) : (
-                              <input style={campoCompattoStyle} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
+                              <input style={campoCompattoQui} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
                             )}
                           </div>
-                          <div style={{ flex: "0 1 90px", minWidth: 0 }}>
+                          <div style={{ flex: isMobile ? "0 1 46px" : "0 1 90px", minWidth: 0 }}>
                             {r.giorni != null && (
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>−</button>
@@ -18049,6 +18082,28 @@ function PannelloRiepilogoAmministrativo({
                             })()}
                           </div>
                         </div>
+                        {/* sotto la riga "Quota venditore", chi quella quota
+                            se l'e' guadagnata: le voci sommano al totale
+                            della riga sopra, per questo non e' filtrato
+                            niente */}
+                        {r.tipo === "venditore" && quoteVenditoreDettaglio.length > 0 && (
+                          <div style={{ marginBottom: 8, paddingLeft: 10, borderLeft: `2px solid ${CREAM_BORDER}` }}>
+                            {quoteVenditoreDettaglio.map((v) => (
+                              <div key={v.nome} style={{ display: "flex", alignItems: "baseline", gap: isMobile ? 5 : 8, marginBottom: 2 }}>
+                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: isMobile ? "2 1 80px" : "2 1 160px" }}>
+                                  {v.nome}
+                                </span>
+                                <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED, whiteSpace: "nowrap", flexShrink: 0 }}>
+                                  {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}
+                                </span>
+                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", marginLeft: "auto" }}>
+                                  € {v.totale}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        </React.Fragment>
                       );
                     })}
                   </div>
@@ -18128,23 +18183,23 @@ function PannelloRiepilogoAmministrativo({
 
                 <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
                   <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 16 }}>Riepilogo Cash</div>
-                  <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", gap: 14 }}>
-                    <div style={{ padding: "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash incassato al corso</div>
-                      <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
+                  <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", gap: isMobile ? 6 : 14 }}>
+                    <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 0" : "0 0 auto", minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Cash incassato al corso</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 13 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {contantiClasse}</div>
                     </div>
-                    <div style={{ padding: "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Totale Cash da pagare</div>
-                      <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCashDaPagareClasse}</div>
+                    <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 0" : "0 0 auto", minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Totale Cash da pagare</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 13 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {totaleCashDaPagareClasse}</div>
                     </div>
-                    <div style={{ padding: "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash pulito in busta</div>
-                      <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY }}>€ {cassaContantiClasse}</div>
+                    <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 0" : "0 0 auto", minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Cash pulito in busta</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
                       {venditeAlCorsoContanti > 0 && (
-                        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4, whiteSpace: "nowrap" }}>di cui € {venditeAlCorsoContanti} di vendite</div>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, color: MUTED, marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>di cui € {venditeAlCorsoContanti} di vendite</div>
                       )}
                     </div>
-                    <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={{ alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
+                    <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={isMobile ? { alignSelf: "center", flex: "1 1 0", minWidth: 0, padding: "9px 4px", fontSize: 11 } : { alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
                   </div>
                 </div>
               </div>
@@ -19848,22 +19903,26 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
               ].filter(Boolean);
               return (
                 <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: `${spaziIscrizioni.dateBoxPaddingV}px 14px`, marginBottom: spaziIscrizioni.dopoDateBox }}>
-                  {/* tre colonne stanno larghe su desktop, ma su un telefono
-                      da 360px lascerebbero ~35px di testo a cella: "MARIANNA
-                      SILVESTRI" ci andava a capo una lettera per riga. Sotto
-                      i 700px le celle si impilano */}
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${celleIntestazione.length}, 1fr)`, gap: 10 }}>
+                  {/* Tre celle affiancate a qualunque larghezza, come sul
+                      desktop. Su un telefono ognuna vale ~105px: prima ne
+                      restavano ~35 di testo e "MARIANNA SILVESTRI" andava a
+                      capo una lettera per riga. Lo spazio si recupera
+                      togliendo l'icona - 38px piu' 11 di stacco, meta'
+                      colonna spesa per ripetere quello che l'etichetta gia'
+                      dice - e abbassando i corpi: cosi' il nome va a capo
+                      fra le due parole, non fra le lettere. */}
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? `repeat(${celleIntestazione.length}, minmax(0, 1fr))` : `repeat(${celleIntestazione.length}, 1fr)`, gap: isMobile ? 6 : 10 }}>
                     {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
                       // il divisore è più scuro del bordo della card: separa tre
                       // dati accostati, e un filo crema su fondo crema non li
                       // teneva distinti
-                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, paddingLeft: !isMobile && idx > 0 ? 14 : 0, borderLeft: !isMobile && idx > 0 ? `1px solid #D5C9AF` : "none", paddingTop: isMobile && idx > 0 ? 10 : 0, borderTop: isMobile && idx > 0 ? `1px solid #D5C9AF` : "none" }}>
-                        <span style={{ width: 38, height: 38, borderRadius: 11, background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: isMobile ? 0 : 11, minWidth: 0, paddingLeft: idx > 0 ? (isMobile ? 7 : 14) : 0, borderLeft: idx > 0 ? `1px solid #D5C9AF` : "none" }}>
+                        <span style={{ width: 38, height: 38, borderRadius: 11, background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           <Icona size={20} color={GOLD} />
                         </span>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ ...fontBody, fontSize: 11, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
-                          <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+                          <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: GOLD, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, whiteSpace: "normal", lineHeight: 1.2 }}>{label}</div>
+                          <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 16, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "normal", overflowWrap: "break-word", lineHeight: 1.2 }}>{valore}</div>
                         </div>
                       </div>
                     ))}
