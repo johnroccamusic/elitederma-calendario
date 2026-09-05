@@ -19487,6 +19487,30 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     }
   }
 
+  // WhatsApp costruisce l'anteprima leggendo i meta tag dell'HTML che il
+  // server restituisce, e non esegue il JavaScript: il titolo che la pagina
+  // si imposta da sola non lo vede nessuno, e la scheda dice sempre
+  // "Gestionale Elitederma". Finche' non c'e' qualcosa lato server che
+  // scriva quei meta tag per ogni link, la descrizione la mettiamo nel
+  // messaggio: due righe sopra l'indirizzo, che si leggono comunque.
+  function messaggioLinkMaster() {
+    const periodo = fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine);
+    return [
+      `Contabilità ${(corso?.nome || "").toUpperCase()}${loc?.nome ? ` · ${loc.nome.toUpperCase()}` : ""}`,
+      periodo,
+      linkMaster,
+    ].join("\n");
+  }
+
+  async function copiaMessaggioMaster() {
+    try {
+      await navigator.clipboard.writeText(messaggioLinkMaster());
+      setMsg("Messaggio copiato: incollalo in chat così com'è.");
+    } catch (e) {
+      setMsg("Copia non riuscita: seleziona il link qui sopra.");
+    }
+  }
+
   function generaLinkModelle() {
     const [aaaa, mm, gg] = corsoData.data_inizio.split("-");
     const dataLeggibile = `${gg}-${mm}-${aaaa}`;
@@ -21549,6 +21573,12 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                     style={{ ...inputStyle, flex: "1 1 200px", fontSize: 12, color: MUTED }}
                   />
                   <Button variant="ghost" onClick={copiaLinkMaster}>Copia link</Button>
+                  <Button onClick={copiaMessaggioMaster}>Copia messaggio</Button>
+                </div>
+              )}
+              {linkMaster && (
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, whiteSpace: "pre-line", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px" }}>
+                  {messaggioLinkMaster()}
                 </div>
               )}
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>
