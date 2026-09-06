@@ -18280,9 +18280,13 @@ function PannelloRiepilogoAmministrativo({
   // l'importo: da quel momento la cassa contanti somma quel numero, non
   // ricalcola la classe.
   async function segnaBustaRientrata(rientrata) {
+    // "in arrivo" si spegne in tutti e due i casi: una busta arrivata non
+    // sta piu' viaggiando, e una rimessa fuori riparte da capo. Il flag e'
+    // il passo intermedio della lista "Contabilita' di ritorno" in cassa
+    // contanti, e non deve restare acceso a raccontare un viaggio finito.
     const campi = rientrata
-      ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse }
-      : { busta_rientrata_il: null, busta_importo: null };
+      ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse, busta_in_arrivo: false }
+      : { busta_rientrata_il: null, busta_importo: null, busta_in_arrivo: false };
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setMsg(rientrata ? "Busta segnata come rientrata: il contante è in cassa." : "Busta rimessa fuori dalla cassa.");
@@ -18787,7 +18791,7 @@ function PannelloRiepilogoAmministrativo({
                         onChange={(e) => segnaBustaRientrata(e.target.checked)}
                         style={{ width: 20, height: 20, cursor: "pointer" }}
                       />
-                      {corsoData.busta_rientrata_il ? "Rientrata" : "Segna rientrata"}
+                      {corsoData.busta_rientrata_il ? "Busta in cassa" : "Ok, busta in cassa"}
                     </label>
                   </div>
                 </div>
@@ -28128,8 +28132,8 @@ const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonific
 const METODI_SPESA_DALLA_CASSA = new Set(["Cassa contanti", "Contanti", "Cash no iva"]);
 
 function PannelloCassaContanti({
-  corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
-  leva, location, hotel, quoteVenditoriSplit, spese, venditeShop,
+  corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
+  leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, ricarica,
 }) {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
@@ -28211,7 +28215,7 @@ function PannelloCassaContanti({
   const busteInArrivo = useMemo(() => {
     const oggi = dataOggiStr();
     let totale = 0;
-    let quante = 0;
+    const righe = [];
     (corsiDate || []).forEach((cd) => {
       if (cd.busta_rientrata_il) return;
       const fine = cd.data_fine || cd.data_inizio || "";
@@ -28234,10 +28238,11 @@ function PannelloCassaContanti({
       // per strada, c'e' semmai un buco da coprire, ed e' un'altra storia
       if (conti.cassaContanti <= 0) return;
       totale += conti.cassaContanti;
-      quante += 1;
+      righe.push({ cd, importo: conti.cassaContanti });
     });
-    return { totale: round2(totale), quante };
-  }, [corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop]);
+    righe.sort((a, b) => String(a.cd.data_inizio).localeCompare(String(b.cd.data_inizio)));
+    return { totale: round2(totale), quante: righe.length, righe };
+  }, [corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop]);
 
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
@@ -28286,6 +28291,27 @@ function PannelloCassaContanti({
     setSalvando(false);
     if (error) { setMsg(`Non salvato: ${error.message}`); return; }
     setPannello(null); setMsg("");
+    carica();
+  }
+
+  // I due passi del ritorno. "In arrivo" e' solo un promemoria: dice che la
+  // busta e' partita, non muove un euro. "Ok, busta in cassa" e' la stessa
+  // identica scrittura del tasto nella scheda della classe — data di
+  // rientro e importo congelato — perche' i due punti devono fare la stessa
+  // cosa, non due cose simili.
+  async function segnaBustaInArrivo(cd, valore) {
+    const { error } = await supabase.from("corsi_date").update({ busta_in_arrivo: valore }).eq("id", cd.id);
+    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    setMsg("");
+    ricarica?.(["corsi_date"]);
+  }
+  async function segnaBustaInCassa(cd, importo) {
+    const { error } = await supabase.from("corsi_date")
+      .update({ busta_rientrata_il: dataOggiStr(), busta_importo: importo, busta_in_arrivo: false })
+      .eq("id", cd.id);
+    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    setMsg("");
+    ricarica?.(["corsi_date"]);
     carica();
   }
 
@@ -28338,6 +28364,49 @@ function PannelloCassaContanti({
           </div>
         );
       })()}
+
+      {/* Le buste per strada, una per una. Il numero in cima dice quanto sta
+          tornando; qui si vede da dove torna e si segna il viaggio: "in
+          arrivo" quando parte, "ok, busta in cassa" quando il contante e'
+          nel cassetto. Solo il secondo muove i soldi.
+          Una riga sparisce dalla lista appena la busta e' in cassa: da li'
+          in poi la si trova nel saldo, non piu' fra quelle attese. */}
+      {busteInArrivo.righe.length > 0 && (
+        <div style={{ ...cardStyle, marginBottom: 14 }}>
+          <TitoloSezioneRiepilogo>Contabilità di ritorno</TitoloSezioneRiepilogo>
+          {busteInArrivo.righe.map(({ cd, importo }) => {
+            const nomeCorso = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "Corso";
+            const nomeSede = (location || []).find((l) => l.id === cd.location_id)?.nome || "";
+            const partita = !!cd.busta_in_arrivo;
+            return (
+              <div key={cd.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ minWidth: 0, flex: "1 1 220px" }}>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                    Busta {nomeSede ? `${nomeSede} — ` : ""}{nomeCorso}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, color: MUTED }}>
+                    {fmtIntervalloEsteso(cd.data_inizio, cd.data_fine || cd.data_inizio)} — {euroRiepilogo(importo)}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 18, flexShrink: 0, flexWrap: "wrap" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: partita ? "#8A6D1D" : MUTED }}>
+                    <input type="checkbox" checked={partita} onChange={(e) => segnaBustaInArrivo(cd, e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                    In arrivo
+                  </label>
+                  {/* il secondo passo compare solo dopo il primo: una busta
+                      che non e' ancora partita non puo' essere gia' arrivata */}
+                  {partita && (
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
+                      <input type="checkbox" checked={false} onChange={() => segnaBustaInCassa(cd, importo)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                      Ok, busta in cassa
+                    </label>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* da dove viene il saldo, riga per riga: una cassa che mostra solo il
           totale non si puo' controllare */}
@@ -29067,7 +29136,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
             corsiDate={corsiDate} iscritti={iscritti} corsiDateDocenti={corsiDateDocenti}
             master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
             leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit}
-            spese={spese} venditeShop={venditeShop}
+            spese={spese} venditeShop={venditeShop} corsi={corsi} ricarica={ricarica}
           />
         )}
         {tab === "consulenze" && <PannelloCassaConsulenze />}
