@@ -26545,12 +26545,12 @@ function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, color
         onClick={onClick}
         style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-          padding: "8px 4px", borderRadius: 12, aspectRatio: "1 / 1", width: "100%", boxSizing: "border-box",
+          padding: "6px 3px", borderRadius: 12, aspectRatio: "1 / 1", width: "100%", boxSizing: "border-box", overflow: "hidden",
           border: `1px solid ${attivo ? NAVY : bordo}`, background: attivo ? NAVY : sfondo, cursor: "pointer", textAlign: "center",
         }}
       >
         <Icona size={16} color={attivo ? "#fff" : coloreIcona} />
-        <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, lineHeight: 1.15, color: attivo ? "#fff" : NAVY }}>{children}</span>
+        <span style={{ ...fontBody, fontSize: 8.5, fontWeight: 700, lineHeight: 1.1, color: attivo ? "#fff" : NAVY, overflowWrap: "anywhere" }}>{children}</span>
       </button>
     );
   }
@@ -26662,18 +26662,28 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
   abbonamenti: "I contratti che si rinnovano da soli — canoni, servizi, licenze — con l'importo e ogni quanto tornano.",
 };
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente }) {
+  const isMobile = useIsMobile();
   const aiuto = (chiave) => ({ chiave: `amministrazione.${chiave}`, testo: AIUTI_TAB_AMMINISTRAZIONE[chiave], ruoloUtente });
   return (
-    <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B" aiuto={aiuto("primanota")}>Prima nota cassa</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("impegni")}>Quadro impegni ({impegniCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E" aiuto={aiuto("documenti")}>Fatture ricevute ({documentiCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD" aiuto={aiuto("notecredito")}>Note di credito ({noteCreditoCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("passivo")}>Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("attivo")}>Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "fondocassa"} onClick={() => onApriScheda("fondocassa")} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Cassa contanti</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "consulenze"} onClick={() => onApriScheda("consulenze")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Cassa consulenze</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("abbonamenti")}>Abbonamenti e contratti ({abbonamentiCount})</SchedaTabAmministrazione>
+    // Sul telefono nove pastiglie larghe quanto il loro testo facevano una
+    // colonna sghemba lunga una schermata: ogni riga cominciava dove finiva
+    // la precedente. Quattro quadrati uguali per riga si leggono come una
+    // tastiera, e la barra si chiude in due righe e mezzo.
+    <div style={{
+      ...(isMobile
+        ? { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, alignItems: "stretch" }
+        : { display: "flex", gap: 10, flexWrap: "wrap" }),
+      marginBottom: 16,
+    }}>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B" aiuto={aiuto("primanota")}>Prima nota cassa</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("impegni")}>Quadro impegni ({impegniCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E" aiuto={aiuto("documenti")}>Fatture ricevute ({documentiCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD" aiuto={aiuto("notecredito")}>Note di credito ({noteCreditoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("passivo")}>Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("attivo")}>Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "fondocassa"} onClick={() => onApriScheda("fondocassa")} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Cassa contanti</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "consulenze"} onClick={() => onApriScheda("consulenze")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Cassa consulenze</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("abbonamenti")}>Abbonamenti e contratti ({abbonamentiCount})</SchedaTabAmministrazione>
     </div>
   );
 }
