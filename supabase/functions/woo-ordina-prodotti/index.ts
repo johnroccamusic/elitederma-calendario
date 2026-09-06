@@ -76,6 +76,7 @@ Deno.serve(async (req) => {
   // che sullo shop non c'e', e semplicemente non ha una posizione
   const saltati = richieste.length - daScrivere.length;
   if (daScrivere.length === 0) return risposta({ aggiornati: 0, saltati });
+  console.log("woo-ordina-prodotti: scrivo", daScrivere.length, "posizioni, saltati", saltati);
 
   try {
     for (let i = 0; i < daScrivere.length; i += MASSIMO_PER_BATCH) {
@@ -87,10 +88,21 @@ Deno.serve(async (req) => {
       });
       if (!rispostaWoo.ok) {
         const testo = await rispostaWoo.text();
+        // Nei log, non solo nella risposta: il corpo di un 502 spesso non
+        // arriva a schermo (supabase-js lo scarta), e senza traccia qui
+        // l'unico modo di sapere perche' il sito ha detto no e' chiederlo
+        // a chi ha premuto il tasto.
+        console.error("woo-ordina-prodotti: WooCommerce ha rifiutato", JSON.stringify({
+          stato: rispostaWoo.status,
+          corpo: testo.slice(0, 1000),
+          quantiProdotti: fetta.length,
+          primoWooId: fetta[0]?.wooId ?? null,
+        }));
         return risposta({ errore: `WooCommerce ha rifiutato il riordino (${rispostaWoo.status})`, dettaglio: testo }, 502);
       }
     }
   } catch (e) {
+    console.error("woo-ordina-prodotti: non ho raggiunto WooCommerce", e instanceof Error ? e.message : String(e));
     return risposta({ errore: "Non sono riuscito a parlare con WooCommerce: " + (e instanceof Error ? e.message : String(e)) }, 502);
   }
 
