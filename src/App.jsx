@@ -12890,6 +12890,13 @@ const ALIQUOTA_IVA_RIEPILOGO_CLASSE = 22;
 // voce, 1fr per ogni importo, una colonna fissa in fondo), cosi' le due
 // tabelle restano incolonnate fra loro.
 const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 46px";
+// Su desktop la stessa impronta, con le colonne dei numeri a larghezza
+// fissa. Erano elastiche, e siccome le due tabelle accostate hanno
+// un'ultima colonna diversa - 90px per i giorni sopra, il cestino sotto -
+// lo spazio avanzato veniva spartito in modo diverso e le colonne non si
+// incolonnavano fra loro. Una cifra occupa quello che occupa: 80px bastano
+// per "€ 8909.4", il resto lo prende la voce, che di spazio sa fare uso.
+const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 80px 80px 80px 90px";
 
 function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie }) {
   const isMobile = useIsMobile();
@@ -12923,8 +12930,8 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
   }
 
   return (
-    <div style={{ display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : undefined, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3, flexWrap: isMobile ? undefined : "wrap" }}>
-      <div style={{ flex: isMobile ? undefined : "2 1 170px", minWidth: 0 }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3 }}>
+      <div style={{ minWidth: 0 }}>
         <select
           style={campoQui}
           value={titoloCorrisponde ? spesa.sottocategoria_id || "" : "__altro__"}
@@ -12941,13 +12948,13 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
           {vociTitolo.map((c) => <option key={c.chiave} value={c.sottocategoriaId}>{c.etichetta}</option>)}
         </select>
       </div>
-      <div style={{ flex: isMobile ? undefined : "1 1 90px", minWidth: 0 }}>
+      <div style={{ minWidth: 0 }}>
         <input style={campoQui} inputMode="decimal" value={totale} onChange={(e) => setTotale(e.target.value)} onBlur={commitTotale} />
       </div>
-      <div style={{ flex: isMobile ? undefined : "1 1 90px", minWidth: 0 }}>
+      <div style={{ minWidth: 0 }}>
         <div style={{ ...campoQui, background: "#EFEFEF", color: MUTED }}>€ {bonifico}</div>
       </div>
-      <div style={{ flex: isMobile ? undefined : "1 1 90px", minWidth: 0 }}>
+      <div style={{ minWidth: 0 }}>
         <input style={campoQui} inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} onBlur={commitCash} />
       </div>
       <button
@@ -18063,12 +18070,12 @@ function PannelloRiepilogoAmministrativo({
                 </div>
                 {righeSpeseTutte.length > 0 && (
                   <div style={{ marginBottom: 8 }}>
-                    <div style={{ display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : undefined, gap: isMobile ? 4 : 8, marginBottom: 4 }}>
-                      <div style={{ flex: isMobile ? "2 1 88px" : "2 1 170px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Voce</div>
-                      <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Totale</div>
-                      <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Bonifico</div>
-                      <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Cash</div>
-                      <div style={{ flex: isMobile ? "0 1 46px" : "0 1 90px", minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Giorni</div>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, marginBottom: 4 }}>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Voce</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Totale</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Bonifico</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Cash</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Giorni</div>
                     </div>
                     {righeSpeseTutte.map((r) => {
                       // "location" e "alloggio" non hanno più uno split libero: seguono
@@ -18079,31 +18086,31 @@ function PannelloRiepilogoAmministrativo({
                       const campoCash = r.tipo === "venditore" ? "quota_venditore_cash" : r.tipo === "modelle" ? "commissione_modelle_cash" : "quota_cash";
                       return (
                         <React.Fragment key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash}>
-                        <div style={{ display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : undefined, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3, flexWrap: isMobile ? undefined : "wrap" }}>
-                          <div style={{ flex: isMobile ? "2 1 88px" : "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3 }}>
+                          <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
                             <div style={{ ...campoCompattoQui, fontSize: 11, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</div>
                             {r.tipo === "alloggio" && r.pagato && (
                               <span title="Hotel pagato" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
                             )}
                           </div>
-                          <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0 }}>
+                          <div style={{ minWidth: 0 }}>
                             <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
                           </div>
-                          <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0 }}>
+                          <div style={{ minWidth: 0 }}>
                             {bloccato ? (
                               <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.bonifico}</div>
                             ) : (
                               <input style={campoCompattoQui} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: v }); }} />
                             )}
                           </div>
-                          <div style={{ flex: isMobile ? "1 1 50px" : "1 1 90px", minWidth: 0 }}>
+                          <div style={{ minWidth: 0 }}>
                             {bloccato ? (
                               <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.cash}</div>
                             ) : (
                               <input style={campoCompattoQui} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
                             )}
                           </div>
-                          <div style={{ flex: isMobile ? "0 1 46px" : "0 1 90px", minWidth: 0 }}>
+                          <div style={{ minWidth: 0 }}>
                             {r.giorni != null && (
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>−</button>
