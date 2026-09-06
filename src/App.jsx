@@ -1055,7 +1055,7 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
   // verticali non capitavano mai due volte nello stesso punto. Con un
   // numero di colonne deciso qui, tutte le righe sotto si incolonnano
   // sulla prima, su qualunque schermo.
-  const colonne = isMobile ? 3 : compatta ? 5 : 6;
+  const colonne = isMobile ? 5 : compatta ? 5 : 6;
   // il filetto sul crema: CREAM_BORDER e' lo stesso tono dello sfondo e
   // spariva. Questo e' il grigio-oro gia' usato per i divisori della
   // scheda corso, che sul crema si vede
@@ -1080,25 +1080,30 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
             onClick={() => onSeleziona(c.id)}
             title={c.nome}
             style={{
-              display: "flex", alignItems: "center", gap: 8, minWidth: 0,
-              padding: compatta ? "8px 10px" : "10px 12px", borderRadius: 12,
+              display: "flex", minWidth: 0,
+              // su cinque colonne di telefono una cella vale ~62px: icona e
+              // nome affiancati non ci stanno, quindi il nome passa sotto
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: "center", justifyContent: isMobile ? "flex-start" : "flex-start",
+              gap: isMobile ? 3 : 8,
+              padding: isMobile ? "7px 3px" : compatta ? "8px 10px" : "10px 12px", borderRadius: 12,
               background: scelta ? NAVY : "transparent",
               // i filetti sono bordi della cella, non elementi in mezzo:
               // cosi' cadono esattamente sulla colonna, riga dopo riga
               border: "1px solid transparent",
               borderRight: !scelta && !ultimaDellaRiga ? `1px solid ${FILETTO}` : "1px solid transparent",
               borderBottom: !scelta && !nellUltimaRiga ? `1px solid ${FILETTO}` : "1px solid transparent",
-              cursor: "pointer", ...fontBody, fontSize: compatta ? 11.5 : 12.5, fontWeight: 700,
-              color: scelta ? "#fff" : NAVY, textAlign: "left",
+              cursor: "pointer", ...fontBody, fontSize: isMobile ? 8.5 : compatta ? 11.5 : 12.5, fontWeight: 700,
+              color: scelta ? "#fff" : NAVY, textAlign: isMobile ? "center" : "left",
             }}
           >
             <span style={{ display: "inline-flex", flexShrink: 0, color: scelta ? "#fff" : GOLD }}>
-              <Icona size={compatta ? 17 : 20} color={scelta ? "#fff" : GOLD} />
+              <Icona size={isMobile ? 15 : compatta ? 17 : 20} color={scelta ? "#fff" : GOLD} />
             </span>
             {/* due parole vanno a capo invece di allungare la colonna:
                 "Lame Microblading" su una riga sola allargherebbe la sua
                 colonna e con lei tutte le altre */}
-            <span style={{ minWidth: 0, lineHeight: 1.2, whiteSpace: "normal", overflowWrap: "anywhere" }}>{c.nome}</span>
+            <span style={{ minWidth: 0, lineHeight: 1.15, whiteSpace: "normal", overflowWrap: "anywhere" }}>{c.nome}</span>
           </button>
         );
       })}
