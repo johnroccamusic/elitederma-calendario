@@ -7500,16 +7500,21 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Raccolta punti premi</div>
             <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}.</div>
             {(() => {
-              // su mobile le 4 card stanno tutte su UNA riga (font e padding
-              // ridotti); su desktop restano larghe e possono andare a capo
-              const cardPunti = { ...cardStyle, flex: isMobile ? "1 1 0" : "1 1 200px", minWidth: 0, padding: isMobile ? "12px 6px" : 16, marginBottom: 0, ...(isMobile ? { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" } : {}) };
+              // le 4 card stanno su una riga sola a qualunque larghezza: sul
+              // telefono con font e imbottitura ridotti, su desktop larghe
+              const cardPunti = { ...cardStyle, minWidth: 0, height: "100%", boxSizing: "border-box", padding: isMobile ? "12px 6px" : 16, marginBottom: 0, ...(isMobile ? { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" } : {}) };
               // su mobile l'etichetta occupa un'altezza fissa (fino a 3 righe),
               // così i numeri delle 4 card partono tutti dalla stessa riga
               const lblPunti = { ...fontBody, fontSize: isMobile ? 10.5 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, marginBottom: isMobile ? 8 : 6, lineHeight: 1.2, ...(isMobile ? { textAlign: "center", minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center" } : {}) };
               const numPunti = { ...fontDisplay, fontSize: isMobile ? 24 : 24, fontWeight: 700, color: NAVY, ...(isMobile ? { textAlign: "center" } : {}) };
               const ptPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 12, color: MUTED, marginTop: 2, ...(isMobile ? { textAlign: "center" } : {}) };
               return (
-            <div style={{ display: "flex", gap: isMobile ? 6 : 12, marginBottom: 12, flexWrap: isMobile ? "nowrap" : "wrap" }}>
+            // quattro colonne uguali, non quattro flex che possono andare a
+            // capo: su desktop la quarta card finiva sotto le altre appena la
+            // finestra si stringeva. "start" le tiene attaccate in alto, cosi'
+            // le etichette partono dalla stessa riga anche quando una va a capo
+            // e le altre no
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               <div style={cardPunti}>
                 <div style={lblPunti}>Vendite effettuate</div>
                 <div style={numPunti}>{raccoltaPuntiMaster.venditeTotale}</div>
