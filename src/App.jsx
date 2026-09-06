@@ -22919,7 +22919,7 @@ function PaginaErp({ onBack, onApriAmministrazione, onApriFondoCassa, onApriCass
           pagina="amministrazione" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "contabilita", title: "Contabilità", descrizione: "Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriAmministrazione },
-            { chiave: "fondocassa", title: "Fondo cassa", descrizione: "Il contante dell'accademia: saldo, entrate e uscite.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriFondoCassa },
+            { chiave: "fondocassa", title: "Cassa contanti", descrizione: "Il contante dell'accademia: saldo, entrate, uscite e prelievi.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriFondoCassa },
             { chiave: "cassaconsulenze", title: "Cassa consulenze", descrizione: "Gli incassi delle consulenze: data, cliente, importo e metodo.", Icona: IconaTileAnagrafiche, attivo: true, onClick: onApriCassaConsulenze },
             { chiave: "categoriespesa", title: "Categorie di spesa", descrizione: "Organizza e gestisci le categorie usate in Prima nota cassa.", Icona: IconaTileCatalogo, attivo: true, onClick: onApriCatalogoCategorieCosti },
             { chiave: "operativocorsi", title: "Operativo corsi", descrizione: "Assegna master, assistenti, leve, hotel e sedi a ogni edizione.", Icona: IconaTileMaster, attivo: true, onClick: onApriAssegnazioneMaster },
@@ -26627,7 +26627,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
       <SchedaTabAmministrazione attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD" aiuto={aiuto("notecredito")}>Note di credito ({noteCreditoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("passivo")}>Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("attivo")}>Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "fondocassa"} onClick={() => onApriScheda("fondocassa")} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Fondo cassa</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "fondocassa"} onClick={() => onApriScheda("fondocassa")} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Cassa contanti</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "consulenze"} onClick={() => onApriScheda("consulenze")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Cassa consulenze</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("abbonamenti")}>Abbonamenti e contratti ({abbonamentiCount})</SchedaTabAmministrazione>
     </div>
@@ -27587,7 +27587,7 @@ function PaginaRiconciliazione({
   );
 }
 
-// ---------- Fondo cassa e Cassa consulenze ----------
+// ---------- Cassa contanti e Cassa consulenze ----------
 //
 // Due pannelli gemelli, tenuti separati di proposito: sono due casse
 // diverse, e mescolarle vorrebbe dire non sapere piu' quanto contante c'e'
@@ -27601,7 +27601,7 @@ function RigaCassaVuota({ testo }) {
   );
 }
 
-function PannelloFondoCassa() {
+function PannelloCassaContanti() {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
   const [msg, setMsg] = useState("");
@@ -27617,7 +27617,7 @@ function PannelloFondoCassa() {
       .select("*")
       .order("data", { ascending: false })
       .order("creato_il", { ascending: false });
-    if (error) { setMsg(`Non riesco a leggere il fondo cassa: ${error.message}`); setMovimenti([]); return; }
+    if (error) { setMsg(`Non riesco a leggere la cassa: ${error.message}`); setMovimenti([]); return; }
     setMovimenti(righe || []);
   }
   useEffect(() => { carica(); }, []);
@@ -28280,7 +28280,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
 
-        {tab === "fondocassa" && <PannelloFondoCassa />}
+        {tab === "fondocassa" && <PannelloCassaContanti />}
         {tab === "consulenze" && <PannelloCassaConsulenze />}
 
         {tab === "impegni" && (
