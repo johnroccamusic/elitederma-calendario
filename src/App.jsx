@@ -38233,7 +38233,125 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
 // (spesso diversi fra pagamento cash e fattura). Se un hotel è
 // associato a un'edizione, i suoi dati compaiono nella Dashboard
 // Master sotto al relativo corso (vedi CardDataMaster).
-function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack }) {
+// ---------- Listino di un hotel: stanze e periodi speciali ----------
+//
+// Tre righe di base - singola, doppia, tripla - con il prezzo cash e quello
+// a fattura. Poi i periodi speciali: date di inizio e fine con gli stessi
+// tre prezzi, che nelle loro date sostituiscono il listino base. E' la
+// stessa forma dei punti master (regola base + periodi), riusata invece di
+// inventarne una seconda.
+//
+// Un periodo puo' restare vuoto: si crea quando si sa che ci sara', si
+// compila quando si sanno i prezzi. Finche' non ha prezzi non sostituisce
+// niente e vale il listino base.
+const TIPI_STANZA = ["singola", "doppia", "tripla"];
+
+function prezzoHotelPerData(prezzi, periodi, hotelId, tipoStanza, data) {
+  const suoi = (prezzi || []).filter((p) => p.hotel_id === hotelId && p.tipo_stanza === tipoStanza);
+  const periodo = data
+    ? (periodi || []).find((pe) => pe.hotel_id === hotelId && pe.data_inizio && pe.data_fine && data >= pe.data_inizio && data <= pe.data_fine)
+    : null;
+  // il prezzo del periodo vale solo se qualcuno l'ha davvero scritto:
+  // un periodo creato e lasciato in bianco non deve azzerare la tariffa
+  if (periodo) {
+    const speciale = suoi.find((p) => p.periodo_id === periodo.id);
+    if (speciale && (speciale.prezzo_cash != null || speciale.prezzo_fattura != null)) return { ...speciale, periodo };
+  }
+  return suoi.find((p) => !p.periodo_id) || null;
+}
+
+function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
+  const isMobile = useIsMobile();
+  const [msg, setMsg] = useState("");
+
+  const miei = (prezzi || []).filter((p) => p.hotel_id === hotelId);
+  const mieiPeriodi = (periodi || []).filter((p) => p.hotel_id === hotelId);
+
+  function rigaDi(periodoId, tipo) {
+    return miei.find((p) => (p.periodo_id || null) === (periodoId || null) && p.tipo_stanza === tipo) || null;
+  }
+
+  async function salvaPrezzo(periodoId, tipo, campo, valore) {
+    const esistente = rigaDi(periodoId, tipo);
+    const numero = valore === "" ? null : parseNum(valore);
+    const { error } = esistente
+      ? await supabase.from("hotel_prezzi").update({ [campo]: numero, aggiornato_il: new Date().toISOString() }).eq("id", esistente.id)
+      : await supabase.from("hotel_prezzi").insert({ hotel_id: hotelId, periodo_id: periodoId || null, tipo_stanza: tipo, [campo]: numero });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("");
+    ricarica(["hotel_prezzi"]);
+  }
+
+  async function aggiungiPeriodo() {
+    const { error } = await supabase.from("hotel_periodi_speciali").insert({ hotel_id: hotelId });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["hotel_periodi_speciali"]);
+  }
+
+  async function salvaPeriodo(id, campo, valore) {
+    const { error } = await supabase.from("hotel_periodi_speciali").update({ [campo]: valore || null }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["hotel_periodi_speciali"]);
+  }
+
+  async function eliminaPeriodo(id) {
+    if (!window.confirm("Eliminare questo periodo speciale e i suoi prezzi?")) return;
+    const { error } = await supabase.from("hotel_periodi_speciali").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["hotel_periodi_speciali", "hotel_prezzi"]);
+  }
+
+  function tabellaPrezzi(periodoId) {
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr 1fr" : "120px 1fr 1fr", gap: 8, alignItems: "center" }}>
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Stanza</div>
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cash</div>
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Fattura</div>
+        {TIPI_STANZA.map((tipo) => {
+          const riga = rigaDi(periodoId, tipo);
+          return (
+            <React.Fragment key={tipo}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "capitalize" }}>{tipo}</div>
+              <input type="number" min="0" step="0.01" style={inputStyle} defaultValue={riga?.prezzo_cash ?? ""}
+                onBlur={(e) => { if (e.target.value !== String(riga?.prezzo_cash ?? "")) salvaPrezzo(periodoId, tipo, "prezzo_cash", e.target.value); }} />
+              <input type="number" min="0" step="0.01" style={inputStyle} defaultValue={riga?.prezzo_fattura ?? ""}
+                onBlur={(e) => { if (e.target.value !== String(riga?.prezzo_fattura ?? "")) salvaPrezzo(periodoId, tipo, "prezzo_fattura", e.target.value); }} />
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Listino a notte</div>
+      {tabellaPrezzi(null)}
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 22, marginBottom: 8, flexWrap: "wrap" }}>
+        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>Periodi speciali</div>
+        <Button variant="ghost" onClick={aggiungiPeriodo}>+ Aggiungi periodo</Button>
+      </div>
+      {mieiPeriodi.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun periodo speciale: vale sempre il listino qui sopra.</div>
+      )}
+      {mieiPeriodi.map((pe) => (
+        <div key={pe.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 10, background: "#FCFBF8" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 150px 150px auto", gap: 8, alignItems: "end", marginBottom: 10 }}>
+            <Field label="Nome (facoltativo)"><input style={inputStyle} defaultValue={pe.nome || ""} placeholder="Alta stagione, fiera…" onBlur={(e) => { if (e.target.value !== (pe.nome || "")) salvaPeriodo(pe.id, "nome", e.target.value); }} /></Field>
+            <Field label="Dal"><input type="date" style={inputStyle} defaultValue={pe.data_inizio || ""} onBlur={(e) => { if (e.target.value !== (pe.data_inizio || "")) salvaPeriodo(pe.id, "data_inizio", e.target.value); }} /></Field>
+            <Field label="Al"><input type="date" style={inputStyle} defaultValue={pe.data_fine || ""} onBlur={(e) => { if (e.target.value !== (pe.data_fine || "")) salvaPeriodo(pe.id, "data_fine", e.target.value); }} /></Field>
+            <button onClick={() => eliminaPeriodo(pe.id)} title="Elimina periodo" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>Elimina</button>
+          </div>
+          {tabellaPrezzi(pe.id)}
+        </div>
+      ))}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categorieGruppi, hotelPrezzi, hotelPeriodi, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricerca, setRicerca] = useState("");
   const [selezionatoId, setSelezionatoId] = useState(null);
@@ -38388,6 +38506,11 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
                     </Field>
                   </div>
                 </div>
+
+                {/* i due costi qui sopra restano come tariffa generica di
+                    ripiego: il listino per stanza li supera, ma le
+                    prenotazioni gia' fatte li usano ancora */}
+                <ListinoHotel hotelId={selezionato.id} prezzi={hotelPrezzi} periodi={hotelPeriodi} ricarica={ricarica} />
 
                 <PannelloClassificazioneGestionale valori={classHotel} onChange={aggiornaClassHotel} />
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -48751,6 +48874,8 @@ export default function App() {
   const [assistenteCorsi, setAssistenteCorsi] = useState([]);
   const [corsiDateDocenti, setCorsiDateDocenti] = useState([]);
   const [quoteVenditoriSplit, setQuoteVenditoriSplit] = useState([]);
+  const [hotelPrezzi, setHotelPrezzi] = useState([]);
+  const [hotelPeriodi, setHotelPeriodi] = useState([]);
   const [vociShopClassificazione, setVociShopClassificazione] = useState([]);
   const [coupon, setCoupon] = useState([]);
   const [regoleReferralAutomatico, setRegoleReferralAutomatico] = useState(null);
@@ -48928,6 +49053,8 @@ export default function App() {
     assistente_corsi: async () => setAssistenteCorsi((await supabase.from("assistente_corsi").select("*")).data || []),
     corsi_date_docenti: async () => setCorsiDateDocenti((await supabase.from("corsi_date_docenti").select("*")).data || []),
     quote_venditori_split: async () => setQuoteVenditoriSplit((await supabase.from("quote_venditori_split").select("*")).data || []),
+    hotel_prezzi: async () => setHotelPrezzi((await supabase.from("hotel_prezzi").select("*")).data || []),
+    hotel_periodi_speciali: async () => setHotelPeriodi((await supabase.from("hotel_periodi_speciali").select("*").order("data_inizio")).data || []),
     voci_shop_classificazione: async () => setVociShopClassificazione((await supabase.from("voci_shop_classificazione").select("*")).data || []),
     coupon: async () => setCoupon((await supabase.from("coupon").select("*").order("created_at", { ascending: false })).data || []),
     regole_referral_automatico: async () => setRegoleReferralAutomatico((await supabase.from("regole_referral_automatico").select("*").limit(1).maybeSingle()).data || null),
@@ -49045,18 +49172,18 @@ export default function App() {
     // tasto Advisor, che infatti il pallino lo mostrava
     // gli stessi dati che servono al riepilogo dentro la scheda del corso:
     // i conti sono gli stessi, quindi gli ingredienti anche
-    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop", "quote_venditori_split"],
+    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
     normative: [],
     ritornoalcorso: ["normative_testi"],
     mappanormativepmu: [],
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa"],
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
-    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split"],
-    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split"],
+    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
+    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
@@ -49112,11 +49239,11 @@ export default function App() {
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
     statisticavenditori: ["corsi", "corsi_date", "iscritti", "venditori", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     ultimeiscrizioni: ["corsi", "location", "corsi_date", "iscritti"],
-    assegnazionemaster: ["corsi", "location", "corsi_date", "corsi_date_docenti", "master", "hotel", "assistente", "leva", "spese", "impostazioni_layout_assegnazione_master"],
+    assegnazionemaster: ["corsi", "location", "corsi_date", "corsi_date_docenti", "master", "hotel", "assistente", "leva", "spese", "impostazioni_layout_assegnazione_master", "hotel_prezzi", "hotel_periodi_speciali"],
     calendario: ["corsi", "location", "corsi_date", "iscritti", "master"],
     cerca: ["corsi", "location", "corsi_date", "iscritti"],
     cercaiscritto: ["corsi", "location", "corsi_date", "iscritti"],
-    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split"],
+    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
   };
 
   async function caricaIniziale() {
@@ -50736,7 +50863,7 @@ export default function App() {
       )}
 
       {view === "gestionehotel" && (
-        <PaginaGestioneHotel hotel={hotel} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <PaginaGestioneHotel hotel={hotel} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("impostazioni")}  hotelPrezzi={hotelPrezzi} hotelPeriodi={hotelPeriodi} />
       )}
 
       {view === "gestionelocation" && (
