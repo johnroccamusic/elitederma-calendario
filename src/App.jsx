@@ -28219,6 +28219,15 @@ function PannelloCassaContanti() {
           totale non si puo' controllare */}
       <div style={{ ...cardStyle, marginBottom: 14 }}>
         <TitoloSezioneRiepilogo>Come si compone</TitoloSezioneRiepilogo>
+        {/* Detto a voce alta perche' altrimenti e' una regola invisibile:
+            riconciliando a settembre una fattura pagata in contanti a
+            luglio, quella non deve scalare niente da questa cassa — la
+            cassa a luglio non esisteva, e quel contante e' gia' dentro il
+            saldo di apertura. Tutte le letture qui sopra partono da quella
+            data, ma chi guarda il totale non ha modo di saperlo. */}
+        <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, color: MUTED, marginBottom: 8, lineHeight: 1.4 }}>
+          Si conta solo da{apertura?.aperta_il ? ` ${fmtData(apertura.aperta_il)}` : "l'apertura"} in poi. Quello che è successo prima — spese pagate, buste rientrate, vendite — non entra qui: è già dentro il saldo all'apertura.
+        </div>
         {[
           { voce: `Saldo all'apertura (${apertura?.aperta_il ? fmtData(apertura.aperta_il) : "—"})`, importo: saldoIniziale, segno: 1 },
           { voce: `Buste rientrate dai corsi (${buste.length})`, importo: totaleBuste, segno: 1 },
