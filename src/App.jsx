@@ -17857,8 +17857,8 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // Come per "Costo location", non è uno split libero: segue in blocco
   // la tendina "Tipo di pagamento" di quella riga.
   const righeAlloggioBase = [
-    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, nottiPrenotate: corsoData.notti_prenotate, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato, scadenza: corsoData.scadenza_pagamento_alloggio },
-    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, nottiPrenotate: d.notti_prenotate, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato, scadenza: d.scadenza_pagamento_alloggio })),
+    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, nottiPrenotate: corsoData.notti_prenotate, aNotteCash: corsoData.pattuito_a_notte_cash, aNotteBonifico: corsoData.pattuito_a_notte_bonifico, tipoStanza: corsoData.tipo_stanza, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato, scadenza: corsoData.scadenza_pagamento_alloggio },
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, nottiPrenotate: d.notti_prenotate, aNotteCash: d.pattuito_a_notte_cash, aNotteBonifico: d.pattuito_a_notte_bonifico, tipoStanza: d.tipo_stanza, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato, scadenza: d.scadenza_pagamento_alloggio })),
   ];
   const righeAlloggioClasse = righeAlloggioBase
     .filter((r) => r.alloggioId && (r.pattuitoPeriodo || r.nottiPrenotate))
@@ -17888,7 +17888,13 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
       // il titolo guida col vero fornitore (l'hotel, per far match con la
       // fattura reale) e riporta la persona solo come contesto — prima
       // mostrava solo la persona, che non serve a niente per riconciliare
-      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${hotelRiga?.nome || "—"}, per ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento, fornitore: hotelRiga?.nome || "—", fornitoreId: hotelRiga?.fornitore_id || null, iban: hotelRiga?.iban || null };
+      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${hotelRiga?.nome || "—"}, per ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento, fornitore: hotelRiga?.nome || "—", fornitoreId: hotelRiga?.fornitore_id || null, iban: hotelRiga?.iban || null,
+        // le due tariffe a notte della stanza scelta, congelate da
+        // "Gestisci alloggio": servono al riepilogo per rifare il conto
+        // quando si sposta il pagamento da bonifico a cash e viceversa
+        nottiPrenotate: r.nottiPrenotate ?? null, aNotteCash: r.aNotteCash ?? null, aNotteBonifico: r.aNotteBonifico ?? null,
+        aNotteHotelCash: hotelRiga?.costo_notte_cash ?? null, aNotteHotelBonifico: hotelRiga?.costo_notte_fattura ?? null,
+        pattuitoPeriodo: r.pattuitoPeriodo ?? null };
     })
     .filter(Boolean);
 
@@ -18267,8 +18273,30 @@ function PannelloRiepilogoAmministrativo({
     const campi = { tipo_pagamento_alloggio: tipo };
     // pagando in contanti una scadenza da bonifico non ha piu' senso
     if (tipo === "cash") campi.scadenza_pagamento_alloggio = null;
+
+    // Spostare il pagamento senza spostare la tariffa non ha senso: la
+    // stanza costa una cifra in contanti e un'altra con fattura, e sono
+    // due numeri diversi. Tutte e due sono gia' scritte sulla riga —
+    // "Gestisci alloggio" le prende dal listino della stanza scelta e le
+    // congela li' — quindi il conto si rifa' senza chiedere niente a
+    // nessuno: notti x la tariffa del modo appena scelto.
+    //
+    // Se sulla riga manca la tariffa di quel modo si ripiega su quella
+    // generica della scheda dell'hotel. Se manca anche quella, o se non ci
+    // sono notti, l'importo resta com'e': un pattuito a corpo, concordato
+    // a voce, non e' un conto da rifare — e riscriverlo in silenzio sarebbe
+    // peggio che lasciarlo.
+    const aNotte = tipo === "cash"
+      ? (r.aNotteCash ?? r.aNotteHotelCash ?? null)
+      : (r.aNotteBonifico ?? r.aNotteHotelBonifico ?? null);
+    const rifatto = r.nottiPrenotate != null && aNotte != null ? round2(r.nottiPrenotate * aNotte) : null;
+    if (rifatto != null) campi.pattuito_periodo = rifatto;
+
     const { error } = await supabase.from(r.tabella).update(campi).eq("id", r.rigaId);
     if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg(rifatto != null
+      ? `Alloggio ${tipo === "cash" ? "in contanti" : "a bonifico"}: ${r.nottiPrenotate} nott${r.nottiPrenotate === 1 ? "e" : "i"} × € ${aNotte} = € ${rifatto}.`
+      : "Pagamento spostato. L'importo resta quello pattuito: senza notti e tariffa a notte non c'è un conto da rifare.");
     ricarica([r.tabella]);
   }
 
@@ -18896,7 +18924,7 @@ function PannelloRiepilogoAmministrativo({
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>
-                        {corsoData.busta_rientrata_il ? "Busta rientrata in cassa" : "Busta ancora fuori"}
+                        {corsoData.busta_rientrata_il ? "Busta rientrata in cassa" : "Busta in viaggio o fuori cassa"}
                       </div>
                       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
                         {corsoData.busta_rientrata_il
