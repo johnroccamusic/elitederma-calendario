@@ -28645,6 +28645,12 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
           );
         })()}
 
+        {/* I quattro avvisi e le schede sono due cose diverse: i primi
+            dicono quanto lavoro c'e', le seconde dove si va a farlo. Il filo
+            marrone lo dichiara, e lo spazio doppio intorno lo lascia
+            respirare invece di far sembrare le due file un unico blocco. */}
+        <div style={{ height: 1, background: "#D5C9AF", margin: isMobile ? "14px 0" : "20px 0" }} />
+
         <TabsAmministrazione
           schedaAttiva={tab}
           onApriPrimaNotaCassa={onApriPrimaNotaCassa}
