@@ -26690,7 +26690,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
     { chiave: "passivo", titolo: `Scadenziario Passivo (${passivoCount})`, sotto: "Scadenze da pagare", Icona: IconaCalendarioCard },
     { chiave: "attivo", titolo: `Scadenziario Attivo (${attivoCount})`, sotto: "Incassi e scadenze attive", Icona: IconaCalendarioCard },
     { chiave: "fondocassa", titolo: "Cassa contanti", sotto: "Entrate e uscite contanti", Icona: IconaRicevutaErp },
-    { chiave: "consulenze", titolo: "Cassa consulenze", sotto: "Prestazioni professionali", Icona: IconaPersonaSemplice },
+    { chiave: "consulenze", titolo: "Cassa consulenze", sotto: "", Icona: IconaPersonaSemplice },
     { chiave: "abbonamenti", titolo: `Abbonamenti e contratti (${abbonamentiCount})`, sotto: "Gestione ricorrenti", Icona: IconaPersonaSemplice },
   ];
 
@@ -26749,7 +26749,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
               <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 13.5, fontWeight: 700, lineHeight: 1.2, color: NAVY, overflowWrap: "anywhere", marginTop: isMobile ? 0 : 4 }}>{s.titolo}</span>
               {/* la riga di spiegazione sta solo su desktop: in un quadrato
                   da ~78px ruberebbe lo spazio al nome, che conta di piu' */}
-              {!isMobile && (
+              {!isMobile && s.sotto && (
                 <span style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.25, color: MUTED }}>{s.sotto}</span>
               )}
               {!isMobile && (
