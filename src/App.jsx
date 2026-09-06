@@ -1055,7 +1055,11 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
   // verticali non capitavano mai due volte nello stesso punto. Con un
   // numero di colonne deciso qui, tutte le righe sotto si incolonnano
   // sulla prima, su qualunque schermo.
-  const colonne = isMobile ? 5 : compatta ? 5 : 6;
+  // il POS le usa entrambe: stretta quando la striscia sta in una colonna
+  // della griglia, larga quando occupa la pagina. Due colonne in piu' per
+  // ciascuna: le categorie sono trenta, e ogni riga risparmiata e' spazio
+  // che va ai prodotti
+  const colonne = isMobile ? 5 : compatta ? 7 : 8;
   // il filetto sul crema: CREAM_BORDER e' lo stesso tono dello sfondo e
   // spariva. Questo e' il grigio-oro gia' usato per i divisori della
   // scheda corso, che sul crema si vede
