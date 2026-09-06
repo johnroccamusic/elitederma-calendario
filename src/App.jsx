@@ -26751,9 +26751,14 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
   const [salvando, setSalvando] = useState(false);
-  async function confermaPagato() {
+  // Due tasti invece di uno: da dove escono i soldi non e' un dettaglio da
+  // correggere dopo, e "Pagato" e basta obbligava a ricordarsi di tornare
+  // sulla spesa a scrivere il metodo. Chi paga sa gia' se ha aperto il
+  // cassetto o fatto un bonifico, e con la cassa contanti quel gesto scala
+  // subito il saldo.
+  async function confermaPagato(metodo) {
     setSalvando(true);
-    await onConferma({ file, dataPagamento });
+    await onConferma({ file, dataPagamento, metodo });
     setSalvando(false);
   }
   const chips = [categoriaNome, scadenza ? `Scade ${fmtData(scadenza)}` : null, iban ? `IBAN ${iban}` : null].filter(Boolean);
@@ -26768,8 +26773,11 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
           <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
           <CampoFileTrascinabile onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
-          <button onClick={confermaPagato} disabled={salvando} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando ? 0.6 : 1, flexShrink: 0 }}>
-            {salvando ? "Salvo…" : "Pagato"}
+          <button onClick={() => confermaPagato("Cassa contanti")} disabled={salvando} title="Esce dalla cassa contanti: il saldo si aggiorna subito" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 16, padding: "9px 14px", cursor: salvando ? "default" : "pointer", opacity: salvando ? 0.6 : 1 }}>
+            {salvando ? "Salvo…" : "Pagato da cassa contanti"}
+          </button>
+          <button onClick={() => confermaPagato("Bonifico")} disabled={salvando} title="Esce dal conto corrente" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 14px", cursor: salvando ? "default" : "pointer", opacity: salvando ? 0.6 : 1 }}>
+            {salvando ? "Salvo…" : "Pagato da conto corrente"}
           </button>
         </div>
       )}
@@ -27660,6 +27668,9 @@ function PannelloCassaContanti() {
   const [venditeSenzaCorso, setVenditeSenzaCorso] = useState(0);
   const [speseDallaCassa, setSpeseDallaCassa] = useState(0);
   const [ricorrenti, setRicorrenti] = useState([]);
+  const [apertura, setApertura] = useState(null);
+  const [aperturaData, setAperturaData] = useState("");
+  const [aperturaSaldo, setAperturaSaldo] = useState("");
   const [msg, setMsg] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [pannello, setPannello] = useState(null); // 'prelievo' | 'versamento' | 'fondo'
@@ -27670,16 +27681,21 @@ function PannelloCassaContanti() {
   const [importoSpesa, setImportoSpesa] = useState("");
 
   async function carica() {
+    const { data: imp } = await supabase.from("cassa_contanti_impostazioni").select("*").limit(1).maybeSingle();
+    const aperta = imp?.aperta_il || dataOggiStr();
+    setApertura(imp || null);
+    setAperturaData(aperta);
+    setAperturaSaldo(String(imp?.saldo_iniziale ?? 0));
     const [mov, bus, ven, spe, ric] = await Promise.all([
-      supabase.from("cassa_contanti_movimenti").select("*").order("data", { ascending: false }).order("creato_il", { ascending: false }),
+      supabase.from("cassa_contanti_movimenti").select("*").gte("data", aperta).order("data", { ascending: false }).order("creato_il", { ascending: false }),
       // solo le buste dichiarate rientrate, con l'importo congelato in quel
       // momento: quello e' il contante davvero arrivato in amministrazione
-      supabase.from("corsi_date").select("id, busta_rientrata_il, busta_importo").not("busta_rientrata_il", "is", null),
+      supabase.from("corsi_date").select("id, busta_rientrata_il, busta_importo").not("busta_rientrata_il", "is", null).gte("busta_rientrata_il", aperta),
       // le vendite in contanti dal POS che NON appartengono a un corso:
       // quelle di un corso stanno gia' dentro la sua busta, e contarle qui
       // vorrebbe dire contarle due volte
-      supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).not("tipo_movimento", "in", '("annullamento","omaggio")'),
-      supabase.from("spese").select("totale, metodo_pagamento"),
+      supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
+      supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
     ]);
     if (mov.error) { setMsg(`Non riesco a leggere la cassa: ${mov.error.message}`); setMovimenti([]); return; }
@@ -27694,7 +27710,8 @@ function PannelloCassaContanti() {
   const totaleBuste = round2(buste.reduce((s, b) => s + (b.busta_importo || 0), 0));
   const versamenti = round2((movimenti || []).filter((m) => m.tipo === "versamento").reduce((s, m) => s + (m.importo || 0), 0));
   const prelievi = round2((movimenti || []).filter((m) => m.tipo === "prelievo").reduce((s, m) => s + (m.importo || 0), 0));
-  const saldo = round2(totaleBuste + venditeSenzaCorso + versamenti - prelievi - speseDallaCassa);
+  const saldoIniziale = round2(Number(apertura?.saldo_iniziale) || 0);
+  const saldo = round2(saldoIniziale + totaleBuste + venditeSenzaCorso + versamenti - prelievi - speseDallaCassa);
   // il fondo cassa non e' un numero scritto a mano: e' quanto serve ogni
   // mese per le spese che si pagano in contanti
   const fondoMinimo = round2(ricorrenti.reduce((s, r) => s + (r.importo_mensile || 0), 0));
@@ -27719,6 +27736,18 @@ function PannelloCassaContanti() {
     if (!window.confirm("Eliminare questo movimento? Il saldo si ricalcola.")) return;
     const { error } = await supabase.from("cassa_contanti_movimenti").delete().eq("id", id);
     if (error) { setMsg(`Non eliminato: ${error.message}`); return; }
+    carica();
+  }
+
+  async function salvaApertura() {
+    const valore = aperturaSaldo === "" ? 0 : parseNum(aperturaSaldo);
+    if (!aperturaData) { setMsg("Serve la data di apertura."); return; }
+    setSalvando(true);
+    const { error } = await supabase.from("cassa_contanti_impostazioni")
+      .upsert({ unica: true, aperta_il: aperturaData, saldo_iniziale: valore, aggiornato_il: new Date().toISOString() }, { onConflict: "unica" });
+    setSalvando(false);
+    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    setPannello(null); setMsg("");
     carica();
   }
 
@@ -27760,6 +27789,7 @@ function PannelloCassaContanti() {
       <div style={{ ...cardStyle, marginBottom: 14 }}>
         <TitoloSezioneRiepilogo>Come si compone</TitoloSezioneRiepilogo>
         {[
+          { voce: `Saldo all'apertura (${apertura?.aperta_il ? fmtData(apertura.aperta_il) : "—"})`, importo: saldoIniziale, segno: 1 },
           { voce: `Buste rientrate dai corsi (${buste.length})`, importo: totaleBuste, segno: 1 },
           { voce: "Vendite in contanti al banco, fuori dai corsi", importo: venditeSenzaCorso, segno: 1 },
           { voce: `Versamenti (${storico.filter((m) => m.tipo === "versamento").length})`, importo: versamenti, segno: 1 },
@@ -27779,6 +27809,7 @@ function PannelloCassaContanti() {
         <Button onClick={() => { setPannello(pannello === "prelievo" ? null : "prelievo"); setMsg(""); }}>Preleva da cassa contanti</Button>
         <Button variant="ghost" onClick={() => { setPannello(pannello === "versamento" ? null : "versamento"); setMsg(""); }}>Versa in cassa contanti</Button>
         <Button variant="ghost" onClick={() => { setPannello(pannello === "fondo" ? null : "fondo"); setMsg(""); }}>Fondo cassa: spese del mese</Button>
+        <Button variant="ghost" onClick={() => { setPannello(pannello === "apertura" ? null : "apertura"); setMsg(""); }}>Apertura cassa</Button>
       </div>
 
       {(pannello === "prelievo" || pannello === "versamento") && (
@@ -27817,6 +27848,21 @@ function PannelloCassaContanti() {
             <Field label="Spesa"><input style={inputStyle} value={nomeSpesa} onChange={(e) => setNomeSpesa(e.target.value)} placeholder="Pulizie, cancelleria…" /></Field>
             <Field label="Al mese"><input inputMode="decimal" style={inputStyle} value={importoSpesa} onChange={(e) => setImportoSpesa(e.target.value)} /></Field>
             <Button onClick={aggiungiRicorrente} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>Aggiungi</Button>
+          </div>
+        </div>
+      )}
+
+      {pannello === "apertura" && (
+        <div style={{ ...cardStyle, marginBottom: 14 }}>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>
+            Da quando esiste questa cassa e quanto c'era nel cassetto quel giorno. Prima di questa data i contanti
+            entravano e uscivano senza essere registrati: contarne solo le uscite darebbe un negativo che non
+            corrisponde a niente.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "170px 170px auto", gap: 8, alignItems: "end" }}>
+            <Field label="Cassa aperta il"><input type="date" style={inputStyle} value={aperturaData} onChange={(e) => setAperturaData(e.target.value)} /></Field>
+            <Field label="Contanti nel cassetto"><input inputMode="decimal" style={inputStyle} value={aperturaSaldo} onChange={(e) => setAperturaSaldo(e.target.value)} /></Field>
+            <Button onClick={salvaApertura} disabled={salvando} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>{salvando ? "Salvo…" : "Salva apertura"}</Button>
           </div>
         </div>
       )}
@@ -28322,7 +28368,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["spese"]);
   }
-  async function segnaPagataReale(item, { file, dataPagamento }) {
+  async function segnaPagataReale(item, { file, dataPagamento, metodo }) {
     setMsg("");
     let allegatoPath = item.spesaReale.allegato_path || null;
     if (file) {
@@ -28330,7 +28376,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       if (errore) { setMsg("Errore allegato: " + errore); return; }
       allegatoPath = url;
     }
-    const { error } = await supabase.from("spese").update({ stato: "pagata", data_pagamento: dataPagamento || null, allegato_path: allegatoPath, metodo_pagamento: "Bonifico" }).eq("id", item.spesaReale.id);
+    const { error } = await supabase.from("spese").update({ stato: "pagata", data_pagamento: dataPagamento || null, allegato_path: allegatoPath, metodo_pagamento: metodo || "Bonifico" }).eq("id", item.spesaReale.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["spese"]);
   }
