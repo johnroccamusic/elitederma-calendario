@@ -28585,17 +28585,33 @@ function PannelloCassaContanti({
                     {fmtIntervalloEsteso(cd.data_inizio, cd.data_fine || cd.data_inizio)} — {euroRiepilogo(importo)}
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 18, flexShrink: 0, flexWrap: "wrap" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: partita ? "#8A6D1D" : MUTED }}>
-                    <input type="checkbox" checked={partita} onChange={(e) => segnaBustaInArrivo(cd, e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                    In arrivo
-                  </label>
-                  {/* il secondo passo compare solo dopo il primo: una busta
-                      che non e' ancora partita non puo' essere gia' arrivata */}
-                  {partita && (
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
-                      <input type="checkbox" checked={false} onChange={() => segnaBustaInCassa(cd, importo)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                      Ok, busta in cassa
+                {/* Una casella sola alla volta, non due: la busta e' a un
+                    punto solo del suo viaggio, e chiedere "e' partita?" a una
+                    che e' gia' partita non serve piu' a niente. Spuntata "In
+                    arrivo", al suo posto compare il passo dopo.
+                    L'"annulla" c'e' perche' un tocco sbagliato non deve
+                    diventare una strada senza ritorno: la busta torna a non
+                    essere partita e la casella di prima ricompare. */}
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, flexShrink: 0, flexWrap: "wrap" }}>
+                  {partita ? (
+                    <>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
+                        <input type="checkbox" checked={false} onChange={() => segnaBustaInCassa(cd, importo)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                        Ok, busta in cassa
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => segnaBustaInArrivo(cd, false)}
+                        title="La busta non è ancora partita"
+                        style={{ ...fontBody, fontSize: 11, color: MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        annulla
+                      </button>
+                    </>
+                  ) : (
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED }}>
+                      <input type="checkbox" checked={false} onChange={() => segnaBustaInArrivo(cd, true)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                      In arrivo
                     </label>
                   )}
                 </div>
