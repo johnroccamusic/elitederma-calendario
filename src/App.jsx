@@ -28401,15 +28401,19 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
             { chiave: "notecredito", etichetta: "Note di credito da riconciliare", valore: ncDaRiconciliare, colore: "#8E44AD", sfondo: "#F3EAF6", onClick: onApriRiconciliazione },
           ];
           return (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 18 }}>
+            {/* i quattro avvisi su una riga sola, sempre. Con auto-fit e un minimo
+                di 190px andavano a capo a due a due appena lo spazio si
+                stringeva, e quattro numeri che dovrebbero leggersi in un colpo
+                d'occhio diventavano due blocchi da scorrere */}
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${riquadri.length}, minmax(0, 1fr))`, gap: isMobile ? 5 : 10, marginBottom: 18, alignItems: "stretch" }}>
               {riquadri.map((r) => (
                 <button
                   key={r.chiave}
                   onClick={r.onClick}
-                  style={{ textAlign: "left", background: r.valore > 0 ? r.sfondo : "#fff", border: `1px solid ${r.valore > 0 ? `${r.colore}44` : CREAM_BORDER}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer" }}
+                  style={{ textAlign: "left", background: r.valore > 0 ? r.sfondo : "#fff", border: `1px solid ${r.valore > 0 ? `${r.colore}44` : CREAM_BORDER}`, borderRadius: isMobile ? 10 : 14, padding: isMobile ? "8px 7px" : "12px 12px", minWidth: 0, cursor: "pointer" }}
                 >
-                  <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: r.valore > 0 ? r.colore : MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6, lineHeight: 1.25 }}>{r.etichetta}</div>
-                  <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: r.valore > 0 ? NAVY : MUTED, lineHeight: 1 }}>{r.valore}</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 7.5 : 9.5, fontWeight: 700, color: r.valore > 0 ? r.colore : MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, marginBottom: isMobile ? 3 : 5, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.etichetta}</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 22, fontWeight: 700, color: r.valore > 0 ? NAVY : MUTED, lineHeight: 1 }}>{r.valore}</div>
                 </button>
               ))}
             </div>
