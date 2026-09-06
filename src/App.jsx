@@ -596,6 +596,37 @@ function IconaBanconota({ size = 20 }) {
     </svg>
   );
 }
+// mancante in cassa: il triangolo di attenzione, l'unica delle cinque
+// caselle che segnala qualcosa invece di limitarsi a contarlo
+function IconaAllerta({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+// prelevabile: quello che puo' uscire dal cassetto
+function IconaFrecciaUscita({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+// in arrivo: la busta che sta ancora viaggiando
+function IconaBustaInViaggio({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8" />
+      <polyline points="3 8 12 14 21 8" />
+      <polyline points="3 8 5 4 19 4 21 8" />
+    </svg>
+  );
+}
 function IconaCartaPos({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -18030,7 +18061,11 @@ function TitoloSezioneRiepilogo({ children }) {
 // serve a separare tre numeri accostati: senza, "8.909,40 7.910,49 998,91"
 // e' una fila indistinta e per capire dove finisce uno e comincia l'altro
 // bisogna leggere le etichette.
-function CellaImportoRiepilogo({ Icona, label, valore, isMobile }) {
+// "colore" e "nota" sono facoltativi: senza, la cella resta esattamente
+// quella di sempre (importo blu, nessuna riga sotto). Servono alla cassa
+// contanti, dove un numero puo' essere un allarme e un altro ha bisogno di
+// dire quante buste sta contando.
+function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, minWidth: 0,
@@ -18039,14 +18074,15 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile }) {
     }}>
       <span style={{
         width: isMobile ? 30 : 42, height: isMobile ? 30 : 42, flexShrink: 0, borderRadius: "50%",
-        background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY,
+        background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: colore,
       }}>
         <Icona size={isMobile ? 16 : 20} />
       </span>
       <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />
       <div style={{ minWidth: 0 }}>
         <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.6, lineHeight: 1.25 }}>{label}</div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", lineHeight: 1.2 }}>{valore}</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 20, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2 }}>{valore}</div>
+        {nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, lineHeight: 1.2, marginTop: 1 }}>{nota}</div>}
       </div>
     </div>
   );
@@ -28339,27 +28375,38 @@ function PannelloCassaContanti({
           colonna quel rapporto lo devi ricostruire scorrendo.
           "Mancano in cassa" c'e' solo quando manca davvero qualcosa:
           quattro caselle quando il fondo e' sotto, tre quando e' a posto */}
+      {/* stesse celle del Riepilogo amministrativo - medaglione, riga
+          verticale, etichetta e importo - invece dei numeri nudi di prima:
+          e' lo stesso genere di informazione e non c'e' motivo che si
+          presenti in due modi diversi in due pagine.
+          Da telefono due per riga: cinque schede affiancate su un cellulare
+          diventerebbero cinque colonne da 60 pixel */}
       {(() => {
         const celle = [
-          { etichetta: "Saldo in cassa", valore: saldo, colore: saldo < 0 ? "#C0392B" : NAVY, grande: true },
-          { etichetta: "Fondo cassa da tenere", valore: fondoMinimo, colore: GOLD },
-          ...(mancanteInCassa > 0 ? [{ etichetta: "Mancano in cassa", valore: mancanteInCassa, colore: "#C0392B" }] : []),
-          { etichetta: "Prelevabile", valore: prelevabile, colore: NAVY },
+          { etichetta: "Saldo in cassa", valore: saldo, colore: saldo < 0 ? "#C0392B" : NAVY, Icona: IconaBanconota },
+          { etichetta: "Fondo cassa da tenere", valore: fondoMinimo, colore: GOLD, Icona: IconaPortafoglio },
+          ...(mancanteInCassa > 0 ? [{ etichetta: "Mancano in cassa", valore: mancanteInCassa, colore: "#C0392B", Icona: IconaAllerta }] : []),
+          { etichetta: "Prelevabile", valore: prelevabile, colore: NAVY, Icona: IconaFrecciaUscita },
           ...(busteInArrivo.quante > 0 ? [{
             etichetta: "In arrivo",
             valore: busteInArrivo.totale,
             colore: "#8A6D1D",
+            Icona: IconaBustaInViaggio,
             nota: `${busteInArrivo.quante} bust${busteInArrivo.quante === 1 ? "a" : "e"} ancora fuori`,
           }] : []),
         ];
         return (
-          <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: isMobile ? 6 : 14, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : `repeat(${celle.length}, minmax(120px, 1fr))`, gap: isMobile ? 8 : 14, marginBottom: 14 }}>
             {celle.map((c) => (
-              <div key={c.etichetta} style={{ minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: isMobile ? 8 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.6, lineHeight: 1.2, overflowWrap: "anywhere" }}>{c.etichetta}</div>
-                <div style={{ ...fontDisplay, fontSize: isMobile ? (c.grande ? 16 : 15) : (c.grande ? 32 : 26), fontWeight: 700, color: c.colore, lineHeight: 1.15, whiteSpace: "nowrap" }}>{euroRiepilogo(c.valore)}</div>
-                {c.nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, lineHeight: 1.2, marginTop: 2 }}>{c.nota}</div>}
-              </div>
+              <CellaImportoRiepilogo
+                key={c.etichetta}
+                isMobile={isMobile}
+                Icona={c.Icona}
+                label={c.etichetta}
+                valore={euroRiepilogo(c.valore)}
+                colore={c.colore}
+                nota={c.nota}
+              />
             ))}
           </div>
         );
