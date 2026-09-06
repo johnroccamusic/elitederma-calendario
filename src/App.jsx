@@ -3498,8 +3498,10 @@ function Gate({ onOk }) {
 // scadenza è nota, il pagamento è schedulabile): se il tipo è Cash resta
 // sempre sola lettura = fine corso, perché il cash si chiude comunque in
 // "Cash pulito in busta" a fine corso, non passa da qui.
-function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }) {
+function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPeriodi, onClose, onSalvato }) {
   const [hotelId, setHotelId] = useState(riga.alloggio_id || "");
+  const [checkIn, setCheckIn] = useState(riga.data_check_in || cd?.data_inizio || "");
+  const [tipoStanza, setTipoStanza] = useState(riga.tipo_stanza || "");
   const [notti, setNotti] = useState(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
   const [costoNotteCash, setCostoNotteCash] = useState(riga.pattuito_a_notte_cash != null ? String(riga.pattuito_a_notte_cash) : "");
   const [costoNotteBonifico, setCostoNotteBonifico] = useState(riga.pattuito_a_notte_bonifico != null ? String(riga.pattuito_a_notte_bonifico) : "");
@@ -3508,16 +3510,31 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // precompila i due costi a notte dalla tariffa dell'hotel scelto (cash e
-  // fattura), solo se il campo è ancora vuoto — non sovrascrive un valore
-  // già inserito a mano
+  // Il prezzo lo decide il listino: hotel + tipo di stanza + data di
+  // check-in, perche' un periodo speciale vale solo nelle sue date.
+  // Qui, a differenza di prima, i due campi si riscrivono ogni volta che
+  // cambia una di quelle tre cose: erano scelte fatte adesso, e tenersi il
+  // prezzo della stanza precedente sarebbe un errore silenzioso. Restano
+  // comunque modificabili a mano dopo.
+  const prezzoListino = hotelId && tipoStanza
+    ? prezzoHotelPerData(hotelPrezzi, hotelPeriodi, hotelId, tipoStanza, checkIn || null)
+    : null;
+
   useEffect(() => {
+    if (!hotelId) return;
     const h = (hotel || []).find((x) => x.id === hotelId);
+    if (tipoStanza && prezzoListino) {
+      setCostoNotteCash(prezzoListino.prezzo_cash != null ? String(prezzoListino.prezzo_cash) : "");
+      setCostoNotteBonifico(prezzoListino.prezzo_fattura != null ? String(prezzoListino.prezzo_fattura) : "");
+      return;
+    }
+    // nessuna riga di listino per questa stanza: si ripiega sulla vecchia
+    // tariffa generica dell'hotel, senza sovrascrivere quello che c'e' gia'
     if (!h) return;
     if (costoNotteCash === "" && h.costo_notte_cash != null) setCostoNotteCash(String(h.costo_notte_cash));
     if (costoNotteBonifico === "" && h.costo_notte_fattura != null) setCostoNotteBonifico(String(h.costo_notte_fattura));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hotelId]);
+  }, [hotelId, tipoStanza, checkIn]);
 
   async function salva() {
     setSalvando(true);
@@ -3528,6 +3545,8 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }
     const periodo = nottiNum != null && aNotteNum != null ? round2(nottiNum * aNotteNum) : null;
     const campi = {
       alloggio_id: hotelId || null,
+      data_check_in: checkIn || null,
+      tipo_stanza: tipoStanza || null,
       notti_prenotate: nottiNum,
       pattuito_a_notte_cash: cashNum,
       pattuito_a_notte_bonifico: bonificoNum,
@@ -3549,9 +3568,36 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }
           {(hotel || []).map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
         </select>
       </Field>
-      <Field label="Notti prenotate">
-        <input type="text" inputMode="numeric" style={inputStyle} value={notti} onChange={(e) => setNotti(e.target.value)} />
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Data check-in">
+            <input type="date" style={inputStyle} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Notti prenotate">
+            <input type="text" inputMode="numeric" style={inputStyle} value={notti} onChange={(e) => setNotti(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      <Field label="Tipo di stanza">
+        <select style={inputStyle} value={tipoStanza} onChange={(e) => setTipoStanza(e.target.value)}>
+          <option value="">— scegli —</option>
+          {TIPI_STANZA.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+        </select>
       </Field>
+      {/* da dove vengono i due prezzi qui sotto: dal listino base o da un
+          periodo speciale. Senza, un prezzo diverso dal solito sembrerebbe
+          un errore */}
+      {tipoStanza && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -6, marginBottom: 10 }}>
+          {prezzoListino
+            ? (prezzoListino.periodo
+                ? `Prezzi dal periodo speciale${prezzoListino.periodo.nome ? ` "${prezzoListino.periodo.nome}"` : ""} (${fmtData(prezzoListino.periodo.data_inizio)} → ${fmtData(prezzoListino.periodo.data_fine)}).`
+                : "Prezzi dal listino base dell'hotel.")
+            : "Nessun prezzo a listino per questa stanza: scrivili a mano qui sotto."}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <Field label="Costo a notte Cash">
@@ -3709,7 +3755,7 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
 // docente extra aggiungere (master/assistente/leva): ognuna diventa
 // una riga propria in corsi_date_docenti, con i propri biglietti di
 // viaggio e il proprio hotel.
-function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, spese, ruoloUtente, layoutCondiviso, ricarica, onBack, onApriRegistraSpesaAlloggio, titolo = "Operativo corsi" }) {
+function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, hotelPrezzi, hotelPeriodi, assistente, leva, spese, ruoloUtente, layoutCondiviso, ricarica, onBack, onApriRegistraSpesaAlloggio, titolo = "Operativo corsi" }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -4507,6 +4553,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
       </div>
       {gestisciAlloggio && (
         <ModaleGestisciAlloggio
+          hotelPrezzi={hotelPrezzi}
+          hotelPeriodi={hotelPeriodi}
           cd={gestisciAlloggio.cd}
           riga={gestisciAlloggio.riga}
           tabella={gestisciAlloggio.tabella}
@@ -17942,6 +17990,20 @@ function PannelloRiepilogoAmministrativo({
     ricarica(["quote_venditori_split"]);
   }
 
+  // L'alloggio non ha uno split libero: o tutto bonifico o tutto cash,
+  // perche' il costo viene da "Tipo di pagamento" scelto in Assegnazione
+  // Master. I due flag qui cambiano quella scelta, cosi' all'ultimo momento
+  // si puo' spostare senza tornare indietro di due pagine.
+  async function impostaTipoPagamentoAlloggio(r, modalita) {
+    const tipo = modalita === "C" ? "cash" : "bonifico";
+    const campi = { tipo_pagamento_alloggio: tipo };
+    // pagando in contanti una scadenza da bonifico non ha piu' senso
+    if (tipo === "cash") campi.scadenza_pagamento_alloggio = null;
+    const { error } = await supabase.from(r.tabella).update(campi).eq("id", r.rigaId);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica([r.tabella]);
+  }
+
   function campiSplitDi(tipo) {
     if (tipo === "venditore") return ["quota_venditore_bonifico", "quota_venditore_cash"];
     if (tipo === "modelle") return ["commissione_modelle_bonifico", "commissione_modelle_cash"];
@@ -18332,6 +18394,24 @@ function PannelloRiepilogoAmministrativo({
                                 <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>+</button>
                               </div>
                             )}
+                            {r.tipo === "alloggio" && (() => {
+                              const modalita = modalitaSplitMaster(r);
+                              return (
+                                <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                                  {["B", "C"].map((chiave) => (
+                                    <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : "Tutto cash"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
+                                      <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalita === chiave ? NAVY : MUTED }}>{chiave}</span>
+                                      <input
+                                        type="checkbox"
+                                        checked={modalita === chiave}
+                                        onChange={() => impostaTipoPagamentoAlloggio(r, chiave)}
+                                        style={{ width: 13, height: 13, cursor: "pointer", margin: 0 }}
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                             {r.tipo === "master" && (() => {
                               const modalita = modalitaSplitMaster(r);
                               return (
@@ -50905,7 +50985,7 @@ export default function App() {
       )}
 
       {view === "assegnazionemaster" && (
-        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("erp")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} titolo={etichettaTasto("amministrazione", "operativocorsi", "Operativo corsi")} />
+        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} hotelPrezzi={hotelPrezzi} hotelPeriodi={hotelPeriodi} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("erp")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} titolo={etichettaTasto("amministrazione", "operativocorsi", "Operativo corsi")} />
       )}
 
       {view === "calendario" && (
