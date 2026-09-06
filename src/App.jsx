@@ -27024,8 +27024,6 @@ function PaginaRiconciliazione({
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
   const codaDaRiconciliare = documenti.filter((d) => d.stato === "da_riconciliare" && dentroContabilita(d)).sort((a, b) => (a.data_documento || "").localeCompare(b.data_documento || ""));
   const elencoRiconciliate = documenti.filter((d) => d.stato === "riconciliato").sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
-  const elencoSenzaImpegno = documenti.filter((d) => d.stato === "senza_impegno").sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
-  const elencoScartate = documenti.filter((d) => d.stato === "scartato").sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
 
   // il documento aperto per il dettaglio: se non è (più) in coda —
   // appena riconciliato/scartato, o passato da un link diretto — cade
@@ -27147,6 +27145,18 @@ function PaginaRiconciliazione({
   // §8: transazione di conferma — crea le righe riconciliazione,
   // ricalcola gli impegni toccati, marca il documento riconciliato,
   // genera le scadenze, alimenta l'apprendimento (§6.5)
+  // usata ancora dal flusso delle note di credito, che ha una barra sua:
+  // qui sotto il tasto "Scarta" non c'e' piu', li' si'
+  async function scartaDocumento() {
+    if (!documento) return;
+    const motivo = window.prompt("Motivo dello scarto (obbligatorio):");
+    if (motivo === null) return;
+    if (!motivo.trim()) { window.alert("Il motivo è obbligatorio."); return; }
+    await supabase.from("documento_fornitore").update({ stato: "scartato", note: motivo.trim() }).eq("id", documento.id);
+    await ricarica(["documento_fornitore"]);
+    vaiA(0);
+  }
+
   async function confermaRiconciliazione() {
     if (!documento || allocato <= 0 || allocato > totaleDocumento + 0.01) return;
     setSalvando(true);
@@ -27299,15 +27309,24 @@ function PaginaRiconciliazione({
   // spesa dalle fatture ricevute, segnala il pagamento nello scadenziario
   // - e in mezzo era facile fermarsi al primo. Qui si fa tutto in una
   // volta: nasce la spesa gia' pagata e il documento esce dalla coda.
-  const [pannelloPagata, setPannelloPagata] = useState(false);
+  // "pagata" oppure "dapagare": due esiti della stessa domanda - i soldi
+  // sono gia' usciti o no - quindi un pannello solo, con un campo in piu'
+  // quando serve
+  const [pannello, setPannello] = useState(null);
   const [pagataData, setPagataData] = useState(dataOggiStr());
   const [pagataMetodo, setPagataMetodo] = useState("Bonifico");
   const [pagataSottocat, setPagataSottocat] = useState("");
   const [pagataFile, setPagataFile] = useState(null);
 
-  async function confermaPagata() {
+  // In entrambi i casi nasce una SPESA, non solo una scadenza interna.
+  // "Accetta senza impegno" scriveva una riga in scadenza_passiva, che
+  // pero' nessuno legge fuori da questa pagina: il documento spariva dalla
+  // coda e nello Scadenziario Passivo non compariva niente. Lo scadenziario
+  // si costruisce dalle spese non pagate, ed e' li' che deve finire.
+  async function confermaSpesa(modo) {
     if (!documento) return;
     if (!pagataSottocat) { setMsg("Errore: scegli la categoria di spesa, altrimenti la spesa nasce senza classificazione."); return; }
+    if (!pagataData) { setMsg(modo === "pagata" ? "Errore: serve la data del pagamento." : "Errore: serve la data di scadenza."); return; }
     setSalvando(true);
     setMsg("");
     let allegato = null;
@@ -27327,39 +27346,20 @@ function PaginaRiconciliazione({
       // dire quanto e' imponibile e quanta IVA, non un ricalcolo nostro
       imponibile: documento.imponibile ?? documento.totale ?? 0,
       totale: documento.totale ?? 0,
-      stato: "pagata",
-      data_pagamento: pagataData || null,
-      metodo_pagamento: pagataMetodo,
+      ...(modo === "pagata"
+        ? { stato: "pagata", data_pagamento: pagataData, metodo_pagamento: pagataMetodo }
+        : { stato: "da_pagare", scadenza_pagamento: pagataData }),
       allegato_path: allegato,
     });
     if (error) { setSalvando(false); setMsg("Errore: " + error.message); return; }
     await supabase.from("documento_fornitore").update({ stato: "senza_impegno" }).eq("id", documento.id);
     setSalvando(false);
-    setPannelloPagata(false); setPagataFile(null); setPagataSottocat("");
+    setPannello(null); setPagataFile(null); setPagataSottocat("");
     await ricarica(["documento_fornitore", "spese"]);
     vaiA(0);
   }
 
-  async function accettaSenzaImpegno() {
-    if (!documento) return;
-    if (!window.confirm("Accettare questo documento come spesa non prevista, senza collegarlo a nessun impegno?")) return;
-    setSalvando(true);
-    await generaScadenzePassive(documento);
-    await supabase.from("documento_fornitore").update({ stato: "senza_impegno" }).eq("id", documento.id);
-    setSalvando(false);
-    await ricarica(["documento_fornitore", "scadenza_passiva"]);
-    vaiA(0);
-  }
 
-  async function scartaDocumento() {
-    if (!documento) return;
-    const motivo = window.prompt("Motivo dello scarto (obbligatorio):");
-    if (motivo === null) return;
-    if (!motivo.trim()) { window.alert("Il motivo è obbligatorio."); return; }
-    await supabase.from("documento_fornitore").update({ stato: "scartato", note: motivo.trim() }).eq("id", documento.id);
-    await ricarica(["documento_fornitore"]);
-    vaiA(0);
-  }
 
   async function creaImpegnoFuoriPrevisione() {
     if (!documento) return;
@@ -27451,8 +27451,6 @@ function PaginaRiconciliazione({
         <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
           <TabPillola attivo={subTab === "da_riconciliare"} onClick={() => setSubTab("da_riconciliare")}>Da riconciliare ({codaDaRiconciliare.length})</TabPillola>
           <TabPillola attivo={subTab === "riconciliate"} onClick={() => setSubTab("riconciliate")}>Riconciliate ({elencoRiconciliate.length})</TabPillola>
-          <TabPillola attivo={subTab === "senza_impegno"} onClick={() => setSubTab("senza_impegno")}>Senza impegno ({elencoSenzaImpegno.length})</TabPillola>
-          <TabPillola attivo={subTab === "scartate"} onClick={() => setSubTab("scartate")}>Scartate ({elencoScartate.length})</TabPillola>
         </div>
 
         {subTab === "da_riconciliare" && (
@@ -27695,10 +27693,12 @@ function PaginaRiconciliazione({
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button onClick={scartaDocumento} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C6C0`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Scarta</button>
-                  <button onClick={() => { setPannelloPagata((v) => !v); setMsg(""); }} disabled={salvando} title="La fattura e' gia' stata pagata: registra la spesa e chiudi il documento" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#fff", border: `1px solid #BFDFC4`, borderRadius: 16, padding: "9px 14px", cursor: salvando ? "default" : "pointer" }}>Pagata</button>
-                  <button onClick={accettaSenzaImpegno} disabled={salvando} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Accetta senza impegno</button>
-                  <button onClick={() => vaiA(1)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Rimanda</button>
+                  {/* due sole strade, che sono poi le due domande vere: i
+                      soldi sono gia' usciti, oppure devono ancora uscire. Il
+                      terzo tasto compare solo quando a destra c'e' un impegno
+                      da coprire. */}
+                  <button onClick={() => { setPannello(pannello === "dapagare" ? null : "dapagare"); setMsg(""); }} disabled={salvando} title="Non ancora pagata: crea la spesa e mandala nello scadenziario passivo" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "9px 14px", cursor: salvando ? "default" : "pointer" }}>Da pagare</button>
+                  <button onClick={() => { setPannello(pannello === "pagata" ? null : "pagata"); setMsg(""); }} disabled={salvando} title="Gia' pagata: registra la spesa come saldata" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#fff", border: `1px solid #BFDFC4`, borderRadius: 16, padding: "9px 14px", cursor: salvando ? "default" : "pointer" }}>Pagata</button>
                   <button onClick={confermaRiconciliazione} disabled={!bottoneAbilitato} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "10px 18px", cursor: bottoneAbilitato ? "pointer" : "default", opacity: bottoneAbilitato ? 1 : 0.5 }}>
                     {salvando ? "Salvo…" : "Riconcilia e crea scadenza"}
                   </button>
@@ -27710,18 +27710,25 @@ function PaginaRiconciliazione({
                   pagamento. La categoria e' obbligatoria - una spesa senza
                   classificazione non compare in nessun conto, e nasce gia'
                   da sistemare */}
-              {pannelloPagata && (
+              {pannello && (
                 <div style={{ ...cardStyle, marginTop: 12, background: "#F6FBF7", border: `1px solid #BFDFC4` }}>
                   <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 10 }}>
-                    Questa fattura è già stata pagata. Registro la spesa come pagata e chiudo il documento, senza passare da "Spese da importare".
+                    {pannello === "pagata"
+                      ? "Questa fattura è già stata pagata. Registro la spesa come saldata e chiudo il documento, senza passare da \"Spese da importare\"."
+                      : "Questa fattura è ancora da pagare. Creo la spesa con la sua scadenza: la trovi nello Scadenziario Passivo, dove si salda con un tasto."}
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "150px 190px 1fr", gap: 10, alignItems: "end", marginBottom: 10 }}>
-                    <Field label="Data del pagamento"><input type="date" style={inputStyle} value={pagataData} onChange={(e) => setPagataData(e.target.value)} /></Field>
-                    <Field label="Pagata con">
-                      <select style={inputStyle} value={pagataMetodo} onChange={(e) => setPagataMetodo(e.target.value)}>
-                        {METODI_SPESA.map((m) => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </Field>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : (pannello === "pagata" ? "150px 190px 1fr" : "150px 1fr"), gap: 10, alignItems: "end", marginBottom: 10 }}>
+                    <Field label={pannello === "pagata" ? "Data del pagamento" : "Scadenza"}><input type="date" style={inputStyle} value={pagataData} onChange={(e) => setPagataData(e.target.value)} /></Field>
+                    {/* il metodo lo si chiede solo a cose fatte: di una spesa
+                        ancora da pagare non si sa da dove uscira', lo si decide
+                        nello scadenziario premendo cassa o conto corrente */}
+                    {pannello === "pagata" && (
+                      <Field label="Pagata con">
+                        <select style={inputStyle} value={pagataMetodo} onChange={(e) => setPagataMetodo(e.target.value)}>
+                          {METODI_SPESA.map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </Field>
+                    )}
                     <Field label="Categoria di spesa">
                       <select style={inputStyle} value={pagataSottocat} onChange={(e) => setPagataSottocat(e.target.value)}>
                         <option value="">— scegli —</option>
@@ -27731,10 +27738,10 @@ function PaginaRiconciliazione({
                   </div>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <CampoFileTrascinabile onChange={(e) => setPagataFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 200px", minWidth: 0 }} />
-                    <button onClick={confermaPagata} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 16, padding: "10px 16px", cursor: salvando ? "default" : "pointer" }}>
-                      {salvando ? "Salvo…" : "Registra come pagata"}
+                    <button onClick={() => confermaSpesa(pannello)} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 16, padding: "10px 16px", cursor: salvando ? "default" : "pointer" }}>
+                      {salvando ? "Salvo…" : pannello === "pagata" ? "Registra come pagata" : "Crea la scadenza"}
                     </button>
-                    <button onClick={() => setPannelloPagata(false)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "9px 14px", cursor: "pointer" }}>Annulla</button>
+                    <button onClick={() => setPannello(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "9px 14px", cursor: "pointer" }}>Annulla</button>
                   </div>
                 </div>
               )}
@@ -27763,27 +27770,7 @@ function PaginaRiconciliazione({
           </div>
         )}
 
-        {subTab === "senza_impegno" && (
-          <div style={{ ...cardStyle }}>
-            {elencoSenzaImpegno.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun documento senza impegno.</div>}
-            {elencoConIntestazioniMese(elencoSenzaImpegno, (d) => d.data_documento || null, (d) => (
-              <RigaAmministrazione key={d.id} data={d.data_documento} titolo={fornitoriById[d.fornitore_id]?.nome || "Fornitore"} sottotitolo={d.numero ? `Fattura n. ${d.numero}` : null} importo={fmtEuroErp(d.totale)}>
-                <button onClick={() => riportaInCoda(d)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riporta in coda</button>
-              </RigaAmministrazione>
-            ))}
-          </div>
-        )}
 
-        {subTab === "scartate" && (
-          <div style={{ ...cardStyle }}>
-            {elencoScartate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun documento scartato.</div>}
-            {elencoConIntestazioniMese(elencoScartate, (d) => d.data_documento || null, (d) => (
-              <RigaAmministrazione key={d.id} data={d.data_documento} titolo={fornitoriById[d.fornitore_id]?.nome || "Fornitore"} sottotitolo={d.note || null} importo={fmtEuroErp(d.totale)}>
-                <button onClick={() => riportaInCoda(d)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riporta in coda</button>
-              </RigaAmministrazione>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
