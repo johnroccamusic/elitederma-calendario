@@ -18255,7 +18255,13 @@ function PannelloRiepilogoAmministrativo({
   const idsSpeseClasseReali = new Set(speseClasseReali.map((s) => s.id));
   const speseClasse = [...speseClasseReali, ...speseClasseNuove.filter((s) => !idsSpeseClasseReali.has(s.id))]
     .filter((s) => !speseClasseRimosse.has(s.id))
-    .map((s) => (speseClasseOverride[s.id] ? { ...s, ...speseClasseOverride[s.id] } : s));
+    .map((s) => (speseClasseOverride[s.id] ? { ...s, ...speseClasseOverride[s.id] } : s))
+    // in ordine di inserimento, e basta: una voce aggiunta va in fondo e ci
+    // resta. Qui non serve un ordine alfabetico ne' per importo — l'elenco
+    // dei costi di una classe si ricorda a memoria per posizione, e una
+    // riga che si sposta da sola dopo ogni spunta e' una riga che non si
+    // ritrova piu'
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")) || String(a.id).localeCompare(String(b.id)));
   async function salvaCampiSpesaClasse(id, campi) {
     setSpeseClasseOverride((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), ...campi } }));
     const { error } = await supabase.from("spese").update(campi).eq("id", id);
@@ -49760,7 +49766,14 @@ export default function App() {
     costi_sottocategorie: async () => setCostiSottocategorie((await supabase.from("costi_sottocategorie").select("*").order("ordine")).data || []),
     eventi: async () => setEventi((await supabase.from("eventi").select("*").order("data_inizio", { ascending: false })).data || []),
     fornitori: async () => setFornitori((await supabase.from("fornitori").select("*").order("nome")).data || []),
-    spese: async () => setSpese((await supabase.from("spese").select("*").order("data_documento", { ascending: false })).data || []),
+    // "data_documento" da sola non basta a decidere l'ordine: le spese di
+    // una classe nascono tutte nello stesso giorno (o senza data), e a
+    // parita' di valore Postgres restituisce le righe nell'ordine in cui
+    // stanno sul disco — che cambia a ogni UPDATE. Bastava spuntare
+    // "cash" su una riga per vederle saltare di posto. Con created_at come
+    // secondo criterio l'ordine e' sempre lo stesso, e le voci restano
+    // dove sono state scritte.
+    spese: async () => setSpese((await supabase.from("spese").select("*").order("data_documento", { ascending: false }).order("created_at")).data || []),
     spese_attribuzioni: async () => setSpeseAttribuzioni((await supabase.from("spese_attribuzioni").select("*")).data || []),
     abbonamenti_contratti: async () => setAbbonamentiContratti((await supabase.from("abbonamenti_contratti").select("*").order("data_inizio", { ascending: false })).data || []),
     abbonamenti_importi: async () => setAbbonamentiImporti((await supabase.from("abbonamenti_importi").select("*").order("valido_da")).data || []),
