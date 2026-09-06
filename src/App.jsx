@@ -27769,19 +27769,21 @@ function PannelloCassaContanti() {
   const storico = (movimenti || []);
   return (
     <div>
-      <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, minmax(0, 1fr))", gap: 14 }}>
-        <div>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Saldo in cassa</div>
-          <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: saldo < 0 ? "#C0392B" : NAVY, lineHeight: 1.1 }}>{euroRiepilogo(saldo)}</div>
-        </div>
-        <div>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Fondo cassa da tenere</div>
-          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: GOLD, lineHeight: 1.1 }}>{euroRiepilogo(fondoMinimo)}</div>
-        </div>
-        <div>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Prelevabile</div>
-          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{euroRiepilogo(prelevabile)}</div>
-        </div>
+      {/* i tre numeri della cassa su una riga sola, telefono compreso: si
+          leggono l'uno in rapporto agli altri - quanto c'e', quanto va
+          tenuto, quanto si puo' portare via - e messi in colonna quel
+          rapporto lo devi ricostruire scorrendo */}
+      <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isMobile ? 6 : 14, alignItems: "start" }}>
+        {[
+          { etichetta: "Saldo in cassa", valore: saldo, colore: saldo < 0 ? "#C0392B" : NAVY, grande: true },
+          { etichetta: "Fondo cassa da tenere", valore: fondoMinimo, colore: GOLD },
+          { etichetta: "Prelevabile", valore: prelevabile, colore: NAVY },
+        ].map((c) => (
+          <div key={c.etichetta} style={{ minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 8 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.6, lineHeight: 1.2, overflowWrap: "anywhere" }}>{c.etichetta}</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? (c.grande ? 16 : 15) : (c.grande ? 32 : 26), fontWeight: 700, color: c.colore, lineHeight: 1.15, whiteSpace: "nowrap" }}>{euroRiepilogo(c.valore)}</div>
+          </div>
+        ))}
       </div>
 
       {/* da dove viene il saldo, riga per riga: una cassa che mostra solo il
