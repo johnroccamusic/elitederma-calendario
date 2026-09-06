@@ -27294,6 +27294,52 @@ function PaginaRiconciliazione({
     await ricarica(["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "rettifica_scadenza_nota_credito"]);
   }
 
+  // "Pagata": la fattura arriva quando i soldi sono gia' usciti. Prima
+  // servivano tre passaggi in tre posti diversi - accetta qui, importa la
+  // spesa dalle fatture ricevute, segnala il pagamento nello scadenziario
+  // - e in mezzo era facile fermarsi al primo. Qui si fa tutto in una
+  // volta: nasce la spesa gia' pagata e il documento esce dalla coda.
+  const [pannelloPagata, setPannelloPagata] = useState(false);
+  const [pagataData, setPagataData] = useState(dataOggiStr());
+  const [pagataMetodo, setPagataMetodo] = useState("Bonifico");
+  const [pagataSottocat, setPagataSottocat] = useState("");
+  const [pagataFile, setPagataFile] = useState(null);
+
+  async function confermaPagata() {
+    if (!documento) return;
+    if (!pagataSottocat) { setMsg("Errore: scegli la categoria di spesa, altrimenti la spesa nasce senza classificazione."); return; }
+    setSalvando(true);
+    setMsg("");
+    let allegato = null;
+    if (pagataFile) {
+      const nome = `${Date.now()}-${sanitizzaNomeFile(pagataFile.name)}`;
+      const { error: erroreUpload } = await supabase.storage.from("spese-allegati").upload(nome, pagataFile);
+      if (erroreUpload) { setSalvando(false); setMsg("Errore allegato: " + erroreUpload.message); return; }
+      allegato = supabase.storage.from("spese-allegati").getPublicUrl(nome).data.publicUrl;
+    }
+    const sottocat = sottocategoriaCostoDi(costiSottocategorie, pagataSottocat);
+    const { error } = await supabase.from("spese").insert({
+      descrizione: `${fornitoriById[documento.fornitore_id]?.nome || "Fornitore"} — fattura ${documento.numero || ""}`.trim(),
+      fornitore_id: documento.fornitore_id || null,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: pagataSottocat,
+      // gli importi del documento si copiano come sono: e' la fattura a
+      // dire quanto e' imponibile e quanta IVA, non un ricalcolo nostro
+      imponibile: documento.imponibile ?? documento.totale ?? 0,
+      totale: documento.totale ?? 0,
+      stato: "pagata",
+      data_pagamento: pagataData || null,
+      metodo_pagamento: pagataMetodo,
+      allegato_path: allegato,
+    });
+    if (error) { setSalvando(false); setMsg("Errore: " + error.message); return; }
+    await supabase.from("documento_fornitore").update({ stato: "senza_impegno" }).eq("id", documento.id);
+    setSalvando(false);
+    setPannelloPagata(false); setPagataFile(null); setPagataSottocat("");
+    await ricarica(["documento_fornitore", "spese"]);
+    vaiA(0);
+  }
+
   async function accettaSenzaImpegno() {
     if (!documento) return;
     if (!window.confirm("Accettare questo documento come spesa non prevista, senza collegarlo a nessun impegno?")) return;
@@ -27650,6 +27696,7 @@ function PaginaRiconciliazione({
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button onClick={scartaDocumento} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C6C0`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Scarta</button>
+                  <button onClick={() => { setPannelloPagata((v) => !v); setMsg(""); }} disabled={salvando} title="La fattura e' gia' stata pagata: registra la spesa e chiudi il documento" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#fff", border: `1px solid #BFDFC4`, borderRadius: 16, padding: "9px 14px", cursor: salvando ? "default" : "pointer" }}>Pagata</button>
                   <button onClick={accettaSenzaImpegno} disabled={salvando} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Accetta senza impegno</button>
                   <button onClick={() => vaiA(1)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Rimanda</button>
                   <button onClick={confermaRiconciliazione} disabled={!bottoneAbilitato} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "10px 18px", cursor: bottoneAbilitato ? "pointer" : "default", opacity: bottoneAbilitato ? 1 : 0.5 }}>
@@ -27657,6 +27704,39 @@ function PaginaRiconciliazione({
                   </button>
                 </div>
               </div>
+              )}
+
+              {/* Pagata: data, come, ed eventualmente il documento del
+                  pagamento. La categoria e' obbligatoria - una spesa senza
+                  classificazione non compare in nessun conto, e nasce gia'
+                  da sistemare */}
+              {pannelloPagata && (
+                <div style={{ ...cardStyle, marginTop: 12, background: "#F6FBF7", border: `1px solid #BFDFC4` }}>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 10 }}>
+                    Questa fattura è già stata pagata. Registro la spesa come pagata e chiudo il documento, senza passare da "Spese da importare".
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "150px 190px 1fr", gap: 10, alignItems: "end", marginBottom: 10 }}>
+                    <Field label="Data del pagamento"><input type="date" style={inputStyle} value={pagataData} onChange={(e) => setPagataData(e.target.value)} /></Field>
+                    <Field label="Pagata con">
+                      <select style={inputStyle} value={pagataMetodo} onChange={(e) => setPagataMetodo(e.target.value)}>
+                        {METODI_SPESA.map((m) => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Categoria di spesa">
+                      <select style={inputStyle} value={pagataSottocat} onChange={(e) => setPagataSottocat(e.target.value)}>
+                        <option value="">— scegli —</option>
+                        {(costiSottocategorie || []).map((sc) => <option key={sc.id} value={sc.id}>{sc.nome}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <CampoFileTrascinabile onChange={(e) => setPagataFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 200px", minWidth: 0 }} />
+                    <button onClick={confermaPagata} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 16, padding: "10px 16px", cursor: salvando ? "default" : "pointer" }}>
+                      {salvando ? "Salvo…" : "Registra come pagata"}
+                    </button>
+                    <button onClick={() => setPannelloPagata(false)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "9px 14px", cursor: "pointer" }}>Annulla</button>
+                  </div>
+                </div>
               )}
               {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.startsWith("Errore") ? "#C0392B" : NAVY, marginTop: 12 }}>{msg}</div>}
               {msgNC && <div style={{ ...fontBody, fontSize: 13, color: msgNC.startsWith("Errore") ? "#C0392B" : NAVY, marginTop: 12 }}>{msgNC}</div>}
