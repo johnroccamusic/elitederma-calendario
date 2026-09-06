@@ -16,8 +16,13 @@
 //   { "posizioni": [ { "prodottoId": "<uuid>", "posizione": 10 }, ... ] }
 //
 // Variabili d'ambiente richieste (Supabase -> Edge Functions -> Secrets):
-//   WC_SITE_URL / WC_CONSUMER_KEY / WC_CONSUMER_SECRET — le stesse di
-//   woo-gestisci-prodotto (qui servono i permessi di scrittura)
+//   WC_SITE_URL / WC_CONSUMER_KEY_WRITE / WC_CONSUMER_SECRET_WRITE — le
+//   stesse di woo-gestisci-prodotto. Devono essere quelle in scrittura: il
+//   progetto ha due coppie di chiavi WooCommerce, una in sola lettura
+//   (WC_CONSUMER_KEY/SECRET) usata da chi legge il catalogo e una in
+//   scrittura. Questa funzione usava per sbaglio la prima, e WooCommerce
+//   rispondeva 401 "La chiave API fornita non ha permessi di scrittura" —
+//   corretto il 6 settembre 2026.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -43,10 +48,10 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return risposta({ errore: "Metodo non consentito" }, 405);
 
   const siteUrl = Deno.env.get("WC_SITE_URL");
-  const consumerKey = Deno.env.get("WC_CONSUMER_KEY");
-  const consumerSecret = Deno.env.get("WC_CONSUMER_SECRET");
+  const consumerKey = Deno.env.get("WC_CONSUMER_KEY_WRITE");
+  const consumerSecret = Deno.env.get("WC_CONSUMER_SECRET_WRITE");
   if (!siteUrl || !consumerKey || !consumerSecret) {
-    return risposta({ errore: "Credenziali WooCommerce mancanti nei secret" }, 500);
+    return risposta({ errore: "Credenziali WooCommerce in scrittura mancanti nei secret (WC_CONSUMER_KEY_WRITE / WC_CONSUMER_SECRET_WRITE)" }, 500);
   }
   const auth = "Basic " + btoa(`${consumerKey}:${consumerSecret}`);
 
