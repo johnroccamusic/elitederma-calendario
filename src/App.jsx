@@ -18785,7 +18785,7 @@ function PannelloRiepilogoAmministrativo({
                         {r.tipo === "venditore" && quoteVenditoreDettaglio.length > 0 && (
                           <div style={{ marginBottom: 8, paddingBottom: 4 }}>
                             {quoteVenditoreDettaglio.map((v) => (
-                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 2 }}>
+                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 4, minHeight: 20 }}>
                                 <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 4 : 5 }}>
                                   {v.nome}
                                   <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
@@ -18814,15 +18814,23 @@ function PannelloRiepilogoAmministrativo({
                                     <span style={cellaDedotta}>€ {suoBonifico}</span>
                                     <span style={cellaDedotta}>€ {suoCash}</span>
                                     <div />
-                                    <div style={{ display: "flex", gap: isMobile ? 4 : 6, justifyContent: "center" }}>
+                                    {/* Qui la lettera sta ACCANTO alla casella,
+                                        non sopra: impilate facevano un
+                                        blocco alto due righe in una riga di
+                                        testo alta una, e sbordava sopra e
+                                        sotto fino a toccare il venditore
+                                        successivo. Le righe automatiche
+                                        possono permettersi la pila perche'
+                                        hanno campi alti; queste no. */}
+                                    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 3 : 5, justifyContent: "center" }}>
                                       {["B", "C", "1/2"].map((chiave) => (
-                                        <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà e metà"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
-                                          <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalita === chiave ? NAVY : MUTED }}>{chiave}</span>
+                                        <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà e metà"} style={{ display: "flex", alignItems: "center", gap: 1.5, cursor: "pointer", lineHeight: 1 }}>
+                                          <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: modalita === chiave ? NAVY : MUTED }}>{chiave}</span>
                                           <input
                                             type="checkbox"
                                             checked={modalita === chiave}
                                             onChange={() => salvaModalitaVenditore(v.chiave, chiave)}
-                                            style={{ width: 12, height: 12, cursor: "pointer", margin: 0 }}
+                                            style={{ width: 11, height: 11, cursor: "pointer", margin: 0, flexShrink: 0 }}
                                           />
                                         </label>
                                       ))}
