@@ -18150,7 +18150,7 @@ function useCorpoImportoNecessario(testo, corpoBase, corpoMin = 8) {
   return { rifBox, rifSonda, corpo };
 }
 
-function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota, compatta = false, corpoImposto, onCorpoNecessario }) {
+function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota, compatta = false, corpoImposto, onCorpoNecessario, altezzaEtichettaImposta, onAltezzaEtichetta }) {
   const medaglione = compatta ? 22 : (isMobile ? 30 : 42);
   const corpoValore = compatta ? 11.5 : (isMobile ? 14 : 20);
   const { rifBox, rifSonda, corpo } = useCorpoImportoNecessario(valore, corpoValore);
@@ -18159,10 +18159,30 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
   // piccola dell'altra sembra che valga meno. Quando chi tiene la riga
   // impone un corpo, vince quello.
   const corpoFinale = corpoImposto || corpo;
-  // L'etichetta occupa sempre due righe, anche quando ne riempie una sola:
-  // senza, in ogni casella l'importo partiva da un'altezza diversa a
-  // seconda di quanto era lungo il titolo, e i numeri non erano incolonnati.
-  const altezzaEtichetta = compatta ? "2.4em" : "2.4em";
+
+  // Quanto e' alto questo titolo una volta andato a capo. Riservargli due
+  // righe a occhio non bastava: "FONDO CASSA DA TENERE" ne prende tre,
+  // sforava lo spazio e spingeva giu' il suo numero mentre gli altri
+  // restavano su. Si misura invece di indovinare, e la riga tiene per
+  // tutte l'altezza della piu' alta.
+  const rifSondaEtichetta = React.useRef(null);
+  const [altezzaEtichetta, setAltezzaEtichetta] = useState(0);
+  useLayoutEffect(() => {
+    function misura() {
+      const el = rifSondaEtichetta.current;
+      if (el) setAltezzaEtichetta(el.offsetHeight);
+    }
+    misura();
+    const osservatore = new ResizeObserver(misura);
+    if (rifBox.current) osservatore.observe(rifBox.current);
+    return () => osservatore.disconnect();
+  }, [label, compatta, isMobile]);
+  useEffect(() => { onAltezzaEtichetta?.(altezzaEtichetta); }, [altezzaEtichetta, onAltezzaEtichetta]);
+  const stileEtichetta = {
+    ...fontBody, fontSize: compatta ? 7.5 : (isMobile ? 9 : 10.5), color: MUTED,
+    textTransform: "uppercase", letterSpacing: compatta ? 0 : (isMobile ? 0.2 : 0.6),
+    lineHeight: 1.2, overflowWrap: "anywhere",
+  };
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: compatta ? 5 : (isMobile ? 8 : 12), minWidth: 0,
@@ -18179,7 +18199,9 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
       <div ref={rifBox} style={{ minWidth: 0, flex: 1, position: "relative" }}>
         {/* la copia invisibile su cui si misura il corpo necessario */}
         <span ref={rifSonda} aria-hidden style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, whiteSpace: "nowrap", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0 }}>{valore}</span>
-        <div style={{ ...fontBody, fontSize: compatta ? 7.5 : (isMobile ? 9 : 10.5), color: MUTED, textTransform: "uppercase", letterSpacing: compatta ? 0 : (isMobile ? 0.2 : 0.6), lineHeight: 1.2, overflowWrap: "anywhere", minHeight: altezzaEtichetta, display: "flex", alignItems: "flex-end" }}>{label}</div>
+        {/* la copia invisibile del titolo, per sapere quanto e' alto davvero */}
+        <span ref={rifSondaEtichetta} aria-hidden style={{ ...stileEtichetta, display: "block", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0, width: "100%" }}>{label}</span>
+        <div style={{ ...stileEtichetta, minHeight: altezzaEtichettaImposta || altezzaEtichetta || undefined, display: "flex", alignItems: "flex-end" }}>{label}</div>
         <div style={{ ...fontDisplay, fontSize: corpoFinale, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2, overflow: "hidden" }}>{valore}</div>
         {nota && <div style={{ ...fontBody, fontSize: compatta ? 7 : (isMobile ? 8.5 : 10), color: MUTED, lineHeight: 1.2, marginTop: 1 }}>{nota}</div>}
       </div>
@@ -28421,6 +28443,14 @@ function PannelloCassaContanti({
   const segnalaCorpo = React.useCallback((chiave, corpo) => {
     setCorpiImporti((precedenti) => (precedenti[chiave] === corpo ? precedenti : { ...precedenti, [chiave]: corpo }));
   }, []);
+  // stessa cosa per l'altezza dei titoli: qui pero' vince la piu' ALTA, non
+  // la piu' bassa — e' lo spazio che serve al titolo piu' lungo, e darlo a
+  // tutti e' l'unico modo perche' i cinque numeri partano dalla stessa
+  // altezza invece che ognuno da dove finisce il suo titolo
+  const [altezzeEtichette, setAltezzeEtichette] = useState({});
+  const segnalaAltezza = React.useCallback((chiave, altezza) => {
+    setAltezzeEtichette((precedenti) => (precedenti[chiave] === altezza ? precedenti : { ...precedenti, [chiave]: altezza }));
+  }, []);
 
   // Le buste che stanno tornando: corsi finiti, quindi con la contabilita'
   // chiusa, di cui pero' nessuno ha ancora spuntato "busta rientrata". Quel
@@ -28588,6 +28618,8 @@ function PannelloCassaContanti({
         // sfarfallerebbe da una misura all'altra.
         const misure = celle.map((c) => corpiImporti[c.etichetta]).filter((x) => x != null);
         const corpoImporti = misure.length === celle.length ? Math.min(...misure) : null;
+        const altezze = celle.map((c) => altezzeEtichette[c.etichetta]).filter((x) => x > 0);
+        const altezzaEtichette = altezze.length === celle.length ? Math.max(...altezze) : null;
         return (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: isMobile ? 4 : 14, marginBottom: 14 }}>
             {celle.map((c) => (
@@ -28602,6 +28634,8 @@ function PannelloCassaContanti({
                 nota={c.nota}
                 corpoImposto={corpoImporti}
                 onCorpoNecessario={(n) => segnalaCorpo(c.etichetta, n)}
+                altezzaEtichettaImposta={altezzaEtichette}
+                onAltezzaEtichetta={(h) => segnalaAltezza(c.etichetta, h)}
               />
             ))}
           </div>
