@@ -1047,16 +1047,24 @@ function iconaCategoriaPos(nome) {
 // orizzontale perche' le categorie sono trenta e non ci staranno mai tutte:
 // si scorre come uno scaffale, invece di far crescere la pagina.
 function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = false }) {
+  const isMobile = useIsMobile();
   const voci = [{ id: "", nome: "Tutti" }, ...(categorie || [])];
+  // Una griglia, non un flex che va a capo. Con il flex ogni riga si
+  // impaginava per conto suo: "Eyebrows" cadeva sotto "Accessori" o sotto
+  // "Aghi" a seconda di quanto era lunga la parola sopra, e i filetti
+  // verticali non capitavano mai due volte nello stesso punto. Con un
+  // numero di colonne deciso qui, tutte le righe sotto si incolonnano
+  // sulla prima, su qualunque schermo.
+  const colonne = isMobile ? 3 : compatta ? 5 : 6;
+  // il filetto sul crema: CREAM_BORDER e' lo stesso tono dello sfondo e
+  // spariva. Questo e' il grigio-oro gia' usato per i divisori della
+  // scheda corso, che sul crema si vede
+  const FILETTO = "#D5C9AF";
+  const ultimaRiga = Math.floor((voci.length - 1) / colonne);
   return (
     <div
       style={{
-        // va a capo su due o tre righe invece di correre in orizzontale:
-        // con trenta categorie la striscia era larga il doppio dello
-        // schermo e, dentro una colonna della griglia, si portava dietro
-        // tutta la pagina — il POS finiva dilatato e passava al layout da
-        // telefono
-        display: "flex", alignItems: "stretch", flexWrap: "wrap",
+        display: "grid", gridTemplateColumns: `repeat(${colonne}, minmax(0, 1fr))`, alignItems: "stretch",
         background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
         padding: compatta ? "4px 6px" : "6px 8px", marginBottom: compatta ? 10 : 16,
       }}
@@ -1064,29 +1072,34 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
       {voci.map((c, i) => {
         const Icona = c.id ? iconaCategoriaPos(c.nome) : IconaTilePos;
         const scelta = selezionata === c.id;
+        const ultimaDellaRiga = (i + 1) % colonne === 0 || i === voci.length - 1;
+        const nellUltimaRiga = Math.floor(i / colonne) === ultimaRiga;
         return (
-          <React.Fragment key={c.id || "tutti"}>
-            {i > 0 && <span style={{ width: 1, background: CREAM_BORDER, margin: "6px 0", flexShrink: 0, alignSelf: "stretch" }} />}
-            <button
-              onClick={() => onSeleziona(c.id)}
-              title={c.nome}
-              style={{
-                display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
-                padding: compatta ? "8px 10px" : "10px 14px", borderRadius: 12,
-                background: scelta ? NAVY : "transparent", border: "1px solid transparent",
-                cursor: "pointer", ...fontBody, fontSize: compatta ? 11.5 : 12.5, fontWeight: 700,
-                color: scelta ? "#fff" : NAVY, textAlign: "left",
-              }}
-            >
-              <span style={{ display: "inline-flex", flexShrink: 0, color: scelta ? "#fff" : GOLD }}>
-                <Icona size={compatta ? 17 : 20} color={scelta ? "#fff" : GOLD} />
-              </span>
-              {/* due parole vanno a capo invece di allungare la striscia:
-                  "Lame Microblading" su una riga sola la fa scorrere il
-                  doppio */}
-              <span style={{ maxWidth: 96, lineHeight: 1.2, whiteSpace: "normal" }}>{c.nome}</span>
-            </button>
-          </React.Fragment>
+          <button
+            key={c.id || "tutti"}
+            onClick={() => onSeleziona(c.id)}
+            title={c.nome}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, minWidth: 0,
+              padding: compatta ? "8px 10px" : "10px 12px", borderRadius: 12,
+              background: scelta ? NAVY : "transparent",
+              // i filetti sono bordi della cella, non elementi in mezzo:
+              // cosi' cadono esattamente sulla colonna, riga dopo riga
+              border: "1px solid transparent",
+              borderRight: !scelta && !ultimaDellaRiga ? `1px solid ${FILETTO}` : "1px solid transparent",
+              borderBottom: !scelta && !nellUltimaRiga ? `1px solid ${FILETTO}` : "1px solid transparent",
+              cursor: "pointer", ...fontBody, fontSize: compatta ? 11.5 : 12.5, fontWeight: 700,
+              color: scelta ? "#fff" : NAVY, textAlign: "left",
+            }}
+          >
+            <span style={{ display: "inline-flex", flexShrink: 0, color: scelta ? "#fff" : GOLD }}>
+              <Icona size={compatta ? 17 : 20} color={scelta ? "#fff" : GOLD} />
+            </span>
+            {/* due parole vanno a capo invece di allungare la colonna:
+                "Lame Microblading" su una riga sola allargherebbe la sua
+                colonna e con lei tutte le altre */}
+            <span style={{ minWidth: 0, lineHeight: 1.2, whiteSpace: "normal", overflowWrap: "anywhere" }}>{c.nome}</span>
+          </button>
         );
       })}
     </div>
