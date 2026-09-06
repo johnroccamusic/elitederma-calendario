@@ -18188,6 +18188,17 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
     textTransform: "uppercase", letterSpacing: compatta ? 0 : grande ? 0.5 : (isMobile ? 0.2 : 0.6),
     lineHeight: 1.25, overflowWrap: "anywhere",
   };
+  const stileNota = { ...fontBody, fontSize: compatta ? 7 : grande ? 10 : (isMobile ? 8.5 : 10), color: MUTED, lineHeight: 1.25, textTransform: "none", letterSpacing: 0 };
+  // La nota sta SOPRA la cifra, non sotto: sotto allungava la casella verso
+  // il basso e quella dell'"in arrivo" restava piu' alta di tutte le altre.
+  // Messa qui fa parte del blocco del titolo, quindi entra nell'altezza che
+  // la riga condivide, e la cifra torna in linea con le altre quattro.
+  const blocco = (
+    <>
+      <div>{label}</div>
+      {nota && <div style={stileNota}>{nota}</div>}
+    </>
+  );
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: compatta ? 5 : grande ? 10 : (isMobile ? 8 : 12), minWidth: 0,
@@ -18205,10 +18216,9 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
         {/* la copia invisibile su cui si misura il corpo necessario */}
         <span ref={rifSonda} aria-hidden style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, whiteSpace: "nowrap", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0 }}>{valore}</span>
         {/* la copia invisibile del titolo, per sapere quanto e' alto davvero */}
-        <span ref={rifSondaEtichetta} aria-hidden style={{ ...stileEtichetta, display: "block", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0, width: "100%" }}>{label}</span>
-        <div style={{ ...stileEtichetta, minHeight: altezzaEtichettaImposta || altezzaEtichetta || undefined, display: "flex", alignItems: "flex-end" }}>{label}</div>
+        <span ref={rifSondaEtichetta} aria-hidden style={{ ...stileEtichetta, display: "block", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0, width: "100%" }}>{blocco}</span>
+        <div style={{ ...stileEtichetta, minHeight: altezzaEtichettaImposta || altezzaEtichetta || undefined, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>{blocco}</div>
         <div style={{ ...fontDisplay, fontSize: corpoFinale, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2, overflow: "hidden" }}>{valore}</div>
-        {nota && <div style={{ ...fontBody, fontSize: compatta ? 7 : grande ? 10 : (isMobile ? 8.5 : 10), color: MUTED, lineHeight: 1.25, marginTop: grande ? 2 : 1 }}>{nota}</div>}
       </div>
     </div>
   );
