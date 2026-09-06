@@ -12949,13 +12949,13 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
         </select>
       </div>
       <div style={{ minWidth: 0 }}>
-        <input style={campoQui} inputMode="decimal" value={totale} onChange={(e) => setTotale(e.target.value)} onBlur={commitTotale} />
+        <input style={{ ...campoQui, textAlign: "right" }} inputMode="decimal" value={totale} onChange={(e) => setTotale(e.target.value)} onBlur={commitTotale} />
       </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ ...campoQui, background: "#EFEFEF", color: MUTED }}>€ {bonifico}</div>
+        <div style={{ ...campoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ {bonifico}</div>
       </div>
       <div style={{ minWidth: 0 }}>
-        <input style={campoQui} inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} onBlur={commitCash} />
+        <input style={{ ...campoQui, textAlign: "right" }} inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} onBlur={commitCash} />
       </div>
       <button
         onClick={onElimina}
@@ -18072,9 +18072,9 @@ function PannelloRiepilogoAmministrativo({
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, marginBottom: 4 }}>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Voce</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Totale</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Bonifico</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Cash</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Totale</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Bonifico</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Cash</div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Giorni</div>
                     </div>
                     {righeSpeseTutte.map((r) => {
@@ -18094,20 +18094,20 @@ function PannelloRiepilogoAmministrativo({
                             )}
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
+                            <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ {r.totale}</div>
                           </div>
                           <div style={{ minWidth: 0 }}>
                             {bloccato ? (
-                              <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.bonifico}</div>
+                              <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ {r.bonifico}</div>
                             ) : (
-                              <input style={campoCompattoQui} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: v }); }} />
+                              <input style={{ ...campoCompattoQui, textAlign: "right" }} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: v }); }} />
                             )}
                           </div>
                           <div style={{ minWidth: 0 }}>
                             {bloccato ? (
-                              <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED }}>€ {r.cash}</div>
+                              <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ {r.cash}</div>
                             ) : (
-                              <input style={campoCompattoQui} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
+                              <input style={{ ...campoCompattoQui, textAlign: "right" }} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
                             )}
                           </div>
                           <div style={{ minWidth: 0 }}>
@@ -18143,16 +18143,14 @@ function PannelloRiepilogoAmministrativo({
                             della riga sopra, per questo non e' filtrato
                             niente */}
                         {r.tipo === "venditore" && quoteVenditoreDettaglio.length > 0 && (
-                          <div style={{ marginBottom: 8, paddingLeft: 10, borderLeft: `2px solid ${CREAM_BORDER}` }}>
+                          <div style={{ marginBottom: 8, paddingBottom: 4 }}>
                             {quoteVenditoreDettaglio.map((v) => (
-                              <div key={v.nome} style={{ display: "flex", alignItems: "baseline", gap: isMobile ? 5 : 8, marginBottom: 2 }}>
-                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: isMobile ? "2 1 80px" : "2 1 160px" }}>
+                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "baseline", marginBottom: 2 }}>
+                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {v.nome}
+                                  <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
                                 </span>
-                                <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED, whiteSpace: "nowrap", flexShrink: 0 }}>
-                                  {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}
-                                </span>
-                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", marginLeft: "auto" }}>
+                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", textAlign: "right" }}>
                                   € {v.totale}
                                 </span>
                               </div>
