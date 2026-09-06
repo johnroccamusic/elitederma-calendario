@@ -19203,7 +19203,12 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // pannello "Riepilogo amministrativo" (costi della classe): parte
   // chiuso perché, se sempre aperto, intralcia la normale gestione
   // contabilità (spuntare incassato, aprire schede...)
-  const [costiAperto, setCostiAperto] = useState(sottoVistaIniziale?.costiAperto ?? false);
+  // Arrivare con il riepilogo gia' aperto e' consentito solo a chi il
+  // codice amministratore l'ha gia' dato in questa sessione: altrimenti
+  // bastava un link per saltare la richiesta. Chi non lo ha dato arriva
+  // sulla classe, preme "Riepilogo amministrativo" e il codice glielo si
+  // chiede li', come sempre.
+  const [costiAperto, setCostiAperto] = useState((sottoVistaIniziale?.costiAperto ?? false) && adminSbloccato);
 
   // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
   // quale iscritto in modifica, contabilità aperta o no): è così che i
@@ -28373,7 +28378,7 @@ const METODI_SPESA_DALLA_CASSA = new Set(["Cassa contanti", "Contanti", "Cash no
 
 function PannelloCassaContanti({
   corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
-  leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, ricarica,
+  leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, ricarica, onApriClasse,
 }) {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
@@ -28656,8 +28661,16 @@ function PannelloCassaContanti({
             const nomeSede = (location || []).find((l) => l.id === cd.location_id)?.nome || "";
             return (
               <div key={cd.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ minWidth: 0, flex: "1 1 220px" }}>
-                  <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                {/* il nome della busta e' il nome di una classe: cliccarlo
+                    porta ai suoi conti. Da li' Indietro riporta qui, perche'
+                    la pagina di partenza viene registrata come per ogni
+                    altro ingresso in una scheda */}
+                <div
+                  onClick={onApriClasse ? () => onApriClasse(cd) : undefined}
+                  title={onApriClasse ? "Apri il riepilogo amministrativo di questa classe" : undefined}
+                  style={{ minWidth: 0, flex: "1 1 220px", cursor: onApriClasse ? "pointer" : "default" }}
+                >
+                  <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere", textDecoration: onApriClasse ? "underline" : "none", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}>
                     Busta {nomeSede ? `${nomeSede} — ` : ""}{nomeCorso}
                   </div>
                   <div style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, color: MUTED }}>
@@ -28905,7 +28918,7 @@ function PannelloCassaConsulenze() {
   );
 }
 
-function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
+function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -29414,6 +29427,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
             master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
             leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit}
             spese={spese} venditeShop={venditeShop} corsi={corsi} ricarica={ricarica}
+            onApriClasse={onApriClasseRiepilogo}
           />
         )}
         {tab === "consulenze" && <PannelloCassaConsulenze />}
@@ -50262,6 +50276,24 @@ export default function App() {
     setSchedaKey((k) => k + 1);
     setView("scheda");
   }
+  // come apriData, ma con il Riepilogo amministrativo gia' aperto: la usa
+  // la lista "Contabilita' di ritorno" della cassa contanti, dove il nome
+  // della busta e' il nome di una classe e cliccarlo deve portare ai suoi
+  // conti. Il tasto Indietro riporta da dove si e' partiti, cassa contanti
+  // compresa, perche' viewPrimaDiScheda registra la pagina di partenza
+  // esattamente come fa apriData.
+  //
+  // Il codice amministratore non viene aggirato: la scheda apre il
+  // riepilogo solo se lo sblocco c'e' gia' (vedi SchedaData), altrimenti
+  // si arriva sulla classe e lo si chiede li' come sempre.
+  function apriRiepilogoClasse(cd) {
+    setViewPrimaDiScheda(view);
+    setVieneDaGestioneModelle(false);
+    setCorsoDataAperta(cd.id);
+    setSottoVistaScheda({ vista: "lista", modificandoId: null, mostraGestione: false, costiAperto: true });
+    setSchedaKey((k) => k + 1);
+    setView("scheda");
+  }
   // come apriData, ma entra direttamente nella tab "Assegna modelle"
   // invece che nella lista iscritti — usata da "Gestione modelle". Segna
   // anche la provenienza: da qui il tasto "torna" nella scheda deve
@@ -51052,6 +51084,7 @@ export default function App() {
           ordineSchedeContabilita={layoutTasti["contabilitaschede"]?.ordine}
           onSalvaOrdineSchedeContabilita={(o) => salvaLayoutTasti("contabilitaschede", { ordine: o })}
           onApriIscritto={apriIscritto}
+          onApriClasseRiepilogo={apriRiepilogoClasse}
           onApriNuovaSpesaDaPagare={apriNuovaSpesaDaPagare}
           onApriNuovoAbbonamento={apriNuovoAbbonamento}
           onApriModificaAbbonamento={apriModificaAbbonamento}
