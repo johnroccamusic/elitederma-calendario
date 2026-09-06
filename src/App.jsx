@@ -12945,6 +12945,46 @@ function SelectCategoriaSpesa({ value, onChange, costiCategorie, costiSottocateg
   );
 }
 
+// La stessa scelta in due passi, per dove la tendina unica non e'
+// governabile: le sottocategorie sono un centinaio e in un elenco solo
+// diventano un muro da scorrere. Prima la macro categoria, poi solo le sue
+// voci — la seconda tendina resta spenta finche' la prima non e' scelta.
+//
+// Riaprendo una spesa gia' classificata la macro categoria si ricava dalla
+// voce salvata: chi torna sul modulo trova le due tendine gia' al posto
+// giusto, non due caselle vuote da rifare.
+function SelettoreCategoriaDueLivelli({ value, onChange, costiCategorie, costiSottocategorie }) {
+  const categoriaDellaVoce = sottocategoriaCostoDi(costiSottocategorie, value)?.categoria_id || "";
+  const [categoriaId, setCategoriaId] = useState(categoriaDellaVoce);
+  useEffect(() => { if (categoriaDellaVoce) setCategoriaId(categoriaDellaVoce); }, [categoriaDellaVoce]);
+  const categorie = (costiCategorie || []).slice().sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+  const voci = sottocategorieDiCategoria(costiSottocategorie, categoriaId);
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+      <select
+        style={inputStyle}
+        value={categoriaId}
+        // cambiando macro categoria la voce di prima non c'entra piu':
+        // lasciarla scritta vorrebbe dire salvare una voce che non
+        // appartiene alla categoria mostrata accanto
+        onChange={(e) => { setCategoriaId(e.target.value); onChange(""); }}
+      >
+        <option value="">— categoria —</option>
+        {categorie.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+      </select>
+      <select
+        style={{ ...inputStyle, color: value ? NAVY : MUTED }}
+        value={value || ""}
+        disabled={!categoriaId}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">{categoriaId ? "— voce di spesa —" : "prima la categoria"}</option>
+        {voci.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+      </select>
+    </div>
+  );
+}
+
 // riga singola fissa: "Associa il gruppo a una categoria di spesa" è
 // un'unica scelta per l'intero gruppo (tutte le assistenti, tutte le
 // master, ecc.), non per singolo record — un solo id, sempre lo stesso
@@ -27931,14 +27971,16 @@ function PaginaRiconciliazione({
                   ) : (
                     <div style={{ border: `1px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: 14 }}>
                       <Field label="Descrizione"><input style={inputStyle} value={nuovoImpDescrizione} onChange={(e) => setNuovoImpDescrizione(e.target.value)} /></Field>
-                      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                        <div style={{ flex: 1 }}><Field label="Importo"><input type="number" step="0.01" style={inputStyle} value={nuovoImpImporto} onChange={(e) => setNuovoImpImporto(e.target.value)} /></Field></div>
-                        <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                        <div style={{ flex: "1 1 120px" }}><Field label="Importo"><input type="number" step="0.01" style={inputStyle} value={nuovoImpImporto} onChange={(e) => setNuovoImpImporto(e.target.value)} /></Field></div>
+                        <div style={{ flex: "2 1 260px", minWidth: 0 }}>
                           <Field label="Categoria">
-                            <select style={inputStyle} value={nuovoImpCategoria} onChange={(e) => setNuovoImpCategoria(e.target.value)}>
-                              <option value="">—</option>
-                              {(costiSottocategorie || []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                            </select>
+                            <SelettoreCategoriaDueLivelli
+                              value={nuovoImpCategoria}
+                              onChange={setNuovoImpCategoria}
+                              costiCategorie={costiCategorie}
+                              costiSottocategorie={costiSottocategorie}
+                            />
                           </Field>
                         </div>
                       </div>
@@ -28012,12 +28054,16 @@ function PaginaRiconciliazione({
                         </select>
                       </Field>
                     )}
-                    <Field label="Categoria di spesa">
-                      <select style={inputStyle} value={pagataSottocat} onChange={(e) => setPagataSottocat(e.target.value)}>
-                        <option value="">— scegli —</option>
-                        {(costiSottocategorie || []).map((sc) => <option key={sc.id} value={sc.id}>{sc.nome}</option>)}
-                      </select>
-                    </Field>
+                    <div style={{ gridColumn: "1 / -1", minWidth: 0 }}>
+                      <Field label="Categoria di spesa">
+                        <SelettoreCategoriaDueLivelli
+                          value={pagataSottocat}
+                          onChange={setPagataSottocat}
+                          costiCategorie={costiCategorie}
+                          costiSottocategorie={costiSottocategorie}
+                        />
+                      </Field>
+                    </div>
                   </div>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <CampoFileTrascinabile onChange={(e) => setPagataFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 200px", minWidth: 0 }} />
@@ -28165,12 +28211,28 @@ function PannelloCassaContanti() {
     carica();
   }
 
+  // La data di apertura si sceglie una volta sola. E' la linea che separa
+  // il prima dal dopo: tutto quello che porta una data anteriore resta
+  // fuori dal saldo perche' e' gia' dentro il saldo di apertura. Spostarla
+  // indietro farebbe rientrare in blocco mesi di spese gia' conteggiate
+  // altrove - a settembre bastano le fatture di luglio pagate in contanti
+  // per far crollare la cassa di migliaia di euro. Spostarla avanti
+  // cancellerebbe invece movimenti veri.
+  //
+  // Il saldo di apertura resta correggibile: quello e' un numero contato a
+  // mano nel cassetto, e chi conta puo' sbagliarsi.
+  const aperturaBloccata = !!apertura?.aperta_il;
+
   async function salvaApertura() {
     const valore = aperturaSaldo === "" ? 0 : parseNum(aperturaSaldo);
     if (!aperturaData) { setMsg("Serve la data di apertura."); return; }
     setSalvando(true);
-    const { error } = await supabase.from("cassa_contanti_impostazioni")
-      .upsert({ unica: true, aperta_il: aperturaData, saldo_iniziale: valore, aggiornato_il: new Date().toISOString() }, { onConflict: "unica" });
+    const { error } = aperturaBloccata
+      ? await supabase.from("cassa_contanti_impostazioni")
+          .update({ saldo_iniziale: valore, aggiornato_il: new Date().toISOString() })
+          .eq("unica", true)
+      : await supabase.from("cassa_contanti_impostazioni")
+          .upsert({ unica: true, aperta_il: aperturaData, saldo_iniziale: valore, aggiornato_il: new Date().toISOString() }, { onConflict: "unica" });
     setSalvando(false);
     if (error) { setMsg(`Non salvato: ${error.message}`); return; }
     setPannello(null); setMsg("");
@@ -28298,11 +28360,20 @@ function PannelloCassaContanti() {
             Da quando esiste questa cassa e quanto c'era nel cassetto quel giorno. Prima di questa data i contanti
             entravano e uscivano senza essere registrati: contarne solo le uscite darebbe un negativo che non
             corrisponde a niente.
+            {aperturaBloccata && " La data non si sposta più: è la linea che separa il prima dal dopo, e spostarla rifarebbe i conti di tutto quello che è già stato registrato. Il saldo del cassetto invece si può ancora correggere."}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "170px 170px auto", gap: 8, alignItems: "end" }}>
-            <Field label="Cassa aperta il"><input type="date" style={inputStyle} value={aperturaData} onChange={(e) => setAperturaData(e.target.value)} /></Field>
+            <Field label="Cassa aperta il">
+              {aperturaBloccata ? (
+                <div title="La data di apertura si sceglie una volta sola" style={{ ...inputStyle, background: "#F4F1EC", color: MUTED, fontWeight: 700, display: "flex", alignItems: "center", cursor: "not-allowed" }}>
+                  {fmtData(apertura.aperta_il)}
+                </div>
+              ) : (
+                <input type="date" style={inputStyle} value={aperturaData} onChange={(e) => setAperturaData(e.target.value)} />
+              )}
+            </Field>
             <Field label="Contanti nel cassetto"><input inputMode="decimal" style={inputStyle} value={aperturaSaldo} onChange={(e) => setAperturaSaldo(e.target.value)} /></Field>
-            <Button onClick={salvaApertura} disabled={salvando} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>{salvando ? "Salvo…" : "Salva apertura"}</Button>
+            <Button onClick={salvaApertura} disabled={salvando} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>{salvando ? "Salvo…" : aperturaBloccata ? "Correggi il saldo" : "Salva apertura"}</Button>
           </div>
         </div>
       )}
