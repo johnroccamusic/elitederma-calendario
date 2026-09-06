@@ -17392,7 +17392,24 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // iscrizione, Bonifico/Cash uno split libero come le altre righe.
   const rigaVenditoreClasse = (() => {
     const dati = conSplit(corsoData.id, { quota_venditore_bonifico: corsoData.quota_venditore_bonifico, quota_venditore_cash: corsoData.quota_venditore_cash });
-    return { rigaId: corsoData.id, tabella: "corsi_date", tipo: "venditore", nome: "Quota venditore", totale: quoteVenditoreClasse, bonifico: dati.quota_venditore_bonifico ?? 0, cash: dati.quota_venditore_cash ?? 0 };
+    const bonificoScritto = dati.quota_venditore_bonifico;
+    const cashScritto = dati.quota_venditore_cash;
+    // La quota venditore si paga in contanti, salvo decisione contraria:
+    // finche' nessuno ha toccato lo split, la riga vale tutta cash - e il
+    // flag "C" risulta gia' spuntato, perche' la modalita' si deduce dalla
+    // frazione a bonifico, che qui e' zero.
+    //
+    // E' un valore predefinito, non un dato scritto: in database le due
+    // colonne restano vuote finche' non si sceglie davvero, cosi' resta
+    // distinguibile "non e' stato deciso" da "si e' deciso cash". Basta
+    // toccare B o 1/2 - o scrivere nelle caselle - perche' comandi quello.
+    const nessunoDeiDue = bonificoScritto == null && cashScritto == null;
+    return {
+      rigaId: corsoData.id, tabella: "corsi_date", tipo: "venditore", nome: "Quota venditore",
+      totale: quoteVenditoreClasse,
+      bonifico: nessunoDeiDue ? 0 : (bonificoScritto ?? 0),
+      cash: nessunoDeiDue ? quoteVenditoreClasse : (cashScritto ?? 0),
+    };
   })();
 
   // durata dell'edizione in giorni, dedotta dal calendario (data_inizio/
