@@ -14670,6 +14670,54 @@ function PallinoTipoModellaCompatto({ tipo }) {
 // l'array tipi_modelle di UN allievo e restituiscono il nuovo array, così
 // SchedaData e VistaRicercaModelle possono riusarle identiche prima del
 // proprio update({ tipi_modelle: ... })
+// Chi puo' comparire nella tendina "Reperita da": le persone con il flag
+// "gestione modelle" attivo, prese dalle tre anagrafiche che le contengono
+// (master, venditori, utenti dell'app). Una persona sola puo' avere piu' di
+// una scheda — Andrea e' master e venditore insieme — e in tendina deve
+// comparire una volta sola: si tiene la prima a parita' di nome.
+//
+// Il tipo viaggia accanto all'id perche' l'id da solo non dice in quale
+// tabella cercarlo, e senza quello non si risale ne' alla persona ne' alla
+// sua quota.
+function componiReperitoriModelle(master, venditori, utenti) {
+  const elenco = [
+    ...(master || []).map((r) => ({ tipo: "master", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0 })),
+    ...(venditori || []).map((r) => ({ tipo: "venditore", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0 })),
+    ...(utenti || []).map((r) => ({ tipo: "utente", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0 })),
+  ].filter((r) => r.id && String(r.nome || "").trim());
+  const visti = new Set();
+  return elenco
+    .filter((r) => {
+      const chiave = r.nome.trim().toUpperCase();
+      if (visti.has(chiave)) return false;
+      visti.add(chiave);
+      return true;
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome, "it"));
+}
+
+// stessa cosa per chi non ha gia' le anagrafiche in memoria (la pagina
+// pubblica di ricerca modelle): si leggono solo le tre colonne che servono
+// — su utenti_app un "select *" porterebbe in giro anche le password
+async function caricaReperitoriModelle() {
+  const colonne = "id, nome, quota_reperimento";
+  const [m, v, u] = await Promise.all([
+    supabase.from("master").select(colonne).eq("gestione_modelle", true),
+    supabase.from("venditori").select(colonne).eq("gestione_modelle", true),
+    supabase.from("utenti_app").select(colonne).eq("gestione_modelle", true),
+  ]);
+  return componiReperitoriModelle(m.data, v.data, u.data);
+}
+
+// i tre campi che una modella porta con se' per dire da chi e' stata
+// trovata: si scrivono e si cancellano sempre insieme, altrimenti resta un
+// nome senza id (o un id che non si sa dove cercare)
+function campiReperimento(scelta) {
+  return scelta
+    ? { reperita_da_tipo: scelta.tipo, reperita_da_id: String(scelta.id), reperita_da_nome: scelta.nome }
+    : { reperita_da_tipo: null, reperita_da_id: null, reperita_da_nome: null };
+}
+
 function nuovoGruppoIdModella() {
   return `g-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -14807,7 +14855,7 @@ function modellaTrovata(m) {
 // blur, non ad ogni tasto: altrimenti ogni carattere digitato scatenerebbe
 // un salvataggio e un ricaricamento dell'intera pagina, facendo perdere il
 // focus mentre si scrive
-function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo }) {
+function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo, reperitori }) {
   const [nome, setNome] = useState(modella.nome_modella || "");
   const [telefono, setTelefono] = useState(modella.telefono_modella || "");
   useEffect(() => { setNome(modella.nome_modella || ""); }, [modella.nome_modella]);
@@ -14907,18 +14955,49 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
 
   return (
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
-      {opzioniTipo ? (
-        <select
-          style={{ ...inputStyle, fontSize: 13, fontWeight: 600, marginBottom: 8, maxWidth: 280 }}
-          value={modella.tipo || ""}
-          onChange={(e) => onSalva("tipo", e.target.value)}
-        >
-          <option value="">— scegli trattamento —</option>
-          {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
-        </select>
-      ) : (
-        <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, marginBottom: 8 }}>{modella.tipo || "(trattamento non scelto)"}</div>
-      )}
+      {/* trattamento e "reperita da" stanno sulla stessa riga: sono le due
+          cose che si scelgono da una tendina prima di scrivere il nome, e
+          in colonna una sotto l'altra rubavano due righe per niente */}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
+        {opzioniTipo ? (
+          <select
+            style={{ ...inputStyle, fontSize: 13, fontWeight: 600, flex: "1 1 200px", maxWidth: 280 }}
+            value={modella.tipo || ""}
+            onChange={(e) => onSalva("tipo", e.target.value)}
+          >
+            <option value="">— scegli trattamento —</option>
+            {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+          </select>
+        ) : (
+          <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{modella.tipo || "(trattamento non scelto)"}</div>
+        )}
+        {/* Chi l'ha trovata. Vale come firma sul lavoro fatto: la
+            commissione di reperimento si legge da qui, quindi chi inserisce
+            una modella mette il proprio nome.
+
+            Se il posto porta un autore che oggi non e' piu' in elenco (il
+            flag gli e' stato tolto) il suo nome resta comunque in tendina,
+            aggiunto in fondo: toglierlo silenziosamente vorrebbe dire
+            perdere l'attribuzione di un lavoro gia' fatto. */}
+        {Array.isArray(reperitori) && (() => {
+          const scelto = modella.reperita_da_id ? `${modella.reperita_da_tipo || ""}:${modella.reperita_da_id}` : "";
+          const inElenco = reperitori.some((r) => `${r.tipo}:${r.id}` === scelto);
+          const voci = !scelto || inElenco
+            ? reperitori
+            : [...reperitori, { tipo: modella.reperita_da_tipo || "", id: modella.reperita_da_id, nome: modella.reperita_da_nome || "(non più in elenco)" }];
+          return (
+            <select
+              title="Chi ha trovato questa modella"
+              style={{ ...inputStyle, fontSize: 12.5, fontWeight: 600, flex: "1 1 170px", maxWidth: 220, color: scelto ? NAVY : MUTED }}
+              value={scelto}
+              onChange={(e) => onSalva(campiReperimento(voci.find((r) => `${r.tipo}:${r.id}` === e.target.value)))}
+            >
+              <option value="">— reperita da —</option>
+              {voci.map((r) => <option key={`${r.tipo}:${r.id}`} value={`${r.tipo}:${r.id}`}>{r.nome}</option>)}
+            </select>
+          );
+        })()}
+      </div>
       {altriSlot.length > 0 && onCambiaGruppo && (
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
           <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>Stessa modella anche per:</span>
@@ -18648,7 +18727,7 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
-function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -18858,6 +18937,16 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   }, [richiedeModelle, numeroModelle]);
 
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
+  // chi puo' firmare il reperimento di una modella: le anagrafiche sono
+  // gia' in memoria, non serve chiederle di nuovo al database
+  const reperitoriModelle = useMemo(
+    () => componiReperitoriModelle(
+      (master || []).filter((r) => r.gestione_modelle),
+      (venditori || []).filter((r) => r.gestione_modelle),
+      (utentiApp || []).filter((r) => r.gestione_modelle),
+    ),
+    [master, venditori, utentiApp]
+  );
   // il pacchetto scelto dice se il dermografo è compreso o si compra a parte
   const kitScelto = (kitDefinizioni || []).find((k) => k.corso_id === corso?.id && k.nome === pacchettoKit) || null;
   const dermografoAParte = !!kitScelto?.dermografo_a_parte;
@@ -21533,6 +21622,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                     <div>
                       {i.tipi_modelle.map((m, idx) => (
                         <RigaModella
+                          reperitori={reperitoriModelle}
                           key={idx}
                           modella={m}
                           primaRiga={idx === 0}
@@ -21596,6 +21686,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                           aver spuntato "Cercare per master" */}
                       {modellaMaster.cercare_per_master && (
                         <RigaModella
+                          reperitori={reperitoriModelle}
                           modella={{ ...modellaMaster, tipo: g.tipo_modella_master }}
                           primaRiga
                           onSalva={(campo, valore) => aggiornaModellaMaster(g.numero_giorno, campo, valore)}
@@ -21653,6 +21744,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                             </div>
                             {daMostrare.map(({ m: modellaVista, indice: indiceReale }, iPosto) => (
                               <RigaModella
+                                reperitori={reperitoriModelle}
                                 key={indiceReale ?? `nuovo-${iPosto}`}
                                 modella={modellaVista}
                                 primaRiga={iPosto === 0}
@@ -22215,6 +22307,12 @@ function VistaMaster({ param }) {
 function VistaRicercaModelle({ param, mostraClasse }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
+  // chi puo' firmare il reperimento: qui le anagrafiche non ci sono, si
+  // chiedono. Se la lettura non riesce la tendina resta vuota ma la pagina
+  // funziona: chi cerca le modelle deve poter scrivere nome e telefono
+  // anche se non sa dire di chi e' il merito
+  const [reperitori, setReperitori] = useState([]);
+  useEffect(() => { caricaReperitoriModelle().then(setReperitori).catch(() => setReperitori([])); }, []);
 
   useEffect(() => {
     async function carica() {
@@ -22366,6 +22464,7 @@ function VistaRicercaModelle({ param, mostraClasse }) {
                 {i.tipi_modelle.map((m, mi) => (
                   presenteIlGiorno(i.giorni_presenza, m.giorno) && (
                     <RigaModella
+                      reperitori={reperitori}
                       key={mi}
                       modella={m}
                       primaRiga={mi === 0}
@@ -48749,7 +48848,7 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
 // callback di navigazione interna (onBack/onCambiaSottoVista/…) sono no-op
 // qui, perché in questa vista non esiste una cronologia condivisa tra le
 // colonne — "← Indietro" in alto chiude l'intera vista e basta
-function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
+function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 0 60px" }}>
@@ -48765,6 +48864,7 @@ function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, 
             return (
               <div key={iscritto.id} style={{ flex: "0 0 680px", width: 680 }}>
                 <SchedaData
+                  utentiApp={utentiApp}
                   quoteVenditoriSplit={quoteVenditoriSplit}
                   puoAssegnareModelle={puoAprireVista("gestionemodelle")}
                   ruoloUtente={ruoloUtente}
@@ -50346,6 +50446,7 @@ export default function App() {
 
       {view === "schedeaffiancate" && (
         <VistaSchedeAffiancate
+          utentiApp={utentiApp}
           quoteVenditoriSplit={quoteVenditoriSplit}
           iscrittiArr={schedeAffiancateIscritti}
           ruoloUtente={ruoloUtente}
@@ -51036,6 +51137,7 @@ export default function App() {
 
       {view === "scheda" && corsoDataApertaObj && (
         <SchedaData
+          utentiApp={utentiApp}
           quoteVenditoriSplit={quoteVenditoriSplit}
           key={schedaKey}
           ruoloUtente={ruoloUtente}
