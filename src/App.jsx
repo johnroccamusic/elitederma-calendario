@@ -28127,7 +28127,10 @@ function RigaCassaVuota({ testo }) {
 const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico", "Cassa contanti"];
 const METODI_SPESA_DALLA_CASSA = new Set(["Cassa contanti", "Contanti", "Cash no iva"]);
 
-function PannelloCassaContanti() {
+function PannelloCassaContanti({
+  corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
+  leva, location, hotel, quoteVenditoriSplit, spese, venditeShop,
+}) {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
   const [buste, setBuste] = useState([]);
@@ -28188,6 +28191,53 @@ function PannelloCassaContanti() {
   // e' questa. Quando il fondo e' pieno la casella sparisce — un "mancano
   // zero" e' rumore.
   const mancanteInCassa = round2(Math.max(0, fondoMinimo - saldo));
+
+  // Le buste che stanno tornando: corsi finiti, quindi con la contabilita'
+  // chiusa, di cui pero' nessuno ha ancora spuntato "busta rientrata". Quel
+  // contante esiste e sta viaggiando, ma non e' ancora in cassa — sommarlo
+  // al saldo direbbe una bugia sul cassetto, non dirlo affatto ne dice
+  // un'altra a chi deve decidere se prelevare.
+  //
+  // L'importo e' lo stesso "Cash pulito in busta" della scheda di classe,
+  // calcolato con le stesse due funzioni che usano il Riepilogo e lo
+  // Scadenziario: cosi' i tre punti non possono raccontare numeri diversi.
+  //
+  // Qui la data di apertura NON filtra, al contrario di tutto il resto del
+  // pannello, e non e' una svista. Le buste entrano nel saldo con la data
+  // in cui rientrano, non con quella del corso: una busta di agosto
+  // spuntata oggi finisce comunque in cassa. Escluderla da "in arrivo"
+  // farebbe comparire dal nulla il giorno della spunta un contante che
+  // nessuno aveva annunciato.
+  const busteInArrivo = useMemo(() => {
+    const oggi = dataOggiStr();
+    let totale = 0;
+    let quante = 0;
+    (corsiDate || []).forEach((cd) => {
+      if (cd.busta_rientrata_il) return;
+      const fine = cd.data_fine || cd.data_inizio || "";
+      if (!fine || fine >= oggi) return;
+      const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
+      const { righeSpeseTutte, totaleSpeseAutomaticheClasse } = calcolaRigheSpeseCorso(
+        cd,
+        { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit },
+        {}
+      );
+      const conti = contiRiepilogoClasse({
+        incassiExtra: Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [],
+        listaIscritti,
+        venditeAlCorso: (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio"),
+        speseClasse: (spese || []).filter((x) => x.classe_id === cd.id),
+        costiExtra: Array.isArray(cd.costi_extra) ? cd.costi_extra : [],
+        righeSpeseTutte, totaleSpeseAutomaticheClasse,
+      });
+      // una busta vuota o in rosso non sta "arrivando": non c'e' contante
+      // per strada, c'e' semmai un buco da coprire, ed e' un'altra storia
+      if (conti.cassaContanti <= 0) return;
+      totale += conti.cassaContanti;
+      quante += 1;
+    });
+    return { totale: round2(totale), quante };
+  }, [corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop]);
 
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
@@ -28263,19 +28313,31 @@ function PannelloCassaContanti() {
           colonna quel rapporto lo devi ricostruire scorrendo.
           "Mancano in cassa" c'e' solo quando manca davvero qualcosa:
           quattro caselle quando il fondo e' sotto, tre quando e' a posto */}
-      <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: `repeat(${mancanteInCassa > 0 ? 4 : 3}, minmax(0, 1fr))`, gap: isMobile ? 6 : 14, alignItems: "start" }}>
-        {[
+      {(() => {
+        const celle = [
           { etichetta: "Saldo in cassa", valore: saldo, colore: saldo < 0 ? "#C0392B" : NAVY, grande: true },
           { etichetta: "Fondo cassa da tenere", valore: fondoMinimo, colore: GOLD },
           ...(mancanteInCassa > 0 ? [{ etichetta: "Mancano in cassa", valore: mancanteInCassa, colore: "#C0392B" }] : []),
           { etichetta: "Prelevabile", valore: prelevabile, colore: NAVY },
-        ].map((c) => (
-          <div key={c.etichetta} style={{ minWidth: 0 }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 8 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.6, lineHeight: 1.2, overflowWrap: "anywhere" }}>{c.etichetta}</div>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? (c.grande ? 16 : 15) : (c.grande ? 32 : 26), fontWeight: 700, color: c.colore, lineHeight: 1.15, whiteSpace: "nowrap" }}>{euroRiepilogo(c.valore)}</div>
+          ...(busteInArrivo.quante > 0 ? [{
+            etichetta: "In arrivo",
+            valore: busteInArrivo.totale,
+            colore: "#8A6D1D",
+            nota: `${busteInArrivo.quante} bust${busteInArrivo.quante === 1 ? "a" : "e"} ancora fuori`,
+          }] : []),
+        ];
+        return (
+          <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: isMobile ? 6 : 14, alignItems: "start" }}>
+            {celle.map((c) => (
+              <div key={c.etichetta} style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: isMobile ? 8 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.6, lineHeight: 1.2, overflowWrap: "anywhere" }}>{c.etichetta}</div>
+                <div style={{ ...fontDisplay, fontSize: isMobile ? (c.grande ? 16 : 15) : (c.grande ? 32 : 26), fontWeight: 700, color: c.colore, lineHeight: 1.15, whiteSpace: "nowrap" }}>{euroRiepilogo(c.valore)}</div>
+                {c.nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, lineHeight: 1.2, marginTop: 2 }}>{c.nota}</div>}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+      })()}
 
       {/* da dove viene il saldo, riga per riga: una cassa che mostra solo il
           totale non si puo' controllare */}
@@ -28502,7 +28564,7 @@ function PannelloCassaConsulenze() {
   );
 }
 
-function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
+function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -29000,7 +29062,14 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
 
-        {tab === "fondocassa" && <PannelloCassaContanti />}
+        {tab === "fondocassa" && (
+          <PannelloCassaContanti
+            corsiDate={corsiDate} iscritti={iscritti} corsiDateDocenti={corsiDateDocenti}
+            master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
+            leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit}
+            spese={spese} venditeShop={venditeShop}
+          />
+        )}
         {tab === "consulenze" && <PannelloCassaConsulenze />}
 
         {tab === "impegni" && (
@@ -50625,7 +50694,7 @@ export default function App() {
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
-          spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} fornitori={fornitori}
+          spese={spese} venditeShop={venditeShop} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} fornitori={fornitori}
           abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti}
           fattureRicevuteFic={fattureRicevuteFic}
           noteCreditoFic={noteCreditoFic}
