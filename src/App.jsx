@@ -12889,20 +12889,27 @@ const ALIQUOTA_IVA_RIEPILOGO_CLASSE = 22;
 // griglia con la stessa impronta di quella della tabella sopra (2fr per la
 // voce, 1fr per ogni importo, una colonna fissa in fondo), cosi' le due
 // tabelle restano incolonnate fra loro.
-const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 46px";
-// Su desktop la stessa impronta, con le colonne dei numeri a larghezza
-// fissa. Erano elastiche, e siccome le due tabelle accostate hanno
-// un'ultima colonna diversa - 90px per i giorni sopra, il cestino sotto -
-// lo spazio avanzato veniva spartito in modo diverso e le colonne non si
-// incolonnavano fra loro. Una cifra occupa quello che occupa: 80px bastano
-// per "€ 8909.4", il resto lo prende la voce, che di spazio sa fare uso.
-const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 80px 80px 80px 90px";
+const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 22px 46px";
+// Sei colonne: voce, i tre importi, il cestino, la modalita'.
+//
+// Le tre degli importi sono a larghezza fissa e stretta - una cifra di
+// queste tabelle sono tre o quattro numeri, non serve altro - cosi' cadono
+// sempre nello stesso punto riga dopo riga e lo spazio avanzato va alla
+// voce, che di spazio sa fare uso.
+//
+// Il cestino ha una colonna sua, prima della modalita': prima stava dentro
+// quella dei flag, e un tasto che cancella la riga accanto a tre caselle
+// che scelgono come si paga sono due gesti diversi appoggiati allo stesso
+// posto. Le due tabelle accostate la usano al contrario - il cestino solo
+// sotto, la modalita' solo sopra - ma la colonna c'e' in entrambe, ed e'
+// per questo che restano incolonnate.
+const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 54px 54px 54px 28px 92px";
 
 function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie }) {
   const isMobile = useIsMobile();
   const campoQui = isMobile
     ? { ...campoCompattoStyle, padding: "5px 4px", fontSize: 10.5 }
-    : campoCompattoStyle;
+    : { ...campoCompattoStyle, padding: "5px 5px", fontSize: 11.5 };
   const [totale, setTotale] = useState(spesa.totale != null ? String(spesa.totale) : "");
   const [cash, setCash] = useState(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
 
@@ -12960,7 +12967,7 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
       <button
         onClick={onElimina}
         title="Elimina voce"
-        style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", justifySelf: "center", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+        style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", justifySelf: "center", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="3 6 5 6 21 6" />
@@ -12968,6 +12975,10 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
           <path d="M10 11v6" /><path d="M14 11v6" />
         </svg>
       </button>
+      {/* nessun flag di modalita' su una spesa libera: la colonna resta
+          vuota, ma resta, perche' e' quella che tiene questa tabella
+          incolonnata con quella sopra */}
+      <div />
     </div>
   );
 }
@@ -17715,7 +17726,7 @@ function PannelloRiepilogoAmministrativo({
   // imbottitura ridotti quanto basta a far stare cinque colonne in riga.
   const campoCompattoQui = isMobile
     ? { ...campoCompattoStyle, padding: "5px 4px", fontSize: 10.5 }
-    : campoCompattoStyle;
+    : { ...campoCompattoStyle, padding: "5px 5px", fontSize: 11.5 };
 
   // Dettaglio della riga "Quota venditore": chi ha venduto in questa classe
   // e quanto ha maturato. Il legame iscritto -> venditore e' il campo
@@ -18102,16 +18113,17 @@ function PannelloRiepilogoAmministrativo({
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, marginBottom: 4 }}>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Voce</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Totale</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Bonifico</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Cash</div>
-                      {/* niente titolo sulla quinta colonna: i giorni non sono
-                          un dato di tutte le righe - ce li ha solo chi ha un
-                          assistente - e l'intestazione faceva sembrare vuote
-                          tutte le altre. Il numero se lo porta scritto dietro,
-                          "3gg", dove compare. La colonna resta per tenere
-                          l'incolonnamento, ma senza nome. */}
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}></div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Totale</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Bonifico</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Cash</div>
+                      {/* il cestino non ha titolo: un'icona che cancella non
+                          ha bisogno di essere annunciata. La modalita' si
+                          chiamava "Giorni", ma i giorni li ha solo chi ha un
+                          assistente e se li porta scritti dietro ("3gg"):
+                          quella colonna dice come si paga la riga, non quanti
+                          giorni dura. */}
+                      <div />
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }}>Modalità</div>
                     </div>
                     {righeSpeseTutte.map((r) => {
                       // "location" e "alloggio" non hanno più uno split libero: seguono
@@ -18145,7 +18157,11 @@ function PannelloRiepilogoAmministrativo({
                               <input style={{ ...campoCompattoQui, textAlign: "right" }} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
                             )}
                           </div>
-                          <div style={{ minWidth: 0 }}>
+                          {/* nessun cestino su queste righe: sono voci fisse,
+                              non si cancellano. La colonna pero' c'e', o le
+                              due tabelle non si incolonnerebbero piu' */}
+                          <div />
+                          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
                             {r.giorni != null && (
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>−</button>
@@ -18185,7 +18201,11 @@ function PannelloRiepilogoAmministrativo({
                                   {v.nome}
                                   <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
                                 </span>
-                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", textAlign: "right" }}>
+                                {/* stesso rientro interno della casella del
+                                    totale qui sopra: senza, le cifre cadono
+                                    cinque pixel piu' a destra e le unita' non
+                                    si incolonnano con quelle della riga */}
+                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>
                                   € {v.totale}
                                 </span>
                               </div>
