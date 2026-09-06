@@ -1059,7 +1059,7 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
   // della griglia, larga quando occupa la pagina. Due colonne in piu' per
   // ciascuna: le categorie sono trenta, e ogni riga risparmiata e' spazio
   // che va ai prodotti
-  const colonne = isMobile ? 5 : compatta ? 7 : 8;
+  const colonne = isMobile ? 8 : compatta ? 7 : 8;
   // il filetto sul crema: CREAM_BORDER e' lo stesso tono dello sfondo e
   // spariva. Questo e' il grigio-oro gia' usato per i divisori della
   // scheda corso, che sul crema si vede
@@ -1089,20 +1089,20 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
               // nome affiancati non ci stanno, quindi il nome passa sotto
               flexDirection: isMobile ? "column" : "row",
               alignItems: "center", justifyContent: isMobile ? "flex-start" : "flex-start",
-              gap: isMobile ? 3 : 8,
-              padding: isMobile ? "7px 3px" : compatta ? "8px 10px" : "10px 12px", borderRadius: 12,
+              gap: isMobile ? 2 : 8,
+              padding: isMobile ? "6px 1px" : compatta ? "8px 10px" : "10px 12px", borderRadius: isMobile ? 9 : 12,
               background: scelta ? NAVY : "transparent",
               // i filetti sono bordi della cella, non elementi in mezzo:
               // cosi' cadono esattamente sulla colonna, riga dopo riga
               border: "1px solid transparent",
               borderRight: !scelta && !ultimaDellaRiga ? `1px solid ${FILETTO}` : "1px solid transparent",
               borderBottom: !scelta && !nellUltimaRiga ? `1px solid ${FILETTO}` : "1px solid transparent",
-              cursor: "pointer", ...fontBody, fontSize: isMobile ? 8.5 : compatta ? 11.5 : 12.5, fontWeight: 700,
+              cursor: "pointer", ...fontBody, fontSize: isMobile ? 7.5 : compatta ? 11.5 : 12.5, fontWeight: 700,
               color: scelta ? "#fff" : NAVY, textAlign: isMobile ? "center" : "left",
             }}
           >
             <span style={{ display: "inline-flex", flexShrink: 0, color: scelta ? "#fff" : GOLD }}>
-              <Icona size={isMobile ? 15 : compatta ? 17 : 20} color={scelta ? "#fff" : GOLD} />
+              <Icona size={isMobile ? 14 : compatta ? 17 : 20} color={scelta ? "#fff" : GOLD} />
             </span>
             {/* due parole vanno a capo invece di allungare la colonna:
                 "Lame Microblading" su una riga sola allargherebbe la sua
