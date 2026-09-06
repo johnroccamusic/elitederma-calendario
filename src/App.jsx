@@ -11018,6 +11018,18 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["utenti_app"]);
   }
+  // Chi puo' firmare il reperimento di una modella. A differenza degli
+  // altri due flag qui sopra vale anche sulle righe di sistema: John e'
+  // una di quelle, e senza questo la sua casella non sarebbe raggiungibile
+  // da nessuna parte.
+  async function salvaModificaModelle(checked) {
+    const { error } = await persist({ gestione_modelle: checked });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["utenti_app"]);
+  }
+  const chkModificaModelle = (
+    <input type="checkbox" checked={!!utente.gestione_modelle} onChange={(e) => salvaModificaModelle(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Compare nella tendina «Reperita da» quando si assegnano le modelle: è la firma di chi le ha trovate" />
+  );
   const chkAmministratore = (
     <input type="checkbox" checked={!!utente.amministratore} onChange={(e) => salvaAmministratore(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Entra con grado amministratore: modifica le schede iscritto, vede Contabilità classe e il Riepilogo amministrativo senza chiedere la password" />
   );
@@ -11061,6 +11073,10 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
             </label>
           </>
         )}
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer" }}>
+          {chkModificaModelle}
+          <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Modifica modelle (firma chi le ha trovate)</span>
+        </label>
         <div style={{ marginBottom: 12 }}>
           {TASTI_HOME.map((t) => (
             <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
@@ -11104,6 +11120,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
       <td style={tdStyle}>{!sistema && selVenditoreCollegato}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkAmministratore}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkSoloCalendario}</td>
+      <td style={{ ...tdStyle, textAlign: "center" }}>{chkModificaModelle}</td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
@@ -11193,6 +11210,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
   const colonneUtenti = [
     { chiave: "nome", larghezza: 120 }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
     { chiave: "amministratore", larghezza: 78 }, { chiave: "solocalendario", larghezza: 78 },
+    { chiave: "modificamodelle", larghezza: 78 },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: 84 })),
     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
     { chiave: "azioni", larghezza: 44 },
@@ -11238,6 +11256,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
                 <th style={{ ...thStyle, textAlign: "center" }}>Amministratore{maniglia("amministratore", larghezzaDi("amministratore", 78))}</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario{maniglia("solocalendario", larghezzaDi("solocalendario", 78))}</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>Modifica modelle{maniglia("modificamodelle", larghezzaDi("modificamodelle", 78))}</th>
                 {TASTI_HOME.map((t) => (
                   <th
                     key={t.chiave}
@@ -14685,9 +14704,20 @@ function componiReperitoriModelle(master, venditori, utenti) {
     ...(venditori || []).map((r) => ({ tipo: "venditore", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0 })),
     ...(utenti || []).map((r) => ({ tipo: "utente", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0 })),
   ].filter((r) => r.id && String(r.nome || "").trim());
+  // Due schede della stessa persona non devono diventare due voci in
+  // tendina. Le si riconosce in due modi: per nome uguale, e per il
+  // collegamento esplicito "e' anche un venditore" (master.venditore_id,
+  // utenti_app.venditore_id) — Andrea e' "ANDREA PAURA" come master e
+  // "ANDREA" come venditore, quindi il nome da solo non basterebbe.
+  //
+  // L'ordine di arrivo decide chi resta: master, poi venditori, poi utenti.
   const visti = new Set();
+  const venditoriGiaRappresentati = new Set(
+    [...(master || []), ...(utenti || [])].map((r) => r.venditore_id).filter(Boolean)
+  );
   return elenco
     .filter((r) => {
+      if (r.tipo === "venditore" && venditoriGiaRappresentati.has(r.id)) return false;
       const chiave = r.nome.trim().toUpperCase();
       if (visti.has(chiave)) return false;
       visti.add(chiave);
@@ -14700,10 +14730,10 @@ function componiReperitoriModelle(master, venditori, utenti) {
 // pubblica di ricerca modelle): si leggono solo le tre colonne che servono
 // — su utenti_app un "select *" porterebbe in giro anche le password
 async function caricaReperitoriModelle() {
-  const colonne = "id, nome, quota_reperimento";
+  const colonne = "id, nome, venditore_id, quota_reperimento";
   const [m, v, u] = await Promise.all([
     supabase.from("master").select(colonne).eq("gestione_modelle", true),
-    supabase.from("venditori").select(colonne).eq("gestione_modelle", true),
+    supabase.from("venditori").select("id, nome, quota_reperimento").eq("gestione_modelle", true),
     supabase.from("utenti_app").select(colonne).eq("gestione_modelle", true),
   ]);
   return componiReperitoriModelle(m.data, v.data, u.data);
@@ -37312,6 +37342,14 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
                       />
                       <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>È anche un venditore, condividi i dati</span>
                     </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, cursor: "pointer" }}>
+                      <input
+                        type="checkbox" checked={!!selezionato.gestione_modelle}
+                        onChange={(e) => salvaCampoMaster("gestione_modelle", e.target.checked)}
+                        style={{ width: 15, height: 15 }}
+                      />
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }} title="Compare nella tendina «Reperita da» quando si assegnano le modelle: e' la firma di chi le ha trovate">Modifica modelle</span>
+                    </label>
                     {mostraCollegaVenditore && (
                       <select value={selezionato.venditore_id || ""} onChange={(e) => collegaVenditore(e.target.value || null)} style={{ ...inputStyle, width: 240, padding: "6px 8px", fontSize: 12.5, marginTop: 6 }}>
                         <option value="">— scegli venditore —</option>
@@ -37836,6 +37874,14 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
                         style={{ width: 15, height: 15 }}
                       />
                       <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>È anche una master, condividi i dati</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, cursor: "pointer" }}>
+                      <input
+                        type="checkbox" checked={!!selezionato.gestione_modelle}
+                        onChange={(e) => salvaCampoVenditore("gestione_modelle", e.target.checked)}
+                        style={{ width: 15, height: 15 }}
+                      />
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }} title="Compare nella tendina «Reperita da» quando si assegnano le modelle: e' la firma di chi le ha trovate">Modifica modelle</span>
                     </label>
                     {mostraCollegaMaster && (
                       <select value={masterCollegataAttuale?.id || ""} onChange={(e) => collegaMaster(e.target.value || null)} style={{ ...inputStyle, width: 240, padding: "6px 8px", fontSize: 12.5, marginTop: 6 }}>
