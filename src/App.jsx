@@ -26667,11 +26667,12 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
   attivo: "Cosa dobbiamo incassare: acconti, quote pre corso e saldi degli allievi, con la data in cui sono attesi.",
   abbonamenti: "I contratti che si rinnovano da soli — canoni, servizi, licenze — con l'importo e ogni quanto tornano.",
 };
-// Il marrone del tasto scelto. Il nero pieno spegneva la scheda attiva:
-// diventava un buco scuro in mezzo al crema, e l'icona d'oro sopra il nero
-// perdeva il suo colore. Questo e' lo stesso oro scuro gia' usato altrove
-// nell'app, abbastanza carico da reggere il testo bianco.
-const MARRONE_SCHEDA_ATTIVA = "#8A6D1D";
+// La scheda scelta si riconosce dal fondo, non dal buio. Prima era nera:
+// un buco scuro in mezzo al crema, con l'icona d'oro che sopra il nero
+// perdeva il proprio colore. Poi oro scuro, che non stava meglio. Adesso
+// e' il marrone di fondo dell'app (BG), lo stesso su cui poggiano le
+// schede, con il bordo d'oro a dire quale e' scelta: il testo resta scuro
+// e leggibile, e la scheda sembra premuta invece che spenta.
 
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente, ordine, onSalvaOrdine }) {
   const isMobile = useIsMobile();
@@ -26728,33 +26729,35 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
               style={{
                 width: "100%", minWidth: 0, boxSizing: "border-box", cursor: "pointer", textAlign: "center",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-                gap: isMobile ? 4 : 8, padding: isMobile ? "10px 4px" : "18px 10px",
+                gap: isMobile ? 3 : 4, padding: isMobile ? "10px 4px" : "12px 10px",
                 borderRadius: isMobile ? 12 : 18,
-                background: attivo ? MARRONE_SCHEDA_ATTIVA : "#FBF7F0",
-                border: `1px solid ${attivo ? MARRONE_SCHEDA_ATTIVA : CREAM_BORDER}`,
+                background: attivo ? BG : "#FBF7F0",
+                border: `${attivo ? 2 : 1}px solid ${attivo ? GOLD : CREAM_BORDER}`,
+                // quadrata, non rettangolare: l'altezza segue la larghezza
+                aspectRatio: "1 / 1", overflow: "hidden",
               }}
             >
               {/* il medaglione tondo: l'icona non galleggia sul fondo della
                   scheda, sta dentro un cerchio che la stacca */}
               <span style={{
-                width: isMobile ? 34 : 62, height: isMobile ? 34 : 62, borderRadius: "50%", flexShrink: 0,
-                background: attivo ? "rgba(255,255,255,0.18)" : "#F3E7D2",
+                width: isMobile ? 34 : 54, height: isMobile ? 34 : 54, borderRadius: "50%", flexShrink: 0,
+                background: "#F3E7D2",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                <s.Icona size={isMobile ? 18 : 28} color={attivo ? "#fff" : GOLD} />
+                <s.Icona size={isMobile ? 18 : 28} color={GOLD} />
               </span>
-              <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 13.5, fontWeight: 700, lineHeight: 1.2, color: attivo ? "#fff" : NAVY, overflowWrap: "anywhere", marginTop: isMobile ? 0 : 6 }}>{s.titolo}</span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 13.5, fontWeight: 700, lineHeight: 1.2, color: NAVY, overflowWrap: "anywhere", marginTop: isMobile ? 0 : 4 }}>{s.titolo}</span>
               {/* la riga di spiegazione sta solo su desktop: in un quadrato
                   da ~78px ruberebbe lo spazio al nome, che conta di piu' */}
               {!isMobile && (
-                <span style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.25, color: attivo ? "rgba(255,255,255,0.85)" : MUTED }}>{s.sotto}</span>
+                <span style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.25, color: MUTED }}>{s.sotto}</span>
               )}
               {!isMobile && (
                 <span style={{
-                  width: 26, height: 26, borderRadius: "50%", marginTop: 6,
-                  border: `1px solid ${attivo ? "rgba(255,255,255,0.5)" : CREAM_BORDER}`,
+                  width: 24, height: 24, borderRadius: "50%", marginTop: 2,
+                  border: `1px solid ${attivo ? GOLD : CREAM_BORDER}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  ...fontBody, fontSize: 13, color: attivo ? "#fff" : MUTED,
+                  ...fontBody, fontSize: 13, color: attivo ? GOLD : MUTED,
                 }}>›</span>
               )}
             </button>
@@ -26774,7 +26777,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
                 title="Trascina per spostare questa scheda"
                 style={{
                   position: "absolute", top: 5, left: 6, cursor: "grab", lineHeight: 1, userSelect: "none",
-                  ...fontBody, fontSize: 11, color: attivo ? "rgba(255,255,255,0.7)" : MUTED,
+                  ...fontBody, fontSize: 11, color: MUTED,
                 }}
               >⠿</span>
             )}
