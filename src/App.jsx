@@ -18119,24 +18119,32 @@ function TitoloSezioneRiepilogo({ children }) {
 // quella di sempre (importo blu, nessuna riga sotto). Servono alla cassa
 // contanti, dove un numero puo' essere un allarme e un altro ha bisogno di
 // dire quante buste sta contando.
-function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota }) {
+function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota, compatta = false }) {
+  const medaglione = compatta ? 22 : (isMobile ? 30 : 42);
+  const corpoValore = compatta ? 11.5 : (isMobile ? 14 : 20);
+  // L'importo non esce piu' dalla casella: se non ci sta, rimpicciolisce
+  // finche' non ci sta. Cinque celle in riga vogliono dire colonne strette,
+  // e "€ 2.850,00" scritto a corpo 20 sfondava il bordo destro andando a
+  // finire sopra la cella accanto. Meglio due punti di corpo in meno che
+  // una cifra tagliata.
+  const { ref: rifValore, fontSize } = useFontRigaAdattato(true, `${valore}|${corpoValore}`, corpoValore, 8);
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, minWidth: 0,
-      background: "#FCFBF8", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14,
-      padding: isMobile ? "10px 10px" : "12px 14px",
+      display: "flex", alignItems: "center", gap: compatta ? 5 : (isMobile ? 8 : 12), minWidth: 0,
+      background: "#FCFBF8", border: `1px solid ${CREAM_BORDER}`, borderRadius: compatta ? 10 : 14,
+      padding: compatta ? "8px 6px" : (isMobile ? "10px 10px" : "12px 14px"),
     }}>
       <span style={{
-        width: isMobile ? 30 : 42, height: isMobile ? 30 : 42, flexShrink: 0, borderRadius: "50%",
+        width: medaglione, height: medaglione, flexShrink: 0, borderRadius: "50%",
         background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: colore,
       }}>
-        <Icona size={isMobile ? 16 : 20} />
+        <Icona size={compatta ? 12 : (isMobile ? 16 : 20)} />
       </span>
-      <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />
-      <div style={{ minWidth: 0 }}>
-        <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.6, lineHeight: 1.25 }}>{label}</div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 20, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2 }}>{valore}</div>
-        {nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, lineHeight: 1.2, marginTop: 1 }}>{nota}</div>}
+      {!compatta && <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ ...fontBody, fontSize: compatta ? 7.5 : (isMobile ? 9 : 10.5), color: MUTED, textTransform: "uppercase", letterSpacing: compatta ? 0 : (isMobile ? 0.2 : 0.6), lineHeight: 1.2, overflowWrap: "anywhere" }}>{label}</div>
+        <div ref={rifValore} style={{ ...fontDisplay, fontSize, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2, overflow: "hidden" }}>{valore}</div>
+        {nota && <div style={{ ...fontBody, fontSize: compatta ? 7 : (isMobile ? 8.5 : 10), color: MUTED, lineHeight: 1.2, marginTop: 1 }}>{nota}</div>}
       </div>
     </div>
   );
@@ -28537,11 +28545,12 @@ function PannelloCassaContanti({
           }] : []),
         ];
         return (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : `repeat(${celle.length}, minmax(120px, 1fr))`, gap: isMobile ? 8 : 14, marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: isMobile ? 4 : 14, marginBottom: 14 }}>
             {celle.map((c) => (
               <CellaImportoRiepilogo
                 key={c.etichetta}
                 isMobile={isMobile}
+                compatta={isMobile}
                 Icona={c.Icona}
                 label={c.etichetta}
                 valore={euroRiepilogo(c.valore)}
