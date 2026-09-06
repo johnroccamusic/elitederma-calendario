@@ -18156,8 +18156,8 @@ function useCorpoImportoNecessario(testo, corpoBase, corpoMin = 8) {
 // Riepilogo amministrativo restano quelle di prima — li' le colonne sono
 // tre e larghe, e non c'era niente da stringere.
 function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota, compatta = false, grande = false, corpoImposto, onCorpoNecessario, altezzaEtichettaImposta, onAltezzaEtichetta }) {
-  const medaglione = compatta ? 22 : grande ? 44 : (isMobile ? 30 : 42);
-  const corpoValore = compatta ? 11.5 : grande ? 28 : (isMobile ? 14 : 20);
+  const medaglione = compatta ? 22 : grande ? 34 : (isMobile ? 30 : 42);
+  const corpoValore = compatta ? 11.5 : grande ? 22 : (isMobile ? 14 : 20);
   const { rifBox, rifSonda, corpo } = useCorpoImportoNecessario(valore, corpoValore);
   useEffect(() => { onCorpoNecessario?.(corpo); }, [corpo, onCorpoNecessario]);
   // le cifre di una stessa riga si leggono insieme: se una e' scritta piu'
@@ -18184,21 +18184,21 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
   }, [label, compatta, isMobile]);
   useEffect(() => { onAltezzaEtichetta?.(altezzaEtichetta); }, [altezzaEtichetta, onAltezzaEtichetta]);
   const stileEtichetta = {
-    ...fontBody, fontSize: compatta ? 7.5 : grande ? 12.5 : (isMobile ? 9 : 10.5), color: MUTED,
-    textTransform: "uppercase", letterSpacing: compatta ? 0 : grande ? 0.9 : (isMobile ? 0.2 : 0.6),
+    ...fontBody, fontSize: compatta ? 7.5 : grande ? 10.5 : (isMobile ? 9 : 10.5), color: MUTED,
+    textTransform: "uppercase", letterSpacing: compatta ? 0 : grande ? 0.5 : (isMobile ? 0.2 : 0.6),
     lineHeight: 1.25, overflowWrap: "anywhere",
   };
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: compatta ? 5 : grande ? 14 : (isMobile ? 8 : 12), minWidth: 0,
+      display: "flex", alignItems: "center", gap: compatta ? 5 : grande ? 10 : (isMobile ? 8 : 12), minWidth: 0,
       background: grande ? "#FDFCFA" : "#FCFBF8", border: `1px solid ${CREAM_BORDER}`, borderRadius: compatta ? 10 : grande ? 16 : 14,
-      padding: compatta ? "8px 6px" : grande ? "14px 20px 14px 16px" : (isMobile ? "10px 10px" : "12px 14px"),
+      padding: compatta ? "8px 6px" : grande ? "12px 12px" : (isMobile ? "10px 10px" : "12px 14px"),
     }}>
       <span style={{
         width: medaglione, height: medaglione, flexShrink: 0, borderRadius: "50%",
         background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: colore,
       }}>
-        <Icona size={compatta ? 12 : grande ? 22 : (isMobile ? 16 : 20)} />
+        <Icona size={compatta ? 12 : grande ? 17 : (isMobile ? 16 : 20)} />
       </span>
       {!compatta && <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0, margin: grande ? "2px 0" : 0 }} />}
       <div ref={rifBox} style={{ minWidth: 0, flex: 1, position: "relative" }}>
@@ -18206,9 +18206,9 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
         <span ref={rifSonda} aria-hidden style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, whiteSpace: "nowrap", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0 }}>{valore}</span>
         {/* la copia invisibile del titolo, per sapere quanto e' alto davvero */}
         <span ref={rifSondaEtichetta} aria-hidden style={{ ...stileEtichetta, display: "block", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0, width: "100%" }}>{label}</span>
-        <div style={{ ...stileEtichetta, minHeight: altezzaEtichettaImposta || altezzaEtichetta || undefined, display: "flex", alignItems: "flex-end", maxWidth: grande ? 190 : undefined }}>{label}</div>
+        <div style={{ ...stileEtichetta, minHeight: altezzaEtichettaImposta || altezzaEtichetta || undefined, display: "flex", alignItems: "flex-end" }}>{label}</div>
         <div style={{ ...fontDisplay, fontSize: corpoFinale, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2, overflow: "hidden" }}>{valore}</div>
-        {nota && <div style={{ ...fontBody, fontSize: compatta ? 7 : grande ? 12 : (isMobile ? 8.5 : 10), color: MUTED, lineHeight: 1.25, marginTop: grande ? 2 : 1, whiteSpace: grande ? "nowrap" : "normal" }}>{nota}</div>}
+        {nota && <div style={{ ...fontBody, fontSize: compatta ? 7 : grande ? 10 : (isMobile ? 8.5 : 10), color: MUTED, lineHeight: 1.25, marginTop: grande ? 2 : 1 }}>{nota}</div>}
       </div>
     </div>
   );
@@ -28631,18 +28631,15 @@ function PannelloCassaContanti({
         const altezze = celle.map((c) => altezzeEtichette[c.etichetta]).filter((x) => x > 0);
         const altezzaEtichette = altezze.length === celle.length ? Math.max(...altezze) : null;
         return (
-          // Da scrivania ogni casella e' larga quanto il suo contenuto, non
-          // quanto un quinto della riga: erano le colonne uguali a
-          // costringere "FONDO CASSA DA TENERE" su tre righe e la cifra a
-          // rimpicciolire. Se in una finestra stretta non ci stanno, la
-          // riga scorre di lato per conto suo — meglio scorrere che
-          // spremere. Da telefono restano cinque colonne uguali e compatte:
-          // li' scorrere di lato una riga di totali sarebbe peggio.
-          <div style={isMobile
-            ? { display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: 4, marginBottom: 14 }
-            : { display: "flex", gap: 14, marginBottom: 14, overflowX: "auto", paddingBottom: 2 }}>
+          // Cinque colonne uguali che riempiono la riga, sempre: la riga dei
+          // totali si guarda tutta in un colpo d'occhio, e una casella
+          // tagliata fuori dal bordo o una barra da trascinare quel colpo
+          // d'occhio lo tolgono. Se lo spazio e' poco a stringersi sono il
+          // corpo della cifra e le imbottiture, non il numero di caselle
+          // visibili.
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: isMobile ? 4 : 10, marginBottom: 14 }}>
             {celle.map((c) => (
-              <div key={c.etichetta} style={isMobile ? { minWidth: 0 } : { flex: "0 0 auto" }}>
+              <div key={c.etichetta} style={{ minWidth: 0 }}>
               <CellaImportoRiepilogo
                 isMobile={isMobile}
                 compatta={isMobile}
