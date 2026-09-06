@@ -18119,15 +18119,50 @@ function TitoloSezioneRiepilogo({ children }) {
 // quella di sempre (importo blu, nessuna riga sotto). Servono alla cassa
 // contanti, dove un numero puo' essere un allarme e un altro ha bisogno di
 // dire quante buste sta contando.
-function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota, compatta = false }) {
+// Il corpo con cui questa cifra ci starebbe nella sua casella, misurato su
+// una copia invisibile scritta a corpo pieno. La cifra vera non lo usa per
+// forza: chi tiene la riga puo' imporne uno piu' piccolo, uguale per tutte.
+// La misura resta comunque quella giusta, perche' non guarda mai la cifra
+// visibile — altrimenti, rimpicciolita, tornerebbe a dire "ci sto" e le
+// due si rincorrerebbero all'infinito.
+function useCorpoImportoNecessario(testo, corpoBase, corpoMin = 8) {
+  const rifBox = React.useRef(null);
+  const rifSonda = React.useRef(null);
+  const [corpo, setCorpo] = useState(corpoBase);
+  useLayoutEffect(() => {
+    function misura() {
+      const box = rifBox.current;
+      const sonda = rifSonda.current;
+      if (!box || !sonda) return;
+      const disponibile = box.clientWidth;
+      const servono = sonda.scrollWidth;
+      if (!disponibile || !servono) return;
+      const grezzo = servono <= disponibile ? corpoBase : (corpoBase * disponibile) / servono;
+      // a mezzo punto per volta: un decimo di punto cambierebbe il valore a
+      // ogni pixel di scroll e la riga non starebbe mai ferma
+      setCorpo(Math.max(corpoMin, Math.floor(grezzo * 2) / 2));
+    }
+    misura();
+    const osservatore = new ResizeObserver(misura);
+    if (rifBox.current) osservatore.observe(rifBox.current);
+    return () => osservatore.disconnect();
+  }, [testo, corpoBase, corpoMin]);
+  return { rifBox, rifSonda, corpo };
+}
+
+function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota, compatta = false, corpoImposto, onCorpoNecessario }) {
   const medaglione = compatta ? 22 : (isMobile ? 30 : 42);
   const corpoValore = compatta ? 11.5 : (isMobile ? 14 : 20);
-  // L'importo non esce piu' dalla casella: se non ci sta, rimpicciolisce
-  // finche' non ci sta. Cinque celle in riga vogliono dire colonne strette,
-  // e "€ 2.850,00" scritto a corpo 20 sfondava il bordo destro andando a
-  // finire sopra la cella accanto. Meglio due punti di corpo in meno che
-  // una cifra tagliata.
-  const { ref: rifValore, fontSize } = useFontRigaAdattato(true, `${valore}|${corpoValore}`, corpoValore, 8);
+  const { rifBox, rifSonda, corpo } = useCorpoImportoNecessario(valore, corpoValore);
+  useEffect(() => { onCorpoNecessario?.(corpo); }, [corpo, onCorpoNecessario]);
+  // le cifre di una stessa riga si leggono insieme: se una e' scritta piu'
+  // piccola dell'altra sembra che valga meno. Quando chi tiene la riga
+  // impone un corpo, vince quello.
+  const corpoFinale = corpoImposto || corpo;
+  // L'etichetta occupa sempre due righe, anche quando ne riempie una sola:
+  // senza, in ogni casella l'importo partiva da un'altezza diversa a
+  // seconda di quanto era lungo il titolo, e i numeri non erano incolonnati.
+  const altezzaEtichetta = compatta ? "2.4em" : "2.4em";
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: compatta ? 5 : (isMobile ? 8 : 12), minWidth: 0,
@@ -18141,9 +18176,11 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
         <Icona size={compatta ? 12 : (isMobile ? 16 : 20)} />
       </span>
       {!compatta && <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />}
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ ...fontBody, fontSize: compatta ? 7.5 : (isMobile ? 9 : 10.5), color: MUTED, textTransform: "uppercase", letterSpacing: compatta ? 0 : (isMobile ? 0.2 : 0.6), lineHeight: 1.2, overflowWrap: "anywhere" }}>{label}</div>
-        <div ref={rifValore} style={{ ...fontDisplay, fontSize, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2, overflow: "hidden" }}>{valore}</div>
+      <div ref={rifBox} style={{ minWidth: 0, flex: 1, position: "relative" }}>
+        {/* la copia invisibile su cui si misura il corpo necessario */}
+        <span ref={rifSonda} aria-hidden style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, whiteSpace: "nowrap", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0 }}>{valore}</span>
+        <div style={{ ...fontBody, fontSize: compatta ? 7.5 : (isMobile ? 9 : 10.5), color: MUTED, textTransform: "uppercase", letterSpacing: compatta ? 0 : (isMobile ? 0.2 : 0.6), lineHeight: 1.2, overflowWrap: "anywhere", minHeight: altezzaEtichetta, display: "flex", alignItems: "flex-end" }}>{label}</div>
+        <div style={{ ...fontDisplay, fontSize: corpoFinale, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2, overflow: "hidden" }}>{valore}</div>
         {nota && <div style={{ ...fontBody, fontSize: compatta ? 7 : (isMobile ? 8.5 : 10), color: MUTED, lineHeight: 1.2, marginTop: 1 }}>{nota}</div>}
       </div>
     </div>
@@ -27183,7 +27220,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
     <div style={{
       display: "grid",
       gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))",
-      gap: isMobile ? 6 : 12, alignItems: "stretch", marginBottom: 16,
+      gap: isMobile ? 6 : 12, alignItems: "stretch",
     }}>
       {ordinate.map((s) => {
         const attivo = schedaAttiva === s.chiave;
@@ -28377,6 +28414,14 @@ function PannelloCassaContanti({
   // zero" e' rumore.
   const mancanteInCassa = round2(Math.max(0, fondoMinimo - saldo));
 
+  // Ogni casella della riga in cima dice quanto corpo le servirebbe per non
+  // far sbordare la sua cifra; la riga usa per tutte il piu' piccolo, cosi'
+  // i cinque numeri si leggono come cinque numeri e non come una classifica.
+  const [corpiImporti, setCorpiImporti] = useState({});
+  const segnalaCorpo = React.useCallback((chiave, corpo) => {
+    setCorpiImporti((precedenti) => (precedenti[chiave] === corpo ? precedenti : { ...precedenti, [chiave]: corpo }));
+  }, []);
+
   // Le buste che stanno tornando: corsi finiti, quindi con la contabilita'
   // chiusa, di cui pero' nessuno ha ancora spuntato "busta rientrata". Quel
   // contante esiste e sta viaggiando, ma non e' ancora in cassa — sommarlo
@@ -28519,6 +28564,10 @@ function PannelloCassaContanti({
           Da telefono due per riga: cinque schede affiancate su un cellulare
           diventerebbero cinque colonne da 60 pixel */}
       {(() => {
+        // Un corpo solo per tutte e cinque le cifre: si leggono insieme, e
+        // una scritta piu' piccola dell'altra sembra valere meno. Ogni
+        // casella dice quanto le servirebbe, e la riga prende la misura
+        // della piu' stretta.
         const celle = [
           { etichetta: "Saldo in cassa", valore: saldo, colore: saldo < 0 ? "#C0392B" : NAVY, Icona: IconaBanconota },
           { etichetta: "Fondo cassa da tenere", valore: fondoMinimo, colore: GOLD, Icona: IconaPortafoglio },
@@ -28532,6 +28581,13 @@ function PannelloCassaContanti({
             nota: `${busteInArrivo.quante} bust${busteInArrivo.quante === 1 ? "a" : "e"} ancora fuori`,
           }] : []),
         ];
+        // si guardano solo le caselle che ci sono adesso: "Mancano in
+        // cassa" compare e sparisce, e una sua misura vecchia terrebbe
+        // piccole tutte le altre per sempre. Finche' non hanno risposto
+        // tutte non si impone niente, o al primo disegno la riga
+        // sfarfallerebbe da una misura all'altra.
+        const misure = celle.map((c) => corpiImporti[c.etichetta]).filter((x) => x != null);
+        const corpoImporti = misure.length === celle.length ? Math.min(...misure) : null;
         return (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: isMobile ? 4 : 14, marginBottom: 14 }}>
             {celle.map((c) => (
@@ -28544,6 +28600,8 @@ function PannelloCassaContanti({
                 valore={euroRiepilogo(c.valore)}
                 colore={c.colore}
                 nota={c.nota}
+                corpoImposto={corpoImporti}
+                onCorpoNecessario={(n) => segnalaCorpo(c.etichetta, n)}
               />
             ))}
           </div>
@@ -29308,6 +29366,11 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
           abbonamentiCount={(abbonamentiContratti || []).length}
           ruoloUtente={ruoloUtente}
         />
+
+        {/* i tasti sono la scelta, quello che c'e' sotto e' la risposta:
+            una riga e lo spazio per farle respirare separano le due cose,
+            che prima si toccavano e sembravano un unico blocco */}
+        <div style={{ height: 1, background: GOLD, opacity: 0.55, margin: isMobile ? "22px 0" : "26px 0" }} />
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
 
