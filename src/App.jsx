@@ -18088,7 +18088,13 @@ function PannelloRiepilogoAmministrativo({
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Totale</div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Bonifico</div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right" }}>Cash</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Giorni</div>
+                      {/* niente titolo sulla quinta colonna: i giorni non sono
+                          un dato di tutte le righe - ce li ha solo chi ha un
+                          assistente - e l'intestazione faceva sembrare vuote
+                          tutte le altre. Il numero se lo porta scritto dietro,
+                          "3gg", dove compare. La colonna resta per tenere
+                          l'incolonnamento, ma senza nome. */}
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}></div>
                     </div>
                     {righeSpeseTutte.map((r) => {
                       // "location" e "alloggio" non hanno più uno split libero: seguono
