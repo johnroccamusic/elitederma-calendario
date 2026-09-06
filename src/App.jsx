@@ -27315,7 +27315,7 @@ function PaginaRiconciliazione({
   documentoFornitoreIdIniziale,
   documentoFornitoreTabella, impegnoTabella, riconciliazioneTabella, scadenzaPassivaTabella, preferenzeMatchTabella,
   rettificheScadenzaNCTabella,
-  fornitori, costiSottocategorie, abbonamentiContratti, abbonamentiImporti,
+  fornitori, costiCategorie, costiSottocategorie, abbonamentiContratti, abbonamentiImporti,
   ricarica, onBack,
 }) {
   const isMobile = useIsMobile();
@@ -50652,6 +50652,7 @@ export default function App() {
           preferenzeMatchTabella={preferenzeMatchTabella}
           rettificheScadenzaNCTabella={rettificheScadenzaNCTabella}
           fornitori={fornitori}
+          costiCategorie={costiCategorie}
           costiSottocategorie={costiSottocategorie}
           abbonamentiContratti={abbonamentiContratti}
           abbonamentiImporti={abbonamentiImporti}
