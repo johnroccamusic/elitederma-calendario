@@ -28400,11 +28400,11 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
             { chiave: "pagare", etichetta: "Spese da pagare", valore: speseDaPagare, colore: "#C0392B", sfondo: "#FBE4E1", onClick: () => setTab("passivo") },
             { chiave: "notecredito", etichetta: "Note di credito da riconciliare", valore: ncDaRiconciliare, colore: "#8E44AD", sfondo: "#F3EAF6", onClick: onApriRiconciliazione },
           ];
+          // I quattro avvisi su una riga sola, sempre. Con auto-fit e un
+          // minimo di 190px andavano a capo due e due appena lo spazio si
+          // stringeva, e quattro numeri che devono leggersi in un colpo
+          // d'occhio diventavano due blocchi da scorrere.
           return (
-            {/* i quattro avvisi su una riga sola, sempre. Con auto-fit e un minimo
-                di 190px andavano a capo a due a due appena lo spazio si
-                stringeva, e quattro numeri che dovrebbero leggersi in un colpo
-                d'occhio diventavano due blocchi da scorrere */}
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${riquadri.length}, minmax(0, 1fr))`, gap: isMobile ? 5 : 10, marginBottom: 18, alignItems: "stretch" }}>
               {riquadri.map((r) => (
                 <button
