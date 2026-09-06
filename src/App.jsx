@@ -26378,6 +26378,8 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
       <SchedaTabAmministrazione attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD" aiuto={aiuto("notecredito")}>Note di credito ({noteCreditoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("passivo")}>Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("attivo")}>Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "fondocassa"} onClick={() => onApriScheda("fondocassa")} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Fondo cassa</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "consulenze"} onClick={() => onApriScheda("consulenze")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Cassa consulenze</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("abbonamenti")}>Abbonamenti e contratti ({abbonamentiCount})</SchedaTabAmministrazione>
     </div>
   );
@@ -27336,6 +27338,213 @@ function PaginaRiconciliazione({
   );
 }
 
+// ---------- Fondo cassa e Cassa consulenze ----------
+//
+// Due pannelli gemelli, tenuti separati di proposito: sono due casse
+// diverse, e mescolarle vorrebbe dire non sapere piu' quanto contante c'e'
+// davvero in cassaforte. Ognuno si carica i propri dati da solo invece di
+// passare dal caricatore globale: sono due tabelle piccole, lette solo
+// qui, e appenderle a fetchDati vorrebbe dire riscaricarle a ogni giro.
+
+function RigaCassaVuota({ testo }) {
+  return (
+    <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: "22px 10px" }}>{testo}</div>
+  );
+}
+
+function PannelloFondoCassa() {
+  const isMobile = useIsMobile();
+  const [movimenti, setMovimenti] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [data, setData] = useState(dataOggiStr());
+  const [tipo, setTipo] = useState("entrata");
+  const [importo, setImporto] = useState("");
+  const [causale, setCausale] = useState("");
+
+  async function carica() {
+    const { data: righe, error } = await supabase
+      .from("fondo_cassa_movimenti")
+      .select("*")
+      .order("data", { ascending: false })
+      .order("creato_il", { ascending: false });
+    if (error) { setMsg(`Non riesco a leggere il fondo cassa: ${error.message}`); setMovimenti([]); return; }
+    setMovimenti(righe || []);
+  }
+  useEffect(() => { carica(); }, []);
+
+  // il saldo non e' un campo: e' la somma dei movimenti. Un saldo scritto
+  // da qualche parte e dei movimenti che lo alimentano sono due verita'
+  // che prima o poi divergono
+  const saldo = round2((movimenti || []).reduce((s, m) => s + (m.tipo === "uscita" ? -1 : 1) * (Number(m.importo) || 0), 0));
+
+  async function aggiungi() {
+    const valore = importo === "" ? null : parseNum(importo);
+    if (valore == null || !(valore > 0)) { setMsg("Serve un importo maggiore di zero."); return; }
+    setSalvando(true);
+    const { error } = await supabase.from("fondo_cassa_movimenti").insert({
+      data, tipo, importo: valore, causale: causale.trim() || null,
+    });
+    setSalvando(false);
+    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    setImporto(""); setCausale(""); setMsg("");
+    carica();
+  }
+
+  async function elimina(id) {
+    if (!window.confirm("Eliminare questo movimento? Il saldo si ricalcola di conseguenza.")) return;
+    const { error } = await supabase.from("fondo_cassa_movimenti").delete().eq("id", id);
+    if (error) { setMsg(`Non eliminato: ${error.message}`); return; }
+    carica();
+  }
+
+  return (
+    <div>
+      <div style={{ ...cardStyle, marginBottom: 14, display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Saldo in cassa</div>
+          <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: saldo < 0 ? "#C0392B" : NAVY, lineHeight: 1.1 }}>€ {saldo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, textAlign: "right" }}>
+          {movimenti == null ? "…" : `${movimenti.length} moviment${movimenti.length === 1 ? "o" : "i"}`}
+        </div>
+      </div>
+
+      <div style={{ ...cardStyle, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "130px 130px 130px 1fr auto", gap: 8, alignItems: "end" }}>
+          <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
+          <Field label="Tipo">
+            <select style={inputStyle} value={tipo} onChange={(e) => setTipo(e.target.value)}>
+              <option value="entrata">Entrata</option>
+              <option value="uscita">Uscita</option>
+            </select>
+          </Field>
+          <Field label="Importo"><input inputMode="decimal" style={inputStyle} value={importo} onChange={(e) => setImporto(e.target.value)} /></Field>
+          <Field label="Causale"><input style={inputStyle} value={causale} onChange={(e) => setCausale(e.target.value)} placeholder="Versamento, prelievo, reintegro…" /></Field>
+          <Button onClick={aggiungi} disabled={salvando} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>{salvando ? "Salvo…" : "Aggiungi"}</Button>
+        </div>
+      </div>
+
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+
+      <div style={cardStyle}>
+        {movimenti == null ? <RigaCassaVuota testo="Carico…" />
+          : movimenti.length === 0 ? <RigaCassaVuota testo="Nessun movimento registrato." />
+          : movimenti.map((m) => (
+            <div key={m.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "auto 1fr auto 28px" : "110px 1fr 120px 32px", gap: 8, alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: MUTED, whiteSpace: "nowrap" }}>{fmtData(m.data)}</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.causale || "—"}</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: m.tipo === "uscita" ? "#C0392B" : "#2E7D32", textAlign: "right", whiteSpace: "nowrap" }}>
+                {m.tipo === "uscita" ? "−" : "+"} € {round2(Number(m.importo) || 0)}
+              </div>
+              <button onClick={() => elimina(m.id)} title="Elimina movimento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", fontSize: 15, padding: 0 }}>×</button>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+function PannelloCassaConsulenze() {
+  const isMobile = useIsMobile();
+  const [incassi, setIncassi] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [data, setData] = useState(dataOggiStr());
+  const [cliente, setCliente] = useState("");
+  const [importo, setImporto] = useState("");
+  const [metodo, setMetodo] = useState("Contanti");
+
+  async function carica() {
+    const { data: righe, error } = await supabase
+      .from("consulenze_incassi")
+      .select("*")
+      .order("data", { ascending: false })
+      .order("creato_il", { ascending: false });
+    if (error) { setMsg(`Non riesco a leggere gli incassi: ${error.message}`); setIncassi([]); return; }
+    setIncassi(righe || []);
+  }
+  useEffect(() => { carica(); }, []);
+
+  const totale = round2((incassi || []).reduce((s, r) => s + (Number(r.importo) || 0), 0));
+  // l'anno solare in corso: il totale di sempre dice poco dopo il secondo
+  // anno, quello dell'anno dice se si sta andando meglio o peggio
+  const annoCorrente = dataOggiStr().slice(0, 4);
+  const totaleAnno = round2((incassi || []).filter((r) => (r.data || "").startsWith(annoCorrente)).reduce((s, r) => s + (Number(r.importo) || 0), 0));
+
+  async function aggiungi() {
+    const valore = importo === "" ? null : parseNum(importo);
+    if (valore == null || !(valore > 0)) { setMsg("Serve un importo maggiore di zero."); return; }
+    setSalvando(true);
+    const { error } = await supabase.from("consulenze_incassi").insert({
+      data, cliente: cliente.trim() || null, importo: valore, metodo: metodo.trim() || null,
+    });
+    setSalvando(false);
+    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    setImporto(""); setCliente(""); setMsg("");
+    carica();
+  }
+
+  async function elimina(id) {
+    if (!window.confirm("Eliminare questo incasso?")) return;
+    const { error } = await supabase.from("consulenze_incassi").delete().eq("id", id);
+    if (error) { setMsg(`Non eliminato: ${error.message}`); return; }
+    carica();
+  }
+
+  return (
+    <div>
+      <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+        <div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Incassato {annoCorrente}</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>€ {totaleAnno}</div>
+        </div>
+        <div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Totale di sempre</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>€ {totale}</div>
+        </div>
+        <div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Consulenze</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{incassi == null ? "…" : incassi.length}</div>
+        </div>
+      </div>
+
+      <div style={{ ...cardStyle, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "130px 1fr 130px 140px auto", gap: 8, alignItems: "end" }}>
+          <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
+          <Field label="Cliente"><input style={inputStyle} value={cliente} onChange={(e) => setCliente(e.target.value)} /></Field>
+          <Field label="Importo"><input inputMode="decimal" style={inputStyle} value={importo} onChange={(e) => setImporto(e.target.value)} /></Field>
+          <Field label="Metodo">
+            <select style={inputStyle} value={metodo} onChange={(e) => setMetodo(e.target.value)}>
+              <option>Contanti</option>
+              <option>Bonifico</option>
+              <option>POS</option>
+              <option>Altro</option>
+            </select>
+          </Field>
+          <Button onClick={aggiungi} disabled={salvando} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>{salvando ? "Salvo…" : "Aggiungi"}</Button>
+        </div>
+      </div>
+
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+
+      <div style={cardStyle}>
+        {incassi == null ? <RigaCassaVuota testo="Carico…" />
+          : incassi.length === 0 ? <RigaCassaVuota testo="Nessuna consulenza registrata." />
+          : incassi.map((r) => (
+            <div key={r.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "auto 1fr auto 28px" : "110px 1fr 110px 120px 32px", gap: 8, alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: MUTED, whiteSpace: "nowrap" }}>{fmtData(r.data)}</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.cliente || "—"}</div>
+              {!isMobile && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{r.metodo || "—"}</div>}
+              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>€ {round2(Number(r.importo) || 0)}</div>
+              <button onClick={() => elimina(r.id)} title="Elimina incasso" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", fontSize: 15, padding: 0 }}>×</button>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
@@ -27821,6 +28030,9 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
         />
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
+
+        {tab === "fondocassa" && <PannelloFondoCassa />}
+        {tab === "consulenze" && <PannelloCassaConsulenze />}
 
         {tab === "impegni" && (
           <div>
