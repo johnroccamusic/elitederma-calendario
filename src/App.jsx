@@ -17876,8 +17876,22 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
         totale = tariffaNotte != null ? round2(tariffaNotte * r.nottiPrenotate) : 0;
       }
       if (!totale) return null;
-      const cash = r.tipoPagamento === "cash" ? totale : 0;
-      const bonifico = r.tipoPagamento === "cash" ? 0 : totale;
+      // Le due tariffe della stanza, con ripiego su quelle generiche della
+      // scheda dell'hotel.
+      const tariffaCash = r.aNotteCash ?? hotelRiga?.costo_notte_cash ?? null;
+      const tariffaBonifico = r.aNotteBonifico ?? hotelRiga?.costo_notte_fattura ?? null;
+      // Quando "Tipo di pagamento" non e' stato scelto, non si va piu' per
+      // default a bonifico: se l'hotel ha una tariffa sola, quella E' il
+      // modo in cui si paga. Villa Fiorelli ha solo il contante, e mostrare
+      // la sua riga come bonifico era dire una cosa falsa su un hotel che
+      // fattura non ne fa. Con tutte e due le tariffe resta il bonifico,
+      // com'e' sempre stato.
+      const modoEffettivo = r.tipoPagamento
+        ? r.tipoPagamento
+        : (tariffaCash != null && tariffaBonifico == null) ? "cash"
+        : "bonifico";
+      const cash = modoEffettivo === "cash" ? totale : 0;
+      const bonifico = modoEffettivo === "cash" ? 0 : totale;
       // "pagato" (spunta "Hotel pagato" in Assegnazione Master) non cambia
       // dove va il costo — resta Bonifico/Cash secondo "Tipo di pagamento" —
       // ma qui aggiunge solo un'indicazione visiva (pallino verde)
@@ -17892,8 +17906,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
         // le due tariffe a notte della stanza scelta, congelate da
         // "Gestisci alloggio": servono al riepilogo per rifare il conto
         // quando si sposta il pagamento da bonifico a cash e viceversa
-        nottiPrenotate: r.nottiPrenotate ?? null, aNotteCash: r.aNotteCash ?? null, aNotteBonifico: r.aNotteBonifico ?? null,
-        aNotteHotelCash: hotelRiga?.costo_notte_cash ?? null, aNotteHotelBonifico: hotelRiga?.costo_notte_fattura ?? null,
+        nottiPrenotate: r.nottiPrenotate ?? null, tariffaCash, tariffaBonifico,
         pattuitoPeriodo: r.pattuitoPeriodo ?? null };
     })
     .filter(Boolean);
@@ -18286,9 +18299,17 @@ function PannelloRiepilogoAmministrativo({
     // sono notti, l'importo resta com'e': un pattuito a corpo, concordato
     // a voce, non e' un conto da rifare — e riscriverlo in silenzio sarebbe
     // peggio che lasciarlo.
-    const aNotte = tipo === "cash"
-      ? (r.aNotteCash ?? r.aNotteHotelCash ?? null)
-      : (r.aNotteBonifico ?? r.aNotteHotelBonifico ?? null);
+    const aNotte = tipo === "cash" ? r.tariffaCash : r.tariffaBonifico;
+    const aNotteAltra = tipo === "cash" ? r.tariffaBonifico : r.tariffaCash;
+    // Un hotel che ha una tariffa sola si fa pagare in un modo solo:
+    // chiedergli l'altro non e' una scelta da registrare, e' un errore.
+    // Si rifiuta e si dice perche'. Se invece non c'e' nessuna delle due
+    // tariffe siamo davanti a un pattuito a corpo, e quello si paga come si
+    // vuole: il modo si cambia e l'importo resta.
+    if (aNotte == null && aNotteAltra != null) {
+      setMsg(`Tipo di pagamento non previsto: per questo hotel esiste solo la tariffa ${tipo === "cash" ? "a bonifico" : "in contanti"}. Aggiungila in Gestione Hotel se serve.`);
+      return;
+    }
     const rifatto = r.nottiPrenotate != null && aNotte != null ? round2(r.nottiPrenotate * aNotte) : null;
     if (rifatto != null) campi.pattuito_periodo = rifatto;
 
