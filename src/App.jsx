@@ -22949,7 +22949,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriAmministrazione, onApriFondoCassa, onApriCassaConsulenze, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
+function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -22963,8 +22963,6 @@ function PaginaErp({ onBack, onApriAmministrazione, onApriFondoCassa, onApriCass
           pagina="amministrazione" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "contabilita", title: "Contabilità", descrizione: "Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriAmministrazione },
-            { chiave: "fondocassa", title: "Cassa contanti", descrizione: "Il contante dell'accademia: saldo, entrate, uscite e prelievi.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriFondoCassa },
-            { chiave: "cassaconsulenze", title: "Cassa consulenze", descrizione: "Gli incassi delle consulenze: data, cliente, importo e metodo.", Icona: IconaTileAnagrafiche, attivo: true, onClick: onApriCassaConsulenze },
             { chiave: "categoriespesa", title: "Categorie di spesa", descrizione: "Organizza e gestisci le categorie usate in Prima nota cassa.", Icona: IconaTileCatalogo, attivo: true, onClick: onApriCatalogoCategorieCosti },
             { chiave: "operativocorsi", title: "Operativo corsi", descrizione: "Assegna master, assistenti, leve, hotel e sedi a ogni edizione.", Icona: IconaTileMaster, attivo: true, onClick: onApriAssegnazioneMaster },
             { chiave: "anagrafiche", title: "Anagrafiche", descrizione: "Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.", Icona: IconaTileAnagrafiche, attivo: true, onClick: onApriAnagrafiche },
@@ -26669,28 +26667,83 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
   attivo: "Cosa dobbiamo incassare: acconti, quote pre corso e saldi degli allievi, con la data in cui sono attesi.",
   abbonamenti: "I contratti che si rinnovano da soli — canoni, servizi, licenze — con l'importo e ogni quanto tornano.",
 };
-function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente }) {
+function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente, ordine, onSalvaOrdine }) {
   const isMobile = useIsMobile();
   const aiuto = (chiave) => ({ chiave: `amministrazione.${chiave}`, testo: AIUTI_TAB_AMMINISTRAZIONE[chiave], ruoloUtente });
+  const trascinata = React.useRef(null);
+
+  // Le nove schede come dati e non come JSX scritto a mano: per poterle
+  // riordinare bisogna poterle mettere in un ordine diverso da quello in
+  // cui sono scritte, e un elenco si riordina, del markup no.
+  const schede = [
+    { chiave: "primanota", etichetta: isMobile ? "Prima nota" : "Prima nota cassa", Icona: IconaRicevutaErp, sfondo: "#FBF3E0", bordo: "#E8D9B5", coloreIcona: "#B8860B", onClick: onApriPrimaNotaCassa },
+    { chiave: "impegni", etichetta: isMobile ? `Impegni (${impegniCount})` : `Quadro impegni (${impegniCount})`, Icona: IconaCalendarioCard, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
+    { chiave: "documenti", etichetta: isMobile ? `Fatture (${documentiCount})` : `Fatture ricevute (${documentiCount})`, Icona: IconaCartellaShop, sfondo: "#FBEEE0", bordo: "#F0D9BE", coloreIcona: "#C67C2E" },
+    { chiave: "notecredito", etichetta: isMobile ? `Note credito (${noteCreditoCount})` : `Note di credito (${noteCreditoCount})`, Icona: IconaCartellaShop, sfondo: "#F3EAF6", bordo: "#DCC7E3", coloreIcona: "#8E44AD" },
+    { chiave: "passivo", etichetta: isMobile ? `Passivo (${passivoCount})` : `Scadenziario Passivo (${passivoCount})`, Icona: IconaCalendarioCard, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
+    { chiave: "attivo", etichetta: isMobile ? `Attivo (${attivoCount})` : `Scadenziario Attivo (${attivoCount})`, Icona: IconaCalendarioCard, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
+    { chiave: "fondocassa", etichetta: isMobile ? "Contanti" : "Cassa contanti", Icona: IconaRicevutaErp, sfondo: "#FBF3E0", bordo: "#E8D9B5", coloreIcona: "#B8860B" },
+    { chiave: "consulenze", etichetta: isMobile ? "Consulenze" : "Cassa consulenze", Icona: IconaPersonaSemplice, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
+    { chiave: "abbonamenti", etichetta: isMobile ? `Abbonamenti (${abbonamentiCount})` : `Abbonamenti e contratti (${abbonamentiCount})`, Icona: IconaPersonaSemplice, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
+  ];
+
+  // In coda le schede mai viste in un ordine salvato: una scheda aggiunta
+  // domani al codice non deve sparire perche' l'ordine di ieri non la
+  // conosceva. Stessa regola di GrigliaTasti.
+  const perChiave = Object.fromEntries(schede.map((s) => [s.chiave, s]));
+  const salvato = (Array.isArray(ordine) ? ordine : []).filter((c) => perChiave[c]);
+  const ordinate = [...salvato, ...schede.filter((s) => !salvato.includes(s.chiave))].map((c) => (typeof c === "string" ? perChiave[c] : c));
+
+  function sposta(da, a) {
+    if (!da || da === a) return;
+    const chiavi = ordinate.map((s) => s.chiave);
+    const iDa = chiavi.indexOf(da);
+    const iA = chiavi.indexOf(a);
+    if (iDa < 0 || iA < 0) return;
+    chiavi.splice(iA, 0, chiavi.splice(iDa, 1)[0]);
+    onSalvaOrdine?.(chiavi);
+  }
+
   return (
-    // Sul telefono nove pastiglie larghe quanto il loro testo facevano una
-    // colonna sghemba lunga una schermata: ogni riga cominciava dove finiva
-    // la precedente. Quattro quadrati uguali per riga si leggono come una
-    // tastiera, e la barra si chiude in due righe e mezzo.
+    // Sei quadrati per riga su desktop, quattro sul telefono. Prima erano
+    // pastiglie larghe quanto il testo, disposte su file sfalsate.
     <div style={{
       display: "grid",
-      gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))",
+      gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
       gap: isMobile ? 6 : 10, alignItems: "stretch", marginBottom: 16,
     }}>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B" aiuto={aiuto("primanota")}>{isMobile ? "Prima nota" : "Prima nota cassa"}</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("impegni")}>{isMobile ? `Impegni (${impegniCount})` : `Quadro impegni (${impegniCount})`}</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E" aiuto={aiuto("documenti")}>{isMobile ? `Fatture (${documentiCount})` : `Fatture ricevute (${documentiCount})`}</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD" aiuto={aiuto("notecredito")}>{isMobile ? `Note credito (${noteCreditoCount})` : `Note di credito (${noteCreditoCount})`}</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("passivo")}>{isMobile ? `Passivo (${passivoCount})` : `Scadenziario Passivo (${passivoCount})`}</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("attivo")}>{isMobile ? `Attivo (${attivoCount})` : `Scadenziario Attivo (${attivoCount})`}</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "fondocassa"} onClick={() => onApriScheda("fondocassa")} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">{isMobile ? "Contanti" : "Cassa contanti"}</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "consulenze"} onClick={() => onApriScheda("consulenze")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">{isMobile ? "Consulenze" : "Cassa consulenze"}</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto dimensioneIcona={32} attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("abbonamenti")}>{isMobile ? `Abbonamenti (${abbonamentiCount})` : `Abbonamenti e contratti (${abbonamentiCount})`}</SchedaTabAmministrazione>
+      {ordinate.map((s) => (
+        <div
+          key={s.chiave}
+          onDragOver={onSalvaOrdine ? (e) => e.preventDefault() : undefined}
+          onDrop={onSalvaOrdine ? (e) => { e.preventDefault(); sposta(trascinata.current, s.chiave); trascinata.current = null; } : undefined}
+          style={{ position: "relative", minWidth: 0, display: "flex" }}
+        >
+          <SchedaTabAmministrazione
+            compatto dimensioneIcona={32}
+            attivo={schedaAttiva === s.chiave}
+            onClick={s.onClick || (() => onApriScheda(s.chiave))}
+            Icona={s.Icona} sfondo={s.sfondo} bordo={s.bordo} coloreIcona={s.coloreIcona}
+            aiuto={aiuto(s.chiave)}
+          >{s.etichetta}</SchedaTabAmministrazione>
+          {/* la maniglia e' un elemento a se' e solo lei e' trascinabile:
+              se lo fosse tutto il quadrato, ogni tentativo di premere il
+              tasto rischierebbe di spostarlo invece di aprirlo */}
+          {onSalvaOrdine && (
+            <span
+              draggable
+              onDragStart={() => { trascinata.current = s.chiave; }}
+              onDragEnd={() => { trascinata.current = null; }}
+              title="Trascina per spostare questa scheda"
+              style={{
+                position: "absolute", top: 3, left: 4, cursor: "grab", lineHeight: 1,
+                ...fontBody, fontSize: 11, color: schedaAttiva === s.chiave ? "rgba(255,255,255,0.65)" : MUTED,
+                padding: "2px 3px", borderRadius: 5, userSelect: "none",
+              }}
+            >⠿</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -28010,7 +28063,7 @@ function PannelloCassaConsulenze() {
   );
 }
 
-function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
+function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -28489,6 +28542,8 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
           schedaAttiva={tab}
           onApriPrimaNotaCassa={onApriPrimaNotaCassa}
           onApriScheda={setTab}
+          ordine={ordineSchedeContabilita}
+          onSalvaOrdine={onSalvaOrdineSchedeContabilita}
           impegniCount={impegni.length}
           documentiCount={(fattureRicevuteFic || []).length}
           noteCreditoCount={(noteCreditoFic || []).length}
@@ -49956,8 +50011,6 @@ export default function App() {
         <PaginaErp
           onBack={() => setView("home")}
           onApriAmministrazione={apriAmministrazione}
-          onApriFondoCassa={() => apriAmministrazioneTab("fondocassa")}
-          onApriCassaConsulenze={() => apriAmministrazioneTab("consulenze")}
           onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
           onApriAssegnazioneMaster={() => setView("assegnazionemaster")}
           onApriAnagrafiche={() => apriViewProtetta("anagrafiche")}
@@ -49985,6 +50038,8 @@ export default function App() {
           onBack={() => setView("erp")}
           onApriModificaSpesa={apriModificaSpesaDaAmministrazione}
           onApriPrimaNotaCassa={apriInserimentoCostiRicavi}
+          ordineSchedeContabilita={layoutTasti["contabilitaschede"]?.ordine}
+          onSalvaOrdineSchedeContabilita={(o) => salvaLayoutTasti("contabilitaschede", { ordine: o })}
           onApriIscritto={apriIscritto}
           onApriNuovaSpesaDaPagare={apriNuovaSpesaDaPagare}
           onApriNuovoAbbonamento={apriNuovoAbbonamento}
