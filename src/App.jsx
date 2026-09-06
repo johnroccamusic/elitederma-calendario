@@ -3184,6 +3184,22 @@ function totQuota(i, prefisso) {
   return round2((i[`${prefisso}_totale`] || 0) + interessi);
 }
 // totale da pagare per le modelle: usa il prezzo speciale se impostato, altrimenti n. modelle × 60€
+// Quante modelle sono state DAVVERO trovate per un allievo: i posti con un
+// nome scritto. Un posto vuoto e' una richiesta ancora scoperta, non una
+// modella.
+//
+// I posti che condividono un "gruppo_id" sono la stessa persona su piu'
+// trattamenti o piu' momenti della giornata: contarli separatamente
+// vorrebbe dire pagare due volte chi ha trovato una persona sola.
+function modelleReperiteDi(i) {
+  const posti = Array.isArray(i?.tipi_modelle) ? i.tipi_modelle : [];
+  const conNome = posti.filter((p) => (p?.nome_modella || "").trim() !== "");
+  const gruppi = new Set();
+  let sciolte = 0;
+  conNome.forEach((p) => { if (p.gruppo_id) gruppi.add(p.gruppo_id); else sciolte += 1; });
+  return gruppi.size + sciolte;
+}
+
 function modelleTotaleDi(i) {
   if (i.prezzo_speciale_modelle != null) return i.prezzo_speciale_modelle;
   return round2((i.numero_modelle || 0) * 60);
@@ -17685,12 +17701,30 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
       return { rigaId: d.id, tabella: "corsi_date_docenti", tipo: "assistente", nome: `Costo Assistente — ${persona?.nome || "—"}`, giorni, compensoGiorno, totale, bonifico, cash };
     });
 
-  // riga "Commissione ricerca modelle": quando la classe incassa quote
-  // modelle, il 50% va riportato come costo — di default interamente
-  // cash (è così che viene pattuita), ma con lo stesso split libero
-  // Bonifico/Cash delle altre righe automatiche se serve correggerlo.
+  // riga "Commissione ricerca modelle": il 50% della quota modelle va
+  // riportato come costo — di default interamente cash (è così che viene
+  // pattuita), ma con lo stesso split libero Bonifico/Cash delle altre
+  // righe automatiche se serve correggerlo.
+  //
+  // La commissione matura sulle modelle EFFETTIVAMENTE REPERITE, non su
+  // quelle richieste. Prima era il 50% di tutta la quota incassata: a Roma
+  // dal 13 settembre risultava un debito di 240 euro con una sola modella
+  // trovata su otto richieste. Chi cerca viene pagato per quello che trova,
+  // e il costo non deve comparire prima che il lavoro sia fatto.
+  //
+  // Il valore di una singola modella si ricava dalla quota di quell'allievo
+  // divisa per quante ne ha chieste: così un prezzo speciale (150 per tre
+  // invece di 180) resta rispettato invece di essere sostituito da un 60
+  // fisso scritto qui.
   const totaleModelleClasse = round2(listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0));
-  const commissioneModelleClasse = round2(totaleModelleClasse * 0.5);
+  const commissioneModelleClasse = round2(listaIscritti.reduce((s, i) => {
+    const chieste = i.numero_modelle || 0;
+    if (!chieste) return s;
+    const reperite = modelleReperiteDi(i);
+    if (!reperite) return s;
+    const valorePerModella = modelleTotaleDi(i) / chieste;
+    return s + Math.min(reperite, chieste) * valorePerModella * 0.5;
+  }, 0));
   const rigaCommissioneModelleClasse = totaleModelleClasse > 0 ? (() => {
     const dati = conSplit(corsoData.id, { commissione_modelle_bonifico: corsoData.commissione_modelle_bonifico, commissione_modelle_cash: corsoData.commissione_modelle_cash });
     const bonifico = dati.commissione_modelle_bonifico;
