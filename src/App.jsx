@@ -13117,6 +13117,28 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
     onSalva({ importo_pagato_cash: v });
   }
 
+  // Gli stessi tre flag delle righe automatiche qui sopra. Anche una spesa
+  // libera - il coordinatore, i viaggi, i pranzi - si paga in un modo o
+  // nell'altro, e finora l'unico modo di dirlo era scrivere a mano la cifra
+  // nella casella Cash. La modalita' si legge dai numeri, non da uno stato
+  // a parte: cosi' non puo' raccontare una cosa diversa da quello che c'e'
+  // scritto nelle celle.
+  const modalitaSpesa = totaleNum === 0 ? null
+    : Math.abs(cashNum) < 0.005 ? "B"
+    : Math.abs(cashNum - totaleNum) < 0.005 ? "C"
+    : Math.abs(cashNum - totaleNum / 2) < 0.01 ? "1/2"
+    : null;
+  function impostaModalitaSpesa(chiave) {
+    const nuovoCash = chiave === "B" ? 0 : chiave === "C" ? totaleNum : round2(totaleNum / 2);
+    setCash(String(nuovoCash));
+    onSalva({ importo_pagato_cash: nuovoCash });
+  }
+  // Con "tutto a bonifico" la casella Cash si chiude: un importo cash
+  // scritto li' contraddirebbe la scelta appena fatta due colonne piu' in
+  // la'. Con C e 1/2 resta aperta - li' un importo diverso e' una
+  // correzione legittima, e semplicemente spegne i flag.
+  const cashBloccato = modalitaSpesa === "B";
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3 }}>
       <div style={{ minWidth: 0 }}>
@@ -13143,7 +13165,11 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
         <div style={{ ...campoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ {bonifico}</div>
       </div>
       <div style={{ minWidth: 0 }}>
-        <input style={{ ...campoQui, textAlign: "right" }} inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} onBlur={commitCash} />
+        {cashBloccato ? (
+          <div title="Tutto a bonifico: non c'è cash da scrivere" style={{ ...campoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ 0</div>
+        ) : (
+          <input style={{ ...campoQui, textAlign: "right" }} inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} onBlur={commitCash} />
+        )}
       </div>
       <button
         onClick={onElimina}
@@ -13156,10 +13182,19 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
           <path d="M10 11v6" /><path d="M14 11v6" />
         </svg>
       </button>
-      {/* nessun flag di modalita' su una spesa libera: la colonna resta
-          vuota, ma resta, perche' e' quella che tiene questa tabella
-          incolonnata con quella sopra */}
-      <div />
+      <div style={{ minWidth: 0, display: "flex", gap: isMobile ? 4 : 6, justifyContent: "center" }}>
+        {["B", "C", "1/2"].map((chiave) => (
+          <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà e metà"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
+            <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalitaSpesa === chiave ? NAVY : MUTED }}>{chiave}</span>
+            <input
+              type="checkbox"
+              checked={modalitaSpesa === chiave}
+              onChange={() => impostaModalitaSpesa(chiave)}
+              style={{ width: 12, height: 12, cursor: "pointer", margin: 0 }}
+            />
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
@@ -18213,6 +18248,20 @@ function PannelloRiepilogoAmministrativo({
   // perche' il costo viene da "Tipo di pagamento" scelto in Assegnazione
   // Master. I due flag qui cambiano quella scelta, cosi' all'ultimo momento
   // si puo' spostare senza tornare indietro di due pagine.
+  // La sede segue "Pagamento sede" di Assegnazione Master, come l'alloggio
+  // segue il suo "Tipo di pagamento". Attenzione: qui non si sposta solo
+  // un importo fra due caselle - le due tariffe della sede (cash e
+  // bonifico) sono numeri diversi, quindi cambiando modo puo' cambiare
+  // anche il totale della riga. E' lo stesso che gia' succede all'hotel.
+  async function impostaPagamentoSede(modalita) {
+    const tipo = modalita === "C" ? "cash" : "bonifico";
+    const campi = { pagamento_sede: tipo };
+    if (tipo === "cash") campi.scadenza_pagamento_location = null;
+    const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["corsi_date"]);
+  }
+
   async function impostaTipoPagamentoAlloggio(r, modalita) {
     const tipo = modalita === "C" ? "cash" : "bonifico";
     const campi = { tipo_pagamento_alloggio: tipo };
@@ -18577,7 +18626,14 @@ function PannelloRiepilogoAmministrativo({
                       // sono la somma di come ha scelto ogni venditore, quindi
                       // scriverli a mano vorrebbe dire contraddire il dettaglio
                       // che sta due righe sotto
-                      const bloccato = r.tipo === "location" || r.tipo === "alloggio" || r.tipo === "venditore";
+                      // "tutto a bonifico" chiude anche le due caselle delle
+                      // righe a split libero: scriverci un cash
+                      // contraddirebbe la scelta appena fatta due colonne
+                      // piu' in la'. Con C e 1/2 restano aperte — li' un
+                      // importo diverso e' una correzione legittima, e
+                      // semplicemente spegne i flag.
+                      const bloccato = r.tipo === "location" || r.tipo === "alloggio" || r.tipo === "venditore"
+                        || modalitaSplitMaster(r) === "B";
                       const [campoBonifico, campoCash] = campiSplitDi(r.tipo);
                       return (
                         <React.Fragment key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash}>
@@ -18617,6 +18673,24 @@ function PannelloRiepilogoAmministrativo({
                                 <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>+</button>
                               </div>
                             )}
+                            {r.tipo === "location" && (() => {
+                              const modalita = modalitaSplitMaster(r);
+                              return (
+                                <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                                  {["B", "C"].map((chiave) => (
+                                    <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : "Tutto cash — attenzione: la sede ha due tariffe diverse, il totale puo' cambiare"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
+                                      <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalita === chiave ? NAVY : MUTED }}>{chiave}</span>
+                                      <input
+                                        type="checkbox"
+                                        checked={modalita === chiave}
+                                        onChange={() => impostaPagamentoSede(chiave)}
+                                        style={{ width: 13, height: 13, cursor: "pointer", margin: 0 }}
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                             {r.tipo === "alloggio" && (() => {
                               const modalita = modalitaSplitMaster(r);
                               return (
@@ -18635,7 +18709,7 @@ function PannelloRiepilogoAmministrativo({
                                 </div>
                               );
                             })()}
-                            {r.tipo === "master" && (() => {
+                            {(r.tipo === "master" || r.tipo === "assistente" || r.tipo === "modelle") && (() => {
                               const modalita = modalitaSplitMaster(r);
                               return (
                                 <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
@@ -18662,7 +18736,7 @@ function PannelloRiepilogoAmministrativo({
                         {r.tipo === "venditore" && quoteVenditoreDettaglio.length > 0 && (
                           <div style={{ marginBottom: 8, paddingBottom: 4 }}>
                             {quoteVenditoreDettaglio.map((v) => (
-                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "baseline", marginBottom: 2 }}>
+                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 2 }}>
                                 <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 4 : 5 }}>
                                   {v.nome}
                                   <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
@@ -18674,14 +18748,23 @@ function PannelloRiepilogoAmministrativo({
                                 <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>
                                   € {v.totale}
                                 </span>
-                                {/* le tre colonne di mezzo restano vuote: il
-                                    bonifico e il cash di un singolo venditore
-                                    non si scrivono, si deducono dalla modalita'
-                                    qui a destra */}
-                                <div /><div /><div />
                                 {(() => {
                                   const modalita = modalitaVenditore(quoteVenditoriSplit, corsoData.id, v.chiave);
+                                  // Dove finisce la quota di questo venditore.
+                                  // Non si scrive: si deduce dalla modalita'
+                                  // scelta qui accanto, ed e' per questo che
+                                  // le due celle restano di sola lettura. Ma
+                                  // devono esserci: la riga sopra dice quanto
+                                  // va a bonifico in tutto, e senza queste non
+                                  // si vede chi ce l'ha mandato.
+                                  const suoBonifico = modalita === "B" ? v.totale : modalita === "1/2" ? round2(v.totale / 2) : 0;
+                                  const suoCash = round2(v.totale - suoBonifico);
+                                  const cellaDedotta = { ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: MUTED, whiteSpace: "nowrap", textAlign: "right", paddingRight: isMobile ? 4 : 5 };
                                   return (
+                                    <>
+                                    <span style={cellaDedotta}>€ {suoBonifico}</span>
+                                    <span style={cellaDedotta}>€ {suoCash}</span>
+                                    <div />
                                     <div style={{ display: "flex", gap: isMobile ? 4 : 6, justifyContent: "center" }}>
                                       {["B", "C", "1/2"].map((chiave) => (
                                         <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà e metà"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
@@ -18695,6 +18778,7 @@ function PannelloRiepilogoAmministrativo({
                                         </label>
                                       ))}
                                     </div>
+                                    </>
                                   );
                                 })()}
                               </div>
