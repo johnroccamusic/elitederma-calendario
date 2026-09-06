@@ -17864,6 +17864,7 @@ function PannelloRiepilogoAmministrativo({
   // "Altri incassi al corso": prodotti venduti in più durante il corso
   // (non le quote di iscrizione), scelti dal magazzino — ognuno con
   // quantità, importo e metodo (contribuisce a Contanti o Pos)
+  const [venditaAperta, setVenditaAperta] = useState(null);
   const [incassiExtra, setIncassiExtra] = useState(
     Array.isArray(corsoData.incassi_extra) ? corsoData.incassi_extra.map((c) => ({ prodotto_id: c.prodotto_id || "", quantita: c.quantita != null ? String(c.quantita) : "1", valore: c.valore != null ? String(c.valore) : "", metodo: c.metodo || "Contanti" })) : []
   );
@@ -18075,6 +18076,84 @@ function PannelloRiepilogoAmministrativo({
                     + Aggiungi
                   </button>
                 </div>
+
+                  {/* Quello che è passato dal POS dell'app, una riga per
+                      vendita. Incolonnato sulle stesse colonne dei costi:
+                      il POS cade sotto "Bonifico", il contante sotto "Cash".
+                      Sono gli stessi importi che entrano in Lordo, Netto e
+                      IVA — qui non si sommano una seconda volta, si mostrano
+                      e basta. Le righe compilate a mano qui sotto restano per
+                      quello che dal POS non passa. */}
+                  {venditeAlCorso.length > 0 && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, marginBottom: 4 }}>
+                        <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Vendita</div>
+                        <div />
+                        <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }}>POS</div>
+                        <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }}>Cash</div>
+                        <div /><div />
+                      </div>
+                      {venditeAlCorso.map((v) => {
+                        const inContanti = v.metodo_pagamento === "contanti";
+                        const aperta = venditaAperta === v.id;
+                        const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
+                        return (
+                          <React.Fragment key={v.id}>
+                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3 }}>
+                              <button
+                                type="button"
+                                onClick={() => setVenditaAperta(aperta ? null : v.id)}
+                                title="Vedi i prodotti di questa vendita"
+                                style={{ ...campoCompattoQui, textAlign: "left", background: "#EFEFEF", color: NAVY, fontWeight: 600, border: `1px solid ${CREAM_BORDER}`, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                              >
+                                {aperta ? "▾" : "▸"} Vendita #{v.numero_ordine || String(v.id).slice(0, 6)}
+                                <span style={{ color: MUTED, fontWeight: 400 }}> · {v.data_ordine ? fmtData(String(v.data_ordine).slice(0, 10)) : "—"}</span>
+                              </button>
+                              <div />
+                              <div style={{ minWidth: 0 }}>
+                                {!inContanti && <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ {round2(v.totale || 0)}</div>}
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                {inContanti && <div style={{ ...campoCompattoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ {round2(v.totale || 0)}</div>}
+                              </div>
+                              <div /><div />
+                            </div>
+                            {aperta && (
+                              <div style={{ marginBottom: 8, paddingLeft: isMobile ? 4 : 5, paddingBottom: 4 }}>
+                                {righe.length === 0 ? (
+                                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Nessun dettaglio prodotti su questa vendita.</div>
+                                ) : righe.map((r, k) => (
+                                  <div key={k} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, marginBottom: 2 }}>
+                                    <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 4 : 5 }}>
+                                      {r.nome || r.titolo || "Prodotto"}
+                                      <span style={{ color: MUTED }}> × {r.quantita ?? r.qta ?? 1}</span>
+                                    </span>
+                                    <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>
+                                      € {round2(r.totale ?? r.prezzo ?? 0)}
+                                    </span>
+                                    <div /><div /><div /><div />
+                                  </div>
+                                ))}
+                                {/* l'IVA di questa vendita: e' quella che il POS ha
+                                    registrato, e finisce nell'IVA del corso. Una
+                                    vendita in contanti senza fattura ce l'ha a zero */}
+                                <div style={{ ...fontBody, fontSize: 11, color: MUTED, paddingLeft: isMobile ? 4 : 5, marginTop: 4 }}>
+                                  Imponibile € {round2(v.totale_imponibile != null ? v.totale_imponibile : (v.totale || 0))} · IVA € {round2(v.totale_iva || 0)}
+                                </div>
+                              </div>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginTop: 4, paddingTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                        <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, paddingLeft: isMobile ? 4 : 5 }}>Totale vendite al corso</span>
+                        <div />
+                        <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>€ {venditeAlCorsoPos}</span>
+                        <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>€ {venditeAlCorsoContanti}</span>
+                        <div /><div />
+                      </div>
+                    </div>
+                  )}
                 {incassiExtra.length === 0 ? (
                   <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Prodotti venduti in più durante il corso, oltre alle quote di iscrizione.</div>
                 ) : (
@@ -22386,21 +22465,30 @@ function contiRiepilogoClasse({
   // "imponibile" (senza IVA) di ogni fase, piu' modelle e incassi extra.
   // L'IVA e' la differenza, non uno scorporo inventato.
   const tutteLeQuote = listaIscritti.flatMap(quotePagateDiIscritto);
+  const venditeContanti = round2(venditeAlCorso.filter((v) => v.metodo_pagamento === "contanti").reduce((s, v) => s + (v.totale || 0), 0));
+  const venditePos = round2(venditeAlCorso.filter((v) => v.metodo_pagamento !== "contanti").reduce((s, v) => s + (v.totale || 0), 0));
+  // I prodotti venduti al corso entrano nei conti come tutto il resto:
+  // lordo il loro "totale", netto il loro "totale_imponibile". L'IVA resta
+  // la differenza, quindi si regola da se' vendita per vendita - una
+  // vendita in contanti senza fattura ha imponibile uguale al totale e non
+  // produce IVA, una con fattura la produce, ed e' il POS a saperlo. Qui
+  // non si decide niente per metodo di pagamento.
+  const venditeLordo = round2(venditeAlCorso.reduce((s, v) => s + (v.totale || 0), 0));
+  const venditeImponibile = round2(venditeAlCorso.reduce((s, v) => s + (v.totale_imponibile != null ? v.totale_imponibile : (v.totale || 0)), 0));
   const incassoLordo = round2(
     tutteLeQuote.reduce((s, q) => s + q.totale, 0)
     + listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0)
     + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+    + venditeLordo
   );
-  const incassoNetto = round2(tutteLeQuote.reduce((s, q) => s + q.imponibile, 0));
+  const incassoNetto = round2(tutteLeQuote.reduce((s, q) => s + q.imponibile, 0) + venditeImponibile);
   const incassiExtraContanti = round2(incassiExtra.filter((c) => c.metodo === "Contanti").reduce((s, c) => s + parseNum(c.valore), 0));
   const incassiExtraPos = round2(incassiExtra.filter((c) => c.metodo === "Pos").reduce((s, c) => s + parseNum(c.valore), 0));
   // "Da avere al corso": gli unici importi incassati fisicamente il giorno
   // del corso — acconto e pre corso arrivano prima e non passano dalle
   // mani del master in aula
-  const contanti = round2(listaIscritti.reduce((s, i) => s + ((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
-  const pos = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
-  const venditeContanti = round2(venditeAlCorso.filter((v) => v.metodo_pagamento === "contanti").reduce((s, v) => s + (v.totale || 0), 0));
-  const venditePos = round2(venditeAlCorso.filter((v) => v.metodo_pagamento !== "contanti").reduce((s, v) => s + (v.totale || 0), 0));
+  const contanti = round2(listaIscritti.reduce((s, i) => s + ((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti + venditeContanti);
+  const pos = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos + venditePos);
   const totaleCosti = round2(
     totaleSpeseAutomaticheClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0)
     + costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
@@ -22413,16 +22501,18 @@ function contiRiepilogoClasse({
   return {
     incassoLordo, incassoNetto, iva: round2(incassoLordo - incassoNetto),
     cashPrimaDelCorso: round2(tutteLeQuote.filter((q) => q.fase !== "saldo" && METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)),
-    contoCorrente: round2(tutteLeQuote.filter((q) => !METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0) + incassiExtraPos),
+    contoCorrente: round2(tutteLeQuote.filter((q) => !METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0) + incassiExtraPos + venditePos),
     incassiExtraContanti, incassiExtraPos,
     contanti, pos, daIncassare,
     venditeContanti, venditePos, venditeTotale: round2(venditeContanti + venditePos),
     totaleCosti, risultato: round2(daIncassare - totaleCosti),
     totaleCashDaPagare,
-    // "Cash pulito in busta": il cash incassato FISICAMENTE al corso (piu'
-    // il contante delle vendite fatte in aula) meno tutto il cash da
-    // pagare. Puo' venire negativo, e allora va integrato da altrove
-    cassaContanti: round2(contanti + venditeContanti - totaleCashDaPagare),
+    // "Cash pulito in busta": il cash incassato FISICAMENTE al corso meno
+    // tutto il cash da pagare. Puo' venire negativo, e allora va integrato
+    // da altrove.
+    // Il contante delle vendite non si somma piu' qui: adesso e' gia'
+    // dentro "contanti", e aggiungerlo di nuovo lo conterebbe due volte
+    cassaContanti: round2(contanti - totaleCashDaPagare),
     allievi: listaIscritti.length,
   };
 }
