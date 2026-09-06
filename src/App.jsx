@@ -26667,24 +26667,30 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
   attivo: "Cosa dobbiamo incassare: acconti, quote pre corso e saldi degli allievi, con la data in cui sono attesi.",
   abbonamenti: "I contratti che si rinnovano da soli — canoni, servizi, licenze — con l'importo e ogni quanto tornano.",
 };
+// Il marrone del tasto scelto. Il nero pieno spegneva la scheda attiva:
+// diventava un buco scuro in mezzo al crema, e l'icona d'oro sopra il nero
+// perdeva il suo colore. Questo e' lo stesso oro scuro gia' usato altrove
+// nell'app, abbastanza carico da reggere il testo bianco.
+const MARRONE_SCHEDA_ATTIVA = "#8A6D1D";
+
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente, ordine, onSalvaOrdine }) {
   const isMobile = useIsMobile();
   const aiuto = (chiave) => ({ chiave: `amministrazione.${chiave}`, testo: AIUTI_TAB_AMMINISTRAZIONE[chiave], ruoloUtente });
   const trascinata = React.useRef(null);
 
-  // Le nove schede come dati e non come JSX scritto a mano: per poterle
-  // riordinare bisogna poterle mettere in un ordine diverso da quello in
-  // cui sono scritte, e un elenco si riordina, del markup no.
+  // Le schede come dati e non come JSX scritto a mano: per riordinarle
+  // bisogna poterle mettere in un ordine diverso da quello in cui sono
+  // scritte, e un elenco si riordina, del markup no.
   const schede = [
-    { chiave: "primanota", etichetta: isMobile ? "Prima nota" : "Prima nota cassa", Icona: IconaRicevutaErp, sfondo: "#FBF3E0", bordo: "#E8D9B5", coloreIcona: "#B8860B", onClick: onApriPrimaNotaCassa },
-    { chiave: "impegni", etichetta: isMobile ? `Impegni (${impegniCount})` : `Quadro impegni (${impegniCount})`, Icona: IconaCalendarioCard, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
-    { chiave: "documenti", etichetta: isMobile ? `Fatture (${documentiCount})` : `Fatture ricevute (${documentiCount})`, Icona: IconaCartellaShop, sfondo: "#FBEEE0", bordo: "#F0D9BE", coloreIcona: "#C67C2E" },
-    { chiave: "notecredito", etichetta: isMobile ? `Note credito (${noteCreditoCount})` : `Note di credito (${noteCreditoCount})`, Icona: IconaCartellaShop, sfondo: "#F3EAF6", bordo: "#DCC7E3", coloreIcona: "#8E44AD" },
-    { chiave: "passivo", etichetta: isMobile ? `Passivo (${passivoCount})` : `Scadenziario Passivo (${passivoCount})`, Icona: IconaCalendarioCard, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
-    { chiave: "attivo", etichetta: isMobile ? `Attivo (${attivoCount})` : `Scadenziario Attivo (${attivoCount})`, Icona: IconaCalendarioCard, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
-    { chiave: "fondocassa", etichetta: isMobile ? "Contanti" : "Cassa contanti", Icona: IconaRicevutaErp, sfondo: "#FBF3E0", bordo: "#E8D9B5", coloreIcona: "#B8860B" },
-    { chiave: "consulenze", etichetta: isMobile ? "Consulenze" : "Cassa consulenze", Icona: IconaPersonaSemplice, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
-    { chiave: "abbonamenti", etichetta: isMobile ? `Abbonamenti (${abbonamentiCount})` : `Abbonamenti e contratti (${abbonamentiCount})`, Icona: IconaPersonaSemplice, sfondo: "#EAF3EA", bordo: "#CFE3CF", coloreIcona: "#2E7D32" },
+    { chiave: "primanota", titolo: "Prima nota cassa", sotto: "Movimenti e registrazioni", Icona: IconaRicevutaErp, onClick: onApriPrimaNotaCassa },
+    { chiave: "impegni", titolo: `Quadro impegni (${impegniCount})`, sotto: "Impegni presi e da saldare", Icona: IconaCalendarioCard },
+    { chiave: "documenti", titolo: `Fatture ricevute (${documentiCount})`, sotto: "Gestione fornitori", Icona: IconaCartellaShop },
+    { chiave: "notecredito", titolo: `Note di credito (${noteCreditoCount})`, sotto: "Emissione e gestione", Icona: IconaCartellaShop },
+    { chiave: "passivo", titolo: `Scadenziario Passivo (${passivoCount})`, sotto: "Scadenze da pagare", Icona: IconaCalendarioCard },
+    { chiave: "attivo", titolo: `Scadenziario Attivo (${attivoCount})`, sotto: "Incassi e scadenze attive", Icona: IconaCalendarioCard },
+    { chiave: "fondocassa", titolo: "Cassa contanti", sotto: "Entrate e uscite contanti", Icona: IconaRicevutaErp },
+    { chiave: "consulenze", titolo: "Cassa consulenze", sotto: "Prestazioni professionali", Icona: IconaPersonaSemplice },
+    { chiave: "abbonamenti", titolo: `Abbonamenti e contratti (${abbonamentiCount})`, sotto: "Gestione ricorrenti", Icona: IconaPersonaSemplice },
   ];
 
   // In coda le schede mai viste in un ordine salvato: una scheda aggiunta
@@ -26692,7 +26698,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
   // conosceva. Stessa regola di GrigliaTasti.
   const perChiave = Object.fromEntries(schede.map((s) => [s.chiave, s]));
   const salvato = (Array.isArray(ordine) ? ordine : []).filter((c) => perChiave[c]);
-  const ordinate = [...salvato, ...schede.filter((s) => !salvato.includes(s.chiave))].map((c) => (typeof c === "string" ? perChiave[c] : c));
+  const ordinate = [...salvato, ...schede.filter((s) => !salvato.includes(s.chiave)).map((s) => s.chiave)].map((c) => perChiave[c]);
 
   function sposta(da, a) {
     if (!da || da === a) return;
@@ -26705,45 +26711,76 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
   }
 
   return (
-    // Sei quadrati per riga su desktop, quattro sul telefono. Prima erano
-    // pastiglie larghe quanto il testo, disposte su file sfalsate.
     <div style={{
       display: "grid",
-      gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
-      gap: isMobile ? 6 : 10, alignItems: "stretch", marginBottom: 16,
+      gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))",
+      gap: isMobile ? 6 : 12, alignItems: "stretch", marginBottom: 16,
     }}>
-      {ordinate.map((s) => (
-        <div
-          key={s.chiave}
-          onDragOver={onSalvaOrdine ? (e) => e.preventDefault() : undefined}
-          onDrop={onSalvaOrdine ? (e) => { e.preventDefault(); sposta(trascinata.current, s.chiave); trascinata.current = null; } : undefined}
-          style={{ position: "relative", minWidth: 0, display: "flex" }}
-        >
-          <SchedaTabAmministrazione
-            compatto dimensioneIcona={32}
-            attivo={schedaAttiva === s.chiave}
-            onClick={s.onClick || (() => onApriScheda(s.chiave))}
-            Icona={s.Icona} sfondo={s.sfondo} bordo={s.bordo} coloreIcona={s.coloreIcona}
-            aiuto={aiuto(s.chiave)}
-          >{s.etichetta}</SchedaTabAmministrazione>
-          {/* la maniglia e' un elemento a se' e solo lei e' trascinabile:
-              se lo fosse tutto il quadrato, ogni tentativo di premere il
-              tasto rischierebbe di spostarlo invece di aprirlo */}
-          {onSalvaOrdine && (
-            <span
-              draggable
-              onDragStart={() => { trascinata.current = s.chiave; }}
-              onDragEnd={() => { trascinata.current = null; }}
-              title="Trascina per spostare questa scheda"
+      {ordinate.map((s) => {
+        const attivo = schedaAttiva === s.chiave;
+        return (
+          <div key={s.chiave} style={{ position: "relative", minWidth: 0, display: "flex" }}
+            onDragOver={onSalvaOrdine ? (e) => e.preventDefault() : undefined}
+            onDrop={onSalvaOrdine ? (e) => { e.preventDefault(); sposta(trascinata.current, s.chiave); trascinata.current = null; } : undefined}
+          >
+            <button
+              onClick={s.onClick || (() => onApriScheda(s.chiave))}
               style={{
-                position: "absolute", top: 3, left: 4, cursor: "grab", lineHeight: 1,
-                ...fontBody, fontSize: 11, color: schedaAttiva === s.chiave ? "rgba(255,255,255,0.65)" : MUTED,
-                padding: "2px 3px", borderRadius: 5, userSelect: "none",
+                width: "100%", minWidth: 0, boxSizing: "border-box", cursor: "pointer", textAlign: "center",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+                gap: isMobile ? 4 : 8, padding: isMobile ? "10px 4px" : "18px 10px",
+                borderRadius: isMobile ? 12 : 18,
+                background: attivo ? MARRONE_SCHEDA_ATTIVA : "#FBF7F0",
+                border: `1px solid ${attivo ? MARRONE_SCHEDA_ATTIVA : CREAM_BORDER}`,
               }}
-            >⠿</span>
-          )}
-        </div>
-      ))}
+            >
+              {/* il medaglione tondo: l'icona non galleggia sul fondo della
+                  scheda, sta dentro un cerchio che la stacca */}
+              <span style={{
+                width: isMobile ? 34 : 62, height: isMobile ? 34 : 62, borderRadius: "50%", flexShrink: 0,
+                background: attivo ? "rgba(255,255,255,0.18)" : "#F3E7D2",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <s.Icona size={isMobile ? 18 : 28} color={attivo ? "#fff" : GOLD} />
+              </span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 13.5, fontWeight: 700, lineHeight: 1.2, color: attivo ? "#fff" : NAVY, overflowWrap: "anywhere", marginTop: isMobile ? 0 : 6 }}>{s.titolo}</span>
+              {/* la riga di spiegazione sta solo su desktop: in un quadrato
+                  da ~78px ruberebbe lo spazio al nome, che conta di piu' */}
+              {!isMobile && (
+                <span style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.25, color: attivo ? "rgba(255,255,255,0.85)" : MUTED }}>{s.sotto}</span>
+              )}
+              {!isMobile && (
+                <span style={{
+                  width: 26, height: 26, borderRadius: "50%", marginTop: 6,
+                  border: `1px solid ${attivo ? "rgba(255,255,255,0.5)" : CREAM_BORDER}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  ...fontBody, fontSize: 13, color: attivo ? "#fff" : MUTED,
+                }}>›</span>
+              )}
+            </button>
+            {aiuto(s.chiave)?.testo && (
+              <span style={{ position: "absolute", top: 6, right: 6 }}>
+                <AiutoInfo chiave={`amministrazione.${s.chiave}`} predefinito={AIUTI_TAB_AMMINISTRAZIONE[s.chiave]} ruoloUtente={ruoloUtente} />
+              </span>
+            )}
+            {/* la maniglia e' un elemento a se' e solo lei e' trascinabile:
+                se lo fosse tutta la scheda, ogni tentativo di premerla
+                rischierebbe di spostarla invece di aprirla */}
+            {onSalvaOrdine && (
+              <span
+                draggable
+                onDragStart={() => { trascinata.current = s.chiave; }}
+                onDragEnd={() => { trascinata.current = null; }}
+                title="Trascina per spostare questa scheda"
+                style={{
+                  position: "absolute", top: 5, left: 6, cursor: "grab", lineHeight: 1, userSelect: "none",
+                  ...fontBody, fontSize: 11, color: attivo ? "rgba(255,255,255,0.7)" : MUTED,
+                }}
+              >⠿</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
