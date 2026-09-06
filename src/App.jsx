@@ -50277,16 +50277,22 @@ export default function App() {
                 boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
               }}
             >
-              {/* il logo e' il tasto Home: e' il gesto che si fa gia' con
-                  l'icona di un'applicazione, e tiene il marchio in vista
-                  senza rubare un posto in piu' */}
+              {/* la casetta, non il marchio: il logo teneva il brand in
+                  vista ma non diceva dove si va, e in mezzo a tre frecce e
+                  a un ingranaggio l'unico tasto senza un'icona di
+                  navigazione era proprio quello che si preme piu' spesso.
+                  Stessa casetta del dock del telefono, cosi' i due si
+                  somigliano */}
               <button
                 onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
                 aria-label="Home"
                 title="Home"
                 style={{ ...stileTastoDock, cursor: "pointer" }}
               >
-                <img src="/logo-elitederma.png" alt="" style={{ width: 44, height: "auto", filter: "invert(1) brightness(1.8)" }} />
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
               </button>
               {!utenteLoggato?.soloCalendarioLettura && (
                 <>
