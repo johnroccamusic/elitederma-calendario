@@ -22883,7 +22883,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
+function PaginaErp({ onBack, onApriAmministrazione, onApriFondoCassa, onApriCassaConsulenze, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -22897,6 +22897,8 @@ function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti
           pagina="amministrazione" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "contabilita", title: "Contabilità", descrizione: "Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriAmministrazione },
+            { chiave: "fondocassa", title: "Fondo cassa", descrizione: "Il contante dell'accademia: saldo, entrate e uscite.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriFondoCassa },
+            { chiave: "cassaconsulenze", title: "Cassa consulenze", descrizione: "Gli incassi delle consulenze: data, cliente, importo e metodo.", Icona: IconaTileAnagrafiche, attivo: true, onClick: onApriCassaConsulenze },
             { chiave: "categoriespesa", title: "Categorie di spesa", descrizione: "Organizza e gestisci le categorie usate in Prima nota cassa.", Icona: IconaTileCatalogo, attivo: true, onClick: onApriCatalogoCategorieCosti },
             { chiave: "operativocorsi", title: "Operativo corsi", descrizione: "Assegna master, assistenti, leve, hotel e sedi a ogni edizione.", Icona: IconaTileMaster, attivo: true, onClick: onApriAssegnazioneMaster },
             { chiave: "anagrafiche", title: "Anagrafiche", descrizione: "Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.", Icona: IconaTileAnagrafiche, attivo: true, onClick: onApriAnagrafiche },
@@ -49694,6 +49696,8 @@ export default function App() {
         <PaginaErp
           onBack={() => setView("home")}
           onApriAmministrazione={apriAmministrazione}
+          onApriFondoCassa={() => apriAmministrazioneTab("fondocassa")}
+          onApriCassaConsulenze={() => apriAmministrazioneTab("consulenze")}
           onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
           onApriAssegnazioneMaster={() => setView("assegnazionemaster")}
           onApriAnagrafiche={() => apriViewProtetta("anagrafiche")}
