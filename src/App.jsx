@@ -18031,6 +18031,19 @@ function PannelloRiepilogoAmministrativo({
   function rimuoviVoceIncasso(idx) {
     setIncassiExtra((prev) => prev.filter((_, i) => i !== idx));
   }
+  // Segna la busta come rientrata (o annulla). All'ingresso si congela
+  // l'importo: da quel momento la cassa contanti somma quel numero, non
+  // ricalcola la classe.
+  async function segnaBustaRientrata(rientrata) {
+    const campi = rientrata
+      ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse }
+      : { busta_rientrata_il: null, busta_importo: null };
+    const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg(rientrata ? "Busta segnata come rientrata: il contante è in cassa." : "Busta rimessa fuori dalla cassa.");
+    ricarica(["corsi_date"]);
+  }
+
   async function salvaCostiClasse() {
     setSalvandoCosti(true);
     const { error } = await supabase.from("corsi_date").update({
@@ -18482,6 +18495,37 @@ function PannelloRiepilogoAmministrativo({
                       )}
                     </div>
                     <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={isMobile ? { alignSelf: "center", flex: "1 1 0", minWidth: 0, padding: "9px 4px", fontSize: 11 } : { alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
+                  </div>
+
+                  {/* La busta entra nella cassa contanti quando
+                      l'amministrazione dichiara di averla ricevuta, non
+                      quando il corso finisce: fino a quel momento quei
+                      contanti sono ancora in mano a qualcuno.
+                      Alla conferma l'importo si congela. Il contante contato
+                      e consegnato e' un fatto: ricalcolarlo domani dai dati
+                      della classe lo farebbe cambiare in silenzio se qualcuno
+                      corregge una quota o una spesa, e la cassa non
+                      tornerebbe piu' con quello che c'e' nel cassetto. */}
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>
+                        {corsoData.busta_rientrata_il ? "Busta rientrata in cassa" : "Busta ancora fuori"}
+                      </div>
+                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                        {corsoData.busta_rientrata_il
+                          ? `${fmtData(corsoData.busta_rientrata_il)} — ${euroRiepilogo(corsoData.busta_importo || 0)} entrati in cassa contanti`
+                          : "Finché non la spunti, questo contante non entra nella cassa contanti."}
+                      </div>
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: corsoData.busta_rientrata_il ? "#2E7D32" : NAVY }}>
+                      <input
+                        type="checkbox"
+                        checked={!!corsoData.busta_rientrata_il}
+                        onChange={(e) => segnaBustaRientrata(e.target.checked)}
+                        style={{ width: 20, height: 20, cursor: "pointer" }}
+                      />
+                      {corsoData.busta_rientrata_il ? "Rientrata" : "Segna rientrata"}
+                    </label>
                   </div>
                 </div>
               </div>
@@ -27601,92 +27645,199 @@ function RigaCassaVuota({ testo }) {
   );
 }
 
+// Metodi di pagamento di una spesa. Solo "Cassa contanti" tocca il saldo
+// del contante; gli altri escono da un conto o da una piattaforma e la
+// cassa non li vede. "Contanti" e "Cash no iva" sono i due nomi storici
+// della stessa cosa e valgono come cassa: le spese gia' registrate cosi'
+// devono continuare a contare.
+const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico", "Cassa contanti"];
+const METODI_SPESA_DALLA_CASSA = new Set(["Cassa contanti", "Contanti", "Cash no iva"]);
+
 function PannelloCassaContanti() {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
+  const [buste, setBuste] = useState([]);
+  const [venditeSenzaCorso, setVenditeSenzaCorso] = useState(0);
+  const [speseDallaCassa, setSpeseDallaCassa] = useState(0);
+  const [ricorrenti, setRicorrenti] = useState([]);
   const [msg, setMsg] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [pannello, setPannello] = useState(null); // 'prelievo' | 'versamento' | 'fondo'
   const [data, setData] = useState(dataOggiStr());
-  const [tipo, setTipo] = useState("entrata");
   const [importo, setImporto] = useState("");
-  const [causale, setCausale] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [nomeSpesa, setNomeSpesa] = useState("");
+  const [importoSpesa, setImportoSpesa] = useState("");
 
   async function carica() {
-    const { data: righe, error } = await supabase
-      .from("fondo_cassa_movimenti")
-      .select("*")
-      .order("data", { ascending: false })
-      .order("creato_il", { ascending: false });
-    if (error) { setMsg(`Non riesco a leggere la cassa: ${error.message}`); setMovimenti([]); return; }
-    setMovimenti(righe || []);
+    const [mov, bus, ven, spe, ric] = await Promise.all([
+      supabase.from("cassa_contanti_movimenti").select("*").order("data", { ascending: false }).order("creato_il", { ascending: false }),
+      // solo le buste dichiarate rientrate, con l'importo congelato in quel
+      // momento: quello e' il contante davvero arrivato in amministrazione
+      supabase.from("corsi_date").select("id, busta_rientrata_il, busta_importo").not("busta_rientrata_il", "is", null),
+      // le vendite in contanti dal POS che NON appartengono a un corso:
+      // quelle di un corso stanno gia' dentro la sua busta, e contarle qui
+      // vorrebbe dire contarle due volte
+      supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).not("tipo_movimento", "in", '("annullamento","omaggio")'),
+      supabase.from("spese").select("totale, metodo_pagamento"),
+      supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
+    ]);
+    if (mov.error) { setMsg(`Non riesco a leggere la cassa: ${mov.error.message}`); setMovimenti([]); return; }
+    setMovimenti(mov.data || []);
+    setBuste(bus.data || []);
+    setVenditeSenzaCorso(round2((ven.data || []).reduce((s, v) => s + (v.totale || 0), 0)));
+    setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento)).reduce((s, x) => s + (x.totale || 0), 0)));
+    setRicorrenti(ric.data || []);
   }
   useEffect(() => { carica(); }, []);
 
-  // il saldo non e' un campo: e' la somma dei movimenti. Un saldo scritto
-  // da qualche parte e dei movimenti che lo alimentano sono due verita'
-  // che prima o poi divergono
-  const saldo = round2((movimenti || []).reduce((s, m) => s + (m.tipo === "uscita" ? -1 : 1) * (Number(m.importo) || 0), 0));
+  const totaleBuste = round2(buste.reduce((s, b) => s + (b.busta_importo || 0), 0));
+  const versamenti = round2((movimenti || []).filter((m) => m.tipo === "versamento").reduce((s, m) => s + (m.importo || 0), 0));
+  const prelievi = round2((movimenti || []).filter((m) => m.tipo === "prelievo").reduce((s, m) => s + (m.importo || 0), 0));
+  const saldo = round2(totaleBuste + venditeSenzaCorso + versamenti - prelievi - speseDallaCassa);
+  // il fondo cassa non e' un numero scritto a mano: e' quanto serve ogni
+  // mese per le spese che si pagano in contanti
+  const fondoMinimo = round2(ricorrenti.reduce((s, r) => s + (r.importo_mensile || 0), 0));
+  const prelevabile = round2(Math.max(0, saldo - fondoMinimo));
 
-  async function aggiungi() {
+  async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
     if (valore == null || !(valore > 0)) { setMsg("Serve un importo maggiore di zero."); return; }
+    if (tipo === "prelievo" && valore > prelevabile) {
+      setMsg(`Non puoi prelevare più di € ${prelevabile}: sotto restano € ${fondoMinimo} di fondo cassa per le spese del mese.`);
+      return;
+    }
     setSalvando(true);
-    const { error } = await supabase.from("fondo_cassa_movimenti").insert({
-      data, tipo, importo: valore, causale: causale.trim() || null,
-    });
+    const { error } = await supabase.from("cassa_contanti_movimenti").insert({ data, tipo, importo: valore, motivo: motivo.trim() || null });
     setSalvando(false);
     if (error) { setMsg(`Non salvato: ${error.message}`); return; }
-    setImporto(""); setCausale(""); setMsg("");
+    setImporto(""); setMotivo(""); setPannello(null); setMsg("");
     carica();
   }
 
-  async function elimina(id) {
-    if (!window.confirm("Eliminare questo movimento? Il saldo si ricalcola di conseguenza.")) return;
-    const { error } = await supabase.from("fondo_cassa_movimenti").delete().eq("id", id);
+  async function eliminaMovimento(id) {
+    if (!window.confirm("Eliminare questo movimento? Il saldo si ricalcola.")) return;
+    const { error } = await supabase.from("cassa_contanti_movimenti").delete().eq("id", id);
     if (error) { setMsg(`Non eliminato: ${error.message}`); return; }
     carica();
   }
 
+  async function aggiungiRicorrente() {
+    const valore = importoSpesa === "" ? null : parseNum(importoSpesa);
+    if (!nomeSpesa.trim() || valore == null || !(valore >= 0)) { setMsg("Servono un nome e un importo."); return; }
+    const { error } = await supabase.from("cassa_spese_ricorrenti").insert({ nome: nomeSpesa.trim(), importo_mensile: valore });
+    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    setNomeSpesa(""); setImportoSpesa(""); setMsg("");
+    carica();
+  }
+
+  async function eliminaRicorrente(id) {
+    const { error } = await supabase.from("cassa_spese_ricorrenti").delete().eq("id", id);
+    if (error) { setMsg(`Non eliminato: ${error.message}`); return; }
+    carica();
+  }
+
+  const storico = (movimenti || []);
   return (
     <div>
-      <div style={{ ...cardStyle, marginBottom: 14, display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, minmax(0, 1fr))", gap: 14 }}>
         <div>
           <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Saldo in cassa</div>
-          <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: saldo < 0 ? "#C0392B" : NAVY, lineHeight: 1.1 }}>€ {saldo}</div>
+          <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: saldo < 0 ? "#C0392B" : NAVY, lineHeight: 1.1 }}>{euroRiepilogo(saldo)}</div>
         </div>
-        <div style={{ ...fontBody, fontSize: 12, color: MUTED, textAlign: "right" }}>
-          {movimenti == null ? "…" : `${movimenti.length} moviment${movimenti.length === 1 ? "o" : "i"}`}
+        <div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Fondo cassa da tenere</div>
+          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: GOLD, lineHeight: 1.1 }}>{euroRiepilogo(fondoMinimo)}</div>
+        </div>
+        <div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Prelevabile</div>
+          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{euroRiepilogo(prelevabile)}</div>
         </div>
       </div>
 
+      {/* da dove viene il saldo, riga per riga: una cassa che mostra solo il
+          totale non si puo' controllare */}
       <div style={{ ...cardStyle, marginBottom: 14 }}>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "130px 130px 130px 1fr auto", gap: 8, alignItems: "end" }}>
-          <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
-          <Field label="Tipo">
-            <select style={inputStyle} value={tipo} onChange={(e) => setTipo(e.target.value)}>
-              <option value="entrata">Entrata</option>
-              <option value="uscita">Uscita</option>
-            </select>
-          </Field>
-          <Field label="Importo"><input inputMode="decimal" style={inputStyle} value={importo} onChange={(e) => setImporto(e.target.value)} /></Field>
-          <Field label="Causale"><input style={inputStyle} value={causale} onChange={(e) => setCausale(e.target.value)} placeholder="Versamento, prelievo, reintegro…" /></Field>
-          <Button onClick={aggiungi} disabled={salvando} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>{salvando ? "Salvo…" : "Aggiungi"}</Button>
-        </div>
+        <TitoloSezioneRiepilogo>Come si compone</TitoloSezioneRiepilogo>
+        {[
+          { voce: `Buste rientrate dai corsi (${buste.length})`, importo: totaleBuste, segno: 1 },
+          { voce: "Vendite in contanti al banco, fuori dai corsi", importo: venditeSenzaCorso, segno: 1 },
+          { voce: `Versamenti (${storico.filter((m) => m.tipo === "versamento").length})`, importo: versamenti, segno: 1 },
+          { voce: `Prelievi (${storico.filter((m) => m.tipo === "prelievo").length})`, importo: prelievi, segno: -1 },
+          { voce: "Spese pagate dalla cassa", importo: speseDallaCassa, segno: -1 },
+        ].map((r) => (
+          <div key={r.voce} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: isMobile ? 12 : 13, color: NAVY }}>
+            <span style={{ minWidth: 0 }}>{r.voce}</span>
+            <span style={{ fontWeight: 700, whiteSpace: "nowrap", color: r.segno < 0 ? "#C0392B" : "#2E7D32" }}>
+              {r.segno < 0 ? "−" : "+"} {euroRiepilogo(r.importo)}
+            </span>
+          </div>
+        ))}
       </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        <Button onClick={() => { setPannello(pannello === "prelievo" ? null : "prelievo"); setMsg(""); }}>Preleva da cassa contanti</Button>
+        <Button variant="ghost" onClick={() => { setPannello(pannello === "versamento" ? null : "versamento"); setMsg(""); }}>Versa in cassa contanti</Button>
+        <Button variant="ghost" onClick={() => { setPannello(pannello === "fondo" ? null : "fondo"); setMsg(""); }}>Fondo cassa: spese del mese</Button>
+      </div>
+
+      {(pannello === "prelievo" || pannello === "versamento") && (
+        <div style={{ ...cardStyle, marginBottom: 14 }}>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>
+            {pannello === "prelievo"
+              ? `Puoi prelevare al massimo ${euroRiepilogo(prelevabile)}: sotto restano ${euroRiepilogo(fondoMinimo)} di fondo cassa per le spese del mese.`
+              : "Contante che rientra in cassa: restituzioni, versamenti extra contabilità. Tutto esente IVA."}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "150px 150px 1fr auto", gap: 8, alignItems: "end" }}>
+            <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
+            <Field label="Importo"><input inputMode="decimal" style={inputStyle} value={importo} onChange={(e) => setImporto(e.target.value)} /></Field>
+            <Field label="Motivo"><input style={inputStyle} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder={pannello === "prelievo" ? "Prelievo per…" : "Restituzione di…"} /></Field>
+            <Button onClick={() => registraMovimento(pannello)} disabled={salvando} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>
+              {salvando ? "Salvo…" : pannello === "prelievo" ? "Registra prelievo" : "Registra versamento"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {pannello === "fondo" && (
+        <div style={{ ...cardStyle, marginBottom: 14 }}>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>
+            Le spese che ogni mese si pagano in contanti. La loro somma è il fondo cassa da tenere da parte, cioè il limite sotto cui non si preleva.
+          </div>
+          {ricorrenti.map((r) => (
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>
+              <span style={{ minWidth: 0 }}>{r.nome}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <b style={{ whiteSpace: "nowrap" }}>{euroRiepilogo(r.importo_mensile)}</b>
+                <button onClick={() => eliminaRicorrente(r.id)} title="Togli dalla lista" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", fontSize: 15 }}>×</button>
+              </span>
+            </div>
+          ))}
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 150px auto", gap: 8, alignItems: "end", marginTop: 12 }}>
+            <Field label="Spesa"><input style={inputStyle} value={nomeSpesa} onChange={(e) => setNomeSpesa(e.target.value)} placeholder="Pulizie, cancelleria…" /></Field>
+            <Field label="Al mese"><input inputMode="decimal" style={inputStyle} value={importoSpesa} onChange={(e) => setImportoSpesa(e.target.value)} /></Field>
+            <Button onClick={aggiungiRicorrente} style={isMobile ? { gridColumn: "1 / -1" } : undefined}>Aggiungi</Button>
+          </div>
+        </div>
+      )}
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
 
       <div style={cardStyle}>
+        <TitoloSezioneRiepilogo>Storico prelievi e versamenti</TitoloSezioneRiepilogo>
         {movimenti == null ? <RigaCassaVuota testo="Carico…" />
-          : movimenti.length === 0 ? <RigaCassaVuota testo="Nessun movimento registrato." />
-          : movimenti.map((m) => (
-            <div key={m.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "auto 1fr auto 28px" : "110px 1fr 120px 32px", gap: 8, alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+          : storico.length === 0 ? <RigaCassaVuota testo="Nessun prelievo e nessun versamento." />
+          : storico.map((m) => (
+            <div key={m.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "auto 1fr auto 28px" : "110px 120px 1fr 130px 32px", gap: 8, alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
               <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: MUTED, whiteSpace: "nowrap" }}>{fmtData(m.data)}</div>
-              <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.causale || "—"}</div>
-              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: m.tipo === "uscita" ? "#C0392B" : "#2E7D32", textAlign: "right", whiteSpace: "nowrap" }}>
-                {m.tipo === "uscita" ? "−" : "+"} € {round2(Number(m.importo) || 0)}
+              {!isMobile && (
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: m.tipo === "prelievo" ? "#C0392B" : "#2E7D32" }}>{m.tipo}</div>
+              )}
+              <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.motivo || "—"}</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: m.tipo === "prelievo" ? "#C0392B" : "#2E7D32", textAlign: "right", whiteSpace: "nowrap" }}>
+                {m.tipo === "prelievo" ? "−" : "+"} {euroRiepilogo(m.importo)}
               </div>
-              <button onClick={() => elimina(m.id)} title="Elimina movimento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", fontSize: 15, padding: 0 }}>×</button>
+              <button onClick={() => eliminaMovimento(m.id)} title="Elimina movimento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", fontSize: 15, padding: 0 }}>×</button>
             </div>
           ))}
       </div>
@@ -47425,7 +47576,12 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           </Field>
           <Field label="Metodo di pagamento">
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-              {["Paypal", "Carta", "Bonifico", "Contanti", "Cash no iva"].map((opz) => (
+              {/* METODI_SPESA sta accanto alla cassa contanti perche' e' li'
+                  che conta: solo "Cassa contanti" scala il saldo del
+                  contante. Se il metodo salvato e' uno dei nomi vecchi
+                  ("Contanti", "Cash no iva") resta scelto e continua a valere
+                  come cassa, invece di sparire dalla scheda */}
+              {[...METODI_SPESA, ...(metodoPagamento && !METODI_SPESA.includes(metodoPagamento) ? [metodoPagamento] : [])].map((opz) => (
                 <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
                   <input type="radio" name="metodo-spesa" checked={metodoPagamento === opz} onChange={() => setMetodoPagamento(opz)} /> {opz}
                 </label>
