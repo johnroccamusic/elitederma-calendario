@@ -18422,13 +18422,9 @@ function PannelloRiepilogoAmministrativo({
   // l'importo: da quel momento la cassa contanti somma quel numero, non
   // ricalcola la classe.
   async function segnaBustaRientrata(rientrata) {
-    // "in arrivo" si spegne in tutti e due i casi: una busta arrivata non
-    // sta piu' viaggiando, e una rimessa fuori riparte da capo. Il flag e'
-    // il passo intermedio della lista "Contabilita' di ritorno" in cassa
-    // contanti, e non deve restare acceso a raccontare un viaggio finito.
     const campi = rientrata
-      ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse, busta_in_arrivo: false }
-      : { busta_rientrata_il: null, busta_importo: null, busta_in_arrivo: false };
+      ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse }
+      : { busta_rientrata_il: null, busta_importo: null };
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setMsg(rientrata ? "Busta segnata come rientrata: il contante è in cassa." : "Busta rimessa fuori dalla cassa.");
@@ -28479,20 +28475,12 @@ function PannelloCassaContanti({
     carica();
   }
 
-  // I due passi del ritorno. "In arrivo" e' solo un promemoria: dice che la
-  // busta e' partita, non muove un euro. "Ok, busta in cassa" e' la stessa
-  // identica scrittura del tasto nella scheda della classe — data di
-  // rientro e importo congelato — perche' i due punti devono fare la stessa
-  // cosa, non due cose simili.
-  async function segnaBustaInArrivo(cd, valore) {
-    const { error } = await supabase.from("corsi_date").update({ busta_in_arrivo: valore }).eq("id", cd.id);
-    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
-    setMsg("");
-    ricarica?.(["corsi_date"]);
-  }
+  // "Ok, busta in cassa" e' la stessa identica scrittura del tasto nella
+  // scheda della classe — data di rientro e importo congelato — perche' i
+  // due punti devono fare la stessa cosa, non due cose simili.
   async function segnaBustaInCassa(cd, importo) {
     const { error } = await supabase.from("corsi_date")
-      .update({ busta_rientrata_il: dataOggiStr(), busta_importo: importo, busta_in_arrivo: false })
+      .update({ busta_rientrata_il: dataOggiStr(), busta_importo: importo })
       .eq("id", cd.id);
     if (error) { setMsg(`Non salvato: ${error.message}`); return; }
     setMsg("");
@@ -28574,7 +28562,6 @@ function PannelloCassaContanti({
           {busteInArrivo.righe.map(({ cd, importo }) => {
             const nomeCorso = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "Corso";
             const nomeSede = (location || []).find((l) => l.id === cd.location_id)?.nome || "";
-            const partita = !!cd.busta_in_arrivo;
             return (
               <div key={cd.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
                 <div style={{ minWidth: 0, flex: "1 1 220px" }}>
@@ -28585,36 +28572,16 @@ function PannelloCassaContanti({
                     {fmtIntervalloEsteso(cd.data_inizio, cd.data_fine || cd.data_inizio)} — {euroRiepilogo(importo)}
                   </div>
                 </div>
-                {/* Una casella sola alla volta, non due: la busta e' a un
-                    punto solo del suo viaggio, e chiedere "e' partita?" a una
-                    che e' gia' partita non serve piu' a niente. Spuntata "In
-                    arrivo", al suo posto compare il passo dopo.
-                    L'"annulla" c'e' perche' un tocco sbagliato non deve
-                    diventare una strada senza ritorno: la busta torna a non
-                    essere partita e la casella di prima ricompare. */}
-                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, flexShrink: 0, flexWrap: "wrap" }}>
-                  {partita ? (
-                    <>
-                      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
-                        <input type="checkbox" checked={false} onChange={() => segnaBustaInCassa(cd, importo)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                        Ok, busta in cassa
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => segnaBustaInArrivo(cd, false)}
-                        title="La busta non è ancora partita"
-                        style={{ ...fontBody, fontSize: 11, color: MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
-                      >
-                        annulla
-                      </button>
-                    </>
-                  ) : (
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED }}>
-                      <input type="checkbox" checked={false} onChange={() => segnaBustaInArrivo(cd, true)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                      In arrivo
-                    </label>
-                  )}
-                </div>
+                {/* Una casella sola, e non e' "in arrivo": se il corso e'
+                    chiuso la busta e' per forza in viaggio, ed e' proprio il
+                    fatto di comparire in questa lista a dirlo. Chiedere di
+                    spuntarlo era far confermare a mano una cosa che si sa
+                    gia' — restava solo da metterla in cassa, ed e' l'unica
+                    cosa che qui si puo' fare. */}
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", flexShrink: 0, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
+                  <input type="checkbox" checked={false} onChange={() => segnaBustaInCassa(cd, importo)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                  Ok, busta in cassa
+                </label>
               </div>
             );
           })}
