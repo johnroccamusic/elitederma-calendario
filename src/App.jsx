@@ -41594,8 +41594,21 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
     });
     setSalvandoOrdineVetrina(false);
-    if (error) { setMsgOrdineVetrina("Errore: " + error.message); return; }
-    if (data?.errore) { setMsgOrdineVetrina("Errore: " + data.errore); return; }
+    if (error) {
+      // Su una risposta non-2xx supabase.functions.invoke butta via il
+      // corpo e lascia solo "non-2xx status code": il motivo vero -
+      // quello che WooCommerce ha risposto - resta dentro
+      // error.context, che e' la Response originale. Senza leggerla,
+      // un rifiuto del sito e un problema di rete si somigliano.
+      let dettaglio = error.message;
+      try {
+        const corpo = await error.context?.json?.();
+        if (corpo?.errore) dettaglio = corpo.errore + (corpo.dettaglio ? ` — ${String(corpo.dettaglio).slice(0, 300)}` : "");
+      } catch (e) { /* il corpo non era leggibile: resta il messaggio generico */ }
+      setMsgOrdineVetrina("Errore: " + dettaglio);
+      return;
+    }
+    if (data?.errore) { setMsgOrdineVetrina("Errore: " + data.errore + (data.dettaglio ? ` — ${String(data.dettaglio).slice(0, 300)}` : "")); return; }
     setOrdineVetrinaBozza(null);
     setMsgOrdineVetrina(`Ordine salvato sullo shop: ${data?.aggiornati ?? 0} prodotti.`);
     ricarica(["prodotti_shop"]);
