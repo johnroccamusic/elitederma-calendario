@@ -17810,6 +17810,16 @@ function PannelloRiepilogoAmministrativo({
   // (il default finché nessuno sceglie) = metà e metà. Un pareggio dei
   // due importi diverso da questi 3 casi (es. modificato a mano nei campi
   // Bonifico/Cash della riga) non fa risultare nessun flag spuntato.
+  // Su quali due colonne si scrive lo split dipende dalla riga: la quota
+  // venditore e la commissione modelle hanno colonne proprie su
+  // corsi_date, tutto il resto usa quota_bonifico/quota_cash. Era gia'
+  // scritto piu' sotto per i campi editabili a mano: adesso lo sa un posto
+  // solo, cosi' i flag e le caselle non possono finire su colonne diverse.
+  function campiSplitDi(tipo) {
+    if (tipo === "venditore") return ["quota_venditore_bonifico", "quota_venditore_cash"];
+    if (tipo === "modelle") return ["commissione_modelle_bonifico", "commissione_modelle_cash"];
+    return ["quota_bonifico", "quota_cash"];
+  }
   function modalitaSplitMaster(r) {
     if (!r.totale) return "1/2";
     const frazioneBonifico = r.bonifico / r.totale;
@@ -17819,9 +17829,12 @@ function PannelloRiepilogoAmministrativo({
     return null;
   }
   function impostaSplitMaster(r, modalita) {
+    const [campoBonifico, campoCash] = campiSplitDi(r.tipo);
     const bonifico = modalita === "B" ? r.totale : modalita === "C" ? 0 : round2(r.totale / 2);
     const cash = round2(r.totale - bonifico);
-    salvaSplitRiga(r.tabella, r.rigaId, { quota_bonifico: bonifico, quota_cash: cash });
+    // non cambia nessun totale: sposta soltanto lo stesso importo fra le
+    // due caselle che si possono gia' compilare a mano
+    salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: bonifico, [campoCash]: cash });
   }
 
   // righe "Costi della classe" (Compenso Master, Costo Location, Costo
@@ -18082,8 +18095,7 @@ function PannelloRiepilogoAmministrativo({
                       // in blocco la tendina scelta in Assegnazione Master ("Pagamento
                       // sede"/"Tipo di pagamento"), quindi qui sono sola lettura.
                       const bloccato = r.tipo === "location" || r.tipo === "alloggio";
-                      const campoBonifico = r.tipo === "venditore" ? "quota_venditore_bonifico" : r.tipo === "modelle" ? "commissione_modelle_bonifico" : "quota_bonifico";
-                      const campoCash = r.tipo === "venditore" ? "quota_venditore_cash" : r.tipo === "modelle" ? "commissione_modelle_cash" : "quota_cash";
+                      const [campoBonifico, campoCash] = campiSplitDi(r.tipo);
                       return (
                         <React.Fragment key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash}>
                         <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3 }}>
@@ -18118,7 +18130,7 @@ function PannelloRiepilogoAmministrativo({
                                 <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>+</button>
                               </div>
                             )}
-                            {r.tipo === "master" && (() => {
+                            {(r.tipo === "master" || r.tipo === "venditore") && (() => {
                               const modalita = modalitaSplitMaster(r);
                               return (
                                 <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
