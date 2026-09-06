@@ -28136,6 +28136,12 @@ function PannelloCassaContanti() {
   // mese per le spese che si pagano in contanti
   const fondoMinimo = round2(ricorrenti.reduce((s, r) => s + (r.importo_mensile || 0), 0));
   const prelevabile = round2(Math.max(0, saldo - fondoMinimo));
+  // quanto manca per ricostituire il fondo. "Prelevabile" a zero dice solo
+  // che non si puo' portare via niente, non di quanto si e' sotto: sono due
+  // informazioni diverse e quella che serve per rimettere a posto la cassa
+  // e' questa. Quando il fondo e' pieno la casella sparisce — un "mancano
+  // zero" e' rumore.
+  const mancanteInCassa = round2(Math.max(0, fondoMinimo - saldo));
 
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
@@ -28189,14 +28195,17 @@ function PannelloCassaContanti() {
   const storico = (movimenti || []);
   return (
     <div>
-      {/* i tre numeri della cassa su una riga sola, telefono compreso: si
+      {/* i numeri della cassa su una riga sola, telefono compreso: si
           leggono l'uno in rapporto agli altri - quanto c'e', quanto va
-          tenuto, quanto si puo' portare via - e messi in colonna quel
-          rapporto lo devi ricostruire scorrendo */}
-      <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isMobile ? 6 : 14, alignItems: "start" }}>
+          tenuto, quanto manca, quanto si puo' portare via - e messi in
+          colonna quel rapporto lo devi ricostruire scorrendo.
+          "Mancano in cassa" c'e' solo quando manca davvero qualcosa:
+          quattro caselle quando il fondo e' sotto, tre quando e' a posto */}
+      <div style={{ ...cardStyle, marginBottom: 14, display: "grid", gridTemplateColumns: `repeat(${mancanteInCassa > 0 ? 4 : 3}, minmax(0, 1fr))`, gap: isMobile ? 6 : 14, alignItems: "start" }}>
         {[
           { etichetta: "Saldo in cassa", valore: saldo, colore: saldo < 0 ? "#C0392B" : NAVY, grande: true },
           { etichetta: "Fondo cassa da tenere", valore: fondoMinimo, colore: GOLD },
+          ...(mancanteInCassa > 0 ? [{ etichetta: "Mancano in cassa", valore: mancanteInCassa, colore: "#C0392B" }] : []),
           { etichetta: "Prelevabile", valore: prelevabile, colore: NAVY },
         ].map((c) => (
           <div key={c.etichetta} style={{ minWidth: 0 }}>
