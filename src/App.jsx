@@ -9670,6 +9670,7 @@ function prioritaTipoModella(tipo) {
 // nella stessa colonna di "sopracciglia" delle altre, invece di scorrere
 // dopo il nome (che ha lunghezze diverse) come accadeva prima.
 function RigaPrioritaModelle({ edizione, onApri }) {
+  const isMobile = useIsMobile();
   const g = edizione.giorniAOggi;
   const coloreCorso = edizione.colore || NAVY;
   // sotto i 20 giorni (compreso oggi/in corso) il badge cresce e lampeggia
@@ -9692,8 +9693,8 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   const { numero: numeroData, sotto: sottoData } = etichettaIntervalloGiorni(edizione.dataInizio, edizione.dataFine);
   const numero = (v, c, lab) => (
     <div style={{ textAlign: "center" }}>
-      <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: c }}>{v}</div>
-      <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{lab}</div>
+      <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: c }}>{v}</div>
+      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, whiteSpace: "nowrap" }}>{lab}</div>
     </div>
   );
 
@@ -9753,18 +9754,24 @@ function RigaPrioritaModelle({ edizione, onApri }) {
       {/* i tre numeri accanto al corso, non sotto: quanto manca e' la
           domanda che si fa guardando la scheda, e stava in fondo dopo la
           data, il nome, la citta' e la master */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
+      {/* su telefono la riga non va a capo: i numeri devono restare accanto
+          al corso, non finire sotto */}
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: isMobile ? "nowrap" : "wrap" }}>
+        <div style={{ background: coloreCorso, borderRadius: 12, padding: isMobile ? "8px 10px" : "10px 14px", textAlign: "center", flexShrink: 0 }}>
           <div style={{ ...fontDisplay, fontSize: numeroData.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numeroData}</div>
           {sottoData && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sottoData}</div>}
         </div>
-        <div style={{ flex: "1 1 120px", minWidth: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(edizione.corsoNome)}</div>
+        <div style={{ flex: "1 1 0", minWidth: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{toTitleCase(edizione.corsoNome)}</div>
           <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(edizione.cittaNome)}</div>
           {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
         </div>
-        <div style={{ display: "flex", gap: 14, flexShrink: 0, paddingBottom: 8, borderBottom: `1px solid ${CREAM_BORDER}` }}>
-          {numero(edizione.richieste, NAVY, "richieste")}
+        {/* Da telefono "richieste" non si mostra: e' la somma delle altre
+            due, e con nessuna assegnata resta scritto solo il numero da
+            trovare — che e' poi la cifra per cui si guarda questa scheda.
+            Due numeri stanno accanto al corso, tre lo mandavano a capo. */}
+        <div style={{ display: "flex", gap: isMobile ? 10 : 14, flexShrink: 0, paddingBottom: 8, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+          {!isMobile && numero(edizione.richieste, NAVY, "richieste")}
           {numero(edizione.assegnate, "#2E7D32", "assegnate")}
           {numero(edizione.daTrovare, "#C0392B", "da trovare")}
         </div>
