@@ -15300,10 +15300,10 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         {mostraOrario && (
-          /* niente riquadro crema intorno: due tasti sanno gia' dire di
-             essere due tasti, e la cornice li faceva sembrare una sezione a
-             se' dentro una riga che e' gia' dentro una scheda */
-          <div style={{ flexShrink: 0, minWidth: 105, paddingTop: 2 }}>
+          /* fondo crema per tenere insieme i due tasti e la scritta, ma
+             senza contorno: il filo marrone faceva una scatola dentro la
+             scatola dell'allievo */
+          <div style={{ background: BG_CHIARO, borderRadius: 10, padding: "5px 7px", flexShrink: 0, minWidth: 105 }}>
             <div style={{ ...fontBody, fontSize: 5.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 3 }}>Presenza modella</div>
             <div style={{ display: "flex", alignItems: "stretch", gap: 4 }}>
               {tastoTurno(mattina, "MAT", IconaSole, (v) => cambiaTurno(v, pomeriggio))}
@@ -22308,15 +22308,21 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                           ? postiDelGiorno
                           : [{ m: { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" }, indice: null }];
                         return (
+                          // Ogni allievo dentro la sua cornice: un filo blu
+                          // e gli angoli tondi. Prima erano separati da una
+                          // linea sola, e con due o tre posti modella a
+                          // testa non si capiva piu' dove finiva uno e
+                          // cominciava l'altro. Chi porta la sua modella
+                          // resta su fondo grigio: e' un allievo di cui non
+                          // dobbiamo occuparci, e si deve vedere.
                           <div
                             key={i.id}
                             style={{
-                              padding: nostra ? "8px 0" : ultimo ? "8px 18px 26px" : "8px 18px",
-                              margin: nostra ? 0 : ultimo ? "0 -18px -18px" : "0 -18px",
-                              background: nostra ? "transparent" : "#F7F6F3",
-                              borderTop: `1px solid ${CREAM_BORDER}`,
-                              borderBottomLeftRadius: ultimo && !nostra ? 14 : 0,
-                              borderBottomRightRadius: ultimo && !nostra ? 14 : 0,
+                              padding: 12,
+                              marginBottom: ultimo ? 0 : 10,
+                              background: nostra ? "#fff" : "#F7F6F3",
+                              border: `1px solid ${nostra ? NAVY : CREAM_BORDER}`,
+                              borderRadius: 14,
                             }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
