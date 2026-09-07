@@ -1780,6 +1780,20 @@ function fmtDataLunga(dataStr) {
 // intervallo di date in italiano esteso, es. "18–19 ottobre 2026" (stesso
 // mese) o "28 settembre – 2 ottobre 2026" (mesi diversi) — usato
 // nell'intestazione di Contabilità classe
+// L'intervallo spezzato in tre righe — giorni, mese, anno — per le celle
+// che si leggono in colonna. Su una riga sola "13–18 settembre 2026"
+// e' lungo il triplo del nome della master accanto, e le tre celle non si
+// incolonnano piu'.
+function righeIntervalloData(inizio, fine) {
+  if (!inizio) return ["—"];
+  const [annoI, meseI, giornoI] = inizio.split("-").map(Number);
+  if (!fine || fine === inizio) return [String(giornoI), MESI[meseI - 1].toLowerCase(), String(annoI)];
+  const [annoF, meseF, giornoF] = fine.split("-").map(Number);
+  if (annoI === annoF && meseI === meseF) return [`${giornoI}–${giornoF}`, MESI[meseI - 1].toLowerCase(), String(annoI)];
+  if (annoI === annoF) return [`${giornoI} ${MESI[meseI - 1].toLowerCase()}`, `${giornoF} ${MESI[meseF - 1].toLowerCase()}`, String(annoI)];
+  return [`${giornoI} ${MESI[meseI - 1].toLowerCase()} ${annoI}`, `${giornoF} ${MESI[meseF - 1].toLowerCase()} ${annoF}`];
+}
+
 function fmtIntervalloEsteso(inizio, fine) {
   const [annoI, meseI, giornoI] = inizio.split("-").map(Number);
   if (inizio === fine) return `${giornoI} ${MESI[meseI - 1].toLowerCase()} ${annoI}`;
@@ -21103,12 +21117,15 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
             {manigliaSpazio("dopoEyebrow")}
             <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoTitolo }}>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <div style={{ ...fontHero, fontSize: spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
+                {/* il carattere dei titoli dell'app, non il serif della
+                    copertina: e' lo stesso nome che si legge in ogni altra
+                    schermata, e cambiava faccia solo qui */}
+                <div style={{ ...fontDisplay, fontWeight: 700, letterSpacing: 0.5, fontSize: spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
                 {manigliaRidimensiona("titoloFontSize")}
               </div>
               {loc?.nome && (
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: Math.round(spaziIscrizioni.pillolaFontSize * 1.125), padding: `${spaziIscrizioni.pillolaPaddingV}px ${Math.round(spaziIscrizioni.pillolaFontSize * 0.75)}px`, flexShrink: 0 }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: Math.round(spaziIscrizioni.pillolaFontSize * 1.125), padding: `${spaziIscrizioni.pillolaPaddingV}px ${Math.round(spaziIscrizioni.pillolaFontSize * 0.75)}px`, flexShrink: 0, marginLeft: "auto" }}>
                     <IconaPin size={Math.round(spaziIscrizioni.pillolaFontSize * 0.94)} color={GOLD} />
                     <span style={{ ...fontBody, fontSize: spaziIscrizioni.pillolaFontSize, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
                   </div>
@@ -21119,16 +21136,26 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
             </div>
             {manigliaSpazio("dopoTitolo")}
             {(() => {
+              // Ogni cella si legge in colonna: il dato che conta sulla
+              // prima riga, il resto sotto. Cosi' le tre celle si leggono
+              // anche in orizzontale — 13-18 / MARTINA / 4 posti — invece
+              // di essere tre frasi di lunghezza diversa che vanno a capo
+              // ognuna dove capita.
+              const nomeMaster = (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?";
+              const parole = nomeMaster.split(/\s+/).filter(Boolean);
               const celleIntestazione = [
                 {
                   chiave: "date", Icona: IconaDataAccento, label: "Date",
-                  valore: fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine),
+                  righe: righeIntervalloData(corsoData.data_inizio, corsoData.data_fine),
                 },
                 corsoData.master_id && {
                   chiave: "master", Icona: IconaMasterAccento, label: "Master",
-                  valore: (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?",
+                  righe: parole.length > 1 ? [parole[0], parole.slice(1).join(" ")] : [nomeMaster],
                 },
-                { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} post${liberi === 1 ? "o libero" : "i liberi"}` },
+                {
+                  chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità",
+                  righe: [`${liberi} post${liberi === 1 ? "o" : "i"}`, liberi === 1 ? "libero" : "liberi"],
+                },
               ].filter(Boolean);
               return (
                 <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: `${spaziIscrizioni.dateBoxPaddingV}px 14px`, marginBottom: spaziIscrizioni.dopoDateBox }}>
@@ -21141,18 +21168,15 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                       dice - e abbassando i corpi: cosi' il nome va a capo
                       fra le due parole, non fra le lettere. */}
                   <div style={{ display: "grid", gridTemplateColumns: isMobile ? `repeat(${celleIntestazione.length}, minmax(0, 1fr))` : `repeat(${celleIntestazione.length}, 1fr)`, gap: isMobile ? 6 : 10 }}>
-                    {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
+                    {celleIntestazione.map(({ chiave, label, righe }, idx) => (
                       // il divisore è più scuro del bordo della card: separa tre
                       // dati accostati, e un filo crema su fondo crema non li
                       // teneva distinti
-                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: isMobile ? 0 : 11, minWidth: 0, paddingLeft: idx > 0 ? (isMobile ? 7 : 14) : 0, borderLeft: idx > 0 ? `1px solid #D5C9AF` : "none" }}>
-                        <span style={{ width: 38, height: 38, borderRadius: 11, background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <Icona size={20} color={GOLD} />
-                        </span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: GOLD, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, whiteSpace: "normal", lineHeight: 1.2 }}>{label}</div>
-                          <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 16, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "normal", overflowWrap: "break-word", lineHeight: 1.2 }}>{valore}</div>
-                        </div>
+                      <div key={chiave} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0, paddingLeft: idx > 0 ? (isMobile ? 7 : 14) : 0, borderLeft: idx > 0 ? `1px solid #D5C9AF` : "none" }}>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 11 : 13, color: GOLD, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, lineHeight: 1.2, textAlign: "center" }}>{label}</div>
+                        {righe.map((riga, i) => (
+                          <div key={i} style={{ ...fontBody, fontSize: isMobile ? 12.5 : 16, fontWeight: 700, color: NAVY, lineHeight: 1.2, textAlign: "center", overflowWrap: "anywhere" }}>{riga}</div>
+                        ))}
                       </div>
                     ))}
                   </div>
