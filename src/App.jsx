@@ -23382,6 +23382,36 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   const [noteIniziali, setNoteIniziali] = useState(progetto.note_iniziali || "");
   useEffect(() => { setNoteSviluppo(progetto.note_sviluppo || ""); }, [progetto.note_sviluppo]);
   useEffect(() => { setNoteIniziali(progetto.note_iniziali || ""); }, [progetto.note_iniziali]);
+  const assegnati = Array.isArray(progetto.incaricati) ? progetto.incaricati : [];
+  function scriviAssegnati(nuovi) {
+    // si scrive anche la vecchia coppia incaricato_id/nome con il primo
+    // della lista: cosi' chi legge i progetti da fuori (o una query fatta
+    // a mano) trova ancora un nome dove si aspetta di trovarlo
+    onSalva({
+      incaricati: nuovi,
+      incaricato_id: nuovi[0]?.id || null,
+      incaricato_nome: nuovi[0]?.nome || null,
+      incaricato_tipo: nuovi[0]?.tipo || null,
+    });
+  }
+  function cambiaAssegnato(posizione, id) {
+    const scelto = incaricabili.find((u) => u.id === id);
+    const nuovi = assegnati.slice();
+    if (!id) nuovi.splice(posizione, 1);
+    else if (posizione >= nuovi.length) nuovi.push({ id, nome: scelto?.nome || "", tipo: scelto?.tipoAnagrafica || "utente" });
+    else nuovi[posizione] = { id, nome: scelto?.nome || "", tipo: scelto?.tipoAnagrafica || "utente" };
+    // la stessa persona due volte non e' un'assegnazione doppia, e' un
+    // clic sbagliato
+    scriviAssegnati(nuovi.filter((a, i) => a && nuovi.findIndex((x) => x.id === a.id) === i));
+  }
+  function aggiungiAssegnato() {
+    const libero = incaricabili.find((u) => !assegnati.some((a) => a.id === u.id));
+    if (!libero) return;
+    scriviAssegnati([...assegnati, { id: libero.id, nome: libero.nome, tipo: libero.tipoAnagrafica }]);
+  }
+  function togliAssegnato(posizione) {
+    scriviAssegnati(assegnati.filter((_, i) => i !== posizione));
+  }
   const pri = prioritaProgetto(progetto.priorita);
   const st = statoProgetto(progetto.stato);
   const scaduto = progettoScaduto(progetto);
@@ -23416,24 +23446,37 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
         >
           {STATI_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
         </select>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        {/* Le persone assegnate, una tendina per ciascuna, con il "+" per
+            aggiungerne un'altra: un progetto puo' essere di due persone
+            insieme, e prima la seconda finiva scritta nelle note — dove
+            nessun filtro la trova. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
           <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 }}>Assegnato a</span>
-          <select
-            value={progetto.incaricato_id || ""}
-            onChange={(e) => {
-              const scelto = incaricabili.find((u) => u.id === e.target.value);
-              onSalva({ incaricato_id: e.target.value || null, incaricato_nome: scelto?.nome || null, incaricato_tipo: scelto?.tipoAnagrafica || null });
-            }}
-            style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }}
-          >
-            <option value="">— nessuno —</option>
-            {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-            {/* chi non ha piu' il permesso resta scritto: toglierlo
-                vorrebbe dire perdere la memoria di chi ci ha lavorato */}
-            {progetto.incaricato_id && !incaricabili.some((u) => u.id === progetto.incaricato_id) && (
-              <option value={progetto.incaricato_id}>{progetto.incaricato_nome || "(non più abilitato)"}</option>
-            )}
-          </select>
+          {(assegnati.length > 0 ? assegnati : [null]).map((assegnato, posizione) => (
+            <div key={assegnato?.id || `vuoto-${posizione}`} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+              <select
+                value={assegnato?.id || ""}
+                onChange={(e) => cambiaAssegnato(posizione, e.target.value)}
+                style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }}
+              >
+                <option value="">— nessuno —</option>
+                {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                {/* chi non ha piu' il permesso resta scritto: toglierlo
+                    vorrebbe dire perdere la memoria di chi ci ha lavorato */}
+                {assegnato?.id && !incaricabili.some((u) => u.id === assegnato.id) && (
+                  <option value={assegnato.id}>{assegnato.nome || "(non più abilitato)"}</option>
+                )}
+              </select>
+              {assegnati.length > 1 && (
+                <button type="button" onClick={() => togliAssegnato(posizione)} title="Togli questa persona" style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>×</button>
+              )}
+            </div>
+          ))}
+          {/* il "+" compare solo quando c'e' gia' qualcuno e resta ancora
+              qualcuno da scegliere: due caselle vuote non servono a niente */}
+          {assegnati.length > 0 && assegnati.length < incaricabili.length && (
+            <button type="button" onClick={aggiungiAssegnato} title="Assegna anche a un'altra persona" style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: GOLD, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>+</button>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 }}>Scadenza</span>
@@ -23532,13 +23575,16 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
     const pesoPriorita = { alta: 0, intermedia: 1, normale: 2 };
     return (progetti || [])
       .filter((p) => (storico ? !!p.archiviato_il : !p.archiviato_il))
-      .filter((p) => !filtroIncaricato || p.incaricato_id === filtroIncaricato)
+      .filter((p) => !filtroIncaricato
+        || (Array.isArray(p.incaricati) && p.incaricati.some((a) => a.id === filtroIncaricato))
+        || p.incaricato_id === filtroIncaricato)
       .filter((p) => !filtroPriorita || p.priorita === filtroPriorita)
       .filter((p) => !testo
         || String(p.nome || "").toLowerCase().includes(testo)
         || String(p.note_iniziali || "").toLowerCase().includes(testo)
         || String(p.note_sviluppo || "").toLowerCase().includes(testo)
-        || String(p.incaricato_nome || "").toLowerCase().includes(testo))
+        || String(p.incaricato_nome || "").toLowerCase().includes(testo)
+        || (Array.isArray(p.incaricati) && p.incaricati.some((a) => String(a.nome || "").toLowerCase().includes(testo))))
       .sort((a, b) => {
         if (ordine === "priorita") return (pesoPriorita[a.priorita] ?? 9) - (pesoPriorita[b.priorita] ?? 9);
         if (ordine === "nome") return String(a.nome).localeCompare(String(b.nome));
@@ -23659,6 +23705,7 @@ function ModaleNuovoProgetto({ incaricabili, onClose, onCreato }) {
     const { error } = await supabase.from("progetti").insert({
       nome: nome.trim(), priorita,
       incaricato_id: incaricatoId || null, incaricato_nome: scelto?.nome || null, incaricato_tipo: scelto?.tipoAnagrafica || null,
+      incaricati: scelto ? [{ id: scelto.id, nome: scelto.nome, tipo: scelto.tipoAnagrafica }] : [],
       scadenza: scadenza || null, note_iniziali: note.trim() || null, stato: "todo",
     });
     setSalvando(false);
