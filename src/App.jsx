@@ -22170,7 +22170,11 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
           });
         });
         const righeConteggio = Object.entries(conteggioPerTipo).sort((a, b) => b[1] - a[1]);
-        const riepilogo = (
+        // Da telefono il riepilogo non si mostra: e' lungo quanto tutta la
+        // pagina e ripete, in altra forma, quello che si legge gia' nelle
+        // schede sotto — chi manca e con che trattamento. Su uno schermo
+        // stretto si finisce a scorrerlo per arrivare al lavoro vero.
+        const riepilogo = isMobile ? null : (
           <div style={cardStyle}>
             <div style={{ ...hStyle, marginBottom: 12 }}>Riepilogo</div>
             {nostreConModelle.length === 0 ? (
