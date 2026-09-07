@@ -23423,15 +23423,20 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
         <input
           defaultValue={progetto.nome}
           onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== progetto.nome) onSalva({ nome: v }); }}
-          style={{ ...fontDisplay, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid transparent`, background: "transparent", padding: 0, outline: "none", flex: "1 1 200px", minWidth: 0 }}
+          // il nome del progetto e' la prima cosa che si cerca scorrendo
+          // l'elenco: deve essere il testo piu' grande della scheda, non
+          // uno dei tanti
+          style={{ ...fontDisplay, fontSize: isMobile ? 20 : 27, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid transparent`, background: "transparent", padding: 0, outline: "none", flex: "1 1 200px", minWidth: 0 }}
           title="Clicca per correggere il nome"
         />
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Priorità</span>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Priorità</span>
+          {/* la priorita' si legge insieme al nome, da lontano: e' quella
+              che dice cosa guardare per primo in un elenco lungo */}
           <select
             value={progetto.priorita}
             onChange={(e) => onSalva({ priorita: e.target.value })}
-            style={{ ...inputStyle, width: "auto", padding: "5px 8px", fontSize: 12.5, fontWeight: 700, color: pri.colore, background: pri.sfondo, border: `1px solid ${pri.colore}33` }}
+            style={{ ...inputStyle, width: "auto", padding: "8px 12px", fontSize: 15, fontWeight: 700, letterSpacing: 0.5, color: pri.colore, background: pri.sfondo, border: `1.5px solid ${pri.colore}55` }}
           >
             {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta.toUpperCase()}</option>)}
           </select>
