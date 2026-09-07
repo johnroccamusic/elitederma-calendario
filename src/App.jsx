@@ -9680,10 +9680,11 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   // sotto i 20 giorni (compreso oggi/in corso) il badge cresce e lampeggia
   // rosso: è la soglia oltre la quale bisogna davvero muoversi
   // Il conto alla rovescia non ha piu' una pastiglia sua: e' il riquadro
-  // della data a diventare rosso e a lampeggiare quando mancano due giorni
-  // o meno. Una scheda che dice "tra 6 giorni" accanto a "13-18 SET" dice
-  // due volte la stessa cosa, e la riga in cima se ne andava per intero.
-  const urgente = g <= 2;
+  // della data a diventare rosso e a lampeggiare sotto i venti giorni —
+  // la soglia oltre la quale bisogna davvero muoversi, la stessa di prima.
+  // Una scheda che dice "tra 6 giorni" accanto a "13-18 SET" diceva due
+  // volte la stessa cosa, e la riga in cima se ne andava per intero.
+  const urgente = g < 20;
   const { numero: numeroData, sotto: sottoData } = etichettaIntervalloGiorni(edizione.dataInizio, edizione.dataFine);
   const numero = (v, c, lab) => (
     <div style={{ textAlign: "center" }}>
