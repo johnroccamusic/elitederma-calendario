@@ -9679,21 +9679,11 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   const coloreCorso = edizione.colore || NAVY;
   // sotto i 20 giorni (compreso oggi/in corso) il badge cresce e lampeggia
   // rosso: è la soglia oltre la quale bisogna davvero muoversi
-  const urgente = g <= 20;
-  const testoGiorni = g < 0 ? "IN CORSO" : g === 0 ? "OGGI" : g === 1 ? "DOMANI" : `TRA ${g} GIORNI`;
-  const badgeGiorni = (
-    <>
-      {urgente && <style>{`@keyframes lampeggiaPrioritaModelle { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }`}</style>}
-      <span style={{
-        ...fontBody, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap", borderRadius: 20,
-        ...(urgente
-          ? { fontSize: 13, color: "#fff", background: "#C0392B", padding: "6px 13px", animation: "lampeggiaPrioritaModelle 1.1s ease-in-out infinite" }
-          : { fontSize: 11, color: NAVY, background: "#F1ECDF", padding: "4px 9px" }),
-      }}>
-        {testoGiorni}
-      </span>
-    </>
-  );
+  // Il conto alla rovescia non ha piu' una pastiglia sua: e' il riquadro
+  // della data a diventare rosso e a lampeggiare quando mancano due giorni
+  // o meno. Una scheda che dice "tra 6 giorni" accanto a "13-18 SET" dice
+  // due volte la stessa cosa, e la riga in cima se ne andava per intero.
+  const urgente = g <= 2;
   const { numero: numeroData, sotto: sottoData } = etichettaIntervalloGiorni(edizione.dataInizio, edizione.dataFine);
   const numero = (v, c, lab) => (
     <div style={{ textAlign: "center" }}>
@@ -9755,17 +9745,21 @@ function RigaPrioritaModelle({ edizione, onApri }) {
     // fondo grigio chiaro invece del bianco: la pagina sotto e' bianca, e
     // una scheda bianca su bianco si riconosce solo dal bordo colorato
     <div onClick={onApri} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, background: "#F5F4F1", cursor: "pointer" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-        {badgeGiorni}
-        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textDecoration: "underline" }}>Clicca per assegnare modelle</span>
-      </div>
+      {urgente && <style>{`@keyframes lampeggiaPrioritaModelle { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>}
       {/* i tre numeri accanto al corso, non sotto: quanto manca e' la
           domanda che si fa guardando la scheda, e stava in fondo dopo la
           data, il nome, la citta' e la master */}
       {/* su telefono la riga non va a capo: i numeri devono restare accanto
           al corso, non finire sotto */}
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: isMobile ? "nowrap" : "wrap" }}>
-        <div style={{ background: coloreCorso, borderRadius: 12, padding: isMobile ? "8px 10px" : "10px 14px", textAlign: "center", flexShrink: 0 }}>
+        <div
+          title={g < 0 ? "Corso in corso" : g === 0 ? "Comincia oggi" : g === 1 ? "Comincia domani" : `Comincia fra ${g} giorni`}
+          style={{
+            background: urgente ? "#C0392B" : coloreCorso, borderRadius: 12,
+            padding: isMobile ? "8px 10px" : "10px 14px", textAlign: "center", flexShrink: 0,
+            ...(urgente ? { animation: "lampeggiaPrioritaModelle 1.1s ease-in-out infinite" } : null),
+          }}
+        >
           <div style={{ ...fontDisplay, fontSize: numeroData.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numeroData}</div>
           {sottoData && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sottoData}</div>}
         </div>
