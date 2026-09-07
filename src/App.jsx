@@ -28529,6 +28529,17 @@ function PannelloCassaContanti({
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
     if (valore == null || !(valore > 0)) { setMsg("Serve un importo maggiore di zero."); return; }
+    // Un movimento datato prima dell'apertura la cassa non lo vede: tutte
+    // le sue letture partono da quel giorno, perche' quello che c'era prima
+    // sta gia' dentro il saldo di apertura. Salvarlo lo stesso voleva dire
+    // scrivere una riga che poi spariva — "il prelievo e' registrato ma il
+    // saldo non si aggiorna e nello storico non c'e'". Meglio dirlo prima
+    // di scrivere.
+    const apertaIl = apertura?.aperta_il || null;
+    if (apertaIl && data < apertaIl) {
+      setMsg(`La cassa contanti è aperta dal ${fmtData(apertaIl)}: un movimento con data precedente non entrerebbe né nel saldo né nello storico. Usa una data dal ${fmtData(apertaIl)} in poi.`);
+      return;
+    }
     // Il fondo cassa e' un obiettivo, non un lucchetto: se i contanti
     // servono si prendono lo stesso, e a decidere e' chi ha in mano la
     // cassa, non il programma. Prima il prelievo veniva rifiutato — con il
