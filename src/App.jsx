@@ -22395,11 +22395,22 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                             }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                              <span style={{ ...fontBody, fontSize: isMobile ? 17 : 14, fontWeight: isMobile ? 700 : 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#FDECEC", color: nostra ? "#8A6D1D" : "#C0392B" }}>
                                 {nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
                               </span>
                             </div>
+                            {/* Da telefono, sotto il nome, una barra blu con
+                                dentro lo stesso nome in bianco: scorrendo un
+                                elenco lungo e' quella che dice dove comincia
+                                un allievo, senza doverla cercare fra campi e
+                                caselle. Prova da giudicare a schermo: se
+                                appesantisce si toglie, e' un blocco solo. */}
+                            {isMobile && (
+                              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, letterSpacing: 0.4, color: "#fff", background: NAVY, borderRadius: 8, padding: "5px 10px", margin: "6px 0 2px", overflowWrap: "anywhere" }}>
+                                {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+                              </div>
+                            )}
                             {daMostrare.map(({ m: modellaVista, indice: indiceReale }, iPosto) => (
                               <RigaModella
                                 reperitori={reperitoriModelle}
