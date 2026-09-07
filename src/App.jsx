@@ -9644,33 +9644,6 @@ function CardStatisticaModelle({ etichetta, valore, sottotitolo, colore, sfondo,
   );
 }
 
-// banner di avviso scadenze modelle: rimane visibile finché non si preme
-// "Visualizzato" — torna a comparire da capo se, alla riapertura della
-// pagina, il numero di slot urgenti è cambiato rispetto a quando è stato
-// chiuso l'ultima volta (altrimenti resterebbe muto per sempre su nuove
-// urgenze comparse dopo la chiusura)
-function AlertScadenzeModelle({ numeroSlot, numeroCorsi, giorni }) {
-  const chiaveVisto = `edc_alert_modelle_${numeroSlot}_${numeroCorsi}_${giorni}`;
-  const [chiuso, setChiuso] = useState(() => sessionStorage.getItem(chiaveVisto) === "1");
-  if (chiuso || numeroSlot === 0) return null;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, background: "#FDECEC", border: "1px solid #F5C6C0", borderRadius: 14, padding: "14px 18px", marginBottom: 18 }}>
-      <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#C0392B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 9v4" /><path d="M12 17h.01" />
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-        </svg>
-      </span>
-      <div style={{ flex: 1, ...fontBody, fontSize: 14, color: "#7A2C1E" }}>
-        <strong>{numeroSlot} modell{numeroSlot === 1 ? "a" : "e"} ancora da trovare</strong> per {numeroCorsi} corso{numeroCorsi === 1 ? "" : "i"} in partenza entro {giorni} giorni.
-      </div>
-      <Button variant="ghost" style={{ borderColor: "#C0392B", color: "#C0392B", flexShrink: 0 }} onClick={() => { sessionStorage.setItem(chiaveVisto, "1"); setChiuso(true); }}>
-        Visualizzato
-      </Button>
-    </div>
-  );
-}
-
 // ordine fisso dei trattamenti nelle colonne di "Modelle necessarie":
 // sopracciglia sempre per prima, poi labbra, poi eyeliner — qualunque altro
 // trattamento (needling, laminazione, microblading...) segue in ordine
@@ -10149,7 +10122,6 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
 
   return (
     <div>
-      <AlertScadenzeModelle numeroSlot={edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0)} numeroCorsi={edizioniPrioritarie.length} giorni={scadenzaGiorni} />
 
       <div style={{ display: "flex", gap: isMobile ? 6 : 14, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: 18 }}>
         <CardStatisticaModelle compatto={isMobile}
@@ -10172,23 +10144,30 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         />
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-        <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca città, corso, master o tipologia…" style={{ flex: "2 1 260px" }} />
-        <select style={{ ...inputStyle, flex: "1 1 150px" }} value={filtroCitta} onChange={(e) => setFiltroCitta(e.target.value)}>
+      {/* La ricerca a parole ha la sua riga, e sotto i quattro filtri stanno
+          tutti in linea: sono quattro tendine che si leggono insieme —
+          dove, che tipo, entro quando, in che ordine — e mescolarle con un
+          campo di testo largo le mandava a capo in ordine sparso a seconda
+          della larghezza della finestra. */}
+      <div style={{ marginBottom: 8 }}>
+        <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca città, corso, master o tipologia…" />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 18 }}>
+        <select style={{ ...inputStyle, minWidth: 0, fontSize: isMobile ? 11 : 13, padding: isMobile ? "8px 6px" : undefined }} value={filtroCitta} onChange={(e) => setFiltroCitta(e.target.value)}>
           <option value="">Tutte le città</option>
           {cittaPresenti.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
         </select>
-        <select style={{ ...inputStyle, flex: "1 1 150px" }} value={filtroTipologia} onChange={(e) => setFiltroTipologia(e.target.value)}>
+        <select style={{ ...inputStyle, minWidth: 0, fontSize: isMobile ? 11 : 13, padding: isMobile ? "8px 6px" : undefined }} value={filtroTipologia} onChange={(e) => setFiltroTipologia(e.target.value)}>
           <option value="">Tutte le tipologie</option>
           {tipologiePresenti.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select style={{ ...inputStyle, flex: "1 1 150px" }} value={scadenzaGiorni} onChange={(e) => setScadenzaGiorni(Number(e.target.value))}>
+        <select style={{ ...inputStyle, minWidth: 0, fontSize: isMobile ? 11 : 13, padding: isMobile ? "8px 6px" : undefined }} value={scadenzaGiorni} onChange={(e) => setScadenzaGiorni(Number(e.target.value))}>
           <option value={7}>Entro 7 giorni</option>
           <option value={15}>Entro 15 giorni</option>
           <option value={30}>Entro 30 giorni</option>
           <option value={90}>Entro 90 giorni</option>
         </select>
-        <select style={{ ...inputStyle, flex: "1 1 150px" }} value={ordine} onChange={(e) => setOrdine(e.target.value)}>
+        <select style={{ ...inputStyle, minWidth: 0, fontSize: isMobile ? 11 : 13, padding: isMobile ? "8px 6px" : undefined }} value={ordine} onChange={(e) => setOrdine(e.target.value)}>
           <option value="urgenza">Ordina: urgenza</option>
           <option value="richieste">Ordina: più da trovare</option>
         </select>
