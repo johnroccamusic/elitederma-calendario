@@ -15159,7 +15159,7 @@ function modellaTrovata(m) {
 // blur, non ad ogni tasto: altrimenti ogni carattere digitato scatenerebbe
 // un salvataggio e un ricaricamento dell'intera pagina, facendo perdere il
 // focus mentre si scrive
-function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo, reperitori }) {
+function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo, reperitori, compatta = false }) {
   const isMobile = useIsMobile();
   const [nome, setNome] = useState(modella.nome_modella || "");
   const [telefono, setTelefono] = useState(modella.telefono_modella || "");
@@ -15413,7 +15413,9 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
           {/* Le due tendine stanno SOTTO il nome, non sopra: si scelgono una
               volta all'inizio, mentre nome e telefono sono quello che si
               cerca e si aggiorna ogni giorno — e va in cima chi si guarda
-              piu' spesso. */}
+              piu' spesso. Con "Comprimi" spariscono, insieme ai posti
+              gemelli: restano turno, nome e numero. */}
+          {!compatta && (
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
             {opzioniTipo ? (
               <select
@@ -15454,7 +15456,8 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
               );
             })()}
           </div>
-          {spuntaGruppo}
+          )}
+          {!compatta && spuntaGruppo}
         </div>
       </div>
     </div>
@@ -19304,6 +19307,11 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   const [soloDaTrovare, setSoloDaTrovare] = useState(!!origineGestioneModelle);
   // quali giorni "solo modella del master" sono stati aperti a mano
   const [giorniModelleAperti, setGiorniModelleAperti] = useState({});
+  // "Comprimi": le righe modella restano turno, nome e numero. Con venti
+  // allievi e tre posti a testa la pagina e' lunga come un lenzuolo, e chi
+  // cerca le modelle ha bisogno di vedere chi manca — trattamento e
+  // "reperita da" li ha gia' scelti, e li riapre quando servono.
+  const [schedeCompatte, setSchedeCompatte] = useState(false);
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
@@ -22199,15 +22207,18 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         const testataAssegnaModelle = (
           // il triplo dello spazio sotto: sparite le tre righe di
           // istruzioni, il titolo era finito appiccicato al primo giorno
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+          <div style={{ marginBottom: 12 }}>
             {/* tre punti in piu' solo qui: hStyle e' il titolo di sezione di
                 tutta l'app, e alzarlo li' sposterebbe una ventina di
                 schermate che con questa non c'entrano niente */}
-            <div style={{ ...hStyle, fontSize: 23, margin: 0, textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Assegna modelle</div>
-            {/* fondo bianco invece che trasparente: il tasto sta sopra la
-                trama dorata dell'intestazione, e da li' il suo contorno
+            <div style={{ ...hStyle, fontSize: 23, margin: "0 0 10px", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5, textAlign: "center" }}>Assegna modelle</div>
+            {/* fondo bianco invece che trasparente: i tasti stanno sopra la
+                trama dorata dell'intestazione, e da li' il loro contorno
                 sottile spariva */}
-            <Button variant="ghost" style={{ background: "#fff", fontSize: 17 }} onClick={() => setSoloDaTrovare((v) => !v)}>{soloDaTrovare ? "Vedi tutta la classe" : "Vedi solo da trovare"}</Button>
+            <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+              <Button variant="ghost" style={{ background: "#fff", fontSize: 17 }} onClick={() => setSoloDaTrovare((v) => !v)}>{soloDaTrovare ? "Vedi tutta la classe" : "Vedi solo da trovare"}</Button>
+              <Button variant="ghost" style={{ background: "#fff", fontSize: 17 }} onClick={() => setSchedeCompatte((v) => !v)}>{schedeCompatte ? "Espandi" : "Comprimi"}</Button>
+            </div>
           </div>
         );
 
@@ -22243,6 +22254,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                       {i.tipi_modelle.map((m, idx) => (
                         <RigaModella
                           reperitori={reperitoriModelle}
+                          compatta={schedeCompatte}
                           key={idx}
                           modella={m}
                           primaRiga={idx === 0}
@@ -22335,6 +22347,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                       {modellaMaster.cercare_per_master && (
                         <RigaModella
                           reperitori={reperitoriModelle}
+                          compatta={schedeCompatte}
                           modella={{ ...modellaMaster, tipo: g.tipo_modella_master }}
                           primaRiga
                           onSalva={(campo, valore) => aggiornaModellaMaster(g.numero_giorno, campo, valore)}
@@ -22413,6 +22426,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                             {daMostrare.map(({ m: modellaVista, indice: indiceReale }, iPosto) => (
                               <RigaModella
                                 reperitori={reperitoriModelle}
+                                compatta={schedeCompatte}
                                 key={indiceReale ?? `nuovo-${iPosto}`}
                                 modella={modellaVista}
                                 primaRiga={iPosto === 0}
