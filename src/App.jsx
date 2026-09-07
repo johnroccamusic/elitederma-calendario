@@ -15349,10 +15349,10 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
             {telefono.trim() && (
               <>
                 <a href={`tel:${telefono.replace(/\s+/g, "")}`} title="Chiama" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0 }}>
-                  <IconaTelefono size={30} />
+                  <IconaTelefono size={24} />
                 </a>
                 <a href={`https://wa.me/${numeroWhatsapp(telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaWhatsapp size={30} />
+                  <IconaWhatsapp size={24} />
                 </a>
               </>
             )}
