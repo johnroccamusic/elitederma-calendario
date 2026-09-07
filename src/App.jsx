@@ -425,6 +425,36 @@ function IndicatoreZoom() {
   );
 }
 
+// La tastiera e' aperta?
+//
+// Su iOS la tastiera non restringe la pagina: restringe solo la parte
+// visibile (il "visual viewport"). Un elemento in position:fixed resta
+// ancorato alla pagina intera, quindi finisce a meta' schermo e da li'
+// sembra scorrere insieme al contenuto — e' il dock che "si sposta"
+// quando si scrive.
+//
+// Non esiste un modo diretto per chiedere al telefono se la tastiera e'
+// aperta: si guarda quanto e' rimasto visibile. Sotto l'85% dell'altezza
+// della finestra c'e' qualcosa che copre lo schermo, e quel qualcosa e'
+// la tastiera. Dove visualViewport non esiste (desktop vecchi) la
+// risposta e' sempre "no", ed e' quella giusta.
+function useTastieraAperta() {
+  const [aperta, setAperta] = useState(false);
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return undefined;
+    function controlla() { setAperta(vv.height < window.innerHeight * 0.85); }
+    controlla();
+    vv.addEventListener("resize", controlla);
+    vv.addEventListener("scroll", controlla);
+    return () => {
+      vv.removeEventListener("resize", controlla);
+      vv.removeEventListener("scroll", controlla);
+    };
+  }, []);
+  return aperta;
+}
+
 function useIsMobile(breakpoint = 700) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && larghezzaUtile() <= breakpoint);
   useEffect(() => {
@@ -50727,6 +50757,7 @@ export default function App() {
     try { return JSON.parse(sessionStorage.getItem("edc_utente") || "null"); } catch { return null; }
   });
   const isMobile = useIsMobile();
+  const tastieraAperta = useTastieraAperta();
   const appDaSchermataHome = useAppDaSchermataHome();
   const [view, setView] = useState("home");
   const [provenienzaVenditeShop, setProvenienzaVenditeShop] = useState("magazzinoshop");
@@ -52089,7 +52120,14 @@ export default function App() {
         </div>
       )}
 
-      {isMobile && (
+      {/* Mentre si scrive il dock sparisce. Su iOS un elemento fissato non
+          sa che la tastiera e' salita: resta ancorato alla pagina intera,
+          finisce a meta' schermo e da li' sembra scorrere insieme al
+          contenuto. Ancorarlo alla parte visibile lo metterebbe appiccicato
+          sopra la tastiera, addosso a quello che si sta scrivendo — e
+          mentre si compila un campo Home, Indietro e Avanti non servono a
+          nessuno. Torna da solo appena la tastiera si chiude. */}
+      {isMobile && !tastieraAperta && (
         // Il dock delle quattro azioni. Sta dentro un guscio che, quando una
         // pagina è disegnata coricata (CRM allievi da telefono dritto), si
         // corica insieme a lei: altrimenti resterebbe attaccato al bordo
