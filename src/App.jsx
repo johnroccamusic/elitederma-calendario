@@ -41343,14 +41343,52 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [spedCitofono, setSpedCitofono] = useState("");
   const [spedInterno, setSpedInterno] = useState("");
   const [spedCellulare, setSpedCellulare] = useState("");
-  // la fattura si chiede prima di compilare: i quattro campi che servono
-  // solo a lei restano nascosti finché non è spuntata, e diventano
-  // obbligatori appena lo è
-  const [spedRichiedeFattura, setSpedRichiedeFattura] = useState(false);
-  const [spedDitta, setSpedDitta] = useState("");
-  const [spedPiva, setSpedPiva] = useState("");
-  const [spedCodDest, setSpedCodDest] = useState("");
-  const [spedPec, setSpedPec] = useState("");
+  // La fattura non e' piu' un dettaglio della spedizione: si spedisce senza
+  // fatturare e si fattura senza spedire, e prima la si poteva chiedere
+  // solo dentro il modulo del corriere. Ora e' una casella sua, con i suoi
+  // campi, e la spedizione — quando c'e' — se li fa bastare.
+  const [fattAttiva, setFattAttiva] = useState(false);
+  const [fattClienteId, setFattClienteId] = useState("");
+  const [fattDitta, setFattDitta] = useState("");
+  const [fattNome, setFattNome] = useState("");
+  const [fattCognome, setFattCognome] = useState("");
+  const [fattPiva, setFattPiva] = useState("");
+  const [fattCf, setFattCf] = useState("");
+  const [fattCodDest, setFattCodDest] = useState("");
+  const [fattPec, setFattPec] = useState("");
+  const [fattIndirizzo, setFattIndirizzo] = useState("");
+  const [fattCivico, setFattCivico] = useState("");
+  const [fattCap, setFattCap] = useState("");
+  const [fattCitta, setFattCitta] = useState("");
+  const [fattProv, setFattProv] = useState("");
+  // quando si spedisce, l'indirizzo di fatturazione e' quasi sempre lo
+  // stesso della consegna: si copia da li' invece di farlo riscrivere
+  const [fattComeSpedizione, setFattComeSpedizione] = useState(true);
+
+  // L'anagrafica di chi ha gia' chiesto una fattura. Si legge qui e non
+  // dal caricamento generale dell'app: serve a una schermata sola, e
+  // trascinarla in giro per tutte le altre non aiuta nessuno.
+  const [clientiFattura, setClientiFattura] = useState([]);
+  async function caricaClientiFattura() {
+    const { data } = await supabase.from("clienti_fattura").select("*").order("aggiornato_il", { ascending: false });
+    setClientiFattura(data || []);
+  }
+  useEffect(() => { caricaClientiFattura(); }, []);
+  function etichettaCliente(c) {
+    const chi = c.ditta || `${c.cognome || ""} ${c.nome || ""}`.trim();
+    return `${chi || "Senza nome"}${c.piva ? ` · ${c.piva}` : ""}${c.citta ? ` · ${c.citta}` : ""}`;
+  }
+  function scegliCliente(id) {
+    setFattClienteId(id);
+    const c = clientiFattura.find((x) => x.id === id);
+    if (!c) return;
+    setFattDitta(c.ditta || ""); setFattNome(c.nome || ""); setFattCognome(c.cognome || "");
+    setFattPiva(c.piva || ""); setFattCf(c.codice_fiscale || "");
+    setFattCodDest(c.cod_dest || ""); setFattPec(c.pec || "");
+    setFattIndirizzo(c.indirizzo || ""); setFattCivico(c.civico || "");
+    setFattCap(c.cap || ""); setFattCitta(c.citta || ""); setFattProv((c.provincia || "").toUpperCase());
+    setFattComeSpedizione(false);
+  }
   const spedDestinatario = `${spedNome.trim()} ${spedCognome.trim()}`.trim();
   // quali caselle sono ancora vuote: serve sia a bloccare la conferma sia
   // a dire quali, invece del solo "completare i dati"
@@ -41360,11 +41398,38 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       [spedNome, "Nome"], [spedCognome, "Cognome"], [spedIndirizzo, "Indirizzo"], [spedCivico, "Civico"],
       [spedCap, "CAP"], [spedCitta, "Città"], [spedProvincia, "Provincia"], [spedCellulare, "Cellulare"],
     ].filter(([v]) => !String(v || "").trim()).map(([, etichetta]) => etichetta);
-    if (spedRichiedeFattura) {
-      mancanti.push(...[
-        [spedDitta, "Nome ditta"], [spedPiva, "P. IVA"], [spedCodDest, "Cod. Dest."], [spedPec, "PEC"],
-      ].filter(([v]) => !String(v || "").trim()).map(([, etichetta]) => etichetta));
-    }
+    return mancanti;
+  })();
+  // L'indirizzo di fatturazione: quello scritto, o quello della spedizione
+  // se si e' detto che coincidono. Un posto solo da leggere, cosi' il
+  // controllo e il salvataggio non possono guardare cose diverse.
+  const copiaDaSpedizione = fattAttiva && spedizioneAttiva && fattComeSpedizione;
+  const fatturaFinale = {
+    ditta: fattDitta.trim(),
+    nome: (copiaDaSpedizione ? spedNome : fattNome).trim(),
+    cognome: (copiaDaSpedizione ? spedCognome : fattCognome).trim(),
+    piva: fattPiva.trim(),
+    codice_fiscale: fattCf.trim().toUpperCase(),
+    cod_dest: fattCodDest.trim().toUpperCase(),
+    pec: fattPec.trim(),
+    indirizzo: (copiaDaSpedizione ? spedIndirizzo : fattIndirizzo).trim(),
+    civico: (copiaDaSpedizione ? spedCivico : fattCivico).trim(),
+    cap: (copiaDaSpedizione ? spedCap : fattCap).trim(),
+    citta: (copiaDaSpedizione ? spedCitta : fattCitta).trim(),
+    provincia: (copiaDaSpedizione ? spedProvincia : fattProv).trim().toUpperCase(),
+  };
+  // Cosa manca per poterla emettere. Non si chiede tutto a tutti: una
+  // ditta ha la P.IVA, un privato il codice fiscale, e la fattura arriva
+  // per codice destinatario OPPURE per PEC — chiederli tutti e due
+  // vorrebbe dire bloccare chi ne ha uno solo, che e' la maggioranza.
+  const campiFatturaMancanti = (() => {
+    if (!fattAttiva) return [];
+    const mancanti = [];
+    if (!fatturaFinale.ditta && !(fatturaFinale.nome && fatturaFinale.cognome)) mancanti.push("Ditta oppure nome e cognome");
+    if (!fatturaFinale.piva && !fatturaFinale.codice_fiscale) mancanti.push("P. IVA oppure codice fiscale");
+    if (!fatturaFinale.cod_dest && !fatturaFinale.pec) mancanti.push("Cod. Dest. oppure PEC");
+    [[fatturaFinale.indirizzo, "Indirizzo"], [fatturaFinale.cap, "CAP"], [fatturaFinale.citta, "Città"], [fatturaFinale.provincia, "Provincia"]]
+      .forEach(([v, etichetta]) => { if (!v) mancanti.push(etichetta); });
     return mancanti;
   })();
   const iscrittiCorsoPos = corsoPosSel ? (iscritti || []).filter((i) => i.corso_data_id === corsoPosSel.id) : [];
@@ -41384,11 +41449,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       setSpedProvincia((isc.fattura_prov || "").toUpperCase());
       setSpedCellulare(isc.telefono || "");
       if (isc.richiede_fattura) {
-        setSpedRichiedeFattura(true);
-        setSpedDitta(isc.fattura_ditta || "");
-        setSpedPiva(isc.fattura_piva || "");
-        setSpedCodDest(isc.fattura_cod_dest || "");
-        setSpedPec(isc.fattura_pec || "");
+        setFattAttiva(true);
+        setFattDitta(isc.fattura_ditta || "");
+        setFattPiva(isc.fattura_piva || "");
+        setFattCodDest(isc.fattura_cod_dest || "");
+        setFattPec(isc.fattura_pec || "");
+        setFattIndirizzo(isc.fattura_indirizzo || "");
+        setFattCivico(isc.fattura_civico || "");
+        setFattCap(isc.fattura_cap || "");
+        setFattCitta(isc.fattura_citta || "");
+        setFattProv((isc.fattura_prov || "").toUpperCase());
+        setFattComeSpedizione(false);
       }
     }
   }
@@ -41501,7 +41572,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setSpedizioneAttiva(false); setSpedIscrittoId("");
     setSpedNome(""); setSpedCognome(""); setSpedIndirizzo(""); setSpedCivico(""); setSpedCitta(""); setSpedCap(""); setSpedProvincia("");
     setSpedCitofono(""); setSpedInterno(""); setSpedCellulare("");
-    setSpedRichiedeFattura(false); setSpedDitta(""); setSpedPiva(""); setSpedCodDest(""); setSpedPec("");
+    setFattAttiva(false); setFattClienteId(""); setFattComeSpedizione(true);
+    setFattDitta(""); setFattNome(""); setFattCognome(""); setFattPiva(""); setFattCf("");
+    setFattCodDest(""); setFattPec(""); setFattIndirizzo(""); setFattCivico(""); setFattCap(""); setFattCitta(""); setFattProv("");
     setOmaggioAttivo(false);
     setPrelevatoDaiKit(false);
     // la simulazione non si spegne da sola: chi prova fa piu' prove di
@@ -41525,6 +41598,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return; }
     if (!operatore) { setMsg("Nessun operatore identificato: esci e rientra con il tuo account prima di vendere."); return; }
     if (omaggioAttivo && !note.trim()) { setMsg("Scrivi una nota per motivare l'omaggio: è obbligatoria."); return; }
+    if (campiFatturaMancanti.length > 0) { setMsg(`Per la fattura manca: ${campiFatturaMancanti.join(", ")}.`); return; }
     if (campiClienteMancanti.length > 0) { setMsg(`Completare i dati cliente: ${campiClienteMancanti.join(", ")}.`); return; }
     // scarico in due tempi: prima si verifica TUTTO il carrello (magazzino
     // fisico, poi shop online fino alla scorta minima — vedi
@@ -41576,6 +41650,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       simulazione: puoSimulare && simulazione,
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
+      richiede_fattura: fattAttiva,
     };
     const datiSpedizione = spedizioneAttiva ? {
       simulazione: puoSimulare && simulazione,
@@ -41592,19 +41667,54 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       citofono: spedCitofono.trim() || null,
       interno: spedInterno.trim() || null,
       cellulare: spedCellulare.trim() || null,
-      richiede_fattura: spedRichiedeFattura,
-      fattura_ditta: spedRichiedeFattura ? spedDitta.trim() : null,
-      fattura_piva: spedRichiedeFattura ? spedPiva.trim() : null,
-      fattura_cod_dest: spedRichiedeFattura ? spedCodDest.trim() : null,
-      fattura_pec: spedRichiedeFattura ? spedPec.trim() : null,
+      richiede_fattura: fattAttiva,
+      fattura_ditta: fattAttiva ? (fatturaFinale.ditta || null) : null,
+      fattura_piva: fattAttiva ? (fatturaFinale.piva || null) : null,
+      fattura_cod_dest: fattAttiva ? (fatturaFinale.cod_dest || null) : null,
+      fattura_pec: fattAttiva ? (fatturaFinale.pec || null) : null,
       prodotti: prodottiRiga,
     } : null;
     const nomeOperatore = operatore?.nome || null;
     const etichettaEsito = (puoSimulare && simulazione) ? "PROVA registrata (nessun incasso, nessuno scarico)"
       : omaggioAttivo ? "Omaggio registrato" : "Vendita registrata";
 
+    // Il cliente della fattura entra (o si aggiorna) in anagrafica prima
+    // che parta la vendita: e' quello che evita di riscrivere tutto la
+    // prossima volta, e l'id serve alla riga della vendita.
+    //
+    // Lo si riconosce dalla partita IVA, o dal codice fiscale se non ce
+    // l'ha: sono gli unici due dati che identificano davvero qualcuno.
+    // Senza nessuno dei due si crea una scheda nuova — meglio un doppione
+    // che sovrascrivere i dati di un omonimo.
+    let clienteFatturaId = fattClienteId || null;
+    if (fattAttiva) {
+      const daSalvare = {
+        ditta: fatturaFinale.ditta || null, nome: fatturaFinale.nome || null, cognome: fatturaFinale.cognome || null,
+        piva: fatturaFinale.piva || null, codice_fiscale: fatturaFinale.codice_fiscale || null,
+        cod_dest: fatturaFinale.cod_dest || null, pec: fatturaFinale.pec || null,
+        indirizzo: fatturaFinale.indirizzo || null, civico: fatturaFinale.civico || null,
+        cap: fatturaFinale.cap || null, citta: fatturaFinale.citta || null, provincia: fatturaFinale.provincia || null,
+        aggiornato_il: new Date().toISOString(),
+      };
+      const gia = clienteFatturaId
+        ? { id: clienteFatturaId }
+        : clientiFattura.find((c) => (daSalvare.piva && (c.piva || "").trim() === daSalvare.piva)
+            || (!daSalvare.piva && daSalvare.codice_fiscale && (c.codice_fiscale || "").trim().toUpperCase() === daSalvare.codice_fiscale));
+      if (gia) {
+        await supabase.from("clienti_fattura").update(daSalvare).eq("id", gia.id);
+        clienteFatturaId = gia.id;
+      } else {
+        const { data: creato } = await supabase.from("clienti_fattura").insert(daSalvare).select("id").single();
+        clienteFatturaId = creato?.id || null;
+      }
+      datiVendita.cliente_fattura_id = clienteFatturaId;
+      caricaClientiFattura();
+    }
+
     nuovaVendita();
-    setMsg(datiSpedizione ? `${etichettaEsito} e spedizione inviata a Raf.` : `${etichettaEsito}.`);
+    setMsg(datiSpedizione
+      ? `${etichettaEsito} e spedizione inviata a Raf.${fattAttiva ? " Fattura da emettere." : ""}`
+      : `${etichettaEsito}.${fattAttiva ? " Fattura da emettere." : ""}`);
 
     (async () => {
       if (pianiVendita.length > 0) {
@@ -41939,24 +42049,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <Field label="Cellulare"><input style={inputStyle} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 8px" }}>
-            <input id="pos-fattura" type="checkbox" checked={spedRichiedeFattura} onChange={(e) => setSpedRichiedeFattura(e.target.checked)} style={{ width: 16, height: 16 }} />
-            <label htmlFor="pos-fattura" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Richiede fattura</label>
-          </div>
-          {spedRichiedeFattura && (
-            <>
-              <div style={{ marginBottom: 8 }}>
-                <Field label="Nome ditta"><input style={inputStyle} value={spedDitta} onChange={(e) => setSpedDitta(e.target.value)} /></Field>
-              </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <div style={{ flex: 1 }}><Field label="P. IVA"><input style={inputStyle} value={spedPiva} onChange={(e) => setSpedPiva(e.target.value)} /></Field></div>
-                <div style={{ flex: 1 }}><Field label="Cod. Dest."><input style={{ ...inputStyle, textTransform: "uppercase" }} value={spedCodDest} onChange={(e) => setSpedCodDest(e.target.value.toUpperCase())} /></Field></div>
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <Field label="PEC"><input style={inputStyle} inputMode="email" value={spedPec} onChange={(e) => setSpedPec(e.target.value)} /></Field>
-              </div>
-            </>
-          )}
+
 
           {campiClienteMancanti.length > 0 && (
             <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 6 }}>
@@ -41964,6 +42057,79 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             </div>
           )}
           <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Genera un ordine di spedizione visibile in Logistica prodotti → Ordini in arrivo.</div>
+        </div>
+      )}
+
+      {/* La fattura sta accanto alla spedizione, non dentro: sono due cose
+          indipendenti — si spedisce senza fatturare e si fattura senza
+          spedire. Prima l'unico modo per chiederla era aprire il modulo del
+          corriere, quindi chi comprava di persona non aveva dove dirlo. */}
+      <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: "pointer", marginBottom: fattAttiva ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
+        <input id="pos-richiede-fattura" type="checkbox" checked={fattAttiva} onChange={(e) => setFattAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
+        <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <IconaCatDocumento size={17} color={GOLD} />
+        </span>
+        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Richiede fattura</span>
+      </label>
+      {fattAttiva && (
+        <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
+          {/* Il modo per non riscrivere cento volte le stesse undici cifre:
+              chi ha gia' chiesto una fattura resta in anagrafica e la
+              seconda volta si sceglie da qui. */}
+          {clientiFattura.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <Field label="Cliente già in anagrafica">
+                <select style={inputStyle} value={fattClienteId} onChange={(e) => (e.target.value ? scegliCliente(e.target.value) : setFattClienteId(""))}>
+                  <option value="">— nuovo cliente, compila sotto —</option>
+                  {clientiFattura.map((c) => <option key={c.id} value={c.id}>{etichettaCliente(c)}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
+          <div style={{ marginBottom: 8 }}>
+            <Field label="Ditta (vuoto se è un privato)"><input style={inputStyle} value={fattDitta} onChange={(e) => setFattDitta(e.target.value)} /></Field>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1 }}><Field label="P. IVA"><input style={inputStyle} value={fattPiva} onChange={(e) => setFattPiva(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="Codice fiscale"><input style={{ ...inputStyle, textTransform: "uppercase" }} value={fattCf} onChange={(e) => setFattCf(e.target.value.toUpperCase())} /></Field></div>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Cod. Dest."><input style={{ ...inputStyle, textTransform: "uppercase" }} value={fattCodDest} onChange={(e) => setFattCodDest(e.target.value.toUpperCase())} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="PEC"><input style={inputStyle} inputMode="email" value={fattPec} onChange={(e) => setFattPec(e.target.value)} /></Field></div>
+          </div>
+          {/* con la spedizione attiva l'indirizzo di fatturazione e' quasi
+              sempre lo stesso della consegna: si copia invece di riscriverlo */}
+          {spedizioneAttiva && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={fattComeSpedizione} onChange={(e) => setFattComeSpedizione(e.target.checked)} style={{ width: 15, height: 15 }} />
+              <span style={{ ...fontBody, fontSize: 12, color: NAVY }}>Stessi dati della spedizione</span>
+            </label>
+          )}
+          {!copiaDaSpedizione && (
+            <>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <div style={{ flex: 1 }}><Field label="Nome"><input style={inputStyle} value={fattNome} onChange={(e) => setFattNome(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field label="Cognome"><input style={inputStyle} value={fattCognome} onChange={(e) => setFattCognome(e.target.value)} /></Field></div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <div style={{ flex: 1 }}><Field label="Indirizzo"><input style={inputStyle} value={fattIndirizzo} onChange={(e) => setFattIndirizzo(e.target.value)} /></Field></div>
+                <div style={{ width: 90 }}><Field label="Civico"><input style={inputStyle} value={fattCivico} onChange={(e) => setFattCivico(e.target.value)} /></Field></div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 90 }}><Field label="CAP"><input style={inputStyle} value={fattCap} onChange={(e) => setFattCap(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={fattCitta} onChange={(e) => setFattCitta(e.target.value)} /></Field></div>
+                <div style={{ width: 74 }}><Field label="Prov."><input style={{ ...inputStyle, textTransform: "uppercase" }} maxLength={2} value={fattProv} onChange={(e) => setFattProv(e.target.value.toUpperCase())} /></Field></div>
+              </div>
+            </>
+          )}
+          {campiFatturaMancanti.length > 0 && (
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 6 }}>
+              Per la fattura manca: {campiFatturaMancanti.join(", ")}.
+            </div>
+          )}
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>
+            Alla conferma il cliente finisce in anagrafica: la prossima volta lo scegli dalla tendina qui sopra.
+          </div>
         </div>
       )}
 
