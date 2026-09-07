@@ -22273,11 +22273,14 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
           // il triplo dello spazio sotto: sparite le tre righe di
           // istruzioni, il titolo era finito appiccicato al primo giorno
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-            <div style={{ ...hStyle, margin: 0, textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Assegna modelle</div>
+            {/* tre punti in piu' solo qui: hStyle e' il titolo di sezione di
+                tutta l'app, e alzarlo li' sposterebbe una ventina di
+                schermate che con questa non c'entrano niente */}
+            <div style={{ ...hStyle, fontSize: 23, margin: 0, textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Assegna modelle</div>
             {/* fondo bianco invece che trasparente: il tasto sta sopra la
                 trama dorata dell'intestazione, e da li' il suo contorno
                 sottile spariva */}
-            <Button variant="ghost" style={{ background: "#fff" }} onClick={() => setSoloDaTrovare((v) => !v)}>{soloDaTrovare ? "Vedi tutta la classe" : "Vedi solo da trovare"}</Button>
+            <Button variant="ghost" style={{ background: "#fff", fontSize: 17 }} onClick={() => setSoloDaTrovare((v) => !v)}>{soloDaTrovare ? "Vedi tutta la classe" : "Vedi solo da trovare"}</Button>
           </div>
         );
 
