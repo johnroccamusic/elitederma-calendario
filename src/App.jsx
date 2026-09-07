@@ -23542,7 +23542,28 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
   const [msg, setMsg] = useState("");
   const [mostraNuovo, setMostraNuovo] = useState(false);
 
-  const incaricabili = incaricabiliProgetti(utentiApp, master, venditori);
+  // Gli assegnabili si leggono qui, non si aspettano da fuori. Le tre
+  // anagrafiche arrivano alla pagina come props, ma quelle props sono
+  // riempite dal caricamento generale dell'app: se una delle tre non e'
+  // ancora arrivata, o e' vecchia di una sessione, la tendina resta corta
+  // e sembra che il permesso non sia stato dato. Chiedendole qui l'elenco
+  // e' quello di adesso, sempre.
+  const [incaricabiliLetti, setIncaricabiliLetti] = useState(null);
+  useEffect(() => {
+    let annullato = false;
+    Promise.all([
+      supabase.from("utenti_app").select("id, nome, permessi"),
+      supabase.from("master").select("id, nome, permessi"),
+      supabase.from("venditori").select("id, nome, permessi"),
+    ]).then(([u, m, v]) => {
+      if (annullato) return;
+      setIncaricabiliLetti(incaricabiliProgetti(u.data, m.data, v.data));
+    });
+    return () => { annullato = true; };
+  }, []);
+  // finche' la lettura non e' tornata si usa quello che c'e' in memoria:
+  // meglio una tendina provvisoria che una vuota
+  const incaricabili = incaricabiliLetti || incaricabiliProgetti(utentiApp, master, venditori);
 
   async function carica() {
     const { data, error } = await supabase.from("progetti").select("*").order("creato_il", { ascending: false });
