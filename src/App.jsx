@@ -15305,7 +15305,6 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   // primo — ed e' cosi' che il nome inserito la mattina spariva la sera
   const daSalvare = nome !== (modella.nome_modella || "") || telefono !== (modella.telefono_modella || "");
   const trovata = modellaTrovata(modella);
-  const sfondoTrovata = { background: VERDE_TROVATA, borderColor: "#BFE3C8" };
   // si legge direttamente dai due campi, non solo dallo stato di React:
   // sulle tastiere di Android la parola in corso di composizione (con
   // correttore e suggerimenti) puo' non essere ancora arrivata a React
@@ -15440,17 +15439,13 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
 
         <div style={{ flex: "1 1 0", minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {/* nome e telefono su verde chiaro quando la modella c'e':
-                scorrendo un elenco lungo si vede quali posti sono coperti
-                senza leggere una riga — il "Trovata" scritto accanto lo
-                dice solo a chi ci arriva con l'occhio */}
             <input
               ref={rifNome}
               placeholder="Nome Cognome"
               value={nome}
               onFocus={() => setInModifica(true)}
               onChange={(e) => setNome(e.target.value)}
-              style={{ ...inputStyle, flex: "2 1 150px", padding: "8px 10px", ...(trovata ? sfondoTrovata : null) }}
+              style={{ ...inputStyle, flex: "2 1 150px", padding: "8px 10px" }}
             />
             <input
               ref={rifTelefono}
@@ -15458,7 +15453,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
               value={telefono}
               onFocus={() => setInModifica(true)}
               onChange={(e) => setTelefono(e.target.value)}
-              style={{ ...inputStyle, flex: "1 1 110px", minWidth: 0, padding: "8px 10px", ...(trovata ? sfondoTrovata : null) }}
+              style={{ ...inputStyle, flex: "1 1 110px", minWidth: 0, padding: "8px 10px" }}
             />
             {telefono.trim() && (
               <>
@@ -22455,6 +22450,10 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                         const daMostrare = postiDelGiorno.length > 0
                           ? postiDelGiorno
                           : [{ m: { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" }, indice: null }];
+                        // coperto = ogni posto di questo giorno ha nome e
+                        // numero. Senza posti non e' "tutto coperto": e'
+                        // una richiesta che non c'e'
+                        const tuttiCoperti = postiDelGiorno.length > 0 && postiDelGiorno.every(({ m }) => modellaTrovata(m));
                         return (
                           // Ogni allievo dentro la sua cornice: un filo blu
                           // e gli angoli tondi. Prima erano separati da una
@@ -22463,13 +22462,18 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                           // cominciava l'altro. Chi porta la sua modella
                           // resta su fondo grigio: e' un allievo di cui non
                           // dobbiamo occuparci, e si deve vedere.
+                          // Verde chiaro quando tutti i posti di questo
+                          // allievo sono coperti: e' la scheda intera a
+                          // cambiare colore, non le caselle dentro. Cosi'
+                          // scorrendo l'elenco si vede a chi manca ancora
+                          // qualcuno senza leggere niente.
                           <div
                             key={i.id}
                             style={{
                               padding: 12,
                               marginBottom: ultimo ? 0 : 10,
-                              background: nostra ? "#fff" : "#F7F6F3",
-                              border: `1px solid ${nostra ? NAVY : CREAM_BORDER}`,
+                              background: !nostra ? "#F7F6F3" : (tuttiCoperti ? VERDE_TROVATA : "#fff"),
+                              border: `1px solid ${nostra ? (tuttiCoperti ? "#BFE3C8" : NAVY) : CREAM_BORDER}`,
                               borderRadius: 14,
                             }}
                           >
