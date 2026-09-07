@@ -19318,6 +19318,8 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // da Gestione Modelle si parte vedendo solo chi ha ancora bisogno di una
   // modella da trovare — poi si può sempre alternare con il tasto apposito
   const [soloDaTrovare, setSoloDaTrovare] = useState(!!origineGestioneModelle);
+  // quali giorni "solo modella del master" sono stati aperti a mano
+  const [giorniModelleAperti, setGiorniModelleAperti] = useState({});
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
@@ -22284,16 +22286,42 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
               // elencata qui come se avesse bisogno di una modella oggi
               const iscrittiDelGiorno = listaIscrittiVisibile.filter((i) => presenteIlGiorno(i.giorni_presenza, g.numero_giorno));
 
+              // I giorni in cui serve solo la modella del master nascono
+              // chiusi: quasi sempre la master la sua modella se la porta,
+              // e quella riga resta una casella non spuntata che occupa
+              // mezza schermata fra un giorno di lavoro e l'altro. Si
+              // aprono con la freccetta quando serve davvero cercarla.
+              const soloMaster = g.richiede_modella_master && !g.richiede_modelle_allievi;
+              // se la ricerca per master e' gia' stata chiesta il giorno
+              // resta aperto: li' c'e' del lavoro da fare, non un vuoto
+              const apertoDiSuo = !soloMaster || !!modellaMaster.cercare_per_master;
+              const aperto = apertoDiSuo || !!giorniModelleAperti[g.id];
               return (
-                <div key={g.id} style={{ ...cardStyle, padding: 18 }}>
+                <div key={g.id} style={{ ...cardStyle, padding: aperto ? 18 : "10px 18px" }}>
                   {/* Un titolo solo, grande: il giorno e il trattamento che
                       si cerca. Erano due righe — "Giorno 2" in grassetto e
                       sotto "ALLIEVI — SOPRACCIGLIA OMBRETTO" in grigio
                       piccolo — e la seconda diceva "Allievi" a una pagina
                       che parla solo di allievi. */}
-                  <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, marginBottom: 14 }}>
-                    Giorno {g.numero_giorno}{g.tipo_modella_allievi ? `: MODELLE ${g.tipo_modella_allievi.toUpperCase()}` : ""}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: aperto ? 14 : 0 }}>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, minWidth: 0, overflowWrap: "anywhere" }}>
+                      Giorno {g.numero_giorno}{g.tipo_modella_allievi ? `: MODELLE ${g.tipo_modella_allievi.toUpperCase()}` : ""}
+                    </div>
+                    {soloMaster && !apertoDiSuo && (
+                      <button
+                        type="button"
+                        onClick={() => setGiorniModelleAperti((m) => ({ ...m, [g.id]: !m[g.id] }))}
+                        title={aperto ? "Chiudi" : "Solo la modella del master: apri se va cercata"}
+                        style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0 }}
+                      >
+                        {aperto ? "chiudi" : "solo modella del master"}
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: aperto ? "rotate(180deg)" : "none" }}>
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
+                  {aperto && (<>
 
                   {g.richiede_modella_master && (
                     <div style={{ marginBottom: g.richiede_modelle_allievi ? 16 : 0 }}>
@@ -22394,6 +22422,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                       })}
                     </div>
                   )}
+                  </>)}
                 </div>
               );
             })}
