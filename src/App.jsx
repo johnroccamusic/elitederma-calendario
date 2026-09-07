@@ -53,6 +53,10 @@ const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle sc
 const MUTED = "#8B8FA3";
 const GRAFITE = "#54585F";
 const GOLD = "#C9A26D"; // accento per icone/badge (es. intestazione Contabilità classe)
+// grigio freddo delle due tendine sotto nome e telefono in "Assegna
+// modelle": stanno sotto due campi bianchi, e un fondo crema le faceva
+// sembrare parte dell'intestazione invece che due caselle da compilare
+const GRIGIO_TENDINA_MODELLA = "#DCDFE6";
 
 const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
@@ -15378,7 +15382,9 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
             {opzioniTipo ? (
               <select
-                style={{ ...inputStyle, fontSize: 12, fontWeight: 600, flex: "1 1 180px", maxWidth: 260, padding: "6px 8px", background: BG_CHIARO }}
+                // stessa larghezza del campo Nome qui sopra, cosi' le due
+                // righe si incolonnano invece di sfalsarsi
+                style={{ ...inputStyle, fontSize: 8.5, fontWeight: 700, letterSpacing: 0.2, flex: "2 1 150px", padding: "6px 8px", background: GRIGIO_TENDINA_MODELLA, border: `1px solid ${GRIGIO_TENDINA_MODELLA}` }}
                 value={modella.tipo || ""}
                 onChange={(e) => onSalva("tipo", e.target.value)}
               >
@@ -15402,7 +15408,8 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
               return (
                 <select
                   title="Chi ha trovato questa modella"
-                  style={{ ...inputStyle, fontSize: 11.5, fontWeight: 600, flex: "1 1 150px", maxWidth: 210, padding: "6px 8px", background: BG_CHIARO, color: scelto ? NAVY : MUTED }}
+                  // e questa quella del campo Tel.
+                  style={{ ...inputStyle, fontSize: 8.5, fontWeight: 700, letterSpacing: 0.2, flex: "1 1 110px", minWidth: 0, padding: "6px 8px", background: GRIGIO_TENDINA_MODELLA, border: `1px solid ${GRIGIO_TENDINA_MODELLA}`, color: scelto ? NAVY : MUTED }}
                   value={scelto}
                   onChange={(e) => onSalva(campiReperimento(voci.find((r) => `${r.tipo}:${r.id}` === e.target.value)))}
                 >
