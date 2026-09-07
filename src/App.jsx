@@ -9529,7 +9529,7 @@ function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, cors
     };
     const giorniCorso = (giorniByCorso[cd.corso_id] || []).slice().sort((a, b) => a.numero_giorno - b.numero_giorno);
     const giorniRilevanti = giorniCorso.filter((g) => g.richiede_modella_master || g.richiede_modelle_allievi);
-    const giornoRipiego = giorniCorso.filter((g) => g.richiede_modelle_allievi)[0]?.numero_giorno ?? null;
+    const giorniAllieviTemplate = giorniCorso.filter((g) => g.richiede_modelle_allievi);
     const iscrittiCd = iscritti.filter((i) => i.corso_data_id === cd.id);
 
     if (giorniRilevanti.length > 0) {
@@ -9547,8 +9547,12 @@ function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, cors
         if (g.richiede_modelle_allievi) {
           iscrittiCd.forEach((i) => {
             if (!i.richiede_modelle) return; // SUA: se la porta l'allieva, non è un "fabbisogno" nostro
+            // stessa regola di "Assegna modelle": i posti senza giorno e
+            // senza trattamento si distribuiscono uno per giorno, invece
+            // di finire tutti sul primo con lo stesso nome di trattamento
+            const giorniDeiPosti = giorniDeiPostiModella(i.tipi_modelle, giorniAllieviTemplate);
             (Array.isArray(i.tipi_modelle) ? i.tipi_modelle : []).forEach((m, idx) => {
-              if ((m.giorno ?? giornoRipiego) !== g.numero_giorno) return;
+              if (giorniDeiPosti[idx] !== g.numero_giorno) return;
               slot.push({
                 ...base, id: `${cd.id}-allievo-${i.id}-${idx}`, ruolo: "allievo", numeroGiorno: g.numero_giorno,
                 tipo: m.tipo || g.tipo_modella_allievi || "?", allievoNome: `${i.nome} ${i.cognome}`,
@@ -9704,11 +9708,15 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   // classe quasi completa la scheda restava lunga uguale.
   const slotDaTrovare = edizione.slot.filter((s) => s.ruolo === "allievo" && !s.assegnata);
   const nomiAllievi = [];
+  // quante ne mancano per ogni coppia allievo/trattamento. Si contano, non
+  // si elencano: due posti dello stesso trattamento per la stessa persona
+  // sono due modelle da cercare, e mostrandone una sola le pastiglie non
+  // tornavano con il numero qui sopra
   const trattamentiPerAllievo = new Map();
   slotDaTrovare.forEach((s) => {
-    if (!trattamentiPerAllievo.has(s.allievoNome)) { trattamentiPerAllievo.set(s.allievoNome, []); nomiAllievi.push(s.allievoNome); }
-    const tipi = trattamentiPerAllievo.get(s.allievoNome);
-    if (!tipi.includes(s.tipo)) tipi.push(s.tipo);
+    if (!trattamentiPerAllievo.has(s.allievoNome)) { trattamentiPerAllievo.set(s.allievoNome, new Map()); nomiAllievi.push(s.allievoNome); }
+    const conti = trattamentiPerAllievo.get(s.allievoNome);
+    conti.set(s.tipo, (conti.get(s.tipo) || 0) + 1);
   });
   // colonne fisse per tipo di trattamento: sopracciglia, labbra, eyeliner,
   // poi il resto in ordine alfabetico
@@ -9732,11 +9740,19 @@ function RigaPrioritaModelle({ edizione, onApri }) {
         {nomiAllievi.map((nome) => (
           <React.Fragment key={nome}>
             <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{nome.toUpperCase()}</span>
-            {tipiPresenti.map((t) => (
-              <div key={t} style={{ minWidth: 0, textAlign: "center" }}>
-                {trattamentiPerAllievo.get(nome).includes(t) && <PallinoTipoModellaCompatto tipo={t} />}
-              </div>
-            ))}
+            {tipiPresenti.map((t) => {
+              const quante = trattamentiPerAllievo.get(nome).get(t) || 0;
+              return (
+                <div key={t} style={{ minWidth: 0, textAlign: "center" }}>
+                  {quante > 0 && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                      <PallinoTipoModellaCompatto tipo={t} />
+                      {quante > 1 && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY }}>×{quante}</span>}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </React.Fragment>
         ))}
       </div>
@@ -15170,6 +15186,39 @@ function normalizzaTipoModella(t) { return String(t || "").trim().toUpperCase();
 function campiModella(campo, valore) {
   return campo && typeof campo === "object" ? campo : { [campo]: valore };
 }
+// A quale giorno appartiene ogni posto modella di un allievo. Regola
+// unica, usata sia da "Assegna modelle" sia dal conteggio delle priorita':
+// applicandola in modo diverso le due pagine mostravano fabbisogni diversi
+// per la stessa classe — cinque da trovare in una, tre pastiglie
+// nell'altra.
+//
+// L'ordine: vince il giorno scritto sul posto, poi il trattamento (il
+// giorno che chiede LABBRA e' il giorno della modella labbra), e per
+// ultimo — chi ha chiesto tre modelle senza dire quali — si distribuiscono
+// in ordine, una per giorno.
+function giorniDeiPostiModella(tipiModelle, giorniAllievi) {
+  const posti = Array.isArray(tipiModelle) ? tipiModelle : [];
+  const ripiego = giorniAllievi[0]?.numero_giorno ?? null;
+  const primoPasso = posti.map((m) => {
+    if (m?.giorno != null && giorniAllievi.some((x) => x.numero_giorno === m.giorno)) return m.giorno;
+    const tipo = normalizzaTipoModella(m?.tipo);
+    if (tipo) {
+      const g = giorniAllievi.find((x) => normalizzaTipoModella(x.tipo_modella_allievi) === tipo);
+      if (g) return g.numero_giorno;
+    }
+    return undefined;
+  });
+  let quanti = 0;
+  return primoPasso.map((giorno) => {
+    if (giorno !== undefined) return giorno;
+    // se i posti chiesti sono piu' dei giorni disponibili, gli avanzi
+    // restano sull'ultimo: meglio in fondo che invisibili
+    const g = giorniAllievi[Math.min(quanti, giorniAllievi.length - 1)];
+    quanti += 1;
+    return g ? g.numero_giorno : ripiego;
+  });
+}
+
 // una modella e' trovata solo quando ci sono NOME e NUMERO: un nome senza
 // telefono non serve a niente — non la si puo' chiamare, e chi legge
 // l'elenco crederebbe che quel posto sia coperto
@@ -19585,15 +19634,19 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // Solo se il trattamento non corrisponde a nessun giorno del corso si
   // ripiega sul primo giorno con allievi: meglio nel posto sbagliato che
   // sparita.
-  // un posto e' "orfano" quando non sa dire a quale giorno appartiene: ne'
-  // un giorno scritto sopra, ne' un trattamento da cui dedurlo
-  function postoSenzaGiorno(m) {
-    if (m?.giorno != null && giorniAllieviCorso.some((x) => x.numero_giorno === m.giorno)) return false;
-    const tipo = normalizzaTipoModella(m?.tipo);
-    if (!tipo) return true;
-    return !giorniAllieviCorso.some((x) => normalizzaTipoModella(x.tipo_modella_allievi) === tipo);
-  }
   function giornoDelPostoModella(m, elenco) {
+    // la regola sta in giorniDeiPostiModella, in cima al file: qui si
+    // guarda solo dove e' finito QUESTO posto
+    if (Array.isArray(elenco) && giorniAllieviCorso.length > 0) {
+      const posizione = elenco.indexOf(m);
+      if (posizione >= 0) {
+        const giorni = giorniDeiPostiModella(elenco, giorniAllieviCorso);
+        if (giorni[posizione] != null) return giorni[posizione];
+      }
+    }
+    return giornoDelPostoModellaSenzaElenco(m);
+  }
+  function giornoDelPostoModellaSenzaElenco(m) {
     // il giorno scritto vale, ma solo se in quel giorno il corso prevede
     // davvero le modelle degli allievi: se il template e' cambiato dopo
     // l'iscrizione, quel giorno non viene disegnato e il posto sparirebbe
@@ -19611,13 +19664,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     //
     // Chi invece ha scritto il trattamento (Anna) non passa mai di qui: il
     // suo posto lo assegna il trattamento, ed e' giusto che vinca lui.
-    if (Array.isArray(elenco) && giorniAllieviCorso.length > 0) {
-      const orfani = elenco.filter(postoSenzaGiorno);
-      const posizione = orfani.indexOf(m);
-      // se i posti chiesti sono piu' dei giorni disponibili, gli avanzi
-      // restano sull'ultimo: meglio in fondo che invisibili
-      if (posizione >= 0) return giorniAllieviCorso[Math.min(posizione, giorniAllieviCorso.length - 1)].numero_giorno;
-    }
     return giornoDiRipiegoAllievi;
   }
   // tipi di modella selezionabili per QUESTO corso (da "Definisci corsi");
