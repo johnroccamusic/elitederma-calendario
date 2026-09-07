@@ -3567,9 +3567,44 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
     ? prezzoHotelPerData(hotelPrezzi, hotelPeriodi, hotelId, tipoStanza, checkIn || null)
     : null;
 
+  // Il conto notte per notte. Con le tariffe per giorno della settimana
+  // "notti x prezzo" non e' piu' il conto giusto: un soggiorno da mercoledi'
+  // a domenica attraversa tre fasce diverse, e moltiplicare per la tariffa
+  // del check-in sbaglia di decine di euro. Si guarda che giorno e' ogni
+  // notte e si somma quello che costa quella notte.
+  const nottiNumero = notti === "" ? null : Number(notti);
+  const contoNotti = useMemo(() => {
+    if (!hotelId || !tipoStanza || !checkIn || !nottiNumero || nottiNumero < 1) return null;
+    const righe = [];
+    let cash = 0;
+    let fattura = 0;
+    let conPrezzo = 0;
+    for (let i = 0; i < nottiNumero; i += 1) {
+      const giorno = addGiorni(checkIn, i);
+      const fascia = prezzoHotelPerData(hotelPrezzi, hotelPeriodi, hotelId, tipoStanza, giorno);
+      if (fascia) {
+        cash += Number(fascia.prezzo_cash) || 0;
+        fattura += Number(fascia.prezzo_fattura) || 0;
+        conPrezzo += 1;
+      }
+      righe.push({ giorno, fascia });
+    }
+    if (conPrezzo === 0) return null;
+    return { righe, cash: round2(cash), fattura: round2(fattura), conPrezzo, notti: nottiNumero };
+  }, [hotelId, tipoStanza, checkIn, nottiNumero, hotelPrezzi, hotelPeriodi]);
+  // finche' il listino sa rispondere, i due campi a notte diventano di sola
+  // lettura e mostrano la media: sono una media vera, non una tariffa, e
+  // lasciarli scrivibili farebbe credere che cambiarli cambi il totale
+  const dalListino = !!contoNotti;
+
   useEffect(() => {
     if (!hotelId) return;
     const h = (hotel || []).find((x) => x.id === hotelId);
+    if (contoNotti) {
+      setCostoNotteCash(String(round2(contoNotti.cash / contoNotti.notti)));
+      setCostoNotteBonifico(String(round2(contoNotti.fattura / contoNotti.notti)));
+      return;
+    }
     if (tipoStanza && prezzoListino) {
       setCostoNotteCash(prezzoListino.prezzo_cash != null ? String(prezzoListino.prezzo_cash) : "");
       setCostoNotteBonifico(prezzoListino.prezzo_fattura != null ? String(prezzoListino.prezzo_fattura) : "");
@@ -3581,16 +3616,23 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
     if (costoNotteCash === "" && h.costo_notte_cash != null) setCostoNotteCash(String(h.costo_notte_cash));
     if (costoNotteBonifico === "" && h.costo_notte_fattura != null) setCostoNotteBonifico(String(h.costo_notte_fattura));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hotelId, tipoStanza, checkIn]);
+  }, [hotelId, tipoStanza, checkIn, contoNotti]);
 
   async function salva() {
     setSalvando(true);
     const nottiNum = notti === "" ? null : Number(notti);
     const cashNum = costoNotteCash === "" ? null : parseNum(costoNotteCash);
     const bonificoNum = costoNotteBonifico === "" ? null : parseNum(costoNotteBonifico);
-    const aNotteNum = tipoPagamento === "cash" ? cashNum : bonificoNum;
-    const periodo = nottiNum != null && aNotteNum != null ? round2(nottiNum * aNotteNum) : null;
+    // I due totali del soggiorno. Con il listino sono la somma notte per
+    // notte; senza, restano notti x la tariffa scritta a mano. Si salvano
+    // tutti e due perche' il riepilogo deve poter spostare bonifico/cash
+    // senza rifare il conto — li' il listino e le date non ci sono.
+    const totaleCash = contoNotti ? contoNotti.cash : (nottiNum != null && cashNum != null ? round2(nottiNum * cashNum) : null);
+    const totaleBonifico = contoNotti ? contoNotti.fattura : (nottiNum != null && bonificoNum != null ? round2(nottiNum * bonificoNum) : null);
+    const periodo = tipoPagamento === "cash" ? totaleCash : totaleBonifico;
     const campi = {
+      pattuito_periodo_cash: totaleCash,
+      pattuito_periodo_bonifico: totaleBonifico,
       alloggio_id: hotelId || null,
       data_check_in: checkIn || null,
       tipo_stanza: tipoStanza || null,
@@ -3647,16 +3689,47 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
       )}
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
-          <Field label="Costo a notte Cash">
-            <input type="text" inputMode="decimal" style={inputStyle} value={costoNotteCash} onChange={(e) => setCostoNotteCash(e.target.value)} />
+          <Field label={dalListino ? "Media a notte Cash" : "Costo a notte Cash"}>
+            <input type="text" inputMode="decimal" readOnly={dalListino} title={dalListino ? "Media delle notti: il totale lo fa la somma, non questa cifra" : undefined}
+              style={dalListino ? { ...inputStyle, background: "#EFEFEF", color: MUTED } : inputStyle}
+              value={costoNotteCash} onChange={(e) => setCostoNotteCash(e.target.value)} />
           </Field>
         </div>
         <div style={{ flex: 1 }}>
-          <Field label="Costo a notte Bonifico">
-            <input type="text" inputMode="decimal" style={inputStyle} value={costoNotteBonifico} onChange={(e) => setCostoNotteBonifico(e.target.value)} />
+          <Field label={dalListino ? "Media a notte Bonifico" : "Costo a notte Bonifico"}>
+            <input type="text" inputMode="decimal" readOnly={dalListino} title={dalListino ? "Media delle notti: il totale lo fa la somma, non questa cifra" : undefined}
+              style={dalListino ? { ...inputStyle, background: "#EFEFEF", color: MUTED } : inputStyle}
+              value={costoNotteBonifico} onChange={(e) => setCostoNotteBonifico(e.target.value)} />
           </Field>
         </div>
       </div>
+      {/* il conto sotto gli occhi: quante notti, che giorno erano e quanto
+          costa ognuna. Un totale che non si puo' verificare non lo si
+          contesta nemmeno, e una tariffa sbagliata resta li' per mesi */}
+      {contoNotti && (
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 10, marginBottom: 12, background: "#FAF7F1" }}>
+          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+            Il conto, notte per notte
+          </div>
+          {contoNotti.righe.map((r) => (
+            <div key={r.giorno} style={{ display: "flex", justifyContent: "space-between", gap: 8, ...fontBody, fontSize: 12, color: r.fascia ? NAVY : "#C0392B", padding: "2px 0" }}>
+              <span>{GIORNI_SETTIMANA[(giornoSettimanaDi(r.giorno) || 1) - 1].breve} {fmtData(r.giorno)}{r.fascia?.nome ? ` · ${r.fascia.nome}` : ""}</span>
+              <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+                {r.fascia ? `${euroRiepilogo(r.fascia.prezzo_cash || 0)} / ${euroRiepilogo(r.fascia.prezzo_fattura || 0)}` : "nessuna tariffa"}
+              </span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 6, paddingTop: 6 }}>
+            <span>Totale {contoNotti.notti} nott{contoNotti.notti === 1 ? "e" : "i"} — cash / fattura</span>
+            <span style={{ whiteSpace: "nowrap" }}>{euroRiepilogo(contoNotti.cash)} / {euroRiepilogo(contoNotti.fattura)}</span>
+          </div>
+          {contoNotti.conPrezzo < contoNotti.notti && (
+            <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", marginTop: 6 }}>
+              {contoNotti.notti - contoNotti.conPrezzo} nott{contoNotti.notti - contoNotti.conPrezzo === 1 ? "e" : "i"} senza tariffa a listino: contano zero. Aggiungi la fascia mancante in Gestione Hotel.
+            </div>
+          )}
+        </div>
+      )}
       <Field label="Tipo di pagamento">
         <select style={inputStyle} value={tipoPagamento} onChange={(e) => { setTipoPagamento(e.target.value); if (e.target.value === "cash") setScadenza(""); }}>
           <option value="cash">Cash</option>
@@ -17857,8 +17930,8 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // Come per "Costo location", non è uno split libero: segue in blocco
   // la tendina "Tipo di pagamento" di quella riga.
   const righeAlloggioBase = [
-    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, nottiPrenotate: corsoData.notti_prenotate, aNotteCash: corsoData.pattuito_a_notte_cash, aNotteBonifico: corsoData.pattuito_a_notte_bonifico, tipoStanza: corsoData.tipo_stanza, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato, scadenza: corsoData.scadenza_pagamento_alloggio },
-    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, nottiPrenotate: d.notti_prenotate, aNotteCash: d.pattuito_a_notte_cash, aNotteBonifico: d.pattuito_a_notte_bonifico, tipoStanza: d.tipo_stanza, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato, scadenza: d.scadenza_pagamento_alloggio })),
+    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, periodoCash: corsoData.pattuito_periodo_cash, periodoBonifico: corsoData.pattuito_periodo_bonifico, nottiPrenotate: corsoData.notti_prenotate, aNotteCash: corsoData.pattuito_a_notte_cash, aNotteBonifico: corsoData.pattuito_a_notte_bonifico, tipoStanza: corsoData.tipo_stanza, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato, scadenza: corsoData.scadenza_pagamento_alloggio },
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, periodoCash: d.pattuito_periodo_cash, periodoBonifico: d.pattuito_periodo_bonifico, nottiPrenotate: d.notti_prenotate, aNotteCash: d.pattuito_a_notte_cash, aNotteBonifico: d.pattuito_a_notte_bonifico, tipoStanza: d.tipo_stanza, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato, scadenza: d.scadenza_pagamento_alloggio })),
   ];
   const righeAlloggioClasse = righeAlloggioBase
     .filter((r) => r.alloggioId && (r.pattuitoPeriodo || r.nottiPrenotate))
@@ -17907,6 +17980,11 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
         // "Gestisci alloggio": servono al riepilogo per rifare il conto
         // quando si sposta il pagamento da bonifico a cash e viceversa
         nottiPrenotate: r.nottiPrenotate ?? null, tariffaCash, tariffaBonifico,
+        // i totali del soggiorno gia' sommati notte per notte: se ci sono,
+        // spostare bonifico/cash e' scegliere fra due numeri gia' scritti,
+        // non rifare un conto che qui non si potrebbe rifare (il listino e
+        // le date delle notti in questa pagina non ci sono)
+        periodoCash: r.periodoCash ?? null, periodoBonifico: r.periodoBonifico ?? null,
         pattuitoPeriodo: r.pattuitoPeriodo ?? null };
     })
     .filter(Boolean);
@@ -18387,6 +18465,10 @@ function PannelloRiepilogoAmministrativo({
     // sono notti, l'importo resta com'e': un pattuito a corpo, concordato
     // a voce, non e' un conto da rifare — e riscriverlo in silenzio sarebbe
     // peggio che lasciarlo.
+    // prima si guarda se il totale del soggiorno per questo modo esiste
+    // gia': l'ha calcolato "Gestisci alloggio" sommando notte per notte, ed
+    // e' piu' giusto di qualunque moltiplicazione fatta qui
+    const totalePronto = tipo === "cash" ? r.periodoCash : r.periodoBonifico;
     const aNotte = tipo === "cash" ? r.tariffaCash : r.tariffaBonifico;
     const aNotteAltra = tipo === "cash" ? r.tariffaBonifico : r.tariffaCash;
     // Un hotel che ha una tariffa sola si fa pagare in un modo solo:
@@ -18394,18 +18476,22 @@ function PannelloRiepilogoAmministrativo({
     // Si rifiuta e si dice perche'. Se invece non c'e' nessuna delle due
     // tariffe siamo davanti a un pattuito a corpo, e quello si paga come si
     // vuole: il modo si cambia e l'importo resta.
-    if (aNotte == null && aNotteAltra != null) {
+    if (totalePronto == null && aNotte == null && aNotteAltra != null) {
       setMsg(`Tipo di pagamento non previsto: per questo hotel esiste solo la tariffa ${tipo === "cash" ? "a bonifico" : "in contanti"}. Aggiungila in Gestione Hotel se serve.`);
       return;
     }
-    const rifatto = r.nottiPrenotate != null && aNotte != null ? round2(r.nottiPrenotate * aNotte) : null;
+    const rifatto = totalePronto != null
+      ? round2(totalePronto)
+      : (r.nottiPrenotate != null && aNotte != null ? round2(r.nottiPrenotate * aNotte) : null);
     if (rifatto != null) campi.pattuito_periodo = rifatto;
 
     const { error } = await supabase.from(r.tabella).update(campi).eq("id", r.rigaId);
     if (error) { setMsg("Errore: " + error.message); return; }
-    setMsg(rifatto != null
-      ? `Alloggio ${tipo === "cash" ? "in contanti" : "a bonifico"}: ${r.nottiPrenotate} nott${r.nottiPrenotate === 1 ? "e" : "i"} × € ${aNotte} = € ${rifatto}.`
-      : "Pagamento spostato. L'importo resta quello pattuito: senza notti e tariffa a notte non c'è un conto da rifare.");
+    setMsg(rifatto == null
+      ? "Pagamento spostato. L'importo resta quello pattuito: senza notti e tariffa a notte non c'è un conto da rifare."
+      : totalePronto != null
+        ? `Alloggio ${tipo === "cash" ? "in contanti" : "a bonifico"}: ${euroRiepilogo(rifatto)}, somma delle ${r.nottiPrenotate ?? "—"} notti a listino.`
+        : `Alloggio ${tipo === "cash" ? "in contanti" : "a bonifico"}: ${r.nottiPrenotate} nott${r.nottiPrenotate === 1 ? "e" : "i"} × € ${aNotte} = € ${rifatto}.`);
     ricarica([r.tabella]);
   }
 
