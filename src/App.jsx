@@ -3425,7 +3425,10 @@ function Gate({ onOk }) {
   async function check() {
     setVerificando(true);
     const [{ data: utenti }, { data: masterRighe }, { data: venditoriRighe }] = await Promise.all([
-      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore"),
+      // le colonne si elencano una per una, quindi ogni permesso nuovo va
+      // aggiunto anche qui: "puo_omaggi" era stato dimenticato, e chi
+      // l'aveva spuntato entrava lo stesso senza poter fare omaggi
+      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore, puo_omaggi"),
       supabase.from("master").select("id, nome, password, permessi, venditore_id"),
       supabase.from("venditori").select("id, nome, password, permessi"),
     ]);
