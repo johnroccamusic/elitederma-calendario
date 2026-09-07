@@ -23550,10 +23550,10 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
             rows={2}
             value={noteIniziali}
             onChange={(e) => setNoteIniziali(e.target.value)}
-            style={{ ...inputStyle, resize: "vertical", fontSize: 12.5 }}
+            style={{ ...inputStyle, resize: "vertical", fontSize: 14.5 }}
           />
         ) : (
-          <div style={{ ...fontBody, fontSize: 12.5, color: progetto.note_iniziali ? NAVY : MUTED, whiteSpace: "pre-wrap", padding: "6px 0" }}>
+          <div style={{ ...fontBody, fontSize: 14.5, color: progetto.note_iniziali ? NAVY : MUTED, whiteSpace: "pre-wrap", padding: "6px 0" }}>
             {progetto.note_iniziali || "—"}
           </div>
         )}
@@ -23569,7 +23569,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
           onChange={(e) => setNoteSviluppo(e.target.value)}
           onBlur={() => { if (noteSviluppo !== (progetto.note_sviluppo || "")) onSalva({ note_sviluppo: noteSviluppo.trim() || null }); }}
           placeholder="Aggiornamenti di chi ci sta lavorando…"
-          style={{ ...inputStyle, resize: "vertical", fontSize: 12.5 }}
+          style={{ ...inputStyle, resize: "vertical", fontSize: 14.5 }}
         />
       </div>
 
@@ -23828,7 +23828,7 @@ function ModaleNuovoProgetto({ incaricabili, onClose, onCreato }) {
         </div>
       )}
       <Field label="Note iniziali">
-        <textarea rows={4} style={{ ...inputStyle, resize: "vertical" }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Di cosa si tratta, cosa serve, da dove si parte…" />
+        <textarea rows={4} style={{ ...inputStyle, resize: "vertical", fontSize: 14.5 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Di cosa si tratta, cosa serve, da dove si parte…" />
       </Field>
       {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
       <Button onClick={crea} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Creo…" : "Crea progetto"}</Button>
