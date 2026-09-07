@@ -22270,7 +22270,9 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
           </div>
         );
         const testataAssegnaModelle = (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
+          // il triplo dello spazio sotto: sparite le tre righe di
+          // istruzioni, il titolo era finito appiccicato al primo giorno
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
             <div style={{ ...hStyle, margin: 0, textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Assegna modelle</div>
             {/* fondo bianco invece che trasparente: il tasto sta sopra la
                 trama dorata dell'intestazione, e da li' il suo contorno
