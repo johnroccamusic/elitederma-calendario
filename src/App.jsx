@@ -23444,10 +23444,10 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
     // il lato sinistro spesso del colore della priorita', che si vede
     // scorrendo l'elenco senza dover leggere niente
     <div style={{
-      ...cardStyle, marginBottom: 14, padding: isMobile ? 14 : 18, opacity: archiviato ? 0.75 : 1,
+      ...cardStyle, marginBottom: 10, padding: isMobile ? 12 : 14, opacity: archiviato ? 0.75 : 1,
       border: `1px solid ${CREAM_BORDER}`, borderLeft: `6px solid ${pri.colore}`, borderRadius: 16,
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
         {inModifica ? (
           <input
             value={nome}
@@ -23475,7 +23475,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap", marginBottom: 10 }}>
         {inModifica ? (
           <select
             value={progetto.stato}
@@ -23543,34 +23543,42 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
         </div>
       </div>
 
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note iniziali</div>
-        {inModifica ? (
+      {/* le due note affiancate da scrivania: una sopra l'altra prendevano
+          mezza scheda per riga, e in un elenco di venti progetti quella
+          mezza scheda diventa una pagina intera */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note iniziali</div>
+          {inModifica ? (
+            <textarea
+              rows={2}
+              value={noteIniziali}
+              onChange={(e) => setNoteIniziali(e.target.value)}
+              style={{ ...inputStyle, resize: "vertical", fontSize: 14.5 }}
+            />
+          ) : (
+            // due righe e poi i puntini: l'apertura di un progetto si
+            // scrive una volta e si rilegge di rado, e per intero basta
+            // aprire Modifica
+            <div style={{ ...fontBody, fontSize: 14.5, color: progetto.note_iniziali ? NAVY : MUTED, padding: "4px 0", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }} title={progetto.note_iniziali || ""}>
+              {progetto.note_iniziali || "—"}
+            </div>
+          )}
+        </div>
+        {/* le note di sviluppo restano sempre scrivibili: sono il diario di
+            chi ci lavora, e doverle sbloccare ogni volta le farebbe scrivere
+            altrove, cioe' da nessuna parte */}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note sviluppo</div>
           <textarea
             rows={2}
-            value={noteIniziali}
-            onChange={(e) => setNoteIniziali(e.target.value)}
+            value={noteSviluppo}
+            onChange={(e) => setNoteSviluppo(e.target.value)}
+            onBlur={() => { if (noteSviluppo !== (progetto.note_sviluppo || "")) onSalva({ note_sviluppo: noteSviluppo.trim() || null }); }}
+            placeholder="Aggiornamenti di chi ci sta lavorando…"
             style={{ ...inputStyle, resize: "vertical", fontSize: 14.5 }}
           />
-        ) : (
-          <div style={{ ...fontBody, fontSize: 14.5, color: progetto.note_iniziali ? NAVY : MUTED, whiteSpace: "pre-wrap", padding: "6px 0" }}>
-            {progetto.note_iniziali || "—"}
-          </div>
-        )}
-      </div>
-      {/* le note di sviluppo restano sempre scrivibili: sono il diario di
-          chi ci lavora, e doverle sbloccare ogni volta le farebbe scrivere
-          altrove, cioe' da nessuna parte */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note sviluppo</div>
-        <textarea
-          rows={2}
-          value={noteSviluppo}
-          onChange={(e) => setNoteSviluppo(e.target.value)}
-          onBlur={() => { if (noteSviluppo !== (progetto.note_sviluppo || "")) onSalva({ note_sviluppo: noteSviluppo.trim() || null }); }}
-          placeholder="Aggiornamenti di chi ci sta lavorando…"
-          style={{ ...inputStyle, resize: "vertical", fontSize: 14.5 }}
-        />
+        </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -23605,6 +23613,7 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
   const [filtroIncaricato, setFiltroIncaricato] = useState("");
   const [filtroPriorita, setFiltroPriorita] = useState("");
   const [ordine, setOrdine] = useState("scadenza"); // scadenza | priorita | nome
+  const [filtroRapido, setFiltroRapido] = useState(null); // inscadenza | scaduti | alta | todo
   const [msg, setMsg] = useState("");
   const [mostraNuovo, setMostraNuovo] = useState(false);
 
@@ -23666,6 +23675,15 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
         || (Array.isArray(p.incaricati) && p.incaricati.some((a) => a.id === filtroIncaricato))
         || p.incaricato_id === filtroIncaricato)
       .filter((p) => !filtroPriorita || p.priorita === filtroPriorita)
+      .filter((p) => {
+        if (!filtroRapido) return true;
+        const oggi = dataOggiStr();
+        if (filtroRapido === "inscadenza") return p.stato !== "done" && p.scadenza && p.scadenza >= oggi && p.scadenza <= addGiorni(oggi, 7);
+        if (filtroRapido === "scaduti") return progettoScaduto(p);
+        if (filtroRapido === "alta") return p.priorita === "alta" && p.stato !== "done";
+        if (filtroRapido === "todo") return p.stato === "todo";
+        return true;
+      })
       .filter((p) => !testo
         || String(p.nome || "").toLowerCase().includes(testo)
         || String(p.note_iniziali || "").toLowerCase().includes(testo)
@@ -23682,9 +23700,21 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
         if (!b.scadenza) return -1;
         return String(a.scadenza).localeCompare(String(b.scadenza));
       });
-  }, [progetti, storico, filtroIncaricato, filtroPriorita, ricercaTesto, ordine]);
+  }, [progetti, storico, filtroIncaricato, filtroPriorita, filtroRapido, ricercaTesto, ordine]);
 
-  const quantiScaduti = (progetti || []).filter(progettoScaduto).length;
+  // Il riepilogo in cima. Sono numeri, ma anche filtri: leggere "priorità
+  // alta 4" e non poter vedere quali quattro sarebbe una domanda lasciata
+  // a meta'. Si preme una pastiglia e l'elenco sotto si restringe.
+  const aperti = (progetti || []).filter((p) => !p.archiviato_il);
+  const fraSetteGiorni = addGiorni(dataOggiStr(), 7);
+  const conteggi = {
+    incorso: aperti.length,
+    inscadenza: aperti.filter((p) => p.stato !== "done" && p.scadenza && p.scadenza >= dataOggiStr() && p.scadenza <= fraSetteGiorni).length,
+    scaduti: aperti.filter(progettoScaduto).length,
+    alta: aperti.filter((p) => p.priorita === "alta" && p.stato !== "done").length,
+    todo: aperti.filter((p) => p.stato === "todo").length,
+  };
+  const quantiScaduti = conteggi.scaduti;
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -23700,9 +23730,36 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
           </button>
         </div>
 
-        {!storico && quantiScaduti > 0 && (
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", border: "1px solid #F0C4BE", borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
-            {quantiScaduti} progett{quantiScaduti === 1 ? "o è" : "i sono"} oltre la scadenza.
+        {!storico && (
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))", gap: isMobile ? 6 : 10, marginBottom: 14 }}>
+            {[
+              { chiave: null, etichetta: "Progetti in corso", valore: conteggi.incorso, colore: NAVY },
+              { chiave: "inscadenza", etichetta: "In scadenza (7 gg)", valore: conteggi.inscadenza, colore: "#B8860B" },
+              { chiave: "scaduti", etichetta: "Scaduti", valore: conteggi.scaduti, colore: "#C0392B" },
+              { chiave: "alta", etichetta: "Priorità alta", valore: conteggi.alta, colore: "#C0392B" },
+              { chiave: "todo", etichetta: "TO DO", valore: conteggi.todo, colore: "#C0392B" },
+            ].map((c) => {
+              const attivo = filtroRapido === c.chiave && c.chiave !== null;
+              const spento = c.valore === 0 && c.chiave !== null;
+              return (
+                <button
+                  key={c.etichetta}
+                  type="button"
+                  onClick={() => setFiltroRapido(c.chiave === null ? null : (filtroRapido === c.chiave ? null : c.chiave))}
+                  title={c.chiave === null ? "Mostra tutti" : (attivo ? "Togli il filtro" : `Mostra solo: ${c.etichetta}`)}
+                  style={{
+                    textAlign: "left", cursor: "pointer", minWidth: 0,
+                    background: attivo ? "#FBF7F0" : "#FDFCFA",
+                    border: `${attivo ? 2 : 1}px solid ${attivo ? c.colore : CREAM_BORDER}`,
+                    borderRadius: 12, padding: isMobile ? "8px 10px" : "10px 12px",
+                    opacity: spento ? 0.55 : 1,
+                  }}
+                >
+                  <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.2, overflowWrap: "anywhere" }}>{c.etichetta}</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: c.valore === 0 ? MUTED : c.colore, lineHeight: 1.2 }}>{c.valore}</div>
+                </button>
+              );
+            })}
           </div>
         )}
 
