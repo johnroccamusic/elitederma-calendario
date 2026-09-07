@@ -9735,7 +9735,9 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   );
 
   return (
-    <div onClick={onApri} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, background: "#fff", cursor: "pointer" }}>
+    // fondo grigio chiaro invece del bianco: la pagina sotto e' bianca, e
+    // una scheda bianca su bianco si riconosce solo dal bordo colorato
+    <div onClick={onApri} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, background: "#F5F4F1", cursor: "pointer" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
         {badgeGiorni}
         <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textDecoration: "underline" }}>Clicca per assegnare modelle</span>
