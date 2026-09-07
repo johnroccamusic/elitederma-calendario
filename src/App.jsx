@@ -13169,7 +13169,7 @@ const ALIQUOTA_IVA_RIEPILOGO_CLASSE = 22;
 // griglia con la stessa impronta di quella della tabella sopra (2fr per la
 // voce, 1fr per ogni importo, una colonna fissa in fondo), cosi' le due
 // tabelle restano incolonnate fra loro.
-const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 22px 46px";
+const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 22px 46px 18px";
 // Sei colonne: voce, i tre importi, il cestino, la modalita'.
 //
 // Le tre degli importi sono a larghezza fissa e stretta - una cifra di
@@ -13183,7 +13183,10 @@ const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minma
 // posto. Le due tabelle accostate la usano al contrario - il cestino solo
 // sotto, la modalita' solo sopra - ma la colonna c'e' in entrambe, ed e'
 // per questo che restano incolonnate.
-const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 54px 54px 54px 28px 92px";
+// L'ultima colonna, stretta, e' il "+" che apre l'appunto sotto la riga.
+// Sta in tutte e due le tabelle anche se solo una lo usa, come gia' il
+// cestino: e' quello che le tiene incolonnate fra loro.
+const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 54px 54px 54px 28px 92px 20px";
 
 function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie }) {
   const isMobile = useIsMobile();
@@ -13192,6 +13195,11 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
     : { ...campoCompattoStyle, padding: "5px 5px", fontSize: 11.5 };
   const [totale, setTotale] = useState(spesa.totale != null ? String(spesa.totale) : "");
   const [cash, setCash] = useState(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
+  // l'appunto sotto la riga: chi ce l'ha lo vede subito, gli altri hanno
+  // un "+" che sta fermo finche' non serve
+  const [nota, setNota] = useState(spesa.note || "");
+  const [notaAperta, setNotaAperta] = useState(!!spesa.note);
+  useEffect(() => { setNota(spesa.note || ""); setNotaAperta((aperta) => aperta || !!spesa.note); }, [spesa.note]);
 
   useEffect(() => {
     setTotale(spesa.totale != null ? String(spesa.totale) : "");
@@ -13239,6 +13247,7 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
   const cashBloccato = modalitaSpesa === "B";
 
   return (
+    <>
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3 }}>
       <div style={{ minWidth: 0 }}>
         <select
@@ -13294,7 +13303,35 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
           </label>
         ))}
       </div>
+      {/* il "+" apre l'appunto. Piccolo e in fondo: una riga di costi si
+          legge per numeri, e un tasto grosso in mezzo li disturberebbe
+          anche a chi una nota non la scrive mai */}
+      <button
+        type="button"
+        onClick={() => setNotaAperta((v) => !v)}
+        title={notaAperta ? "Chiudi la nota" : "Aggiungi una nota a questa voce"}
+        style={{ ...fontBody, fontSize: 14, fontWeight: 700, lineHeight: 1, color: nota.trim() ? GOLD : MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", justifySelf: "center" }}
+      >
+        {notaAperta ? "−" : "+"}
+      </button>
     </div>
+    {notaAperta && (
+      // Corpo 10.5: e' un appunto, non una voce. Scritto grande quanto la
+      // riga sopra sembrerebbe piu' importante del costo a cui si riferisce.
+      <input
+        value={nota}
+        onChange={(e) => setNota(e.target.value)}
+        onBlur={() => { if (nota !== (spesa.note || "")) onSalva({ note: nota.trim() || null }); }}
+        placeholder="nota…"
+        style={{
+          ...fontBody, fontSize: 10.5, color: MUTED, fontStyle: "italic",
+          width: "100%", boxSizing: "border-box", background: "transparent",
+          border: "none", borderBottom: `1px dotted ${CREAM_BORDER}`,
+          padding: isMobile ? "1px 0 3px 6px" : "1px 0 3px 8px", marginBottom: 4, outline: "none",
+        }}
+      />
+    )}
+    </>
   );
 }
 
