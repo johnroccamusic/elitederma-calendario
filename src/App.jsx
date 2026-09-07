@@ -23378,10 +23378,23 @@ function incaricabiliProgetti(utentiApp, master, venditori) {
 
 function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, onRipristina }) {
   const isMobile = useIsMobile();
+  // La scheda si legge, non si modifica per sbaglio. Nome, priorita',
+  // stato, assegnatari, scadenza e note iniziali sono sotto il tasto
+  // "Modifica": in un elenco di progetti si passa il dito sopra le schede
+  // molte piu' volte di quante se ne cambi una, e un campo sempre aperto
+  // e' un campo che prima o poi si cambia senza volerlo.
+  //
+  // Le note di sviluppo no: quelle sono il diario di chi ci lavora e si
+  // scrivono ogni giorno. Doverle sbloccare ogni volta le farebbe scrivere
+  // altrove, cioe' da nessuna parte.
+  const [inModifica, setInModifica] = useState(false);
   const [noteSviluppo, setNoteSviluppo] = useState(progetto.note_sviluppo || "");
   const [noteIniziali, setNoteIniziali] = useState(progetto.note_iniziali || "");
+  const [nome, setNome] = useState(progetto.nome || "");
   useEffect(() => { setNoteSviluppo(progetto.note_sviluppo || ""); }, [progetto.note_sviluppo]);
   useEffect(() => { setNoteIniziali(progetto.note_iniziali || ""); }, [progetto.note_iniziali]);
+  useEffect(() => { setNome(progetto.nome || ""); }, [progetto.nome]);
+
   const assegnati = Array.isArray(progetto.incaricati) ? progetto.incaricati : [];
   function scriviAssegnati(nuovi) {
     // si scrive anche la vecchia coppia incaricato_id/nome con il primo
@@ -23412,99 +23425,142 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   function togliAssegnato(posizione) {
     scriviAssegnati(assegnati.filter((_, i) => i !== posizione));
   }
+  function chiudiModifica() {
+    const pulito = nome.trim();
+    if (pulito && pulito !== progetto.nome) onSalva({ nome: pulito });
+    else setNome(progetto.nome || "");
+    if (noteIniziali !== (progetto.note_iniziali || "")) onSalva({ note_iniziali: noteIniziali.trim() || null });
+    setInModifica(false);
+  }
+
   const pri = prioritaProgetto(progetto.priorita);
   const st = statoProgetto(progetto.stato);
   const scaduto = progettoScaduto(progetto);
   const archiviato = !!progetto.archiviato_il;
+  const etichettaSola = { ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 };
 
   return (
-    <div style={{ ...cardStyle, marginBottom: 14, padding: isMobile ? 14 : 18, opacity: archiviato ? 0.75 : 1 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-        <input
-          defaultValue={progetto.nome}
-          onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== progetto.nome) onSalva({ nome: v }); }}
-          // il nome del progetto e' la prima cosa che si cerca scorrendo
-          // l'elenco: deve essere il testo piu' grande della scheda, non
-          // uno dei tanti
-          style={{ ...fontDisplay, fontSize: isMobile ? 20 : 27, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid transparent`, background: "transparent", padding: 0, outline: "none", flex: "1 1 200px", minWidth: 0 }}
-          title="Clicca per correggere il nome"
-        />
+    // stessa cornice delle schede dei corsi: filo sottile tutt'intorno e
+    // il lato sinistro spesso del colore della priorita', che si vede
+    // scorrendo l'elenco senza dover leggere niente
+    <div style={{
+      ...cardStyle, marginBottom: 14, padding: isMobile ? 14 : 18, opacity: archiviato ? 0.75 : 1,
+      border: `1px solid ${CREAM_BORDER}`, borderLeft: `6px solid ${pri.colore}`, borderRadius: 16,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        {inModifica ? (
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            style={{ ...fontDisplay, fontSize: isMobile ? 20 : 27, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid ${GOLD}`, background: "transparent", padding: 0, outline: "none", flex: "1 1 200px", minWidth: 0 }}
+          />
+        ) : (
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 27, fontWeight: 700, color: NAVY, flex: "1 1 200px", minWidth: 0, overflowWrap: "anywhere" }}>{progetto.nome}</div>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Priorità</span>
-          {/* la priorita' si legge insieme al nome, da lontano: e' quella
-              che dice cosa guardare per primo in un elenco lungo */}
-          <select
-            value={progetto.priorita}
-            onChange={(e) => onSalva({ priorita: e.target.value })}
-            style={{ ...inputStyle, width: "auto", padding: "8px 12px", fontSize: 15, fontWeight: 700, letterSpacing: 0.5, color: pri.colore, background: pri.sfondo, border: `1.5px solid ${pri.colore}55` }}
-          >
-            {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta.toUpperCase()}</option>)}
-          </select>
+          {inModifica ? (
+            <select
+              value={progetto.priorita}
+              onChange={(e) => onSalva({ priorita: e.target.value })}
+              style={{ ...inputStyle, width: "auto", padding: "8px 12px", fontSize: 15, fontWeight: 700, letterSpacing: 0.5, color: pri.colore, background: pri.sfondo, border: `1.5px solid ${pri.colore}55` }}
+            >
+              {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta.toUpperCase()}</option>)}
+            </select>
+          ) : (
+            <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, letterSpacing: 0.5, color: pri.colore, background: pri.sfondo, border: `1.5px solid ${pri.colore}55`, borderRadius: 10, padding: "7px 12px" }}>
+              {pri.etichetta.toUpperCase()}
+            </span>
+          )}
         </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap", marginBottom: 12 }}>
-        <select
-          value={progetto.stato}
-          onChange={(e) => onSalva({ stato: e.target.value })}
-          style={{ ...inputStyle, width: "auto", padding: "7px 10px", fontSize: 12.5, fontWeight: 700, color: st.colore, background: st.sfondo, border: `1px solid ${st.colore}44` }}
-        >
-          {STATI_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
-        </select>
-        {/* Le persone assegnate, una tendina per ciascuna, con il "+" per
-            aggiungerne un'altra: un progetto puo' essere di due persone
-            insieme, e prima la seconda finiva scritta nelle note — dove
-            nessun filtro la trova. */}
+        {inModifica ? (
+          <select
+            value={progetto.stato}
+            onChange={(e) => onSalva({ stato: e.target.value })}
+            style={{ ...inputStyle, width: "auto", padding: "7px 10px", fontSize: 12.5, fontWeight: 700, color: st.colore, background: st.sfondo, border: `1px solid ${st.colore}44` }}
+          >
+            {STATI_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
+          </select>
+        ) : (
+          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: st.colore, background: st.sfondo, border: `1px solid ${st.colore}44`, borderRadius: 9, padding: "7px 12px" }}>{st.etichetta}</span>
+        )}
+
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
-          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 }}>Assegnato a</span>
-          {(assegnati.length > 0 ? assegnati : [null]).map((assegnato, posizione) => (
-            <div key={assegnato?.id || `vuoto-${posizione}`} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-              <select
-                value={assegnato?.id || ""}
-                onChange={(e) => cambiaAssegnato(posizione, e.target.value)}
-                style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }}
-              >
-                <option value="">— nessuno —</option>
-                {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-                {/* chi non ha piu' il permesso resta scritto: toglierlo
-                    vorrebbe dire perdere la memoria di chi ci ha lavorato */}
-                {assegnato?.id && !incaricabili.some((u) => u.id === assegnato.id) && (
-                  <option value={assegnato.id}>{assegnato.nome || "(non più abilitato)"}</option>
-                )}
-              </select>
-              {assegnati.length > 1 && (
-                <button type="button" onClick={() => togliAssegnato(posizione)} title="Togli questa persona" style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>×</button>
+          <span style={etichettaSola}>Assegnato a</span>
+          {inModifica ? (
+            <>
+              {(assegnati.length > 0 ? assegnati : [null]).map((assegnato, posizione) => (
+                <div key={assegnato?.id || `vuoto-${posizione}`} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <select
+                    value={assegnato?.id || ""}
+                    onChange={(e) => cambiaAssegnato(posizione, e.target.value)}
+                    style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }}
+                  >
+                    <option value="">— nessuno —</option>
+                    {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                    {/* chi non ha piu' il permesso resta scritto: toglierlo
+                        vorrebbe dire perdere la memoria di chi ci ha lavorato */}
+                    {assegnato?.id && !incaricabili.some((u) => u.id === assegnato.id) && (
+                      <option value={assegnato.id}>{assegnato.nome || "(non più abilitato)"}</option>
+                    )}
+                  </select>
+                  {assegnati.length > 1 && (
+                    <button type="button" onClick={() => togliAssegnato(posizione)} title="Togli questa persona" style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>×</button>
+                  )}
+                </div>
+              ))}
+              {/* il "+" compare solo quando c'e' gia' qualcuno e resta ancora
+                  qualcuno da scegliere: due caselle vuote non servono a niente */}
+              {assegnati.length > 0 && assegnati.length < incaricabili.length && (
+                <button type="button" onClick={aggiungiAssegnato} title="Assegna anche a un'altra persona" style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: GOLD, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>+</button>
               )}
-            </div>
-          ))}
-          {/* il "+" compare solo quando c'e' gia' qualcuno e resta ancora
-              qualcuno da scegliere: due caselle vuote non servono a niente */}
-          {assegnati.length > 0 && assegnati.length < incaricabili.length && (
-            <button type="button" onClick={aggiungiAssegnato} title="Assegna anche a un'altra persona" style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: GOLD, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>+</button>
+            </>
+          ) : (
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: assegnati.length ? NAVY : MUTED }}>
+              {assegnati.length ? assegnati.map((a) => a.nome).join(", ") : "nessuno"}
+            </span>
           )}
         </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 }}>Scadenza</span>
-          <input
-            type="date"
-            value={progetto.scadenza || ""}
-            onChange={(e) => onSalva({ scadenza: e.target.value || null })}
-            style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5, fontWeight: 700, color: scaduto ? "#C0392B" : NAVY }}
-          />
+          <span style={etichettaSola}>Scadenza</span>
+          {inModifica ? (
+            <input
+              type="date"
+              value={progetto.scadenza || ""}
+              onChange={(e) => onSalva({ scadenza: e.target.value || null })}
+              style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5, fontWeight: 700, color: scaduto ? "#C0392B" : NAVY }}
+            />
+          ) : (
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: scaduto ? "#C0392B" : NAVY }}>
+              {progetto.scadenza ? fmtData(progetto.scadenza) : "—"}
+            </span>
+          )}
           {scaduto && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B" }}>scaduto</span>}
         </div>
       </div>
 
       <div style={{ marginBottom: 8 }}>
         <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note iniziali</div>
-        <textarea
-          rows={2}
-          value={noteIniziali}
-          onChange={(e) => setNoteIniziali(e.target.value)}
-          onBlur={() => { if (noteIniziali !== (progetto.note_iniziali || "")) onSalva({ note_iniziali: noteIniziali.trim() || null }); }}
-          style={{ ...inputStyle, resize: "vertical", fontSize: 12.5 }}
-        />
+        {inModifica ? (
+          <textarea
+            rows={2}
+            value={noteIniziali}
+            onChange={(e) => setNoteIniziali(e.target.value)}
+            style={{ ...inputStyle, resize: "vertical", fontSize: 12.5 }}
+          />
+        ) : (
+          <div style={{ ...fontBody, fontSize: 12.5, color: progetto.note_iniziali ? NAVY : MUTED, whiteSpace: "pre-wrap", padding: "6px 0" }}>
+            {progetto.note_iniziali || "—"}
+          </div>
+        )}
       </div>
+      {/* le note di sviluppo restano sempre scrivibili: sono il diario di
+          chi ci lavora, e doverle sbloccare ogni volta le farebbe scrivere
+          altrove, cioe' da nessuna parte */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note sviluppo</div>
         <textarea
@@ -23522,6 +23578,11 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
           {archiviato ? `Archiviato il ${fmtData(String(progetto.archiviato_il).slice(0, 10))}` : `Aperto il ${fmtData(String(progetto.creato_il).slice(0, 10))}`}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {inModifica ? (
+            <button onClick={chiudiModifica} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 16px", cursor: "pointer" }}>Fine</button>
+          ) : (
+            <button onClick={() => setInModifica(true)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 14px", cursor: "pointer" }}>Modifica</button>
+          )}
           {archiviato ? (
             <button onClick={onRipristina} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 14px", cursor: "pointer" }}>Riporta fra i progetti</button>
           ) : (
