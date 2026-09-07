@@ -9689,17 +9689,21 @@ function RigaPrioritaModelle({ edizione, onApri }) {
     </div>
   );
 
+  // Solo i posti ancora scoperti. L'elenco serve a sapere chi cercare, e
+  // una modella gia' trovata non si cerca piu': tenerla in lista faceva
+  // rileggere ogni volta righe su cui non c'era niente da fare, e su una
+  // classe quasi completa la scheda restava lunga uguale.
+  const slotDaTrovare = edizione.slot.filter((s) => s.ruolo === "allievo" && !s.assegnata);
   const nomiAllievi = [];
   const trattamentiPerAllievo = new Map();
-  edizione.slot.forEach((s) => {
-    if (s.ruolo !== "allievo") return;
+  slotDaTrovare.forEach((s) => {
     if (!trattamentiPerAllievo.has(s.allievoNome)) { trattamentiPerAllievo.set(s.allievoNome, []); nomiAllievi.push(s.allievoNome); }
     const tipi = trattamentiPerAllievo.get(s.allievoNome);
     if (!tipi.includes(s.tipo)) tipi.push(s.tipo);
   });
   // colonne fisse per tipo di trattamento: sopracciglia, labbra, eyeliner,
   // poi il resto in ordine alfabetico
-  const tipiPresenti = Array.from(new Set(edizione.slot.filter((s) => s.ruolo === "allievo").map((s) => s.tipo)))
+  const tipiPresenti = Array.from(new Set(slotDaTrovare.map((s) => s.tipo)))
     .sort((a, b) => prioritaTipoModella(a) - prioritaTipoModella(b) || String(a).localeCompare(String(b)));
   // le colonne dei trattamenti non possono avere larghezza "a contenuto"
   // (auto): con le schede ristrette, 3 trattamenti lunghi (es.
@@ -9710,7 +9714,7 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   // dell'allieva
   const anteprimaAllievi = nomiAllievi.length > 0 && (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Modelle necessarie</div>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Modelle ancora da trovare</div>
       <div style={{
         display: "grid",
         gridTemplateColumns: `minmax(70px, 1.4fr) repeat(${tipiPresenti.length}, minmax(0, 1fr))`,
@@ -9736,6 +9740,9 @@ function RigaPrioritaModelle({ edizione, onApri }) {
         {badgeGiorni}
         <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textDecoration: "underline" }}>Clicca per assegnare modelle</span>
       </div>
+      {/* i tre numeri accanto al corso, non sotto: quanto manca e' la
+          domanda che si fa guardando la scheda, e stava in fondo dopo la
+          data, il nome, la citta' e la master */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
           <div style={{ ...fontDisplay, fontSize: numeroData.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numeroData}</div>
@@ -9746,11 +9753,11 @@ function RigaPrioritaModelle({ edizione, onApri }) {
           <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(edizione.cittaNome)}</div>
           {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
         </div>
-      </div>
-      <div style={{ display: "flex", gap: 14, marginTop: 12 }}>
-        {numero(edizione.richieste, NAVY, "richieste")}
-        {numero(edizione.assegnate, "#2E7D32", "assegnate")}
-        {numero(edizione.daTrovare, "#C0392B", "da trovare")}
+        <div style={{ display: "flex", gap: 14, flexShrink: 0, paddingBottom: 8, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+          {numero(edizione.richieste, NAVY, "richieste")}
+          {numero(edizione.assegnate, "#2E7D32", "assegnate")}
+          {numero(edizione.daTrovare, "#C0392B", "da trovare")}
+        </div>
       </div>
       {anteprimaAllievi}
     </div>
