@@ -17361,6 +17361,10 @@ const TASTI_HOME = [
   { chiave: "impostazioni", etichetta: "Setting" },
   { chiave: "prezzicorsi", etichetta: "Prezzi corsi" },
   { chiave: "normative", etichetta: "Normative" },
+  // il permesso serve due volte: per aprire l'area e per comparire nella
+  // tendina "Assegnato a" — assegnare un progetto a chi non puo' nemmeno
+  // vederlo sarebbe un modo elegante di non farlo fare a nessuno
+  { chiave: "progettiincorso", etichetta: "Progetti in corso" },
 ];
 // viste interne che non sono un tasto della home (sotto-sezioni raggiunte
 // da dentro un'area già sbloccata, es. "Anagrafiche" dentro Amministrazione)
@@ -23280,6 +23284,366 @@ function contiRiepilogoClasse({
     cassaContanti: round2(contanti - totaleCashDaPagare),
     allievi: listaIscritti.length,
   };
+}
+
+
+// ---------- Progetti in corso ----------
+// Tre stati e basta: TO DO finche' nessuno l'ha preso, ON GOING mentre ci
+// si lavora, DONE quando e' finito. Un progetto finito non sparisce da
+// solo: si archivia a mano, perche' "fatto" e "non lo voglio piu' vedere"
+// sono due decisioni diverse e la seconda la prende una persona.
+const PRIORITA_PROGETTO = [
+  { chiave: "normale", etichetta: "Normale", colore: "#2E7D32", sfondo: "#E6F4E8" },
+  { chiave: "intermedia", etichetta: "Intermedia", colore: "#B8860B", sfondo: "#FBF1D9" },
+  { chiave: "alta", etichetta: "Alta", colore: "#C0392B", sfondo: "#FBE4E1" },
+];
+const STATI_PROGETTO = [
+  { chiave: "todo", etichetta: "TO DO", colore: "#C0392B", sfondo: "#FBE4E1" },
+  { chiave: "ongoing", etichetta: "ON GOING", colore: "#B8860B", sfondo: "#FBF1D9" },
+  { chiave: "done", etichetta: "DONE", colore: "#2E7D32", sfondo: "#E6F4E8" },
+];
+function prioritaProgetto(chiave) { return PRIORITA_PROGETTO.find((p) => p.chiave === chiave) || PRIORITA_PROGETTO[0]; }
+function statoProgetto(chiave) { return STATI_PROGETTO.find((s) => s.chiave === chiave) || STATI_PROGETTO[0]; }
+// scaduto = la scadenza e' passata e il progetto non e' ne' finito ne'
+// archiviato. Un progetto DONE oltre la scadenza non e' un problema: e'
+// stato consegnato, magari in ritardo, ma non chiede piu' niente a nessuno
+function progettoScaduto(p) {
+  return !p.archiviato_il && p.stato !== "done" && !!p.scadenza && p.scadenza < dataOggiStr();
+}
+
+// chi puo' essere incaricato: gli utenti che hanno il permesso di aprire
+// questa stessa area. Assegnare un progetto a chi non puo' nemmeno vederlo
+// sarebbe un modo elegante di non farlo fare a nessuno
+function incaricabiliProgetti(utentiApp) {
+  return (utentiApp || [])
+    .filter((u) => u.id && (u.permessi || []).includes("progettiincorso"))
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+}
+
+function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, onRipristina }) {
+  const isMobile = useIsMobile();
+  const [noteSviluppo, setNoteSviluppo] = useState(progetto.note_sviluppo || "");
+  const [noteIniziali, setNoteIniziali] = useState(progetto.note_iniziali || "");
+  useEffect(() => { setNoteSviluppo(progetto.note_sviluppo || ""); }, [progetto.note_sviluppo]);
+  useEffect(() => { setNoteIniziali(progetto.note_iniziali || ""); }, [progetto.note_iniziali]);
+  const pri = prioritaProgetto(progetto.priorita);
+  const st = statoProgetto(progetto.stato);
+  const scaduto = progettoScaduto(progetto);
+  const archiviato = !!progetto.archiviato_il;
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 14, padding: isMobile ? 14 : 18, opacity: archiviato ? 0.75 : 1 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <input
+          defaultValue={progetto.nome}
+          onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== progetto.nome) onSalva({ nome: v }); }}
+          style={{ ...fontDisplay, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid transparent`, background: "transparent", padding: 0, outline: "none", flex: "1 1 200px", minWidth: 0 }}
+          title="Clicca per correggere il nome"
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Priorità</span>
+          <select
+            value={progetto.priorita}
+            onChange={(e) => onSalva({ priorita: e.target.value })}
+            style={{ ...inputStyle, width: "auto", padding: "5px 8px", fontSize: 12.5, fontWeight: 700, color: pri.colore, background: pri.sfondo, border: `1px solid ${pri.colore}33` }}
+          >
+            {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta.toUpperCase()}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap", marginBottom: 12 }}>
+        <select
+          value={progetto.stato}
+          onChange={(e) => onSalva({ stato: e.target.value })}
+          style={{ ...inputStyle, width: "auto", padding: "7px 10px", fontSize: 12.5, fontWeight: 700, color: st.colore, background: st.sfondo, border: `1px solid ${st.colore}44` }}
+        >
+          {STATI_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
+        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 }}>Assegnato a</span>
+          <select
+            value={progetto.incaricato_id || ""}
+            onChange={(e) => {
+              const scelto = incaricabili.find((u) => u.id === e.target.value);
+              onSalva({ incaricato_id: e.target.value || null, incaricato_nome: scelto?.nome || null });
+            }}
+            style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }}
+          >
+            <option value="">— nessuno —</option>
+            {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+            {/* chi non ha piu' il permesso resta scritto: toglierlo
+                vorrebbe dire perdere la memoria di chi ci ha lavorato */}
+            {progetto.incaricato_id && !incaricabili.some((u) => u.id === progetto.incaricato_id) && (
+              <option value={progetto.incaricato_id}>{progetto.incaricato_nome || "(non più abilitato)"}</option>
+            )}
+          </select>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 }}>Scadenza</span>
+          <input
+            type="date"
+            value={progetto.scadenza || ""}
+            onChange={(e) => onSalva({ scadenza: e.target.value || null })}
+            style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5, fontWeight: 700, color: scaduto ? "#C0392B" : NAVY }}
+          />
+          {scaduto && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B" }}>scaduto</span>}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note iniziali</div>
+        <textarea
+          rows={2}
+          value={noteIniziali}
+          onChange={(e) => setNoteIniziali(e.target.value)}
+          onBlur={() => { if (noteIniziali !== (progetto.note_iniziali || "")) onSalva({ note_iniziali: noteIniziali.trim() || null }); }}
+          style={{ ...inputStyle, resize: "vertical", fontSize: 12.5 }}
+        />
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note sviluppo</div>
+        <textarea
+          rows={2}
+          value={noteSviluppo}
+          onChange={(e) => setNoteSviluppo(e.target.value)}
+          onBlur={() => { if (noteSviluppo !== (progetto.note_sviluppo || "")) onSalva({ note_sviluppo: noteSviluppo.trim() || null }); }}
+          placeholder="Aggiornamenti di chi ci sta lavorando…"
+          style={{ ...inputStyle, resize: "vertical", fontSize: 12.5 }}
+        />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>
+          {archiviato ? `Archiviato il ${fmtData(String(progetto.archiviato_il).slice(0, 10))}` : `Aperto il ${fmtData(String(progetto.creato_il).slice(0, 10))}`}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {archiviato ? (
+            <button onClick={onRipristina} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 14px", cursor: "pointer" }}>Riporta fra i progetti</button>
+          ) : (
+            <button onClick={onArchivia} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 14px", cursor: "pointer" }}>Archivia</button>
+          )}
+          <button onClick={onElimina} title="Elimina definitivamente" style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: "#C0392B", display: "flex" }}>
+            <IconaCestino size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PaginaProgetti({ utentiApp, ricarica, onBack, titolo = "Progetti in corso" }) {
+  const isMobile = useIsMobile();
+  const [progetti, setProgetti] = useState(null);
+  const [storico, setStorico] = useState(false);
+  const [ricercaTesto, setRicercaTesto] = useState("");
+  const [filtroIncaricato, setFiltroIncaricato] = useState("");
+  const [filtroPriorita, setFiltroPriorita] = useState("");
+  const [ordine, setOrdine] = useState("scadenza"); // scadenza | priorita | nome
+  const [msg, setMsg] = useState("");
+  const [mostraNuovo, setMostraNuovo] = useState(false);
+
+  const incaricabili = incaricabiliProgetti(utentiApp);
+
+  async function carica() {
+    const { data, error } = await supabase.from("progetti").select("*").order("creato_il", { ascending: false });
+    if (error) { setMsg("Non riesco a leggere i progetti: " + error.message); setProgetti([]); return; }
+    setProgetti(data || []);
+  }
+  useEffect(() => { carica(); }, []);
+
+  async function salva(id, campi) {
+    // ottimistico: la scheda si muove subito, la rete arriva dopo — qui si
+    // scrive una nota per volta, e aspettare il giro completo a ogni campo
+    // renderebbe la pagina lenta proprio mentre si lavora
+    setProgetti((prev) => (prev || []).map((p) => (p.id === id ? { ...p, ...campi } : p)));
+    const { error } = await supabase.from("progetti").update({ ...campi, aggiornato_il: new Date().toISOString() }).eq("id", id);
+    if (error) { setMsg("Non salvato: " + error.message); carica(); return; }
+    setMsg("");
+  }
+  async function elimina(p) {
+    if (!window.confirm(`Eliminare definitivamente "${p.nome}"? Non si recupera.`)) return;
+    const { error } = await supabase.from("progetti").delete().eq("id", p.id);
+    if (error) { setMsg("Non eliminato: " + error.message); return; }
+    carica();
+  }
+  async function archivia(p, dentro) {
+    await salva(p.id, { archiviato_il: dentro ? new Date().toISOString() : null });
+  }
+
+  const elenco = useMemo(() => {
+    const testo = ricercaTesto.trim().toLowerCase();
+    const pesoPriorita = { alta: 0, intermedia: 1, normale: 2 };
+    return (progetti || [])
+      .filter((p) => (storico ? !!p.archiviato_il : !p.archiviato_il))
+      .filter((p) => !filtroIncaricato || p.incaricato_id === filtroIncaricato)
+      .filter((p) => !filtroPriorita || p.priorita === filtroPriorita)
+      .filter((p) => !testo
+        || String(p.nome || "").toLowerCase().includes(testo)
+        || String(p.note_iniziali || "").toLowerCase().includes(testo)
+        || String(p.note_sviluppo || "").toLowerCase().includes(testo)
+        || String(p.incaricato_nome || "").toLowerCase().includes(testo))
+      .sort((a, b) => {
+        if (ordine === "priorita") return (pesoPriorita[a.priorita] ?? 9) - (pesoPriorita[b.priorita] ?? 9);
+        if (ordine === "nome") return String(a.nome).localeCompare(String(b.nome));
+        // per scadenza: prima chi ha una data, e prima la piu' vicina. Chi
+        // non ne ha una va in fondo — non e' in ritardo su niente
+        if (!a.scadenza && !b.scadenza) return 0;
+        if (!a.scadenza) return 1;
+        if (!b.scadenza) return -1;
+        return String(a.scadenza).localeCompare(String(b.scadenza));
+      });
+  }, [progetti, storico, filtroIncaricato, filtroPriorita, ricercaTesto, ordine]);
+
+  const quantiScaduti = (progetti || []).filter(progettoScaduto).length;
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ marginBottom: 10 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 26, color: NAVY }}>{storico ? "Storico progetti" : titolo}</div>
+          <button
+            onClick={() => setStorico((v) => !v)}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: storico ? BG_CHIARO : "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "9px 16px", cursor: "pointer" }}
+          >
+            {storico ? "← Torna ai progetti in corso" : "Storico progetti"}
+          </button>
+        </div>
+
+        {!storico && quantiScaduti > 0 && (
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", border: "1px solid #F0C4BE", borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
+            {quantiScaduti} progett{quantiScaduti === 1 ? "o è" : "i sono"} oltre la scadenza.
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+          <input
+            value={ricercaTesto}
+            onChange={(e) => setRicercaTesto(e.target.value)}
+            placeholder="Cerca per parola…"
+            style={{ ...inputStyle, ...(isMobile ? { gridColumn: "1 / -1" } : null) }}
+          />
+          <select style={inputStyle} value={filtroIncaricato} onChange={(e) => setFiltroIncaricato(e.target.value)}>
+            <option value="">Tutti gli incaricati</option>
+            {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+          </select>
+          <select style={inputStyle} value={filtroPriorita} onChange={(e) => setFiltroPriorita(e.target.value)}>
+            <option value="">Tutte le priorità</option>
+            {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
+          </select>
+          <select style={inputStyle} value={ordine} onChange={(e) => setOrdine(e.target.value)}>
+            <option value="scadenza">Ordina per scadenza</option>
+            <option value="priorita">Ordina per priorità</option>
+            <option value="nome">Ordina per nome</option>
+          </select>
+        </div>
+
+        {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+
+        {progetti == null ? (
+          <div style={{ ...cardStyle, ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
+        ) : elenco.length === 0 ? (
+          <div style={{ ...cardStyle, ...fontBody, fontSize: 13, color: MUTED }}>
+            {storico ? "Nessun progetto archiviato." : "Nessun progetto aperto. Creane uno con “+ Aggiungi progetto”."}
+          </div>
+        ) : (
+          elenco.map((p) => (
+            <RigaProgetto
+              key={p.id}
+              progetto={p}
+              incaricabili={incaricabili}
+              onSalva={(campi) => salva(p.id, campi)}
+              onElimina={() => elimina(p)}
+              onArchivia={() => archivia(p, true)}
+              onRipristina={() => archivia(p, false)}
+            />
+          ))
+        )}
+
+        {!storico && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+            <button
+              onClick={() => setMostraNuovo(true)}
+              style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "6px 2px" }}
+            >
+              + Aggiungi progetto
+            </button>
+          </div>
+        )}
+      </div>
+
+      {mostraNuovo && (
+        <ModaleNuovoProgetto
+          incaricabili={incaricabili}
+          onClose={() => setMostraNuovo(false)}
+          onCreato={() => { setMostraNuovo(false); carica(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Il modulo di apertura: nome, priorita', incaricato, scadenza e le note
+// iniziali. Lo stato non si chiede — un progetto appena aperto e' TO DO
+// per definizione, e le note di sviluppo le scrivera' chi ci lavora.
+function ModaleNuovoProgetto({ incaricabili, onClose, onCreato }) {
+  const [nome, setNome] = useState("");
+  const [priorita, setPriorita] = useState("normale");
+  const [incaricatoId, setIncaricatoId] = useState("");
+  const [scadenza, setScadenza] = useState("");
+  const [note, setNote] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function crea() {
+    if (!nome.trim()) { setMsg("Serve il nome del progetto."); return; }
+    setSalvando(true);
+    const scelto = incaricabili.find((u) => u.id === incaricatoId);
+    const { error } = await supabase.from("progetti").insert({
+      nome: nome.trim(), priorita,
+      incaricato_id: incaricatoId || null, incaricato_nome: scelto?.nome || null,
+      scadenza: scadenza || null, note_iniziali: note.trim() || null, stato: "todo",
+    });
+    setSalvando(false);
+    if (error) { setMsg("Non salvato: " + error.message); return; }
+    onCreato();
+  }
+
+  const pri = prioritaProgetto(priorita);
+  return (
+    <Modal title="Nuovo progetto" onClose={onClose} maxWidth={480}>
+      <Field label="Nome del progetto"><input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus /></Field>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Priorità">
+            <select style={{ ...inputStyle, fontWeight: 700, color: pri.colore, background: pri.sfondo }} value={priorita} onChange={(e) => setPriorita(e.target.value)}>
+              {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Scadenza"><input type="date" style={inputStyle} value={scadenza} onChange={(e) => setScadenza(e.target.value)} /></Field>
+        </div>
+      </div>
+      <Field label="Assegnato a">
+        <select style={inputStyle} value={incaricatoId} onChange={(e) => setIncaricatoId(e.target.value)}>
+          <option value="">— nessuno per ora —</option>
+          {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+        </select>
+      </Field>
+      {incaricabili.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", marginTop: -6, marginBottom: 10 }}>
+          Nessun utente ha il permesso "Progetti in corso": daglielo in Password menù → Gestione utenti, altrimenti non c'è nessuno a cui assegnarlo.
+        </div>
+      )}
+      <Field label="Note iniziali">
+        <textarea rows={4} style={{ ...inputStyle, resize: "vertical" }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Di cosa si tratta, cosa serve, da dove si parte…" />
+      </Field>
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={crea} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Creo…" : "Crea progetto"}</Button>
+    </Modal>
+  );
 }
 
 // ---------- ERP: dashboard direzionale ----------
@@ -50809,6 +51173,19 @@ export default function App() {
     return () => { annullato = true; };
   }, [ok, view]);
 
+  // il pallino sul tasto "Progetti in corso": quanti hanno sfondato la
+  // scadenza senza essere finiti. Si rilegge tornando in home, dove il
+  // tasto si vede — non serve tenerlo aggiornato mentre si e' altrove
+  const [progettiScaduti, setProgettiScaduti] = useState(0);
+  useEffect(() => {
+    if (!ok || view !== "home") return;
+    let annullato = false;
+    supabase.from("progetti").select("id", { count: "exact", head: true })
+      .is("archiviato_il", null).neq("stato", "done").lt("scadenza", dataOggiStr())
+      .then(({ count }) => { if (!annullato) setProgettiScaduti(count || 0); });
+    return () => { annullato = true; };
+  }, [ok, view]);
+
   if (!ok) return <div style={{ ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh", paddingTop: "env(safe-area-inset-top, 0px)" }}><Gate onOk={(ruolo, utente) => {
     setRuoloUtente(ruolo);
     setUtenteLoggato(utente);
@@ -51073,6 +51450,7 @@ export default function App() {
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
+  function apriProgetti() { apriViewProtetta("progettiincorso"); }
   function apriPrezziCorsi() { apriViewProtetta("prezzicorsi"); }
   function apriNormative() { apriViewProtetta("normative"); }
   function apriPos() { apriViewProtetta("pos"); }
@@ -51535,7 +51913,7 @@ export default function App() {
               { chiave: "storicoallievi", title: "Storico Allievi", descrizione: "Corsi svolti prima del gestionale, recuperati dagli archivi", Icona: IconaStoricoPos, attivo: tastoAbilitato("storicoallievi"), onClick: apriStoricoAllievi },
               { chiave: "normative", title: "Normative", descrizione: "Le regole da rispettare e i documenti che le accompagnano", Icona: IconaTileNormative, attivo: tastoAbilitato("normative"), onClick: apriNormative },
               { chiave: "impostazioni", title: "Impostazioni", descrizione: "Configura preferenze, utenti e permessi", Icona: IconaTileImpostazioni, attivo: tastoAbilitato("impostazioni"), onClick: apriImpostazioni },
-              { chiave: "progettiincorso", title: "Progetti in corso", descrizione: "Questa sezione sarà presto disponibile.", Icona: IconaTileLampadina, attivo: false, onClick: () => {} },
+              { chiave: "progettiincorso", title: "Progetti in corso", descrizione: "Cosa c'è da fare, chi ci sta lavorando e per quando", Icona: IconaTileLampadina, attivo: tastoAbilitato("progettiincorso"), onClick: apriProgetti, badge: progettiScaduti },
             ]}
           />
         </div>
@@ -51659,6 +52037,15 @@ export default function App() {
           tabIniziale={amministrazioneTabIniziale}
           onCambiaTab={setAmministrazioneTabIniziale}
           titolo={etichettaTasto("amministrazione", "contabilita", "Contabilità")}
+        />
+      )}
+
+      {view === "progettiincorso" && (
+        <PaginaProgetti
+          utentiApp={utentiApp}
+          ricarica={fetchDati}
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "progettiincorso", "Progetti in corso")}
         />
       )}
 
