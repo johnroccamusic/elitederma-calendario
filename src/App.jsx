@@ -21686,7 +21686,18 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
               { q: pagPrecorso, pagato: pagPrecorsoPagato },
               ...precorsoExtra.map((r) => ({ q: r, pagato: r.pagato })),
             ];
-            const sommaAccontiPagati = quotePagate.filter((x) => x.pagato).reduce((somma, x) => somma + impEffettivo(x.q), 0);
+            // Quanto togliere al pattuito: l'imponibile o il totale davvero
+            // incassato. Dove il prezzo pattuito e' gia' lordo, sottrarre
+            // l'imponibile fa comparire un residuo che non esiste — 300
+            // pattuiti, 100 incassati con IVA, e la scheda ne chiedeva
+            // ancora 218 invece di 200.
+            //
+            // Lo dice il corso, non il programma: e' una scelta di come e'
+            // fatto il prezzo di quel corso, e leggerla dal nome vorrebbe
+            // dire che rinominarlo cambia di nascosto il conto dei soldi.
+            const sulTotaleIncassato = !!corso?.saldo_su_totale_pagato;
+            const quantoTogliere = (q) => (sulTotaleIncassato ? parseNum(q.totale) : impEffettivo(q));
+            const sommaAccontiPagati = quotePagate.filter((x) => x.pagato).reduce((somma, x) => somma + quantoTogliere(x.q), 0);
             const restanoDaPagare = totalePattuito === "" ? null : round2(parseNum(totalePattuito) - sommaAccontiPagati);
             return (
               <div style={{ ...areaSchedaIscritto, marginBottom: 10, background: BG_CHIARO }}>
