@@ -3684,25 +3684,32 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
             ? (prezzoListino.periodo
                 ? `Prezzi dal periodo speciale${prezzoListino.periodo.nome ? ` "${prezzoListino.periodo.nome}"` : ""} (${fmtData(prezzoListino.periodo.data_inizio)} → ${fmtData(prezzoListino.periodo.data_fine)}).`
                 : "Prezzi dal listino base dell'hotel.")
-            : "Nessun prezzo a listino per questa stanza: scrivili a mano qui sotto."}
+            : "Nessun prezzo a listino per questa stanza: scrivi la tariffa a mano qui sotto, oppure compila il listino in Gestione Hotel."}
         </div>
       )}
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label={dalListino ? "Media a notte Cash" : "Costo a notte Cash"}>
-            <input type="text" inputMode="decimal" readOnly={dalListino} title={dalListino ? "Media delle notti: il totale lo fa la somma, non questa cifra" : undefined}
-              style={dalListino ? { ...inputStyle, background: "#EFEFEF", color: MUTED } : inputStyle}
-              value={costoNotteCash} onChange={(e) => setCostoNotteCash(e.target.value)} />
-          </Field>
+      {/* Il "costo a notte" non ha piu' senso quando il listino sa
+          rispondere: una notte costa quello che costa quel giorno della
+          settimana, e una cifra sola non lo puo' dire. Sparisce, e al suo
+          posto c'e' il conto qui sotto.
+
+          Resta solo per gli hotel di cui il listino e' ancora vuoto: li'
+          senza questi due campi non ci sarebbe modo di dire quanto costa,
+          e la stanza risulterebbe gratis. Spariranno anche loro quando
+          tutti gli alberghi gia' prenotati saranno stati trascritti. */}
+      {!dalListino && (
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <Field label="Costo a notte Cash">
+              <input type="text" inputMode="decimal" style={inputStyle} value={costoNotteCash} onChange={(e) => setCostoNotteCash(e.target.value)} />
+            </Field>
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field label="Costo a notte Bonifico">
+              <input type="text" inputMode="decimal" style={inputStyle} value={costoNotteBonifico} onChange={(e) => setCostoNotteBonifico(e.target.value)} />
+            </Field>
+          </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <Field label={dalListino ? "Media a notte Bonifico" : "Costo a notte Bonifico"}>
-            <input type="text" inputMode="decimal" readOnly={dalListino} title={dalListino ? "Media delle notti: il totale lo fa la somma, non questa cifra" : undefined}
-              style={dalListino ? { ...inputStyle, background: "#EFEFEF", color: MUTED } : inputStyle}
-              value={costoNotteBonifico} onChange={(e) => setCostoNotteBonifico(e.target.value)} />
-          </Field>
-        </div>
-      </div>
+      )}
       {/* il conto sotto gli occhi: quante notti, che giorno erano e quanto
           costa ognuna. Un totale che non si puo' verificare non lo si
           contesta nemmeno, e una tariffa sbagliata resta li' per mesi */}
