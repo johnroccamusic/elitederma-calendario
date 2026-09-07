@@ -9767,16 +9767,22 @@ function RigaPrioritaModelle({ edizione, onApri }) {
       {/* su telefono la riga non va a capo: i numeri devono restare accanto
           al corso, non finire sotto */}
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: isMobile ? "nowrap" : "wrap" }}>
+        {/* Misura fissa per tutte: "26", "25-26" e "30 set - 2 ott" davano
+            tre riquadri di larghezza diversa, e in un elenco incolonnato la
+            differenza si vede piu' del contenuto. A stringersi e' il corpo
+            del testo quando la data e' lunga, non il riquadro. */}
         <div
           title={g < 0 ? "Corso in corso" : g === 0 ? "Comincia oggi" : g === 1 ? "Comincia domani" : `Comincia fra ${g} giorni`}
           style={{
             background: urgente ? "#C0392B" : coloreCorso, borderRadius: 12,
-            padding: isMobile ? "8px 10px" : "10px 14px", textAlign: "center", flexShrink: 0,
+            width: isMobile ? 64 : 82, height: isMobile ? 64 : 82, flexShrink: 0,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            padding: "4px 6px", boxSizing: "border-box", overflow: "hidden",
             ...(urgente ? { animation: "lampeggiaPrioritaModelle 1.1s ease-in-out infinite" } : null),
           }}
         >
-          <div style={{ ...fontDisplay, fontSize: numeroData.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numeroData}</div>
-          {sottoData && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sottoData}</div>}
+          <div style={{ ...fontDisplay, fontSize: numeroData.length > 9 ? 11 : numeroData.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", lineHeight: 1.1, textAlign: "center", overflowWrap: "anywhere" }}>{numeroData}</div>
+          {sottoData && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase", marginTop: 2 }}>{sottoData}</div>}
         </div>
         <div style={{ flex: "1 1 0", minWidth: 0 }}>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{toTitleCase(edizione.corsoNome)}</div>
