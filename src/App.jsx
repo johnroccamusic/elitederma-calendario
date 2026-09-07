@@ -57,6 +57,11 @@ const GOLD = "#C9A26D"; // accento per icone/badge (es. intestazione Contabilit�
 // modelle": stanno sotto due campi bianchi, e un fondo crema le faceva
 // sembrare parte dell'intestazione invece che due caselle da compilare
 const GRIGIO_TENDINA_MODELLA = "#DCDFE6";
+// i due turni in "Assegna modelle" da telefono: il giallo e' la mattina,
+// l'arancio il pomeriggio. Due colori diversi si riconoscono con la coda
+// dell'occhio scorrendo venti allievi, due rettangoli blu uguali no
+const GIALLO_MATTINA = "#F5C542";
+const ARANCIO_POMERIGGIO = "#E8873A";
 
 const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
@@ -15316,26 +15321,34 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   // "seleziona il turno" dicevano a parole quello che un sole e una luna
   // dicono da soli, e in una riga stretta ogni parola in meno e' spazio in
   // piu' per il nome della modella.
-  function tastoTurno(acceso, etichetta, Icona, onCambia) {
+  // Da telefono i due turni sono due strisce verticali affiancate, alte
+  // quanto la riga: si dividono in due lo spazio a sinistra invece di
+  // impilarsi in due tessere basse con il vuoto sotto. Mattina gialla,
+  // pomeriggio arancio — due colori che si distinguono con la coda
+  // dell'occhio scorrendo l'elenco, cosa che due rettangoli blu uguali non
+  // permettevano. Da scrivania resta il blu di sempre.
+  function tastoTurno(acceso, etichetta, Icona, onCambia, coloreAcceso) {
+    const sfondo = acceso ? (isMobile ? coloreAcceso : NAVY) : "#FCFBF8";
+    const inchiostro = acceso ? (isMobile ? NAVY : "#fff") : NAVY;
     return (
       <label style={{
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 5,
+        alignItems: "center", justifyContent: "center", gap: 6,
         cursor: "pointer", alignSelf: "stretch",
-        // impilate, le due si spartiscono l'altezza della riga in parti
-        // uguali; affiancate restano alte quanto il loro contenuto
+        // affiancate si spartiscono la larghezza e prendono tutta
+        // l'altezza; da scrivania restano larghe quanto il contenuto
         flex: isMobile ? "1 1 0" : "0 0 auto",
-        background: acceso ? NAVY : "#FCFBF8",
-        border: `1px solid ${acceso ? NAVY : CREAM_BORDER}`,
-        borderRadius: 10, padding: "7px 10px", minWidth: isMobile ? 58 : 0,
+        background: sfondo,
+        border: `1px solid ${acceso ? sfondo : CREAM_BORDER}`,
+        borderRadius: 10, padding: isMobile ? "8px 4px" : "7px 10px", minWidth: 0,
       }}>
-        <span style={{ color: acceso ? "#fff" : NAVY, display: "flex" }}><Icona size={15} /></span>
-        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, letterSpacing: 0.4, color: acceso ? "#fff" : NAVY }}>{etichetta}</span>
+        <span style={{ color: inchiostro, display: "flex" }}><Icona size={15} /></span>
+        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, letterSpacing: 0.4, color: inchiostro }}>{etichetta}</span>
         <input
           type="checkbox"
           checked={acceso}
           onChange={(e) => onCambia(e.target.checked)}
-          style={{ width: 14, height: 14, margin: 0, cursor: "pointer", accentColor: acceso ? "#fff" : NAVY }}
+          style={{ width: 14, height: 14, margin: 0, cursor: "pointer", accentColor: acceso ? (isMobile ? NAVY : "#fff") : NAVY }}
         />
       </label>
     );
@@ -15353,9 +15366,9 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
           // impilate si dividono in due l'altezza della riga: lo spazio a
           // sinistra c'e' gia' — lo lasciava vuoto — e due tessere alte si
           // premono col dito senza mirare
-          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "stretch", gap: isMobile ? 6 : 6, flexShrink: 0, alignSelf: "stretch" }}>
-            {tastoTurno(mattina, "MAT", IconaSole, (v) => cambiaTurno(v, pomeriggio))}
-            {tastoTurno(pomeriggio, "POM", IconaLuna, (v) => cambiaTurno(mattina, v))}
+          <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 5 : 6, flexShrink: 0, alignSelf: "stretch", width: isMobile ? 104 : "auto" }}>
+            {tastoTurno(mattina, "MAT", IconaSole, (v) => cambiaTurno(v, pomeriggio), GIALLO_MATTINA)}
+            {tastoTurno(pomeriggio, "POM", IconaLuna, (v) => cambiaTurno(mattina, v), ARANCIO_POMERIGGIO)}
             {/* Il tasto compare solo finche' il database non ha confermato
                 il turno: se si vede, quella spunta non e' ancora salvata.
                 Si salva al primo contatto — su iPad e Android il dito che
