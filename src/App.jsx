@@ -39069,18 +39069,136 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
 // niente e vale il listino base.
 const TIPI_STANZA = ["singola", "doppia", "tripla"];
 
+// Giorni della settimana come li scrive il database: 1 lunedi' ... 7
+// domenica. Date.getDay() invece parte dalla domenica con lo zero, e
+// confondere i due sistemi vorrebbe dire applicare la tariffa del lunedi'
+// alla domenica — di qui la conversione, in un posto solo.
+const GIORNI_SETTIMANA = [
+  { n: 1, breve: "LUN" }, { n: 2, breve: "MAR" }, { n: 3, breve: "MER" },
+  { n: 4, breve: "GIO" }, { n: 5, breve: "VEN" }, { n: 6, breve: "SAB" }, { n: 7, breve: "DOM" },
+];
+function giornoSettimanaDi(dataIso) {
+  if (!dataIso) return null;
+  const [anno, mese, giorno] = String(dataIso).split("-").map(Number);
+  if (!anno || !mese || !giorno) return null;
+  const d = new Date(Date.UTC(anno, mese - 1, giorno)).getUTCDay();
+  return d === 0 ? 7 : d;
+}
+
+// Il prezzo di una stanza in una data: prima si guarda se quella data cade
+// in un periodo speciale, poi fra le fasce di quella stanza si prende
+// quella che copre il giorno della settimana.
+//
+// Se nessuna fascia copre quel giorno si ripiega sulla prima che ha un
+// prezzo: meglio la tariffa base che nessuna tariffa: un listino
+// incompleto non deve far risultare la stanza gratis.
+function fasciaPerGiorno(fasce, dataIso) {
+  const utili = (fasce || []).filter((f) => f.prezzo_cash != null || f.prezzo_fattura != null);
+  if (utili.length === 0) return null;
+  const giorno = giornoSettimanaDi(dataIso);
+  if (giorno) {
+    const calzante = utili.find((f) => Array.isArray(f.giorni) && f.giorni.includes(giorno));
+    if (calzante) return calzante;
+  }
+  return utili[0];
+}
+
 function prezzoHotelPerData(prezzi, periodi, hotelId, tipoStanza, data) {
-  const suoi = (prezzi || []).filter((p) => p.hotel_id === hotelId && p.tipo_stanza === tipoStanza);
+  const suoi = (prezzi || [])
+    .filter((p) => p.hotel_id === hotelId && p.tipo_stanza === tipoStanza)
+    .sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
   const periodo = data
     ? (periodi || []).find((pe) => pe.hotel_id === hotelId && pe.data_inizio && pe.data_fine && data >= pe.data_inizio && data <= pe.data_fine)
     : null;
   // il prezzo del periodo vale solo se qualcuno l'ha davvero scritto:
   // un periodo creato e lasciato in bianco non deve azzerare la tariffa
   if (periodo) {
-    const speciale = suoi.find((p) => p.periodo_id === periodo.id);
-    if (speciale && (speciale.prezzo_cash != null || speciale.prezzo_fattura != null)) return { ...speciale, periodo };
+    const speciale = fasciaPerGiorno(suoi.filter((p) => p.periodo_id === periodo.id), data);
+    if (speciale) return { ...speciale, periodo };
   }
-  return suoi.find((p) => !p.periodo_id) || null;
+  return fasciaPerGiorno(suoi.filter((p) => !p.periodo_id), data);
+}
+
+// il lettino della colonna di sinistra: uno, due o tre a seconda di quante
+// persone dorme la stanza, cosi' si riconosce senza leggere
+function IconaStanza({ posti = 1, size = 20 }) {
+  const larghezza = size * (posti === 1 ? 1 : posti === 2 ? 1.35 : 1.7);
+  return (
+    <svg width={larghezza} height={size} viewBox={`0 0 ${posti === 1 ? 24 : posti === 2 ? 32 : 41} 24`} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {Array.from({ length: posti }).map((_, i) => (
+        <g key={i} transform={`translate(${i * 8.5} 0)`}>
+          <path d="M3 18v-6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6" />
+          <path d="M3 18h10" />
+          <path d="M5 10V8a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 11 8v2" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+const POSTI_STANZA = { singola: 1, doppia: 2, tripla: 3 };
+
+// Una riga di listino: nome della fascia, i sette giorni da accendere, i
+// due prezzi e il cestino. I giorni sono pastiglie e non caselle di
+// spunta perche' vanno lette in fila come una settimana, non una per una.
+function RigaFasciaHotel({ fascia, indice, isMobile, onSalva, onElimina }) {
+  const giorniAccesi = Array.isArray(fascia.giorni) ? fascia.giorni : [];
+  function cambiaGiorno(n) {
+    const nuovi = giorniAccesi.includes(n) ? giorniAccesi.filter((g) => g !== n) : [...giorniAccesi, n].sort((a, b) => a - b);
+    onSalva({ giorni: nuovi });
+  }
+  const campo = { ...inputStyle, padding: isMobile ? "5px 6px" : "6px 8px", fontSize: isMobile ? 11.5 : 12.5 };
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr 1fr" : "20px minmax(70px, 110px) 1fr 96px 96px 22px",
+      gap: isMobile ? 6 : 8, alignItems: "center", padding: isMobile ? "6px 0" : "3px 0",
+    }}>
+      {!isMobile && (
+        <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textAlign: "center" }}>{indice + 1}</span>
+      )}
+      <input
+        style={{ ...campo, ...(isMobile ? { gridColumn: "1 / -1" } : null) }}
+        defaultValue={fascia.nome || ""}
+        placeholder={`Fascia ${indice + 1}`}
+        onBlur={(e) => { if (e.target.value !== (fascia.nome || "")) onSalva({ nome: e.target.value.trim() || null }); }}
+      />
+      <div style={{ display: "flex", gap: isMobile ? 3 : 4, flexWrap: "wrap", ...(isMobile ? { gridColumn: "1 / -1" } : null) }}>
+        {GIORNI_SETTIMANA.map((g) => {
+          const acceso = giorniAccesi.includes(g.n);
+          return (
+            <button
+              key={g.n}
+              type="button"
+              onClick={() => cambiaGiorno(g.n)}
+              title={acceso ? "Non applicare in questo giorno" : "Applica anche in questo giorno"}
+              style={{
+                ...fontBody, fontSize: isMobile ? 8.5 : 9.5, fontWeight: 700, letterSpacing: 0.3,
+                color: acceso ? "#fff" : MUTED, background: acceso ? NAVY : "#F4F0E7",
+                border: `1px solid ${acceso ? NAVY : CREAM_BORDER}`, borderRadius: 999,
+                padding: isMobile ? "3px 6px" : "4px 8px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
+              }}
+            >
+              {g.breve}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>€</span>
+        <input type="number" min="0" step="0.01" style={{ ...campo, minWidth: 0, flex: 1 }} defaultValue={fascia.prezzo_cash ?? ""}
+          onBlur={(e) => { if (e.target.value !== String(fascia.prezzo_cash ?? "")) onSalva({ prezzo_cash: e.target.value === "" ? null : parseNum(e.target.value) }); }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>€</span>
+        <input type="number" min="0" step="0.01" style={{ ...campo, minWidth: 0, flex: 1 }} defaultValue={fascia.prezzo_fattura ?? ""}
+          onBlur={(e) => { if (e.target.value !== String(fascia.prezzo_fattura ?? "")) onSalva({ prezzo_fattura: e.target.value === "" ? null : parseNum(e.target.value) }); }} />
+      </div>
+      <button onClick={onElimina} title="Elimina questa fascia" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#C0392B", display: "flex", justifySelf: isMobile ? "start" : "center" }}>
+        <IconaCestino size={14} />
+      </button>
+    </div>
+  );
 }
 
 function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
@@ -39090,18 +39208,38 @@ function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
   const miei = (prezzi || []).filter((p) => p.hotel_id === hotelId);
   const mieiPeriodi = (periodi || []).filter((p) => p.hotel_id === hotelId);
 
-  function rigaDi(periodoId, tipo) {
-    return miei.find((p) => (p.periodo_id || null) === (periodoId || null) && p.tipo_stanza === tipo) || null;
+  function fasceDi(periodoId, tipo) {
+    return miei
+      .filter((p) => (p.periodo_id || null) === (periodoId || null) && p.tipo_stanza === tipo)
+      .sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || String(a.id).localeCompare(String(b.id)));
   }
 
-  async function salvaPrezzo(periodoId, tipo, campo, valore) {
-    const esistente = rigaDi(periodoId, tipo);
-    const numero = valore === "" ? null : parseNum(valore);
-    const { error } = esistente
-      ? await supabase.from("hotel_prezzi").update({ [campo]: numero, aggiornato_il: new Date().toISOString() }).eq("id", esistente.id)
-      : await supabase.from("hotel_prezzi").insert({ hotel_id: hotelId, periodo_id: periodoId || null, tipo_stanza: tipo, [campo]: numero });
+  async function aggiungiFascia(periodoId, tipo) {
+    const esistenti = fasceDi(periodoId, tipo);
+    const { error } = await supabase.from("hotel_prezzi").insert({
+      hotel_id: hotelId, periodo_id: periodoId || null, tipo_stanza: tipo,
+      nome: `Fascia ${esistenti.length + 1}`,
+      // la fascia nuova nasce senza giorni: sono quelli da scegliere, e
+      // accenderli tutti vorrebbe dire sovrascrivere di colpo le fasce gia'
+      // scritte per meta' settimana
+      giorni: [],
+      ordine: esistenti.length + 1,
+    });
     if (error) { setMsg("Errore: " + error.message); return; }
     setMsg("");
+    ricarica(["hotel_prezzi"]);
+  }
+
+  async function salvaFascia(id, campi) {
+    const { error } = await supabase.from("hotel_prezzi").update({ ...campi, aggiornato_il: new Date().toISOString() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("");
+    ricarica(["hotel_prezzi"]);
+  }
+
+  async function eliminaFascia(id) {
+    const { error } = await supabase.from("hotel_prezzi").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["hotel_prezzi"]);
   }
 
@@ -39124,22 +39262,60 @@ function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
     ricarica(["hotel_periodi_speciali", "hotel_prezzi"]);
   }
 
-  function tabellaPrezzi(periodoId) {
+  const stileTitolino = { ...fontBody, fontSize: isMobile ? 8 : 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 };
+
+  function bloccoStanze(periodoId) {
     return (
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr 1fr" : "120px 1fr 1fr", gap: 8, alignItems: "center" }}>
-        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Stanza</div>
-        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cash</div>
-        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Fattura</div>
-        {TIPI_STANZA.map((tipo) => {
-          const riga = rigaDi(periodoId, tipo);
+      <div>
+        {TIPI_STANZA.map((tipo, i) => {
+          const fasce = fasceDi(periodoId, tipo);
           return (
-            <React.Fragment key={tipo}>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "capitalize" }}>{tipo}</div>
-              <input type="number" min="0" step="0.01" style={inputStyle} defaultValue={riga?.prezzo_cash ?? ""}
-                onBlur={(e) => { if (e.target.value !== String(riga?.prezzo_cash ?? "")) salvaPrezzo(periodoId, tipo, "prezzo_cash", e.target.value); }} />
-              <input type="number" min="0" step="0.01" style={inputStyle} defaultValue={riga?.prezzo_fattura ?? ""}
-                onBlur={(e) => { if (e.target.value !== String(riga?.prezzo_fattura ?? "")) salvaPrezzo(periodoId, tipo, "prezzo_fattura", e.target.value); }} />
-            </React.Fragment>
+            <div key={tipo} style={{
+              display: isMobile ? "block" : "grid", gridTemplateColumns: "132px 1fr", gap: isMobile ? 0 : 14,
+              padding: isMobile ? "12px 0" : "14px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}`,
+            }}>
+              <div style={{ display: "flex", flexDirection: isMobile ? "row" : "column", alignItems: isMobile ? "center" : "flex-start", gap: isMobile ? 10 : 6, marginBottom: isMobile ? 10 : 0 }}>
+                <span style={{ width: 40, height: 40, borderRadius: "50%", background: BG_CHIARO, color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaStanza posti={POSTI_STANZA[tipo]} size={18} />
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, textTransform: "capitalize" }}>{tipo}</div>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, lineHeight: 1.25 }}>Prezzi per la camera {tipo}</div>
+                </div>
+              </div>
+
+              <div style={{ minWidth: 0 }}>
+                {!isMobile && (
+                  <div style={{ display: "grid", gridTemplateColumns: "20px minmax(70px, 110px) 1fr 96px 96px 22px", gap: 8, marginBottom: 4 }}>
+                    <div /><div style={stileTitolino}>Fasce di prezzo</div>
+                    <div style={stileTitolino}>Giorni</div>
+                    <div style={stileTitolino}>Cash</div>
+                    <div style={stileTitolino}>Fattura</div>
+                    <div />
+                  </div>
+                )}
+                {fasce.length === 0 && (
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, padding: "4px 0 8px" }}>Nessuna tariffa per questa stanza.</div>
+                )}
+                {fasce.map((f, idx) => (
+                  <RigaFasciaHotel
+                    key={f.id}
+                    fascia={f}
+                    indice={idx}
+                    isMobile={isMobile}
+                    onSalva={(campi) => salvaFascia(f.id, campi)}
+                    onElimina={() => eliminaFascia(f.id)}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => aggiungiFascia(periodoId, tipo)}
+                  style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, background: "#fff", border: `1px dashed ${GOLD}`, borderRadius: 999, padding: "6px 12px", cursor: "pointer", marginTop: 6 }}
+                >
+                  + Aggiungi fascia prezzo
+                </button>
+              </div>
+            </div>
           );
         })}
       </div>
@@ -39149,7 +39325,9 @@ function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
   return (
     <div style={{ marginTop: 18 }}>
       <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Listino a notte</div>
-      {tabellaPrezzi(null)}
+      <div style={{ background: "#FAF7F1", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "4px 12px" : "6px 16px" }}>
+        {bloccoStanze(null)}
+      </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 22, marginBottom: 8, flexWrap: "wrap" }}>
         <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>Periodi speciali</div>
@@ -39158,15 +39336,16 @@ function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
       {mieiPeriodi.length === 0 && (
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun periodo speciale: vale sempre il listino qui sopra.</div>
       )}
-      {mieiPeriodi.map((pe) => (
-        <div key={pe.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 10, background: "#FCFBF8" }}>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 150px 150px auto", gap: 8, alignItems: "end", marginBottom: 10 }}>
+      {mieiPeriodi.map((pe, i) => (
+        <div key={pe.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 12 : 14, marginBottom: 10, background: "#FAF7F1" }}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{pe.nome || `Periodo ${i + 1}`}</div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 150px 150px auto", gap: 8, alignItems: "end", marginBottom: 6 }}>
             <Field label="Nome (facoltativo)"><input style={inputStyle} defaultValue={pe.nome || ""} placeholder="Alta stagione, fiera…" onBlur={(e) => { if (e.target.value !== (pe.nome || "")) salvaPeriodo(pe.id, "nome", e.target.value); }} /></Field>
             <Field label="Dal"><input type="date" style={inputStyle} defaultValue={pe.data_inizio || ""} onBlur={(e) => { if (e.target.value !== (pe.data_inizio || "")) salvaPeriodo(pe.id, "data_inizio", e.target.value); }} /></Field>
             <Field label="Al"><input type="date" style={inputStyle} defaultValue={pe.data_fine || ""} onBlur={(e) => { if (e.target.value !== (pe.data_fine || "")) salvaPeriodo(pe.id, "data_fine", e.target.value); }} /></Field>
             <button onClick={() => eliminaPeriodo(pe.id)} title="Elimina periodo" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>Elimina</button>
           </div>
-          {tabellaPrezzi(pe.id)}
+          {bloccoStanze(pe.id)}
         </div>
       ))}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 8 }}>{msg}</div>}
