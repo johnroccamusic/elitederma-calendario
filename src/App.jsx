@@ -22271,8 +22271,11 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         );
         const testataAssegnaModelle = (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
-            <div style={{ ...hStyle, margin: 0 }}>Assegna modelle</div>
-            <Button variant="ghost" onClick={() => setSoloDaTrovare((v) => !v)}>{soloDaTrovare ? "Vedi tutta la classe" : "Vedi solo da trovare"}</Button>
+            <div style={{ ...hStyle, margin: 0, textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Assegna modelle</div>
+            {/* fondo bianco invece che trasparente: il tasto sta sopra la
+                trama dorata dell'intestazione, e da li' il suo contorno
+                sottile spariva */}
+            <Button variant="ghost" style={{ background: "#fff" }} onClick={() => setSoloDaTrovare((v) => !v)}>{soloDaTrovare ? "Vedi tutta la classe" : "Vedi solo da trovare"}</Button>
           </div>
         );
 
