@@ -28549,7 +28549,14 @@ function RigaCassaVuota({ testo }) {
 // cassa non li vede. "Contanti" e "Cash no iva" sono i due nomi storici
 // della stessa cosa e valgono come cassa: le spese gia' registrate cosi'
 // devono continuare a contare.
-const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico", "Cassa contanti"];
+// I modi in cui esce un soldo. "Domiciliazione bancaria" e "Bonifico
+// periodico" sono due bonifici che partono da soli, ma tenerli distinti
+// serve: un addebito domiciliato non lo si e' disposto e non lo si trova
+// nella lista dei bonifici fatti, e un bonifico periodico si puo'
+// interrompere mentre una domiciliazione va revocata. Sulla riconciliazione
+// e' l'unica informazione che spiega perche' quella spesa e' gia' uscita
+// senza che nessuno l'abbia mandata.
+const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico", "Bonifico periodico", "Domiciliazione bancaria", "Cassa contanti"];
 const METODI_SPESA_DALLA_CASSA = new Set(["Cassa contanti", "Contanti", "Cash no iva"]);
 
 function PannelloCassaContanti({
