@@ -22400,17 +22400,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                                 {nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
                               </span>
                             </div>
-                            {/* Da telefono, sotto il nome, una barra blu con
-                                dentro lo stesso nome in bianco: scorrendo un
-                                elenco lungo e' quella che dice dove comincia
-                                un allievo, senza doverla cercare fra campi e
-                                caselle. Prova da giudicare a schermo: se
-                                appesantisce si toglie, e' un blocco solo. */}
-                            {isMobile && (
-                              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, letterSpacing: 0.4, color: "#fff", background: NAVY, borderRadius: 8, padding: "5px 10px", margin: "6px 0 2px", overflowWrap: "anywhere" }}>
-                                {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
-                              </div>
-                            )}
+
                             {daMostrare.map(({ m: modellaVista, indice: indiceReale }, iPosto) => (
                               <RigaModella
                                 reperitori={reperitoriModelle}
