@@ -15277,19 +15277,19 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   function tastoTurno(acceso, etichetta, Icona, onCambia) {
     return (
       <label style={{
-        display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
         background: acceso ? NAVY : "#FCFBF8",
         border: `1px solid ${acceso ? NAVY : CREAM_BORDER}`,
-        borderRadius: 12, padding: "8px 12px", flex: "1 1 0", minWidth: 0,
+        borderRadius: 8, padding: "4px 6px", flex: "1 1 0", minWidth: 0,
       }}>
-        <span style={{ color: acceso ? "#fff" : NAVY, display: "flex", flexShrink: 0 }}><Icona size={20} /></span>
-        <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 0 }}>
-          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, letterSpacing: 0.4, color: acceso ? "#fff" : NAVY }}>{etichetta}</span>
+        <span style={{ color: acceso ? "#fff" : NAVY, display: "flex", flexShrink: 0 }}><Icona size={10} /></span>
+        <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0 }}>
+          <span style={{ ...fontBody, fontSize: 6.5, fontWeight: 700, letterSpacing: 0.3, color: acceso ? "#fff" : NAVY }}>{etichetta}</span>
           <input
             type="checkbox"
             checked={acceso}
             onChange={(e) => onCambia(e.target.checked)}
-            style={{ width: 15, height: 15, margin: 0, cursor: "pointer", accentColor: acceso ? "#fff" : NAVY }}
+            style={{ width: 8, height: 8, margin: 0, cursor: "pointer", accentColor: acceso ? "#fff" : NAVY }}
           />
         </span>
       </label>
@@ -15300,13 +15300,16 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         {mostraOrario && (
-          <div style={{ background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 12px", flexShrink: 0, minWidth: 210 }}>
-            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Presenza modella</div>
-            <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+          /* niente riquadro crema intorno: due tasti sanno gia' dire di
+             essere due tasti, e la cornice li faceva sembrare una sezione a
+             se' dentro una riga che e' gia' dentro una scheda */
+          <div style={{ flexShrink: 0, minWidth: 105, paddingTop: 2 }}>
+            <div style={{ ...fontBody, fontSize: 5.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 3 }}>Presenza modella</div>
+            <div style={{ display: "flex", alignItems: "stretch", gap: 4 }}>
               {tastoTurno(mattina, "MAT", IconaSole, (v) => cambiaTurno(v, pomeriggio))}
               {tastoTurno(pomeriggio, "POM", IconaLuna, (v) => cambiaTurno(mattina, v))}
             </div>
-            <div style={{ ...fontBody, fontSize: 9.5, color: turniDaSalvare ? "#C0392B" : MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6, textAlign: "center" }}>
+            <div style={{ ...fontBody, fontSize: 5, color: turniDaSalvare ? "#C0392B" : MUTED, textTransform: "uppercase", letterSpacing: 0.25, marginTop: 3, textAlign: "center" }}>
               {turniDaSalvare ? "da confermare" : "seleziona il turno"}
             </div>
             {/* il tasto resta in vista finche' il database non ha
@@ -15324,7 +15327,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                   setTimeout(() => { turniInCorso.current = false; }, 700);
                 }}
                 onClick={() => { if (!turniInCorso.current) salvaTurni(mattina, pomeriggio); }}
-                style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "5px 10px", cursor: "pointer", width: "100%", marginTop: 4, touchAction: "manipulation" }}
+                style={{ ...fontBody, fontSize: 7, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer", width: "100%", marginTop: 3, touchAction: "manipulation" }}
               >
                 Conferma
               </button>
