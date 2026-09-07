@@ -28091,7 +28091,16 @@ function PaginaRiconciliazione({
       allegato_path: allegato,
     });
     if (error) { setSalvando(false); setMsg("Errore: " + error.message); return; }
-    await supabase.from("documento_fornitore").update({ stato: "senza_impegno" }).eq("id", documento.id);
+    // Il documento e' riconciliato: la spesa e' nata, la fattura ha
+    // trovato la sua destinazione. Finiva invece in "senza_impegno" — uno
+    // stato che nessuna delle due liste guarda, quindi il documento
+    // spariva da "Da riconciliare" senza comparire in "Riconciliate": non
+    // si trovava piu' da nessuna parte.
+    //
+    // Che non ci fosse un impegno da coprire non lo rende meno
+    // riconciliato: l'impegno e' una previsione, e non tutte le fatture
+    // ne hanno una.
+    await supabase.from("documento_fornitore").update({ stato: "riconciliato" }).eq("id", documento.id);
     setSalvando(false);
     setPannello(null); setPagataFile(null); setPagataSottocat("");
     await ricarica(["documento_fornitore", "spese"]);

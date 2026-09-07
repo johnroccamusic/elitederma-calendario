@@ -1,0 +1,12 @@
+-- Riconciliando una fattura con "Pagata" o "Da pagare", il documento
+-- finiva in stato "senza_impegno". Ma nessuna delle due liste guarda quello
+-- stato: la fattura spariva da "Da riconciliare" senza comparire in
+-- "Riconciliate", e non si trovava piu' da nessuna parte.
+--
+-- Che non ci fosse un impegno da coprire non la rende meno riconciliata:
+-- l'impegno e' una previsione, e non tutte le fatture ne hanno una.
+--
+-- Le nove rimaste bloccate hanno tutte la loro spesa gia' creata (stesso
+-- fornitore, stesso totale) e nessuna scadenza appesa: sono riconciliate
+-- davvero, erano solo invisibili.
+update public.documento_fornitore set stato = 'riconciliato' where stato = 'senza_impegno';
