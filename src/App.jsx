@@ -627,6 +627,24 @@ function IconaBustaInViaggio({ size = 20 }) {
     </svg>
   );
 }
+// mattina e pomeriggio: un sole e una luna dicono il turno prima che si
+// legga la sigla, e in una pagina piena di caselle uguali e' quello che
+// serve
+function IconaSole({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+function IconaLuna({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
+  );
+}
 function IconaCartaPos({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -15228,85 +15246,59 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
     onSalva({ nome_modella: n, telefono_modella: t });
   }
 
+  // Le tre tendine dei posti "gemelli" (stessa modella per piu' trattamenti)
+  const spuntaGruppo = altriSlot.length > 0 && onCambiaGruppo ? (
+    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+      <span style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>Stessa modella anche per:</span>
+      {altriSlot.map(({ s: altro, i: indice }) => (
+        <label key={indice} style={{ display: "flex", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY }}>
+          <input
+            type="checkbox"
+            checked={!!(modella.gruppo_id && altro.gruppo_id === modella.gruppo_id)}
+            onChange={(e) => onCambiaGruppo(indice, e.target.checked)}
+            style={{ width: 13, height: 13 }}
+          />
+          {altro.tipo || "(trattamento non scelto)"}
+        </label>
+      ))}
+    </div>
+  ) : null;
+
+  // Il turno: un riquadro suo, con il sole e la luna. Prima erano due
+  // quadratini in mezzo agli altri campi e si spuntavano per sbaglio; qui
+  // sono la prima cosa a sinistra, con scritto sopra cosa sono.
+  function tastoTurno(acceso, etichetta, Icona, onCambia) {
+    return (
+      <label style={{
+        display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+        background: acceso ? "#fff" : "transparent", border: `1px solid ${acceso ? NAVY : "transparent"}`,
+        borderRadius: 8, padding: "4px 7px",
+      }}>
+        <span style={{ color: acceso ? GOLD : MUTED, display: "flex" }}><Icona size={15} /></span>
+        <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: acceso ? NAVY : MUTED }}>{etichetta}</span>
+        <input type="checkbox" checked={acceso} onChange={(e) => onCambia(e.target.checked)} style={{ width: 13, height: 13, margin: 0, cursor: "pointer" }} />
+      </label>
+    );
+  }
+
   return (
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
-      {/* trattamento e "reperita da" stanno sulla stessa riga: sono le due
-          cose che si scelgono da una tendina prima di scrivere il nome, e
-          in colonna una sotto l'altra rubavano due righe per niente */}
-      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
-        {opzioniTipo ? (
-          <select
-            style={{ ...inputStyle, fontSize: 13, fontWeight: 600, flex: "1 1 200px", maxWidth: 280 }}
-            value={modella.tipo || ""}
-            onChange={(e) => onSalva("tipo", e.target.value)}
-          >
-            <option value="">— scegli trattamento —</option>
-            {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
-          </select>
-        ) : (
-          <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{modella.tipo || "(trattamento non scelto)"}</div>
-        )}
-        {/* Chi l'ha trovata. Vale come firma sul lavoro fatto: la
-            commissione di reperimento si legge da qui, quindi chi inserisce
-            una modella mette il proprio nome.
-
-            Se il posto porta un autore che oggi non e' piu' in elenco (il
-            flag gli e' stato tolto) il suo nome resta comunque in tendina,
-            aggiunto in fondo: toglierlo silenziosamente vorrebbe dire
-            perdere l'attribuzione di un lavoro gia' fatto. */}
-        {Array.isArray(reperitori) && (() => {
-          const scelto = modella.reperita_da_id ? `${modella.reperita_da_tipo || ""}:${modella.reperita_da_id}` : "";
-          const inElenco = reperitori.some((r) => `${r.tipo}:${r.id}` === scelto);
-          const voci = !scelto || inElenco
-            ? reperitori
-            : [...reperitori, { tipo: modella.reperita_da_tipo || "", id: modella.reperita_da_id, nome: modella.reperita_da_nome || "(non più in elenco)" }];
-          return (
-            <select
-              title="Chi ha trovato questa modella"
-              style={{ ...inputStyle, fontSize: 12.5, fontWeight: 600, flex: "1 1 170px", maxWidth: 220, color: scelto ? NAVY : MUTED }}
-              value={scelto}
-              onChange={(e) => onSalva(campiReperimento(voci.find((r) => `${r.tipo}:${r.id}` === e.target.value)))}
-            >
-              <option value="">— reperita da —</option>
-              {voci.map((r) => <option key={`${r.tipo}:${r.id}`} value={`${r.tipo}:${r.id}`}>{r.nome}</option>)}
-            </select>
-          );
-        })()}
-      </div>
-      {altriSlot.length > 0 && onCambiaGruppo && (
-        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
-          <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>Stessa modella anche per:</span>
-          {altriSlot.map(({ s, i }) => (
-            <label key={i} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", ...fontBody, fontSize: 12, color: NAVY }}>
-              <input
-                type="checkbox"
-                checked={!!(modella.gruppo_id && s.gruppo_id === modella.gruppo_id)}
-                onChange={(e) => onCambiaGruppo(i, e.target.checked)}
-              />
-              {s.tipo || "(trattamento non scelto)"}
-            </label>
-          ))}
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         {mostraOrario && (
-          <>
-            {/* etichetta sopra il quadratino invece che affiancata: occupa
-                molto meno spazio in orizzontale, lasciandone di più al
-                campo Tel. che altrimenti veniva mozzato */}
-            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>
-              MAT
-              <input type="checkbox" checked={mattina} onChange={(e) => cambiaTurno(e.target.checked, pomeriggio)} />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>
-              POM
-              <input type="checkbox" checked={pomeriggio} onChange={(e) => cambiaTurno(mattina, e.target.checked)} />
-            </label>
+          <div style={{ background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "6px 8px", flexShrink: 0 }}>
+            <div style={{ ...fontBody, fontSize: 8.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Presenza modella</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              {tastoTurno(mattina, "MAT", IconaSole, (v) => cambiaTurno(v, pomeriggio))}
+              {tastoTurno(pomeriggio, "POM", IconaLuna, (v) => cambiaTurno(mattina, v))}
+            </div>
+            <div style={{ ...fontBody, fontSize: 8, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginTop: 3, textAlign: "center" }}>
+              {turniDaSalvare ? "da confermare" : "seleziona il turno"}
+            </div>
             {/* il tasto resta in vista finche' il database non ha
                 confermato il turno: se si vede, quella spunta non e'
-                ancora salvata. Si salva al primo contatto come il
-                Conferma del nome — su iPad e Android il dito che esce da
-                un campo fa riassestare la pagina e il click non arriva */}
+                ancora salvata. Si salva al primo contatto — su iPad e
+                Android il dito che esce da un campo fa riassestare la
+                pagina e il click non arriva */}
             {turniDaSalvare && (
               <button
                 type="button"
@@ -15317,73 +15309,111 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                   setTimeout(() => { turniInCorso.current = false; }, 700);
                 }}
                 onClick={() => { if (!turniInCorso.current) salvaTurni(mattina, pomeriggio); }}
-                title="Salva subito MAT/POM"
-                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 9, padding: "7px 12px", cursor: "pointer", flexShrink: 0, touchAction: "manipulation", alignSelf: "center" }}
+                style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "5px 10px", cursor: "pointer", width: "100%", marginTop: 4, touchAction: "manipulation" }}
               >
                 Conferma
               </button>
             )}
-          </>
+          </div>
         )}
-        <input
-          ref={rifNome}
-          placeholder="Nome"
-          value={nome}
-          onFocus={() => setInModifica(true)}
-          onChange={(e) => setNome(e.target.value)}
-          style={{ ...inputStyle, flex: "2 1 150px", padding: "6px 10px" }}
-        />
-        <div style={{ display: "flex", alignItems: "center", gap: 2, flex: "1 1 140px" }}>
-          <input
-            ref={rifTelefono}
-            placeholder="Tel."
-            value={telefono}
-            onFocus={() => setInModifica(true)}
-            onChange={(e) => setTelefono(e.target.value)}
-            style={{ ...inputStyle, flex: 1, minWidth: 0, padding: "6px 10px" }}
-          />
-          {telefono.trim() && (
-            <>
-              <a href={`tel:${telefono.replace(/\s+/g, "")}`} title="Chiama" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0, padding: 6 }}>
-                <IconaTelefono size={34} />
-              </a>
-              <a href={`https://wa.me/${numeroWhatsapp(telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, padding: 6 }}>
-                <IconaWhatsapp size={34} />
-              </a>
-            </>
-          )}
+
+        <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <input
+              ref={rifNome}
+              placeholder="Nome Cognome"
+              value={nome}
+              onFocus={() => setInModifica(true)}
+              onChange={(e) => setNome(e.target.value)}
+              style={{ ...inputStyle, flex: "2 1 150px", padding: "8px 10px" }}
+            />
+            <input
+              ref={rifTelefono}
+              placeholder="Tel."
+              value={telefono}
+              onFocus={() => setInModifica(true)}
+              onChange={(e) => setTelefono(e.target.value)}
+              style={{ ...inputStyle, flex: "1 1 110px", minWidth: 0, padding: "8px 10px" }}
+            />
+            {telefono.trim() && (
+              <>
+                <a href={`tel:${telefono.replace(/\s+/g, "")}`} title="Chiama" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0 }}>
+                  <IconaTelefono size={30} />
+                </a>
+                <a href={`https://wa.me/${numeroWhatsapp(telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaWhatsapp size={30} />
+                </a>
+              </>
+            )}
+            {/* Nome e numero non si salvano da soli: si scrivono tutti e due
+                e si preme Conferma. Il salvataggio all'uscita dal campo
+                sembrava comodo, ma lasciava mezzo dato scritto senza che
+                nessuno l'avesse deciso — e con mezzo dato il posto
+                risultava coperto pur non essendolo */}
+            {(daSalvare || inModifica) ? (
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  salvataggioInCorso.current = true;
+                  salvaNomeETelefono();
+                  setTimeout(() => { salvataggioInCorso.current = false; }, 700);
+                }}
+                onClick={() => { if (!salvataggioInCorso.current) salvaNomeETelefono(); }}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "9px 15px", cursor: "pointer", flexShrink: 0, touchAction: "manipulation" }}
+              >
+                Conferma
+              </button>
+            ) : trovata ? (
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap", flexShrink: 0 }}>✓ Trovata</span>
+            ) : (
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap", flexShrink: 0 }}>Da trovare</span>
+            )}
+          </div>
+
+          {/* Le due tendine stanno SOTTO il nome, non sopra: si scelgono una
+              volta all'inizio, mentre nome e telefono sono quello che si
+              cerca e si aggiorna ogni giorno — e va in cima chi si guarda
+              piu' spesso. */}
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+            {opzioniTipo ? (
+              <select
+                style={{ ...inputStyle, fontSize: 12, fontWeight: 600, flex: "1 1 180px", maxWidth: 260, padding: "6px 8px", background: BG_CHIARO }}
+                value={modella.tipo || ""}
+                onChange={(e) => onSalva("tipo", e.target.value)}
+              >
+                <option value="">— scegli trattamento —</option>
+                {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+              </select>
+            ) : (
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY }}>{modella.tipo || "(trattamento non scelto)"}</div>
+            )}
+            {/* Chi l'ha trovata. Vale come firma sul lavoro fatto: la
+                commissione di reperimento si legge da qui.
+                Se il posto porta un autore che oggi non e' piu' in elenco,
+                il suo nome resta comunque in tendina — toglierlo vorrebbe
+                dire perdere l'attribuzione di un lavoro gia' fatto. */}
+            {Array.isArray(reperitori) && (() => {
+              const scelto = modella.reperita_da_id ? `${modella.reperita_da_tipo || ""}:${modella.reperita_da_id}` : "";
+              const inElenco = reperitori.some((r) => `${r.tipo}:${r.id}` === scelto);
+              const voci = !scelto || inElenco
+                ? reperitori
+                : [...reperitori, { tipo: modella.reperita_da_tipo || "", id: modella.reperita_da_id, nome: modella.reperita_da_nome || "(non più in elenco)" }];
+              return (
+                <select
+                  title="Chi ha trovato questa modella"
+                  style={{ ...inputStyle, fontSize: 11.5, fontWeight: 600, flex: "1 1 150px", maxWidth: 210, padding: "6px 8px", background: BG_CHIARO, color: scelto ? NAVY : MUTED }}
+                  value={scelto}
+                  onChange={(e) => onSalva(campiReperimento(voci.find((r) => `${r.tipo}:${r.id}` === e.target.value)))}
+                >
+                  <option value="">— reperita da —</option>
+                  {voci.map((r) => <option key={`${r.tipo}:${r.id}`} value={`${r.tipo}:${r.id}`}>{r.nome}</option>)}
+                </select>
+              );
+            })()}
+          </div>
+          {spuntaGruppo}
         </div>
-        {/* Nome e numero non si salvano da soli: si scrivono tutti e due e
-            si preme Conferma. Il salvataggio automatico all'uscita dal
-            campo sembrava comodo, ma lasciava mezzo dato scritto senza che
-            nessuno l'avesse deciso — e con mezzo dato il posto risultava
-            coperto pur non essendolo */}
-        {(daSalvare || inModifica) ? (
-          <button
-            type="button"
-            // Su iPad e su Android il tocco su questo tasto faceva prima
-            // uscire dal campo: la tastiera si chiudeva, la pagina si
-            // riassestava e il tasto scivolava via da sotto il dito, cosi'
-            // il "click" non arrivava mai e il nome non veniva salvato.
-            // Si salva quindi al primo contatto, impedendo l'uscita dal
-            // campo; il click che segue viene ignorato per non salvare due
-            // volte la stessa cosa
-            onPointerDown={(e) => {
-              e.preventDefault();
-              salvataggioInCorso.current = true;
-              salvaNomeETelefono();
-              setTimeout(() => { salvataggioInCorso.current = false; }, 700);
-            }}
-            onClick={() => { if (!salvataggioInCorso.current) salvaNomeETelefono(); }}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: "pointer", flexShrink: 0, touchAction: "manipulation" }}
-          >
-            Conferma
-          </button>
-        ) : trovata ? (
-          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap", flexShrink: 0 }}>✓ Trovata</span>
-        ) : (
-          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap", flexShrink: 0 }}>Da trovare</span>
-        )}
       </div>
     </div>
   );
