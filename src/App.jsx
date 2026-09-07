@@ -22292,9 +22292,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
             <div>
               {riepilogo}
               {testataAssegnaModelle}
-              <div style={subStyle}>
-                Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono, poi premi Conferma. Finché vedi il tasto Conferma quella riga non è ancora salvata.
-              </div>
 
               {iscrittiVisibili.length === 0 && (
                 <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto di questa classe ha richiesto modelle.</div>
@@ -22342,9 +22339,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
           <div>
             {riepilogo}
             {testataAssegnaModelle}
-            <div style={subStyle}>
-              Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono, poi premi Conferma. Finché vedi il tasto Conferma quella riga non è ancora salvata.
-            </div>
 
             {giorniRilevantiModelle.map((g) => {
               const modellaMaster = modelleMaster.find((m) => m.numero_giorno === g.numero_giorno)
