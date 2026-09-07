@@ -28529,15 +28529,21 @@ function PannelloCassaContanti({
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
     if (valore == null || !(valore > 0)) { setMsg("Serve un importo maggiore di zero."); return; }
-    if (tipo === "prelievo" && valore > prelevabile) {
-      setMsg(`Non puoi prelevare più di € ${prelevabile}: sotto restano € ${fondoMinimo} di fondo cassa per le spese del mese.`);
-      return;
-    }
+    // Il fondo cassa e' un obiettivo, non un lucchetto: se i contanti
+    // servono si prendono lo stesso, e a decidere e' chi ha in mano la
+    // cassa, non il programma. Prima il prelievo veniva rifiutato — con il
+    // fondo scoperto voleva dire non poter prelevare niente, mai. Ora si
+    // registra e si avvisa: quello che serve e' sapere che si sta
+    // scendendo sotto la soglia, non essere fermati.
+    const sottoSoglia = tipo === "prelievo" && valore > prelevabile;
     setSalvando(true);
     const { error } = await supabase.from("cassa_contanti_movimenti").insert({ data, tipo, importo: valore, motivo: motivo.trim() || null });
     setSalvando(false);
     if (error) { setMsg(`Non salvato: ${error.message}`); return; }
-    setImporto(""); setMotivo(""); setPannello(null); setMsg("");
+    setImporto(""); setMotivo(""); setPannello(null);
+    setMsg(sottoSoglia
+      ? `Attenzione: la cassa contanti scende sotto la soglia minima di ${euroRiepilogo(fondoMinimo)}. Prelievo registrato.`
+      : "");
     carica();
   }
 
@@ -28763,7 +28769,7 @@ function PannelloCassaContanti({
         <div style={{ ...cardStyle, marginBottom: 14 }}>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>
             {pannello === "prelievo"
-              ? `Puoi prelevare al massimo ${euroRiepilogo(prelevabile)}: sotto restano ${euroRiepilogo(fondoMinimo)} di fondo cassa per le spese del mese.`
+              ? `Senza scendere sotto il fondo cassa puoi prelevare ${euroRiepilogo(prelevabile)}: sotto restano ${euroRiepilogo(fondoMinimo)} per le spese del mese. Puoi prelevare di più — te lo segnalo e basta.`
               : "Contante che rientra in cassa: restituzioni, versamenti extra contabilità. Tutto esente IVA."}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "150px 150px 1fr auto", gap: 8, alignItems: "end" }}>
