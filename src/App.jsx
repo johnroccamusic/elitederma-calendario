@@ -23351,13 +23351,29 @@ function progettoScaduto(p) {
   return !p.archiviato_il && p.stato !== "done" && !!p.scadenza && p.scadenza < dataOggiStr();
 }
 
-// chi puo' essere incaricato: gli utenti che hanno il permesso di aprire
-// questa stessa area. Assegnare un progetto a chi non puo' nemmeno vederlo
-// sarebbe un modo elegante di non farlo fare a nessuno
-function incaricabiliProgetti(utentiApp) {
-  return (utentiApp || [])
-    .filter((u) => u.id && (u.permessi || []).includes("progettiincorso"))
-    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+// Chi puo' essere incaricato: chi ha il permesso di aprire questa stessa
+// area. Assegnare un progetto a chi non puo' nemmeno vederlo sarebbe un
+// modo elegante di non farlo fare a nessuno.
+//
+// Il permesso si da' su tre elenchi diversi della stessa pagina — utenti
+// dell'app, master, venditori — e vanno guardati tutti e tre: Chiara e'
+// una master abilitata, e cercandola solo fra gli utenti non si trovava.
+// Una persona che compare in due elenchi resta una voce sola.
+function incaricabiliProgetti(utentiApp, master, venditori) {
+  const tutti = [
+    ...(utentiApp || []).map((u) => ({ ...u, tipoAnagrafica: "utente" })),
+    ...(master || []).map((u) => ({ ...u, tipoAnagrafica: "master" })),
+    ...(venditori || []).map((u) => ({ ...u, tipoAnagrafica: "venditore" })),
+  ].filter((u) => u.id && String(u.nome || "").trim() && (u.permessi || []).includes("progettiincorso"));
+  const visti = new Set();
+  return tutti
+    .filter((u) => {
+      const chiave = u.nome.trim().toUpperCase();
+      if (visti.has(chiave)) return false;
+      visti.add(chiave);
+      return true;
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome, "it"));
 }
 
 function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, onRipristina }) {
@@ -23406,7 +23422,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
             value={progetto.incaricato_id || ""}
             onChange={(e) => {
               const scelto = incaricabili.find((u) => u.id === e.target.value);
-              onSalva({ incaricato_id: e.target.value || null, incaricato_nome: scelto?.nome || null });
+              onSalva({ incaricato_id: e.target.value || null, incaricato_nome: scelto?.nome || null, incaricato_tipo: scelto?.tipoAnagrafica || null });
             }}
             style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }}
           >
@@ -23472,7 +23488,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   );
 }
 
-function PaginaProgetti({ utentiApp, ricarica, onBack, titolo = "Progetti in corso" }) {
+function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo = "Progetti in corso" }) {
   const isMobile = useIsMobile();
   const [progetti, setProgetti] = useState(null);
   const [storico, setStorico] = useState(false);
@@ -23483,7 +23499,7 @@ function PaginaProgetti({ utentiApp, ricarica, onBack, titolo = "Progetti in cor
   const [msg, setMsg] = useState("");
   const [mostraNuovo, setMostraNuovo] = useState(false);
 
-  const incaricabili = incaricabiliProgetti(utentiApp);
+  const incaricabili = incaricabiliProgetti(utentiApp, master, venditori);
 
   async function carica() {
     const { data, error } = await supabase.from("progetti").select("*").order("creato_il", { ascending: false });
@@ -23642,7 +23658,7 @@ function ModaleNuovoProgetto({ incaricabili, onClose, onCreato }) {
     const scelto = incaricabili.find((u) => u.id === incaricatoId);
     const { error } = await supabase.from("progetti").insert({
       nome: nome.trim(), priorita,
-      incaricato_id: incaricatoId || null, incaricato_nome: scelto?.nome || null,
+      incaricato_id: incaricatoId || null, incaricato_nome: scelto?.nome || null, incaricato_tipo: scelto?.tipoAnagrafica || null,
       scadenza: scadenza || null, note_iniziali: note.trim() || null, stato: "todo",
     });
     setSalvando(false);
@@ -23674,7 +23690,7 @@ function ModaleNuovoProgetto({ incaricabili, onClose, onCreato }) {
       </Field>
       {incaricabili.length === 0 && (
         <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", marginTop: -6, marginBottom: 10 }}>
-          Nessun utente ha il permesso "Progetti in corso": daglielo in Password menù → Gestione utenti, altrimenti non c'è nessuno a cui assegnarlo.
+          Nessuno ha il permesso "Progetti in corso": daglielo in Password menù, nella tabella utenti, master o venditori, altrimenti non c'è nessuno a cui assegnarlo.
         </div>
       )}
       <Field label="Note iniziali">
@@ -52114,7 +52130,7 @@ export default function App() {
 
       {view === "progettiincorso" && (
         <PaginaProgetti
-          utentiApp={utentiApp}
+          utentiApp={utentiApp} master={master} venditori={venditori}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "progettiincorso", "Progetti in corso")}
