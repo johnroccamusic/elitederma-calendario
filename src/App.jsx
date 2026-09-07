@@ -15271,27 +15271,28 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   // Il turno: un riquadro suo, con il sole e la luna. Prima erano due
   // quadratini in mezzo agli altri campi e si spuntavano per sbaglio; qui
   // sono la prima cosa a sinistra, con scritto sopra cosa sono.
-  // Due tasti grandi, non due caselle: quello scelto si riempie di blu e
-  // si vede da lontano quale turno e' stato preso, che e' l'unica cosa che
-  // si guarda scorrendo un elenco di venti allievi.
+  // Due tessere in piedi, sole sopra e luna sopra: quella scelta si riempie
+  // di blu. Senza titolo e senza didascalia — "presenza modella" e
+  // "seleziona il turno" dicevano a parole quello che un sole e una luna
+  // dicono da soli, e in una riga stretta ogni parola in meno e' spazio in
+  // piu' per il nome della modella.
   function tastoTurno(acceso, etichetta, Icona, onCambia) {
     return (
       <label style={{
-        display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", gap: 4,
+        cursor: "pointer", alignSelf: "stretch",
         background: acceso ? NAVY : "#FCFBF8",
         border: `1px solid ${acceso ? NAVY : CREAM_BORDER}`,
-        borderRadius: 8, padding: "4px 6px", flex: "1 1 0", minWidth: 0,
+        borderRadius: 10, padding: "7px 9px", flexShrink: 0,
       }}>
-        <span style={{ color: acceso ? "#fff" : NAVY, display: "flex", flexShrink: 0 }}><Icona size={10} /></span>
-        <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0 }}>
-          <span style={{ ...fontBody, fontSize: 6.5, fontWeight: 700, letterSpacing: 0.3, color: acceso ? "#fff" : NAVY }}>{etichetta}</span>
-          <input
-            type="checkbox"
-            checked={acceso}
-            onChange={(e) => onCambia(e.target.checked)}
-            style={{ width: 8, height: 8, margin: 0, cursor: "pointer", accentColor: acceso ? "#fff" : NAVY }}
-          />
-        </span>
+        <span style={{ color: acceso ? "#fff" : NAVY, display: "flex" }}><Icona size={13} /></span>
+        <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: acceso ? "#fff" : NAVY }}>{etichetta}</span>
+        <input
+          type="checkbox"
+          checked={acceso}
+          onChange={(e) => onCambia(e.target.checked)}
+          style={{ width: 13, height: 13, margin: 0, cursor: "pointer", accentColor: acceso ? "#fff" : NAVY }}
+        />
       </label>
     );
   }
@@ -15300,23 +15301,14 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         {mostraOrario && (
-          /* fondo crema per tenere insieme i due tasti e la scritta, ma
-             senza contorno: il filo marrone faceva una scatola dentro la
-             scatola dell'allievo */
-          <div style={{ background: BG_CHIARO, borderRadius: 10, padding: "5px 7px", flexShrink: 0, minWidth: 105 }}>
-            <div style={{ ...fontBody, fontSize: 5.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 3 }}>Presenza modella</div>
-            <div style={{ display: "flex", alignItems: "stretch", gap: 4 }}>
-              {tastoTurno(mattina, "MAT", IconaSole, (v) => cambiaTurno(v, pomeriggio))}
-              {tastoTurno(pomeriggio, "POM", IconaLuna, (v) => cambiaTurno(mattina, v))}
-            </div>
-            <div style={{ ...fontBody, fontSize: 5, color: turniDaSalvare ? "#C0392B" : MUTED, textTransform: "uppercase", letterSpacing: 0.25, marginTop: 3, textAlign: "center" }}>
-              {turniDaSalvare ? "da confermare" : "seleziona il turno"}
-            </div>
-            {/* il tasto resta in vista finche' il database non ha
-                confermato il turno: se si vede, quella spunta non e'
-                ancora salvata. Si salva al primo contatto — su iPad e
-                Android il dito che esce da un campo fa riassestare la
-                pagina e il click non arriva */}
+          <div style={{ display: "flex", alignItems: "stretch", gap: 6, flexShrink: 0 }}>
+            {tastoTurno(mattina, "MAT", IconaSole, (v) => cambiaTurno(v, pomeriggio))}
+            {tastoTurno(pomeriggio, "POM", IconaLuna, (v) => cambiaTurno(mattina, v))}
+            {/* Il tasto compare solo finche' il database non ha confermato
+                il turno: se si vede, quella spunta non e' ancora salvata.
+                Si salva al primo contatto — su iPad e Android il dito che
+                esce da un campo fa riassestare la pagina e il click non
+                arriva mai. */}
             {turniDaSalvare && (
               <button
                 type="button"
@@ -15327,7 +15319,8 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                   setTimeout(() => { turniInCorso.current = false; }, 700);
                 }}
                 onClick={() => { if (!turniInCorso.current) salvaTurni(mattina, pomeriggio); }}
-                style={{ ...fontBody, fontSize: 7, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer", width: "100%", marginTop: 3, touchAction: "manipulation" }}
+                title="Salva subito il turno"
+                style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: "4px 8px", cursor: "pointer", alignSelf: "stretch", touchAction: "manipulation", whiteSpace: "nowrap" }}
               >
                 Conferma
               </button>
