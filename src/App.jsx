@@ -23728,6 +23728,20 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
           </select>
         </div>
 
+        {/* Il tasto sta sopra le schede: si apre un progetto prima di
+            leggerne venti, non dopo averli scorsi fino in fondo. In fondo
+            lo trovava solo chi arrivava in fondo. */}
+        {!storico && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <button
+              onClick={() => setMostraNuovo(true)}
+              style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, cursor: "pointer", padding: "10px 18px" }}
+            >
+              + Aggiungi progetto
+            </button>
+          </div>
+        )}
+
         {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
 
         {progetti == null ? (
@@ -23750,16 +23764,6 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
           ))
         )}
 
-        {!storico && (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-            <button
-              onClick={() => setMostraNuovo(true)}
-              style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "6px 2px" }}
-            >
-              + Aggiungi progetto
-            </button>
-          </div>
-        )}
       </div>
 
       {mostraNuovo && (
