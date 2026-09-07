@@ -15192,6 +15192,7 @@ function modellaTrovata(m) {
 // un salvataggio e un ricaricamento dell'intera pagina, facendo perdere il
 // focus mentre si scrive
 function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo, reperitori }) {
+  const isMobile = useIsMobile();
   const [nome, setNome] = useState(modella.nome_modella || "");
   const [telefono, setTelefono] = useState(modella.telefono_modella || "");
   useEffect(() => { setNome(modella.nome_modella || ""); }, [modella.nome_modella]);
@@ -15318,19 +15319,23 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   function tastoTurno(acceso, etichetta, Icona, onCambia) {
     return (
       <label style={{
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", gap: 4,
-        cursor: "pointer", alignSelf: "stretch",
+        display: "flex",
+        // in colonna le due tessere si allargano in orizzontale: icona,
+        // sigla e casella in fila tengono la colonna stretta e bassa
+        flexDirection: isMobile ? "row" : "column",
+        alignItems: "center", justifyContent: isMobile ? "flex-start" : "space-between",
+        gap: isMobile ? 5 : 4, cursor: "pointer", alignSelf: "stretch",
         background: acceso ? NAVY : "#FCFBF8",
         border: `1px solid ${acceso ? NAVY : CREAM_BORDER}`,
-        borderRadius: 10, padding: "7px 9px", flexShrink: 0,
+        borderRadius: 10, padding: isMobile ? "5px 7px" : "7px 9px", flexShrink: 0,
       }}>
-        <span style={{ color: acceso ? "#fff" : NAVY, display: "flex" }}><Icona size={13} /></span>
-        <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: acceso ? "#fff" : NAVY }}>{etichetta}</span>
+        <span style={{ color: acceso ? "#fff" : NAVY, display: "flex" }}><Icona size={isMobile ? 11 : 13} /></span>
+        <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, letterSpacing: 0.4, color: acceso ? "#fff" : NAVY }}>{etichetta}</span>
         <input
           type="checkbox"
           checked={acceso}
           onChange={(e) => onCambia(e.target.checked)}
-          style={{ width: 13, height: 13, margin: 0, cursor: "pointer", accentColor: acceso ? "#fff" : NAVY }}
+          style={{ width: isMobile ? 11 : 13, height: isMobile ? 11 : 13, margin: 0, cursor: "pointer", accentColor: acceso ? "#fff" : NAVY }}
         />
       </label>
     );
@@ -15338,9 +15343,14 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
 
   return (
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+      {/* Il turno resta a sinistra anche sul telefono, mai sopra o sotto:
+          scorrendo l'elenco si legge in colonna chi sta la mattina e chi il
+          pomeriggio, ed e' l'unica cosa che si guarda tutta insieme. Per
+          questo la riga non va a capo (nowrap) e le due tessere si
+          impilano quando lo spazio manca, invece di spostarsi. */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 8 : 12, flexWrap: "nowrap" }}>
         {mostraOrario && (
-          <div style={{ display: "flex", alignItems: "stretch", gap: 6, flexShrink: 0 }}>
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "stretch", gap: isMobile ? 4 : 6, flexShrink: 0 }}>
             {tastoTurno(mattina, "MAT", IconaSole, (v) => cambiaTurno(v, pomeriggio))}
             {tastoTurno(pomeriggio, "POM", IconaLuna, (v) => cambiaTurno(mattina, v))}
             {/* Il tasto compare solo finche' il database non ha confermato
@@ -15367,7 +15377,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
           </div>
         )}
 
-        <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+        <div style={{ flex: "1 1 0", minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <input
               ref={rifNome}
