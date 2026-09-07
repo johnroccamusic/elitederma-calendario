@@ -51213,6 +51213,38 @@ export default function App() {
     return () => { annullato = true; };
   }, [ok, view]);
 
+  // I permessi vengono fotografati al login e messi da parte per tutta la
+  // sessione: dando a qualcuno un permesso nuovo, lui non lo vedeva finche'
+  // non usciva e rientrava — e nessuno pensa di doverlo fare. Qui si
+  // rileggono all'apertura dell'app, cosi' basta ricaricare la pagina.
+  //
+  // Solo per gli account nominali: chi entra con la password di una master
+  // o di un venditore ha i permessi della sua scheda, che sta in un'altra
+  // tabella, e li' non c'e' niente da rileggere.
+  useEffect(() => {
+    if (!ok || !utenteLoggato?.id) return;
+    let annullato = false;
+    supabase.from("utenti_app")
+      .select("permessi, amministratore, solo_calendario, puo_omaggi")
+      .eq("id", utenteLoggato.id).maybeSingle()
+      .then(({ data }) => {
+        if (annullato || !data) return;
+        const aggiornato = {
+          ...utenteLoggato,
+          permessi: [...new Set([...(data.permessi || []), ...(utenteLoggato.venditoreId ? ["dashboardvenditori"] : [])])],
+          ...(data.puo_omaggi ? { puoOmaggi: true } : { puoOmaggi: undefined }),
+          ...(data.solo_calendario ? { soloCalendarioLettura: true } : { soloCalendarioLettura: undefined }),
+        };
+        // si riscrive solo se e' davvero cambiato qualcosa, o l'effetto
+        // ripartirebbe a ogni giro rincorrendo se stesso
+        if (JSON.stringify(aggiornato) === JSON.stringify(utenteLoggato)) return;
+        setUtenteLoggato(aggiornato);
+        try { sessionStorage.setItem("edc_utente", JSON.stringify(aggiornato)); } catch (e) { /* navigazione privata */ }
+        if (data.amministratore) setRuoloUtente((r) => (r === "programmatore" ? r : "amministratore"));
+      });
+    return () => { annullato = true; };
+  }, [ok, utenteLoggato]);
+
   // il pallino sul tasto "Progetti in corso": quanti hanno sfondato la
   // scadenza senza essere finiti. Si rilegge tornando in home, dove il
   // tasto si vede — non serve tenerlo aggiornato mentre si e' altrove
