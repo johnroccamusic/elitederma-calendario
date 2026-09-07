@@ -3521,6 +3521,9 @@ function Gate({ onOk }) {
         // lettura del calendario, niente Home/Indietro/Avanti nella
         // barra di navigazione (vedi onOk del Gate e l'header/pasticca)
         ...(nominale.solo_calendario ? { soloCalendarioLettura: true } : {}),
+        // puo' fare omaggi sul POS pur non essendo amministratore: e' un
+        // permesso suo, non un grado
+        ...(nominale.puo_omaggi ? { puoOmaggi: true } : {}),
       };
     }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
@@ -11141,6 +11144,16 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   const chkModificaModelle = (
     <input type="checkbox" checked={!!utente.gestione_modelle} onChange={(e) => salvaModificaModelle(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Compare nella tendina «Reperita da» quando si assegnano le modelle: è la firma di chi le ha trovate" />
   );
+  // permesso, non grado: l'omaggio si concede senza dare le chiavi di
+  // schede iscritto, contabilita' e riepilogo amministrativo
+  async function salvaPuoOmaggi(checked) {
+    const { error } = await persist({ puo_omaggi: checked });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["utenti_app"]);
+  }
+  const chkPuoOmaggi = (
+    <input type="checkbox" checked={!!utente.puo_omaggi} onChange={(e) => salvaPuoOmaggi(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Può spuntare «Omaggio» sul POS senza essere amministratore. Non dà lo sconto libero." />
+  );
   const chkAmministratore = (
     <input type="checkbox" checked={!!utente.amministratore} onChange={(e) => salvaAmministratore(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Entra con grado amministratore: modifica le schede iscritto, vede Contabilità classe e il Riepilogo amministrativo senza chiedere la password" />
   );
@@ -11188,6 +11201,10 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
           {chkModificaModelle}
           <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Modifica modelle (firma chi le ha trovate)</span>
         </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer" }}>
+          {chkPuoOmaggi}
+          <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Omaggi sul POS</span>
+        </label>
         <div style={{ marginBottom: 12 }}>
           {TASTI_HOME.map((t) => (
             <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
@@ -11232,6 +11249,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkAmministratore}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkSoloCalendario}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{chkModificaModelle}</td>
+      <td style={{ ...tdStyle, textAlign: "center" }}>{chkPuoOmaggi}</td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
@@ -11321,7 +11339,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
   const colonneUtenti = [
     { chiave: "nome", larghezza: 120 }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
     { chiave: "amministratore", larghezza: 78 }, { chiave: "solocalendario", larghezza: 78 },
-    { chiave: "modificamodelle", larghezza: 78 },
+    { chiave: "modificamodelle", larghezza: 78 }, { chiave: "omaggipos", larghezza: 72 },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: 84 })),
     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
     { chiave: "azioni", larghezza: 44 },
@@ -11368,6 +11386,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                 <th style={{ ...thStyle, textAlign: "center" }}>Amministratore{maniglia("amministratore", larghezzaDi("amministratore", 78))}</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario{maniglia("solocalendario", larghezzaDi("solocalendario", 78))}</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Modifica modelle{maniglia("modificamodelle", larghezzaDi("modificamodelle", 78))}</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>Omaggi POS{maniglia("omaggipos", larghezzaDi("omaggipos", 72))}</th>
                 {TASTI_HOME.map((t) => (
                   <th
                     key={t.chiave}
@@ -41208,11 +41227,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // venditore ha sempre ruoloUtente "user", anche loggato, quindi resta
   // escluso automaticamente
   const puoGestireResi = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
-  // sconto libero e omaggio decidono da soli quanto entra in cassa, quindi
-  // restano ad amministratore e programmatore: una master che vende al
-  // banco applica il prezzo di listino, oppure un coupon — che è uno sconto
-  // deciso a monte e tracciato, non una cifra scritta al momento
+  // lo sconto libero decide da solo quanto entra in cassa, quindi resta ad
+  // amministratore e programmatore: una master che vende al banco applica
+  // il prezzo di listino, oppure un coupon — che è uno sconto deciso a
+  // monte e tracciato, non una cifra scritta al momento
   const puoScontare = puoGestireResi;
+  // L'omaggio invece si può concedere a chi serve, senza dargli il grado
+  // di amministratore. Le due cose stavano insieme, ma non pesano uguale:
+  // l'omaggio obbliga a scrivere il perché, non incassa niente e finisce
+  // in "Omaggi" con nome e nota, mentre lo sconto libero è una cifra
+  // scritta al momento dentro una vendita come tutte le altre.
+  const puoOmaggiare = puoScontare || !!utenteLoggato?.puoOmaggi;
   const isMobile = useIsMobile();
   // chi ha una password collegata sia a un profilo master sia a un
   // profilo venditore (es. Andrea/Andrea Paura) svolge davvero entrambi
@@ -41845,7 +41870,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         )}
       </div>
 
-      {puoScontare && (
+      {puoOmaggiare && (
         <label htmlFor="pos-omaggio" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: "pointer", borderBottom: `1px solid ${CREAM_BORDER}` }}>
           <input id="pos-omaggio" type="checkbox" checked={omaggioAttivo} onChange={(e) => setOmaggioAttivo(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
           <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
