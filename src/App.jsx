@@ -10038,16 +10038,6 @@ function ModaleModelleAssegnate({ slotList, slotDaTrovare, ctx, ricarica, onClos
 // dashboard "Fabbisogno, scadenze e assegnazioni": card riepilogo, filtri,
 // priorità prossimi 15 giorni, riepilogo per città, tabella completa
 function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, apriDataModelle }) {
-  // l'elenco resta diviso per mese: cliccando una colonna si riordina
-  // dentro ogni mese, non fra mesi diversi — il calendario resta leggibile
-  const { ordine: ordineTab, cambiaOrdine: cambiaOrdineTab, ordina: ordinaTab } = useOrdinamentoTabella();
-  const valoriModelle = {
-    citta: (e) => e.cittaNome || "",
-    data: (e) => e.dataInizio || "",
-    corso: (e) => e.corsoNome || "",
-    richieste: (e) => e.richieste ?? null,
-    daTrovare: (e) => e.daTrovare ?? null,
-  };
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const [ricerca, setRicerca] = useState("");
@@ -10101,18 +10091,6 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
   // tabella raggruppata per mese (come nei calendari): l'ordine scelto
   // nel filtro "Ordina" vale dentro ogni mese, i mesi restano sempre in
   // sequenza cronologica
-  const edizioniPerMese = useMemo(() => {
-    const gruppi = new Map();
-    edizioniFiltrate.forEach((e) => {
-      const chiave = e.dataInizio.slice(0, 7); // "YYYY-MM"
-      if (!gruppi.has(chiave)) {
-        const mese = parseInt(e.dataInizio.slice(5, 7), 10);
-        gruppi.set(chiave, { chiave, etichetta: `${MESI[mese - 1]} ${e.dataInizio.slice(0, 4)}`, edizioni: [] });
-      }
-      gruppi.get(chiave).edizioni.push(e);
-    });
-    return Array.from(gruppi.values()).sort((a, b) => a.chiave.localeCompare(b.chiave));
-  }, [edizioniFiltrate]);
 
   const edizioniPrioritarie = useMemo(
     () => edizioniFiltrate.filter((e) => e.daTrovare > 0 && e.giorniAOggi <= scadenzaGiorni),
@@ -10219,72 +10197,12 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 18, alignItems: "start", marginTop: 18 }}>
-        <div style={cardStyle}>
-          <div style={{ ...hStyle, marginBottom: 0 }}>Tutti i corsi con modelle richieste</div>
-          <div style={subStyle}>Solo corsi con fabbisogno attivo · ordinati per {ordine === "richieste" ? "quante ne mancano" : "urgenza"}</div>
-          {isMobile ? (
-            <div style={{ marginTop: 8 }}>
-              {edizioniPerMese.map((gruppo) => (
-                <div key={gruppo.chiave} style={{ marginBottom: 6 }}>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, background: BG, padding: "7px 10px", borderRadius: 6, marginBottom: 6 }}>{gruppo.etichetta}</div>
-                  {gruppo.edizioni.map((e) => (
-                    <div key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "10px 2px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
-                        <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{e.cittaNome.toUpperCase()}</span>
-                        <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</span>
-                      </div>
-                      <div style={{ ...fontBody, fontSize: 14, color: NAVY, marginBottom: 6 }}>{toTitleCase(e.corsoNome)}</div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div>
-                      <div style={{ display: "flex", gap: 20, ...fontBody, fontSize: 12 }}>
-                        <span style={{ color: MUTED }}>Richieste <b style={{ color: NAVY, fontSize: 14 }}>{e.richieste}</b></span>
-                        <span style={{ color: MUTED }}>Da trovare <b style={{ color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32", fontSize: 14 }}>{e.daTrovare}</b></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-              {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
-            </div>
-          ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
-              <thead>
-                <tr style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left" }}>
-                  <ThOrdina campo="citta" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 8px 8px 0" }}>Città</ThOrdina>
-                  <ThOrdina campo="data" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 8px 8px 0" }}>Data</ThOrdina>
-                  <ThOrdina campo="corso" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 8px 8px 0" }}>Corso</ThOrdina>
-                  <th style={{ padding: "0 8px 8px 0" }}>Tipologie richieste</th>
-                  <ThOrdina campo="richieste" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 8px 8px 0", textAlign: "right" }}>Richieste</ThOrdina>
-                  <ThOrdina campo="daTrovare" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 0 8px 0", textAlign: "right" }}>Da trovare</ThOrdina>
-                </tr>
-              </thead>
-              <tbody>
-                {edizioniPerMese.map((gruppo) => (
-                  <React.Fragment key={gruppo.chiave}>
-                    <tr>
-                      <td colSpan={6} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, background: BG, padding: "7px 10px", borderRadius: 6 }}>
-                        {gruppo.etichetta}
-                      </td>
-                    </tr>
-                    {ordinaTab(gruppo.edizioni, valoriModelle).map((e) => (
-                      <tr key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                        <td style={{ padding: "10px 8px 10px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{e.cittaNome.toUpperCase()}</td>
-                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</td>
-                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY }}>{toTitleCase(e.corsoNome)}</td>
-                        <td style={{ padding: "10px 8px" }}><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div></td>
-                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "right" }}>{e.richieste}</td>
-                        <td style={{ padding: "10px 0", ...fontBody, fontSize: 13, fontWeight: 700, textAlign: "right", color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32" }}>{e.daTrovare}</td>
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-            {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
-          </div>
-          )}
-        </div>
+      {/* Via l'elenco "Tutti i corsi con modelle richieste": ripeteva le
+          stesse edizioni delle schede qui sopra, con gli stessi numeri e
+          le stesse tipologie, in forma di tabella. Due elenchi della
+          stessa cosa nella stessa pagina si contraddicono appena uno dei
+          due cambia, e intanto raddoppiano la pagina da scorrere. */}
+      <div style={{ marginTop: 18 }}>
 
         <div style={cardStyle}>
           <div style={{ ...hStyle, marginBottom: 12 }}>Richieste totali per città</div>
