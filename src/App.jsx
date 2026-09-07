@@ -9708,15 +9708,15 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   // classe quasi completa la scheda restava lunga uguale.
   const slotDaTrovare = edizione.slot.filter((s) => s.ruolo === "allievo" && !s.assegnata);
   const nomiAllievi = [];
-  // quante ne mancano per ogni coppia allievo/trattamento. Si contano, non
-  // si elencano: due posti dello stesso trattamento per la stessa persona
-  // sono due modelle da cercare, e mostrandone una sola le pastiglie non
-  // tornavano con il numero qui sopra
+  // una pastiglia per trattamento: la stessa persona non fa due volte lo
+  // stesso trattamento nello stesso corso, quindi due posti uguali sono un
+  // dato sbagliato — e un dato sbagliato non si mostra come se fosse
+  // normale
   const trattamentiPerAllievo = new Map();
   slotDaTrovare.forEach((s) => {
-    if (!trattamentiPerAllievo.has(s.allievoNome)) { trattamentiPerAllievo.set(s.allievoNome, new Map()); nomiAllievi.push(s.allievoNome); }
-    const conti = trattamentiPerAllievo.get(s.allievoNome);
-    conti.set(s.tipo, (conti.get(s.tipo) || 0) + 1);
+    if (!trattamentiPerAllievo.has(s.allievoNome)) { trattamentiPerAllievo.set(s.allievoNome, []); nomiAllievi.push(s.allievoNome); }
+    const tipi = trattamentiPerAllievo.get(s.allievoNome);
+    if (!tipi.includes(s.tipo)) tipi.push(s.tipo);
   });
   // colonne fisse per tipo di trattamento: sopracciglia, labbra, eyeliner,
   // poi il resto in ordine alfabetico
@@ -9740,19 +9740,11 @@ function RigaPrioritaModelle({ edizione, onApri }) {
         {nomiAllievi.map((nome) => (
           <React.Fragment key={nome}>
             <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{nome.toUpperCase()}</span>
-            {tipiPresenti.map((t) => {
-              const quante = trattamentiPerAllievo.get(nome).get(t) || 0;
-              return (
-                <div key={t} style={{ minWidth: 0, textAlign: "center" }}>
-                  {quante > 0 && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-                      <PallinoTipoModellaCompatto tipo={t} />
-                      {quante > 1 && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY }}>×{quante}</span>}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+            {tipiPresenti.map((t) => (
+              <div key={t} style={{ minWidth: 0, textAlign: "center" }}>
+                {trattamentiPerAllievo.get(nome).includes(t) && <PallinoTipoModellaCompatto tipo={t} />}
+              </div>
+            ))}
           </React.Fragment>
         ))}
       </div>
