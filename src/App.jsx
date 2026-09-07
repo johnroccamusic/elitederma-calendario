@@ -62,8 +62,9 @@ const GRIGIO_TENDINA_MODELLA = "#DCDFE6";
 // dell'occhio scorrendo venti allievi, due rettangoli blu uguali no
 const GIALLO_MATTINA = "#F5C542";
 const ARANCIO_POMERIGGIO = "#E8873A";
-// verde chiaro delle caselle di una modella gia' trovata
+// verde chiaro quando la modella c'e', rosso chiaro finche' manca
 const VERDE_TROVATA = "#E9F6EC";
+const ROSSO_DA_TROVARE = "#FDECEC";
 
 const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
@@ -22390,8 +22391,15 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                             style={{
                               padding: 12,
                               marginBottom: ultimo ? 0 : 10,
-                              background: !nostra ? "#F7F6F3" : (tuttiCoperti ? VERDE_TROVATA : "#fff"),
-                              border: `1px solid ${nostra ? (tuttiCoperti ? "#BFE3C8" : NAVY) : CREAM_BORDER}`,
+                              // verde quando i posti sono coperti, rosso
+                              // chiaro finche' manca qualcuno: il colore
+                              // dice a colpo d'occhio dove c'e' ancora da
+                              // lavorare, senza leggere una riga
+                              background: !nostra ? "#F7F6F3" : (tuttiCoperti ? VERDE_TROVATA : ROSSO_DA_TROVARE),
+                              // il contorno resta quello di sempre: e' il
+                              // filo che separa un allievo dall'altro, e
+                              // senza le schede si impastano fra loro
+                              border: `1px solid ${nostra ? NAVY : CREAM_BORDER}`,
                               borderRadius: 14,
                             }}
                           >
