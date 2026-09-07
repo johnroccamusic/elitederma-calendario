@@ -15216,7 +15216,19 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   // salvata da nessuna parte (nessun indice reale) non può far parte di
   // un gruppo finché non esiste
   const altriSlot = Array.isArray(tuttiGliSlot) && tuttiGliSlot.length > 1 && mioIndice != null && mioIndice >= 0
-    ? tuttiGliSlot.map((s, i) => ({ s, i })).filter(({ i }) => i !== mioIndice)
+    ? tuttiGliSlot.map((s, i) => ({ s, i }))
+        .filter(({ i }) => i !== mioIndice)
+        // Un posto che ha gia' la sua modella non si propone: spuntarlo
+        // vorrebbe dire scriverci sopra un'altra persona, e una modella
+        // gia' trovata e' un lavoro fatto. Restano gli altri, quelli
+        // ancora scoperti.
+        //
+        // L'eccezione e' il posto che fa gia' gruppo con questo: quel nome
+        // ce l'ha messo questa spunta, e la spunta deve poter tornare
+        // indietro — togliendola sparirebbe il modo di sciogliere il
+        // gruppo.
+        .filter(({ s: altro }) => !String(altro?.nome_modella || "").trim()
+          || (modella.gruppo_id && altro.gruppo_id === modella.gruppo_id))
     : [];
 
   // nome e telefono si scrivono SEMPRE insieme, in un colpo solo: uno alla
