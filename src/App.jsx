@@ -22224,8 +22224,13 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
 
               return (
                 <div key={g.id} style={{ ...cardStyle, padding: 18 }}>
-                  <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>
-                    Giorno {g.numero_giorno}
+                  {/* Un titolo solo, grande: il giorno e il trattamento che
+                      si cerca. Erano due righe — "Giorno 2" in grassetto e
+                      sotto "ALLIEVI — SOPRACCIGLIA OMBRETTO" in grigio
+                      piccolo — e la seconda diceva "Allievi" a una pagina
+                      che parla solo di allievi. */}
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, marginBottom: 14 }}>
+                    Giorno {g.numero_giorno}{g.tipo_modella_allievi ? `: MODELLE ${g.tipo_modella_allievi.toUpperCase()}` : ""}
                   </div>
 
                   {g.richiede_modella_master && (
@@ -22257,9 +22262,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
 
                   {g.richiede_modelle_allievi && (
                     <div>
-                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
-                        Allievi{g.tipo_modella_allievi ? ` — ${g.tipo_modella_allievi}` : ""}
-                      </div>
                       {iscrittiDelGiorno.length === 0 && (
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto presente in questa classe in questo giorno.</div>
                       )}
