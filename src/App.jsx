@@ -19425,7 +19425,15 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // Solo se il trattamento non corrisponde a nessun giorno del corso si
   // ripiega sul primo giorno con allievi: meglio nel posto sbagliato che
   // sparita.
-  function giornoDelPostoModella(m) {
+  // un posto e' "orfano" quando non sa dire a quale giorno appartiene: ne'
+  // un giorno scritto sopra, ne' un trattamento da cui dedurlo
+  function postoSenzaGiorno(m) {
+    if (m?.giorno != null && giorniAllieviCorso.some((x) => x.numero_giorno === m.giorno)) return false;
+    const tipo = normalizzaTipoModella(m?.tipo);
+    if (!tipo) return true;
+    return !giorniAllieviCorso.some((x) => normalizzaTipoModella(x.tipo_modella_allievi) === tipo);
+  }
+  function giornoDelPostoModella(m, elenco) {
     // il giorno scritto vale, ma solo se in quel giorno il corso prevede
     // davvero le modelle degli allievi: se il template e' cambiato dopo
     // l'iscrizione, quel giorno non viene disegnato e il posto sparirebbe
@@ -19434,6 +19442,21 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     if (tipo) {
       const g = giorniAllieviCorso.find((x) => normalizzaTipoModella(x.tipo_modella_allievi) === tipo);
       if (g) return g.numero_giorno;
+    }
+    // Chi ha chiesto tre modelle senza dire quali, si ritrovava tutti e tre
+    // i posti impilati sullo stesso giorno — e gli altri giorni vuoti,
+    // come se non avesse chiesto niente. Non e' vero: ha chiesto una
+    // modella per ciascuno dei giorni che le prevedono, ed e' cosi' che
+    // vanno distribuiti, in ordine, uno per giorno.
+    //
+    // Chi invece ha scritto il trattamento (Anna) non passa mai di qui: il
+    // suo posto lo assegna il trattamento, ed e' giusto che vinca lui.
+    if (Array.isArray(elenco) && giorniAllieviCorso.length > 0) {
+      const orfani = elenco.filter(postoSenzaGiorno);
+      const posizione = orfani.indexOf(m);
+      // se i posti chiesti sono piu' dei giorni disponibili, gli avanzi
+      // restano sull'ultimo: meglio in fondo che invisibili
+      if (posizione >= 0) return giorniAllieviCorso[Math.min(posizione, giorniAllieviCorso.length - 1)].numero_giorno;
     }
     return giornoDiRipiegoAllievi;
   }
@@ -20544,7 +20567,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     const indicePassato = opzioni.indice != null && opzioni.indice >= 0 ? opzioni.indice : -1;
     const indiceAffidabile = indicePassato >= 0 && elenco[indicePassato]
       && (opzioni.tipoAtteso == null || normalizzaTipoModella(elenco[indicePassato].tipo) === normalizzaTipoModella(opzioni.tipoAtteso));
-    const idx = indiceAffidabile ? indicePassato : elenco.findIndex((m) => giornoDelPostoModella(m) === numeroGiorno);
+    const idx = indiceAffidabile ? indicePassato : elenco.findIndex((m) => giornoDelPostoModella(m, elenco) === numeroGiorno);
     if (idx < 0 || !elenco[idx]) {
       if (!opzioni.creaSeMancante) {
         // avviso in faccia, non una riga in fondo alla pagina: chi scrive
@@ -21978,7 +22001,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         // è presente non conta come da trovare per lei — vedi presenteIlGiorno()
         const nostreConModelle = listaIscritti
           .filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0)
-          .map((i) => ({ ...i, tipi_modelle: i.tipi_modelle.filter((m) => presenteIlGiorno(i.giorni_presenza, giornoDelPostoModella(m))) }))
+          .map((i) => ({ ...i, tipi_modelle: i.tipi_modelle.filter((m) => presenteIlGiorno(i.giorni_presenza, giornoDelPostoModella(m, i.tipi_modelle))) }))
           .filter((i) => i.tipi_modelle.length > 0);
         const conteggioPerTipo = {};
         nostreConModelle.forEach((i) => {
@@ -22160,7 +22183,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                         // secondo non compariva da nessuna parte
                         const postiDelGiorno = elenco
                           .map((m, indice) => ({ m, indice }))
-                          .filter(({ m }) => giornoDelPostoModella(m) === g.numero_giorno);
+                          .filter(({ m }) => giornoDelPostoModella(m, elenco) === g.numero_giorno);
                         // se non ce n'e' nessuno resta una riga scrivibile,
                         // creata al primo carattere digitato — ma solo per
                         // chi porta la SUA modella: per gli altri sarebbe una
