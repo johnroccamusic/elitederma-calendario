@@ -23977,7 +23977,9 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
         </div>
 
         {!storico && (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))", gap: isMobile ? 6 : 10, marginBottom: 14 }}>
+          // cinque quadrati in fila, uguali: due per riga facevano tre
+          // righe di riquadri larghi e bassi prima di arrivare ai progetti
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: isMobile ? 4 : 10, marginBottom: 14 }}>
             {[
               { chiave: null, etichetta: "Progetti in corso", valore: conteggi.incorso, colore: NAVY },
               { chiave: "inscadenza", etichetta: "In scadenza (7 gg)", valore: conteggi.inscadenza, colore: "#B8860B" },
@@ -23994,37 +23996,44 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
                   onClick={() => setFiltroRapido(c.chiave === null ? null : (filtroRapido === c.chiave ? null : c.chiave))}
                   title={c.chiave === null ? "Mostra tutti" : (attivo ? "Togli il filtro" : `Mostra solo: ${c.etichetta}`)}
                   style={{
-                    textAlign: "left", cursor: "pointer", minWidth: 0,
+                    textAlign: "center", cursor: "pointer", minWidth: 0, aspectRatio: "1 / 1",
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
                     background: attivo ? "#FBF7F0" : "#FDFCFA",
                     border: `${attivo ? 2 : 1}px solid ${attivo ? c.colore : CREAM_BORDER}`,
-                    borderRadius: 12, padding: isMobile ? "8px 10px" : "10px 12px",
-                    opacity: spento ? 0.55 : 1,
+                    borderRadius: 12, padding: isMobile ? "5px 3px" : "10px 8px",
+                    opacity: spento ? 0.55 : 1, overflow: "hidden",
                   }}
                 >
-                  <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.2, overflowWrap: "anywhere" }}>{c.etichetta}</div>
-                  <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: c.valore === 0 ? MUTED : c.colore, lineHeight: 1.2 }}>{c.valore}</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 7.5 : 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.15, overflowWrap: "anywhere" }}>{c.etichetta}</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 22, fontWeight: 700, color: c.valore === 0 ? MUTED : c.colore, lineHeight: 1.1 }}>{c.valore}</div>
                 </button>
               );
             })}
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+        {/* La ricerca a parole ha la sua riga: e' un campo di testo largo, e
+            mescolato alle tendine le mandava a capo in ordine sparso. I tre
+            filtri restano in linea, tre colonne uguali. */}
+        <div style={{ marginBottom: 8 }}>
           <input
             value={ricercaTesto}
             onChange={(e) => setRicercaTesto(e.target.value)}
             placeholder="Cerca per parola…"
-            style={{ ...inputStyle, ...(isMobile ? { gridColumn: "1 / -1" } : null) }}
+            style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
           />
-          <select style={inputStyle} value={filtroIncaricato} onChange={(e) => setFiltroIncaricato(e.target.value)}>
-            <option value="">Tutti gli incaricati</option>
-            {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-          </select>
-          <select style={inputStyle} value={filtroPriorita} onChange={(e) => setFiltroPriorita(e.target.value)}>
-            <option value="">Tutte le priorità</option>
-            {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
-          </select>
-          <select style={inputStyle} value={ordine} onChange={(e) => setOrdine(e.target.value)}>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 16 }}>
+          {[
+            { valore: filtroIncaricato, onCambia: setFiltroIncaricato, vuoto: "Tutti gli incaricati", voci: incaricabili.map((u) => ({ v: u.id, l: u.nome })) },
+            { valore: filtroPriorita, onCambia: setFiltroPriorita, vuoto: "Tutte le priorità", voci: PRIORITA_PROGETTO.map((o) => ({ v: o.chiave, l: o.etichetta })) },
+          ].map((f, i) => (
+            <select key={i} style={{ ...inputStyle, minWidth: 0, fontSize: isMobile ? 11 : 13, padding: isMobile ? "8px 6px" : undefined }} value={f.valore} onChange={(e) => f.onCambia(e.target.value)}>
+              <option value="">{f.vuoto}</option>
+              {f.voci.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+            </select>
+          ))}
+          <select style={{ ...inputStyle, minWidth: 0, fontSize: isMobile ? 11 : 13, padding: isMobile ? "8px 6px" : undefined }} value={ordine} onChange={(e) => setOrdine(e.target.value)}>
             <option value="scadenza">Ordina per scadenza</option>
             <option value="priorita">Ordina per priorità</option>
             <option value="nome">Ordina per nome</option>
