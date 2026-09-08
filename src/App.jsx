@@ -24822,10 +24822,13 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
     todo: aperti.filter((p) => p.stato === "todo").length,
   };
   const quantiScaduti = conteggi.scaduti;
+  // L'indice dei titoli sta a fianco, e solo da desktop: su un telefono
+  // due colonne sarebbero due colonne strette.
+  const indiceVisibile = !isMobile && elenco.length > 0;
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ maxWidth: isMobile ? 900 : 1180, margin: "0 auto" }}>
         <div style={{ marginBottom: 10 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 26, color: NAVY }}>{storico ? "Storico progetti" : titolo}</div>
@@ -24836,6 +24839,36 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
             {storico ? "← Torna ai progetti in corso" : "Storico progetti"}
           </button>
         </div>
+
+      {/* Due colonne: a sinistra il solo elenco dei titoli col colore
+          dello stato, a destra le schede. Venti progetti sono venti schede
+          alte, e per sapere a che punto e' uno bisognava scorrerle tutte;
+          l'indice le tiene sotto gli occhi insieme. Solo da desktop: su un
+          telefono due colonne sarebbero due colonne strette. */}
+      <div style={{ display: "grid", gridTemplateColumns: indiceVisibile ? "230px minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 18, alignItems: "start" }}>
+        {indiceVisibile && (
+          <div style={{ ...cardStyle, position: "sticky", top: 16, padding: "14px 14px", maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              {elenco.length} {elenco.length === 1 ? "progetto" : "progetti"}
+            </div>
+            {elenco.map((p) => {
+              const st = statoProgetto(p.stato);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => document.getElementById(`progetto-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  title={`${p.nome} — ${st.etichetta}`}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", background: "transparent", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, padding: "8px 0", cursor: "pointer" }}
+                >
+                  <span style={{ ...fontBody, fontSize: 12, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</span>
+                  <span style={{ width: 38, height: 15, borderRadius: 4, background: st.sfondo, border: `1px solid ${st.colore}`, flexShrink: 0 }} />
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ minWidth: 0 }}>
 
         {!storico && (
           // cinque quadrati in fila, uguali: due per riga facevano tre
@@ -24925,8 +24958,8 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
           </div>
         ) : (
           elenco.map((p) => (
+            <div key={p.id} id={`progetto-${p.id}`} style={{ scrollMarginTop: 16 }}>
             <RigaProgetto
-              key={p.id}
               progetto={p}
               incaricabili={incaricabili}
               onSalva={(campi) => salva(p.id, campi)}
@@ -24934,9 +24967,12 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
               onArchivia={() => archivia(p, true)}
               onRipristina={() => archivia(p, false)}
             />
+            </div>
           ))
         )}
 
+        </div>
+      </div>
       </div>
 
       {mostraNuovo && (
