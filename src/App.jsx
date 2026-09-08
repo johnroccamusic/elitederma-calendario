@@ -14873,7 +14873,9 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
           {storico == null ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
           ) : storico.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun logo generato finora.</div>
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+              Nessun logo in elenco. Lo storico registra i loghi scaricati da adesso in avanti: quelli fatti prima non sono annotati da nessuna parte, quindi il loro numero non si può recuperare.
+            </div>
           ) : (
             storico.map((r, i) => (
               <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
@@ -15145,6 +15147,9 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   const [generando, setGenerando] = useState(false);
   const [msg, setMsg] = useState("");
   const [codiceGenerato, setCodiceGenerato] = useState(null);
+  // i loghi composti ma non ancora scaricati: vivono solo nella pagina
+  const [anteprime, setAnteprime] = useState([]);
+  const [scaricando, setScaricando] = useState(false);
 
   const OPZIONI_CORSO = [...CORSI_LOGO, { chiave: "master_assistant", etichetta: "Master Assistant" }, { chiave: "master", etichetta: "Master" }];
   const richiedeVariante = corso && corso !== "master_assistant" && corso !== "master";
@@ -15177,6 +15182,12 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     caricaFontGenerazione();
   }, [loghiImpostazioni?.font_nome_path, loghiImpostazioni?.font_numero_path]);
 
+  // Generare non e' scaricare. Prima il tasto faceva tutto insieme:
+  // componeva, scaricava e consumava il numero progressivo — e ogni prova
+  // bruciava un codice per sempre. Ora "Genera" fa vedere i loghi qui
+  // sotto e basta: si possono rifare quante volte si vuole, il codice
+  // resta lo stesso. Il numero si consuma quando si scarica, che e' il
+  // momento in cui il logo esce davvero da qui.
   async function genera() {
     if (!masterScelta) { setMsg("Scegli la master."); return; }
     if (!categoria) { setMsg("Scegli il tipo di corso/logo."); return; }
@@ -15188,6 +15199,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     setMsg("");
     try {
       const codice = calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero);
+      const fatti = [];
       const blobNero = await componiLogoPng({
         percorsoLogo: categoria.logo_nero_path,
         variante: "nero",
@@ -15197,7 +15209,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
         famigliaNome: "loghiFontNomeGen",
         famigliaNumero: "loghiFontNumeroGen",
       });
-      scaricaBlob(blobNero, `${categoria.chiave}-nero-${codice}.png`);
+      fatti.push({ variante: "nero", blob: blobNero, url: URL.createObjectURL(blobNero), nomeFile: `${categoria.chiave}-nero-${codice}.png` });
 
       if (categoria.richiede_bianco) {
         const blobBianco = await componiLogoPng({
@@ -15209,28 +15221,46 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
           famigliaNome: "loghiFontNomeGen",
           famigliaNumero: "loghiFontNumeroGen",
         });
-        scaricaBlob(blobBianco, `${categoria.chiave}-bianco-${codice}.png`);
+        fatti.push({ variante: "bianco", blob: blobBianco, url: URL.createObjectURL(blobBianco), nomeFile: `${categoria.chiave}-bianco-${codice}.png` });
       }
 
-      // resta traccia di cosa e' stato generato: senza, dopo una prova non
-      // ci sarebbe modo di sapere quale numero restituire al contatore
-      const { error: erroreStorico } = await supabase.from("loghi_generati").insert({
-        numero: prossimoNumero, codice,
-        categoria_chiave: categoria.chiave, categoria_etichetta: categoria.etichetta,
-        master_nome: masterScelta.nome, allieva_nome: nomeAllieva.trim(),
-      });
-      // se lo storico non registra, si dice: senza quella riga il numero
-      // non si puo' piu' recuperare, e scoprirlo dopo non serve a niente
-      if (erroreStorico) window.alert("Loghi generati, ma non sono riuscito a registrarli nello storico: " + testoErrore(erroreStorico));
-      const { error } = await supabase.from("loghi_impostazioni").update({ prossimo_numero: prossimoNumero + 1 }).eq("id", loghiImpostazioni.id);
-      if (error) { setMsg("Loghi generati, ma non sono riuscito ad aggiornare il contatore: " + testoErrore(error)); setGenerando(false); return; }
+      // le anteprime di prima non servono piu': gli indirizzi temporanei si
+      // liberano, o restano appesi alla pagina per tutta la sessione
+      anteprime.forEach((a) => URL.revokeObjectURL(a.url));
+      setAnteprime(fatti);
       setCodiceGenerato(codice);
-      setMsg(`Loghi generati con codice ${codice}.`);
-      ricarica(["loghi_impostazioni"]);
+      setMsg("Loghi pronti qui sotto. Finché non li scarichi il codice resta libero: puoi rigenerarli quante volte vuoi.");
     } catch (e) {
       setMsg("Errore nella generazione: " + e.message);
     }
     setGenerando(false);
+  }
+
+  // Il download e' il momento in cui il logo esce da qui: allora si
+  // registra nello storico e si consuma il numero. Prima si scaricano i
+  // file, poi si scrive: se il browser blocca il download, il numero non
+  // e' stato ancora bruciato.
+  async function scarica() {
+    if (anteprime.length === 0 || !codiceGenerato) return;
+    setScaricando(true);
+    anteprime.forEach((a) => scaricaBlob(a.blob, a.nomeFile));
+
+    const { error: erroreStorico } = await supabase.from("loghi_generati").insert({
+      numero: prossimoNumero, codice: codiceGenerato,
+      categoria_chiave: categoria.chiave, categoria_etichetta: categoria.etichetta,
+      master_nome: masterScelta.nome, allieva_nome: nomeAllieva.trim(),
+    });
+    // se lo storico non registra, si dice: senza quella riga il numero non
+    // si puo' piu' recuperare, e scoprirlo dopo non serve a niente
+    if (erroreStorico) window.alert("Loghi scaricati, ma non sono riuscito a registrarli nello storico: " + testoErrore(erroreStorico));
+
+    const { error } = await supabase.from("loghi_impostazioni").update({ prossimo_numero: prossimoNumero + 1 }).eq("id", loghiImpostazioni.id);
+    setScaricando(false);
+    if (error) { setMsg("Loghi scaricati, ma non sono riuscito ad aggiornare il contatore: " + testoErrore(error)); return; }
+    anteprime.forEach((a) => URL.revokeObjectURL(a.url));
+    setAnteprime([]);
+    setMsg(`Loghi scaricati con codice ${codiceGenerato}. Il prossimo numero è ${prossimoNumero + 1}.`);
+    ricarica(["loghi_impostazioni"]);
   }
 
   return (
@@ -15275,12 +15305,38 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
           {generando ? "Genero…" : "Genera loghi"}
         </Button>
         {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
-        {codiceGenerato && (
-          <div style={{ ...fontBody, fontSize: 13, color: "#2E7D32", marginTop: 6 }}>
-            I 2 file PNG sono stati scaricati.
-          </div>
-        )}
       </div>
+
+      {/* I loghi si vedono prima di uscire da qui. Su fondo bianco perche'
+          il logo bianco su carta beige non si vedrebbe, e su questo si
+          controlla anche l'ombra del testo — che serve proprio a farlo
+          vivere su un fondo chiaro. */}
+      {anteprime.length > 0 && (
+        <div style={{ ...cardStyle, marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
+              Anteprima — codice {codiceGenerato}
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>numero {prossimoNumero}, ancora libero</div>
+          </div>
+          {anteprime.map((a) => (
+            <div key={a.variante} style={{ marginBottom: 12 }}>
+              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                Logo {a.variante}
+              </div>
+              <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12 }}>
+                <img src={a.url} alt={`Logo ${a.variante}`} style={{ width: "100%", height: "auto", display: "block" }} />
+              </div>
+            </div>
+          ))}
+          <Button onClick={scarica} disabled={scaricando} style={{ width: "100%" }}>
+            {scaricando ? "Scarico…" : `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`} e usa il numero ${prossimoNumero}`}
+          </Button>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
+            Finché non scarichi, il numero {prossimoNumero} resta libero: puoi cambiare nome o categoria e rigenerare quante volte vuoi.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
