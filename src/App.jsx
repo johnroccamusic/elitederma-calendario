@@ -2272,19 +2272,33 @@ function IconaColonne({ n, size = 16, color = "currentColor" }) {
 // già l'onBack di quella pagina), solo l'aspetto cambia. Nessun
 // trascinamento qui: queste pagine non contengono tasti/cartelle da
 // spostare, a differenza della Home
+// Il tasto per risalire di un livello: un medaglione tondo color crema
+// con l'icona dentro e sotto il nome del posto dove si torna. Era una
+// pastiglia bianca con icona e testo in fila, e in cima a una pagina
+// bianca si confondeva con i campi; tonda e colorata si riconosce con la
+// coda dell'occhio, che e' l'unico modo in cui si guarda un tasto
+// "indietro". Verso Home l'icona e' la casetta: e' il posto che si
+// riconosce prima di leggere.
 function TastoLivelloPrecedente({ titolo, onClick }) {
+  const versoHome = String(titolo || "").trim().toLowerCase() === "home";
+  const Icona = versoHome ? IconaCasa : IconaCartellaShop;
   return (
     <button
       onClick={onClick}
       title={titolo}
       style={{
-        display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-        background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10,
-        padding: "6px 10px", cursor: "pointer", maxWidth: 130,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0,
+        background: "none", border: "none", padding: 0, cursor: "pointer", maxWidth: 96,
       }}
     >
-      <IconaCartellaShop size={14} color={NAVY} />
-      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titolo}</span>
+      <span style={{
+        width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+        background: "#F3E7D2", border: `1px solid ${CREAM_BORDER}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <Icona size={20} color={NAVY} />
+      </span>
+      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{titolo}</span>
     </button>
   );
 }
