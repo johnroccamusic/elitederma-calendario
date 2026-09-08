@@ -14782,24 +14782,71 @@ function ControlliOmbra({ titolo, ombra, onCambia }) {
 // logo, e per cambiarla serviva una riga di sorgente. Qui si vede mentre
 // la si muove, sul fondo chiaro che e' il caso difficile — su fondo scuro
 // il testo bianco si legge da solo.
-function RegolaOmbraLogo({ config, aggiorna, famigliaNome, famigliaNumero }) {
+function RegolaOmbraLogo({ config, aggiorna, famigliaNome, famigliaNumero, loghiCategorie, larghezzePerCategoria }) {
   const ombraNome = ombraLogoDi(config, "nome");
   const ombraNumero = ombraLogoDi(config, "numero");
-  // l'anteprima non e' l'immagine vera: le misure sono in unita' di
-  // larghezza, quindi si scalano sulla larghezza del riquadro e il
-  // rapporto resta quello che si vedra' stampato
+  // Un'ombra si giudica sul logo, non su un riquadro colorato: qui si
+  // scrive sul file bianco vero, alla posizione e alla grandezza calibrate,
+  // cosi' quello che si vede e' quello che esce dal download.
+  const categoria = (CATEGORIE_LOGO
+    .map((c) => (loghiCategorie || []).find((lc) => lc.chiave === c.chiave))
+    .filter(Boolean)
+    .find((c) => c.logo_bianco_path)) || null;
+  const src = categoria ? supabase.storage.from("loghi-immagini").getPublicUrl(categoria.logo_bianco_path).data.publicUrl : null;
+  // il testo bianco su fondo bianco non si vede: il fondo si sceglie, ed
+  // e' anche il modo di capire se l'ombra regge dove il logo andra' a finire
+  const [fondoScuro, setFondoScuro] = useState(false);
+
   const rifAnteprima = React.useRef(null);
-  const [larghezzaAnteprima, setLarghezzaAnteprima] = useState(560);
+  const [larghezzaMostrata, setLarghezzaMostrata] = useState(560);
   useEffect(() => {
-    function misura() { if (rifAnteprima.current) setLarghezzaAnteprima(rifAnteprima.current.clientWidth || 560); }
-    misura();
-    window.addEventListener("resize", misura);
-    return () => window.removeEventListener("resize", misura);
-  }, []);
+    const el = rifAnteprima.current;
+    if (!el) return;
+    const osservatore = new ResizeObserver((voci) => { for (const v of voci) setLarghezzaMostrata(v.contentRect.width); });
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, [src]);
+
+  // Le misure di calibrazione sono in pixel del file di riferimento (il
+  // nero), non del bianco che si sta mostrando: si scalano una volta sola,
+  // dal riferimento alla larghezza a schermo.
+  const pfx = categoria ? prefissoCalibrazioneLogo(categoria) : "nero";
+  const larghezze = (categoria && larghezzePerCategoria?.[categoria.chiave]) || {};
+  const larghezzaRif = larghezze[pfx] || larghezze.bianco || larghezze.nero || null;
+  const scala = larghezzaRif ? larghezzaMostrata / larghezzaRif : 0;
+
+  const nomeProva = "NOME COGNOME";
+  const codiceProva = calcolaCodiceLogo("Andrea Paura", "Carla Bosi", config.prossimo_numero || 1);
+  const sx = Number(categoria?.[`${pfx}_nome_limite_sx`] ?? 0);
+  const dx = Number(categoria?.[`${pfx}_nome_limite_dx`] ?? 100);
+  const numSx = Number(categoria?.[`${pfx}_numero_limite_sx`] ?? 0);
+  const numDx = Number(categoria?.[`${pfx}_numero_limite_dx`] ?? 100);
+  const spaziaturaNumero = Number(categoria?.[`${pfx}_numero_spaziatura`]) || 0;
+  const adattNome = larghezzaRif
+    ? adattaNomeLogo(nomeProva, Number(categoria[`${pfx}_nome_font_size`]), famigliaNome, Math.max(1, (larghezzaRif * (dx - sx)) / 100))
+    : { fontSize: 0, spaziatura: 0 };
+  const adattNumero = larghezzaRif
+    ? adattaTestoDentro(codiceProva, Number(categoria[`${pfx}_numero_font_size`]), famigliaNumero, Math.max(1, (larghezzaRif * (numDx - numSx)) / 100), spaziaturaNumero)
+    : { fontSize: 0 };
+
+  // stessa formula del canvas: unita' di larghezza dell'immagine, qui
+  // riportate alla larghezza a schermo
   const inOmbra = (o) => {
-    const u = larghezzaAnteprima * UNITA_OMBRA_LOGO;
+    const u = larghezzaMostrata * UNITA_OMBRA_LOGO;
     return `${(o.x * u).toFixed(2)}px ${(o.y * u).toFixed(2)}px ${(Math.max(0, o.sfocatura) * u).toFixed(2)}px rgba(0,0,0,${Math.min(1, Math.max(0, o.intensita / 100))})`;
   };
+  const conSpaziatura = (testo, fontSize, spaziatura, famiglia, ombra) => (
+    <div style={{ display: "flex", justifyContent: "center", userSelect: "none", pointerEvents: "none" }}>
+      {testo.split("").map((ch, i) => (
+        <span key={i} style={{
+          fontFamily: `"${famiglia || "sans-serif"}", sans-serif`,
+          fontSize, color: "#fff", whiteSpace: "pre", textShadow: inOmbra(ombra),
+          marginRight: i < testo.length - 1 ? spaziatura : 0,
+        }}>{ch}</span>
+      ))}
+    </div>
+  );
+
   return (
     <div style={{ ...cardStyle, marginTop: 16 }}>
       <div style={hStyle}>Ombra del testo bianco</div>
@@ -14807,13 +14854,40 @@ function RegolaOmbraLogo({ config, aggiorna, famigliaNome, famigliaNumero }) {
         Vale solo per i loghi bianchi: il testo nero su fondo chiaro si legge da sé, e un’ombra scura sotto un testo scuro lo impasta.
         Il nome e il codice si regolano separatamente — uno è grande e l’altro piccolo, e la stessa ombra non sta bene a tutti e due.
       </div>
-      <div
-        ref={rifAnteprima}
-        style={{ background: "#EFECE8", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "22px 16px", textAlign: "center", overflow: "hidden" }}
-      >
-        <div style={{ fontFamily: famigliaNome || "serif", fontSize: 30, color: "#fff", textShadow: inOmbra(ombraNome), letterSpacing: 6, whiteSpace: "nowrap" }}>NOME COGNOME</div>
-        <div style={{ fontFamily: famigliaNumero || "serif", fontSize: 15, color: "#fff", textShadow: inOmbra(ombraNumero), letterSpacing: 3, marginTop: 10, whiteSpace: "nowrap" }}>APEC0409IT</div>
-      </div>
+      {src ? (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: 1, minWidth: 140 }}>{categoria.etichetta} — logo bianco</span>
+            {[["Fondo chiaro", false], ["Fondo scuro", true]].map(([etichetta, valore]) => (
+              <button
+                key={etichetta}
+                onClick={() => setFondoScuro(valore)}
+                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: fondoScuro === valore ? "#fff" : NAVY, background: fondoScuro === valore ? NAVY : "#fff", border: `1px solid ${fondoScuro === valore ? NAVY : CREAM_BORDER}`, borderRadius: 14, padding: "5px 11px", cursor: "pointer" }}
+              >{etichetta}</button>
+            ))}
+          </div>
+          <div
+            ref={rifAnteprima}
+            style={{ position: "relative", width: "100%", background: fondoScuro ? "#3A3D45" : "#EFECE8", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, overflow: "hidden" }}
+          >
+            <img src={src} alt={categoria.etichetta} style={{ width: "100%", height: "auto", display: "block" }} />
+            {scala > 0 && (
+              <>
+                <div style={{ position: "absolute", left: `${sx}%`, width: `${dx - sx}%`, top: `${Number(categoria[`${pfx}_nome_pos_y`]) || 0}%`, transform: "translateY(-50%)" }}>
+                  {conSpaziatura(nomeProva, adattNome.fontSize * scala, (adattNome.spaziatura || 0) * scala, famigliaNome, ombraNome)}
+                </div>
+                <div style={{ position: "absolute", left: `${numSx}%`, width: `${numDx - numSx}%`, top: `${Number(categoria[`${pfx}_numero_pos_y`]) || 0}%`, transform: "translateY(-50%)" }}>
+                  {conSpaziatura(codiceProva, adattNumero.fontSize * scala, spaziaturaNumero * scala, famigliaNumero, ombraNumero)}
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      ) : (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "14px 0" }}>
+          Per vedere l’ombra serve almeno un logo bianco caricato qui sotto: l’ombra si giudica sul logo, non a numeri.
+        </div>
+      )}
       <ControlliOmbra titolo="Nome allieva" ombra={ombraNome} onCambia={(o) => aggiorna({ ombra_nome_x: o.x, ombra_nome_y: o.y, ombra_nome_sfocatura: o.sfocatura, ombra_nome_intensita: o.intensita })} />
       <ControlliOmbra titolo="Codice progressivo" ombra={ombraNumero} onCambia={(o) => aggiorna({ ombra_numero_x: o.x, ombra_numero_y: o.y, ombra_numero_sfocatura: o.sfocatura, ombra_numero_intensita: o.intensita })} />
       <button
@@ -15069,6 +15143,8 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
         aggiorna={aggiorna}
         famigliaNome={famigliaNomeAnteprima}
         famigliaNumero={famigliaNumeroAnteprima}
+        loghiCategorie={loghiCategorie}
+        larghezzePerCategoria={larghezzePerCategoria}
       />
 
       {CATEGORIE_LOGO
