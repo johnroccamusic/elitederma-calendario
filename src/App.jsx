@@ -17942,17 +17942,23 @@ function BottonePulsanteScheda({ p }) {
       // quattro tasti uguali, con lo stesso fondo delle nuvole della scheda:
       // erano scritte trasparenti di larghezze diverse, e non si capiva
       // dove finisse una e cominciasse l'altra
+      // Da telefono tutti su una riga sola: icona sopra e testo sotto, che
+      // va a capo dove serve. Erano due per riga e prendevano mezza
+      // schermata prima di arrivare alla classe; in colonna il testo ha
+      // tutta la larghezza del tasto invece della meta' lasciata
+      // dall'icona di fianco, e ci sta in due righe.
       style={{
-        ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-        padding: "11px 10px",
+        ...fontDisplay, fontWeight: 600, fontSize: isMobile ? 9 : 12,
+        display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", justifyContent: "center", gap: isMobile ? 5 : 8,
+        padding: isMobile ? "9px 3px" : "11px 10px",
         borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, cursor: p.disabled ? "default" : "pointer",
         background: "#fff",
         color: NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
-        flex: "1 1 130px", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
+        flex: isMobile ? "1 1 0" : "1 1 130px", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
       }}
     >
-      <p.Icona size={16} color={GOLD} />
+      <p.Icona size={isMobile ? 32 : 16} color={GOLD} />
       <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", minWidth: 0, overflowWrap: "break-word" }}>{p.etichetta}</span>
     </button>
   );
@@ -21204,7 +21210,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
               <>
                 <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: spaziIscrizioni.dopoDivider }} />
                 {manigliaSpazio("dopoDivider")}
-                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 10, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoSecondari, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 8 }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: isMobile ? 5 : 10, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: spaziIscrizioni.dopoSecondari, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 5 : 8 }}>
                   {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("dopoSecondari")}
