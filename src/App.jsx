@@ -2272,13 +2272,12 @@ function IconaColonne({ n, size = 16, color = "currentColor" }) {
 // già l'onBack di quella pagina), solo l'aspetto cambia. Nessun
 // trascinamento qui: queste pagine non contengono tasti/cartelle da
 // spostare, a differenza della Home
-// Il tasto per risalire di un livello: un medaglione tondo color crema
-// con l'icona dentro e sotto il nome del posto dove si torna. Era una
-// pastiglia bianca con icona e testo in fila, e in cima a una pagina
-// bianca si confondeva con i campi; tonda e colorata si riconosce con la
-// coda dell'occhio, che e' l'unico modo in cui si guarda un tasto
-// "indietro". Verso Home l'icona e' la casetta: e' il posto che si
-// riconosce prima di leggere.
+// Il tasto per risalire di un livello: un tondo bianco con dentro
+// l'icona e, sotto, il nome del posto dove si torna. Era una pastiglia
+// con icona e testo in fila, larga quanto il nome: tonda occupa sempre
+// lo stesso spazio, e un tasto "indietro" che sta sempre nello stesso
+// punto si preme senza cercarlo. Verso Home l'icona e' la casetta: e' il
+// posto che si riconosce prima di leggerne il nome.
 function TastoLivelloPrecedente({ titolo, onClick }) {
   const versoHome = String(titolo || "").trim().toLowerCase() === "home";
   const Icona = versoHome ? IconaCasa : IconaCartellaShop;
@@ -2287,18 +2286,21 @@ function TastoLivelloPrecedente({ titolo, onClick }) {
       onClick={onClick}
       title={titolo}
       style={{
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0,
-        background: "none", border: "none", padding: 0, cursor: "pointer", maxWidth: 96,
+        width: 68, height: 68, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+        background: "#fff", border: `1px solid ${CREAM_BORDER}`, padding: "0 6px", cursor: "pointer",
+        overflow: "hidden",
       }}
     >
+      <Icona size={16} color={NAVY} />
+      {/* il nome sta DENTRO il tondo e va a capo dove capita, anche in
+          mezzo a una parola: in un cerchio da 68 "Amministrazione" non ci
+          sta su una riga, e tagliarla con i puntini vorrebbe dire non
+          leggerla affatto */}
       <span style={{
-        width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
-        background: "#F3E7D2", border: `1px solid ${CREAM_BORDER}`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <Icona size={20} color={NAVY} />
-      </span>
-      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{titolo}</span>
+        ...fontBody, fontSize: 8.5, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center",
+        overflowWrap: "anywhere", wordBreak: "break-word", maxWidth: "100%",
+      }}>{titolo}</span>
     </button>
   );
 }
