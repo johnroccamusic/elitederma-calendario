@@ -9639,28 +9639,32 @@ function etichettaSlot(s) {
 
 // card statistica in cima alla Dashboard modelle: cliccabile quando passa
 // onClick (le due centrali aprono le liste di slot corrispondenti)
+// Quattro quadrati uguali, in linea su ogni schermo. Erano rettangoli
+// larghi il doppio dell'altezza, con l'icona di fianco al numero: la
+// larghezza cambiava da una casella all'altra a seconda di quanto era
+// lunga l'etichetta, e da telefono andavano a capo in ordine sparso.
+// Icona sopra, etichetta, numero, e il resto sotto — tutto in colonna e
+// centrato, come i tasti quadrati del resto dell'app.
 function CardStatisticaModelle({ etichetta, valore, sottotitolo, colore, sfondo, icona, onClick, compatto }) {
   return (
     <button
       onClick={onClick}
       disabled={!onClick}
       style={{
-        ...fontBody, textAlign: compatto ? "center" : "left", flex: compatto ? "1 1 0" : "1 1 200px", minWidth: 0,
-        display: "flex", flexDirection: compatto ? "column" : "row", alignItems: "center", gap: compatto ? 5 : 14,
-        background: sfondo || "#fff", border: `1px solid ${sfondo ? "transparent" : CREAM_BORDER}`, borderRadius: 14,
-        padding: compatto ? "12px 5px" : 18, cursor: onClick ? "pointer" : "default",
+        ...fontBody, textAlign: "center", flex: "1 1 0", minWidth: 0, aspectRatio: "1 / 1",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: compatto ? 3 : 6,
+        background: sfondo || "#fff", border: `1px solid ${sfondo ? "transparent" : CREAM_BORDER}`, borderRadius: 16,
+        padding: compatto ? "6px 4px" : "10px 8px", cursor: onClick ? "pointer" : "default", overflow: "hidden",
       }}
     >
       {icona && (
-        <span style={{ width: compatto ? 32 : 42, height: compatto ? 32 : 42, borderRadius: "50%", background: colore ? `${colore}22` : "#F1ECDF", color: colore || NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ width: compatto ? 26 : 40, height: compatto ? 26 : 40, borderRadius: "50%", background: colore ? `${colore}22` : "#F1ECDF", color: colore || NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           {icona}
         </span>
       )}
-      <span style={{ minWidth: 0 }}>
-        <div style={{ ...fontBody, fontSize: compatto ? 10 : 13, color: MUTED, marginBottom: 2, lineHeight: compatto ? 1.15 : undefined }}>{etichetta}</div>
-        <div style={{ ...fontDisplay, fontSize: compatto ? 22 : 26, fontWeight: 700, color: colore || NAVY, lineHeight: 1 }}>{valore}</div>
-        {sottotitolo && <div style={{ ...fontBody, fontSize: compatto ? 9.5 : 12, color: MUTED, marginTop: 3, lineHeight: compatto ? 1.1 : undefined }}>{sottotitolo}</div>}
-      </span>
+      <div style={{ ...fontBody, fontSize: compatto ? 8.5 : 12, color: MUTED, lineHeight: 1.15, overflowWrap: "anywhere" }}>{etichetta}</div>
+      <div style={{ ...fontDisplay, fontSize: compatto ? 20 : 28, fontWeight: 700, color: colore || NAVY, lineHeight: 1 }}>{valore}</div>
+      {sottotitolo && <div style={{ ...fontBody, fontSize: compatto ? 8 : 11, color: MUTED, lineHeight: 1.1, overflowWrap: "anywhere" }}>{sottotitolo}</div>}
     </button>
   );
 }
@@ -10134,7 +10138,9 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
   return (
     <div>
 
-      <div style={{ display: "flex", gap: isMobile ? 6 : 14, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: 18 }}>
+      {/* quattro colonne uguali, mai a capo: quattro quadrati in fila si
+          leggono come una riga sola di numeri */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: isMobile ? 6 : 14, marginBottom: 18 }}>
         <CardStatisticaModelle compatto={isMobile}
           etichetta="Modelle richieste" valore={totaleRichieste} sottotitolo={`su ${corsiDistinti} cors${corsiDistinti === 1 ? "o" : "i"}`}
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>}
