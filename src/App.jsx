@@ -15473,7 +15473,17 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                 onChange={(e) => onSalva("tipo", e.target.value)}
               >
                 <option value="">— scegli trattamento —</option>
-                {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+                {/* I trattamenti gia' presi dagli altri posti di questo
+                    allievo non si ripropongono: nello stesso corso ognuno
+                    fa un trattamento solo per tipo, e sceglierlo due volte
+                    crea due modelle da cercare per la stessa cosa — e' cosi'
+                    che Emiljana Kica si e' ritrovata due sopracciglia e
+                    nessun eyeliner. Il suo trattamento attuale resta in
+                    elenco, o non si potrebbe piu' cambiare idea. */}
+                {opzioniTipo
+                  .filter((opz) => normalizzaTipoModella(opz) === normalizzaTipoModella(modella.tipo)
+                    || !(tuttiGliSlot || []).some((altro, i) => i !== mioIndice && normalizzaTipoModella(altro?.tipo) === normalizzaTipoModella(opz)))
+                  .map((opz) => <option key={opz} value={opz}>{opz}</option>)}
               </select>
             ) : (
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY }}>{modella.tipo || "(trattamento non scelto)"}</div>
