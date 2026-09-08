@@ -19557,16 +19557,35 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     if (richiedeModelle !== "si") { if (tipiModelle.length > 0) setTipiModelle([]); return; }
     const n = Math.max(0, parseInt(numeroModelle, 10) || 0);
     if (n === tipiModelle.length) return;
-    // se il corso ha un solo giorno che richiede modelle allievi, lo si
-    // assegna subito senza chiedere nulla — il selettore "Giorno" compare
-    // solo quando c'è davvero una scelta da fare (più giorni possibili)
-    const giorniAllievi = (corsiGiorni || []).filter((g) => g.corso_id === corsoData.corso_id && g.richiede_modelle_allievi);
-    const giornoUnico = giorniAllievi.length === 1 ? giorniAllievi[0] : null;
-    const giornoDefault = giornoUnico ? giornoUnico.numero_giorno : null;
-    const tipoDefault = giornoUnico ? (giornoUnico.tipo_modella_allievi || "") : "";
+    // I posti nuovi nascono gia' assegnati ai giorni del corso, uno per
+    // giorno: su PMU BASE tre modelle diventano sopracciglia, labbra ed
+    // eyeliner senza che nessuno scelga niente. Chi si dimentica di
+    // compilare le tendine ha comunque le tre richieste giuste sui tre
+    // giorni giusti — era proprio da quei posti lasciati vuoti che sono
+    // usciti i doppioni.
+    //
+    // Si salta quello che gli altri posti hanno gia' preso: nello stesso
+    // corso ogni allievo fa un trattamento solo per tipo. Se i posti
+    // chiesti sono piu' dei giorni, gli avanzi restano da scegliere a mano
+    // — non c'e' un trattamento libero da dargli.
+    const giorniAllievi = (corsiGiorni || [])
+      .filter((g) => g.corso_id === corsoData.corso_id && g.richiede_modelle_allievi)
+      .slice()
+      .sort((a, b) => a.numero_giorno - b.numero_giorno);
     setTipiModelle((prev) => {
       if (n < prev.length) return prev.slice(0, n);
-      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ tipo: tipoDefault, mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", giorno: giornoDefault }))];
+      const presi = new Set(prev.map((x) => normalizzaTipoModella(x?.tipo)).filter(Boolean));
+      const nuovi = [];
+      for (let i = 0; i < n - prev.length; i += 1) {
+        const libero = giorniAllievi.find((g) => g.tipo_modella_allievi && !presi.has(normalizzaTipoModella(g.tipo_modella_allievi)));
+        if (libero) presi.add(normalizzaTipoModella(libero.tipo_modella_allievi));
+        nuovi.push({
+          tipo: libero ? libero.tipo_modella_allievi : "",
+          mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "",
+          giorno: libero ? libero.numero_giorno : null,
+        });
+      }
+      return [...prev, ...nuovi];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [richiedeModelle, numeroModelle]);
