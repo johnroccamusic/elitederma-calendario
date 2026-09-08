@@ -687,6 +687,34 @@ function IconaLuna({ size = 16 }) {
     </svg>
   );
 }
+// icone della scheda progetto
+function IconaFumetto({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function IconaArchivio({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+      <path d="M10 12h4" />
+    </svg>
+  );
+}
+// la priorita' si legge anche dalla forma: due frecce su per l'alta, una
+// riga per la normale
+function IconaPrioritaProgetto({ size = 16, livello = "normale" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+      {livello === "alta" && <><polyline points="6 15 12 9 18 15" /><polyline points="6 20 12 14 18 20" /></>}
+      {livello === "intermedia" && <polyline points="6 15 12 9 18 15" />}
+      {livello === "normale" && <line x1="6" y1="12" x2="18" y2="12" />}
+    </svg>
+  );
+}
 function IconaCartaPos({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -23671,6 +23699,9 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   // scrivono ogni giorno. Doverle sbloccare ogni volta le farebbe scrivere
   // altrove, cioe' da nessuna parte.
   const [inModifica, setInModifica] = useState(false);
+  // gli aggiornamenti si aprono da soli se ce ne sono gia': un diario
+  // scritto che non si vede e' un diario che nessuno rilegge
+  const [aggiornamentiAperti, setAggiornamentiAperti] = useState(!!progetto.note_sviluppo);
   const [noteSviluppo, setNoteSviluppo] = useState(progetto.note_sviluppo || "");
   const [noteIniziali, setNoteIniziali] = useState(progetto.note_iniziali || "");
   const [nome, setNome] = useState(progetto.nome || "");
@@ -23722,43 +23753,62 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   const archiviato = !!progetto.archiviato_il;
   const etichettaSola = { ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 };
 
+  // Quante volte e' stato aggiornato: le righe scritte nelle note di
+  // sviluppo. Non e' un conteggio esatto di "interventi" — non li
+  // registriamo uno per uno — ma dice a colpo d'occhio se qualcuno ci ha
+  // messo mano o se la scheda e' ferma da quando e' nata.
+  const righeAggiornamenti = (progetto.note_sviluppo || "").split("\n").map((r) => r.trim()).filter(Boolean);
+  const etichettaSottile = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.2 };
+  const divisore = <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />;
+
   return (
     // stessa cornice delle schede dei corsi: filo sottile tutt'intorno e
     // il lato sinistro spesso del colore della priorita', che si vede
     // scorrendo l'elenco senza dover leggere niente
     <div style={{
-      ...cardStyle, marginBottom: 10, padding: isMobile ? 12 : 14, opacity: archiviato ? 0.75 : 1,
+      ...cardStyle, marginBottom: 10, padding: isMobile ? 12 : 16, opacity: archiviato ? 0.75 : 1,
       border: `1px solid ${CREAM_BORDER}`, borderLeft: `6px solid ${pri.colore}`, borderRadius: 16,
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
-        {inModifica ? (
-          <input
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            style={{ ...fontDisplay, fontSize: isMobile ? 20 : 27, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid ${GOLD}`, background: "transparent", padding: 0, outline: "none", flex: "1 1 200px", minWidth: 0 }}
-          />
-        ) : (
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 27, fontWeight: 700, color: NAVY, flex: "1 1 200px", minWidth: 0, overflowWrap: "anywhere" }}>{progetto.nome}</div>
-        )}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Priorità</span>
+      {/* Titolo con l'icona a sinistra e la priorita' in un riquadro a
+          destra: sono le due cose che si guardano scorrendo l'elenco, e
+          stanno ai due capi della riga per non confondersi fra loro. */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
+        <span style={{ width: isMobile ? 38 : 44, height: isMobile ? 38 : 44, borderRadius: 12, background: BG_CHIARO, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <IconaCatDocumento size={isMobile ? 20 : 24} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
           {inModifica ? (
-            <select
-              value={progetto.priorita}
-              onChange={(e) => onSalva({ priorita: e.target.value })}
-              style={{ ...inputStyle, width: "auto", padding: "8px 12px", fontSize: 15, fontWeight: 700, letterSpacing: 0.5, color: pri.colore, background: pri.sfondo, border: `1.5px solid ${pri.colore}55` }}
-            >
-              {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta.toUpperCase()}</option>)}
-            </select>
+            <input
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid ${GOLD}`, background: "transparent", padding: 0, outline: "none", width: "100%" }}
+            />
           ) : (
-            <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, letterSpacing: 0.5, color: pri.colore, background: pri.sfondo, border: `1.5px solid ${pri.colore}55`, borderRadius: 10, padding: "7px 12px" }}>
-              {pri.etichetta.toUpperCase()}
-            </span>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{progetto.nome}</div>
           )}
         </div>
+        {inModifica ? (
+          <select
+            value={progetto.priorita}
+            onChange={(e) => onSalva({ priorita: e.target.value })}
+            style={{ ...inputStyle, width: "auto", padding: "7px 10px", fontSize: 13, fontWeight: 700, color: pri.colore, background: pri.sfondo, border: `1.5px solid ${pri.colore}55`, flexShrink: 0 }}
+          >
+            {PRIORITA_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta.toUpperCase()}</option>)}
+          </select>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 7, background: pri.sfondo, borderRadius: 12, padding: isMobile ? "6px 9px" : "8px 12px", flexShrink: 0 }}>
+            <span style={{ color: pri.colore, display: "flex" }}><IconaPrioritaProgetto size={isMobile ? 15 : 18} livello={progetto.priorita} /></span>
+            <span style={{ textAlign: "left" }}>
+              <div style={{ ...etichettaSottile, color: pri.colore, opacity: 0.8, fontSize: 8.5 }}>Priorità</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 16, fontWeight: 700, color: pri.colore, lineHeight: 1.1 }}>{pri.etichetta.toUpperCase()}</div>
+            </span>
+          </div>
+        )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap", marginBottom: 10 }}>
+      {/* stato, incaricati e scadenza su una riga sola, separati da un filo:
+          sono tre risposte brevi — a che punto e', di chi e', per quando */}
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap", marginBottom: 12 }}>
         {inModifica ? (
           <select
             value={progetto.stato}
@@ -23768,119 +23818,139 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
             {STATI_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
           </select>
         ) : (
-          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: st.colore, background: st.sfondo, border: `1px solid ${st.colore}44`, borderRadius: 9, padding: "7px 12px" }}>{st.etichetta}</span>
+          <span style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 20, padding: isMobile ? "6px 12px" : "8px 14px", whiteSpace: "nowrap" }}>{st.etichetta}</span>
         )}
-
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
-          <span style={etichettaSola}>Assegnato a</span>
-          {inModifica ? (
-            <>
-              {(assegnati.length > 0 ? assegnati : [null]).map((assegnato, posizione) => (
-                <div key={assegnato?.id || `vuoto-${posizione}`} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <select
-                    value={assegnato?.id || ""}
-                    onChange={(e) => cambiaAssegnato(posizione, e.target.value)}
-                    style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }}
-                  >
-                    <option value="">— nessuno —</option>
-                    {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-                    {/* chi non ha piu' il permesso resta scritto: toglierlo
-                        vorrebbe dire perdere la memoria di chi ci ha lavorato */}
-                    {assegnato?.id && !incaricabili.some((u) => u.id === assegnato.id) && (
-                      <option value={assegnato.id}>{assegnato.nome || "(non più abilitato)"}</option>
+        {divisore}
+        <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, flex: "1 1 130px" }}>
+          <span style={{ color: MUTED, display: "flex", flexShrink: 0 }}><IconaPersonaSemplice size={isMobile ? 18 : 22} /></span>
+          <div style={{ minWidth: 0 }}>
+            <div style={etichettaSottile}>Assegnato a</div>
+            {inModifica ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
+                {(assegnati.length > 0 ? assegnati : [null]).map((assegnato, posizione) => (
+                  <div key={assegnato?.id || `vuoto-${posizione}`} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <select
+                      value={assegnato?.id || ""}
+                      onChange={(e) => cambiaAssegnato(posizione, e.target.value)}
+                      style={{ ...inputStyle, width: "auto", padding: "5px 7px", fontSize: 12 }}
+                    >
+                      <option value="">— nessuno —</option>
+                      {incaricabili.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                      {/* chi non ha piu' il permesso resta scritto: toglierlo
+                          vorrebbe dire perdere la memoria di chi ci ha lavorato */}
+                      {assegnato?.id && !incaricabili.some((u) => u.id === assegnato.id) && (
+                        <option value={assegnato.id}>{assegnato.nome || "(non più abilitato)"}</option>
+                      )}
+                    </select>
+                    {assegnati.length > 1 && (
+                      <button type="button" onClick={() => togliAssegnato(posizione)} title="Togli questa persona" style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>×</button>
                     )}
-                  </select>
-                  {assegnati.length > 1 && (
-                    <button type="button" onClick={() => togliAssegnato(posizione)} title="Togli questa persona" style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>×</button>
-                  )}
-                </div>
-              ))}
-              {/* il "+" compare solo quando c'e' gia' qualcuno e resta ancora
-                  qualcuno da scegliere: due caselle vuote non servono a niente */}
-              {assegnati.length > 0 && assegnati.length < incaricabili.length && (
-                <button type="button" onClick={aggiungiAssegnato} title="Assegna anche a un'altra persona" style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: GOLD, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>+</button>
-              )}
-            </>
-          ) : (
-            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: assegnati.length ? NAVY : MUTED }}>
-              {assegnati.length ? assegnati.map((a) => a.nome).join(", ") : "nessuno"}
-            </span>
-          )}
+                  </div>
+                ))}
+                {assegnati.length > 0 && assegnati.length < incaricabili.length && (
+                  <button type="button" onClick={aggiungiAssegnato} title="Assegna anche a un'altra persona" style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: GOLD, background: "none", border: "none", padding: "0 2px", cursor: "pointer", lineHeight: 1 }}>+</button>
+                )}
+              </div>
+            ) : (
+              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 600, color: assegnati.length ? NAVY : MUTED, lineHeight: 1.2, overflowWrap: "anywhere" }}>
+                {assegnati.length ? assegnati.map((a) => toTitleCase(a.nome || "")).join(", ") : "nessuno"}
+              </div>
+            )}
+          </div>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={etichettaSola}>Scadenza</span>
-          {inModifica ? (
-            <input
-              type="date"
-              value={progetto.scadenza || ""}
-              onChange={(e) => onSalva({ scadenza: e.target.value || null })}
-              style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5, fontWeight: 700, color: scaduto ? "#C0392B" : NAVY }}
-            />
-          ) : (
-            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: scaduto ? "#C0392B" : NAVY }}>
-              {progetto.scadenza ? fmtData(progetto.scadenza) : "—"}
-            </span>
-          )}
-          {scaduto && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B" }}>scaduto</span>}
+        {divisore}
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+          <span style={{ color: MUTED, display: "flex" }}><IconaCalendarioCard size={isMobile ? 18 : 22} /></span>
+          <div>
+            <div style={etichettaSottile}>Scadenza</div>
+            {inModifica ? (
+              <input
+                type="date"
+                value={progetto.scadenza || ""}
+                onChange={(e) => onSalva({ scadenza: e.target.value || null })}
+                style={{ ...inputStyle, width: "auto", padding: "5px 7px", fontSize: 12, marginTop: 2 }}
+              />
+            ) : (
+              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 600, color: scaduto ? "#C0392B" : NAVY, lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                {progetto.scadenza ? fmtData(progetto.scadenza) : "—"}
+              </div>
+            )}
+          </div>
         </div>
+        {scaduto && (
+          <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: "#C0392B", background: "#FDECEC", borderRadius: 20, padding: "5px 11px", whiteSpace: "nowrap" }}>SCADUTO</span>
+        )}
       </div>
 
-      {/* le due note affiancate da scrivania: una sopra l'altra prendevano
-          mezza scheda per riga, e in un elenco di venti progetti quella
-          mezza scheda diventa una pagina intera */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 10 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note iniziali</div>
-          {inModifica ? (
-            <textarea
-              rows={2}
-              value={noteIniziali}
-              onChange={(e) => setNoteIniziali(e.target.value)}
-              style={{ ...inputStyle, resize: "vertical", fontSize: 14.5 }}
-            />
-          ) : (
-            // due righe e poi i puntini: l'apertura di un progetto si
-            // scrive una volta e si rilegge di rado, e per intero basta
-            // aprire Modifica
-            <div style={{ ...fontBody, fontSize: 14.5, color: progetto.note_iniziali ? NAVY : MUTED, padding: "4px 0", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }} title={progetto.note_iniziali || ""}>
-              {progetto.note_iniziali || "—"}
-            </div>
-          )}
-        </div>
-        {/* le note di sviluppo restano sempre scrivibili: sono il diario di
-            chi ci lavora, e doverle sbloccare ogni volta le farebbe scrivere
-            altrove, cioe' da nessuna parte */}
-        <div style={{ minWidth: 0 }}>
-          <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 2 }}>Note sviluppo</div>
+      {/* le note iniziali si vedono solo quando si modifica: sono l'atto di
+          nascita del progetto, si scrivono una volta e non si rileggono
+          ogni giorno */}
+      {inModifica && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...etichettaSottile, marginBottom: 3 }}>Note iniziali</div>
           <textarea
-            rows={2}
-            value={noteSviluppo}
-            onChange={(e) => setNoteSviluppo(e.target.value)}
-            onBlur={() => { if (noteSviluppo !== (progetto.note_sviluppo || "")) onSalva({ note_sviluppo: noteSviluppo.trim() || null }); }}
-            placeholder="Aggiornamenti di chi ci sta lavorando…"
+            rows={3}
+            value={noteIniziali}
+            onChange={(e) => setNoteIniziali(e.target.value)}
             style={{ ...inputStyle, resize: "vertical", fontSize: 14.5 }}
           />
         </div>
+      )}
+
+      {/* Gli aggiornamenti sono il diario di chi ci lavora: restano sempre
+          scrivibili, anche a scheda chiusa. Il numero accanto dice se
+          qualcuno ci ha messo mano o se il progetto e' fermo da quando e'
+          nato. */}
+      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 12, marginBottom: 12, background: "#FCFBF8" }}>
+        <button
+          type="button"
+          onClick={() => setAggiornamentiAperti((v) => !v)}
+          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+        >
+          <span style={{ color: NAVY, display: "flex" }}><IconaFumetto size={16} /></span>
+          <span style={{ ...etichettaSottile, color: NAVY, flex: 1, textAlign: "left" }}>Aggiornamenti</span>
+          <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, background: BG_CHIARO, borderRadius: 20, minWidth: 22, padding: "2px 7px" }}>{righeAggiornamenti.length}</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: aggiornamentiAperti ? "rotate(90deg)" : "none" }}>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+        {aggiornamentiAperti && (
+          <textarea
+            rows={3}
+            value={noteSviluppo}
+            onChange={(e) => setNoteSviluppo(e.target.value)}
+            onBlur={() => { if (noteSviluppo !== (progetto.note_sviluppo || "")) onSalva({ note_sviluppo: noteSviluppo.trim() || null }); }}
+            placeholder="Scrivi un aggiornamento…"
+            style={{ ...inputStyle, resize: "vertical", fontSize: 14.5, marginTop: 8, background: "#fff" }}
+          />
+        )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 10 }}>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
           {archiviato ? `Archiviato il ${fmtData(String(progetto.archiviato_il).slice(0, 10))}` : `Aperto il ${fmtData(String(progetto.creato_il).slice(0, 10))}`}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14 }}>
           {inModifica ? (
-            <button onClick={chiudiModifica} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 16px", cursor: "pointer" }}>Fine</button>
+            <button onClick={chiudiModifica} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 16px", cursor: "pointer" }}>Fine</button>
           ) : (
-            <button onClick={() => setInModifica(true)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 14px", cursor: "pointer" }}>Modifica</button>
+            <button onClick={() => setInModifica(true)} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: "none", padding: 4, cursor: "pointer" }}>
+              <IconaMatitaNota size={15} /> Modifica
+            </button>
           )}
+          {divisore}
           {archiviato ? (
-            <button onClick={onRipristina} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 14px", cursor: "pointer" }}>Riporta fra i progetti</button>
+            <button onClick={onRipristina} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: "none", padding: 4, cursor: "pointer" }}>
+              <IconaArchivio size={15} /> Riporta
+            </button>
           ) : (
-            <button onClick={onArchivia} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 14px", cursor: "pointer" }}>Archivia</button>
+            <button onClick={onArchivia} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: "none", padding: 4, cursor: "pointer" }}>
+              <IconaArchivio size={15} /> Archivia
+            </button>
           )}
+          {divisore}
           <button onClick={onElimina} title="Elimina definitivamente" style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: "#C0392B", display: "flex" }}>
-            <IconaCestino size={16} />
+            <IconaCestino size={17} />
           </button>
         </div>
       </div>
