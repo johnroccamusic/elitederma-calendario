@@ -18462,8 +18462,14 @@ function useCorpoImportoNecessario(testo, corpoBase, corpoMin = 8) {
 // Riepilogo amministrativo restano quelle di prima — li' le colonne sono
 // tre e larghe, e non c'era niente da stringere.
 function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota, compatta = false, grande = false, corpoImposto, onCorpoNecessario, altezzaEtichettaImposta, onAltezzaEtichetta }) {
-  const medaglione = compatta ? 22 : grande ? 34 : (isMobile ? 30 : 42);
-  const corpoValore = compatta ? 11.5 : grande ? 22 : (isMobile ? 14 : 20);
+  // Da telefono, fuori dai due vestiti speciali, la cella diventa un
+  // quadrato con l'icona sopra: affiancate, icona e testo si dividevano
+  // una colonna larga un terzo di schermo e l'etichetta andava a capo una
+  // parola per riga — "QUOTA CASH GIA' INCASSATA PRIMA DEL CORSO" ne
+  // faceva sette.
+  const colonna = isMobile && !compatta && !grande;
+  const medaglione = compatta ? 22 : grande ? 34 : colonna ? 46 : (isMobile ? 30 : 42);
+  const corpoValore = compatta ? 11.5 : grande ? 22 : colonna ? 17 : (isMobile ? 14 : 20);
   const { rifBox, rifSonda, corpo } = useCorpoImportoNecessario(valore, corpoValore);
   useEffect(() => { onCorpoNecessario?.(corpo); }, [corpo, onCorpoNecessario]);
   // le cifre di una stessa riga si leggono insieme: se una e' scritta piu'
@@ -18490,7 +18496,7 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
   }, [label, compatta, isMobile]);
   useEffect(() => { onAltezzaEtichetta?.(altezzaEtichetta); }, [altezzaEtichetta, onAltezzaEtichetta]);
   const stileEtichetta = {
-    ...fontBody, fontSize: compatta ? 7.5 : grande ? 10.5 : (isMobile ? 9 : 10.5), color: MUTED,
+    ...fontBody, fontSize: compatta ? 7.5 : grande ? 10.5 : colonna ? 12 : (isMobile ? 9 : 10.5), color: MUTED,
     textTransform: "uppercase", letterSpacing: compatta ? 0 : grande ? 0.5 : (isMobile ? 0.2 : 0.6),
     lineHeight: 1.25, overflowWrap: "anywhere",
   };
@@ -18507,23 +18513,27 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
   );
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: compatta ? 5 : grande ? 10 : (isMobile ? 8 : 12), minWidth: 0,
+      display: "flex", flexDirection: colonna ? "column" : "row",
+      alignItems: "center", justifyContent: colonna ? "center" : undefined,
+      gap: compatta ? 5 : grande ? 10 : colonna ? 6 : (isMobile ? 8 : 12), minWidth: 0,
+      ...(colonna ? { aspectRatio: "1 / 1", textAlign: "center" } : null),
       background: grande ? "#FDFCFA" : "#FCFBF8", border: `1px solid ${CREAM_BORDER}`, borderRadius: compatta ? 10 : grande ? 16 : 14,
-      padding: compatta ? "8px 6px" : grande ? "12px 12px" : (isMobile ? "10px 10px" : "12px 14px"),
+      padding: compatta ? "8px 6px" : grande ? "12px 12px" : colonna ? "8px 5px" : (isMobile ? "10px 10px" : "12px 14px"),
+      overflow: "hidden",
     }}>
       <span style={{
         width: medaglione, height: medaglione, flexShrink: 0, borderRadius: "50%",
         background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: colore,
       }}>
-        <Icona size={compatta ? 12 : grande ? 17 : (isMobile ? 16 : 20)} />
+        <Icona size={compatta ? 12 : grande ? 17 : colonna ? 30 : (isMobile ? 16 : 20)} />
       </span>
-      {!compatta && <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0, margin: grande ? "2px 0" : 0 }} />}
-      <div ref={rifBox} style={{ minWidth: 0, flex: 1, position: "relative" }}>
+      {!compatta && !colonna && <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0, margin: grande ? "2px 0" : 0 }} />}
+      <div ref={rifBox} style={{ minWidth: 0, flex: colonna ? "0 0 auto" : 1, width: colonna ? "100%" : undefined, position: "relative" }}>
         {/* la copia invisibile su cui si misura il corpo necessario */}
         <span ref={rifSonda} aria-hidden style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, whiteSpace: "nowrap", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0 }}>{valore}</span>
         {/* la copia invisibile del titolo, per sapere quanto e' alto davvero */}
         <span ref={rifSondaEtichetta} aria-hidden style={{ ...stileEtichetta, display: "block", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0, width: "100%" }}>{blocco}</span>
-        <div style={{ ...stileEtichetta, minHeight: altezzaEtichettaImposta || altezzaEtichetta || undefined, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>{blocco}</div>
+        <div style={{ ...stileEtichetta, minHeight: colonna ? undefined : (altezzaEtichettaImposta || altezzaEtichetta || undefined), display: "flex", flexDirection: "column", justifyContent: colonna ? "flex-start" : "flex-end", alignItems: colonna ? "center" : undefined }}>{blocco}</div>
         <div style={{ ...fontDisplay, fontSize: corpoFinale, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2, overflow: "hidden" }}>{valore}</div>
       </div>
     </div>
