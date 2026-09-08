@@ -14729,6 +14729,9 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
   // Lo storico dei loghi generati: si legge qui, serve solo a questa
   // pagina. Il piu' recente e' il primo.
   const [storico, setStorico] = useState(null);
+  // lo storico e' una pagina sua: e' una lista che cresce, e in fondo alla
+  // calibrazione la si trovava solo scorrendo dieci schede di loghi
+  const [mostraStorico, setMostraStorico] = useState(false);
   async function caricaStorico() {
     const { data } = await supabase.from("loghi_generati").select("*").order("numero", { ascending: false }).limit(50);
     setStorico(data || []);
@@ -14851,9 +14854,73 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
     aggiorna({ prossimo_numero: n });
   }
 
+  // Lo storico e' una pagina sua: e' una lista che cresce, e in fondo alla
+  // calibrazione la si trovava solo scorrendo dieci schede di loghi.
+  if (mostraStorico) {
+    return (
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
+        <TopBar title="Storico loghi" onBack={() => setMostraStorico(false)} />
+        {/* Storico dei loghi emessi. Il cestino c'e' solo sul primo — che e'
+            l'ultimo generato — perche' il progressivo e' una fila: togliendo
+            un numero in mezzo resterebbe un buco che nessuno potrebbe piu'
+            riempire. Serve dopo le prove: si cancella e il numero torna
+            disponibile, invece di restare bruciato per sempre. */}
+        <div style={{ ...cardStyle, marginBottom: 16 }}>
+          <div style={hStyle}>Storico loghi</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>
+            Il prossimo logo avrà il numero <strong style={{ color: NAVY }}>{config.prossimo_numero}</strong>. Eliminando l’ultimo generato quel numero torna disponibile.
+          </div>
+          {storico == null ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
+          ) : storico.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun logo generato finora.</div>
+          ) : (
+            storico.map((r, i) => (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                    {r.codice}
+                    <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
+                    {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
+                      .filter(Boolean).join(" · ")}
+                    {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
+                  </div>
+                </div>
+                {i === 0 ? (
+                  <button
+                    onClick={() => eliminaUltimoLogo(r)}
+                    title="Elimina l’ultimo logo generato e restituisci il numero"
+                    style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <IconaCestino size={14} /> Elimina e recupera il numero
+                  </button>
+                ) : (
+                  <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>si elimina solo l’ultimo</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+      </div>
+    );
+  }
+
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Setting loghi" onBack={onBack} />
+      {/* lo storico si apre da qui, in cima: e' l'unica cosa di questa
+          pagina che non serve a calibrare */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <button
+          onClick={() => { setMostraStorico(true); caricaStorico(); }}
+          style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "9px 16px", cursor: "pointer" }}
+        >
+          Storico loghi →
+        </button>
+      </div>
       <div style={subStyle}>
         Carica qui i 2 font usati per scrivere nome allieva e codice progressivo sui loghi, il numero da cui riparte
         il contatore (unico per tutti i loghi), e per ciascuna categoria il logo nero/bianco con la posizione dei 2
@@ -14898,49 +14965,6 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
           />
         ))}
 
-      {/* Storico dei loghi emessi. Il cestino c'e' solo sul primo — che e'
-          l'ultimo generato — perche' il progressivo e' una fila: togliendo
-          un numero in mezzo resterebbe un buco che nessuno potrebbe piu'
-          riempire. Serve dopo le prove: si cancella e il numero torna
-          disponibile, invece di restare bruciato per sempre. */}
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={hStyle}>Storico loghi</div>
-        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>
-          Il prossimo logo avrà il numero <strong style={{ color: NAVY }}>{config.prossimo_numero}</strong>. Eliminando l’ultimo generato quel numero torna disponibile.
-        </div>
-        {storico == null ? (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
-        ) : storico.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun logo generato finora.</div>
-        ) : (
-          storico.map((r, i) => (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
-                  {r.codice}
-                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
-                </div>
-                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
-                  {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
-                    .filter(Boolean).join(" · ")}
-                  {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
-                </div>
-              </div>
-              {i === 0 ? (
-                <button
-                  onClick={() => eliminaUltimoLogo(r)}
-                  title="Elimina l’ultimo logo generato e restituisci il numero"
-                  style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
-                >
-                  <IconaCestino size={14} /> Elimina e recupera il numero
-                </button>
-              ) : (
-                <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>si elimina solo l’ultimo</span>
-              )}
-            </div>
-          ))
-        )}
-      </div>
     </div>
   );
 }
@@ -15190,11 +15214,14 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
 
       // resta traccia di cosa e' stato generato: senza, dopo una prova non
       // ci sarebbe modo di sapere quale numero restituire al contatore
-      await supabase.from("loghi_generati").insert({
+      const { error: erroreStorico } = await supabase.from("loghi_generati").insert({
         numero: prossimoNumero, codice,
         categoria_chiave: categoria.chiave, categoria_etichetta: categoria.etichetta,
         master_nome: masterScelta.nome, allieva_nome: nomeAllieva.trim(),
       });
+      // se lo storico non registra, si dice: senza quella riga il numero
+      // non si puo' piu' recuperare, e scoprirlo dopo non serve a niente
+      if (erroreStorico) window.alert("Loghi generati, ma non sono riuscito a registrarli nello storico: " + testoErrore(erroreStorico));
       const { error } = await supabase.from("loghi_impostazioni").update({ prossimo_numero: prossimoNumero + 1 }).eq("id", loghiImpostazioni.id);
       if (error) { setMsg("Loghi generati, ma non sono riuscito ad aggiornare il contatore: " + testoErrore(error)); setGenerando(false); return; }
       setCodiceGenerato(codice);
