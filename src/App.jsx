@@ -15976,7 +15976,11 @@ function modellaTrovata(m) {
 // blur, non ad ogni tasto: altrimenti ogni carattere digitato scatenerebbe
 // un salvataggio e un ricaricamento dell'intera pagina, facendo perdere il
 // focus mentre si scrive
-function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo, reperitori, compatta = false }) {
+// "soloLettura": la stessa riga, ma da guardare. Serve alla master che
+// apre le modelle della sua classe dalla dashboard — deve vedere chi c'e'
+// e poter chiamare, non riassegnare i posti. Restano vivi solo il tasto
+// del telefono e quello di WhatsApp.
+function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo, reperitori, compatta = false, soloLettura = false }) {
   const isMobile = useIsMobile();
   // La riga si apre quando si comincia a scrivere e si richiude alla
   // conferma: le schede stanno chiuse quasi sempre, e si aprono solo
@@ -16110,7 +16114,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   }
 
   // Le tre tendine dei posti "gemelli" (stessa modella per piu' trattamenti)
-  const spuntaGruppo = altriSlot.length > 0 && onCambiaGruppo ? (
+  const spuntaGruppo = altriSlot.length > 0 && onCambiaGruppo && !soloLettura ? (
     <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
       <span style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>Stessa modella anche per:</span>
       {altriSlot.map(({ s: altro, i: indice }) => (
@@ -16155,14 +16159,16 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
         background: sfondo,
         border: `1px solid ${acceso ? sfondo : CREAM_BORDER}`,
         borderRadius: 10, padding: isMobile ? "8px 4px" : "7px 10px", minWidth: 0,
+        ...(soloLettura ? { cursor: "default" } : null),
       }}>
         <span style={{ color: inchiostro, display: "flex" }}><Icona size={15} /></span>
         <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, letterSpacing: 0.4, color: inchiostro }}>{etichetta}</span>
         <input
           type="checkbox"
           checked={acceso}
+          disabled={soloLettura}
           onChange={(e) => onCambia(e.target.checked)}
-          style={{ width: 14, height: 14, margin: 0, cursor: "pointer", accentColor: acceso ? (isMobile ? NAVY : "#fff") : NAVY }}
+          style={{ width: 14, height: 14, margin: 0, cursor: soloLettura ? "default" : "pointer", accentColor: acceso ? (isMobile ? NAVY : "#fff") : NAVY }}
         />
       </label>
     );
@@ -16188,7 +16194,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                 Si salva al primo contatto — su iPad e Android il dito che
                 esce da un campo fa riassestare la pagina e il click non
                 arriva mai. */}
-            {turniDaSalvare && (
+            {turniDaSalvare && !soloLettura && (
               <button
                 type="button"
                 onPointerDown={(e) => {
@@ -16213,17 +16219,19 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
               ref={rifNome}
               placeholder="Nome Cognome"
               value={nome}
-              onFocus={() => { setInModifica(true); setApertaPerModifica(true); }}
-              onChange={(e) => { setNome(e.target.value); setApertaPerModifica(true); }}
-              style={{ ...inputStyle, flex: "2 1 150px", padding: "8px 10px" }}
+              readOnly={soloLettura}
+              onFocus={soloLettura ? undefined : () => { setInModifica(true); setApertaPerModifica(true); }}
+              onChange={soloLettura ? undefined : (e) => { setNome(e.target.value); setApertaPerModifica(true); }}
+              style={{ ...inputStyle, flex: "2 1 150px", padding: "8px 10px", ...(soloLettura ? { background: "#F7F5F0", color: NAVY } : null) }}
             />
             <input
               ref={rifTelefono}
               placeholder="Tel."
               value={telefono}
-              onFocus={() => { setInModifica(true); setApertaPerModifica(true); }}
-              onChange={(e) => { setTelefono(e.target.value); setApertaPerModifica(true); }}
-              style={{ ...inputStyle, flex: "1 1 110px", minWidth: 0, padding: "8px 10px" }}
+              readOnly={soloLettura}
+              onFocus={soloLettura ? undefined : () => { setInModifica(true); setApertaPerModifica(true); }}
+              onChange={soloLettura ? undefined : (e) => { setTelefono(e.target.value); setApertaPerModifica(true); }}
+              style={{ ...inputStyle, flex: "1 1 110px", minWidth: 0, padding: "8px 10px", ...(soloLettura ? { background: "#F7F5F0", color: NAVY } : null) }}
             />
             {telefono.trim() && (
               <>
@@ -16240,7 +16248,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                 sembrava comodo, ma lasciava mezzo dato scritto senza che
                 nessuno l'avesse deciso — e con mezzo dato il posto
                 risultava coperto pur non essendolo */}
-            {(daSalvare || inModifica) ? (
+            {(!soloLettura && (daSalvare || inModifica)) ? (
               <button
                 type="button"
                 onPointerDown={(e) => {
@@ -16273,7 +16281,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
               gemelli: restano turno, nome e numero. */}
           {!chiusa && (
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-            {opzioniTipo ? (
+            {opzioniTipo && !soloLettura ? (
               <select
                 // stessa larghezza del campo Nome qui sopra, cosi' le due
                 // righe si incolonnano invece di sfalsarsi
@@ -16302,7 +16310,12 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                 Se il posto porta un autore che oggi non e' piu' in elenco,
                 il suo nome resta comunque in tendina — toglierlo vorrebbe
                 dire perdere l'attribuzione di un lavoro gia' fatto. */}
-            {Array.isArray(reperitori) && (() => {
+            {Array.isArray(reperitori) && soloLettura && (
+              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: modella.reperita_da_nome ? NAVY : MUTED }}>
+                {modella.reperita_da_nome ? `Trovata da ${toTitleCase(modella.reperita_da_nome)}` : "— reperita da —"}
+              </div>
+            )}
+            {Array.isArray(reperitori) && !soloLettura && (() => {
               const scelto = modella.reperita_da_id ? `${modella.reperita_da_tipo || ""}:${modella.reperita_da_id}` : "";
               const inElenco = reperitori.some((r) => `${r.tipo}:${r.id}` === scelto);
               const voci = !scelto || inElenco
@@ -20202,7 +20215,7 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
-function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -21970,6 +21983,13 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
           // non ha quel permesso non deve trovarne la porta di servizio qui
           ...(puoAssegnareModelle ? [{ chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true, attivo: vista === "modelle" }] : []),
         ];
+        // In sola lettura la scheda e' una vetrina: si guarda chi c'e' e si
+        // chiama, nient'altro. Niente iscrizioni, niente contabilita',
+        // nessuna porta verso le altre sotto-aree — resta la via d'uscita.
+        const secondariVisibili = modelleSolaLettura
+          ? [{ chiave: "esci", etichetta: "Esci", Icona: IconaFrecciaSinistra, onClick: onBack }]
+          : secondari;
+        const primariVisibili = modelleSolaLettura ? [] : primari;
 
         return (
           <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: `${spaziIscrizioni.paddingTop}px 22px ${spaziIscrizioni.paddingBottom}px`, marginBottom: 22 }}>
@@ -22057,14 +22077,14 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                 <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: spaziIscrizioni.dopoDivider }} />
                 {manigliaSpazio("dopoDivider")}
                 <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: isMobile ? 5 : 10, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: spaziIscrizioni.dopoSecondari, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 5 : 8 }}>
-                  {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+                  {secondariVisibili.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("dopoSecondari")}
                 {/* tutte in linea sul telefono: sono cinque al massimo, e
                     una griglia con una colonna per tile le tiene larghe
                     uguale senza che l'etichetta piu' lunga ne allarghi una */}
-                <div style={{ position: "relative", display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? `repeat(${primari.length}, minmax(0, 1fr))` : undefined, alignItems: "stretch", gap: isMobile ? 4 : 8, flexWrap: isMobile ? undefined : "wrap" }}>
-                  {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+                <div style={{ position: "relative", display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? `repeat(${primariVisibili.length}, minmax(0, 1fr))` : undefined, alignItems: "stretch", gap: isMobile ? 4 : 8, flexWrap: isMobile ? undefined : "wrap" }}>
+                  {primariVisibili.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("paddingBottom")}
               </>
@@ -23190,6 +23210,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                     <div>
                       {i.tipi_modelle.map((m, idx) => (
                         <RigaModella
+                          soloLettura={modelleSolaLettura}
                           reperitori={reperitoriModelle}
                           compatta={schedeCompatte}
                           key={idx}
@@ -23271,18 +23292,21 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                         <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6 }}>
                           Modella del Master{g.tipo_modella_master ? ` — ${g.tipo_modella_master}` : ""}
                         </div>
-                        <CheckboxOttimistica
-                          valore={modellaMaster.cercare_per_master}
-                          onCambia={(v) => aggiornaModellaMaster(g.numero_giorno, "cercare_per_master", v)}
-                        >
-                          Cercare per master
-                        </CheckboxOttimistica>
+                        {!modelleSolaLettura && (
+                          <CheckboxOttimistica
+                            valore={modellaMaster.cercare_per_master}
+                            onCambia={(v) => aggiornaModellaMaster(g.numero_giorno, "cercare_per_master", v)}
+                          >
+                            Cercare per master
+                          </CheckboxOttimistica>
+                        )}
                       </div>
                       {/* di default la master non ha bisogno di una modella:
                           la riga di ricerca/assegnazione compare solo dopo
                           aver spuntato "Cercare per master" */}
                       {modellaMaster.cercare_per_master && (
                         <RigaModella
+                          soloLettura={modelleSolaLettura}
                           reperitori={reperitoriModelle}
                           compatta={schedeCompatte}
                           modella={{ ...modellaMaster, tipo: g.tipo_modella_master }}
@@ -23364,6 +23388,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
 
                             {daMostrare.map(({ m: modellaVista, indice: indiceReale }, iPosto) => (
                               <RigaModella
+                                soloLettura={modelleSolaLettura}
                                 reperitori={reperitoriModelle}
                                 compatta={schedeCompatte}
                                 key={indiceReale ?? `nuovo-${iPosto}`}
@@ -53933,8 +53958,6 @@ export default function App() {
         const corso = cd ? corsi.find((c) => c.id === cd.corso_id) : null;
         const loc = cd ? location.find((l) => l.id === cd.location_id) : null;
         if (!cd || !corso || !loc) return <div style={{ maxWidth: 640, margin: "0 auto", padding: "20px", ...fontBody, color: MUTED }}>Classe non trovata.</div>;
-        const [aaaa, mm, gg] = cd.data_inizio.split("-");
-        const paramClasse = [slugify(corso.nome), slugify(loc.nome), `${gg}-${mm}-${aaaa}`].join("/");
         if (classeMasterModelle) {
           return (
             <div>
@@ -53944,7 +53967,49 @@ export default function App() {
                   <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla classe</span>
                 </button>
               </div>
-              <VistaRicercaModelle param={paramClasse} />
+              {/* La stessa schermata delle modelle che si usa in ufficio,
+                  ma da guardare: la master vede chi c'e' per ogni giorno e
+                  chiama, non riassegna i posti. Prima qui c'era la vista
+                  del link pubblico, che e' un'altra pagina — per giorno
+                  contro per allievo — e non era quella che ci si aspetta
+                  di ritrovare aprendo la classe. */}
+              <SchedaData
+                modelleSolaLettura
+                sottoVistaIniziale={{ vista: "modelle" }}
+                puoAssegnareModelle
+                ruoloUtente={ruoloUtente}
+                codiceAmministratoreAttuale={null}
+                corsoData={cd}
+                corsi={corsi}
+                location={location}
+                corsiDate={corsiDate}
+                iscritti={iscritti}
+                master={master}
+                utentiApp={utentiApp}
+                masterCorsi={masterCorsi}
+                corsiDateDocenti={corsiDateDocenti}
+                quoteVenditoriSplit={quoteVenditoriSplit}
+                assistente={assistente}
+                assistenteCorsi={assistenteCorsi}
+                leva={leva}
+                hotel={hotel}
+                layoutIscrizioni={layoutIscrizioni}
+                fontDiplomi={fontDiplomi}
+                segnaposti={segnaposti}
+                costiCategorie={costiCategorie}
+                costiSottocategorie={costiSottocategorie}
+                spese={spese}
+                corsiGiorni={corsiGiorni}
+                tipiModella={tipiModella}
+                corsiTipiModella={corsiTipiModella}
+                venditori={venditori}
+                kitDefinizioni={kitDefinizioni}
+                prodottiShop={prodottiShop}
+                venditeShop={venditeShop}
+                accontiDaVerificare={accontiDaVerificare}
+                ricarica={fetchDati}
+                onBack={() => { scrollAppInCima(); setClasseMasterModelle(false); }}
+              />
             </div>
           );
         }
