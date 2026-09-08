@@ -21184,9 +21184,9 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                       // dati accostati, e un filo crema su fondo crema non li
                       // teneva distinti
                       <div key={chiave} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0, paddingLeft: idx > 0 ? (isMobile ? 7 : 14) : 0, borderLeft: idx > 0 ? `1px solid #D5C9AF` : "none" }}>
-                        <div style={{ ...fontBody, fontSize: isMobile ? 11 : 13, color: GOLD, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, lineHeight: 1.2, textAlign: "center" }}>{label}</div>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 16 : 18, color: GOLD, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, lineHeight: 1.2, textAlign: "center" }}>{label}</div>
                         {righe.map((riga, i) => (
-                          <div key={i} style={{ ...fontBody, fontSize: isMobile ? 12.5 : 16, fontWeight: 700, color: NAVY, lineHeight: 1.2, textAlign: "center", overflowWrap: "anywhere" }}>{riga}</div>
+                          <div key={i} style={{ ...fontBody, fontSize: isMobile ? 17.5 : 21, fontWeight: 700, color: NAVY, lineHeight: 1.2, textAlign: "center", overflowWrap: "anywhere" }}>{riga}</div>
                         ))}
                       </div>
                     ))}
