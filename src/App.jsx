@@ -15458,7 +15458,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                 <select
                   title="Chi ha trovato questa modella"
                   // e questa quella del campo Tel.
-                  style={{ ...inputStyle, fontSize: 8.5, fontWeight: 700, letterSpacing: 0.2, flex: "1 1 110px", minWidth: 0, padding: "6px 8px", background: GRIGIO_TENDINA_MODELLA, border: `1px solid ${GRIGIO_TENDINA_MODELLA}`, color: scelto ? NAVY : MUTED }}
+                  style={{ ...inputStyle, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.2, flex: "1 1 110px", minWidth: 0, padding: "6px 8px", background: GRIGIO_TENDINA_MODELLA, border: `1px solid ${GRIGIO_TENDINA_MODELLA}`, color: scelto ? NAVY : MUTED }}
                   value={scelto}
                   onChange={(e) => onSalva(campiReperimento(voci.find((r) => `${r.tipo}:${r.id}` === e.target.value)))}
                 >
