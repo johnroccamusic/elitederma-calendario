@@ -12204,6 +12204,10 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   // scheda dell'allievo non deve nemmeno chiederlo. Acceso di default: un
   // corso nuovo lo prevede, salvo dire il contrario
   const [modCategoriaCorso, setModCategoriaCorso] = useState("");
+  // come si conta quello che resta da pagare: sull'imponibile delle quote
+  // incassate o sul totale davvero incassato. Vedi il commento nella
+  // scheda di iscrizione, dove il flag viene letto.
+  const [modSaldoSuTotalePagato, setModSaldoSuTotalePagato] = useState(false);
   const [vistaCorsiModal, setVistaCorsiModal] = useState("griglia"); // griglia | nuovo | modifica
   const [ricercaCorsi, setRicercaCorsi] = useState("");
   const [tipiModellaSelCorso, setTipiModellaSelCorso] = useState([]);
@@ -12302,6 +12306,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     setModColoreCorso(c.colore);
     setModPostiCorso(String(c.posti_max));
     setModCategoriaCorso(c.categoria || "");
+    setModSaldoSuTotalePagato(!!c.saldo_su_totale_pagato);
     const giorniEsistenti = (corsiGiorni || []).filter((g) => g.corso_id === c.id).sort((a, b) => a.numero_giorno - b.numero_giorno);
     setDurataCorsoModifica(giorniEsistenti.length > 0 ? String(giorniEsistenti.length) : "");
     setGiorniCorsoModifica(giorniEsistenti.map((g) => ({
@@ -12359,6 +12364,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       colore: modColoreCorso,
       posti_max: Number(modPostiCorso) || 10,
       categoria: modCategoriaCorso.trim() || null,
+      saldo_su_totale_pagato: modSaldoSuTotalePagato,
     };
     const { error } = await supabase.from("corsi").update(payload).eq("id", id);
     if (error) { setMsg("Errore: " + testoErrore(error)); setSalvandoCorso(false); return; }
@@ -12683,6 +12689,28 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
                     </Field>
                   </div>
                 </div>
+                {/* Su quasi tutti i corsi il prezzo pattuito e' netto, e
+                    "Restano da pagare" toglie giustamente l'imponibile
+                    delle quote incassate. Dove invece il prezzo e' gia'
+                    lordo quel conto fa comparire un residuo che non
+                    esiste: 300 pattuiti, 100 incassati con IVA, e la
+                    scheda ne chiedeva ancora 218 invece di 200. Lo dice il
+                    corso, non il programma: dedurlo dal nome vorrebbe dire
+                    che rinominarlo cambia di nascosto il conto dei soldi. */}
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 9, marginBottom: 16, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={modSaldoSuTotalePagato}
+                    onChange={(e) => setModSaldoSuTotalePagato(e.target.checked)}
+                    style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
+                  />
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+                    Il prezzo pattuito è già comprensivo di IVA
+                    <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                      In “Restano da pagare” si sottrae il totale davvero incassato invece del solo imponibile. Lasciato spento, vale la regola normale: si sottrae l’imponibile.
+                    </span>
+                  </span>
+                </label>
                 <SceltaTipiEDurata
                   tipiModella={tipiModella}
                   selezionati={tipiModellaSelCorsoModifica} onCambiaSelezionati={setTipiModellaSelCorsoModifica}
