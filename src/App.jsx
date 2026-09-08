@@ -23100,67 +23100,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
           </div>
         );
 
-        // "Riepilogo": chi cerchiamo (solo NOSTRA, sempre — indipendente
-        // dal tasto "Vedi solo da trovare"/"Vedi tutta la classe" qui
-        // sotto, che riguarda solo l'elenco dettagliato) e il totale per
-        // tipo di modella sull'intero corso. I conteggi sono trattamenti
-        // da coprire, non persone: una sola modella su più trattamenti
-        // (vedi il gruppo in RigaModella) conta comunque una volta a testa
-        // "corso parziale": un trattamento nel giorno in cui l'iscritta non
-        // è presente non conta come da trovare per lei — vedi presenteIlGiorno()
-        const nostreConModelle = listaIscritti
-          .filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0)
-          .map((i) => ({ ...i, tipi_modelle: i.tipi_modelle.filter((m) => presenteIlGiorno(i.giorni_presenza, giornoDelPostoModella(m, i.tipi_modelle))) }))
-          .filter((i) => i.tipi_modelle.length > 0);
-        const conteggioPerTipo = {};
-        nostreConModelle.forEach((i) => {
-          i.tipi_modelle.forEach((m) => {
-            const chiave = m.tipo || "(trattamento non scelto)";
-            conteggioPerTipo[chiave] = (conteggioPerTipo[chiave] || 0) + 1;
-          });
-        });
-        const righeConteggio = Object.entries(conteggioPerTipo).sort((a, b) => b[1] - a[1]);
-        // Da telefono il riepilogo non si mostra: e' lungo quanto tutta la
-        // pagina e ripete, in altra forma, quello che si legge gia' nelle
-        // schede sotto — chi manca e con che trattamento. Su uno schermo
-        // stretto si finisce a scorrerlo per arrivare al lavoro vero.
-        const riepilogo = isMobile ? null : (
-          <div style={cardStyle}>
-            <div style={{ ...hStyle, marginBottom: 12 }}>Riepilogo</div>
-            {nostreConModelle.length === 0 ? (
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo di questa classe ha una modella da trovare.</div>
-            ) : (
-              <>
-                {nostreConModelle.map((i) => {
-                  const tipiDistinti = [...new Set(i.tipi_modelle.map((m) => m.tipo || "(trattamento non scelto)"))];
-                  // solo programmatore/amministratore possono aprire la scheda di
-                  // iscrizione da qui — un click "innocente" da master/venditore
-                  // non deve finire dentro dati contabili che non gli competono
-                  const puoAprireScheda = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
-                  return (
-                    <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0" }}>
-                      {puoAprireScheda ? (
-                        <span onClick={() => apriModificaCompleta(i)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
-                      ) : (
-                        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
-                      )}
-                      {tipiDistinti.map((t) => <PallinoTipoModella key={t} tipo={t} />)}
-                    </div>
-                  );
-                })}
-                <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Riepilogo corso</div>
-                  {righeConteggio.map(([tipo, n]) => (
-                    <div key={tipo} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 22 }}>{n}</span>
-                      <PallinoTipoModella tipo={tipo} />
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        );
         const testataAssegnaModelle = (
           // il triplo dello spazio sotto: sparite le tre righe di
           // istruzioni, il titolo era finito appiccicato al primo giorno
@@ -23190,7 +23129,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
             .slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0));
           return (
             <div>
-              {riepilogo}
               {testataAssegnaModelle}
 
               {iscrittiVisibili.length === 0 && (
@@ -23239,7 +23177,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
 
         return (
           <div>
-            {riepilogo}
             {testataAssegnaModelle}
 
             {giorniRilevantiModelle.map((g) => {
