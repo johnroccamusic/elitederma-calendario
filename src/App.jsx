@@ -7850,12 +7850,18 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             {(() => {
               // le 4 card stanno su una riga sola a qualunque larghezza: sul
               // telefono con font e imbottitura ridotti, su desktop larghe
-              const cardPunti = { ...cardStyle, minWidth: 0, height: "100%", boxSizing: "border-box", padding: isMobile ? "12px 6px" : 16, marginBottom: 0, ...(isMobile ? { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" } : {}) };
+              // da telefono quadrate, come tutti gli altri riquadri di
+              // riepilogo dell'app: quattro colonne su uno schermo stretto
+              // facevano quattro strisce alte e magre, e il numero — che e'
+              // l'unica cosa che si guarda — finiva perso a meta' altezza
+              const cardPunti = { ...cardStyle, minWidth: 0, boxSizing: "border-box", padding: isMobile ? "8px 4px" : 16, marginBottom: 0, ...(isMobile ? { aspectRatio: "1 / 1", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 2 } : { height: "100%" }) };
               // su mobile l'etichetta occupa un'altezza fissa (fino a 3 righe),
               // così i numeri delle 4 card partono tutti dalla stessa riga
-              const lblPunti = { ...fontBody, fontSize: isMobile ? 10.5 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, marginBottom: isMobile ? 8 : 6, lineHeight: 1.2, ...(isMobile ? { textAlign: "center", minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center" } : {}) };
-              const numPunti = { ...fontDisplay, fontSize: isMobile ? 24 : 24, fontWeight: 700, color: NAVY, ...(isMobile ? { textAlign: "center" } : {}) };
-              const ptPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 12, color: MUTED, marginTop: 2, ...(isMobile ? { textAlign: "center" } : {}) };
+              // dentro un quadrato lo spazio e' quello che e': etichetta,
+              // numero e riga sotto si stringono invece di sfondare
+              const lblPunti = { ...fontBody, fontSize: isMobile ? 8.5 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, marginBottom: isMobile ? 0 : 6, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center" } : {}) };
+              const numPunti = { ...fontDisplay, fontSize: isMobile ? 16 : 24, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", ...(isMobile ? { textAlign: "center" } : {}) };
+              const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
               return (
             // quattro colonne uguali, non quattro flex che possono andare a
             // capo: su desktop la quarta card finiva sotto le altre appena la
@@ -7879,8 +7885,15 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 <div style={lblPunti}>Pezzi da premio</div>
                 <div style={numPunti}>{provvigioniMaster.pezzi}</div>
                 <div style={ptPunti}>
-                  {provvigioniMaster.premi.euro > 0 ? `${fmtEuroErp2(provvigioniMaster.premi.euro)} maturati` : "nessun premio ancora"}
-                  {provvigioniMaster.premi.prossimo && ` · ${provvigioniMaster.premi.pezziAlProssimo} al prossimo`}
+                  {/* da telefono si scrive solo quello che serve a fare il
+                      pezzo dopo: "nessun premio ancora" occupa tre righe per
+                      dire quello che il numero grande sopra dice gia' */}
+                  {isMobile
+                    ? (provvigioniMaster.premi.prossimo ? `${provvigioniMaster.premi.pezziAlProssimo} al prossimo` : "tutti i premi presi")
+                    : <>
+                        {provvigioniMaster.premi.euro > 0 ? `${fmtEuroErp2(provvigioniMaster.premi.euro)} maturati` : "nessun premio ancora"}
+                        {provvigioniMaster.premi.prossimo && ` · ${provvigioniMaster.premi.pezziAlProssimo} al prossimo`}
+                      </>}
                 </div>
               </div>
               <div style={cardPunti}>
