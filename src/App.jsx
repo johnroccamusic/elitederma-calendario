@@ -15265,7 +15265,14 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
     setNome(n); setTelefono(t);
     // svuotare tutti e due libera il posto: e' il modo per dire "questa
     // modella non viene piu'", e deve restare possibile
-    if (!n && !t) { setInModifica(false); setApertaPerModifica(false); onSalva({ nome_modella: "", telefono_modella: "" }); return; }
+    // Togliendo la modella si toglie anche chi l'aveva trovata: quel posto
+    // torna scoperto, e una firma su un lavoro che non c'e' piu' varrebbe
+    // una commissione per una modella che non verra'.
+    if (!n && !t) {
+      setInModifica(false); setApertaPerModifica(false);
+      onSalva({ nome_modella: "", telefono_modella: "", ...campiReperimento(null) });
+      return;
+    }
     // mezzo dato no: senza numero non la si puo' chiamare, e il posto
     // risulterebbe coperto quando non lo e'
     if (!n || !t) {
