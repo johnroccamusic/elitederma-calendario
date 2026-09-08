@@ -15438,7 +15438,12 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                 Conferma
               </button>
             ) : trovata ? (
-              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap", flexShrink: 0 }}>✓ Trovata</span>
+              // con la riga chiusa il nome di chi l'ha trovata non si
+              // vedrebbe da nessuna parte: scritto qui resta sotto gli
+              // occhi, ed e' il dato da cui esce la commissione
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", flexShrink: 0, overflowWrap: "anywhere" }}>
+                ✓ Trovata{modella.reperita_da_nome ? ` da ${toTitleCase(modella.reperita_da_nome)}` : ""}
+              </span>
             ) : (
               <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap", flexShrink: 0 }}>Da trovare</span>
             )}
