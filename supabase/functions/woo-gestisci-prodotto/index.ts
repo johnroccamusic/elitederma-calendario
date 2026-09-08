@@ -167,7 +167,12 @@ Deno.serve(async (req) => {
         .insert({
           woo_product_id: creato.id,
           nome: creato.name,
-          prezzo_vendita: creato.price !== "" && creato.price != null ? parseFloat(creato.price) : prezzo,
+          // il prezzo NON si scrive qui. "prezzo_vendita" in anagrafica e'
+          // il NETTO; quello che WooCommerce restituisce e' il LORDO
+          // pubblicato. Scriverlo qui metteva un lordo dentro un campo
+          // netto, e da li' in poi ogni salvataggio ripartiva da un prezzo
+          // gonfiato del 22%. Lo scrive la scheda prodotto subito dopo,
+          // che il netto lo conosce davvero.
           descrizione: creato.description || null,
           descrizione_breve: creato.short_description || null,
           stato: creato.status || "publish",
@@ -227,7 +232,9 @@ Deno.serve(async (req) => {
     if (nome != null) aggiornamentoLocale.nome = aggiornato.name;
     if (descrizione != null) aggiornamentoLocale.descrizione = aggiornato.description || null;
     if (descrizioneBreve != null) aggiornamentoLocale.descrizione_breve = aggiornato.short_description || null;
-    if (prezzo != null) aggiornamentoLocale.prezzo_vendita = aggiornato.price !== "" && aggiornato.price != null ? parseFloat(aggiornato.price) : prezzo;
+    // il prezzo locale non si tocca mai da qui: vedi la nota in "crea".
+    // Il sito riceve il lordo, l'anagrafica tiene il netto, e a scriverlo
+    // e' solo la scheda prodotto.
     if (stato != null) aggiornamentoLocale.stato = aggiornato.status || stato;
 
     const { error: erroreUpdate } = await supabase.from("prodotti_shop").update(aggiornamentoLocale).eq("id", prodottoId);

@@ -109,7 +109,10 @@ Deno.serve(async (req) => {
   }
 
   const aggiornamentoLocale: Record<string, unknown> = { ts_sync: new Date().toISOString() };
-  if (cambiaPrezzo) aggiornamentoLocale.prezzo_vendita = prezzoVendita;
+  // il prezzo si spinge sul sito ma NON si riscrive in anagrafica:
+  // "prezzo_vendita" e' il netto e lo decide la scheda prodotto. Nessuna
+  // sincronizzazione deve poterlo cambiare — e infatti oggi nessuno
+  // chiama questa funzione passando un prezzo.
   if (cambiaGiacenza) aggiornamentoLocale.quantita = quantita;
   if (cambiaMagazzino) aggiornamentoLocale.giacenza_magazzino = giacenzaMagazzino;
 
