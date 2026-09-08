@@ -47950,22 +47950,35 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         ))}
       </div>
 
-      {/* si autocompila dalla taglia scelta da ciascun iscritto nel modulo
-          di iscrizione (iscritti.taglia_divisa): qui solo la possibilità
-          di correggerla, per chi prepara davvero le divise da spedire */}
-      <div style={labelStyle}>Divise</div>
+      {/* Una riga per iscritto con quello che lo distingue dagli altri
+          mentre si prepara la sua scatola: il kit che ha scelto e la
+          taglia della divisa. Si chiamava "Divise" quando c'era solo la
+          taglia; il kit sta qui e non in un altro elenco perche' chi
+          prepara guarda una persona per volta, non due liste.
+          La taglia si autocompila da quella scelta nel modulo di
+          iscrizione (iscritti.taglia_divisa): qui solo la possibilita' di
+          correggerla. */}
+      <div style={labelStyle}>Specifiche</div>
       <div style={{ marginBottom: 20 }}>
         {iscrittiEdizione.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 0" }}>Nessun iscritto ancora.</div>
         ) : iscrittiEdizione.map((i) => (
           <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{toTitleCase(i.nome)} {toTitleCase(i.cognome)}</span>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+              <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{toTitleCase(i.nome)} {toTitleCase(i.cognome)}</span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: i.pacchetto_kit ? GRAFITE : MUTED }}>
+                {i.pacchetto_kit || "nessun kit"}
+              </span>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
               <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Tg.</span>
+              {/* stretta quanto basta a contenere "NO DIVISA", che e' la
+                  voce piu' lunga: una casella larga il doppio della parola
+                  faceva sembrare la taglia il dato principale della riga */}
               <select
                 value={i.taglia_divisa || ""}
                 onChange={(e) => onCambiaTagliaIscritto(i.id, e.target.value || null)}
-                style={{ ...inputStyle, width: 92, padding: "6px 8px" }}
+                style={{ ...inputStyle, width: 84, padding: "5px 4px", fontSize: 12 }}
               >
                 <option value="">—</option>
                 {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((t) => <option key={t} value={t}>{t}</option>)}
