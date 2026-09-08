@@ -14265,6 +14265,7 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
   const kNumDx = `${prefisso}_numero_limite_dx`;
   const kFontNome = `${prefisso}_nome_font_size`;
   const kFontNumero = `${prefisso}_numero_font_size`;
+  const kSpazNumero = `${prefisso}_numero_spaziatura`;
 
   function iniziaDrag(e, chiave) {
     e.preventDefault();
@@ -14309,8 +14310,9 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
     : { fontSize: config[kFontNome], spaziatura: 0 };
   const numSx = config[kNumSx] ?? 0;
   const numDx = config[kNumDx] ?? 100;
+  const spaziaturaNumero = Number(config[kSpazNumero]) || 0;
   const adattamentoNumero = naturaleWidth
-    ? adattaTestoDentro(testoProvaNumero, config[kFontNumero], famigliaNumero, Math.max(1, (naturaleWidth * (numDx - numSx)) / 100))
+    ? adattaTestoDentro(testoProvaNumero, config[kFontNumero], famigliaNumero, Math.max(1, (naturaleWidth * (numDx - numSx)) / 100), spaziaturaNumero)
     : { fontSize: config[kFontNumero] };
 
   return (
@@ -14394,8 +14396,20 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
             background: trascinato === "numero" ? "#EA580C22" : "transparent", touchAction: "none",
           }}
         >
-          <span style={{ fontFamily: `"${famigliaNumero || "sans-serif"}", sans-serif`, fontSize: adattamentoNumero.fontSize * scalaAnteprima, color: coloreAnteprima, whiteSpace: "nowrap", userSelect: "none", pointerEvents: "none" }}>
-            {testoProvaNumero}
+          <span style={{ display: "flex", userSelect: "none", pointerEvents: "none" }}>
+            {testoProvaNumero.split("").map((ch, i) => (
+              <span
+                key={i}
+                style={{
+                  fontFamily: `"${famigliaNumero || "sans-serif"}", sans-serif`,
+                  fontSize: adattamentoNumero.fontSize * scalaAnteprima,
+                  color: coloreAnteprima, whiteSpace: "pre",
+                  marginRight: i < testoProvaNumero.length - 1 ? spaziaturaNumero * scalaAnteprima : 0,
+                }}
+              >
+                {ch}
+              </span>
+            ))}
           </span>
         </div>
 
@@ -14438,13 +14452,23 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
             <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 30, textAlign: "center" }}>{config[kFontNumero]}</span>
             <button onClick={() => aggiorna({ [kFontNumero]: Math.min(400, config[kFontNumero] + 2) })} style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>+</button>
           </div>
+          {/* alcuni font scrivono le lettere attaccate: qui si distanziano.
+              Va in pixel dell'immagine, come la dimensione, e conta nel
+              calcolo dei margini — distanziando troppo il codice
+              rimpicciolisce invece di uscire. */}
+          <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Spaziatura</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button onClick={() => aggiorna({ [kSpazNumero]: Math.max(0, spaziaturaNumero - 1) })} style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>−</button>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 30, textAlign: "center" }}>{spaziaturaNumero}</span>
+            <button onClick={() => aggiorna({ [kSpazNumero]: Math.min(200, spaziaturaNumero + 1) })} style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>+</button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
+function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutteLeCategorie, larghezzePerCategoria }) {
   const [config, setConfig] = useState(categoria);
   const [previewNeroUrl, setPreviewNeroUrl] = useState(null);
   const [previewBiancoUrl, setPreviewBiancoUrl] = useState(null);
@@ -14491,12 +14515,39 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
     return doppi;
   }
 
+  // I loghi hanno tutti lo stesso impianto: quello che si regola su uno
+  // vale per tutti. Dieci categorie da calibrare a mano una per una sono
+  // dieci occasioni di sbagliare, e nessuno si accorge dell'undicesima
+  // finche' non stampa. Chi ha un logo fatto diversamente spunta "Regola
+  // solo questo logo" e resta fuori: non lo tocca nessuno, e lui non tocca
+  // gli altri.
+  const soloCalibrazione = (campi) => Object.keys(campi).every((k) => /_(pos_[xy]|limite_(sx|dx)|font_size|spaziatura)$/.test(k));
+
   async function aggiorna(campi) {
     modificatoLocalmenteRef.current = true;
     const tutti = anchePerAltraVariante(campi);
     setConfig((c) => ({ ...c, ...tutti }));
     const { error } = await supabase.from("loghi_categorie").update(tutti).eq("chiave", categoria.chiave);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+
+    if (!config.calibrazione_propria && soloCalibrazione(campi)) {
+      // le altre categorie che seguono la calibrazione comune. Le
+      // dimensioni in pixel si riportano in proporzione alla larghezza del
+      // loro file, come si fa fra nero e bianco: gli impianti sono uguali,
+      // le risoluzioni no.
+      const altre = (tutteLeCategorie || []).filter((c) => c.chiave !== categoria.chiave && !c.calibrazione_propria);
+      for (const altra of altre) {
+        const suoi = {};
+        Object.entries(tutti).forEach(([chiave, valore]) => {
+          if (!/_(font_size|spaziatura)$/.test(chiave)) { suoi[chiave] = valore; return; }
+          const variante = chiave.startsWith("nero_") ? "nero" : "bianco";
+          const mia = variante === "nero" ? larghezzaNero : larghezzaBianco;
+          const sua = larghezzePerCategoria?.[altra.chiave]?.[variante];
+          suoi[chiave] = mia && sua ? Math.max(6, Math.round(valore * (sua / mia))) : valore;
+        });
+        await supabase.from("loghi_categorie").update(suoi).eq("chiave", altra.chiave);
+      }
+    }
     ricarica(["loghi_categorie"]);
   }
 
@@ -14578,6 +14629,19 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
         famigliaNome={famigliaNome}
         famigliaNumero={famigliaNumero}
       />
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={!!config.calibrazione_propria}
+          onChange={(e) => aggiorna({ calibrazione_propria: e.target.checked })}
+          style={{ width: 15, height: 15 }}
+        />
+        <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>
+          Regola solo questo logo
+          <span style={{ color: MUTED }}> — dissocia dalla calibrazione comune: quello che si regola qui non va sugli altri, e gli altri non toccano questo.</span>
+        </span>
+      </label>
+
       {/* le due immagini raramente hanno la stessa risoluzione: la
           dimensione del font si converte in proporzione, e qui si dice
           quale numero finisce sull'altro file */}
@@ -14601,6 +14665,9 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
   const [msg, setMsg] = useState("");
   const [famigliaNomeAnteprima, setFamigliaNomeAnteprima] = useState(null);
   const [famigliaNumeroAnteprima, setFamigliaNumeroAnteprima] = useState(null);
+  // la larghezza vera del file di ogni categoria: serve a riportare in
+  // proporzione le misure in pixel quando la calibrazione si propaga
+  const [larghezzePerCategoria, setLarghezzePerCategoria] = useState({});
   const modificatoLocalmenteRef = React.useRef(false);
 
   useEffect(() => {
@@ -14649,6 +14716,22 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
     }
     carica();
   }, [config.font_numero_path]);
+
+  useEffect(() => {
+    let annullato = false;
+    (loghiCategorie || []).forEach((cat) => {
+      [["nero", cat.logo_nero_path], ["bianco", cat.logo_bianco_path]].forEach(([variante, percorso]) => {
+        if (!percorso) return;
+        const img = new Image();
+        img.onload = () => {
+          if (annullato) return;
+          setLarghezzePerCategoria((m) => ({ ...m, [cat.chiave]: { ...(m[cat.chiave] || {}), [variante]: img.naturalWidth } }));
+        };
+        img.src = supabase.storage.from("loghi-immagini").getPublicUrl(percorso).data.publicUrl;
+      });
+    });
+    return () => { annullato = true; };
+  }, [loghiCategorie]);
 
   async function aggiorna(campi) {
     modificatoLocalmenteRef.current = true;
@@ -14723,7 +14806,15 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
         .map((c) => loghiCategorie.find((lc) => lc.chiave === c.chiave))
         .filter(Boolean)
         .map((cat) => (
-          <CategoriaLogo key={cat.chiave} categoria={cat} ricarica={ricarica} famigliaNome={famigliaNomeAnteprima} famigliaNumero={famigliaNumeroAnteprima} />
+          <CategoriaLogo
+            key={cat.chiave}
+            categoria={cat}
+            ricarica={ricarica}
+            famigliaNome={famigliaNomeAnteprima}
+            famigliaNumero={famigliaNumeroAnteprima}
+            tutteLeCategorie={loghiCategorie}
+            larghezzePerCategoria={larghezzePerCategoria}
+          />
         ))}
     </div>
   );
@@ -14746,14 +14837,16 @@ function ottieniCtxMisuraLoghi() {
 // Come adattaNomeLogo, ma senza distribuire la spaziatura: il codice
 // progressivo non si "giustifica" fra i margini — resta scritto normale e
 // al massimo rimpicciolisce quanto basta a starci.
-function adattaTestoDentro(testo, fontSizeBase, famiglia, spazioDisponibilePx) {
+function adattaTestoDentro(testo, fontSizeBase, famiglia, spazioDisponibilePx, spaziatura = 0) {
   if (!testo) return { fontSize: fontSizeBase };
   const ctx = ottieniCtxMisuraLoghi();
   const famigliaSicura = famiglia || "sans-serif";
   let fontSize = fontSizeBase;
+  // la spaziatura conta nella misura: distanziando le lettere il codice si
+  // allarga, e deve rimpicciolire prima di uscire dai margini
   function larghezza(dim) {
     ctx.font = `${dim}px "${famigliaSicura}", sans-serif`;
-    return ctx.measureText(testo).width;
+    return ctx.measureText(testo).width + spaziatura * Math.max(0, testo.length - 1);
   }
   while (fontSize > 6 && larghezza(fontSize) > spazioDisponibilePx) fontSize -= 0.5;
   return { fontSize };
@@ -14838,10 +14931,12 @@ async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, 
     const numSxPx = (canvas.width * (categoria[`${pfx}_numero_limite_sx`] ?? 0)) / 100;
     const numDxPx = (canvas.width * (categoria[`${pfx}_numero_limite_dx`] ?? 100)) / 100;
     const spazioNumero = Math.max(1, numDxPx - numSxPx);
-    const numAdatt = adattaTestoDentro(codiceTesto, categoria[`${pfx}_numero_font_size`], famigliaNumero, spazioNumero);
-    ctx.font = `${numAdatt.fontSize}px "${famigliaNumero}", sans-serif`;
-    ctx.fillStyle = colore;
-    ctx.fillText(codiceTesto, (numSxPx + numDxPx) / 2, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100);
+    const spaziaturaNumero = Number(categoria[`${pfx}_numero_spaziatura`]) || 0;
+    const numAdatt = adattaTestoDentro(codiceTesto, categoria[`${pfx}_numero_font_size`], famigliaNumero, spazioNumero, spaziaturaNumero);
+    disegnaNomeConSpaziatura(
+      ctx, codiceTesto, (numSxPx + numDxPx) / 2, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100,
+      numAdatt.fontSize, famigliaNumero, colore, spaziaturaNumero,
+    );
 
     const limiteSxPx = (canvas.width * categoria[`${pfx}_nome_limite_sx`]) / 100;
     const limiteDxPx = (canvas.width * categoria[`${pfx}_nome_limite_dx`]) / 100;
