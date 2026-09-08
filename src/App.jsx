@@ -7700,29 +7700,37 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // solo le righe con totale positivo (un reso/annullamento non è un
   // "acquisto effettuato"); i punti invece riflettono anche i resi
   // (negativi), perché sono la sostanza vera della raccolta punti
-  const raccoltaPuntiMaster = useMemo(() => {
-    const vuoto = { venditeTotale: 0, venditeCorsi: 0, venditePersonale: 0, puntiTotale: 0, puntiCorsi: 0, puntiPersonale: 0, gruppi: [] };
+  const provvigioniMaster = useMemo(() => {
+    const vuoto = { venditeTotale: 0, euroCorso: 0, euroReferral: 0, euroTotale: 0, pezzi: 0, premi: premiVolumeRaggiunti(0), gruppi: [] };
     if (!masterSelId || !puntiMasterImpostazioni) return vuoto;
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
-    let venditeTotale = 0, venditeCorsi = 0, venditePersonale = 0;
-    let puntiTotale = 0, puntiCorsi = 0, puntiPersonale = 0;
+    let venditeTotale = 0, euroCorso = 0, euroReferral = 0, pezzi = 0;
     const perGruppo = {};
     righe.forEach((v) => {
-      const infoCoupon = v.codice_coupon ? couponPerCodice[v.codice_coupon.toLowerCase()] : null;
-      const punti = puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase, infoCoupon);
-      const contaComeVendita = (v.totale || 0) > 0;
-      puntiTotale += punti;
-      if (contaComeVendita) venditeTotale += 1;
-      if (infoCoupon?.corsi_date_id) { if (contaComeVendita) venditeCorsi += 1; puntiCorsi += punti; }
-      else if (infoCoupon) { if (contaComeVendita) venditePersonale += 1; puntiPersonale += punti; }
+      // l'importo non si ricalcola: e' quello congelato sulla vendita il
+      // giorno in cui e' stata fatta. Un reso ha totale negativo e porta
+      // con se' una provvigione negativa, quindi si sottrae da sola
+      const euro = Number(v.provvigione_master) || 0;
+      if ((v.totale || 0) > 0) venditeTotale += 1;
+      if (v.provvigione_canale === "corso") euroCorso += euro; else euroReferral += euro;
+      pezzi += Number(v.provvigione_pezzi) || 0;
       const chiave = v.codice_coupon ? v.codice_coupon.toUpperCase() : "__pos_senza_referral__";
-      if (!perGruppo[chiave]) perGruppo[chiave] = { etichetta: v.codice_coupon ? v.codice_coupon.toUpperCase() : "Vendite POS senza referral", vendite: 0, punti: 0 };
-      if (contaComeVendita) perGruppo[chiave].vendite += 1;
-      perGruppo[chiave].punti += punti;
+      if (!perGruppo[chiave]) perGruppo[chiave] = { etichetta: v.codice_coupon ? v.codice_coupon.toUpperCase() : "Vendite al corso, senza referral", vendite: 0, euro: 0, pezzi: 0 };
+      if ((v.totale || 0) > 0) perGruppo[chiave].vendite += 1;
+      perGruppo[chiave].euro += euro;
+      perGruppo[chiave].pezzi += Number(v.provvigione_pezzi) || 0;
     });
-    const gruppi = Object.values(perGruppo).sort((a, b) => b.vendite - a.vendite);
-    return { venditeTotale, venditeCorsi, venditePersonale, puntiTotale, puntiCorsi, puntiPersonale, gruppi };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase, couponPerCodice]);
+    const premi = premiVolumeRaggiunti(pezzi);
+    const gruppi = Object.values(perGruppo).map((g) => ({ ...g, euro: round2(g.euro) })).sort((a, b) => b.euro - a.euro);
+    return {
+      venditeTotale,
+      euroCorso: round2(euroCorso), euroReferral: round2(euroReferral),
+      // il premio a volume e' maturato quanto le provvigioni: sta nel
+      // totale, non in una riga a parte che nessuno somma
+      euroTotale: round2(euroCorso + euroReferral + premi.euro),
+      pezzi, premi, gruppi,
+    };
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
 
   if (mostraDettaglioPunti && masterSel) {
@@ -7731,18 +7739,21 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraDettaglioPunti(false)} />
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Raccolta punti — dettaglio</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Provvigioni — dettaglio</div>
           </div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Per codice referral usato dai tuoi clienti (online e al banco); i resi e gli annullamenti riducono i punti.</div>
-          {raccoltaPuntiMaster.gruppi.length === 0 ? (
-            <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessuna vendita nella finestra della raccolta punti.</div>
-          ) : raccoltaPuntiMaster.gruppi.map((g) => (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Per codice referral usato dai tuoi clienti (online e al banco); i resi e gli annullamenti riducono l'importo.</div>
+          {provvigioniMaster.gruppi.length === 0 ? (
+            <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessuna vendita in questo anno di raccolta.</div>
+          ) : provvigioniMaster.gruppi.map((g) => (
             <div key={g.etichetta} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
-                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: g.etichetta === "Vendite POS senza referral" ? "none" : "uppercase" }}>{g.etichetta}</div>
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>{g.vendite} vendit{g.vendite === 1 ? "a" : "e"}</div>
+                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: g.etichetta.startsWith("Vendite al corso") ? "none" : "uppercase" }}>{g.etichetta}</div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>
+                  {g.vendite} vendit{g.vendite === 1 ? "a" : "e"}
+                  {g.pezzi > 0 && ` · ${g.pezzi} pezz${g.pezzi === 1 ? "o" : "i"} da premio`}
+                </div>
               </div>
-              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: g.punti < 0 ? "#C0392B" : GOLD }}>{g.punti} pt</div>
+              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: g.euro < 0 ? "#C0392B" : GOLD }}>{fmtEuro(g.euro)}</div>
             </div>
           ))}
         </div>
@@ -7818,8 +7829,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
 
         {masterSel && puntiMasterImpostazioni && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Raccolta punti premi</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}.</div>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Le tue provvigioni</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}. Un punto vale un euro.</div>
             {(() => {
               // le 4 card stanno su una riga sola a qualunque larghezza: sul
               // telefono con font e imbottitura ridotti, su desktop larghe
@@ -7837,22 +7848,29 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             // e le altre no
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               <div style={cardPunti}>
-                <div style={lblPunti}>Vendite effettuate</div>
-                <div style={numPunti}>{raccoltaPuntiMaster.venditeTotale}</div>
+                <div style={lblPunti}>Al corso</div>
+                <div style={numPunti}>{fmtEuro(provvigioniMaster.euroCorso)}</div>
               </div>
               <div style={cardPunti}>
-                <div style={lblPunti}>Vendite con referral dei corsi</div>
-                <div style={numPunti}>{raccoltaPuntiMaster.venditeCorsi}</div>
-                <div style={ptPunti}>{raccoltaPuntiMaster.puntiCorsi} pt</div>
+                <div style={lblPunti}>Con il tuo referral</div>
+                <div style={numPunti}>{fmtEuro(provvigioniMaster.euroReferral)}</div>
+              </div>
+              {/* i pezzi che da soli non arrivavano a un euro: qui valgono,
+                  ed e' l'unico posto dove si vede quanti ne mancano al
+                  premio dopo — che e' la parte che fa venire voglia di
+                  venderne un altro */}
+              <div style={cardPunti}>
+                <div style={lblPunti}>Pezzi da premio</div>
+                <div style={numPunti}>{provvigioniMaster.pezzi}</div>
+                <div style={ptPunti}>
+                  {provvigioniMaster.premi.euro > 0 ? `${fmtEuro(provvigioniMaster.premi.euro)} maturati` : "nessun premio ancora"}
+                  {provvigioniMaster.premi.prossimo && ` · ${provvigioniMaster.premi.pezziAlProssimo} al prossimo`}
+                </div>
               </div>
               <div style={cardPunti}>
-                <div style={lblPunti}>Vendite con referral personale</div>
-                <div style={numPunti}>{raccoltaPuntiMaster.venditePersonale}</div>
-                <div style={ptPunti}>{raccoltaPuntiMaster.puntiPersonale} pt</div>
-              </div>
-              <div style={cardPunti}>
-                <div style={lblPunti}>Punti accumulati</div>
-                <div style={{ ...numPunti, color: GOLD }}>{raccoltaPuntiMaster.puntiTotale} <span style={{ ...fontBody, fontSize: isMobile ? 10 : 13, fontWeight: 400, color: MUTED }}>pt</span></div>
+                <div style={lblPunti}>Totale maturato</div>
+                <div style={{ ...numPunti, color: GOLD }}>{fmtEuro(provvigioniMaster.euroTotale)}</div>
+                <div style={ptPunti}>{provvigioniMaster.venditeTotale} vendit{provvigioniMaster.venditeTotale === 1 ? "a" : "e"}</div>
               </div>
             </div>
               );
@@ -27946,10 +27964,12 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     if (!puntiMasterImpostazioni) return [];
     return (master || []).map((m) => {
       const venditeMaster = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
-      const punti = venditeMaster.reduce((s, v) => {
-        const info = v.codice_coupon ? (coupon || []).find((c) => (c.codice || "").toLowerCase() === v.codice_coupon.toLowerCase()) : null;
-        return s + puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase, info);
-      }, 0);
+      // le provvigioni non si ricalcolano: si sommano quelle congelate
+      // sulle vendite, piu' i premi maturati dai pezzi sotto soglia — sono
+      // gli stessi euro che la master vede nella sua dashboard, e due
+      // classifiche che non coincidono non servirebbero a niente
+      const pezzi = venditeMaster.reduce((somma, v) => somma + (Number(v.provvigione_pezzi) || 0), 0);
+      const punti = round2(venditeMaster.reduce((somma, v) => somma + (Number(v.provvigione_master) || 0), 0) + premiVolumeRaggiunti(pezzi).euro);
       const euro = round2(venditeMaster.reduce((s, v) => s + (v.totale || 0), 0));
       return { master: m, punti, euro };
     }).filter((r) => r.punti !== 0 || r.euro !== 0).sort((a, b) => b.punti - a.punti);
@@ -28344,7 +28364,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 420 }}>
                     <thead>
                       <tr>
-                        {[{ c: "master", l: "Master" }, { c: "punti", l: "Punti" }, { c: "euro", l: "Valore venduto" }].map((th) => (
+                        {[{ c: "master", l: "Master" }, { c: "punti", l: "Provvigioni" }, { c: "euro", l: "Valore venduto" }].map((th) => (
                           <ThOrdina key={th.c} campo={th.c} ordine={ordineClassifica} onOrdina={cambiaOrdineClassifica} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                         ))}
                       </tr>
@@ -28357,7 +28377,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                       }).map((r) => (
                         <tr key={r.master.id}>
                           <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{toTitleCase(r.master.nome)}</td>
-                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: r.punti < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{r.punti}</td>
+                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: r.punti < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(r.punti)}</td>
                           <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(r.euro)}</td>
                         </tr>
                       ))}
