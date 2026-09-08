@@ -22066,7 +22066,16 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                           }}
                         >
                           <option value="">— scegli —</option>
-                          {opzioniTipoModellaCorso.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+                          {/* stessa regola della pagina "Assegna modelle":
+                              un trattamento gia' scelto per un'altra
+                              modella di questa allieva non si ripropone.
+                              Sceglierlo due volte porta due modelle sullo
+                              stesso giorno e lascia scoperto il giorno del
+                              trattamento saltato */}
+                          {opzioniTipoModellaCorso
+                            .filter((opz) => normalizzaTipoModella(opz) === normalizzaTipoModella(m.tipo)
+                              || !tipiModelle.some((altro, i) => i !== idx && normalizzaTipoModella(altro?.tipo) === normalizzaTipoModella(opz)))
+                            .map((opz) => <option key={opz} value={opz}>{opz}</option>)}
                         </select>
                         {giorniAllieviCorso.length > 1 && (
                           // proposto in automatico dal trattamento scelto sopra, ma
