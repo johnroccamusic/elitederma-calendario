@@ -14671,6 +14671,29 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
   // la larghezza vera del file di ogni categoria: serve a riportare in
   // proporzione le misure in pixel quando la calibrazione si propaga
   const [larghezzePerCategoria, setLarghezzePerCategoria] = useState({});
+  // Lo storico dei loghi generati: si legge qui, serve solo a questa
+  // pagina. Il piu' recente e' il primo.
+  const [storico, setStorico] = useState(null);
+  async function caricaStorico() {
+    const { data } = await supabase.from("loghi_generati").select("*").order("numero", { ascending: false }).limit(50);
+    setStorico(data || []);
+  }
+  useEffect(() => { caricaStorico(); }, []);
+
+  // Si cancella solo l'ultimo, e solo se e' davvero l'ultimo emesso: il
+  // contatore e' una fila, non un insieme. Togliendo un numero in mezzo
+  // resterebbe un buco che nessuno potrebbe piu' riempire, e il
+  // progressivo mentirebbe.
+  async function eliminaUltimoLogo(riga) {
+    if (!window.confirm(`Eliminare il logo ${riga.codice}? Il numero ${riga.numero} torna disponibile per il prossimo.`)) return;
+    const { error } = await supabase.from("loghi_generati").delete().eq("id", riga.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    if (config.id) await supabase.from("loghi_impostazioni").update({ prossimo_numero: riga.numero }).eq("id", config.id);
+    modificatoLocalmenteRef.current = false;
+    setMsg(`Logo ${riga.codice} eliminato: il prossimo riparte da ${riga.numero}.`);
+    caricaStorico();
+    ricarica(["loghi_impostazioni"]);
+  }
   const modificatoLocalmenteRef = React.useRef(false);
 
   useEffect(() => {
@@ -14819,6 +14842,50 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
             larghezzePerCategoria={larghezzePerCategoria}
           />
         ))}
+
+      {/* Storico dei loghi emessi. Il cestino c'e' solo sul primo — che e'
+          l'ultimo generato — perche' il progressivo e' una fila: togliendo
+          un numero in mezzo resterebbe un buco che nessuno potrebbe piu'
+          riempire. Serve dopo le prove: si cancella e il numero torna
+          disponibile, invece di restare bruciato per sempre. */}
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={hStyle}>Storico loghi</div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>
+          Il prossimo logo avrà il numero <strong style={{ color: NAVY }}>{config.prossimo_numero}</strong>. Eliminando l’ultimo generato quel numero torna disponibile.
+        </div>
+        {storico == null ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
+        ) : storico.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun logo generato finora.</div>
+        ) : (
+          storico.map((r, i) => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                  {r.codice}
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
+                </div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
+                  {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
+                    .filter(Boolean).join(" · ")}
+                  {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
+                </div>
+              </div>
+              {i === 0 ? (
+                <button
+                  onClick={() => eliminaUltimoLogo(r)}
+                  title="Elimina l’ultimo logo generato e restituisci il numero"
+                  style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                >
+                  <IconaCestino size={14} /> Elimina e recupera il numero
+                </button>
+              ) : (
+                <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>si elimina solo l’ultimo</span>
+              )}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -15066,8 +15133,15 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
         scaricaBlob(blobBianco, `${categoria.chiave}-bianco-${codice}.png`);
       }
 
+      // resta traccia di cosa e' stato generato: senza, dopo una prova non
+      // ci sarebbe modo di sapere quale numero restituire al contatore
+      await supabase.from("loghi_generati").insert({
+        numero: prossimoNumero, codice,
+        categoria_chiave: categoria.chiave, categoria_etichetta: categoria.etichetta,
+        master_nome: masterScelta.nome, allieva_nome: nomeAllieva.trim(),
+      });
       const { error } = await supabase.from("loghi_impostazioni").update({ prossimo_numero: prossimoNumero + 1 }).eq("id", loghiImpostazioni.id);
-      if (error) { setMsg("Loghi generati, ma non sono riuscito ad aggiornare il contatore: " + error.message); setGenerando(false); return; }
+      if (error) { setMsg("Loghi generati, ma non sono riuscito ad aggiornare il contatore: " + testoErrore(error)); setGenerando(false); return; }
       setCodiceGenerato(codice);
       setMsg(`Loghi generati con codice ${codice}.`);
       ricarica(["loghi_impostazioni"]);
