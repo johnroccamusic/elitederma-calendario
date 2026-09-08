@@ -7769,7 +7769,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                   {g.pezzi > 0 && ` · ${g.pezzi} pezz${g.pezzi === 1 ? "o" : "i"} da premio`}
                 </div>
               </div>
-              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: g.euro < 0 ? "#C0392B" : GOLD }}>{fmtEuro(g.euro)}</div>
+              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: g.euro < 0 ? "#C0392B" : GOLD }}>{fmtEuroErp2(g.euro)}</div>
             </div>
           ))}
         </div>
@@ -7865,11 +7865,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               <div style={cardPunti}>
                 <div style={lblPunti}>Al corso</div>
-                <div style={numPunti}>{fmtEuro(provvigioniMaster.euroCorso)}</div>
+                <div style={numPunti}>{fmtEuroErp2(provvigioniMaster.euroCorso)}</div>
               </div>
               <div style={cardPunti}>
                 <div style={lblPunti}>Con il tuo referral</div>
-                <div style={numPunti}>{fmtEuro(provvigioniMaster.euroReferral)}</div>
+                <div style={numPunti}>{fmtEuroErp2(provvigioniMaster.euroReferral)}</div>
               </div>
               {/* i pezzi che da soli non arrivavano a un euro: qui valgono,
                   ed e' l'unico posto dove si vede quanti ne mancano al
@@ -7879,13 +7879,13 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 <div style={lblPunti}>Pezzi da premio</div>
                 <div style={numPunti}>{provvigioniMaster.pezzi}</div>
                 <div style={ptPunti}>
-                  {provvigioniMaster.premi.euro > 0 ? `${fmtEuro(provvigioniMaster.premi.euro)} maturati` : "nessun premio ancora"}
+                  {provvigioniMaster.premi.euro > 0 ? `${fmtEuroErp2(provvigioniMaster.premi.euro)} maturati` : "nessun premio ancora"}
                   {provvigioniMaster.premi.prossimo && ` · ${provvigioniMaster.premi.pezziAlProssimo} al prossimo`}
                 </div>
               </div>
               <div style={cardPunti}>
                 <div style={lblPunti}>Totale maturato</div>
-                <div style={{ ...numPunti, color: GOLD }}>{fmtEuro(provvigioniMaster.euroTotale)}</div>
+                <div style={{ ...numPunti, color: GOLD }}>{fmtEuroErp2(provvigioniMaster.euroTotale)}</div>
                 <div style={ptPunti}>{provvigioniMaster.venditeTotale} vendit{provvigioniMaster.venditeTotale === 1 ? "a" : "e"}</div>
               </div>
             </div>
