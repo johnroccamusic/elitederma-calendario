@@ -7430,6 +7430,65 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
     </div>
   );
 }
+// Le modelle di un allievo, riassunte in una riga: per ogni trattamento
+// il nome e, sotto, due caselle MAT e POM — si accende quella del turno in
+// cui la modella e' attesa. La modella della master non compare mai: qui
+// si guarda la classe, e quella e' un fatto suo.
+//
+// I trattamenti li dice l'allievo, non il calendario: sono i posti che ha
+// davvero (tipi_modelle), in ordine di giorno. Su un PMU vengono da soli
+// sopracciglia il secondo giorno, labbra il quinto ed eyeliner il sesto;
+// su un corso fatto in un altro modo viene fuori quello che c'e', invece
+// di tre voci scritte a mano che valgono per un corso solo.
+function RiepilogoModelleAllievo({ iscritto, colore, tinta, bordo }) {
+  const posti = (Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [])
+    .map((m, indice) => ({ ...m, indice }))
+    .sort((a, b) => {
+      const ga = a.giorno == null ? 99 : Number(a.giorno);
+      const gb = b.giorno == null ? 99 : Number(b.giorno);
+      return ga === gb ? a.indice - b.indice : ga - gb;
+    });
+  if (posti.length === 0) return null;
+
+  // "SOPRACCIGLIA OMBRETTO" in una casella larga poco piu' di due
+  // caselle non ci sta: si scrive la prima parola, che e' quella che
+  // distingue, e il resto resta nel titolo per chi passa sopra
+  const etichetta = (tipo) => {
+    const t = String(tipo || "").trim();
+    if (!t) return "—";
+    return toTitleCase(t.split(/\s+/)[0]);
+  };
+  const cella = (acceso, testo) => (
+    <span style={{
+      ...fontBody, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, lineHeight: 1,
+      padding: "4px 0", minWidth: 30, textAlign: "center", borderRadius: 6,
+      background: acceso ? colore : "#fff",
+      border: `1px solid ${acceso ? colore : CREAM_BORDER}`,
+      color: acceso ? "#fff" : MUTED,
+    }}>{testo}</span>
+  );
+
+  return (
+    // tutto su una riga sola, anche da telefono: sono tre voci corte e
+    // messe in colonna occuperebbero mezza schermata per allievo. Se lo
+    // schermo e' davvero stretto scorre di lato invece di andare a capo
+    <div style={{ flexBasis: "100%", display: "flex", gap: 8, marginTop: 8, overflowX: "auto", paddingBottom: 2 }}>
+      {posti.map((m) => (
+        <div key={m.indice} title={m.tipo || "trattamento non scelto"} style={{
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0,
+          background: tinta, border: `1px solid ${bordo}`, borderRadius: 8, padding: "5px 7px",
+        }}>
+          <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{etichetta(m.tipo)}</span>
+          <div style={{ display: "flex", gap: 4 }}>
+            {cella(!!m.mattina, "MAT")}
+            {cella(!!m.pomeriggio, "POM")}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // La classe vista dalla master: stessa card della dashboard — fondo bianco,
 // bordo del colore del corso, targhetta della data in alto a sinistra — solo
 // che dentro, al posto del riepilogo per kit, c'è l'elenco nome per nome.
@@ -7527,6 +7586,8 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
                   </>
                 )}
               </div>
+
+              <RiepilogoModelleAllievo iscritto={i} colore={coloreCorso} tinta={tintaCorso} bordo={bordoTinta} />
             </div>
           ))}
         </div>
