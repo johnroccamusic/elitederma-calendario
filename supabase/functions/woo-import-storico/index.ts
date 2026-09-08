@@ -20,7 +20,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  mappaOrdine, attribuisciMasterReferral,
+  mappaOrdine, attribuisciMasterReferral, congelaProvvigioneReferral,
   STATI_VIVI, applicaMovimentoBundle, applicaMovimentoProdottiSemplici, sincronizzaDisponibilitaBundle,
 } from "../_shared/woo.ts";
 
@@ -61,6 +61,7 @@ async function salvaLotto(supabase: any, ordini: any[], siteUrl: string) {
     // tempo reale — prima mancava qui, quindi lo storico di un ordine mai
     // arrivato via webhook restava senza operatore/coupon
     await attribuisciMasterReferral(supabase, o, riga);
+    await congelaProvvigioneReferral(supabase, riga);
     righe.push(riga);
   }
   if (righe.length === 0) return { salvati: 0, errore: null as string | null };

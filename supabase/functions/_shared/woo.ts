@@ -1,3 +1,4 @@
+import { provvigioneVendita } from "./provvigioni-master.js";
 // Logica condivisa tra "woo-webhook" (in tempo reale) e
 // "woo-import-storico" (una tantum): entrambi ricevono un ordine
 // WooCommerce con la stessa identica forma (è lo stesso oggetto "Order"
@@ -110,6 +111,62 @@ export async function attribuisciMasterReferral(supabase: any, ordine: any, riga
   riga.operatore_tipo = "master";
   riga.operatore_id = scelto.master_id;
   riga.operatore_nome = masterRiga?.nome || null;
+}
+
+
+// La provvigione della master su un ordine arrivato dal sito con il suo
+// referral code. Stesso motore del banco (provvigioni-master.js), quindi
+// gli stessi euro: cambierebbe solo il canale, che qui e' sempre
+// "referral" — l'ordine e' arrivato da fuori, non da una classe.
+//
+// Si congela una volta sola. Un ordine che torna con un altro stato non
+// rifa' il conto con le fasce di oggi: o e' gia' congelato e resta com'e',
+// oppure non e' piu' completato e allora la provvigione va a zero, perche'
+// una vendita annullata non e' un compenso.
+export async function congelaProvvigioneReferral(supabase: any, riga: Record<string, unknown>): Promise<void> {
+  if (riga.operatore_tipo !== "master") return;
+
+  const { data: esistente } = await supabase
+    .from("vendite_shop")
+    .select("provvigione_master")
+    .eq("woo_order_id", riga.woo_order_id as number)
+    .maybeSingle();
+
+  if (riga.stato !== "completed") {
+    // rimborsato, annullato, fallito: quello che era maturato si azzera
+    riga.provvigione_master = 0;
+    riga.provvigione_pezzi = 0;
+    return;
+  }
+  // gia' congelata: non si tocca. E' il senso stesso del congelamento —
+  // le fasce di domani non devono cambiare un compenso di ieri
+  if (esistente?.provvigione_master != null) return;
+
+  const prodotti = Array.isArray(riga.prodotti) ? (riga.prodotti as any[]) : [];
+  const wooIds = prodotti.map((r) => r.woo_product_id).filter((id) => id != null);
+  if (wooIds.length === 0) return;
+
+  const [{ data: fasce }, { data: anagrafica }] = await Promise.all([
+    supabase.from("provvigioni_fasce").select("*"),
+    supabase.from("prodotti_shop").select("woo_product_id, costo_acquisto").in("woo_product_id", wooIds),
+  ]);
+  if (!fasce?.length) return;
+  const costoPerWooId: Record<string, number> = {};
+  (anagrafica || []).forEach((p: any) => { costoPerWooId[String(p.woo_product_id)] = Number(p.costo_acquisto) || 0; });
+
+  // "total" di una riga WooCommerce e' gia' al netto dell'IVA (l'imposta
+  // sta in total_tax, a parte), e la spedizione non e' una riga prodotto:
+  // il ricavo che arriva qui e' quello giusto senza toccarlo
+  const righeConto = prodotti.map((r) => ({
+    ricavoNetto: Number(r.totale_riga) || 0,
+    costoUnitario: costoPerWooId[String(r.woo_product_id)] ?? 0,
+    quantita: Number(r.quantita) || 0,
+  }));
+  const esito = provvigioneVendita({ righe: righeConto, canale: "referral", fasce });
+  riga.provvigione_master = esito.provvigione;
+  riga.provvigione_canale = "referral";
+  riga.provvigione_pezzi = esito.pezziSottoSoglia;
+  riga.provvigione_dettaglio = esito.dettaglio;
 }
 
 // stati WooCommerce che "impegnano" davvero lo stock (stessi due in cui

@@ -17,7 +17,7 @@
 // da Supabase a ogni Edge Function, non vanno impostati a mano.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mappaOrdine, attribuisciMasterReferral, STATI_VIVI, applicaMovimentoBundle, applicaMovimentoProdottiSemplici, sincronizzaDisponibilitaBundle } from "../_shared/woo.ts";
+import { mappaOrdine, attribuisciMasterReferral, congelaProvvigioneReferral, STATI_VIVI, applicaMovimentoBundle, applicaMovimentoProdottiSemplici, sincronizzaDisponibilitaBundle } from "../_shared/woo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -98,6 +98,10 @@ Deno.serve(async (req) => {
   // sulla data di inizio raccolta vivono in attribuisciMasterReferral
   // (condivisa con woo-import-storico, stessa identica regola)
   await attribuisciMasterReferral(supabase, ordine, riga);
+  // se la vendita e' attribuita a una master, la sua provvigione si
+  // congela qui insieme all'ordine: stesso motore del banco, canale
+  // "referral" perche' l'ordine e' arrivato da fuori
+  await congelaProvvigioneReferral(supabase, riga);
 
   // letto PRIMA dell'upsert: serve a sapere se questo webhook è la prima
   // volta che l'ordine diventa "vivo" (da scaricare) o che smette di

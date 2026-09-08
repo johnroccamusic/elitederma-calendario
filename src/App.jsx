@@ -5,7 +5,7 @@ import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabas
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
   PREMI_VOLUME_PROVVIGIONI, provvigioneVendita, premiVolumeRaggiunti,
-} from "./lib/provvigioni-master.js";
+} from "../supabase/functions/_shared/provvigioni-master.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
