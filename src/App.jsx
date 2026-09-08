@@ -14632,6 +14632,15 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
         famigliaNome={famigliaNome}
         famigliaNumero={famigliaNumero}
       />
+      {!config.calibrazione_propria && (
+        <button
+          onClick={applicaATutti}
+          disabled={applicandoATutti}
+          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: applicandoATutti ? "default" : "pointer", marginTop: 12 }}
+        >
+          {applicandoATutti ? "Applico…" : "Applica questa calibrazione a tutti i loghi"}
+        </button>
+      )}
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
         <input
           type="checkbox"
