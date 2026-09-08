@@ -29185,7 +29185,11 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
     { chiave: "impegni", titolo: `Quadro impegni (${impegniCount})`, sotto: "Impegni presi e da saldare", Icona: IconaCalendarioCard },
     { chiave: "documenti", titolo: `Fatture ricevute (${documentiCount})`, sotto: "Gestione fornitori", Icona: IconaCartellaShop },
     { chiave: "notecredito", titolo: `Note di credito (${noteCreditoCount})`, sotto: "Emissione e gestione", Icona: IconaCartellaShop },
-    { chiave: "passivo", titolo: `Scadenziario Passivo (${passivoCount})`, sotto: "Scadenze da pagare", Icona: IconaCalendarioCard },
+    // il pallino lampeggiante sulla sola scheda del passivo: e' l'unica
+    // coda dove il ritardo costa qualcosa a qualcun altro — un fornitore
+    // che aspetta — e il numero fra parentesi nel titolo si legge solo se
+    // lo si va a cercare
+    { chiave: "passivo", titolo: `Scadenziario Passivo (${passivoCount})`, sotto: "Scadenze da pagare", Icona: IconaCalendarioCard, badge: passivoCount },
     { chiave: "attivo", titolo: `Scadenziario Attivo (${attivoCount})`, sotto: "Incassi e scadenze attive", Icona: IconaCalendarioCard },
     { chiave: "fondocassa", titolo: "Cassa contanti", sotto: "Entrate e uscite contanti", Icona: IconaRicevutaErp },
     { chiave: "consulenze", titolo: "Cassa consulenze", sotto: "", Icona: IconaPersonaSemplice },
@@ -29239,10 +29243,30 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
                   scheda, sta dentro un cerchio che la stacca */}
               <span style={{
                 width: isMobile ? 34 : 54, height: isMobile ? 34 : 54, borderRadius: "50%", flexShrink: 0,
-                background: "#F3E7D2",
+                background: "#F3E7D2", position: "relative",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
                 <s.Icona size={isMobile ? 18 : 28} color={GOLD} />
+                {/* sta attaccato all'icona e non a un angolo della scheda:
+                    gli angoli sono gia' presi dalla maniglia e dal punto
+                    interrogativo, e un terzo segno lassu' non si
+                    distinguerebbe dagli altri due */}
+                {s.badge > 0 && (
+                  <>
+                    <style>{`@keyframes lampeggiaBadgeTasto { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }`}</style>
+                    <span
+                      title={`${s.badge} scadenz${s.badge === 1 ? "a" : "e"} da pagare`}
+                      style={{
+                        position: "absolute", top: isMobile ? -4 : -3, right: isMobile ? -6 : -6,
+                        ...fontBody, fontSize: isMobile ? 9 : 11, fontWeight: 700, color: "#fff", background: "#C0392B",
+                        borderRadius: 20, minWidth: isMobile ? 16 : 20, height: isMobile ? 16 : 20,
+                        display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px",
+                        animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite",
+                        boxShadow: "0 1px 3px rgba(14,27,51,0.3)",
+                      }}
+                    >{s.badge}</span>
+                  </>
+                )}
               </span>
               <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 13.5, fontWeight: 700, lineHeight: 1.2, color: NAVY, overflowWrap: "anywhere", marginTop: isMobile ? 0 : 4 }}>{s.titolo}</span>
               {/* la riga di spiegazione sta solo su desktop: in un quadrato
