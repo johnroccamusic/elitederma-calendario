@@ -6408,12 +6408,16 @@ function SezioneDateCorsi({
     // (in qualunque ordine): "mei milano" trova Mei anche se sta in un
     // campo diverso da "milano" (es. nome allievo + città)
     if (!terminiRicerca.every((t) => testo.includes(t))) return false;
-    // un allievo è "centrato" se almeno un termine sta nel suo nome e i
-    // termini restanti li spiega la riga del corso: così "mei milano"
-    // segna Mei, mentre cercare solo "milano" non segna nessuno
-    const centrati = iscrittiData.filter((i) => {
+    // Un allievo si segna solo per quello che la riga del corso NON sa già
+    // spiegare. Cercando "napoli" il corso di Napoli si spiega da solo, e
+    // segnare Giorgia Di Napoli e' un falso allarme: quel nome compariva
+    // in rosso accanto a un corso che nessuno stava cercando tramite lei.
+    // Cercando "mei milano", se "mei" non e' ne' corso ne' sede ne' master,
+    // resta un termine scoperto e allora sì che va cercato fra gli allievi.
+    const terminiScoperti = terminiRicerca.filter((t) => !testoCorso.includes(t));
+    const centrati = terminiScoperti.length === 0 ? [] : iscrittiData.filter((i) => {
       const nomeIntero = `${i.nome || ""} ${i.cognome || ""}`.toLowerCase();
-      return terminiRicerca.some((t) => nomeIntero.includes(t)) && terminiRicerca.every((t) => nomeIntero.includes(t) || testoCorso.includes(t));
+      return terminiScoperti.every((t) => nomeIntero.includes(t));
     });
     if (centrati.length > 0) allieviTrovatiPerData[cd.id] = centrati;
     return true;
