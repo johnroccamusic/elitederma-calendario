@@ -14448,6 +14448,10 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
   const [config, setConfig] = useState(categoria);
   const [previewNeroUrl, setPreviewNeroUrl] = useState(null);
   const [previewBiancoUrl, setPreviewBiancoUrl] = useState(null);
+  // le larghezze vere dei due file: servono a convertire le dimensioni dei
+  // font da un'immagine all'altra
+  const [larghezzaNero, setLarghezzaNero] = useState(null);
+  const [larghezzaBianco, setLarghezzaBianco] = useState(null);
   const [msg, setMsg] = useState("");
   const modificatoLocalmenteRef = React.useRef(false);
 
@@ -14463,11 +14467,26 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
   //
   // Restano separati i due percorsi delle immagini: quelli sono davvero
   // due file diversi.
+  // Le posizioni sono percentuali e si copiano tali e quali. Le dimensioni
+  // dei font invece sono pixel dell'immagine sorgente: se i due file non
+  // hanno la stessa risoluzione, lo stesso numero da' due testi di
+  // grandezza diversa. Si converte in proporzione alle due larghezze —
+  // ecco perche' questa categoria aveva 110 sul nero e 60 sul bianco: non
+  // erano due gusti diversi, erano due immagini di misura diversa.
   function anchePerAltraVariante(campi) {
     const doppi = { ...campi };
+    const rapporto = (da, a) => (da && a ? a / da : 1);
     Object.entries(campi).forEach(([chiave, valore]) => {
-      if (chiave.startsWith("nero_")) doppi[`bianco_${chiave.slice(5)}`] = valore;
-      else if (chiave.startsWith("bianco_")) doppi[`nero_${chiave.slice(7)}`] = valore;
+      const daNero = chiave.startsWith("nero_");
+      const daBianco = chiave.startsWith("bianco_");
+      if (!daNero && !daBianco) return;
+      const gemella = daNero ? `bianco_${chiave.slice(5)}` : `nero_${chiave.slice(7)}`;
+      if (chiave.endsWith("_font_size")) {
+        const scala = daNero ? rapporto(larghezzaNero, larghezzaBianco) : rapporto(larghezzaBianco, larghezzaNero);
+        doppi[gemella] = Math.max(6, Math.round(valore * scala));
+      } else {
+        doppi[gemella] = valore;
+      }
     });
     return doppi;
   }
@@ -14498,6 +14517,21 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
   const srcNero = previewNeroUrl || (config.logo_nero_path ? supabase.storage.from("loghi-immagini").getPublicUrl(config.logo_nero_path).data.publicUrl : null);
   const srcBianco = previewBiancoUrl || (config.logo_bianco_path ? supabase.storage.from("loghi-immagini").getPublicUrl(config.logo_bianco_path).data.publicUrl : null);
 
+  // si misurano tutte e due, anche quella che non si vede: senza la sua
+  // larghezza non si puo' convertire la dimensione del font
+  useEffect(() => {
+    let annullato = false;
+    function misura(src, imposta) {
+      if (!src) { imposta(null); return; }
+      const img = new Image();
+      img.onload = () => { if (!annullato) imposta(img.naturalWidth); };
+      img.src = src;
+    }
+    misura(srcNero, setLarghezzaNero);
+    misura(srcBianco, setLarghezzaBianco);
+    return () => { annullato = true; };
+  }, [srcNero, srcBianco]);
+
   const testoProvaNome = "NOME COGNOME";
   const testoProvaNumero = calcolaCodiceLogo("Andrea Paura", "Carla Bosi", 402);
 
@@ -14525,10 +14559,17 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
         )}
       </div>
 
+      {/* Un solo blocco di calibrazione, non due: il logo nero e quello
+          bianco sono lo stesso disegno in due colori, e quello che si
+          regola qui vale per tutti e due. Si lavora sul nero perche' il
+          testo bianco su fondo chiaro si vede meglio; se il nero non c'e'
+          si usa il bianco. */}
       <BloccoCalibrazioneLogo
-        titolo="Posizionamento su logo nero (in stampa il testo è nero, qui è mostrato bianco solo per poterlo vedere)"
-        prefisso="nero"
-        src={srcNero}
+        titolo={srcNero
+          ? "Posizionamento (vale per tutti e due i loghi — in stampa il testo prende il colore del logo, qui è mostrato al contrario solo per poterlo vedere)"
+          : "Posizionamento sul logo bianco (vale per tutti e due i loghi)"}
+        prefisso={srcNero ? "nero" : "bianco"}
+        src={srcNero || srcBianco}
         config={config}
         setConfig={setConfig}
         aggiorna={aggiorna}
@@ -14537,19 +14578,13 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
         famigliaNome={famigliaNome}
         famigliaNumero={famigliaNumero}
       />
-      {config.richiede_bianco && (
-        <BloccoCalibrazioneLogo
-          titolo="Posizionamento su logo bianco (in stampa il testo è bianco, qui è mostrato nero solo per poterlo vedere)"
-          prefisso="bianco"
-          src={srcBianco}
-          config={config}
-          setConfig={setConfig}
-          aggiorna={aggiorna}
-          testoProvaNome={testoProvaNome}
-          testoProvaNumero={testoProvaNumero}
-          famigliaNome={famigliaNome}
-          famigliaNumero={famigliaNumero}
-        />
+      {/* le due immagini raramente hanno la stessa risoluzione: la
+          dimensione del font si converte in proporzione, e qui si dice
+          quale numero finisce sull'altro file */}
+      {srcNero && srcBianco && larghezzaNero && larghezzaBianco && larghezzaNero !== larghezzaBianco && (
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 8 }}>
+          Il logo bianco è largo {larghezzaBianco}px contro {larghezzaNero}px del nero: le dimensioni dei font ci vengono riportate in proporzione, quindi il testo esce della stessa grandezza su tutti e due.
+        </div>
       )}
 
       {msg && <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginTop: 8 }}>{msg}</div>}
