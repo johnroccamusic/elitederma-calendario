@@ -14526,6 +14526,52 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
   // gli altri.
   const soloCalibrazione = (campi) => Object.keys(campi).every((k) => /_(pos_[xy]|limite_(sx|dx)|font_size|spaziatura)$/.test(k));
 
+  // Tutte le misure di calibrazione di questa categoria, per la variante
+  // mostrata: servono al tasto che le manda su tutti gli altri loghi.
+  function campiCalibrazione(prefisso) {
+    const chiavi = [
+      `${prefisso}_nome_pos_y`, `${prefisso}_nome_font_size`,
+      `${prefisso}_nome_limite_sx`, `${prefisso}_nome_limite_dx`,
+      `${prefisso}_numero_pos_y`, `${prefisso}_numero_font_size`,
+      `${prefisso}_numero_limite_sx`, `${prefisso}_numero_limite_dx`,
+      `${prefisso}_numero_spaziatura`,
+    ];
+    const fuori = {};
+    chiavi.forEach((k) => { if (config[k] != null) fuori[k] = config[k]; });
+    return fuori;
+  }
+
+  // "Applica a tutti": la propagazione automatica scatta a ogni modifica,
+  // ma copia solo il campo che si tocca — i loghi calibrati prima che
+  // esistesse sono rimasti come stavano, e un miscuglio di misure vecchie
+  // e nuove non si raddrizza da solo. Con questo tasto si prende la
+  // calibrazione che si sta guardando e la si manda su tutti gli altri in
+  // un colpo, sapendo cosa si sta facendo.
+  const [applicandoATutti, setApplicandoATutti] = useState(false);
+  async function applicaATutti() {
+    const prefisso = config.logo_nero_path ? "nero" : "bianco";
+    const altre = (tutteLeCategorie || []).filter((c) => c.chiave !== categoria.chiave && !c.calibrazione_propria);
+    if (altre.length === 0) { setMsg("Nessun altro logo da allineare: gli altri hanno tutti la calibrazione propria."); return; }
+    if (!window.confirm(`Applicare questa calibrazione ad altri ${altre.length} loghi? Quelli con "Regola solo questo logo" restano come sono.`)) return;
+    setApplicandoATutti(true);
+    const base = anchePerAltraVariante(campiCalibrazione(prefisso));
+    for (const altra of altre) {
+      const suoi = {};
+      Object.entries(base).forEach(([chiave, valore]) => {
+        if (!/_(font_size|spaziatura)$/.test(chiave)) { suoi[chiave] = valore; return; }
+        const variante = chiave.startsWith("nero_") ? "nero" : "bianco";
+        const mia = variante === "nero" ? larghezzaNero : larghezzaBianco;
+        const sua = larghezzePerCategoria?.[altra.chiave]?.[variante];
+        suoi[chiave] = mia && sua ? Math.max(6, Math.round(valore * (sua / mia))) : valore;
+      });
+      await supabase.from("loghi_categorie").update(suoi).eq("chiave", altra.chiave);
+    }
+    setApplicandoATutti(false);
+    modificatoLocalmenteRef.current = false;
+    setMsg(`Calibrazione applicata ad altri ${altre.length} loghi.`);
+    ricarica(["loghi_categorie"]);
+  }
+
   async function aggiorna(campi) {
     modificatoLocalmenteRef.current = true;
     const tutti = anchePerAltraVariante(campi);
