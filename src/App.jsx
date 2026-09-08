@@ -47447,7 +47447,7 @@ function TastoFaseSede({ fatto, spento, etichettaDaFare, etichettaFatto, onClick
     </button>
   );
 }
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, onAllestisci, onApriInventarioSede, onAnnullaInventario }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, inLavorazione, onAllestisci, onApriInventarioSede, onAnnullaInventario }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const inSede = !!loc?.sede_centrale;
   const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
@@ -47489,9 +47489,14 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           // (ed è lì che il magazzino si scarica) e l'inventario di fine
           // corso, che rimette dentro quello che è avanzato
           <div style={{ display: "flex", gap: 6, flex: "1 1 320px", minWidth: 280, alignItems: "stretch", flexWrap: "wrap" }}>
+            {/* mentre il magazzino si muove il tasto lo dice e non
+                risponde: e' un'operazione da minuti, e prima sembrava che
+                il clic non fosse arrivato */}
             <TastoFaseSede
               fatto={!!allestitoTs}
-              etichettaDaFare="Corso da allestire" etichettaFatto="Corso allestito"
+              spento={inLavorazione}
+              etichettaDaFare={inLavorazione ? "Scarico in corso…" : "Corso da allestire"}
+              etichettaFatto={inLavorazione ? "Rientro in corso…" : "Corso allestito"}
               onClick={(e) => { e.stopPropagation(); onAllestisci(!allestitoTs); }}
             />
             <TastoFaseSede
@@ -48183,7 +48188,53 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // di prodotti, tutti scaricati insieme — e quanto già applicato
   // l'ultima volta per QUEL kit, così un iscritto che cambia pacchetto e
   // una risincronizzazione muovono solo la differenza, mai il totale
+  // Lo scarico di un corso puo' durare due minuti: ogni prodotto passa da
+  // una lettura, una scrittura e — se e' in vendita online — da
+  // WooCommerce. In quei due minuti il tasto restava premibile e a schermo
+  // non cambiava niente, quindi lo si premeva di nuovo. Ogni pressione
+  // faceva un giro completo, e siccome il segno di "gia' scaricato"
+  // (scarico_per_kit) si scrive solo alla fine, ogni giro si credeva il
+  // primo: l'8 settembre 2026 quattro clic sul PMU BASE di Roma hanno
+  // tolto quattro volte lo stesso materiale dal magazzino.
+  //
+  // Il cancello sta qui e non sul tasto: allo scarico si arriva da quattro
+  // punti diversi (aula allestita, pacco ritirato, rientro annullato,
+  // inventario rifatto) e uno solo protetto non protegge niente.
+  const edizioniInLavorazioneRef = React.useRef(new Set());
+  const [edizioneInLavorazione, setEdizioneInLavorazione] = useState(null);
+  function iniziaLavorazione(corsoDataId) {
+    if (edizioniInLavorazioneRef.current.has(corsoDataId)) return false;
+    edizioniInLavorazioneRef.current.add(corsoDataId);
+    setEdizioneInLavorazione(corsoDataId);
+    return true;
+  }
+  function fineLavorazione(corsoDataId) {
+    edizioniInLavorazioneRef.current.delete(corsoDataId);
+    setEdizioneInLavorazione((c) => (c === corsoDataId ? null : c));
+  }
   async function sincronizzaMagazzino(corsoData) {
+    if (!iniziaLavorazione(corsoData.id)) {
+      window.alert("Il magazzino di questo corso si sta ancora muovendo: aspetta che finisca prima di premere di nuovo.");
+      return false;
+    }
+    try {
+      return await sincronizzaMagazzinoInterno(corsoData);
+    } finally {
+      fineLavorazione(corsoData.id);
+    }
+  }
+  async function ripristinaMagazzinoDaScarico(corsoData) {
+    if (!iniziaLavorazione(corsoData.id)) {
+      window.alert("Il magazzino di questo corso si sta ancora muovendo: aspetta che finisca prima di premere di nuovo.");
+      return;
+    }
+    try {
+      await ripristinaMagazzinoDaScaricoInterno(corsoData);
+    } finally {
+      fineLavorazione(corsoData.id);
+    }
+  }
+  async function sincronizzaMagazzinoInterno(corsoData) {
     const stato = statoDi(corsoData.id);
     const richiesti = totaleKitPerEdizione(iscritti.filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni, corsoData.corso_id, stato.riserva_per_kit);
     const scaricoAttuale = stato.scarico_per_kit || {};
@@ -48326,7 +48377,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // Gestione rientro (fine corso) e "torna indietro" dalla fase "Pacco
   // ritirato dal corriere" (annulla lo scarico appena fatto) — nessuno
   // dei due tocca qui la fase, ci pensa chi chiama
-  async function ripristinaMagazzinoDaScarico(corsoData) {
+  async function ripristinaMagazzinoDaScaricoInterno(corsoData) {
     const stato = statoDi(corsoData.id);
     const scaricoAttuale = stato.scarico_per_kit || {};
     const deltaPerProdotto = {};
@@ -48553,6 +48604,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 })}
                 allestitoTs={statoDi(cd.id).allestito_ts}
                 inventarioTs={statoDi(cd.id).inventario_sede_ts}
+                inLavorazione={edizioneInLavorazione === cd.id}
                 onAllestisci={(allestire) => { setEdizioneSelId(cd.id); allestisciCorso(cd, allestire); }}
                 onApriInventarioSede={() => { setEdizioneSelId(cd.id); setInventarioSedeCorsoId(cd.id); }}
                 onAnnullaInventario={() => annullaInventarioSede(cd)}
