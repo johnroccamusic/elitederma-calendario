@@ -15161,6 +15161,12 @@ function modellaTrovata(m) {
 // focus mentre si scrive
 function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo, reperitori, compatta = false }) {
   const isMobile = useIsMobile();
+  // La riga si apre quando si comincia a scrivere e si richiude alla
+  // conferma: le schede stanno chiuse quasi sempre, e si aprono solo
+  // quella su cui si sta lavorando. Il tasto Espandi le tiene tutte
+  // aperte a prescindere.
+  const [apertaPerModifica, setApertaPerModifica] = useState(false);
+  const chiusa = compatta && !apertaPerModifica;
   const [nome, setNome] = useState(modella.nome_modella || "");
   const [telefono, setTelefono] = useState(modella.telefono_modella || "");
   useEffect(() => { setNome(modella.nome_modella || ""); }, [modella.nome_modella]);
@@ -15259,14 +15265,23 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
     setNome(n); setTelefono(t);
     // svuotare tutti e due libera il posto: e' il modo per dire "questa
     // modella non viene piu'", e deve restare possibile
-    if (!n && !t) { setInModifica(false); onSalva({ nome_modella: "", telefono_modella: "" }); return; }
+    if (!n && !t) { setInModifica(false); setApertaPerModifica(false); onSalva({ nome_modella: "", telefono_modella: "" }); return; }
     // mezzo dato no: senza numero non la si puo' chiamare, e il posto
     // risulterebbe coperto quando non lo e'
     if (!n || !t) {
       window.alert(`Per confermare servono sia il nome sia il numero: manca ${!n ? "il nome" : "il numero"}.`);
       return;
     }
+    // Senza "reperita da" non si chiude: e' la firma di chi ha fatto il
+    // lavoro, e da quella si legge la commissione di reperimento. Scritta
+    // dopo, a memoria, non la scrive piu' nessuno.
+    if (Array.isArray(reperitori) && !modella.reperita_da_id) {
+      window.alert("Manca «reperita da»: scegli chi ha trovato questa modella prima di confermare.");
+      setApertaPerModifica(true);
+      return;
+    }
     setInModifica(false);
+    setApertaPerModifica(false);
     onSalva({ nome_modella: n, telefono_modella: t });
   }
 
@@ -15374,16 +15389,16 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
               ref={rifNome}
               placeholder="Nome Cognome"
               value={nome}
-              onFocus={() => setInModifica(true)}
-              onChange={(e) => setNome(e.target.value)}
+              onFocus={() => { setInModifica(true); setApertaPerModifica(true); }}
+              onChange={(e) => { setNome(e.target.value); setApertaPerModifica(true); }}
               style={{ ...inputStyle, flex: "2 1 150px", padding: "8px 10px" }}
             />
             <input
               ref={rifTelefono}
               placeholder="Tel."
               value={telefono}
-              onFocus={() => setInModifica(true)}
-              onChange={(e) => setTelefono(e.target.value)}
+              onFocus={() => { setInModifica(true); setApertaPerModifica(true); }}
+              onChange={(e) => { setTelefono(e.target.value); setApertaPerModifica(true); }}
               style={{ ...inputStyle, flex: "1 1 110px", minWidth: 0, padding: "8px 10px" }}
             />
             {telefono.trim() && (
@@ -15427,7 +15442,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
               cerca e si aggiorna ogni giorno — e va in cima chi si guarda
               piu' spesso. Con "Comprimi" spariscono, insieme ai posti
               gemelli: restano turno, nome e numero. */}
-          {!compatta && (
+          {!chiusa && (
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
             {opzioniTipo ? (
               <select
@@ -15469,7 +15484,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
             })()}
           </div>
           )}
-          {!compatta && spuntaGruppo}
+          {!chiusa && spuntaGruppo}
         </div>
       </div>
     </div>
@@ -19323,7 +19338,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // allievi e tre posti a testa la pagina e' lunga come un lenzuolo, e chi
   // cerca le modelle ha bisogno di vedere chi manca — trattamento e
   // "reperita da" li ha gia' scelti, e li riapre quando servono.
-  const [schedeCompatte, setSchedeCompatte] = useState(false);
+  const [schedeCompatte, setSchedeCompatte] = useState(true);
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
