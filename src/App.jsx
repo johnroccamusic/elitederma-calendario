@@ -14900,24 +14900,14 @@ function RegolaOmbraLogo({ config, aggiorna, famigliaNome, famigliaNumero, loghi
   );
 }
 
-// pagina "Setting loghi": i 2 font condivisi + il numero di partenza del
-// contatore progressivo globale, poi una card per ciascuna delle 10
-// categorie (CategoriaLogo)
-function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
-  const [config, setConfig] = useState(loghiImpostazioni || CONFIG_LOGHI_DEFAULT);
-  const [numeroPartenza, setNumeroPartenza] = useState(String((loghiImpostazioni || CONFIG_LOGHI_DEFAULT).prossimo_numero));
-  const [msg, setMsg] = useState("");
-  const [famigliaNomeAnteprima, setFamigliaNomeAnteprima] = useState(null);
-  const [famigliaNumeroAnteprima, setFamigliaNumeroAnteprima] = useState(null);
-  // la larghezza vera del file di ogni categoria: serve a riportare in
-  // proporzione le misure in pixel quando la calibrazione si propaga
-  const [larghezzePerCategoria, setLarghezzePerCategoria] = useState({});
-  // Lo storico dei loghi generati: si legge qui, serve solo a questa
-  // pagina. Il piu' recente e' il primo.
+// Lo storico dei loghi emessi: una pagina sua, aperta sia da Setting
+// loghi sia da Assegna logo. E' una lista che cresce, e in fondo alla
+// calibrazione la si trovava solo scorrendo dieci schede di loghi.
+function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack }) {
   const [storico, setStorico] = useState(null);
-  // lo storico e' una pagina sua: e' una lista che cresce, e in fondo alla
-  // calibrazione la si trovava solo scorrendo dieci schede di loghi
-  const [mostraStorico, setMostraStorico] = useState(false);
+  const [msg, setMsg] = useState("");
+  const prossimoNumero = loghiImpostazioni?.prossimo_numero ?? 1;
+
   async function caricaStorico() {
     const { data } = await supabase.from("loghi_generati").select("*").order("numero", { ascending: false }).limit(50);
     setStorico(data || []);
@@ -14932,12 +14922,79 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
     if (!window.confirm(`Eliminare il logo ${riga.codice}? Il numero ${riga.numero} torna disponibile per il prossimo.`)) return;
     const { error } = await supabase.from("loghi_generati").delete().eq("id", riga.id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    if (config.id) await supabase.from("loghi_impostazioni").update({ prossimo_numero: riga.numero }).eq("id", config.id);
-    modificatoLocalmenteRef.current = false;
+    if (loghiImpostazioni?.id) await supabase.from("loghi_impostazioni").update({ prossimo_numero: riga.numero }).eq("id", loghiImpostazioni.id);
     setMsg(`Logo ${riga.codice} eliminato: il prossimo riparte da ${riga.numero}.`);
     caricaStorico();
     ricarica(["loghi_impostazioni"]);
   }
+
+  return (
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Storico loghi" onBack={onBack} />
+      {/* Storico dei loghi emessi. Il cestino c'e' solo sul primo — che e'
+          l'ultimo generato — perche' il progressivo e' una fila: togliendo
+          un numero in mezzo resterebbe un buco che nessuno potrebbe piu'
+          riempire. Serve dopo le prove: si cancella e il numero torna
+          disponibile, invece di restare bruciato per sempre. */}
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={hStyle}>Storico loghi</div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>
+          Il prossimo logo avrà il numero <strong style={{ color: NAVY }}>{prossimoNumero}</strong>. Eliminando l’ultimo generato quel numero torna disponibile.
+        </div>
+        {storico == null ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
+        ) : storico.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+            Nessun logo in elenco. Lo storico registra i loghi scaricati da adesso in avanti: quelli fatti prima non sono annotati da nessuna parte, quindi il loro numero non si può recuperare.
+          </div>
+        ) : (
+          storico.map((r, i) => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                  {r.codice}
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
+                </div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
+                  {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
+                    .filter(Boolean).join(" · ")}
+                  {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
+                </div>
+              </div>
+              {i === 0 ? (
+                <button
+                  onClick={() => eliminaUltimoLogo(r)}
+                  title="Elimina l’ultimo logo generato e restituisci il numero"
+                  style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                >
+                  <IconaCestino size={14} /> Elimina e recupera il numero
+                </button>
+              ) : (
+                <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>si elimina solo l’ultimo</span>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+    </div>
+  );
+}
+
+// pagina "Setting loghi": i 2 font condivisi + il numero di partenza del
+// contatore progressivo globale, poi una card per ciascuna delle 10
+// categorie (CategoriaLogo)
+function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
+  const [config, setConfig] = useState(loghiImpostazioni || CONFIG_LOGHI_DEFAULT);
+  const [numeroPartenza, setNumeroPartenza] = useState(String((loghiImpostazioni || CONFIG_LOGHI_DEFAULT).prossimo_numero));
+  const [msg, setMsg] = useState("");
+  const [famigliaNomeAnteprima, setFamigliaNomeAnteprima] = useState(null);
+  const [famigliaNumeroAnteprima, setFamigliaNumeroAnteprima] = useState(null);
+  // la larghezza vera del file di ogni categoria: serve a riportare in
+  // proporzione le misure in pixel quando la calibrazione si propaga
+  const [larghezzePerCategoria, setLarghezzePerCategoria] = useState({});
+  // lo storico e' una pagina sua, da aprire
+  const [mostraStorico, setMostraStorico] = useState(false);
   const modificatoLocalmenteRef = React.useRef(false);
 
   useEffect(() => {
@@ -15040,60 +15097,9 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
     aggiorna({ prossimo_numero: n });
   }
 
-  // Lo storico e' una pagina sua: e' una lista che cresce, e in fondo alla
-  // calibrazione la si trovava solo scorrendo dieci schede di loghi.
+  // Lo storico e' una pagina sua: qui si apre soltanto.
   if (mostraStorico) {
-    return (
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
-        <TopBar title="Storico loghi" onBack={() => setMostraStorico(false)} />
-        {/* Storico dei loghi emessi. Il cestino c'e' solo sul primo — che e'
-            l'ultimo generato — perche' il progressivo e' una fila: togliendo
-            un numero in mezzo resterebbe un buco che nessuno potrebbe piu'
-            riempire. Serve dopo le prove: si cancella e il numero torna
-            disponibile, invece di restare bruciato per sempre. */}
-        <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <div style={hStyle}>Storico loghi</div>
-          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>
-            Il prossimo logo avrà il numero <strong style={{ color: NAVY }}>{config.prossimo_numero}</strong>. Eliminando l’ultimo generato quel numero torna disponibile.
-          </div>
-          {storico == null ? (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
-          ) : storico.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>
-              Nessun logo in elenco. Lo storico registra i loghi scaricati da adesso in avanti: quelli fatti prima non sono annotati da nessuna parte, quindi il loro numero non si può recuperare.
-            </div>
-          ) : (
-            storico.map((r, i) => (
-              <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
-                    {r.codice}
-                    <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
-                  </div>
-                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
-                    {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
-                      .filter(Boolean).join(" · ")}
-                    {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
-                  </div>
-                </div>
-                {i === 0 ? (
-                  <button
-                    onClick={() => eliminaUltimoLogo(r)}
-                    title="Elimina l’ultimo logo generato e restituisci il numero"
-                    style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
-                  >
-                    <IconaCestino size={14} /> Elimina e recupera il numero
-                  </button>
-                ) : (
-                  <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>si elimina solo l’ultimo</span>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-        {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
-      </div>
-    );
+    return <PaginaStoricoLoghi loghiImpostazioni={loghiImpostazioni} ricarica={ricarica} onBack={() => setMostraStorico(false)} />;
   }
 
   return (
@@ -15103,7 +15109,7 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
           pagina che non serve a calibrare */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
         <button
-          onClick={() => { setMostraStorico(true); caricaStorico(); }}
+          onClick={() => setMostraStorico(true)}
           style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "9px 16px", cursor: "pointer" }}
         >
           Storico loghi →
@@ -15372,6 +15378,17 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   // i loghi composti ma non ancora scaricati: vivono solo nella pagina
   const [anteprime, setAnteprime] = useState([]);
   const [scaricando, setScaricando] = useState(false);
+  // Gli ultimi assegnati, qui sotto: chi apre questa pagina di solito
+  // vuole sapere se un logo e' gia' stato fatto, e prima per scoprirlo
+  // bisognava passare da Setting loghi. Dieci bastano; il resto sta nello
+  // storico.
+  const [ultimi, setUltimi] = useState(null);
+  const [mostraStorico, setMostraStorico] = useState(false);
+  async function caricaUltimi() {
+    const { data } = await supabase.from("loghi_generati").select("*").order("numero", { ascending: false }).limit(10);
+    setUltimi(data || []);
+  }
+  useEffect(() => { caricaUltimi(); }, []);
 
   const OPZIONI_CORSO = [...CORSI_LOGO, { chiave: "master_assistant", etichetta: "Master Assistant" }, { chiave: "master", etichetta: "Master" }];
   const richiedeVariante = corso && corso !== "master_assistant" && corso !== "master";
@@ -15491,7 +15508,12 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     anteprime.forEach((a) => URL.revokeObjectURL(a.url));
     setAnteprime([]);
     setMsg(`Loghi scaricati con codice ${codiceGenerato}. Il prossimo numero è ${prossimoNumero + 1}.`);
+    caricaUltimi();
     ricarica(["loghi_impostazioni"]);
+  }
+
+  if (mostraStorico) {
+    return <PaginaStoricoLoghi loghiImpostazioni={loghiImpostazioni} ricarica={ricarica} onBack={() => { setMostraStorico(false); caricaUltimi(); }} />;
   }
 
   return (
@@ -15568,6 +15590,40 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
           </div>
         </div>
       )}
+
+      {/* Gli ultimi assegnati: serve a non rifare due volte lo stesso logo,
+          ed e' la domanda che ci si fa proprio mentre si compila questa
+          pagina. Il resto della lista sta nello storico. */}
+      <div style={{ ...cardStyle, marginTop: 16 }}>
+        <div style={hStyle}>Ultimi loghi assegnati</div>
+        {ultimi == null ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
+        ) : ultimi.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+            Ancora nessuno. Lo storico registra i loghi scaricati da qui, non quelli fatti prima.
+          </div>
+        ) : (
+          ultimi.map((r, i) => (
+            <div key={r.id} style={{ padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                {r.codice}
+                <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
+                {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
+                  .filter(Boolean).join(" · ")}
+                {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
+              </div>
+            </div>
+          ))
+        )}
+        <button
+          onClick={() => setMostraStorico(true)}
+          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", marginTop: 12, width: "100%" }}
+        >
+          Vedi lo storico
+        </button>
+      </div>
     </div>
   );
 }
