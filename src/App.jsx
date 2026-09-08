@@ -3725,7 +3725,7 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
     };
     const { error } = await supabase.from(tabella).update(campi).eq("id", riga.id);
     setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     onSalvato();
   }
 
@@ -3886,7 +3886,7 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
     };
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", cd.id);
     setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     onSalvato();
   }
 
@@ -4192,7 +4192,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     setOverrideCampi((m) => ({ ...m, [chiave]: valore }));
     const { error } = await supabase.from(tabella).update({ [campo]: valore }).eq("id", id);
     if (error) {
-      window.alert("Errore: " + error.message);
+      window.alert("Errore: " + testoErrore(error));
       setOverrideCampi((m) => { const copia = { ...m }; delete copia[chiave]; return copia; });
       return;
     }
@@ -4210,7 +4210,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     });
     const { error } = await supabase.from(tabella).update(campi).eq("id", id);
     if (error) {
-      window.alert("Errore: " + error.message);
+      window.alert("Errore: " + testoErrore(error));
       setOverrideCampi((m) => { const copia = { ...m }; for (const c of Object.keys(campi)) delete copia[`${id}:${c}`]; return copia; });
       return;
     }
@@ -4227,7 +4227,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     // non provvisorio): compare a schermo appena arrivata la risposta
     // dell'insert, senza aspettare l'intero fetchDati
     const { data, error } = await supabase.from("corsi_date_docenti").insert({ corso_data_id: cd.id, tipo, persona_id: null }).select().single();
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setRigheExtraOttimistiche((prev) => [...prev, data]);
     ricarica(["corsi_date_docenti"]);
   }
@@ -4251,7 +4251,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     setIdsRimosseOttimisticamente((prev) => new Set(prev).add(riga.id));
     const { error } = await supabase.from("corsi_date_docenti").delete().eq("id", riga.id);
     if (error) {
-      window.alert("Errore: " + error.message);
+      window.alert("Errore: " + testoErrore(error));
       setIdsRimosseOttimisticamente((prev) => { const copia = new Set(prev); copia.delete(riga.id); return copia; });
       return;
     }
@@ -5022,7 +5022,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
       ? await supabase.from("acconti_da_verificare").update(payload).eq("id", accontoEsistente.id)
       : await supabase.from("acconti_da_verificare").insert({ ...payload, iscritto_id: iscritto.id, venditore_nome: venditoreNome, origine: "manuale" });
     setInviando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["acconti_da_verificare"]);
     if (onInviato) onInviato(iscritto.id);
     else onChiudi();
@@ -5170,7 +5170,7 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
   async function resetResiduo() {
     if (!window.confirm("Sei sicuro di voler ricominciare? Tutto quello che risulta già contabilizzato tornerà disponibile.")) return;
     const { error } = await supabase.from("acconti_da_verificare").update({ importo_residuo: integrazione.importo }).eq("id", integrazione.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["acconti_da_verificare"]);
   }
 
@@ -5430,14 +5430,14 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
     setApprovandoId(a.id);
     const { error } = await supabase.from("acconti_da_verificare").update({ stato: "approvato", approvato_il: new Date().toISOString() }).eq("id", a.id);
     setApprovandoId(null);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["acconti_da_verificare"]);
   }
 
   async function eliminaAcconto(a) {
     if (!window.confirm("Eliminare definitivamente questa segnalazione di pagamento?")) return;
     const { error } = await supabase.from("acconti_da_verificare").delete().eq("id", a.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["acconti_da_verificare"]);
   }
 
@@ -8515,12 +8515,12 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
       { location_id: corsoData.location_id, tipo, riferimento, quantita, corso_data_id: corsoData.id, master_id: masterLoggataId || null },
       { onConflict: "location_id,tipo,riferimento" }
     );
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["inventario_sede"]);
   }
   async function eliminaVoceInventario(id) {
     const { error } = await supabase.from("inventario_sede").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["inventario_sede"]);
   }
 
@@ -8547,17 +8547,17 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
       location_id: corsoData.location_id, prodotto_id: p.id, quantita: 1, livello: 5,
       corso_data_id: corsoData.id, master_id: masterLoggataId || null,
     });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["magazzino_locale_consumabili"]);
   }
   async function aggiornaConsumabile(id, campi) {
     const { error } = await supabase.from("magazzino_locale_consumabili").update(campi).eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["magazzino_locale_consumabili"]);
   }
   async function rimuoviConsumabile(id) {
     const { error } = await supabase.from("magazzino_locale_consumabili").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["magazzino_locale_consumabili"]);
   }
 
@@ -8572,7 +8572,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     const { error } = await supabase
       .from("logistica_kit_edizioni")
       .upsert({ corso_data_id: corsoData.id, ...campi }, { onConflict: "corso_data_id" });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["logistica_kit_edizioni"]);
   }
   // "Consulenze": una riga per ciascuna spedita da Raf in Logistica
@@ -8596,7 +8596,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
       corso_data_id: corsoData.id, location_id: corsoData.location_id, master_id: masterLoggataId || null, testo: testoSegnalazione.trim(),
     });
     setInviandoSegnalazione(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setTestoSegnalazione("");
     ricarica(["segnalazioni_magazzino"]);
   }
@@ -8784,7 +8784,7 @@ function BottoneNuovaAgenda({ ricarica }) {
     setSalvando(true);
     const { error } = await supabase.from("agende").insert({ nome: nome.trim() });
     setSalvando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["agende"]);
   }
   return (
@@ -9112,26 +9112,26 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
   async function eliminaAgenda(a) {
     if (!window.confirm(`Eliminare l'agenda "${a.nome}"? Elimina anche tutti i suoi appuntamenti.`)) return;
     const { error } = await supabase.from("agende").delete().eq("id", a.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     if (agendaApertaId === a.id) setAgendaApertaId(null);
     ricarica(["agende"]);
   }
   async function salvaNuovaVoce(campi) {
     const { error } = await supabase.from("agenda_voci").insert({ agenda_id: agendaAperta.id, data: popupNuovo.data, ...campi });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPopupNuovo(null);
     ricarica(["agenda_voci"]);
   }
   async function salvaModificaVoce(campi) {
     const { error } = await supabase.from("agenda_voci").update(campi).eq("id", popupVoce.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPopupVoce(null);
     ricarica(["agenda_voci"]);
   }
   async function eliminaVoce() {
     if (!window.confirm("Eliminare questo appuntamento?")) return;
     const { error } = await supabase.from("agenda_voci").delete().eq("id", popupVoce.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPopupVoce(null);
     ricarica(["agenda_voci"]);
   }
@@ -9141,7 +9141,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
     const { error } = await supabase
       .from("agenda_note_settimanali")
       .upsert({ agenda_id: agendaAperta.id, settimana_inizio: settimanaInizio, testo }, { onConflict: "agenda_id,settimana_inizio" });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["agenda_note_settimanali"]);
   }
 
@@ -9898,7 +9898,7 @@ function ModaleSlotDaTrovare({ slotList, ctx, ricarica, onClose }) {
     setSalvando(true); setErrore("");
     const err = await scriviSlotModella(s, ctx, nome.trim(), telefono.trim());
     setSalvando(false);
-    if (err) { setErrore("Errore: " + err.message); return; }
+    if (err) { setErrore("Errore: " + testoErrore(err)); return; }
     setApertoId(null);
     await ricarica(["corsi_date", "iscritti"]);
   }
@@ -9959,7 +9959,7 @@ function ModaleModelleAssegnate({ slotList, slotDaTrovare, ctx, ricarica, onClos
     setSalvando(true); setErrore("");
     const err = await scriviSlotModella(s, ctx, nome.trim(), telefono.trim());
     setSalvando(false);
-    if (err) { setErrore("Errore: " + err.message); return; }
+    if (err) { setErrore("Errore: " + testoErrore(err)); return; }
     setInModifica(null);
     await ricarica(["corsi_date", "iscritti"]);
   }
@@ -9969,7 +9969,7 @@ function ModaleModelleAssegnate({ slotList, slotDaTrovare, ctx, ricarica, onClos
     setSalvando(true); setErrore("");
     const err = await spostaModellaTraSlot(s, dest, ctx);
     setSalvando(false);
-    if (err) { setErrore("Errore: " + err.message); return; }
+    if (err) { setErrore("Errore: " + testoErrore(err)); return; }
     setInModifica(null);
     await ricarica(["corsi_date", "iscritti"]);
   }
@@ -9978,7 +9978,7 @@ function ModaleModelleAssegnate({ slotList, slotDaTrovare, ctx, ricarica, onClos
     setSalvando(true);
     const err = await scriviSlotModella(s, ctx, "", "");
     setSalvando(false);
-    if (err) { window.alert("Errore: " + err.message); return; }
+    if (err) { window.alert("Errore: " + testoErrore(err)); return; }
     await ricarica(["corsi_date", "iscritti"]);
   }
 
@@ -11088,7 +11088,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
     if (nome.trim() === (utente.nome || "").trim() && password.trim() === (utente.password || "").trim()) return;
     if (!nome.trim() || !password.trim()) { window.alert("Nome e password non possono essere vuoti."); return; }
     const { error } = await persist({ nome: nome.trim(), password: password.trim() });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
   }
   React.useImperativeHandle(ref, () => ({ salvaSeNecessario: salvaCampi }));
@@ -11097,14 +11097,14 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
     setPermessiLocali(nuovi);
     const { error } = await persist({ permessi: nuovi });
-    if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); setPermessiLocali(attuali); return; }
     ricarica(["utenti_app"]);
   }
   async function elimina() {
     if (!utente.id) return;
     if (!window.confirm(`Eliminare l'utente "${utente.nome}"? Non potrà più entrare nell'app con questa password.`)) return;
     const { error } = await supabase.from("utenti_app").delete().eq("id", utente.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
   }
   // collegamento a un venditore che è la stessa persona (stesso meccanismo
@@ -11112,7 +11112,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   // sistema, condivise da più persone con lo stesso ruolo
   async function salvaVenditoreCollegato(venditoreId) {
     const { error } = await persist({ venditore_id: venditoreId || null });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
   }
   const selVenditoreCollegato = (
@@ -11129,14 +11129,14 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   // lettura del calendario e dei filtri — niente Home/Indietro/Avanti
   async function salvaSoloCalendario(checked) {
     const { error } = await persist({ solo_calendario: checked });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
   }
   // grado amministratore su un account nominale: sblocca ovunque ciò che
   // finora chiedeva la password amministratore condivisa
   async function salvaAmministratore(checked) {
     const { error } = await persist({ amministratore: checked });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
   }
   // Chi puo' firmare il reperimento di una modella. A differenza degli
@@ -11145,7 +11145,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   // da nessuna parte.
   async function salvaModificaModelle(checked) {
     const { error } = await persist({ gestione_modelle: checked });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
   }
   const chkModificaModelle = (
@@ -11155,7 +11155,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   // schede iscritto, contabilita' e riepilogo amministrativo
   async function salvaPuoOmaggi(checked) {
     const { error } = await persist({ puo_omaggi: checked });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
   }
   const chkPuoOmaggi = (
@@ -11291,7 +11291,7 @@ function BottoneGeneraUtente({ utentiApp, ricarica }) {
     const password = Math.random().toString(36).slice(2, 8).toUpperCase();
     const { error } = await supabase.from("utenti_app").insert({ nome: `Nuovo utente ${numero}`, password, permessi: [] });
     setSalvando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
   }
   return (
@@ -11462,7 +11462,7 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
   async function salvaPassword() {
     if ((masterRec.password || "") === password.trim()) return;
     const { error } = await persist({ password: password.trim() || null });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["master"]);
   }
   async function toggleTasto(chiave, checked) {
@@ -11470,12 +11470,12 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
     setPermessiLocali(nuovi);
     const { error } = await persist({ permessi: nuovi });
-    if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); setPermessiLocali(attuali); return; }
     ricarica(["master"]);
   }
   async function salvaVenditoreCollegato(venditoreId) {
     const { error } = await persist({ venditore_id: venditoreId || null });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["master"]);
   }
   const selVenditoreCollegato = (
@@ -11638,7 +11638,7 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
     setPermessiLocali(nuovi);
     const { error } = await supabase.from("venditori").update({ permessi: nuovi }).eq("id", venditore.id);
-    if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); setPermessiLocali(attuali); return; }
     ricarica(["venditori"]);
   }
   // stesso schema "scrivi ed esci dal campo" della password Master: in
@@ -11647,7 +11647,7 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
   async function salvaPassword() {
     if ((venditore.password || "") === password.trim()) return;
     const { error } = await supabase.from("venditori").update({ password: password.trim() || "0000" }).eq("id", venditore.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["venditori"]);
   }
   const campoPassword = (
@@ -11771,7 +11771,7 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
     const { error } = await supabase.from("password_menu").upsert({ vista, password: password.trim() }, { onConflict: "vista" });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Password aggiornata.");
     ricarica(["password_menu"]);
   }
@@ -12050,7 +12050,7 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
     if (valore === (intestazione?.[campo] || "")) return;
     modificatoLocalmenteRef.current = true;
     const { error } = await supabase.from("intestazione_societa").update({ [campo]: valore || null }).eq("id", true);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Salvato.");
     ricarica(["intestazione_societa"]);
   }
@@ -12084,7 +12084,7 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
   async function togliLogo() {
     if (!window.confirm("Togliere il logo dall'intestazione?")) return;
     const { error } = await supabase.from("intestazione_societa").update({ logo_path: null }).eq("id", true);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setAnteprimaLogo(null);
     setMsg("Logo tolto.");
     ricarica(["intestazione_societa"]);
@@ -12159,7 +12159,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     const nuovo = parseNum(aliquotaIvaDefaultInput);
     if (nuovo === (impostazioniIva?.aliquota_default ?? 22)) return;
     const { error } = await supabase.from("impostazioni_iva").update({ aliquota_default: nuovo }).eq("id", true);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["impostazioni_iva"]);
   }
   const isMobile = useIsMobile();
@@ -12264,7 +12264,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   async function eliminaCorso(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
     const { error } = await supabase.from("corsi").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Corso eliminato.");
     ricarica(["corsi"]);
   }
@@ -12333,7 +12333,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       categoria: modCategoriaCorso.trim() || null,
     };
     const { error } = await supabase.from("corsi").update(payload).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); setSalvandoCorso(false); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); setSalvandoCorso(false); return; }
     const erroreGiorni = await salvaGiorniCorso(id, giorniCorsoModifica);
     if (erroreGiorni) { setMsg("Corso aggiornato, ma errore nel salvataggio dei giorni: " + erroreGiorni.message); setSalvandoCorso(false); return; }
     const erroreTipi = await salvaTipiModellaCorso(id, tipiModellaSelCorsoModifica);
@@ -12371,7 +12371,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     setLocation((prev) => prev.map((l) => (l.id === locationId ? { ...l, magazzino_locale: valore } : l)));
     const { error } = await supabase.from("location").update({ magazzino_locale: valore }).eq("id", locationId);
     if (error) {
-      window.alert("Errore: " + error.message);
+      window.alert("Errore: " + testoErrore(error));
       setLocation((prev) => prev.map((l) => (l.id === locationId ? { ...l, magazzino_locale: !valore } : l)));
     }
   }
@@ -12762,7 +12762,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   async function eliminaData(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
     const { error } = await supabase.from("corsi_date").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Data eliminata.");
     ricarica(["corsi_date"]);
   }
@@ -12796,7 +12796,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
       posti_max: modPostiData ? Number(modPostiData) : null,
       master_id: modMasterSel || null,
     }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setDataInModifica(null);
     setMsg("Data aggiornata.");
     ricarica(["corsi_date"]);
@@ -13129,7 +13129,7 @@ const ID_IMPOSTAZIONI_CATEGORIE_GRUPPI = "00000000-0000-0000-0000-000000000001";
 function SelettoreCategoriaGruppo({ campo, categorieGruppi, costiCategorie, costiSottocategorie, ricarica }) {
   async function salva(valore) {
     const { error } = await supabase.from("impostazioni_categorie_gruppi").update({ [campo]: valore }).eq("id", ID_IMPOSTAZIONI_CATEGORIE_GRUPPI);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["impostazioni_categorie_gruppi"]);
   }
   return (
@@ -13561,10 +13561,10 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
     delete payload.ts;
     if (nuovo.id) {
       const { error } = await supabase.from("font_diplomi").update(payload).eq("id", nuovo.id);
-      if (error) { setMsg("Errore: " + error.message); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     } else {
       const { data, error } = await supabase.from("font_diplomi").insert(payload).select("id").single();
-      if (error) { setMsg("Errore: " + error.message); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
       setConfig((c) => ({ ...c, id: data.id }));
     }
     ricarica(["font_diplomi"]);
@@ -13583,10 +13583,10 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
     delete payload.ts;
     if (nuovo.id) {
       const { error } = await supabase.from("segnaposti_config").update(payload).eq("id", nuovo.id);
-      if (error) { setMsg("Errore: " + error.message); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     } else {
       const { data, error } = await supabase.from("segnaposti_config").insert(payload).select("id").single();
-      if (error) { setMsg("Errore: " + error.message); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
       setConfigSegna((c) => ({ ...c, id: data.id }));
     }
     ricarica(["segnaposti_config"]);
@@ -14392,7 +14392,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
     modificatoLocalmenteRef.current = true;
     setConfig((c) => ({ ...c, ...campi }));
     const { error } = await supabase.from("loghi_categorie").update(campi).eq("chiave", categoria.chiave);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["loghi_categorie"]);
   }
 
@@ -14517,10 +14517,10 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
     delete payload.ts;
     if (nuovo.id) {
       const { error } = await supabase.from("loghi_impostazioni").update(payload).eq("id", nuovo.id);
-      if (error) { setMsg("Errore: " + error.message); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     } else {
       const { data, error } = await supabase.from("loghi_impostazioni").insert(payload).select("id").single();
-      if (error) { setMsg("Errore: " + error.message); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
       setConfig((c) => ({ ...c, id: data.id }));
     }
     ricarica(["loghi_impostazioni"]);
@@ -15684,7 +15684,7 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
   async function aggiungi() {
     if (!nome.trim()) return;
     const { data, error } = await supabase.from(tabella).insert({ nome: nome.trim().toUpperCase() }).select("id").single();
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setNome(""); setMsg(`${nomeSingolare} aggiunt${nomeArticolo === "un" ? "o" : "a"}.`);
     // ogni nuovo venditore parte con una password predefinita, così è
     // subito pronto per il futuro login: chi ha accesso a Impostazioni la
@@ -15697,18 +15697,18 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
   async function elimina(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
     const { error } = await supabase.from(tabella).delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg(`${nomeSingolare} eliminat${nomeArticolo === "un" ? "o" : "a"}.`);
     ricarica([tabella]);
   }
   async function salvaTelefono(id, telefono) {
     const { error } = await supabase.from(tabella).update({ telefono }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica([tabella]);
   }
   async function salvaEmail(id, email) {
     const { error } = await supabase.from(tabella).update({ email: email || null }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica([tabella]);
   }
   function apriModifica(el) {
@@ -15718,7 +15718,7 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
   async function salvaModifica(id) {
     if (!modNome.trim()) { setMsg("Il nome non può essere vuoto."); return; }
     const { error } = await supabase.from(tabella).update({ nome: modNome.trim().toUpperCase() }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setInModifica(null);
     setMsg(`${nomeSingolare} aggiornat${nomeArticolo === "un" ? "o" : "a"}.`);
     ricarica([tabella]);
@@ -15840,7 +15840,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
   async function eliminaTarget(id) {
     if (!window.confirm("Eliminare questo target?")) return;
     const { error } = await supabase.from("target_vendite_prodotti").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     if (targetInModifica === id) resetForm();
     ricarica(["target_vendite_prodotti"]);
   }
@@ -15883,7 +15883,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
       ? await supabase.from("target_vendite_prodotti").update(basaRiga).eq("id", targetInModifica)
       : await supabase.from("target_vendite_prodotti").insert(soggettiSelezionati.map((id) => ({ ...basaRiga, soggetto_id: id })));
     setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     resetForm();
     ricarica(["target_vendite_prodotti"]);
   }
@@ -17076,7 +17076,7 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
     if (!window.confirm(`Spostare ${nome}?\n\nDa: ${daTesto}\nA:  ${aTesto}`)) { setSpostamento(null); return; }
     const { error } = await supabase.from("corsi_date").update({ data_inizio: finale.inizio, data_fine: finale.fine }).eq("id", d.id);
     setSpostamento(null);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_date"]);
   }
 
@@ -17090,14 +17090,14 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
 
   async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine, master_id }) {
     const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine, master_id: master_id || null });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPopupNuovo(null);
     ricarica(["corsi_date"]);
   }
   async function eliminaEsistente(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
     const { error } = await supabase.from("corsi_date").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPopupElimina(null);
     ricarica(["corsi_date"]);
   }
@@ -17183,14 +17183,14 @@ function CalendarioModifica({ corsi, location, corsiDate, iscritti, master, cdId
   const [popupElimina, setPopupElimina] = useState(null);
   async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine, master_id }) {
     const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine, master_id: master_id || null });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPopupNuovo(null);
     ricarica(["corsi_date"]);
   }
   async function eliminaEsistente(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
     const { error } = await supabase.from("corsi_date").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPopupElimina(null);
     ricarica(["corsi_date"]);
     onDataEliminata?.(id);
@@ -18381,6 +18381,26 @@ function ManigliaRidimensionaOrizzontale({ cursore = "ew-resize", onPointerDown,
 // migliaia, virgola per i centesimi, simbolo davanti. "8909.4" e
 // "8.909,40" sono lo stesso numero, ma il secondo si legge a colpo
 // d'occhio e il primo va contato cifra per cifra.
+// Cosa dire quando una scrittura non riesce.
+//
+// Quando il telefono perde la rete per un attimo — schermo bloccato, app in
+// secondo piano, ascensore — supabase-js restituisce l'errore cosi' com'e'
+// arrivato dal browser: su Safari "TypeError: Load failed", su Chrome
+// "Failed to fetch". Finiva in faccia a chi stava lavorando, che leggeva
+// una parola inglese e non sapeva ne' cosa fosse successo ne' se il dato
+// fosse stato salvato.
+//
+// Il messaggio vero (una colonna che non accetta quel valore, una regola
+// del database) resta invece utile e si mostra tale e quale: e' quello che
+// serve per capire cosa correggere.
+function testoErrore(e) {
+  const grezzo = String(e?.message || e || "").trim();
+  if (/load failed|failed to fetch|networkerror|network request failed/i.test(grezzo)) {
+    return "connessione persa, l'operazione non è stata salvata. Riprova fra un momento.";
+  }
+  return grezzo || "errore sconosciuto";
+}
+
 function euroRiepilogo(n) {
   return `€ ${(Number(n) || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -18551,7 +18571,7 @@ function PannelloRiepilogoAmministrativo({
   async function salvaCampiSpesaClasse(id, campi) {
     setSpeseClasseOverride((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), ...campi } }));
     const { error } = await supabase.from("spese").update(campi).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
   async function aggiungiRigaCostoClasse(categoriaId, sottocategoriaId, descrizione) {
@@ -18560,7 +18580,7 @@ function PannelloRiepilogoAmministrativo({
       categoria_id: categoriaId, sottocategoria_id: sottocategoriaId,
       descrizione: descrizione || null, imponibile: 0, totale: 0,
     }).select().single();
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setSpeseClasseNuove((prev) => [...prev, data]);
     setSceltaCategoriaCosto(false);
     ricarica(["spese"]);
@@ -18569,7 +18589,7 @@ function PannelloRiepilogoAmministrativo({
     if (!window.confirm("Vuoi eliminare questa voce di costo?")) return;
     setSpeseClasseRimosse((prev) => new Set(prev).add(id));
     const { error } = await supabase.from("spese").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
   // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
@@ -18611,7 +18631,7 @@ function PannelloRiepilogoAmministrativo({
   async function salvaSplitRiga(tabella, rigaId, campi) {
     setSplitOverride((m) => ({ ...m, [rigaId]: { ...(m[rigaId] || {}), ...campi } }));
     const { error } = await supabase.from(tabella).update(campi).eq("id", rigaId);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica([tabella]);
   }
 
@@ -18633,7 +18653,7 @@ function PannelloRiepilogoAmministrativo({
       .from("quote_venditori_split")
       .upsert({ corso_data_id: corsoData.id, venditore: chiaveVenditore, modalita, aggiornato_il: new Date().toISOString() },
               { onConflict: "corso_data_id,venditore" });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["quote_venditori_split"]);
   }
 
@@ -18651,7 +18671,7 @@ function PannelloRiepilogoAmministrativo({
     const campi = { pagamento_sede: tipo };
     if (tipo === "cash") campi.scadenza_pagamento_location = null;
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_date"]);
   }
 
@@ -18694,7 +18714,7 @@ function PannelloRiepilogoAmministrativo({
     if (rifatto != null) campi.pattuito_periodo = rifatto;
 
     const { error } = await supabase.from(r.tabella).update(campi).eq("id", r.rigaId);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg(rifatto == null
       ? "Pagamento spostato. L'importo resta quello pattuito: senza notti e tariffa a notte non c'è un conto da rifare."
       : totalePronto != null
@@ -18733,7 +18753,7 @@ function PannelloRiepilogoAmministrativo({
   async function salvaGiorniPresenza(rigaId, giorni) {
     setGiorniPresenzaOverride((m) => ({ ...m, [rigaId]: giorni }));
     const { error } = await supabase.from("corsi_date_docenti").update({ giorni_presenza: giorni }).eq("id", rigaId);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_date_docenti"]);
   }
   const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
@@ -18800,7 +18820,7 @@ function PannelloRiepilogoAmministrativo({
       ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse }
       : { busta_rientrata_il: null, busta_importo: null };
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg(rientrata ? "Busta segnata come rientrata: il contante è in cassa." : "Busta rimessa fuori dalla cassa.");
     ricarica(["corsi_date"]);
   }
@@ -18812,7 +18832,7 @@ function PannelloRiepilogoAmministrativo({
       incassi_extra: incassiExtra.filter((c) => c.prodotto_id !== "" || c.valore !== "").map((c) => ({ prodotto_id: c.prodotto_id || null, quantita: parseNum(c.quantita) || 1, valore: parseNum(c.valore), metodo: c.metodo })),
     }).eq("id", corsoData.id);
     setSalvandoCosti(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Costi salvati.");
     ricarica(["corsi_date"]);
   }
@@ -19517,7 +19537,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
       master_id: modMasterSelScheda || null,
     }).eq("id", corsoData.id);
     setSalvandoDateScheda(false);
-    if (error) { setMsgDateScheda("Errore: " + error.message); return; }
+    if (error) { setMsgDateScheda("Errore: " + testoErrore(error)); return; }
     setModificaDateAperta(false);
     ricarica(["corsi_date"]);
   }
@@ -20214,7 +20234,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
       acconto_extra: nuovoAccontoExtra.map(mappaRiga),
       precorso_extra: nuovoPrecorsoExtra.map(mappaRiga),
     }).eq("id", modificandoId);
-    if (erroreIscritto) { window.alert("Errore: " + erroreIscritto.message); return; }
+    if (erroreIscritto) { window.alert("Errore: " + testoErrore(erroreIscritto)); return; }
     const residuoAttuale = integrazione.importo_residuo != null ? integrazione.importo_residuo : (integrazione.importo || 0);
     const nuovoResiduo = Math.max(0, round2(residuoAttuale - parseNum(valori.totale)));
     const { error: erroreResiduo } = await supabase.from("acconti_da_verificare").update({ importo_residuo: nuovoResiduo }).eq("id", integrazione.id);
@@ -20478,7 +20498,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         error = ins.error;
         nuovoId = ins.data?.id;
       }
-      if (error) { setMsg("Errore: " + error.message); return false; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); return false; }
       const idIscritto = modificandoId || nuovoId;
       if (nuovoId) setModificandoId(nuovoId); // da qui in poi i campi successivi si autosalvano sullo stesso iscritto
 
@@ -20617,7 +20637,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     const nome = chi ? `${chi.nome || ""} ${chi.cognome || ""}`.trim().toUpperCase() : "";
     if (!window.confirm(`Sei sicuro di voler cancellare in modo definitivo l'allievo${nome ? ` ${nome}` : ""}? Spariscono anche tutti i suoi dati di pagamento, e non si torna indietro.`)) return;
     const { error } = await supabase.from("iscritti").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
@@ -20726,7 +20746,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         : nuovoElenco.map((m, i) => (i === idx ? { ...m, [nomeCampo]: valoreCampo } : m));
     });
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
   // spunta/togli "stessa modella anche per": condivide (o scioglie) il
@@ -20740,7 +20760,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     const nuovoElenco = spuntato ? gruppoModellaSpunta(elenco, idx, altroIdx) : gruppoModellaTogli(elenco, altroIdx);
     if (!nuovoElenco) return; // annullato dall'utente (sovrascrittura rifiutata)
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
@@ -20756,7 +20776,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
       ? elencoAttuale.map((m) => (m.numero_giorno === numeroGiorno ? { ...m, ...campi } : m))
       : [...elencoAttuale, { numero_giorno: numeroGiorno, mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", ...campi }];
     const { error } = await supabase.from("corsi_date").update({ modelle_master: nuovoElenco }).eq("id", corsoData.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_date"]);
   }
 
@@ -20807,7 +20827,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         ...campi,
       };
       const { error: erroreNuovo } = await supabase.from("iscritti").update({ tipi_modelle: [...elenco, nuovoPosto] }).eq("id", iscrittoId);
-      if (erroreNuovo) { setMsg("Errore: " + erroreNuovo.message); return; }
+      if (erroreNuovo) { setMsg("Errore: " + testoErrore(erroreNuovo)); return; }
       ricarica(["iscritti"]);
       return;
     }
@@ -20818,19 +20838,19 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         : nuovoElenco.map((m, i) => (i === idx ? { ...m, [nomeCampo]: valoreCampo } : m));
     });
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
   async function toggleIncassato(i) {
     const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
   async function toggleRicontattato(i) {
     const { error } = await supabase.from("iscritti").update({ ricontattato: !i.ricontattato }).eq("id", i.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
@@ -20838,13 +20858,13 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // genera il PDF solo per loro invece che per tutta la classe
   async function toggleRistampaDiploma(i) {
     const { error } = await supabase.from("iscritti").update({ ristampa_diploma: !i.ristampa_diploma }).eq("id", i.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
   async function salvaNotaRicontatto(id, valore) {
     const { error } = await supabase.from("iscritti").update({ note_ricontatto: valore.trim() || null }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
@@ -20853,7 +20873,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     const etichetta = cdTarget.data_inizio === cdTarget.data_fine ? fmtData(cdTarget.data_inizio) : `${fmtData(cdTarget.data_inizio)} → ${fmtData(cdTarget.data_fine)}`;
     if (!window.confirm(`Spostare ${iscritto.nome.toUpperCase()} ${iscritto.cognome.toUpperCase()} su ${corsoTarget?.nome || "?"} · ${locTarget?.nome || "?"} · ${etichetta}?`)) return;
     const { error } = await supabase.from("iscritti").update({ corso_data_id: cdTarget.id }).eq("id", iscritto.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setSpostaIscrittoId(null);
     setMsg("Iscritto spostato.");
     ricarica(["iscritti"]);
@@ -20893,7 +20913,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     if (!ridimensionamentoSpazioRef.current) return;
     ridimensionamentoSpazioRef.current = null;
     const { error } = await supabase.from("impostazioni_layout_iscrizioni").update({ spazi: spaziIscrizioni }).eq("id", ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["impostazioni_layout_iscrizioni"]);
   }
   function manigliaSpazio(chiave) {
@@ -24792,7 +24812,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     }
     const { error } = await supabase.from(s.tabella).update(campi).eq("id", s.recordId);
     setSalvando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setModificaAperta(null);
     await ricarica([s.tabella]);
   }
@@ -24820,7 +24840,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
       sottocategoria_id: formNuovo.sottocategoriaId || null,
     });
     setSalvandoNuovo(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setNuovoAperto(false);
     await ricarica(["fornitori"]);
   }
@@ -24871,7 +24891,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
         : { telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null };
     const { error } = await supabase.from(target.tabella).update(campi).eq("id", target.id);
     setAssociaSalvando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     chiudiAssocia();
     await ricarica([target.tabella]);
   }
@@ -24884,7 +24904,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
       ? await supabase.from("hotel").insert({ nome: f.nome, citta: associaCittaScelta, fornitore_id: f.recordId, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, iban: f.iban || null })
       : await supabase.from("location").insert({ nome: associaCittaScelta, nome_sede: f.nome, fornitore_id: f.recordId, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null });
     setAssociaSalvando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     chiudiAssocia();
     await ricarica([associaTipo]);
   }
@@ -24968,7 +24988,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     setApplicandoDoc(true);
     const { error } = await supabase.from(soggetto.tabella).update({ iban: risultatoDoc.iban }).eq("id", soggetto.recordId);
     setApplicandoDoc(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     await ricarica([soggetto.tabella]);
     prossimoFile(true);
   }
@@ -25987,12 +26007,12 @@ function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, r
 
   async function salvaCampo(id, campo, valore) {
     const { error } = await supabase.from("voci_shop_classificazione").update({ [campo]: valore, updated_at: new Date().toISOString() }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["voci_shop_classificazione"]);
   }
   async function classificaNuova(nome, tipo) {
     const { error } = await supabase.from("voci_shop_classificazione").insert({ nome, tipo });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["voci_shop_classificazione"]);
   }
 
@@ -26625,7 +26645,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       ? await supabase.from("coupon").update(payload).eq("id", couponInModifica)
       : await supabase.from("coupon").insert(payload);
     setSalvando(false);
-    if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+    if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
     if (!couponInModifica) {
       await supabase.from("codici_emessi").insert({ codice: codiceLower, origine: "manuale", master_id: null, corsi_date_id: null });
     }
@@ -26700,7 +26720,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       generato_da_cron: false,
       creato_da: "manuale",
     }).select().single();
-    if (erroreInsert || !riga) { setMasterCreandoId(null); setMsgTipo("errore"); setMsg("Errore: " + erroreInsert?.message); return; }
+    if (erroreInsert || !riga) { setMasterCreandoId(null); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(erroreInsert)); return; }
     const { data, error: erroreAttiva } = await supabase.functions.invoke("woo-crea-coupon", { body: { couponId: riga.id } });
     setMasterCreandoId(null);
     if (erroreAttiva || data?.errore) { setMsgTipo("errore"); setMsg("Coupon salvato ma non creato su WooCommerce: " + (data?.errore || erroreAttiva.message)); ricarica(["coupon"]); return; }
@@ -26735,7 +26755,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setSalvandoPuntiCodice(true);
     const { error } = await supabase.from("coupon").update({ punti_valore: valore, punti_ogni_euro: ogniEuro }).eq("id", c.id);
     setSalvandoPuntiCodice(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPuntiCodiceAperto(null);
     ricarica(["coupon"]);
   }
@@ -26755,7 +26775,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setSalvandoImpostazioni(true); setMsg("");
     const { error } = await supabase.from("punti_master_impostazioni").update({ data_inizio: impostazioniForm.data_inizio, data_fine: impostazioniForm.data_fine }).eq("id", puntiMasterImpostazioni.id);
     setSalvandoImpostazioni(false);
-    if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+    if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
     setMsgTipo("successo"); setMsg("Finestra della raccolta punti aggiornata.");
     ricarica(["punti_master_impostazioni"]);
   }
@@ -26781,19 +26801,19 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       await supabase.from("punti_master_regola_base").delete().not("id", "is", null);
       const { error } = await supabase.from("punti_master_regola_base").insert({ data_inizio: puntiMasterImpostazioni?.data_inizio || oggi, data_fine: null, punti, euro });
       setSalvandoRegolaBase(false);
-      if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+      if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
       setMsgTipo("successo"); setMsg("Regola ricalcolata dall'inizio della raccolta: il punteggio di tutte le master cambia di conseguenza.");
     } else {
       if (regolaBaseAperta && regolaBaseAperta.data_inizio === oggi) {
         const { error } = await supabase.from("punti_master_regola_base").update({ punti, euro }).eq("id", regolaBaseAperta.id);
-        if (error) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+        if (error) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
       } else {
         if (regolaBaseAperta) {
           const { error: erroreChiusura } = await supabase.from("punti_master_regola_base").update({ data_fine: addGiorni(oggi, -1) }).eq("id", regolaBaseAperta.id);
-          if (erroreChiusura) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + erroreChiusura.message); return; }
+          if (erroreChiusura) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(erroreChiusura)); return; }
         }
         const { error } = await supabase.from("punti_master_regola_base").insert({ data_inizio: oggi, data_fine: null, punti, euro });
-        if (error) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+        if (error) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
       }
       setSalvandoRegolaBase(false);
       setMsgTipo("successo"); setMsg("Nuova regola valida da oggi in avanti: il passato non cambia.");
@@ -26817,7 +26837,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setSalvandoPeriodo(true); setMsg("");
     const { error } = await supabase.from("punti_master_periodi_speciali").insert({ data_inizio, data_fine, punti, euro });
     setSalvandoPeriodo(false);
-    if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+    if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
     setMsgTipo("successo"); setMsg("Periodo speciale aggiunto.");
     setPeriodoForm({ data_inizio: "", data_fine: "", punti: "", euro: "" });
     ricarica(["punti_master_periodi_speciali"]);
@@ -26828,7 +26848,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setEliminandoPeriodoId(id); setMsg("");
     const { error } = await supabase.from("punti_master_periodi_speciali").delete().eq("id", id);
     setEliminandoPeriodoId(null);
-    if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+    if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["punti_master_periodi_speciali"]);
   }
 
@@ -26869,7 +26889,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       aggiornato_ts: new Date().toISOString(),
     }).eq("id", regoleForm.id);
     setSalvandoRegole(false);
-    if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+    if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
     setMsgTipo("successo"); setMsg("Regole salvate.");
     ricarica(["regole_referral_automatico"]);
   }
@@ -28774,7 +28794,7 @@ function PaginaRiconciliazione({
 
     for (const [impegnoId, importo] of voci) {
       const { error } = await supabase.from("riconciliazione").insert({ documento_id: documento.id, impegno_id: impegnoId, importo_allocato: Number(importo), creata_da: "staff" });
-      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); setSalvando(false); return; }
     }
     for (const [impegnoId, importo] of voci) {
       const imp = impegnoTabella.find((i) => i.id === impegnoId);
@@ -28824,7 +28844,7 @@ function PaginaRiconciliazione({
         importo_allocato: -Number(importo), creata_da: "staff",
         note: `Rettifica da nota di credito su fattura ${fatturaSelezionataNC?.numero || fatturaSelezionataNC?.id}`,
       });
-      if (error) { setMsgNC("Errore: " + error.message); setSalvandoNC(false); return; }
+      if (error) { setMsgNC("Errore: " + testoErrore(error)); setSalvandoNC(false); return; }
     }
 
     // 2) impegni: floor a 0, senza toccare stati decisi a mano (coperto/chiuso/annullato)
@@ -28960,7 +28980,7 @@ function PaginaRiconciliazione({
         : { stato: "da_pagare", scadenza_pagamento: pagataData }),
       allegato_path: allegato,
     });
-    if (error) { setSalvando(false); setMsg("Errore: " + error.message); return; }
+    if (error) { setSalvando(false); setMsg("Errore: " + testoErrore(error)); return; }
     // Il documento e' riconciliato: la spesa e' nata, la fattura ha
     // trovato la sua destinazione. Finiva invece in "senza_impegno" — uno
     // stato che nessuna delle due liste guarda, quindi il documento
@@ -28987,7 +29007,7 @@ function PaginaRiconciliazione({
       fornitore_id: documento.fornitore_id, descrizione: nuovoImpDescrizione.trim(), origine_tipo: "manuale",
       categoria_id: nuovoImpCategoria || null, importo_previsto: importo, data_prevista: documento.data_documento, stato: "aperto",
     }).select("id").single();
-    if (error || !data) { window.alert("Errore: " + (error?.message || "")); return; }
+    if (error || !data) { window.alert("Errore: " + testoErrore(error)); return; }
     const residuoDoc = round2(totaleDocumento - allocato);
     setSelezione((s) => ({ ...s, [data.id]: round2(Math.max(0, Math.min(importo, residuoDoc))) }));
     setNuovoImpDescrizione(""); setNuovoImpImporto(""); setNuovoImpCategoria(""); setNuovoImpegnoAperto(false);
@@ -29582,7 +29602,7 @@ function PannelloCassaContanti({
     setSalvando(true);
     const { error } = await supabase.from("cassa_contanti_movimenti").insert({ data, tipo, importo: valore, motivo: motivo.trim() || null });
     setSalvando(false);
-    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
     setImporto(""); setMotivo(""); setPannello(null);
     setMsg(sottoSoglia
       ? `Attenzione: la cassa contanti scende sotto la soglia minima di ${euroRiepilogo(fondoMinimo)}. Prelievo registrato.`
@@ -29593,7 +29613,7 @@ function PannelloCassaContanti({
   async function eliminaMovimento(id) {
     if (!window.confirm("Eliminare questo movimento? Il saldo si ricalcola.")) return;
     const { error } = await supabase.from("cassa_contanti_movimenti").delete().eq("id", id);
-    if (error) { setMsg(`Non eliminato: ${error.message}`); return; }
+    if (error) { setMsg(`Non eliminato: ${testoErrore(error)}`); return; }
     carica();
   }
 
@@ -29620,7 +29640,7 @@ function PannelloCassaContanti({
       : await supabase.from("cassa_contanti_impostazioni")
           .upsert({ unica: true, aperta_il: aperturaData, saldo_iniziale: valore, aggiornato_il: new Date().toISOString() }, { onConflict: "unica" });
     setSalvando(false);
-    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
     setPannello(null); setMsg("");
     carica();
   }
@@ -29632,7 +29652,7 @@ function PannelloCassaContanti({
     const { error } = await supabase.from("corsi_date")
       .update({ busta_rientrata_il: dataOggiStr(), busta_importo: importo })
       .eq("id", cd.id);
-    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
     setMsg("");
     ricarica?.(["corsi_date"]);
     carica();
@@ -29642,14 +29662,14 @@ function PannelloCassaContanti({
     const valore = importoSpesa === "" ? null : parseNum(importoSpesa);
     if (!nomeSpesa.trim() || valore == null || !(valore >= 0)) { setMsg("Servono un nome e un importo."); return; }
     const { error } = await supabase.from("cassa_spese_ricorrenti").insert({ nome: nomeSpesa.trim(), importo_mensile: valore });
-    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
     setNomeSpesa(""); setImportoSpesa(""); setMsg("");
     carica();
   }
 
   async function eliminaRicorrente(id) {
     const { error } = await supabase.from("cassa_spese_ricorrenti").delete().eq("id", id);
-    if (error) { setMsg(`Non eliminato: ${error.message}`); return; }
+    if (error) { setMsg(`Non eliminato: ${testoErrore(error)}`); return; }
     carica();
   }
 
@@ -29931,7 +29951,7 @@ function PannelloCassaConsulenze() {
       data, cliente: cliente.trim() || null, importo: valore, metodo: metodo.trim() || null,
     });
     setSalvando(false);
-    if (error) { setMsg(`Non salvato: ${error.message}`); return; }
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
     setImporto(""); setCliente(""); setMsg("");
     carica();
   }
@@ -29939,7 +29959,7 @@ function PannelloCassaConsulenze() {
   async function elimina(id) {
     if (!window.confirm("Eliminare questo incasso?")) return;
     const { error } = await supabase.from("consulenze_incassi").delete().eq("id", id);
-    if (error) { setMsg(`Non eliminato: ${error.message}`); return; }
+    if (error) { setMsg(`Non eliminato: ${testoErrore(error)}`); return; }
     carica();
   }
 
@@ -30065,7 +30085,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
     }
     if (righeImpegno.length > 0) {
       const { error } = await supabase.from("impegno").upsert(righeImpegno, { onConflict: "chiave_origine" });
-      if (error) { setMsgImpegni("Errore: " + error.message); setSincronizzandoImpegni(false); return; }
+      if (error) { setMsgImpegni("Errore: " + testoErrore(error)); setSincronizzandoImpegni(false); return; }
     }
     setMsgImpegni(`Allineati ${righeImpegno.length} impegni.`);
     setSincronizzandoImpegni(false);
@@ -30085,7 +30105,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
     });
     setSincronizzandoFic(false);
-    if (error) { setMsgFic("Errore: " + error.message); return; }
+    if (error) { setMsgFic("Errore: " + testoErrore(error)); return; }
     if (data?.errore) { setMsgFic("Errore: " + data.errore); return; }
     setMsgFic(`Sincronizzate ${data?.importati ?? 0} fatture.`);
     ricarica(["fatture_ricevute_fic"]);
@@ -30107,7 +30127,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
     });
     setSincronizzandoNoteCredito(false);
-    if (error) { setMsgNoteCredito("Errore: " + error.message); return; }
+    if (error) { setMsgNoteCredito("Errore: " + testoErrore(error)); return; }
     const esito = data?.esiti?.[0];
     if (esito?.esito === "errore") { setMsgNoteCredito("Errore: " + esito.messaggio); return; }
     setMsgNoteCredito(`Sincronizzati ${esito?.ricevuti ?? 0} documenti ricevuti.`);
@@ -30126,7 +30146,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       numero: fic.numero, data_documento: fic.data, imponibile: fic.imponibile, iva: fic.iva, totale: fic.totale,
       stato: "da_riconciliare",
     });
-    if (error) { setMsgNoteCredito("Errore: " + error.message); return; }
+    if (error) { setMsgNoteCredito("Errore: " + testoErrore(error)); return; }
     setAssegnazioneApertaFicId(null);
     setFornitoreScelto("");
     await ricarica(["documento_fornitore"]);
@@ -30347,7 +30367,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       };
     });
     const { error } = await supabase.from("spese").insert(righe);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
   async function segnaPagataVirtuale(item, { file, dataPagamento }) {
@@ -30370,7 +30390,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       allegato_path: allegatoPath, origine: "automatico",
       origine_scadenziario_chiave: item.chiave,
     });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
   async function segnaPagataReale(item, { file, dataPagamento, metodo }) {
@@ -30382,7 +30402,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       allegatoPath = url;
     }
     const { error } = await supabase.from("spese").update({ stato: "pagata", data_pagamento: dataPagamento || null, allegato_path: allegatoPath, metodo_pagamento: metodo || "Bonifico" }).eq("id", item.spesaReale.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
   // conferma il pagamento di una occorrenza di Abbonamenti e contratti:
@@ -30417,7 +30437,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       ricorrenza: ab.ricorrenza, bene_durevole: ab.bene_durevole, includi_analisi_costi: ab.includi_analisi_costi,
       budget_previsto: ab.budget_previsto, soglia_allerta_personalizzata: ab.soglia_allerta_personalizzata, responsabile_costo: ab.responsabile_costo,
     });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
   function confermaPagato(item, dati) {
@@ -31140,7 +31160,7 @@ function PaginaInserimentoCostiRicavi({
   async function eliminaSpesa(id) {
     if (!window.confirm("Eliminare questa spesa?")) return;
     const { error } = await supabase.from("spese").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
 
@@ -33717,14 +33737,14 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     const nuovo = unitaMisura.trim() === "" ? null : unitaMisura.trim();
     if (nuovo === p.unita_misura) return;
     const { error } = await supabase.from("prodotti_shop").update({ unita_misura: nuovo }).eq("id", p.id);
-    if (error) { window.alert("Errore: " + error.message); setUnitaMisura(p.unita_misura || ""); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); setUnitaMisura(p.unita_misura || ""); return; }
     ricarica(["prodotti_shop"]);
   }
   async function salvaScortaMin() {
     const nuovo = scortaMin.trim() === "" ? null : parseInt(parseNum(scortaMin), 10);
     if (nuovo === p.soglia_riordino) return;
     const { error } = await supabase.from("prodotti_shop").update({ soglia_riordino: nuovo }).eq("id", p.id);
-    if (error) { window.alert("Errore: " + error.message); setScortaMin(p.soglia_riordino != null ? String(p.soglia_riordino) : ""); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); setScortaMin(p.soglia_riordino != null ? String(p.soglia_riordino) : ""); return; }
     ricarica(["prodotti_shop"]);
   }
   // "Non sul POS" e "Solo offline" possono arrivare anche dalla categoria
@@ -33733,12 +33753,12 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   // sulla categoria (Gestisci categorie), non sul singolo prodotto
   async function salvaFlagEscludiVenditaDiretta(checked) {
     const { error } = await supabase.from("prodotti_shop").update({ escludi_vendita_diretta: checked }).eq("id", p.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["prodotti_shop"]);
   }
   async function salvaFlagSoloOffline(checked) {
     const { error } = await supabase.from("prodotti_shop").update({ solo_offline: checked }).eq("id", p.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["prodotti_shop"]);
   }
   // correzione a mano dello stock: è un movimento come gli altri, quindi
@@ -35008,12 +35028,12 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
       { location_id: locationId, tipo, riferimento, quantita, corso_data_id: null, master_id: null },
       { onConflict: "location_id,tipo,riferimento" }
     );
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["inventario_sede"]);
   }
   async function eliminaVoceInventario(id) {
     const { error } = await supabase.from("inventario_sede").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["inventario_sede"]);
   }
   function aggiungiAttrezzatura(sc) { setRicercaAttrezzatura(""); salvaVoce("attrezzatura", sc.id, 1); }
@@ -35027,17 +35047,17 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
     const { error } = await supabase.from("magazzino_locale_consumabili").insert({
       location_id: locationId, prodotto_id: p.id, quantita: 1, livello: 5, corso_data_id: null, master_id: null,
     });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["magazzino_locale_consumabili"]);
   }
   async function aggiornaConsumabile(id, campi) {
     const { error } = await supabase.from("magazzino_locale_consumabili").update(campi).eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["magazzino_locale_consumabili"]);
   }
   async function rimuoviConsumabile(id) {
     const { error } = await supabase.from("magazzino_locale_consumabili").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["magazzino_locale_consumabili"]);
   }
 
@@ -35238,7 +35258,7 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
   }
   async function salvaNotaRisoluzione(id, nota) {
     const { error } = await supabase.from("segnalazioni_magazzino").update({ nota_risoluzione: nota.trim() || null }).eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["segnalazioni_magazzino"]);
   }
 
@@ -36825,7 +36845,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
     setSalvandoGruppo(g.chiave);
     const { error } = await supabase.from("iscritti").update({ pacchetto_kit: nomeKit }).in("id", g.iscritti.map((i) => i.iscrittoId));
     setSalvandoGruppo(null);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
@@ -36876,7 +36896,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
     setSalvandoLead(g.chiave);
     const { error } = await supabase.from("prodotti_shop").update({ lead_time_giorni: giorni }).in("id", bersagli.map((p) => p.id));
     setSalvandoLead(null);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setGiorniGruppo((prev) => ({ ...prev, [g.chiave]: "" }));
     ricarica(["prodotti_shop"]);
   }
@@ -36896,7 +36916,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
     setSalvandoProdottoLead(prodotto.id);
     const { error } = await supabase.from("prodotti_shop").update({ lead_time_giorni: giorni }).eq("id", prodotto.id);
     setSalvandoProdottoLead(null);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setGiorniProdotto((prev) => ({ ...prev, [prodotto.id]: "" }));
     ricarica(["prodotti_shop"]);
   }
@@ -38625,7 +38645,7 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   async function salvaCampoMaster(campo, valore) {
     setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), [campo]: valore } }));
     const { error } = await supabase.from("master").update({ [campo]: valore }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     await propagaSeCollegato("venditori", selezionato?.venditore_id, { [campo]: valore });
     ricarica(["master", "venditori"]);
   }
@@ -38665,13 +38685,13 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   async function aggiungiMaster() {
     if (!nomeNuovo.trim()) return;
     const { error } = await supabase.from("master").insert({ nome: nomeNuovo.trim().toUpperCase() });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setNomeNuovo(""); setMostraForm(false); ricarica(["master"]);
   }
   async function eliminaMaster() {
     if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo profilo? L'operazione è irreversibile.")) return;
     const { error } = await supabase.from("master").delete().eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setSelezionatoId(null); ricarica(["master"]);
   }
   function toggleFirmato(checked) { return salvaCampoMaster("diploma_gia_firmato", checked); }
@@ -38682,7 +38702,7 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   useEffect(() => { setMostraCollegaVenditore(!!selezionato?.venditore_id); }, [selezionatoId]);
   async function collegaVenditore(venditoreId) {
     const { error } = await supabase.from("master").update({ venditore_id: venditoreId || null }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     if (venditoreId) {
       const venditoreRec = (venditori || []).find((v) => v.id === venditoreId);
       await importaDatiCondivisi(selezionato, venditoreRec);
@@ -38710,7 +38730,7 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     };
     setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
     const { error } = await supabase.from("master").update(campi).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     // solo la classificazione/budget va agli altri master, mai email/
     // telefono/IBAN/indirizzo — quelli restano personali per ciascuno
     if (applicaOverride !== undefined ? applicaOverride : applicaClassATutteMaster) {
@@ -38732,11 +38752,11 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     setCaricandoFoto(true);
     const percorso = `${selezionatoId}/foto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error: erroreUpload } = await supabase.storage.from("master-foto").upload(percorso, file, { upsert: true });
-    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + erroreUpload.message); return; }
+    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + testoErrore(erroreUpload)); return; }
     const { data: urlData } = supabase.storage.from("master-foto").getPublicUrl(percorso);
     const { error } = await supabase.from("master").update({ foto_url: urlData.publicUrl }).eq("id", selezionatoId);
     setCaricandoFoto(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     await propagaSeCollegato("venditori", selezionato?.venditore_id, { foto_url: urlData.publicUrl });
     ricarica(["master", "venditori"]);
   }
@@ -38749,14 +38769,14 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     const corso = corsoById[corsoScelto];
     const fasceIniziali = (corso?.fasce_compenso_default || []).map((f) => ({ ...f }));
     const { error } = await supabase.from("master_corsi").insert({ master_id: selezionatoId, corso_id: corsoScelto, fasce_compenso: fasceIniziali });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setCorsoScelto("");
     ricarica(["master_corsi"]);
   }
   async function rimuoviCorso(assegnazioneId) {
     if (!window.confirm("Rimuovere questo corso dalla master? Si perdono anche le fasce di compenso impostate.")) return;
     const { error } = await supabase.from("master_corsi").delete().eq("id", assegnazioneId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["master_corsi"]);
   }
   // sovrascrittura ottimistica delle fasce: senza, ogni onBlur di ogni
@@ -38769,7 +38789,7 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   async function salvaFasce(assegnazioneId, fasce) {
     setFasceOverride((m) => ({ ...m, [assegnazioneId]: fasce }));
     const { error } = await supabase.from("master_corsi").update({ fasce_compenso: fasce }).eq("id", assegnazioneId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["master_corsi"]);
   }
   // "Gestione compensi": il compenso di default di un corso (vedi
@@ -38779,13 +38799,13 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   async function salvaFasceCorso(corsoId, fasce) {
     setFasceCorsoOverride((m) => ({ ...m, [corsoId]: fasce }));
     const { error } = await supabase.from("corsi").update({ fasce_compenso_default: fasce }).eq("id", corsoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi"]);
   }
   async function salvaNote() {
     if ((selezionato?.note || "") === note.trim()) return;
     const { error } = await supabase.from("master").update({ note: note.trim() || null }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     await propagaSeCollegato("venditori", selezionato?.venditore_id, { note: note.trim() || null });
     ricarica(["master", "venditori"]);
   }
@@ -38794,10 +38814,10 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     setCaricandoContratto(true); setMsg("");
     const percorso = `${selezionatoId}/contratto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error: erroreUpload } = await supabase.storage.from("master-documenti").upload(percorso, file);
-    if (erroreUpload) { setCaricandoContratto(false); setMsg("Errore: " + erroreUpload.message); return; }
+    if (erroreUpload) { setCaricandoContratto(false); setMsg("Errore: " + testoErrore(erroreUpload)); return; }
     const { error } = await supabase.from("master").update({ contratto_file_path: percorso }).eq("id", selezionatoId);
     setCaricandoContratto(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["master"]);
   }
 
@@ -39248,7 +39268,7 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
   async function salvaCampoVenditore(campo, valore) {
     setVenditoreOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), [campo]: valore } }));
     const { error } = await supabase.from("venditori").update({ [campo]: valore }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     await propagaSeCollegato("master", masterCollegataAttuale?.id, { [campo]: valore });
     ricarica(["venditori", "master"]);
   }
@@ -39268,7 +39288,7 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
     }
     if (!masterId) { ricarica(["master"]); return; }
     const { error } = await supabase.from("master").update({ venditore_id: selezionatoId }).eq("id", masterId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     const masterRec = (master || []).find((m) => m.id === masterId);
     await importaDatiCondivisi(masterRec, selezionato);
     ricarica(["master", "venditori"]);
@@ -39303,13 +39323,13 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
   async function aggiungiVenditore() {
     if (!nomeNuovo.trim()) return;
     const { error } = await supabase.from("venditori").insert({ nome: nomeNuovo.trim().toUpperCase(), password: "0000" });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setNomeNuovo(""); setMostraForm(false); ricarica(["venditori"]);
   }
   async function eliminaVenditore() {
     if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo profilo? L'operazione è irreversibile.")) return;
     const { error } = await supabase.from("venditori").delete().eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setSelezionatoId(null); ricarica(["venditori"]);
   }
   async function salvaContatti(classOverride, applicaOverride) {
@@ -39322,7 +39342,7 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
     };
     setVenditoreOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
     const { error } = await supabase.from("venditori").update(campi).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     if (applicaOverride !== undefined ? applicaOverride : applicaClassATuttiVenditori) {
       await supabase.from("venditori").update(classPayload).neq("id", selezionatoId);
     }
@@ -39342,18 +39362,18 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
     setCaricandoFoto(true);
     const percorso = `${selezionatoId}/foto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error: erroreUpload } = await supabase.storage.from("venditori-foto").upload(percorso, file, { upsert: true });
-    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + erroreUpload.message); return; }
+    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + testoErrore(erroreUpload)); return; }
     const { data: urlData } = supabase.storage.from("venditori-foto").getPublicUrl(percorso);
     const { error } = await supabase.from("venditori").update({ foto_url: urlData.publicUrl }).eq("id", selezionatoId);
     setCaricandoFoto(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     await propagaSeCollegato("master", masterCollegataAttuale?.id, { foto_url: urlData.publicUrl });
     ricarica(["venditori", "master"]);
   }
   async function salvaNote() {
     if ((selezionato?.note || "") === note.trim()) return;
     const { error } = await supabase.from("venditori").update({ note: note.trim() || null }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     await propagaSeCollegato("master", masterCollegataAttuale?.id, { note: note.trim() || null });
     ricarica(["venditori", "master"]);
   }
@@ -39362,10 +39382,10 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
     setCaricandoDocumento(true); setMsg("");
     const percorso = `${selezionatoId}/documento-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error: erroreUpload } = await supabase.storage.from("venditori-documenti").upload(percorso, file);
-    if (erroreUpload) { setCaricandoDocumento(false); setMsg("Errore: " + erroreUpload.message); return; }
+    if (erroreUpload) { setCaricandoDocumento(false); setMsg("Errore: " + testoErrore(erroreUpload)); return; }
     const { error } = await supabase.from("venditori").update({ documento_file_path: percorso }).eq("id", selezionatoId);
     setCaricandoDocumento(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["venditori"]);
   }
 
@@ -39687,22 +39707,22 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   async function aggiungiElemento() {
     if (!nomeNuovo.trim()) return;
     const { error } = await supabase.from(tabella).insert({ nome: nomeNuovo.trim().toUpperCase() });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setNomeNuovo(""); setMostraForm(false); ricarica([tabella]);
   }
   async function eliminaElemento() {
     if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo profilo? L'operazione è irreversibile.")) return;
     const { error } = await supabase.from(tabella).delete().eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setSelezionatoId(null); setMenuAzioni(false); ricarica([tabella]);
   }
   async function promuovi() {
     if (!selezionato) return;
     if (!window.confirm(`Promuovere "${toTitleCase(selezionato.nome)}" ${promuoviConfig.verbo}? Verrà spostata dall'elenco ${nomeSingolare === "Leva" ? "Leve" : "Assistenti"}.`)) return;
     const { error: erroreIns } = await supabase.from(promuoviConfig.tabellaDestinazione).insert({ nome: selezionato.nome, telefono: selezionato.telefono || null, email: selezionato.email || null });
-    if (erroreIns) { window.alert("Errore: " + erroreIns.message); return; }
+    if (erroreIns) { window.alert("Errore: " + testoErrore(erroreIns)); return; }
     const { error: erroreDel } = await supabase.from(tabella).delete().eq("id", selezionato.id);
-    if (erroreDel) { window.alert("Errore: " + erroreDel.message); return; }
+    if (erroreDel) { window.alert("Errore: " + testoErrore(erroreDel)); return; }
     setSelezionatoId(null); setMenuAzioni(false); ricarica([tabella, promuoviConfig.tabellaDestinazione]);
   }
   // salvataggio diretto, nessun tasto "Salva": ogni campo di contatto
@@ -39721,7 +39741,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
       });
     }
     const { error } = await supabase.from(tabella).update(campi).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica([tabella]);
   }
   // modalita' di pagamento dell'assistente (bonifico/cash/meta e meta'):
@@ -39730,7 +39750,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   // mano per quella riga — vedi calcolaRigheSpeseCorso
   async function salvaModalitaPagamento(valore) {
     const { error } = await supabase.from("assistente").update({ modalita_pagamento: valore }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["assistente"]);
   }
   function aggiornaClassMod(campo, valore) {
@@ -39742,7 +39762,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   }
   async function salvaCampo(campo, valore) {
     const { error } = await supabase.from(tabella).update({ [campo]: valore }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica([tabella]);
   }
   async function caricaFoto(file) {
@@ -39750,17 +39770,17 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     setCaricandoFoto(true);
     const percorso = `${tabella}/${selezionatoId}/foto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error: erroreUpload } = await supabase.storage.from(bucketFoto).upload(percorso, file, { upsert: true });
-    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + erroreUpload.message); return; }
+    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + testoErrore(erroreUpload)); return; }
     const { data: urlData } = supabase.storage.from(bucketFoto).getPublicUrl(percorso);
     const { error } = await supabase.from(tabella).update({ foto_url: urlData.publicUrl }).eq("id", selezionatoId);
     setCaricandoFoto(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica([tabella]);
   }
   async function salvaNote() {
     if ((selezionato?.note || "") === note.trim()) return;
     const { error } = await supabase.from(tabella).update({ note: note.trim() || null }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica([tabella]);
   }
   async function caricaDocumento(file) {
@@ -39768,29 +39788,29 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     setCaricandoDocumento(true); setMsg("");
     const percorso = `${tabella}/${selezionatoId}/documento-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error: erroreUpload } = await supabase.storage.from(bucketDocumenti).upload(percorso, file);
-    if (erroreUpload) { setCaricandoDocumento(false); setMsg("Errore: " + erroreUpload.message); return; }
+    if (erroreUpload) { setCaricandoDocumento(false); setMsg("Errore: " + testoErrore(erroreUpload)); return; }
     const { error } = await supabase.from(tabella).update({ documento_file_path: percorso }).eq("id", selezionatoId);
     setCaricandoDocumento(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica([tabella]);
   }
   async function aggiungiCorsoAssistente() {
     if (!corsoScelto || !selezionatoId) return;
     const { error } = await supabase.from("assistente_corsi").insert({ assistente_id: selezionatoId, corso_id: corsoScelto });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setCorsoScelto("");
     ricarica(["assistente_corsi"]);
   }
   async function rimuoviCorsoAssistente(assegnazioneId) {
     if (!window.confirm("Rimuovere questo corso dall'assistente?")) return;
     const { error } = await supabase.from("assistente_corsi").delete().eq("id", assegnazioneId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["assistente_corsi"]);
   }
   async function salvaCompensoGiornaliero(assegnazioneId, valore) {
     const numero = valore.trim() === "" ? null : Number(valore);
     const { error } = await supabase.from("assistente_corsi").update({ compenso_giornaliero: numero }).eq("id", assegnazioneId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["assistente_corsi"]);
   }
 
@@ -39811,7 +39831,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     setAssistenzeOverride((m) => ({ ...m, [selezionato.id]: nuovoValore }));
     const { error } = await supabase.from(tabella).update({ assistenze_extra: nuovoValore }).eq("id", selezionato.id);
     if (error) {
-      window.alert("Errore: " + error.message);
+      window.alert("Errore: " + testoErrore(error));
       setAssistenzeOverride((m) => { const copia = { ...m }; delete copia[selezionato.id]; return copia; });
       return;
     }
@@ -40257,40 +40277,40 @@ function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
       giorni: [],
       ordine: esistenti.length + 1,
     });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("");
     ricarica(["hotel_prezzi"]);
   }
 
   async function salvaFascia(id, campi) {
     const { error } = await supabase.from("hotel_prezzi").update({ ...campi, aggiornato_il: new Date().toISOString() }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("");
     ricarica(["hotel_prezzi"]);
   }
 
   async function eliminaFascia(id) {
     const { error } = await supabase.from("hotel_prezzi").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["hotel_prezzi"]);
   }
 
   async function aggiungiPeriodo() {
     const { error } = await supabase.from("hotel_periodi_speciali").insert({ hotel_id: hotelId });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["hotel_periodi_speciali"]);
   }
 
   async function salvaPeriodo(id, campo, valore) {
     const { error } = await supabase.from("hotel_periodi_speciali").update({ [campo]: valore || null }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["hotel_periodi_speciali"]);
   }
 
   async function eliminaPeriodo(id) {
     if (!window.confirm("Eliminare questo periodo speciale e i suoi prezzi?")) return;
     const { error } = await supabase.from("hotel_periodi_speciali").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["hotel_periodi_speciali", "hotel_prezzi"]);
   }
 
@@ -40419,7 +40439,7 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
   async function salvaClassificazioneHotel() {
     const payload = classificazionePerPayload(classHotel);
     const { error } = await supabase.from("hotel").update(payload).eq("id", selezionatoId);
-    if (error) { setMsgClassHotel("Errore: " + error.message); return; }
+    if (error) { setMsgClassHotel("Errore: " + testoErrore(error)); return; }
     if (applicaClassATuttiHotel) {
       await supabase.from("hotel").update(payload).neq("id", selezionatoId);
     }
@@ -40430,18 +40450,18 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
   async function aggiungiHotel() {
     if (!nomeNuovo.trim()) return;
     const { error } = await supabase.from("hotel").insert({ nome: nomeNuovo.trim().toUpperCase() });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setNomeNuovo(""); setMostraForm(false); ricarica(["hotel"]);
   }
   async function eliminaHotel() {
     if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo hotel? L'operazione è irreversibile.")) return;
     const { error } = await supabase.from("hotel").delete().eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setSelezionatoId(null); ricarica(["hotel"]);
   }
   async function salvaCampo(campo, valore) {
     const { error } = await supabase.from("hotel").update({ [campo]: valore }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["hotel"]);
   }
 
@@ -40584,7 +40604,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   async function aggiungiCitta() {
     if (!nomeCittaNuova.trim()) return;
     const { error } = await supabase.from("citta").insert({ nome: nomeCittaNuova.trim().toUpperCase() });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setNomeCittaNuova(""); setMostraFormCitta(false); setMsg("Città aggiunta.");
     ricarica(["citta"]);
   }
@@ -40595,14 +40615,14 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   async function salvaModificaCitta(id) {
     if (!modNomeCitta.trim()) { setMsg("Il nome non può essere vuoto."); return; }
     const { error } = await supabase.from("citta").update({ nome: modNomeCitta.trim().toUpperCase() }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setCittaInModifica(null); setMsg("Città aggiornata.");
     ricarica(["citta"]);
   }
   async function eliminaCitta(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questa città?")) return;
     const { error } = await supabase.from("citta").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Città eliminata.");
     ricarica(["citta"]);
   }
@@ -40675,7 +40695,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       sottocategoria_id: sottocategoriaLoc,
       ...classificazionePerPayload(classNuova),
     });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     if (applicaCategoriaATutteLoc) {
       await supabase.from("location").update({ categoria_id: categoriaIdLoc, sottocategoria_id: sottocategoriaLoc, ...classificazionePerPayload(classNuova) }).not("id", "is", null);
     }
@@ -40720,7 +40740,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       sottocategoria_id: modSottocategoriaLoc,
       ...classificazionePerPayload(classMod),
     }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     if (modApplicaCategoriaATutteLoc) {
       await supabase.from("location").update({ categoria_id: modCategoriaIdLoc, sottocategoria_id: modSottocategoriaLoc, ...classificazionePerPayload(classMod) }).neq("id", id);
     }
@@ -40730,7 +40750,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   async function eliminaLocation(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questa sede? Rimuove anche le date collegate a quella città.")) return;
     const { error } = await supabase.from("location").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Sede eliminata.");
     ricarica(["location"]);
   }
@@ -41098,7 +41118,7 @@ function DettaglioAllievoCrm({ allievo, corsoById, locById, cdById, onClose, ric
       note: note.trim() || null,
     }, { onConflict: "chiave" });
     setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Salvato.");
     ricarica(["allievi_crm"]);
   }
@@ -41198,7 +41218,7 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
       telefono: telefono.trim() || null,
       totale_pattuito: totale === "" ? null : parseNum(totale),
     });
-    if (erroreIscritto) { setSalvando(false); setMsg("Errore: " + erroreIscritto.message); return; }
+    if (erroreIscritto) { setSalvando(false); setMsg("Errore: " + testoErrore(erroreIscritto)); return; }
     if (email.trim() || citta.trim()) {
       const { error: erroreCrm } = await supabase.from("allievi_crm").upsert({
         chiave: chiaveAllievo(nome, cognome, telefono),
@@ -41797,7 +41817,7 @@ function DettaglioStoricoAllievo({ riga, corso, onClose, ricarica }) {
       email: email.trim() || null,
     }).eq("id", riga.id);
     setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Salvato.");
     ricarica(["storico_allievi"]);
   }
@@ -44921,12 +44941,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         descrizione_breve: f.descrizioneBreve || null,
         ...(f.giacenzaPropria ? { quantita: stock } : {}),
       }).eq("id", idProdotto);
-      if (erroreUpdate) return { errore: "Errore: " + erroreUpdate.message };
+      if (erroreUpdate) return { errore: "Errore: " + testoErrore(erroreUpdate) };
     } else {
       const { data: riga, error: erroreInsert } = await supabase.from("prodotti_shop")
         .insert({ nome: f.nome.trim(), descrizione: f.descrizione || null, descrizione_breve: f.descrizioneBreve || null, quantita: stock, attivo: true })
         .select().single();
-      if (erroreInsert) return { errore: "Errore: " + erroreInsert.message };
+      if (erroreInsert) return { errore: "Errore: " + testoErrore(erroreInsert) };
       idProdotto = riga.id;
     }
     const { error: erroreRimuoviCat } = await supabase.from("prodotti_categorie").delete().eq("prodotto_id", idProdotto);
@@ -45040,7 +45060,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setApplicandoCopia(true); setMsgCopia("");
     const { error } = await supabase.from("prodotti_shop").update(campi).in("id", ids);
     setApplicandoCopia(false);
-    if (error) { setMsgCopia("Errore: " + error.message); return; }
+    if (error) { setMsgCopia("Errore: " + testoErrore(error)); return; }
     setMsgCopia(`Applicato a ${ids.length} prodott${ids.length === 1 ? "o" : "i"}.`);
     setSelezionatiCopia({});
     if (ricarica) ricarica(["prodotti_shop"]);
@@ -47209,7 +47229,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   const [vistaMobile, setVistaMobile] = useState("lista"); // "lista" | "dettaglio"
   async function cambiaTagliaIscritto(iscrittoId, taglia) {
     const { error } = await supabase.from("iscritti").update({ taglia_divisa: taglia }).eq("id", iscrittoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
 
@@ -47232,7 +47252,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     const { error } = await supabase
       .from("logistica_kit_edizioni")
       .upsert({ corso_data_id: corsoDataId, ...campi }, { onConflict: "corso_data_id" });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["logistica_kit_edizioni"]);
   }
   // scarico "reattivo": non riscarica mai il valore assoluto, applica al
@@ -47705,7 +47725,7 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack
 
   async function segnaSpedita(id) {
     const { error } = await supabase.from("spedizioni_pos").update({ stato: "spedito", spedito_il: new Date().toISOString() }).eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["spedizioni_pos"]);
   }
   function etichettaCorso(s) {
@@ -47884,7 +47904,7 @@ function PaginaMagazziniLocali({ location, inventarioSede, magazzinoLocaleConsum
 function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio }) {
   async function elimina() {
     const { error } = await supabase.from("kit_definizioni").delete().eq("id", kit.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["kit_definizioni"]);
   }
   return (
@@ -47932,7 +47952,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
 
   async function cambiaDermografoAParte(valore) {
     const { error } = await supabase.from("kit_definizioni").update({ dermografo_a_parte: valore }).eq("id", kit.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["kit_definizioni"]);
   }
   async function salvaNome() {
@@ -47940,7 +47960,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     if (!nuovo || nuovo === kit.nome) { setNome(kit.nome); return; }
     const vecchio = kit.nome;
     const { error } = await supabase.from("kit_definizioni").update({ nome: nuovo }).eq("id", kit.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     // iscritti.pacchetto_kit è una copia del nome al momento della scelta,
     // non un riferimento vivo al kit: rinominare qui deve aggiornare anche
     // le schede che avevano già scelto questo pacchetto, altrimenti restano
@@ -47985,25 +48005,25 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   async function elimina() {
     if (!window.confirm(`Eliminare il pacchetto "${kit.nome}"?\n\nSulle iscrizioni che lo hanno già scelto il nome resta scritto — è la traccia di cosa era stato venduto — ma segnalato come "non più in elenco": quegli allievi non porteranno nessun prodotto in preparazione finché non gli assegni un altro pacchetto.`)) return;
     const { error } = await supabase.from("kit_definizioni").delete().eq("id", kit.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["kit_definizioni"]);
   }
   async function aggiungiProdotto(prodottoId) {
     const { error } = await supabase.from("corsi_kit_prodotti").insert({ kit_id: kit.id, prodotto_id: prodottoId, tipo: "kit", quantita: 1 });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setMostraRicercaKit(false); setRicercaKit("");
     ricarica(["corsi_kit_prodotti"]);
   }
   async function cambiaQuantita(rigaId, quantita) {
     const { error } = await supabase.from("corsi_kit_prodotti").update({ quantita }).eq("id", rigaId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_kit_prodotti"]);
   }
   // rimuove un singolo prodotto dal contenuto del pacchetto (a differenza
   // di "elimina", che rimuove l'intero pacchetto)
   async function rimuovi(rigaId) {
     const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_kit_prodotti"]);
   }
   // "Incolla" sostituisce per intero il contenuto di QUESTO pacchetto con
@@ -48022,12 +48042,12 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
       : `Incollare ${kitCopiato.prodotti.length} prodotti in "${kit.nome}"?`;
     if (!window.confirm(messaggio)) return;
     const { error: erroreDelete } = await supabase.from("corsi_kit_prodotti").delete().eq("kit_id", kit.id).eq("tipo", "kit");
-    if (erroreDelete) { window.alert("Errore: " + erroreDelete.message); return; }
+    if (erroreDelete) { window.alert("Errore: " + testoErrore(erroreDelete)); return; }
     if (kitCopiato.prodotti.length > 0) {
       const { error: erroreInsert } = await supabase.from("corsi_kit_prodotti").insert(
         kitCopiato.prodotti.map((p) => ({ kit_id: kit.id, prodotto_id: p.prodotto_id, tipo: "kit", quantita: p.quantita }))
       );
-      if (erroreInsert) { window.alert("Errore: " + erroreInsert.message); return; }
+      if (erroreInsert) { window.alert("Errore: " + testoErrore(erroreInsert)); return; }
     }
     ricarica(["corsi_kit_prodotti"]);
   }
@@ -48049,7 +48069,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     const { error: erroreUpload } = await supabase.storage.from("diploma-templates").upload(percorso, file);
     if (erroreUpload) { setCaricandoDiploma(false); window.alert("Errore nel caricamento: " + erroreUpload.message); return; }
     const { error } = await supabase.from("kit_definizioni").update({ diploma_path: percorso, diploma_nome: file.name }).eq("id", kit.id);
-    if (error) { setCaricandoDiploma(false); window.alert("Errore: " + error.message); return; }
+    if (error) { setCaricandoDiploma(false); window.alert("Errore: " + testoErrore(error)); return; }
 
     // Il primo diploma di un corso vale per tutti i suoi pacchetti: quasi
     // sempre il foglio è lo stesso, e caricarlo dieci volte sarebbe solo
@@ -48081,7 +48101,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   async function togliDiploma() {
     if (!window.confirm(`Togliere il diploma associato a "${kit.nome}"?`)) return;
     const { error } = await supabase.from("kit_definizioni").update({ diploma_path: null, diploma_nome: null }).eq("id", kit.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["kit_definizioni"]);
   }
   const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
@@ -48222,14 +48242,14 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
   }, [tuttiCorsiKitProdotti, corsi, corso]);
   async function aggiungi(prodottoId) {
     const { error } = await supabase.from("corsi_kit_prodotti").insert({ corso_id: corso?.id || null, kit_id: null, prodotto_id: prodottoId, tipo: "accessorio", quantita: 1 });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setRicerca("");
     setAvvisoDuplicati("");
     ricarica(["corsi_kit_prodotti"]);
   }
   async function rimuovi(rigaId) {
     const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_kit_prodotti"]);
   }
   // importa i prodotti della lista scelta: quelli già presenti in questa
@@ -48246,7 +48266,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
       const { error } = await supabase.from("corsi_kit_prodotti").insert(
         daImportare.map((r) => ({ corso_id: corso?.id || null, kit_id: null, prodotto_id: r.prodotto_id, tipo: "accessorio", quantita: 1 }))
       );
-      if (error) { setCopiando(false); window.alert("Errore: " + error.message); return; }
+      if (error) { setCopiando(false); window.alert("Errore: " + testoErrore(error)); return; }
     }
     setCopiando(false);
     setCorsoOrigineId("");
@@ -48330,13 +48350,13 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
     setSalvando(true);
     const { error } = await supabase.from("kit_definizioni").insert({ nome: nomeNuovo.trim(), corso_id: corso?.id || null, ordine: pacchetti.length, tipo: "kit" });
     setSalvando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setNomeNuovo(""); setMostraNuovo(false);
     ricarica(["kit_definizioni"]);
   }
   async function creaDivisore() {
     const { error } = await supabase.from("kit_definizioni").insert({ nome: "", corso_id: corso?.id || null, ordine: pacchetti.length, tipo: "divisore" });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["kit_definizioni"]);
   }
   // trascina-e-rilascia per riordinare i pacchetti di questo corso: al
@@ -49469,7 +49489,7 @@ function PannelloDrillDownCosti({ drillDown, onClose, kpi, range, location, cors
   async function eliminaSpesa(id) {
     if (!window.confirm("Eliminare questa spesa?")) return;
     const { error } = await supabase.from("spese").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
 
@@ -49570,7 +49590,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
     if (costiCategorie.some((c) => c.id === id)) { setMsg("Esiste già una categoria con questo nome."); return; }
     const ordine = Math.max(0, ...costiCategorie.map((c) => c.ordine || 0)) + 1;
     const { error } = await supabase.from("costi_categorie").insert({ id, nome, ordine });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setNuovaCategoria(""); setMsg(""); ricarica(["costi_categorie"]);
   }
   async function rinominaCategoria(id, nome) { await supabase.from("costi_categorie").update({ nome }).eq("id", id); ricarica(["costi_categorie"]); }
@@ -49600,7 +49620,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
     const esistenti = sottocategorieDiCategoria(costiSottocategorie, categoriaId);
     const ordine = Math.max(0, ...esistenti.map((v) => v.ordine || 0)) + 1;
     const { error } = await supabase.from("costi_sottocategorie").insert({ id, categoria_id: categoriaId, nome, ordine });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setTestoNuovaSottocategoria((prev) => ({ ...prev, [categoriaId]: "" }));
     setMsg(""); ricarica(["costi_sottocategorie"]);
   }
@@ -49627,7 +49647,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
   async function aggiungiSoglia() {
     if (!nuovaSoglia.soglia || !nuovaSoglia.categoria_id) return;
     const { error } = await supabase.from("costi_soglie_allerta").insert({ ...nuovaSoglia, soglia: parseNum(nuovaSoglia.soglia) });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setNuovaSoglia({ tipo_indicatore: "incidenza_categoria", categoria_id: "", soglia: "", operatore: ">" });
     ricarica(["costi_soglie_allerta"]);
   }
@@ -50008,10 +50028,10 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     let idSpesa = spesaId;
     if (spesaId) {
       const { error } = await supabase.from("spese").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", spesaId);
-      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); setSalvando(false); return; }
     } else {
       const { data, error } = await supabase.from("spese").insert(payload).select().single();
-      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); setSalvando(false); return; }
       idSpesa = data.id;
     }
 
@@ -50422,10 +50442,10 @@ function PaginaAbbonamentoForm({ abbonamentoId, corsi, location, corsiDate, even
     let idAbbonamento = abbonamentoId;
     if (abbonamentoId) {
       const { error } = await supabase.from("abbonamenti_contratti").update(payload).eq("id", abbonamentoId);
-      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); setSalvando(false); return; }
     } else {
       const { data, error } = await supabase.from("abbonamenti_contratti").insert(payload).select().single();
-      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+      if (error) { setMsg("Errore: " + testoErrore(error)); setSalvando(false); return; }
       idAbbonamento = data.id;
     }
 
@@ -50670,7 +50690,7 @@ function PaginaBudgetCosti({ costiCategorie, location, corsi, costiBudget, ricar
       anno, mese: mese === "" ? null : Number(mese), categoria_id: categoriaId,
       sede_id: sedeId || null, corso_id: corsoId || null, importo_budget: parseNum(importo),
     });
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setImporto(""); setMsg(""); ricarica(["costi_budget"]);
   }
   async function eliminaBudget(id) { await supabase.from("costi_budget").delete().eq("id", id); ricarica(["costi_budget"]); }
@@ -50806,7 +50826,7 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
       data_documento: r.data_documento || null, origine: "importato", stato: "pagata",
     })));
     setImportando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
     onClose();
   }
