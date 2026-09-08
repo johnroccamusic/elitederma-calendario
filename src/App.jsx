@@ -18514,7 +18514,7 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
   return (
     <div style={{
       display: "flex", flexDirection: colonna ? "column" : "row",
-      alignItems: "center", justifyContent: colonna ? "center" : undefined,
+      alignItems: "center", justifyContent: colonna ? "space-between" : undefined,
       gap: compatta ? 5 : grande ? 10 : colonna ? 6 : (isMobile ? 8 : 12), minWidth: 0,
       ...(colonna ? { aspectRatio: "1 / 1", textAlign: "center" } : null),
       background: grande ? "#FDFCFA" : "#FCFBF8", border: `1px solid ${CREAM_BORDER}`, borderRadius: compatta ? 10 : grande ? 16 : 14,
@@ -18528,12 +18528,19 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
         <Icona size={compatta ? 12 : grande ? 17 : colonna ? 30 : (isMobile ? 16 : 20)} />
       </span>
       {!compatta && !colonna && <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0, margin: grande ? "2px 0" : 0 }} />}
-      <div ref={rifBox} style={{ minWidth: 0, flex: colonna ? "0 0 auto" : 1, width: colonna ? "100%" : undefined, position: "relative" }}>
+      <div ref={rifBox} style={{
+        minWidth: 0, flex: 1, width: colonna ? "100%" : undefined, position: "relative",
+        // etichetta al centro e importo appoggiato in fondo: le celle
+        // affiancate sono alte uguale, quindi cosi' i numeri cadono tutti
+        // sulla stessa linea anche quando un titolo va a capo tre volte e
+        // il vicino una sola
+        ...(colonna ? { display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "center" } : null),
+      }}>
         {/* la copia invisibile su cui si misura il corpo necessario */}
         <span ref={rifSonda} aria-hidden style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, whiteSpace: "nowrap", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0 }}>{valore}</span>
         {/* la copia invisibile del titolo, per sapere quanto e' alto davvero */}
         <span ref={rifSondaEtichetta} aria-hidden style={{ ...stileEtichetta, display: "block", position: "absolute", visibility: "hidden", pointerEvents: "none", left: 0, top: 0, width: "100%" }}>{blocco}</span>
-        <div style={{ ...stileEtichetta, minHeight: colonna ? undefined : (altezzaEtichettaImposta || altezzaEtichetta || undefined), display: "flex", flexDirection: "column", justifyContent: colonna ? "flex-start" : "flex-end", alignItems: colonna ? "center" : undefined }}>{blocco}</div>
+        <div style={{ ...stileEtichetta, minHeight: colonna ? undefined : (altezzaEtichettaImposta || altezzaEtichetta || undefined), display: "flex", flexDirection: "column", justifyContent: "center", alignItems: colonna ? "center" : undefined, ...(colonna ? { flex: 1 } : null) }}>{blocco}</div>
         <div style={{ ...fontDisplay, fontSize: corpoFinale, fontWeight: 700, color: colore, whiteSpace: "nowrap", lineHeight: 1.2, overflow: "hidden" }}>{valore}</div>
       </div>
     </div>
@@ -18889,7 +18896,7 @@ function PannelloRiepilogoAmministrativo({
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 8 : 14, marginBottom: 22 }}>
                   <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaCartaPos} label="Conto corrente" valore={euroRiepilogo(contoCorrenteClasse)} />
                   <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Cash al corso" valore={euroRiepilogo(contantiClasse)} />
-                  <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Quota cash già incassata prima del corso" valore={euroRiepilogo(cashPrimaDelCorsoClasse)} />
+                  <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Cash prima del corso" valore={euroRiepilogo(cashPrimaDelCorsoClasse)} />
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
