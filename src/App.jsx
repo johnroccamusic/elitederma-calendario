@@ -22456,10 +22456,12 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                               // dice a colpo d'occhio dove c'e' ancora da
                               // lavorare, senza leggere una riga
                               background: !nostra ? "#F7F6F3" : (tuttiCoperti ? VERDE_TROVATA : ROSSO_DA_TROVARE),
-                              // il contorno resta quello di sempre: e' il
-                              // filo che separa un allievo dall'altro, e
-                              // senza le schede si impastano fra loro
-                              border: `1px solid ${nostra ? NAVY : CREAM_BORDER}`,
+                              // il filo blu su tutte, comprese quelle di
+                              // chi porta la sua modella: e' quello che
+                              // separa un allievo dall'altro, e sulle
+                              // grigie il contorno crema su fondo crema
+                              // spariva — restavano scritte accostate
+                              border: `1px solid ${NAVY}`,
                               borderRadius: 14,
                             }}
                           >
