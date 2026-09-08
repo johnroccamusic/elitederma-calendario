@@ -12697,20 +12697,19 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
                     scheda ne chiedeva ancora 218 invece di 200. Lo dice il
                     corso, non il programma: dedurlo dal nome vorrebbe dire
                     che rinominarlo cambia di nascosto il conto dei soldi. */}
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 9, marginBottom: 16, cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={modSaldoSuTotalePagato}
-                    onChange={(e) => setModSaldoSuTotalePagato(e.target.checked)}
-                    style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
-                  />
-                  <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
-                    Il prezzo pattuito è già comprensivo di IVA
-                    <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
-                      In “Restano da pagare” si sottrae il totale davvero incassato invece del solo imponibile. Lasciato spento, vale la regola normale: si sottrae l’imponibile.
-                    </span>
-                  </span>
-                </label>
+                <Field label="Verifica sul totale pagato">
+                  <select
+                    style={inputStyle}
+                    value={modSaldoSuTotalePagato ? "conIva" : "senzaIva"}
+                    onChange={(e) => setModSaldoSuTotalePagato(e.target.value === "conIva")}
+                  >
+                    <option value="senzaIva">Senza IVA — si sottrae l’imponibile</option>
+                    <option value="conIva">Con IVA — si sottrae il totale incassato</option>
+                  </select>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>
+                    Riguarda “Restano da pagare” nella scheda di iscrizione. Senza IVA è la regola normale, giusta dove il prezzo pattuito è netto; con IVA serve dove il pattuito è già lordo.
+                  </div>
+                </Field>
                 <SceltaTipiEDurata
                   tipiModella={tipiModella}
                   selezionati={tipiModellaSelCorsoModifica} onCambiaSelezionati={setTipiModellaSelCorsoModifica}
