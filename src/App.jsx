@@ -14487,19 +14487,20 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
   }, [categoria]);
 
   // Il logo nero e quello bianco sono lo stesso disegno in due colori:
-  // dove sta il nome sull'uno sta anche sull'altro. Calibrare due volte la
-  // stessa cosa e' lavoro doppio, e basta dimenticarne uno perche' i due
-  // file escano diversi. Quindi ogni misura scritta su una variante si
-  // scrive anche sull'altra.
+  // dove sta il nome sull'uno sta anche sull'altro. Qui se ne calibra uno
+  // solo, e in generazione il secondo legge le stesse misure del primo —
+  // non c'e' piu' una copia da tenere allineata, quindi non c'e' piu' il
+  // modo di ritrovarsi i due file diversi.
   //
+  // Questo rispecchio resta perche' la calibrazione viaggia anche da una
+  // categoria all'altra, e non tutte hanno lo stesso logo di riferimento:
+  // una che parte dal bianco deve trovare scritti i campi del bianco.
   // Restano separati i due percorsi delle immagini: quelli sono davvero
   // due file diversi.
   // Le posizioni sono percentuali e si copiano tali e quali. Le dimensioni
   // dei font invece sono pixel dell'immagine sorgente: se i due file non
   // hanno la stessa risoluzione, lo stesso numero da' due testi di
-  // grandezza diversa. Si converte in proporzione alle due larghezze —
-  // ecco perche' questa categoria aveva 110 sul nero e 60 sul bianco: non
-  // erano due gusti diversi, erano due immagini di misura diversa.
+  // grandezza diversa, e si converte in proporzione alle due larghezze.
   function anchePerAltraVariante(campi) {
     const doppi = { ...campi };
     const rapporto = (da, a) => (da && a ? a / da : 1);
@@ -14549,7 +14550,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
   // un colpo, sapendo cosa si sta facendo.
   const [applicandoATutti, setApplicandoATutti] = useState(false);
   async function applicaATutti() {
-    const prefisso = config.logo_nero_path ? "nero" : "bianco";
+    const prefisso = prefissoCalibrazioneLogo(config);
     const altre = (tutteLeCategorie || []).filter((c) => c.chiave !== categoria.chiave && !c.calibrazione_propria);
     if (altre.length === 0) { setMsg("Nessun altro logo da allineare: gli altri hanno tutti la calibrazione propria."); return; }
     if (!window.confirm(`Applicare questa calibrazione ad altri ${altre.length} loghi? Quelli con "Regola solo questo logo" restano come sono.`)) return;
@@ -15053,7 +15054,14 @@ function disegnaNomeConSpaziatura(ctx, testo, centroX, y, fontSize, famiglia, co
 // bianco sul logo bianco, per restare coerente col colore del logo
 // stesso; il nome è sempre centrato tra i 2 limiti della variante e
 // adattato automaticamente (spaziatura o rimpicciolimento) per entrarci
-async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, categoria, famigliaNome, famigliaNumero }) {
+// Ogni categoria si calibra una volta sola, sul logo nero — o sul bianco
+// quando il nero non c'e'. L'altro file e' lo stesso disegno in un altro
+// colore: non ha misure sue.
+function prefissoCalibrazioneLogo(categoria) {
+  return categoria?.logo_nero_path ? "nero" : "bianco";
+}
+
+async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, categoria, famigliaNome, famigliaNumero, larghezzaRiferimento }) {
   const bytes = await scaricaBytesStorage("loghi-immagini", percorsoLogo);
   const blobSorgente = new Blob([bytes]);
   const url = URL.createObjectURL(blobSorgente);
@@ -15072,7 +15080,22 @@ async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, 
     await document.fonts.ready;
 
     const colore = variante === "nero" ? "#000000" : "#ffffff";
-    const pfx = variante;
+
+    // La calibrazione e' una sola per categoria: quella del logo di
+    // riferimento. Il bianco non ha piu' misure proprie da tenere
+    // allineate — erano una copia scritta a ogni modifica, e bastava che
+    // una copia non partisse perche' i due file uscissero diversi senza
+    // che si potesse accorgersene da nessuna parte: in Setting loghi si
+    // vede e si regola un logo solo.
+    //
+    // Le posizioni sono percentuali e valgono tali e quali su tutti e
+    // due. Le dimensioni dei font sono invece pixel del file su cui si e'
+    // calibrato: se questo file ha un'altra risoluzione vanno riportate
+    // in proporzione, altrimenti lo stesso numero da' due testi di
+    // grandezza diversa.
+    const pfx = prefissoCalibrazioneLogo(categoria);
+    const scala = larghezzaRiferimento ? canvas.width / larghezzaRiferimento : 1;
+    const inPixel = (valore) => (Number(valore) || 0) * scala;
 
     // Il testo bianco prende un'ombra, come ce l'ha il logo bianco sotto:
     // senza, su uno sfondo chiaro sparisce, e sul disegno in rilievo
@@ -15102,8 +15125,8 @@ async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, 
     const numSxPx = (canvas.width * (categoria[`${pfx}_numero_limite_sx`] ?? 0)) / 100;
     const numDxPx = (canvas.width * (categoria[`${pfx}_numero_limite_dx`] ?? 100)) / 100;
     const spazioNumero = Math.max(1, numDxPx - numSxPx);
-    const spaziaturaNumero = Number(categoria[`${pfx}_numero_spaziatura`]) || 0;
-    const numAdatt = adattaTestoDentro(codiceTesto, categoria[`${pfx}_numero_font_size`], famigliaNumero, spazioNumero, spaziaturaNumero);
+    const spaziaturaNumero = inPixel(categoria[`${pfx}_numero_spaziatura`]);
+    const numAdatt = adattaTestoDentro(codiceTesto, inPixel(categoria[`${pfx}_numero_font_size`]), famigliaNumero, spazioNumero, spaziaturaNumero);
     conOmbraBianca(numAdatt.fontSize, () => disegnaNomeConSpaziatura(
       ctx, codiceTesto, (numSxPx + numDxPx) / 2, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100,
       numAdatt.fontSize, famigliaNumero, colore, spaziaturaNumero,
@@ -15113,10 +15136,11 @@ async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, 
     const limiteDxPx = (canvas.width * categoria[`${pfx}_nome_limite_dx`]) / 100;
     const centroXPx = (limiteSxPx + limiteDxPx) / 2;
     const yPx = (canvas.height * categoria[`${pfx}_nome_pos_y`]) / 100;
-    const { fontSize, spaziatura } = adattaNomeLogo(nomeTesto, categoria[`${pfx}_nome_font_size`], famigliaNome, Math.max(1, limiteDxPx - limiteSxPx));
+    const { fontSize, spaziatura } = adattaNomeLogo(nomeTesto, inPixel(categoria[`${pfx}_nome_font_size`]), famigliaNome, Math.max(1, limiteDxPx - limiteSxPx));
     conOmbraBianca(fontSize, () => disegnaNomeConSpaziatura(ctx, nomeTesto, centroXPx, yPx, fontSize, famigliaNome, colore, spaziatura));
 
-    return await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    return { blob, larghezza: canvas.width };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -15200,7 +15224,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     try {
       const codice = calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero);
       const fatti = [];
-      const blobNero = await componiLogoPng({
+      const nero = await componiLogoPng({
         percorsoLogo: categoria.logo_nero_path,
         variante: "nero",
         nomeTesto: nomeAllieva.trim().toUpperCase(),
@@ -15209,10 +15233,14 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
         famigliaNome: "loghiFontNomeGen",
         famigliaNumero: "loghiFontNumeroGen",
       });
-      fatti.push({ variante: "nero", blob: blobNero, url: URL.createObjectURL(blobNero), nomeFile: `${categoria.chiave}-nero-${codice}.png` });
+      fatti.push({ variante: "nero", blob: nero.blob, url: URL.createObjectURL(nero.blob), nomeFile: `${categoria.chiave}-nero-${codice}.png` });
 
       if (categoria.richiede_bianco) {
-        const blobBianco = await componiLogoPng({
+        // il bianco usa la stessa calibrazione del nero: qui gli si passa
+        // la larghezza del nero, cioe' il file su cui quelle misure sono
+        // state prese, cosi' il testo esce della stessa grandezza anche se
+        // le due immagini hanno risoluzioni diverse
+        const bianco = await componiLogoPng({
           percorsoLogo: categoria.logo_bianco_path,
           variante: "bianco",
           nomeTesto: nomeAllieva.trim().toUpperCase(),
@@ -15220,8 +15248,9 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
           categoria,
           famigliaNome: "loghiFontNomeGen",
           famigliaNumero: "loghiFontNumeroGen",
+          larghezzaRiferimento: nero.larghezza,
         });
-        fatti.push({ variante: "bianco", blob: blobBianco, url: URL.createObjectURL(blobBianco), nomeFile: `${categoria.chiave}-bianco-${codice}.png` });
+        fatti.push({ variante: "bianco", blob: bianco.blob, url: URL.createObjectURL(bianco.blob), nomeFile: `${categoria.chiave}-bianco-${codice}.png` });
       }
 
       // le anteprime di prima non servono piu': gli indirizzi temporanei si
