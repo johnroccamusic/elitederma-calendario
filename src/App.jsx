@@ -3737,7 +3737,14 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
     // senza rifare il conto — li' il listino e le date non ci sono.
     const totaleCash = contoNotti ? contoNotti.cash : (nottiNum != null && cashNum != null ? round2(nottiNum * cashNum) : null);
     const totaleBonifico = contoNotti ? contoNotti.fattura : (nottiNum != null && bonificoNum != null ? round2(nottiNum * bonificoNum) : null);
-    const periodo = tipoPagamento === "cash" ? totaleCash : totaleBonifico;
+    // "meta": ogni meta' costa la sua tariffa, quindi il pattuito e' la
+    // somma delle due meta' — non meta' di una sola. Senza tutte e due le
+    // tariffe si ripiega su quella che c'e'.
+    const periodo = tipoPagamento === "cash"
+      ? totaleCash
+      : tipoPagamento === "meta"
+        ? (totaleCash != null && totaleBonifico != null ? round2(round2(totaleBonifico / 2) + round2(totaleCash / 2)) : (totaleBonifico ?? totaleCash))
+        : totaleBonifico;
     const campi = {
       pattuito_periodo_cash: totaleCash,
       pattuito_periodo_bonifico: totaleBonifico,
@@ -3849,6 +3856,7 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
         <select style={inputStyle} value={tipoPagamento} onChange={(e) => { setTipoPagamento(e.target.value); if (e.target.value === "cash") setScadenza(""); }}>
           <option value="cash">Cash</option>
           <option value="bonifico">Bonifico con fattura</option>
+          <option value="meta">Metà bonifico / metà cash</option>
         </select>
       </Field>
       <Field label={tipoPagamento === "cash" ? "Scadenza pagamento (Cash — pagato a fine corso)" : "Scadenza pagamento (vuota finché non arriva la fattura)"}>
@@ -18997,8 +19005,21 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
         ? r.tipoPagamento
         : (tariffaCash != null && tariffaBonifico == null) ? "cash"
         : "bonifico";
-      const cash = modoEffettivo === "cash" ? totale : 0;
-      const bonifico = modoEffettivo === "cash" ? 0 : totale;
+      // "meta": si paga meta' a bonifico e meta' in contanti, e ogni meta'
+      // costa la sua tariffa — l'hotel fattura una cifra e ne chiede
+      // un'altra in nero, quindi meta' di 200 a bonifico piu' meta' di 160
+      // cash fa 180, non 200 ne' 160. Senza le due tariffe (pattuito a
+      // corpo) si divide in due l'importo concordato.
+      let cash;
+      let bonifico;
+      if (modoEffettivo === "meta") {
+        bonifico = round2((r.periodoBonifico ?? totale) / 2);
+        cash = round2((r.periodoCash ?? totale) / 2);
+        totale = round2(bonifico + cash);
+      } else {
+        cash = modoEffettivo === "cash" ? totale : 0;
+        bonifico = modoEffettivo === "cash" ? 0 : totale;
+      }
       // "pagato" (spunta "Hotel pagato" in Assegnazione Master) non cambia
       // dove va il costo — resta Bonifico/Cash secondo "Tipo di pagamento" —
       // ma qui aggiunge solo un'indicazione visiva (pallino verde)
@@ -19019,6 +19040,9 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
         // non rifare un conto che qui non si potrebbe rifare (il listino e
         // le date delle notti in questa pagina non ci sono)
         periodoCash: r.periodoCash ?? null, periodoBonifico: r.periodoBonifico ?? null,
+        // con due tariffe diverse la meta' non e' meta' del totale (100 su
+        // 180 non fa 0,5): il modo va letto da qui, non dedotto dai numeri
+        modoPagamento: modoEffettivo,
         pattuitoPeriodo: r.pattuitoPeriodo ?? null };
     })
     .filter(Boolean);
@@ -19519,6 +19543,28 @@ function PannelloRiepilogoAmministrativo({
   }
 
   async function impostaTipoPagamentoAlloggio(r, modalita) {
+    // Meta' e meta': ogni meta' costa la sua tariffa, non meta' di una
+    // sola — l'hotel fattura una cifra e ne chiede un'altra in contanti.
+    // Se ne conosce una sola, quel modo e' l'unico che pratica e la meta'
+    // non si puo' fare: si dice e non si scrive niente. Senza nessuna
+    // delle due (pattuito a corpo) si divide l'importo concordato.
+    if (modalita === "1/2") {
+      const totB = r.periodoBonifico ?? (r.nottiPrenotate != null && r.tariffaBonifico != null ? round2(r.nottiPrenotate * r.tariffaBonifico) : null);
+      const totC = r.periodoCash ?? (r.nottiPrenotate != null && r.tariffaCash != null ? round2(r.nottiPrenotate * r.tariffaCash) : null);
+      if ((totB == null) !== (totC == null)) {
+        setMsg(`Metà e metà non è possibile: per questo hotel esiste solo la tariffa ${totB != null ? "a bonifico" : "in contanti"}. Aggiungi l'altra in Gestione Hotel se serve.`);
+        return;
+      }
+      const campiMeta = { tipo_pagamento_alloggio: "meta" };
+      if (totB != null && totC != null) campiMeta.pattuito_periodo = round2(round2(totB / 2) + round2(totC / 2));
+      const { error: erroreMeta } = await supabase.from(r.tabella).update(campiMeta).eq("id", r.rigaId);
+      if (erroreMeta) { setMsg("Errore: " + testoErrore(erroreMeta)); return; }
+      setMsg(totB != null && totC != null
+        ? `Alloggio metà e metà: ${euroRiepilogo(round2(totB / 2))} a bonifico (metà di ${euroRiepilogo(totB)}) + ${euroRiepilogo(round2(totC / 2))} in contanti (metà di ${euroRiepilogo(totC)}).`
+        : "Alloggio metà e metà: l'importo pattuito si divide in due, non c'è un listino da cui rifare il conto.");
+      ricarica([r.tabella]);
+      return;
+    }
     const tipo = modalita === "C" ? "cash" : "bonifico";
     const campi = { tipo_pagamento_alloggio: tipo };
     // pagando in contanti una scadenza da bonifico non ha piu' senso
@@ -19982,11 +20028,14 @@ function PannelloRiepilogoAmministrativo({
                               );
                             })()}
                             {r.tipo === "alloggio" && (() => {
-                              const modalita = modalitaSplitMaster(r);
+                              // il modo si legge dalla riga, non dagli
+                              // importi: con due tariffe diverse la meta'
+                              // non e' meta' del totale
+                              const modalita = r.modoPagamento === "meta" ? "1/2" : modalitaSplitMaster(r);
                               return (
                                 <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                                  {["B", "C"].map((chiave) => (
-                                    <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : "Tutto cash"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
+                                  {["B", "C", "1/2"].map((chiave) => (
+                                    <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà a bonifico e metà in contanti, ciascuna alla sua tariffa"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
                                       <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalita === chiave ? NAVY : MUTED }}>{chiave}</span>
                                       <input
                                         type="checkbox"
