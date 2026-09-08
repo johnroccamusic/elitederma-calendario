@@ -2,6 +2,10 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { createClient } from "@supabase/supabase-js";
 import { regioneDaCitta } from "./comuni-regioni";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
+import {
+  CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
+  PREMI_VOLUME_PROVVIGIONI, provvigioneVendita, premiVolumeRaggiunti,
+} from "./lib/provvigioni-master.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
@@ -12192,6 +12196,156 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
   );
 }
 
+// "Definizione provvigioni": le fasce con cui una vendita diventa un
+// compenso per la master. Sta in Setting perche' e' una regola
+// dell'azienda, non un dato di una vendita.
+//
+// Due sezioni separate — referral e corso — perche' sono due lavori
+// diversi: al corso la classe e' gia' li', con il referral la master
+// porta gente da fuori. Le fasce si leggono in percentuale di MARGINE:
+// "da 35% a 50% di margine, alla master ne va il 20%". Mai sul prezzo di
+// vendita — su un prodotto rivenduto a poco piu' di quanto costa non c'e'
+// niente da dividere.
+function DefinizioneProvvigioni() {
+  const [fasce, setFasce] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  async function carica() {
+    const { data, error } = await supabase.from("provvigioni_fasce").select("*").order("canale").order("margine_da");
+    if (error) { setMsg("Non riesco a leggere le fasce: " + testoErrore(error)); setFasce([]); return; }
+    setFasce(data || []);
+  }
+  useEffect(() => { carica(); }, []);
+
+  // Al primo accesso l'elenco e' vuoto solo se qualcuno ha cancellato
+  // tutto: le fasce proposte le mette la migrazione. Qui si possono
+  // rimettere, ed e' l'unico modo di tornare indietro dopo aver fatto
+  // pulizia per sbaglio.
+  async function riproponiDefault() {
+    if (!window.confirm("Rimettere le fasce proposte dal sistema? Quelle attuali restano dove sono: queste si aggiungono.")) return;
+    setSalvando(true);
+    const { error } = await supabase.from("provvigioni_fasce").insert(FASCE_PROVVIGIONI_DEFAULT);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("Fasce proposte aggiunte.");
+    carica();
+  }
+
+  async function aggiungi(canale) {
+    const delCanale = (fasce || []).filter((f) => f.canale === canale);
+    // la nuova nasce dove finisce l'ultima: cosi' non si sovrappone a
+    // quelle che ci sono gia' e non lascia un buco in mezzo
+    const ultima = delCanale.slice().sort((a, b) => Number(a.margine_da) - Number(b.margine_da)).pop();
+    const da = ultima ? Number(ultima.margine_a ?? ultima.margine_da) + 5 : 0;
+    const { error } = await supabase.from("provvigioni_fasce").insert({ canale, margine_da: da, margine_a: null, percentuale: 10 });
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("");
+    carica();
+  }
+  async function salvaCampo(riga, campo, valore) {
+    // ottimistico: si scrive un numero per volta, e aspettare il giro
+    // completo a ogni tasto renderebbe la tabella lenta proprio mentre la
+    // si compila
+    setFasce((prec) => (prec || []).map((f) => (f.id === riga.id ? { ...f, [campo]: valore } : f)));
+    const { error } = await supabase.from("provvigioni_fasce").update({ [campo]: valore }).eq("id", riga.id);
+    if (error) { setMsg("Non salvato: " + testoErrore(error)); carica(); return; }
+    setMsg("");
+  }
+  async function elimina(riga) {
+    if (!window.confirm(`Eliminare la fascia da ${riga.margine_da}% ${riga.margine_a == null ? "in su" : `a ${riga.margine_a}%`}?`)) return;
+    const { error } = await supabase.from("provvigioni_fasce").delete().eq("id", riga.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    carica();
+  }
+
+  const campoNumero = { ...inputStyle, width: 78, padding: "7px 8px", textAlign: "right" };
+
+  function sezione(canale, etichetta) {
+    const righe = (fasce || [])
+      .filter((f) => f.canale === canale)
+      .sort((a, b) => Number(a.margine_da) - Number(b.margine_da));
+    return (
+      <div key={canale} style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={hStyle}>{etichetta}</div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>
+          Si legge così: da un certo margine in su, alla master va quella percentuale <b style={{ color: NAVY }}>del margine</b>. L’ultima fascia può restare senza tetto — vale da lì in avanti.
+        </div>
+        {righe.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 0" }}>Nessuna fascia: senza, su questo canale non matura niente.</div>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 28px", gap: 8, marginBottom: 4 }}>
+              {["Margine da", "Margine fino a", "Alla master", ""].map((t, i) => (
+                <div key={i} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{t}</div>
+              ))}
+            </div>
+            {righe.map((f) => (
+              <div key={f.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 28px", gap: 8, alignItems: "center", padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <input style={campoNumero} inputMode="decimal" defaultValue={f.margine_da}
+                    onBlur={(e) => { const v = parseNum(e.target.value); if (v !== Number(f.margine_da)) salvaCampo(f, "margine_da", v); }} />
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  {/* vuoto = senza tetto: e' l'ultima fascia, quella che
+                      prende tutto quello che sta piu' in alto */}
+                  <input style={campoNumero} inputMode="decimal" placeholder="in su" defaultValue={f.margine_a ?? ""}
+                    onBlur={(e) => { const t = e.target.value.trim(); const v = t === "" ? null : parseNum(t); if (v !== (f.margine_a == null ? null : Number(f.margine_a))) salvaCampo(f, "margine_a", v); }} />
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <input style={campoNumero} inputMode="decimal" defaultValue={f.percentuale}
+                    onBlur={(e) => { const v = parseNum(e.target.value); if (v !== Number(f.percentuale)) salvaCampo(f, "percentuale", v); }} />
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
+                </div>
+                <button onClick={() => elimina(f)} title="Elimina questa fascia"
+                  style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <IconaCestino size={13} />
+                </button>
+              </div>
+            ))}
+          </>
+        )}
+        <Button variant="ghost" onClick={() => aggiungi(canale)} style={{ marginTop: 12 }}>+ Aggiungi fascia</Button>
+      </div>
+    );
+  }
+
+  if (fasce == null) return <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>;
+
+  return (
+    <div>
+      <div style={{ ...subStyle, marginTop: -4 }}>
+        La provvigione si calcola sul <b>margine</b> — il ricavo senza IVA e senza spedizione, meno il costo d’acquisto — e mai sul prezzo di vendita.
+        Ogni vendita congela l’importo maturato: cambiando queste fasce, le vendite già fatte non si ricalcolano.
+      </div>
+      {CANALI_PROVVIGIONE.map((c) => sezione(c.chiave, c.etichetta))}
+
+      {/* La soglia e i premi non sono regolabili da qui: sono la stessa
+          regola per tutti i canali, e metterli fra le fasce farebbe
+          credere che cambino da un canale all'altro */}
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={hStyle}>Sotto un euro: i premi a volume</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>
+          Quando la provvigione di un pezzo non arriva a € {SOGLIA_PROVVIGIONE_EURO.toFixed(2)} non diventa punti: quel pezzo conta a numero, e i pezzi sbloccano i premi qui sotto. Sono cumulativi e si azzerano ogni anno di raccolta.
+        </div>
+        {PREMI_VOLUME_PROVVIGIONI.map((p) => (
+          <div key={p.pezzi} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 70 }}>{p.pezzi} pezzi</span>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>€ {p.euro}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <Button variant="ghost" onClick={riproponiDefault} disabled={salvando}>Rimetti le fasce proposte</Button>
+        {msg && <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
@@ -12231,6 +12385,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   const [showIntestazioneModal, setShowIntestazioneModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
+  const [showProvvigioniModal, setShowProvvigioniModal] = useState(false);
   // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
   // modali (compreso un gesto di swipe-per-tornare-indietro del trackpad,
   // o il tasto "indietro" del mouse) salta oltre e riporta alla schermata
@@ -12244,6 +12399,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showMagazziniModal, setShowMagazziniModal], [showIntestazioneModal, setShowIntestazioneModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
+      [showProvvigioniModal, setShowProvvigioniModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
     if (aperto) { registraInterceptaIndietro(() => aperto[1](false)); return () => registraInterceptaIndietro(null); }
@@ -12251,7 +12407,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
     showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal,
-    showTargetMasterModal, showTargetVenditoriModal,
+    showTargetMasterModal, showTargetVenditoriModal, showProvvigioniModal,
   ]);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
@@ -12443,6 +12599,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
       voci: [
         { chiave: "corsi", etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
+        { chiave: "provvigioni", etichetta: "Definizione provvigioni", Icona: IconaTargetRiga, onClick: () => setShowProvvigioniModal(true) },
         { chiave: "tipimodelle", etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
         { chiave: "hotel", etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
         { chiave: "location", etichetta: "Definisci Location", Icona: IconaPin, onClick: onApriGestioneLocation },
@@ -12764,6 +12921,12 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
         <Modal title="Intestazione società" onClose={() => setShowIntestazioneModal(false)}>
           <div style={subStyle}>Le righe che vanno in cima ai documenti, una sotto l'altra come si vogliono leggere. Si salvano da sole uscendo dal campo; quelle lasciate vuote non compaiono.</div>
           <IntestazioneSocieta intestazione={intestazioneSocieta} ricarica={ricarica} />
+        </Modal>
+      )}
+
+      {showProvvigioniModal && (
+        <Modal title="Definizione provvigioni" onClose={() => setShowProvvigioniModal(false)} maxWidth={760}>
+          <DefinizioneProvvigioni />
         </Modal>
       )}
 
@@ -37175,6 +37338,45 @@ async function muoviStock(prodotto, delta, { origine, nota = null, riferimento =
   });
   return null;
 }
+// La provvigione della master, calcolata e CONGELATA al momento della
+// vendita. Le fasce si rileggono adesso dal database e non da quello che
+// la pagina ha in memoria: una provvigione e' un compenso, e va decisa
+// con la regola in vigore in questo istante — poi non si ricalcola piu',
+// nemmeno se domani le fasce cambiano.
+//
+// Il canale lo dice la vendita: se e' legata a un corso e' una vendita al
+// corso; se non lo e' ma porta un referral code, e' una vendita portata
+// da fuori. Una vendita al banco senza ne' l'uno ne' l'altro non e' ne'
+// una cosa ne' l'altra, e non matura niente.
+async function congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale, aliquotaDefault = 22 }) {
+  if (!canale) return null;
+  const { data: fasce, error } = await supabase.from("provvigioni_fasce").select("*");
+  if (error || !fasce?.length) return null;
+  const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+  const righe = (prodottiRiga || []).map((r) => {
+    const p = r.prodotto_id ? perId[r.prodotto_id] : null;
+    // il ricavo va netto: dentro totale_riga l'IVA c'e', e non e' mai
+    // stata nostra. La spedizione qui non entra proprio — sta su
+    // spedizioni_pos, non fra i prodotti
+    const aliquota = Number(p?.aliquota_iva_vendita ?? aliquotaDefault) || 0;
+    return {
+      ricavoNetto: round2((Number(r.totale_riga) || 0) / (1 + aliquota / 100)),
+      costoUnitario: Number(p?.costo_acquisto) || 0,
+      quantita: Number(r.quantita) || 0,
+    };
+  });
+  const esito = provvigioneVendita({ righe, canale, fasce });
+  if (!esito.provvigione && !esito.pezziSottoSoglia) return null;
+  return {
+    provvigione_master: esito.provvigione,
+    provvigione_canale: canale,
+    provvigione_pezzi: esito.pezziSottoSoglia,
+    // il conto riga per riga com'era oggi: serve a spiegare un importo fra
+    // sei mesi, quando le fasce non saranno piu' queste
+    provvigione_dettaglio: esito.dettaglio,
+  };
+}
+
 // espande una riga da scaricare: un bundle virtuale non ha giacenza
 // propria e scarica i suoi componenti, tutto il resto scarica se stesso
 function righeScarico(prodotto, quantita, bundleComponenti, prodottiPerId) {
@@ -43560,7 +43762,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         if (erroreScarico) { window.alert("Attenzione: " + erroreScarico); ricarica(["prodotti_shop"]); return; }
       }
 
-      const { data: venditaCreata, error: erroreVendita } = await supabase.from("vendite_shop").insert(datiVendita).select().single();
+      // La provvigione della master si congela qui, insieme alla vendita:
+      // sulle prove non matura niente, e un omaggio ha righe a zero quindi
+      // non produce margine da dividere.
+      let provvigione = null;
+      if (operatore.tipo === "master" && !datiVendita.simulazione && !omaggioAttivo) {
+        const canaleProvvigione = corsoPosSel ? "corso" : (couponAttivo ? "referral" : null);
+        provvigione = await congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale: canaleProvvigione });
+      }
+      const { data: venditaCreata, error: erroreVendita } = await supabase.from("vendite_shop").insert({ ...datiVendita, ...(provvigione || {}) }).select().single();
       if (erroreVendita) {
         window.alert("Attenzione: magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message);
         ricarica(["prodotti_shop", "vendite_shop"]);
