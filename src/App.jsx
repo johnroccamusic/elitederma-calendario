@@ -7647,7 +7647,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onApriChiusura, onApriClasse, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, onApriInventarioSede, onApriChiusura, onApriClasse, onBack, titolo = "Dashboard master" }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -27556,12 +27556,10 @@ function idsLocaliDaWoo(idsWoo, elenco, campoWoo) {
 // "genera-referral-automatico" (import condiviso da
 // supabase/functions/_shared/codiceReferral.js), così i codici nati a mano e
 // quelli automatici seguono esattamente la stessa regola e non collidono mai
-// ---------- Raccolta punti master: calcolo puro, mai un valore salvato ----------
-// i punti non sono mai memorizzati: si ricavano al volo dalle vendite ogni
-// volta che servono (Gestione Premi, Dashboard Master), così "ricalcola
-// dall'inizio" o "valida solo da qui in avanti" bastano a cambiare le righe
-// di punti_master_regola_base/punti_master_periodi_speciali, senza dover
-// mai riscrivere un punteggio già scritto da qualche parte
+// ---------- Provvigioni master: finestra della raccolta ----------
+// Le provvigioni si congelano sulla vendita (vedi congelaProvvigioneMaster):
+// qui resta solo il modo di dire se una vendita cade dentro l'anno di
+// raccolta in corso e a chi e' attribuita.
 
 // converte un timestamp UTC (vendite_shop.data_ordine) nel giorno di
 // calendario vissuto in Italia: le regole/periodi speciali hanno date "pure"
@@ -27573,49 +27571,6 @@ function dataLocaleRomaPuntiMaster(dataIso) {
   const parti = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(dataIso));
   const mappa = Object.fromEntries(parti.map((p) => [p.type, p.value]));
   return `${mappa.year}-${mappa.month}-${mappa.day}`;
-}
-// un periodo speciale sostituisce per intero la regola base nelle sue date;
-// altrimenti si usa la riga storica valida in quella data (data_fine null = aperta)
-function regolaPuntiMasterApplicabile(dataLocale, periodiSpeciali, regoleBase) {
-  const speciale = (periodiSpeciali || []).find((p) => dataLocale >= p.data_inizio && dataLocale <= p.data_fine);
-  if (speciale) return speciale;
-  return (regoleBase || []).find((r) => dataLocale >= r.data_inizio && (r.data_fine == null || dataLocale <= r.data_fine)) || null;
-}
-// punti maturati da UNA riga di vendite_shop — arrotondamento per
-// troncamento verso lo zero, applicato qui riga per riga (mai su un totale
-// già sommato): un reso/annullamento/cambio POS ha già il totale negativo,
-// quindi la stessa formula produce punti negativi senza bisogno di un caso a parte
-// "couponDellaVendita" e' il referral code con cui la vendita e' stata
-// fatta: se quel codice ha una sua regola punti (punti_valore /
-// punti_ogni_euro) comanda quella, altrimenti vale la regola generale
-// della raccolta. Cosi' si puo' premiare di piu' un codice senza
-// cambiare la raccolta per tutti.
-function puntiMasterDiVendita(v, periodiSpeciali, regoleBase, couponDellaVendita) {
-  const dataLocale = dataLocaleRomaPuntiMaster(v.data_ordine);
-  if (!dataLocale) return 0;
-  const regolaCodice = couponDellaVendita && couponDellaVendita.punti_valore != null && Number(couponDellaVendita.punti_ogni_euro) > 0
-    ? { punti: Number(couponDellaVendita.punti_valore), euro: Number(couponDellaVendita.punti_ogni_euro) }
-    : null;
-  const regola = regolaCodice || regolaPuntiMasterApplicabile(dataLocale, periodiSpeciali, regoleBase);
-  if (!regola || !(regola.euro > 0)) return 0;
-  const fattore = regola.punti / regola.euro;
-  if (v.origine === "woocommerce") {
-    if (v.stato !== "completed") return 0; // refunded/cancelled/failed/pending/... → zero, mai punti
-    let punti = Math.trunc((v.totale || 0) * fattore);
-    const refunds = v.payload_raw?.refunds;
-    if (Array.isArray(refunds)) {
-      const visti = new Set();
-      for (const r of refunds) {
-        if (r?.id == null || visti.has(r.id)) continue;
-        visti.add(r.id);
-        punti += Math.trunc((Number(r.total) || 0) * fattore);
-      }
-    }
-    return punti;
-  }
-  // origine "pos": vendita/reso/annullamento/cambio sono sempre "completed"
-  // per costruzione — il segno di v.totale fa già tutto il lavoro
-  return Math.trunc((v.totale || 0) * fattore);
 }
 // true se la vendita è dentro la finestra della raccolta punti e attribuita
 // a QUESTA master — stesso operatore_tipo/operatore_id già usato ovunque
@@ -27641,7 +27596,7 @@ async function generaCodiceReferralUnivoco(nome) {
   }
 }
 
-function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
+function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
   const { ordine: ordineClassifica, cambiaOrdine: cambiaOrdineClassifica, ordina: ordinaClassifica } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("manuale");
@@ -27835,39 +27790,8 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   }
   const masterOrdinate = useMemo(() => [...(master || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "")), [master]);
 
-  // Quanti punti vale un euro venduto CON QUEL codice. Se non si scrive
-  // niente vale la regola generale della raccolta: qui si mette solo
-  // l'eccezione, cosi' un codice puo' premiare di piu' senza cambiare le
-  // regole per tutti.
-  const [puntiCodiceAperto, setPuntiCodiceAperto] = useState(null); // { coupon, master }
-  const [puntiValore, setPuntiValore] = useState("");
-  const [puntiOgniEuro, setPuntiOgniEuro] = useState("");
-  const [salvandoPuntiCodice, setSalvandoPuntiCodice] = useState(false);
-  function apriPuntiCodice(c, m) {
-    setPuntiCodiceAperto({ coupon: c, master: m });
-    setPuntiValore(c.punti_valore != null ? String(c.punti_valore) : "");
-    setPuntiOgniEuro(c.punti_ogni_euro != null ? String(c.punti_ogni_euro) : "");
-  }
-  async function salvaPuntiCodice(azzera) {
-    const c = puntiCodiceAperto?.coupon;
-    if (!c) return;
-    let valore = null, ogniEuro = null;
-    if (!azzera) {
-      valore = parseNum(puntiValore);
-      ogniEuro = parseNum(puntiOgniEuro);
-      if (!(valore > 0) || !(ogniEuro > 0)) { window.alert("Scrivi quanti punti e ogni quanti euro, tutti e due maggiori di zero."); return; }
-    }
-    setSalvandoPuntiCodice(true);
-    const { error } = await supabase.from("coupon").update({ punti_valore: valore, punti_ogni_euro: ogniEuro }).eq("id", c.id);
-    setSalvandoPuntiCodice(false);
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    setPuntiCodiceAperto(null);
-    ricarica(["coupon"]);
-  }
 
   // ---------- tab "Gestione Premi" ----------
-  const regolaBaseAperta = useMemo(() => (puntiMasterRegolaBase || []).find((r) => r.data_fine == null) || null, [puntiMasterRegolaBase]);
-  const regolaBaseStorico = useMemo(() => [...(puntiMasterRegolaBase || [])].filter((r) => r.data_fine != null).sort((a, b) => b.data_inizio.localeCompare(a.data_inizio)), [puntiMasterRegolaBase]);
 
   const [impostazioniForm, setImpostazioniForm] = useState(null);
   useEffect(() => {
@@ -27883,78 +27807,6 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
     setMsgTipo("successo"); setMsg("Finestra della raccolta punti aggiornata.");
     ricarica(["punti_master_impostazioni"]);
-  }
-
-  const [puntiBaseForm, setPuntiBaseForm] = useState("");
-  const [euroBaseForm, setEuroBaseForm] = useState("");
-  useEffect(() => {
-    if (regolaBaseAperta && puntiBaseForm === "" && euroBaseForm === "") { setPuntiBaseForm(String(regolaBaseAperta.punti)); setEuroBaseForm(String(regolaBaseAperta.euro)); }
-  }, [regolaBaseAperta]);
-  const [salvandoRegolaBase, setSalvandoRegolaBase] = useState(false);
-  // "avanti": chiude la riga aperta (data_fine = ieri, oppure oggi stesso
-  // se era già iniziata oggi — evita un intervallo invertito) e ne apre
-  // una nuova da oggi: il passato resta invariato.
-  // "ricalcola": svuota tutta la tabella e ne lascia una sola, valida fin
-  // dall'inizio della raccolta — il passato cambia insieme al futuro.
-  async function salvaRegolaBase(modo) {
-    const punti = parseNum(puntiBaseForm);
-    const euro = parseNum(euroBaseForm);
-    if (!(punti >= 0) || !(euro > 0)) { setMsgTipo("errore"); setMsg("Inserisci punti (≥0) ed euro (>0) validi."); return; }
-    setSalvandoRegolaBase(true); setMsg("");
-    const oggi = dataOggiStr();
-    if (modo === "ricalcola") {
-      await supabase.from("punti_master_regola_base").delete().not("id", "is", null);
-      const { error } = await supabase.from("punti_master_regola_base").insert({ data_inizio: puntiMasterImpostazioni?.data_inizio || oggi, data_fine: null, punti, euro });
-      setSalvandoRegolaBase(false);
-      if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
-      setMsgTipo("successo"); setMsg("Regola ricalcolata dall'inizio della raccolta: il punteggio di tutte le master cambia di conseguenza.");
-    } else {
-      if (regolaBaseAperta && regolaBaseAperta.data_inizio === oggi) {
-        const { error } = await supabase.from("punti_master_regola_base").update({ punti, euro }).eq("id", regolaBaseAperta.id);
-        if (error) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
-      } else {
-        if (regolaBaseAperta) {
-          const { error: erroreChiusura } = await supabase.from("punti_master_regola_base").update({ data_fine: addGiorni(oggi, -1) }).eq("id", regolaBaseAperta.id);
-          if (erroreChiusura) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(erroreChiusura)); return; }
-        }
-        const { error } = await supabase.from("punti_master_regola_base").insert({ data_inizio: oggi, data_fine: null, punti, euro });
-        if (error) { setSalvandoRegolaBase(false); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
-      }
-      setSalvandoRegolaBase(false);
-      setMsgTipo("successo"); setMsg("Nuova regola valida da oggi in avanti: il passato non cambia.");
-    }
-    ricarica(["punti_master_regola_base"]);
-  }
-
-  const [periodoForm, setPeriodoForm] = useState({ data_inizio: "", data_fine: "", punti: "", euro: "" });
-  const [salvandoPeriodo, setSalvandoPeriodo] = useState(false);
-  const periodiOrdinati = useMemo(() => [...(puntiMasterPeriodiSpeciali || [])].sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)), [puntiMasterPeriodiSpeciali]);
-  async function aggiungiPeriodoSpeciale() {
-    const { data_inizio, data_fine } = periodoForm;
-    const punti = parseNum(periodoForm.punti);
-    const euro = parseNum(periodoForm.euro);
-    if (!data_inizio || !data_fine) { setMsgTipo("errore"); setMsg("Indica inizio e fine del periodo speciale."); return; }
-    if (data_fine < data_inizio) { setMsgTipo("errore"); setMsg("La fine del periodo non può precedere l'inizio."); return; }
-    if (!(punti >= 0) || !(euro > 0)) { setMsgTipo("errore"); setMsg("Inserisci punti (≥0) ed euro (>0) validi."); return; }
-    if (puntiMasterImpostazioni && (data_inizio < puntiMasterImpostazioni.data_inizio || data_fine > puntiMasterImpostazioni.data_fine)) { setMsgTipo("errore"); setMsg("Il periodo speciale deve stare dentro la finestra della raccolta punti."); return; }
-    const sovrapposto = (puntiMasterPeriodiSpeciali || []).some((p) => data_inizio <= p.data_fine && data_fine >= p.data_inizio);
-    if (sovrapposto) { setMsgTipo("errore"); setMsg("Questo periodo si sovrappone a un periodo speciale già esistente."); return; }
-    setSalvandoPeriodo(true); setMsg("");
-    const { error } = await supabase.from("punti_master_periodi_speciali").insert({ data_inizio, data_fine, punti, euro });
-    setSalvandoPeriodo(false);
-    if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
-    setMsgTipo("successo"); setMsg("Periodo speciale aggiunto.");
-    setPeriodoForm({ data_inizio: "", data_fine: "", punti: "", euro: "" });
-    ricarica(["punti_master_periodi_speciali"]);
-  }
-  const [eliminandoPeriodoId, setEliminandoPeriodoId] = useState(null);
-  async function eliminaPeriodoSpeciale(id) {
-    if (!window.confirm("Eliminare questo periodo speciale?")) return;
-    setEliminandoPeriodoId(id); setMsg("");
-    const { error } = await supabase.from("punti_master_periodi_speciali").delete().eq("id", id);
-    setEliminandoPeriodoId(null);
-    if (error) { setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
-    ricarica(["punti_master_periodi_speciali"]);
   }
 
   // classifica: solo le vendite già attribuite a una master (stesso
@@ -27973,7 +27825,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       const euro = round2(venditeMaster.reduce((s, v) => s + (v.totale || 0), 0));
       return { master: m, punti, euro };
     }).filter((r) => r.punti !== 0 || r.euro !== 0).sort((a, b) => b.punti - a.punti);
-  }, [master, venditeShop, puntiMasterImpostazioni, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase, coupon]);
+  }, [master, venditeShop, puntiMasterImpostazioni]);
 
   // ---------- tab "Generazione automatica" ----------
   const [regoleForm, setRegoleForm] = useState(null);
@@ -28046,7 +27898,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "referral", l: "Genera referral code" }, { v: "premi", l: "Gestione Premi" }].map((t) => (
+          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "referral", l: "Genera referral code" }, { v: "premi", l: "Provvigioni master" }].map((t) => (
             <button key={t.v} onClick={() => { setTab(t.v); setMsg(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 18, border: "none", background: tab === t.v ? NAVY : BG, color: tab === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
               {t.l}
             </button>
@@ -28167,17 +28019,6 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{esistente.codice}</span>
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: (ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).colore, borderRadius: 20, padding: "2px 9px" }}>{(ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).testo}</span>
-                      {/* quanto vale questo codice nella raccolta punti:
-                          scritto sul tasto, cosi' si legge senza aprirlo */}
-                      <button
-                        onClick={() => apriPuntiCodice(esistente, m)}
-                        title="Quanti punti guadagna la master per ogni euro venduto con questo codice"
-                        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: esistente.punti_valore != null ? NAVY : MUTED, background: esistente.punti_valore != null ? "#FDF8EC" : "#fff", border: `1px solid ${esistente.punti_valore != null ? GOLD : CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-                      >
-                        {esistente.punti_valore != null && esistente.punti_ogni_euro
-                          ? `${esistente.punti_valore} punti ogni ${esistente.punti_ogni_euro} €`
-                          : "Punti: regola generale"}
-                      </button>
                     </div>
                   ) : codiceProposto[m.id] ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -28192,42 +28033,6 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               );
             })}
           </div>
-        )}
-
-        {puntiCodiceAperto && (
-          <Modal
-            title={`Punti del codice ${String(puntiCodiceAperto.coupon.codice || "").toUpperCase()}`}
-            onClose={() => setPuntiCodiceAperto(null)}
-            maxWidth={440}
-          >
-            <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.55, marginBottom: 14 }}>
-              Quanti punti guadagna <b>{toTitleCase(puntiCodiceAperto.master.nome)}</b> per ogni vendita fatta con questo codice.
-            </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 120px" }}>
-                <Field label="Punti"><input style={inputStyle} inputMode="decimal" value={puntiValore} onChange={(e) => setPuntiValore(e.target.value)} placeholder="1" /></Field>
-              </div>
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED, paddingBottom: 22 }}>ogni</div>
-              <div style={{ flex: "1 1 120px" }}>
-                <Field label="Euro venduti"><input style={inputStyle} inputMode="decimal" value={puntiOgniEuro} onChange={(e) => setPuntiOgniEuro(e.target.value)} placeholder="10" /></Field>
-              </div>
-            </div>
-            {parseNum(puntiValore) > 0 && parseNum(puntiOgniEuro) > 0 && (
-              <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "10px 12px", marginTop: 10 }}>
-                Una vendita da 100 € con questo codice vale <b>{Math.trunc(100 * (parseNum(puntiValore) / parseNum(puntiOgniEuro)))} punti</b>.
-              </div>
-            )}
-            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 10, lineHeight: 1.45 }}>
-              Lasciando vuoto vale la <b>regola generale</b> della raccolta{regolaBaseAperta ? ` (${regolaBaseAperta.punti} punti ogni ${regolaBaseAperta.euro} €)` : ""}. I punti si ricalcolano da soli sulle vendite già fatte con questo codice: non sono un saldo salvato.
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-              <Button onClick={() => salvaPuntiCodice(false)} disabled={salvandoPuntiCodice}>{salvandoPuntiCodice ? "Salvo…" : "Salva"}</Button>
-              {puntiCodiceAperto.coupon.punti_valore != null && (
-                <Button variant="ghost" onClick={() => salvaPuntiCodice(true)} disabled={salvandoPuntiCodice}>Torna alla regola generale</Button>
-              )}
-              <Button variant="ghost" onClick={() => setPuntiCodiceAperto(null)}>Annulla</Button>
-            </div>
-          </Modal>
         )}
 
         {tab === "automatica" && (
@@ -28294,7 +28099,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         {tab === "premi" && (
           <div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
-              Raccolta punti per le master: si accumulano sulle vendite fatte col loro referral code (shop online) e sulle loro vendite al banco. I punti non vengono mai salvati, si calcolano al momento da queste regole.
+              Le provvigioni maturano sulle vendite al banco e su quelle fatte con il referral code della master. Gli importi si congelano al momento della vendita: le fasce si regolano in Setting → Definizione provvigioni, e cambiarle non tocca quello che è già maturato.
             </div>
 
             <div style={{ ...cardStyle }}>
@@ -28310,49 +28115,6 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                   <Button onClick={salvaImpostazioniPremi} disabled={salvandoImpostazioni}>{salvandoImpostazioni ? "Salvo…" : "Salva finestra"}</Button>
                 </>
               )}
-            </div>
-
-            <div style={{ ...cardStyle }}>
-              <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Regola base</div>
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
-                {regolaBaseAperta ? `In vigore dal ${fmtData(regolaBaseAperta.data_inizio)}: ${regolaBaseAperta.punti} punti ogni ${fmtEuroErp2(regolaBaseAperta.euro)}.` : "Nessuna regola base configurata."}
-              </div>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 140px" }}><Field label="Punti"><input type="number" min="0" step="0.01" style={inputStyle} value={puntiBaseForm} onChange={(e) => setPuntiBaseForm(e.target.value)} /></Field></div>
-                <div style={{ flex: "1 1 140px" }}><Field label="Ogni € spesi"><input type="number" min="0.01" step="0.01" style={inputStyle} value={euroBaseForm} onChange={(e) => setEuroBaseForm(e.target.value)} /></Field></div>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-                <Button onClick={() => salvaRegolaBase("avanti")} disabled={salvandoRegolaBase}>{salvandoRegolaBase ? "Salvo…" : "Valida da oggi in avanti"}</Button>
-                <Button variant="ghost" onClick={() => { if (window.confirm("Ricalcolare i punti di TUTTE le master dall'inizio della raccolta con questi nuovi valori? Il passato cambia.")) salvaRegolaBase("ricalcola"); }} disabled={salvandoRegolaBase}>Ricalcola dall'inizio</Button>
-              </div>
-              {regolaBaseStorico.length > 0 && (
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Storico</div>
-                  {regolaBaseStorico.map((r) => (
-                    <div key={r.id} style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "3px 0" }}>{fmtData(r.data_inizio)} → {fmtData(r.data_fine)}: {r.punti} punti ogni {fmtEuroErp2(r.euro)}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ ...cardStyle }}>
-              <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Periodi di maggior compenso</div>
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Nelle loro date sostituiscono per intero la regola base (non si sommano).</div>
-              {periodiOrdinati.map((p) => (
-                <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                  <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{fmtData(p.data_inizio)} → {fmtData(p.data_fine)} · {p.punti} punti ogni {fmtEuroErp2(p.euro)}</div>
-                  <button onClick={() => eliminaPeriodoSpeciale(p.id)} disabled={eliminandoPeriodoId === p.id} title="Elimina periodo" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
-                  </button>
-                </div>
-              ))}
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: periodiOrdinati.length > 0 ? 14 : 0 }}>
-                <div style={{ flex: "1 1 140px" }}><Field label="Da"><input type="date" style={inputStyle} value={periodoForm.data_inizio} onChange={(e) => setPeriodoForm({ ...periodoForm, data_inizio: e.target.value })} /></Field></div>
-                <div style={{ flex: "1 1 140px" }}><Field label="A"><input type="date" style={inputStyle} value={periodoForm.data_fine} onChange={(e) => setPeriodoForm({ ...periodoForm, data_fine: e.target.value })} /></Field></div>
-                <div style={{ flex: "1 1 100px" }}><Field label="Punti"><input type="number" min="0" step="0.01" style={inputStyle} value={periodoForm.punti} onChange={(e) => setPeriodoForm({ ...periodoForm, punti: e.target.value })} /></Field></div>
-                <div style={{ flex: "1 1 120px" }}><Field label="Ogni € spesi"><input type="number" min="0.01" step="0.01" style={inputStyle} value={periodoForm.euro} onChange={(e) => setPeriodoForm({ ...periodoForm, euro: e.target.value })} /></Field></div>
-              </div>
-              <Button variant="ghost" onClick={aggiungiPeriodoSpeciale} disabled={salvandoPeriodo}>{salvandoPeriodo ? "Aggiungo…" : "+ Aggiungi periodo"}</Button>
             </div>
 
             <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, margin: "24px 0 10px" }}>Classifica master</div>
@@ -52350,8 +52112,6 @@ export default function App() {
   const [vociShopClassificazione, setVociShopClassificazione] = useState([]);
   const [coupon, setCoupon] = useState([]);
   const [regoleReferralAutomatico, setRegoleReferralAutomatico] = useState(null);
-  const [puntiMasterRegolaBase, setPuntiMasterRegolaBase] = useState([]);
-  const [puntiMasterPeriodiSpeciali, setPuntiMasterPeriodiSpeciali] = useState([]);
   const [puntiMasterImpostazioni, setPuntiMasterImpostazioni] = useState(null);
   const [allieviCrm, setAllieviCrm] = useState([]);
   const [storicoAllievi, setStoricoAllievi] = useState([]);
@@ -52536,8 +52296,6 @@ export default function App() {
     voci_shop_classificazione: async () => setVociShopClassificazione((await supabase.from("voci_shop_classificazione").select("*")).data || []),
     coupon: async () => setCoupon((await supabase.from("coupon").select("*").order("created_at", { ascending: false })).data || []),
     regole_referral_automatico: async () => setRegoleReferralAutomatico((await supabase.from("regole_referral_automatico").select("*").limit(1).maybeSingle()).data || null),
-    punti_master_regola_base: async () => setPuntiMasterRegolaBase((await supabase.from("punti_master_regola_base").select("*").order("data_inizio")).data || []),
-    punti_master_periodi_speciali: async () => setPuntiMasterPeriodiSpeciali((await supabase.from("punti_master_periodi_speciali").select("*").order("data_inizio")).data || []),
     punti_master_impostazioni: async () => setPuntiMasterImpostazioni((await supabase.from("punti_master_impostazioni").select("*").limit(1).maybeSingle()).data || null),
     impostazioni_categorie_gruppi: async () => setCategorieGruppi((await supabase.from("impostazioni_categorie_gruppi").select("*").limit(1)).data?.[0] || null),
     impostazioni_layout_assegnazione_master: async () => setLayoutAssegnazioneMaster((await supabase.from("impostazioni_layout_assegnazione_master").select("*").limit(1)).data?.[0] || null),
@@ -52666,7 +52424,7 @@ export default function App() {
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
-    generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_regola_base", "punti_master_periodi_speciali", "punti_master_impostazioni"],
+    generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
     statvenditeshop: ["vendite_shop", "woo_coupon"],
     statvenditealbanco: ["vendite_shop"],
@@ -52693,7 +52451,7 @@ export default function App() {
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
-    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_regola_base", "punti_master_periodi_speciali", "punti_master_impostazioni"],
+    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
@@ -53938,7 +53696,7 @@ export default function App() {
           corsi={corsi} corsiDate={corsiDate} location={location}
           regoleReferralAutomatico={regoleReferralAutomatico}
           venditeShop={venditeShop}
-          puntiMasterRegolaBase={puntiMasterRegolaBase} puntiMasterPeriodiSpeciali={puntiMasterPeriodiSpeciali} puntiMasterImpostazioni={puntiMasterImpostazioni}
+          puntiMasterImpostazioni={puntiMasterImpostazioni}
           ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "generacoupon", "Genera Coupon")}
         />
@@ -54164,7 +53922,7 @@ export default function App() {
           master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti}
           masterLoggataId={utenteLoggato?.masterId || null}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
-          puntiMasterRegolaBase={puntiMasterRegolaBase} puntiMasterPeriodiSpeciali={puntiMasterPeriodiSpeciali} puntiMasterImpostazioni={puntiMasterImpostazioni}
+          puntiMasterImpostazioni={puntiMasterImpostazioni}
           onApriInventarioSede={apriInventarioSede}
           onApriChiusura={apriChiusuraCorso}
           onApriClasse={apriClasseMaster}
