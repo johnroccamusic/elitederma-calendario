@@ -14256,6 +14256,9 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
 
   const scalaAnteprima = naturaleWidth && larghezzaMostrata ? larghezzaMostrata / naturaleWidth : 1;
   const coloreAnteprima = prefisso === "nero" ? "#ffffff" : "#000000";
+  // in anteprima i colori sono invertiti per poterli vedere, quindi
+  // l'ombra si mostra sempre: dice dov'e', non com'e'
+  const ombraAnteprima = (fontSize) => `${(fontSize * 0.045).toFixed(1)}px ${(fontSize * 0.06).toFixed(1)}px ${(fontSize * 0.14).toFixed(1)}px rgba(0,0,0,0.45)`;
   const kY = `${prefisso}_nome_pos_y`;
   const kNumX = `${prefisso}_numero_pos_x`;
   const kNumY = `${prefisso}_numero_pos_y`;
@@ -14923,6 +14926,26 @@ async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, 
     const colore = variante === "nero" ? "#000000" : "#ffffff";
     const pfx = variante;
 
+    // Il testo bianco prende un'ombra, come ce l'ha il logo bianco sotto:
+    // senza, su uno sfondo chiaro sparisce, e sul disegno in rilievo
+    // sembra incollato sopra invece che parte dello stesso oggetto.
+    // Sul nero non serve: il nero su chiaro si legge da solo, e un'ombra
+    // scura sotto un testo scuro lo impasta.
+    //
+    // Le misure seguono il corpo del carattere e non sono numeri fissi: lo
+    // stesso logo esiste a risoluzioni diverse, e un'ombra da 4 pixel su
+    // un file da 4000 di larghezza non si vedrebbe.
+    function conOmbraBianca(fontSize, disegna) {
+      if (variante !== "bianco") { disegna(); return; }
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur = fontSize * 0.14;
+      ctx.shadowOffsetX = fontSize * 0.045;
+      ctx.shadowOffsetY = fontSize * 0.06;
+      disegna();
+      ctx.restore();
+    }
+
     // Il codice sta dentro i suoi due margini, come il nome: si centra fra
     // loro e rimpicciolisce se non ci sta. Prima aveva solo un punto, e una
     // sigla lunga usciva dal disegno senza che ci fosse modo di contenerla.
@@ -14933,17 +14956,17 @@ async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, 
     const spazioNumero = Math.max(1, numDxPx - numSxPx);
     const spaziaturaNumero = Number(categoria[`${pfx}_numero_spaziatura`]) || 0;
     const numAdatt = adattaTestoDentro(codiceTesto, categoria[`${pfx}_numero_font_size`], famigliaNumero, spazioNumero, spaziaturaNumero);
-    disegnaNomeConSpaziatura(
+    conOmbraBianca(numAdatt.fontSize, () => disegnaNomeConSpaziatura(
       ctx, codiceTesto, (numSxPx + numDxPx) / 2, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100,
       numAdatt.fontSize, famigliaNumero, colore, spaziaturaNumero,
-    );
+    ));
 
     const limiteSxPx = (canvas.width * categoria[`${pfx}_nome_limite_sx`]) / 100;
     const limiteDxPx = (canvas.width * categoria[`${pfx}_nome_limite_dx`]) / 100;
     const centroXPx = (limiteSxPx + limiteDxPx) / 2;
     const yPx = (canvas.height * categoria[`${pfx}_nome_pos_y`]) / 100;
     const { fontSize, spaziatura } = adattaNomeLogo(nomeTesto, categoria[`${pfx}_nome_font_size`], famigliaNome, Math.max(1, limiteDxPx - limiteSxPx));
-    disegnaNomeConSpaziatura(ctx, nomeTesto, centroXPx, yPx, fontSize, famigliaNome, colore, spaziatura);
+    conOmbraBianca(fontSize, () => disegnaNomeConSpaziatura(ctx, nomeTesto, centroXPx, yPx, fontSize, famigliaNome, colore, spaziatura));
 
     return await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   } finally {
