@@ -14225,14 +14225,18 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
 // FontDiplomi, ma qui il riferimento è una semplice <img>, non un canvas
 // pdf.js: niente conversione punti-PDF, basta naturalWidth dell'immagine
 // blocco di calibrazione per UNA variante (nero o bianco) di una
-// categoria: il nome è sempre centrato tra i 2 limiti sx/dx (trascinabili
-// solo in orizzontale) e trascinabile solo in verticale; il codice
-// progressivo resta libero in X/Y come prima. Il colore mostrato qui è
+// categoria: nome e codice progressivo hanno ciascuno i propri due
+// margini (verdi il nome, arancioni il codice), trascinabili solo in
+// orizzontale, e stanno sempre centrati fra i loro. Il testo si trascina
+// solo in verticale.
+//
+// Quello che si regola qui vale per tutte e due le varianti: il logo nero
+// e quello bianco sono lo stesso disegno in due colori. Il colore mostrato è
 // sempre l'OPPOSTO di quello reale (bianco su nero, nero su bianco): solo
 // per poterlo vedere durante il trascinamento, dato che in stampa il
 // testo è sempre coerente col colore del logo (nero su logo nero, bianco
 // su logo bianco)
-function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggiorna, testoProvaNome, testoProvaNumero, famigliaNome }) {
+function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggiorna, testoProvaNome, testoProvaNumero, famigliaNome, famigliaNumero }) {
   const [naturaleWidth, setNaturaleWidth] = useState(null);
   const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
   const contenitoreRef = React.useRef(null);
@@ -14257,6 +14261,8 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
   const kNumY = `${prefisso}_numero_pos_y`;
   const kSx = `${prefisso}_nome_limite_sx`;
   const kDx = `${prefisso}_nome_limite_dx`;
+  const kNumSx = `${prefisso}_numero_limite_sx`;
+  const kNumDx = `${prefisso}_numero_limite_dx`;
   const kFontNome = `${prefisso}_nome_font_size`;
   const kFontNumero = `${prefisso}_numero_font_size`;
 
@@ -14273,9 +14279,13 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
     const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
     const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
     if (d.chiave === "nome") setConfig((c) => ({ ...c, [kY]: y }));
-    else if (d.chiave === "numero") setConfig((c) => ({ ...c, [kNumX]: x, [kNumY]: y }));
+    // il codice si trascina solo in verticale: da sinistra a destra lo
+    // decidono i suoi due margini, come per il nome
+    else if (d.chiave === "numero") setConfig((c) => ({ ...c, [kNumY]: y }));
     else if (d.chiave === "limiteSx") setConfig((c) => ({ ...c, [kSx]: Math.min(x, c[kDx] - 2) }));
     else if (d.chiave === "limiteDx") setConfig((c) => ({ ...c, [kDx]: Math.max(x, c[kSx] + 2) }));
+    else if (d.chiave === "numLimiteSx") setConfig((c) => ({ ...c, [kNumSx]: Math.min(x, c[kNumDx] - 2) }));
+    else if (d.chiave === "numLimiteDx") setConfig((c) => ({ ...c, [kNumDx]: Math.max(x, c[kNumSx] + 2) }));
   }
   function fineDrag() {
     const d = dragRef.current;
@@ -14283,9 +14293,11 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
     dragRef.current = null;
     setTrascinato(null);
     if (d.chiave === "nome") aggiorna({ [kY]: config[kY] });
-    else if (d.chiave === "numero") aggiorna({ [kNumX]: config[kNumX], [kNumY]: config[kNumY] });
+    else if (d.chiave === "numero") aggiorna({ [kNumY]: config[kNumY] });
     else if (d.chiave === "limiteSx") aggiorna({ [kSx]: config[kSx] });
     else if (d.chiave === "limiteDx") aggiorna({ [kDx]: config[kDx] });
+    else if (d.chiave === "numLimiteSx") aggiorna({ [kNumSx]: config[kNumSx] });
+    else if (d.chiave === "numLimiteDx") aggiorna({ [kNumDx]: config[kNumDx] });
   }
 
   if (!src) return null;
@@ -14295,6 +14307,11 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
   const adattamento = naturaleWidth
     ? adattaNomeLogo(testoProvaNome, config[kFontNome], famigliaNome, Math.max(1, limiteDxPx - limiteSxPx))
     : { fontSize: config[kFontNome], spaziatura: 0 };
+  const numSx = config[kNumSx] ?? 0;
+  const numDx = config[kNumDx] ?? 100;
+  const adattamentoNumero = naturaleWidth
+    ? adattaTestoDentro(testoProvaNumero, config[kFontNumero], famigliaNumero, Math.max(1, (naturaleWidth * (numDx - numSx)) / 100))
+    : { fontSize: config[kFontNumero] };
 
   return (
     <div style={{ marginTop: 18 }}>
@@ -14334,14 +14351,18 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
           onPointerUp={fineDrag}
           onPointerCancel={fineDrag}
           title="Trascina su/giù per la posizione verticale del nome"
+          // Largo esattamente quanto i due margini, non quanto il testo:
+          // con l'imbottitura e il bordo tratteggiato il riquadro sporgeva
+          // di sei pixel per lato, e sembrava che il nome uscisse dai
+          // limiti. Il testo sta al centro e non puo' sbordare.
           style={{
-            position: "absolute", left: `${(config[kSx] + config[kDx]) / 2}%`, top: `${config[kY]}%`,
-            transform: "translate(-50%, -50%)", cursor: "ns-resize", padding: 4,
-            border: "2px dashed #2563EB", borderRadius: 4,
+            position: "absolute", left: `${config[kSx]}%`, width: `${config[kDx] - config[kSx]}%`, top: `${config[kY]}%`,
+            transform: "translateY(-50%)", cursor: "ns-resize", boxSizing: "border-box",
+            border: "2px dashed #2563EB", borderRadius: 4, overflow: "hidden",
             background: trascinato === "nome" ? "#2563EB22" : "transparent", touchAction: "none",
           }}
         >
-          <div style={{ display: "flex", userSelect: "none", pointerEvents: "none" }}>
+          <div style={{ display: "flex", justifyContent: "center", userSelect: "none", pointerEvents: "none" }}>
             {testoProvaNome.split("").map((ch, i) => (
               <span
                 key={i}
@@ -14364,18 +14385,35 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
           onPointerMove={muoviDrag}
           onPointerUp={fineDrag}
           onPointerCancel={fineDrag}
-          title="Trascina per posizionare il codice progressivo"
+          title="Trascina su/giù per la posizione verticale del codice"
           style={{
-            position: "absolute", left: `${config[kNumX]}%`, top: `${config[kNumY]}%`,
-            transform: "translate(-50%, -50%)", cursor: "grab", padding: 4,
-            border: "2px dashed #EA580C", borderRadius: 4,
+            position: "absolute", left: `${numSx}%`, width: `${numDx - numSx}%`, top: `${config[kNumY]}%`,
+            transform: "translateY(-50%)", cursor: "ns-resize", boxSizing: "border-box",
+            border: "2px dashed #EA580C", borderRadius: 4, overflow: "hidden",
+            display: "flex", justifyContent: "center",
             background: trascinato === "numero" ? "#EA580C22" : "transparent", touchAction: "none",
           }}
         >
-          <span style={{ fontSize: config[kFontNumero] * scalaAnteprima, color: coloreAnteprima, whiteSpace: "nowrap", userSelect: "none", pointerEvents: "none" }}>
+          <span style={{ fontFamily: `"${famigliaNumero || "sans-serif"}", sans-serif`, fontSize: adattamentoNumero.fontSize * scalaAnteprima, color: coloreAnteprima, whiteSpace: "nowrap", userSelect: "none", pointerEvents: "none" }}>
             {testoProvaNumero}
           </span>
         </div>
+
+        {/* i due margini del codice, arancioni come il suo riquadro: si
+            trascinano come quelli verdi del nome */}
+        {["numLimiteSx", "numLimiteDx"].map((chiave) => (
+          <div
+            key={chiave}
+            onPointerDown={(e) => iniziaDrag(e, chiave)}
+            onPointerMove={muoviDrag}
+            onPointerUp={fineDrag}
+            onPointerCancel={fineDrag}
+            title={chiave === "numLimiteSx" ? "Margine sinistro del codice" : "Margine destro del codice"}
+            style={{ position: "absolute", left: `${chiave === "numLimiteSx" ? numSx : numDx}%`, top: 0, bottom: 0, width: 16, marginLeft: -8, cursor: "ew-resize", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}
+          >
+            <div style={{ width: 2, height: "100%", background: "#EA580C", opacity: trascinato === chiave ? 1 : 0.5 }} />
+          </div>
+        ))}
       </div>
 
       <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -14390,6 +14428,7 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
         </div>
         <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>
           Il nome viene sempre centrato tra le 2 righe verdi: se è più corto la spaziatura tra le lettere si allarga per riempirle, se è più lungo il font si rimpicciolisce automaticamente finché non ci entra.
+          Il codice progressivo funziona allo stesso modo tra le 2 righe arancioni, ma senza allargare la spaziatura: resta scritto normale e al massimo rimpicciolisce.
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
           <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#EA580C", flexShrink: 0 }} />
@@ -14405,7 +14444,7 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
   );
 }
 
-function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
+function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero }) {
   const [config, setConfig] = useState(categoria);
   const [previewNeroUrl, setPreviewNeroUrl] = useState(null);
   const [previewBiancoUrl, setPreviewBiancoUrl] = useState(null);
@@ -14416,10 +14455,28 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
     if (!modificatoLocalmenteRef.current) setConfig(categoria);
   }, [categoria]);
 
+  // Il logo nero e quello bianco sono lo stesso disegno in due colori:
+  // dove sta il nome sull'uno sta anche sull'altro. Calibrare due volte la
+  // stessa cosa e' lavoro doppio, e basta dimenticarne uno perche' i due
+  // file escano diversi. Quindi ogni misura scritta su una variante si
+  // scrive anche sull'altra.
+  //
+  // Restano separati i due percorsi delle immagini: quelli sono davvero
+  // due file diversi.
+  function anchePerAltraVariante(campi) {
+    const doppi = { ...campi };
+    Object.entries(campi).forEach(([chiave, valore]) => {
+      if (chiave.startsWith("nero_")) doppi[`bianco_${chiave.slice(5)}`] = valore;
+      else if (chiave.startsWith("bianco_")) doppi[`nero_${chiave.slice(7)}`] = valore;
+    });
+    return doppi;
+  }
+
   async function aggiorna(campi) {
     modificatoLocalmenteRef.current = true;
-    setConfig((c) => ({ ...c, ...campi }));
-    const { error } = await supabase.from("loghi_categorie").update(campi).eq("chiave", categoria.chiave);
+    const tutti = anchePerAltraVariante(campi);
+    setConfig((c) => ({ ...c, ...tutti }));
+    const { error } = await supabase.from("loghi_categorie").update(tutti).eq("chiave", categoria.chiave);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["loghi_categorie"]);
   }
@@ -14478,6 +14535,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
         testoProvaNome={testoProvaNome}
         testoProvaNumero={testoProvaNumero}
         famigliaNome={famigliaNome}
+        famigliaNumero={famigliaNumero}
       />
       {config.richiede_bianco && (
         <BloccoCalibrazioneLogo
@@ -14490,6 +14548,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
           testoProvaNome={testoProvaNome}
           testoProvaNumero={testoProvaNumero}
           famigliaNome={famigliaNome}
+          famigliaNumero={famigliaNumero}
         />
       )}
 
@@ -14506,6 +14565,7 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
   const [numeroPartenza, setNumeroPartenza] = useState(String((loghiImpostazioni || CONFIG_LOGHI_DEFAULT).prossimo_numero));
   const [msg, setMsg] = useState("");
   const [famigliaNomeAnteprima, setFamigliaNomeAnteprima] = useState(null);
+  const [famigliaNumeroAnteprima, setFamigliaNumeroAnteprima] = useState(null);
   const modificatoLocalmenteRef = React.useRef(false);
 
   useEffect(() => {
@@ -14535,6 +14595,25 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
     }
     carica();
   }, [config.font_nome_path]);
+
+  // stessa cosa per il font del codice: adesso anche lui rimpicciolisce
+  // per stare nei suoi margini, e senza il font vero l'anteprima
+  // mostrerebbe un adattamento diverso da quello della stampa
+  useEffect(() => {
+    async function carica() {
+      if (!config.font_numero_path) { setFamigliaNumeroAnteprima(null); return; }
+      try {
+        const { data } = supabase.storage.from("loghi-fonts").getPublicUrl(config.font_numero_path);
+        const f = new FontFace("loghiFontNumeroSetting", `url(${data.publicUrl})`);
+        await f.load();
+        document.fonts.add(f);
+        setFamigliaNumeroAnteprima("loghiFontNumeroSetting");
+      } catch {
+        setFamigliaNumeroAnteprima(null);
+      }
+    }
+    carica();
+  }, [config.font_numero_path]);
 
   async function aggiorna(campi) {
     modificatoLocalmenteRef.current = true;
@@ -14609,7 +14688,7 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
         .map((c) => loghiCategorie.find((lc) => lc.chiave === c.chiave))
         .filter(Boolean)
         .map((cat) => (
-          <CategoriaLogo key={cat.chiave} categoria={cat} ricarica={ricarica} famigliaNome={famigliaNomeAnteprima} />
+          <CategoriaLogo key={cat.chiave} categoria={cat} ricarica={ricarica} famigliaNome={famigliaNomeAnteprima} famigliaNumero={famigliaNumeroAnteprima} />
         ))}
     </div>
   );
@@ -14629,6 +14708,22 @@ function ottieniCtxMisuraLoghi() {
 // spazio disponibile, si allarga la spaziatura tra le lettere fino a
 // riempirlo; se è più LARGO, si rimpicciolisce il font finché non
 // rientra (senza spaziatura extra)
+// Come adattaNomeLogo, ma senza distribuire la spaziatura: il codice
+// progressivo non si "giustifica" fra i margini — resta scritto normale e
+// al massimo rimpicciolisce quanto basta a starci.
+function adattaTestoDentro(testo, fontSizeBase, famiglia, spazioDisponibilePx) {
+  if (!testo) return { fontSize: fontSizeBase };
+  const ctx = ottieniCtxMisuraLoghi();
+  const famigliaSicura = famiglia || "sans-serif";
+  let fontSize = fontSizeBase;
+  function larghezza(dim) {
+    ctx.font = `${dim}px "${famigliaSicura}", sans-serif`;
+    return ctx.measureText(testo).width;
+  }
+  while (fontSize > 6 && larghezza(fontSize) > spazioDisponibilePx) fontSize -= 0.5;
+  return { fontSize };
+}
+
 function adattaNomeLogo(testo, fontSizeBase, famiglia, spazioDisponibilePx) {
   if (!testo) return { fontSize: fontSizeBase, spaziatura: 0, larghezze: [] };
   const ctx = ottieniCtxMisuraLoghi();
@@ -14700,11 +14795,18 @@ async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, 
     const colore = variante === "nero" ? "#000000" : "#ffffff";
     const pfx = variante;
 
+    // Il codice sta dentro i suoi due margini, come il nome: si centra fra
+    // loro e rimpicciolisce se non ci sta. Prima aveva solo un punto, e una
+    // sigla lunga usciva dal disegno senza che ci fosse modo di contenerla.
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `${categoria[`${pfx}_numero_font_size`]}px ${famigliaNumero}, sans-serif`;
+    const numSxPx = (canvas.width * (categoria[`${pfx}_numero_limite_sx`] ?? 0)) / 100;
+    const numDxPx = (canvas.width * (categoria[`${pfx}_numero_limite_dx`] ?? 100)) / 100;
+    const spazioNumero = Math.max(1, numDxPx - numSxPx);
+    const numAdatt = adattaTestoDentro(codiceTesto, categoria[`${pfx}_numero_font_size`], famigliaNumero, spazioNumero);
+    ctx.font = `${numAdatt.fontSize}px "${famigliaNumero}", sans-serif`;
     ctx.fillStyle = colore;
-    ctx.fillText(codiceTesto, (canvas.width * categoria[`${pfx}_numero_pos_x`]) / 100, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100);
+    ctx.fillText(codiceTesto, (numSxPx + numDxPx) / 2, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100);
 
     const limiteSxPx = (canvas.width * categoria[`${pfx}_nome_limite_sx`]) / 100;
     const limiteDxPx = (canvas.width * categoria[`${pfx}_nome_limite_dx`]) / 100;
