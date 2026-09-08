@@ -7469,10 +7469,14 @@ function RiepilogoModelleAllievo({ iscritto, colore, tinta, bordo }) {
   );
 
   return (
-    // tutto su una riga sola, anche da telefono: sono tre voci corte e
-    // messe in colonna occuperebbero mezza schermata per allievo. Se lo
-    // schermo e' davvero stretto scorre di lato invece di andare a capo
-    <div style={{ flexBasis: "100%", display: "flex", gap: 8, marginTop: 8, overflowX: "auto", paddingBottom: 2 }}>
+    // La scritta a sinistra e uno spazio vuoto uguale a destra: i tre
+    // gruppi restano centrati rispetto alla scheda, non spinti di lato
+    // dall'etichetta. Tutto su una riga sola anche da telefono — sono tre
+    // voci corte, e in colonna prenderebbero mezza schermata per allievo;
+    // se lo schermo e' davvero stretto scorre di lato invece di andare a capo
+    <div style={{ flexBasis: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+      <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, width: 54, flexShrink: 0 }}>Modelle</span>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "center", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
       {posti.map((m) => (
         <div key={m.indice} title={m.tipo || "trattamento non scelto"} style={{
           display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0,
@@ -7485,6 +7489,8 @@ function RiepilogoModelleAllievo({ iscritto, colore, tinta, bordo }) {
           </div>
         </div>
       ))}
+      </div>
+      <span style={{ width: 54, flexShrink: 0 }} />
     </div>
   );
 }
