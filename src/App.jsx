@@ -24846,30 +24846,11 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
           l'indice le tiene sotto gli occhi insieme. Solo da desktop: su un
           telefono due colonne sarebbero due colonne strette. */}
       <div style={{ display: "grid", gridTemplateColumns: indiceVisibile ? "230px minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 18, alignItems: "start" }}>
-        {indiceVisibile && (
-          <div style={{ ...cardStyle, position: "sticky", top: 16, padding: "14px 14px", maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
-            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
-              {elenco.length} {elenco.length === 1 ? "progetto" : "progetti"}
-            </div>
-            {elenco.map((p) => {
-              const st = statoProgetto(p.stato);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => document.getElementById(`progetto-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  title={`${p.nome} — ${st.etichetta}`}
-                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", background: "transparent", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, padding: "8px 0", cursor: "pointer" }}
-                >
-                  <span style={{ ...fontBody, fontSize: 12, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</span>
-                  <span style={{ width: 38, height: 15, borderRadius: 4, background: st.sfondo, border: `1px solid ${st.colore}`, flexShrink: 0 }} />
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* La prima riga della griglia e' solo per i filtri: a sinistra
+            resta vuota, cosi' l'indice comincia in linea con la prima
+            scheda e non con i tasti in cima alla pagina. */}
+        {indiceVisibile && <div />}
         <div style={{ minWidth: 0 }}>
-
         {!storico && (
           // cinque quadrati in fila, uguali: due per riga facevano tre
           // righe di riquadri larghi e bassi prima di arrivare ai progetti
@@ -24949,6 +24930,30 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
         )}
 
         {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+        </div>
+        {indiceVisibile && (
+          <div style={{ ...cardStyle, position: "sticky", top: 16, padding: "14px 14px", maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              {elenco.length} {elenco.length === 1 ? "progetto" : "progetti"}
+            </div>
+            {elenco.map((p) => {
+              const st = statoProgetto(p.stato);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => document.getElementById(`progetto-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  title={`${p.nome} — ${st.etichetta}`}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", background: "transparent", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, padding: "8px 0", cursor: "pointer" }}
+                >
+                  <span style={{ ...fontBody, fontSize: 12, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</span>
+                  <span style={{ width: 38, height: 15, borderRadius: 4, background: st.sfondo, border: `1px solid ${st.colore}`, flexShrink: 0 }} />
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ minWidth: 0 }}>
 
         {progetti == null ? (
           <div style={{ ...cardStyle, ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
