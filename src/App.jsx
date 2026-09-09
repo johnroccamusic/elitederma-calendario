@@ -7266,6 +7266,16 @@ function PaginaDashboardVenditori({
               })}
             </div>
 
+            {/* il titolo della scheda aperta, come per "Iscrivi allievo":
+                quello lo scrive la sezione dei corsi per conto suo, gli
+                altri due non l'avevano e si entrava in una pagina senza
+                nome */}
+            {tabDashboardVenditore !== "corsi" && (
+              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 14, textAlign: "center", textTransform: "uppercase" }}>
+                {tabDashboardVenditore === "performance" ? "Performance di vendita" : "Le tue iscrizioni"}
+              </div>
+            )}
+
             {tabDashboardVenditore === "performance" && (
             <>
             {targetAttiviVenditore.length > 0 && (
