@@ -25251,7 +25251,12 @@ function VistaMaster({ param }) {
 // pagina pubblica di sola lettura per chi cerca modelle per una classe:
 // solo i trattamenti richiesti, senza nessun dato personale o di pagamento
 // (stessa logica di slug di VistaMaster, ma parametro "?modelle=")
-function VistaRicercaModelle({ param, mostraClasse }) {
+// `param` e' lo slug del link pubblico (corso/citta/gg-mm-aaaa). Da dentro
+// l'app pero' l'edizione la si conosce gia': si passa `corsoDataId` e si
+// salta il giro dello slug, che e' fragile — due edizioni dello stesso
+// corso nella stessa citta' che cominciano lo stesso giorno rendono la
+// ricerca ambigua, e la pagina rispondeva "corso non trovato" pur essendoci.
+function VistaRicercaModelle({ param, mostraClasse, corsoDataId }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
   // chi puo' firmare il reperimento: qui le anagrafiche non ci sono, si
@@ -25263,6 +25268,23 @@ function VistaRicercaModelle({ param, mostraClasse }) {
 
   useEffect(() => {
     async function carica() {
+      // dall'app: l'edizione arriva gia' identificata, niente slug da
+      // riconoscere
+      if (corsoDataId) {
+        const [{ data: cd }, { data: corsi }, { data: location }, { data: master }] = await Promise.all([
+          supabase.from("corsi_date").select("*").eq("id", corsoDataId).maybeSingle(),
+          supabase.from("corsi").select("*"),
+          supabase.from("location").select("*"),
+          supabase.from("master").select("*"),
+        ]);
+        if (!cd) { setErrore(true); return; }
+        const corso = (corsi || []).find((c) => c.id === cd.corso_id) || null;
+        const loc = (location || []).find((l) => l.id === cd.location_id) || null;
+        const { data: iscritti } = await supabase.from("iscritti").select("*").eq("corso_data_id", cd.id).order("ts");
+        const masterNome = cd.master_id ? (master || []).find((m) => m.id === cd.master_id)?.nome : null;
+        setDati({ cd, corso, loc, masterNome, iscritti: iscritti || [] });
+        return;
+      }
       const parti = decodeURIComponent(param || "").split("/");
       const [slugCorso, slugCitta, dataLeggibile] = parti;
       const match = (dataLeggibile || "").match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
@@ -25292,7 +25314,7 @@ function VistaRicercaModelle({ param, mostraClasse }) {
       setDati({ cd, corso, loc, masterNome, iscritti: iscritti || [] });
     }
     carica();
-  }, [param]);
+  }, [param, corsoDataId]);
 
   if (errore) {
     return (
@@ -55357,8 +55379,6 @@ export default function App() {
           // scheda modelle dell'ufficio in sola lettura — che pero' e' la
           // pagina con cui si assegnano i posti, e non e' quello che la
           // master cerca aprendo la sua classe: lei vuole sapere chi c'e'.
-          const [aaaa, mm, gg] = cd.data_inizio.split("-");
-          const paramModelleClasse = [slugify(corso?.nome), slugify(loc?.nome), `${gg}-${mm}-${aaaa}`].filter(Boolean).join("/");
           return (
             <div>
               <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 0" }}>
@@ -55367,7 +55387,7 @@ export default function App() {
                   <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla classe</span>
                 </button>
               </div>
-              <VistaRicercaModelle param={paramModelleClasse} mostraClasse={false} />
+              <VistaRicercaModelle corsoDataId={cd.id} mostraClasse={false} />
             </div>
           );
         }
