@@ -8416,7 +8416,10 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
     if (data) setChiusura(data);
   }
 
-  const titoloBlocco = { ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 };
+  // il doppio del corpo e un oro scuro invece di quello chiaro: sono i
+  // passi della chiusura, e in undici punti color sabbia si leggevano come
+  // una didascalia del testo che sta sotto invece che come i titoli
+  const titoloBlocco = { ...fontBody, fontSize: 22, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, lineHeight: 1.15 };
   const sottotitoloBlocco = { ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.45 };
   const rigaBase = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` };
   const confermata = chiusura?.stato && chiusura.stato !== "aperta";
