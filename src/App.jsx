@@ -36786,7 +36786,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 online, riservati dalla soglia) erano numeri da guardare,
                 non cose da fare, e "Da gestire oggi" e' un elenco di cose
                 da fare */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 8 : 10, alignItems: "stretch" }}>
+            {/* quattro su una riga sola anche da telefono: erano due per
+                due, e il secondo paio finiva sotto la piega. Con un quarto
+                di schermo a testa il contenuto si incolonna — icona,
+                etichetta, numero — invece di stare in riga */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: isMobile ? 5 : 10, alignItems: "stretch" }}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
                 { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", valore: fermi.length, unita: "prodotti", filtro: true },
@@ -36817,22 +36821,27 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 const scelto = c.filtro && filtroRapido === c.chiave;
                 const corpo = (
                   <>
-                    <span style={{ display: "flex", alignItems: isMobile ? "center" : "flex-start", gap: 8, minHeight: isMobile ? 30 : 34 }}>
-                      {/* da telefono l'icona sta in un tondo del suo colore
-                          appena accennato: nuda accanto a un'etichetta su due
-                          righe si perdeva */}
+                    <span style={{
+                      display: "flex", alignItems: "center", gap: isMobile ? 4 : 8,
+                      flexDirection: isMobile ? "column" : "row",
+                      minHeight: isMobile ? 56 : 34,
+                    }}>
+                      {/* l'icona in un tondo del suo colore appena accennato:
+                          nuda, accanto a un'etichetta su piu' righe, si
+                          perdeva */}
                       <span style={{
                         display: "inline-flex", flexShrink: 0, color: c.tinta, marginTop: isMobile ? 0 : 1,
-                        ...(isMobile ? { width: 28, height: 28, borderRadius: "50%", background: `${c.tinta}1F`, alignItems: "center", justifyContent: "center" } : {}),
-                      }}><c.Icona size={isMobile ? 15 : 18} color={c.tinta} /></span>
+                        ...(isMobile ? { width: 24, height: 24, borderRadius: "50%", background: `${c.tinta}1F`, alignItems: "center", justifyContent: "center" } : {}),
+                      }}><c.Icona size={isMobile ? 13 : 18} color={c.tinta} /></span>
                       <span style={{
-                        ...fontBody, fontSize: isMobile ? 10 : (c.maiuscolo ? 10.5 : 12.5), fontWeight: 700, color: NAVY, lineHeight: 1.25,
+                        ...fontBody, fontSize: isMobile ? 8.5 : (c.maiuscolo ? 10.5 : 12.5), fontWeight: 700, color: NAVY, lineHeight: 1.2,
+                        ...(isMobile ? { textAlign: "center" } : {}),
                         ...(c.maiuscolo ? { textTransform: "uppercase", letterSpacing: 0.6 } : {}),
                       }}>{c.etichetta}</span>
                     </span>
-                    <span style={{ display: "block", marginTop: isMobile ? 6 : 10 }}>
-                      <span style={{ ...fontDisplay, fontSize: isMobile ? 22 : 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{c.valore.toLocaleString("it-IT")}</span>
-                      <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, color: MUTED }}>{c.unita}</span>
+                    <span style={{ display: "block", marginTop: isMobile ? 4 : 10, textAlign: isMobile ? "center" : "left" }}>
+                      <span style={{ ...fontDisplay, fontSize: isMobile ? 19 : 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{c.valore.toLocaleString("it-IT")}</span>
+                      <span style={{ ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, display: "block", lineHeight: 1.2 }}>{c.unita}</span>
                     </span>
                     {/* la nota si appoggia in fondo: cosi' una tessera con
                         due righe di spiegazione resta alta come le altre */}
@@ -36846,21 +36855,23 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 // direbbe piu' niente
                 const accento = isMobile && ((c.chiave === "sottoscorta" && c.valore > 0) || c.tinta === "#C0392B");
                 const stile = {
-                  display: "flex", flexDirection: "column", padding: isMobile ? "10px 12px" : "16px 18px", borderRadius: 16,
+                  display: "flex", flexDirection: "column", padding: isMobile ? "9px 6px" : "16px 18px", borderRadius: isMobile ? 13 : 16,
                   border: `1px solid ${c.bordo || (scelto ? GOLD : CREAM_BORDER)}`, background: c.sfondo || (scelto ? BG : "#fff"),
                   ...(accento ? { borderLeft: "3px solid #C0392B" } : {}),
-                  textAlign: "left", minHeight: isMobile ? 96 : 132, position: "relative",
+                  textAlign: "left", minHeight: isMobile ? 104 : 132, position: "relative",
                 };
                 if (!c.filtro && !c.azione) return <div key={c.chiave} style={stile}>{corpo}</div>;
                 return (
                   <button key={c.chiave} onClick={c.azione || (() => setFiltroRapido(c.chiave))} style={{ ...stile, cursor: "pointer" }}>
                     {corpo}
-                    <span style={{
-                      position: "absolute", right: isMobile ? 10 : 14, bottom: isMobile ? 10 : 14, display: "inline-flex",
-                      ...(isMobile ? { width: 22, height: 22, borderRadius: "50%", background: "#F1F2F4", alignItems: "center", justifyContent: "center" } : {}),
-                    }}>
-                      <IconaChevronDestra size={isMobile ? 13 : 16} color={MUTED} />
-                    </span>
+                    {/* la freccetta da telefono non c'e': in un quarto di
+                        schermo si sarebbe mangiata il numero, e la tessera
+                        e' tutta un tasto */}
+                    {!isMobile && (
+                      <span style={{ position: "absolute", right: 14, bottom: 14, display: "inline-flex" }}>
+                        <IconaChevronDestra size={16} color={MUTED} />
+                      </span>
+                    )}
                   </button>
                 );
               })}
