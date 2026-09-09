@@ -55351,57 +55351,23 @@ export default function App() {
         const loc = cd ? location.find((l) => l.id === cd.location_id) : null;
         if (!cd || !corso || !loc) return <div style={{ maxWidth: 640, margin: "0 auto", padding: "20px", ...fontBody, color: MUTED }}>Classe non trovata.</div>;
         if (classeMasterModelle) {
+          // La stessa pagina del link che si manda alle master, aperta da
+          // dentro l'app: l'elenco delle modelle allievo per allievo, con
+          // mattina o pomeriggio e il nome di chi viene. Qui c'era la
+          // scheda modelle dell'ufficio in sola lettura — che pero' e' la
+          // pagina con cui si assegnano i posti, e non e' quello che la
+          // master cerca aprendo la sua classe: lei vuole sapere chi c'e'.
+          const [aaaa, mm, gg] = cd.data_inizio.split("-");
+          const paramModelleClasse = [slugify(corso?.nome), slugify(loc?.nome), `${gg}-${mm}-${aaaa}`].filter(Boolean).join("/");
           return (
             <div>
               <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 0" }}>
-                <button onClick={() => { scrollAppInCima(); setClasseMasterModelle(false); }} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4 }}>
+                <button onClick={() => { scrollAppInCima(); setClasseMasterModelle(false); }} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: "8px 0" }}>
                   <IconaFrecciaSinistra size={20} />
                   <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla classe</span>
                 </button>
               </div>
-              {/* La stessa schermata delle modelle che si usa in ufficio,
-                  ma da guardare: la master vede chi c'e' per ogni giorno e
-                  chiama, non riassegna i posti. Prima qui c'era la vista
-                  del link pubblico, che e' un'altra pagina — per giorno
-                  contro per allievo — e non era quella che ci si aspetta
-                  di ritrovare aprendo la classe. */}
-              <SchedaData
-                modelleSolaLettura
-                sottoVistaIniziale={{ vista: "modelle" }}
-                puoAssegnareModelle
-                ruoloUtente={ruoloUtente}
-                codiceAmministratoreAttuale={null}
-                corsoData={cd}
-                corsi={corsi}
-                location={location}
-                corsiDate={corsiDate}
-                iscritti={iscritti}
-                master={master}
-                utentiApp={utentiApp}
-                masterCorsi={masterCorsi}
-                corsiDateDocenti={corsiDateDocenti}
-                quoteVenditoriSplit={quoteVenditoriSplit}
-                assistente={assistente}
-                assistenteCorsi={assistenteCorsi}
-                leva={leva}
-                hotel={hotel}
-                layoutIscrizioni={layoutIscrizioni}
-                fontDiplomi={fontDiplomi}
-                segnaposti={segnaposti}
-                costiCategorie={costiCategorie}
-                costiSottocategorie={costiSottocategorie}
-                spese={spese}
-                corsiGiorni={corsiGiorni}
-                tipiModella={tipiModella}
-                corsiTipiModella={corsiTipiModella}
-                venditori={venditori}
-                kitDefinizioni={kitDefinizioni}
-                prodottiShop={prodottiShop}
-                venditeShop={venditeShop}
-                accontiDaVerificare={accontiDaVerificare}
-                ricarica={fetchDati}
-                onBack={() => { scrollAppInCima(); setClasseMasterModelle(false); }}
-              />
+              <VistaRicercaModelle param={paramModelleClasse} mostraClasse={false} />
             </div>
           );
         }
