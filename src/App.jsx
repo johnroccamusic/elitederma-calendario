@@ -36727,7 +36727,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             <TastoLivelloPrecedente titolo={vistaPrimaDellaScheda ? "Gestione magazzino" : (titoloIndietro || "Gestione magazzino e shop")} onClick={tornaIndietro} />
             <div style={{ ...stileTitoloPagina, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{titolo}</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {/* da telefono questi due scendono accanto a "Da gestire oggi":
+              in testata, sotto un titolo maiuscolo, facevano tre file di
+              roba prima del primo dato */}
+          <div style={{ display: isMobile && vistaProdotti === "elenco" ? "none" : "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button
               onClick={() => mostraVista("categorie")}
               style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "11px 18px", cursor: "pointer" }}
@@ -36749,9 +36752,30 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             sguardo alla pagina, devono stare in cima */}
         {vistaProdotti === "elenco" && (
           <div style={{ marginBottom: 22 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Da gestire oggi</div>
-              {totSegnalazioni > 0 && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 10, padding: "2px 9px" }}>{totSegnalazioni}</span>}
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <div>
+                  {isMobile && <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 2, marginBottom: 2 }}>Prodotti</div>}
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Da gestire oggi</div>
+                </div>
+                {totSegnalazioni > 0 && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 10, padding: "2px 9px" }}>{totSegnalazioni}</span>}
+              </div>
+              {isMobile && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => mostraVista("categorie")}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "8px 12px", cursor: "pointer" }}
+                  >
+                    <IconaGriglia size={14} color={NAVY} /> Categorie
+                  </button>
+                  <button
+                    onClick={() => apriSchedaProdotto({ nuovo: true })}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "8px 12px", cursor: "pointer" }}
+                  >
+                    + Nuovo prodotto
+                  </button>
+                </div>
+              )}
             </div>
             {/* Tre tessere con la stessa impalcatura: intestazione alta
                 due righe (anche quando il titolo ne occupa una sola), poi
@@ -36793,8 +36817,14 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 const scelto = c.filtro && filtroRapido === c.chiave;
                 const corpo = (
                   <>
-                    <span style={{ display: "flex", alignItems: "flex-start", gap: 8, minHeight: isMobile ? 30 : 34 }}>
-                      <span style={{ display: "inline-flex", flexShrink: 0, color: c.tinta, marginTop: 1 }}><c.Icona size={isMobile ? 15 : 18} color={c.tinta} /></span>
+                    <span style={{ display: "flex", alignItems: isMobile ? "center" : "flex-start", gap: 8, minHeight: isMobile ? 30 : 34 }}>
+                      {/* da telefono l'icona sta in un tondo del suo colore
+                          appena accennato: nuda accanto a un'etichetta su due
+                          righe si perdeva */}
+                      <span style={{
+                        display: "inline-flex", flexShrink: 0, color: c.tinta, marginTop: isMobile ? 0 : 1,
+                        ...(isMobile ? { width: 28, height: 28, borderRadius: "50%", background: `${c.tinta}1F`, alignItems: "center", justifyContent: "center" } : {}),
+                      }}><c.Icona size={isMobile ? 15 : 18} color={c.tinta} /></span>
                       <span style={{
                         ...fontBody, fontSize: isMobile ? 10 : (c.maiuscolo ? 10.5 : 12.5), fontWeight: 700, color: NAVY, lineHeight: 1.25,
                         ...(c.maiuscolo ? { textTransform: "uppercase", letterSpacing: 0.6 } : {}),
@@ -36811,16 +36841,24 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                     )}
                   </>
                 );
+                // il filo rosso a sinistra solo dove c'e' davvero qualcosa
+                // che non puo' aspettare: se lo portassero tutte non
+                // direbbe piu' niente
+                const accento = isMobile && ((c.chiave === "sottoscorta" && c.valore > 0) || c.tinta === "#C0392B");
                 const stile = {
                   display: "flex", flexDirection: "column", padding: isMobile ? "10px 12px" : "16px 18px", borderRadius: 16,
                   border: `1px solid ${c.bordo || (scelto ? GOLD : CREAM_BORDER)}`, background: c.sfondo || (scelto ? BG : "#fff"),
+                  ...(accento ? { borderLeft: "3px solid #C0392B" } : {}),
                   textAlign: "left", minHeight: isMobile ? 96 : 132, position: "relative",
                 };
                 if (!c.filtro && !c.azione) return <div key={c.chiave} style={stile}>{corpo}</div>;
                 return (
                   <button key={c.chiave} onClick={c.azione || (() => setFiltroRapido(c.chiave))} style={{ ...stile, cursor: "pointer" }}>
                     {corpo}
-                    <span style={{ position: "absolute", right: isMobile ? 10 : 14, bottom: isMobile ? 10 : 14, display: "inline-flex" }}>
+                    <span style={{
+                      position: "absolute", right: isMobile ? 10 : 14, bottom: isMobile ? 10 : 14, display: "inline-flex",
+                      ...(isMobile ? { width: 22, height: 22, borderRadius: "50%", background: "#F1F2F4", alignItems: "center", justifyContent: "center" } : {}),
+                    }}>
                       <IconaChevronDestra size={isMobile ? 13 : 16} color={MUTED} />
                     </span>
                   </button>
