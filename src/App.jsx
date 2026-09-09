@@ -6549,8 +6549,11 @@ function SezioneDateCorsi({
               l'elenco come Elenco/Calendario, e' una cosa che si porta
               fuori dall'app. Fra quelle due pastiglie sembrava una terza
               vista. Il calendario intero pero' non si stampa: il tasto
-              pretende prima il filtro citta' o corso. */}
-          {!nascondiTitolo && (
+              pretende prima il filtro citta' o corso.
+              C'e' ovunque compaia questa sezione — Dashboard venditori,
+              Gestione corsi, Gestione modelle — ma solo in vista elenco:
+              e' l'elenco che finisce sul foglio, non il calendario. */}
+          {vistaDateModo === "elenco" && (
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
               <button
                 onClick={apriDatePerCliente}
