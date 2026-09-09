@@ -36467,6 +36467,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     ricarica(["prodotti_shop", "prodotti_categorie", "bundle_componenti"]);
   }
 
+  // Non c'e' piu' un tasto che la chiami: "Importa catalogo dal sito"
+  // serviva quando i prodotti nascevano su WooCommerce, e ormai nascono
+  // qui. Resta scritta perche' il giorno che servisse di nuovo basta
+  // rimettere il tasto, non riscrivere la procedura.
   async function sincronizzaCatalogo() {
     // da quando la fonte di verità è l'app, importare dal sito serve solo
     // in un caso: recuperare un prodotto creato direttamente su
@@ -36711,16 +36715,17 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         {/* il tasto dice sempre dove porta: tornando da una scheda aperta
             da un avviso porta all'elenco, non fuori dalla pagina */}
-        {/* La testata: a sinistra dove sono, a destra le tre azioni. Prima
-            titolo e tasti stavano sulla stessa riga e si spingevano a
-            vicenda; qui i comandi hanno una riga loro, sopra, e il titolo
-            resta grande e da solo */}
+        {/* La testata: a sinistra dove sono e come si chiama la pagina, a
+            destra le tre azioni */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <span style={{ width: 44, height: 44, borderRadius: "50%", border: `1px solid ${GOLD}`, background: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <IconaScatolaErp size={20} color={GOLD} />
-            </span>
+          {/* un tondo solo, quello che porta indietro, e accanto il titolo
+              come in ogni altra pagina. Ce n'erano due: il secondo, con la
+              scatola in oro, non andava da nessuna parte — era un fregio, e
+              in cima a una pagina due cerchi affiancati si leggono come due
+              vie d'uscita */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
             <TastoLivelloPrecedente titolo={vistaPrimaDellaScheda ? "Gestione magazzino" : (titoloIndietro || "Gestione magazzino e shop")} onClick={tornaIndietro} />
+            <div style={{ ...stileTitoloPagina, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{titolo}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button
@@ -36741,33 +36746,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             >
               + Nuovo prodotto
             </button>
-          </div>
-        </div>
-
-        {/* titolo a sinistra, importazione dal sito a destra: due cose che
-            non c'entrano l'una con l'altra, e mescolate si leggevano male */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap", marginBottom: 22 }}>
-          <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 26 : 36, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{titolo}</div>
-            <div style={{ ...fontBody, fontSize: 14, color: MUTED, lineHeight: 1.6, maxWidth: 520 }}>
-              {vistaProdotti === "elenco"
-                ? "Magazzino fisico e shop online insieme. Clicca sul nome per aprire la scheda del prodotto, sullo stock totale per aggiornare il magazzino."
-                : "Gli stessi prodotti ordinati per categoria dello shop. Clicca un prodotto per aprirne la scheda completa."}
-            </div>
-          </div>
-          <div style={{ flex: "0 1 340px", textAlign: "right" }}>
-            <button
-              onClick={sincronizzaCatalogo}
-              disabled={sincronizzando}
-              style={{ display: "inline-flex", alignItems: "center", gap: 10, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "11px 18px", cursor: sincronizzando ? "default" : "pointer", opacity: sincronizzando ? 0.6 : 1 }}
-            >
-              {sincronizzando ? "Importo dal sito…" : "Importa catalogo dal sito"}
-              <IconaScaricaGiu size={15} color={MUTED} />
-            </button>
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
-              Da usare solo se hai creato un prodotto direttamente su WooCommerce: riporta indietro nomi, categorie e immagini dal sito. Stock e prezzi non si toccano — li decide l'app.
-            </div>
-            {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
           </div>
         </div>
 
