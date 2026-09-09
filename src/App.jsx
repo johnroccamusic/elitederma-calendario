@@ -37022,12 +37022,17 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </button>
             )}
           </div>
-          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
+          {/* da telefono la barra e' larga quanto l'elenco che filtra e i
+              cinque si dividono lo spazio: sporgeva oltre la tabella, e una
+              barra piu' larga di cio' che governa sembra appartenere a
+              un'altra pagina. Gli angoli si stringono per la stessa
+              ragione — accanto a una tabella squadrata, ovali */}
+          <div style={{ display: "flex", background: BG, borderRadius: isMobile ? 12 : 20, padding: 4, gap: 2, flexWrap: "wrap", width: isMobile ? "100%" : undefined, boxSizing: "border-box" }}>
             {/* questi filtri leggono lo stato del magazzino, cosa che solo
                 la tabella sa mostrare: sceglierne uno riporta all'elenco
                 invece di restare un tasto che non fa niente */}
             {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
-              <button key={f.v} onClick={() => { setFiltroRapido(f.v); cambiaVistaAMano("elenco"); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
+              <button key={f.v} onClick={() => { setFiltroRapido(f.v); cambiaVistaAMano("elenco"); }} style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 600, padding: isMobile ? "7px 4px" : "7px 13px", borderRadius: isMobile ? 9 : 16, border: "none", flex: isMobile ? "1 1 0" : undefined, minWidth: 0, whiteSpace: "nowrap", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
                 {f.l}
               </button>
             ))}
