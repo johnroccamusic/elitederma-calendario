@@ -48844,7 +48844,19 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         if (r.prodotto && r.prodotto.conta_magazzino !== false) righeKit.push(r);
       });
     });
-    const pianiKit = preparaScarichi(righeKit, {
+    // Le giacenze e le soglie si rileggono adesso, non si prendono da
+    // quelle in memoria: su quei numeri si decide se un corso si puo'
+    // allestire, e la pagina puo' averli in pancia da mezz'ora. Il 9
+    // settembre 2026 una soglia di riordino abbassata da un'altra
+    // schermata non era arrivata qui, e il corso restava bloccato da un
+    // numero che nel database non esisteva piu'.
+    const idsCoinvolti = [...new Set(righeKit.map((r) => r.prodotto?.id).filter(Boolean))];
+    const { data: prodottiFreschi } = idsCoinvolti.length
+      ? await supabase.from("prodotti_shop").select("*").in("id", idsCoinvolti)
+      : { data: [] };
+    const freschiPerId = Object.fromEntries((prodottiFreschi || []).map((p) => [p.id, p]));
+    const righeKitAggiornate = righeKit.map((r) => ({ ...r, prodotto: freschiPerId[r.prodotto?.id] || r.prodotto }));
+    const pianiKit = preparaScarichi(righeKitAggiornate, {
       // qui la scorta minima NON si supera nemmeno con una conferma: la
       // riserva dello shop online è il limite oltre il quale il corso non
       // si può allestire, e va detto subito con nome e data
