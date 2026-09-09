@@ -17368,6 +17368,13 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
 
 function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40 }) {
   const overlayRef = React.useRef(null);
+  const isMobile = useIsMobile();
+  // In fondo allo schermo di un telefono non c'e' solo il vetro: c'e' la
+  // barra home, e in certe configurazioni il dock del browser. Una
+  // finestra che arriva a filo del bordo ci finisce sotto i suoi tasti —
+  // "Copia immagine" e "Scarica" della stampa calendario sparivano dietro
+  // il dock. Si tiene sempre dello spazio in fondo, oltre alla safe area.
+  const paddingBasso = isMobile ? "calc(env(safe-area-inset-bottom, 0px) + 96px)" : `${paddingTop}px`;
 
   useEffect(() => {
     const overlay = overlayRef.current;
@@ -17406,7 +17413,7 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40 }) {
   return (
     <div
       ref={overlayRef}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: `${paddingTop}px 20px`, overflowY: "auto", zIndex: 1000 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: `${paddingTop}px 20px ${paddingBasso}`, overflowY: "auto", zIndex: 1000 }}
       onClick={onClose}
     >
       {/* "margin: auto" invece dell'allineamento in alto: una finestra
