@@ -48375,9 +48375,6 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
     // altre consulenze dove stavano
     onSalvaCampi({ consulenze_edizione: [...altre, ...aggiornate] });
   }
-  function rimuoviConsulenza(id) {
-    onSalvaCampi({ consulenze_edizione: consulenzeEdizione.filter((r) => r.id !== id) });
-  }
   function aggiornaLivelloConsulenza(id, livello) {
     onSalvaCampi({ consulenze_edizione: consulenzeEdizione.map((r) => (r.id === id ? { ...r, livello } : r)) });
   }
@@ -48520,41 +48517,30 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 
       <div style={labelStyle}>Consulenze</div>
       <div style={{ marginBottom: 20 }}>
-        {/* raggruppate per prodotto: con cinque barattoli della stessa
-            consulenza, cinque righe uguali di fila non dicevano quanti ne
-            partono — il numero si contava a occhio. Sotto, il livello di
-            ciascun pezzo resta il suo */}
+        {/* Qui si spediscono pezzi interi: quanti barattoli partono, non
+            quanto sono pieni. Il livello di riempimento e' un'altra cosa e
+            un altro momento — lo dichiara la master all'inventario di fine
+            corso, sulle consulenze aperte — e messo qui chiedeva di
+            rispondere a una domanda che al momento della spedizione non si
+            pone. */}
         {Object.values(consulenzeEdizione.reduce((gruppi, r) => {
           if (!gruppi[r.prodotto_id]) gruppi[r.prodotto_id] = { prodottoId: r.prodotto_id, pezzi: [] };
           gruppi[r.prodotto_id].pezzi.push(r);
           return gruppi;
         }, {})).map((g) => (
-          <div key={g.prodottoId} style={{ padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nomeProdotto(g.prodottoId)}</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                <input
-                  type="number" min="0" max="99"
-                  style={{ ...inputStyle, width: 78, padding: "6px 8px", textAlign: "center" }}
-                  value={g.pezzi.length}
-                  onChange={(e) => impostaQuantitaConsulenza(g.prodottoId, e.target.value)}
-                />
-                <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>pezz{g.pezzi.length === 1 ? "o" : "i"}</span>
-              </div>
-              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>disp. {prodottiShop.find((p) => p.id === g.prodottoId)?.quantita ?? 0}</span>
+          <div key={g.prodottoId} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nomeProdotto(g.prodottoId)}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              <input
+                type="number" min="0" max="99"
+                style={{ ...inputStyle, width: 78, padding: "6px 8px", textAlign: "center" }}
+                value={g.pezzi.length}
+                onChange={(e) => impostaQuantitaConsulenza(g.prodottoId, e.target.value)}
+              />
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>pezz{g.pezzi.length === 1 ? "o" : "i"}</span>
             </div>
-            {g.pezzi.map((r, n) => (
-              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                <span style={{ ...fontBody, fontSize: 11, color: MUTED, width: 22, flexShrink: 0 }}>n. {n + 1}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  {[1, 2, 3, 4, 5].map((q) => (
-                    <button key={q} onClick={() => aggiornaLivelloConsulenza(r.id, q === r.livello ? q - 1 : q)} title={`${q}/5`} style={{ width: 16, height: 16, borderRadius: "50%", border: `1px solid ${GOLD}`, background: q <= r.livello ? GOLD : "transparent", cursor: "pointer", padding: 0 }} />
-                  ))}
-                </div>
-                {r.livello === 0 && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B" }}>Rispedito vuoto</span>}
-                <button onClick={() => rimuoviConsulenza(r.id)} title="Togli questo pezzo" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 13, padding: 4, marginLeft: "auto" }}>✕</button>
-              </div>
-            ))}
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>disp. {prodottiShop.find((p) => p.id === g.prodottoId)?.quantita ?? 0}</span>
+            <button onClick={() => impostaQuantitaConsulenza(g.prodottoId, 0)} title="Togli questa consulenza" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4, flexShrink: 0 }}>✕</button>
           </div>
         ))}
         {pickerConsulenzaAperto ? (
