@@ -47866,12 +47866,12 @@ function TastoFaseSede({ fatto, spento, etichettaDaFare, etichettaFatto, onClick
     </button>
   );
 }
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, inLavorazione, onAllestisci, onApriInventarioSede, onAnnullaInventario }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const inSede = !!loc?.sede_centrale;
   const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
   const etichettaFase = inSede
-    ? (inventarioTs ? "Inventario eseguito" : allestitoTs ? "Inventario da fare" : "Corso da allestire")
+    ? (inventarioTs ? "Inventario eseguito" : allestitoTs ? "Inventario da fare" : preparatoTs ? "Materiale da consegnare" : "Materiale da preparare")
     : completata
     ? FASI_LOGISTICA[FASI_LOGISTICA.length - 1].etichettaFatto
     : (FASI_LOGISTICA.find((f) => f.chiave === faseCorrente)?.etichettaPending || "");
@@ -47911,12 +47911,24 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
             {/* mentre il magazzino si muove il tasto lo dice e non
                 risponde: e' un'operazione da minuti, e prima sembrava che
                 il clic non fosse arrivato */}
+            {/* Tre passi invece di due. Prima "Corso allestito" voleva dire
+                due cose insieme — il materiale e' pronto e il materiale e'
+                in aula — e in mezzo ci sono ore in cui il pacco esiste ma
+                non e' ancora uscito dal magazzino. Il primo passo non
+                muove niente: e' un promemoria di chi prepara. Lo scarico
+                resta attaccato alla consegna, che e' il momento in cui i
+                pezzi lasciano davvero lo scaffale. */}
+            <TastoFaseSede
+              fatto={!!preparatoTs}
+              etichettaDaFare="Materiale da preparare" etichettaFatto="Materiale preparato"
+              onClick={(e) => { e.stopPropagation(); onPrepara(!preparatoTs); }}
+            />
             <TastoFaseSede
               fatto={!!allestitoTs}
-              spento={inLavorazione}
-              etichettaDaFare={inLavorazione ? "Scarico in corso…" : "Corso da allestire"}
-              etichettaFatto={inLavorazione ? "Rientro in corso…" : "Corso allestito"}
-              onClick={(e) => { e.stopPropagation(); onAllestisci(!allestitoTs); }}
+              spento={inLavorazione || !preparatoTs}
+              etichettaDaFare={inLavorazione ? "Scarico in corso…" : "Materiale da consegnare"}
+              etichettaFatto={inLavorazione ? "Rientro in corso…" : "Materiale consegnato"}
+              onClick={(e) => { e.stopPropagation(); if (preparatoTs) onAllestisci(!allestitoTs); }}
             />
             <TastoFaseSede
               fatto={!!inventarioTs}
@@ -48921,9 +48933,19 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // lo stesso scarico che per gli altri corsi scatta al ritiro del corriere,
   // perché è lo stesso fatto: i pezzi non sono più sullo scaffale.
   const [inventarioSedeCorsoId, setInventarioSedeCorsoId] = useState(null);
+  // "Materiale preparato": e' solo una spunta, non muove niente. Serve a
+  // chi prepara le scatole per dire che ha finito, ore prima che il
+  // materiale scenda in aula.
+  async function preparaMateriale(corsoData, preparare) {
+    if (!preparare && statoDi(corsoData.id).allestito_ts) {
+      window.alert("Il materiale risulta già consegnato: torna indietro prima da «Materiale consegnato».");
+      return;
+    }
+    await salvaCampiEdizione(corsoData.id, { materiale_preparato_ts: preparare ? new Date().toISOString() : null });
+  }
   async function allestisciCorso(corsoData, allestire) {
     if (allestire) {
-      if (!window.confirm("L'aula è allestita: scarico dal magazzino il materiale di questo corso?")) return;
+      if (!window.confirm("Materiale consegnato in aula: scarico dal magazzino il materiale di questo corso?")) return;
       const ok = await sincronizzaMagazzino(corsoData);
       if (ok === false) return;
       const foto = componiSpedizione({
@@ -49105,9 +49127,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                   ...(attivo && !statoDi(cd.id).fase_rientro ? { fase_rientro: FASI_RIENTRO[0].chiave } : {}),
                 })}
                 allestitoTs={statoDi(cd.id).allestito_ts}
+                preparatoTs={statoDi(cd.id).materiale_preparato_ts}
                 inventarioTs={statoDi(cd.id).inventario_sede_ts}
                 inLavorazione={edizioneInLavorazione === cd.id}
                 onAllestisci={(allestire) => { setEdizioneSelId(cd.id); allestisciCorso(cd, allestire); }}
+                onPrepara={(preparare) => { setEdizioneSelId(cd.id); preparaMateriale(cd, preparare); }}
                 onApriInventarioSede={() => { setEdizioneSelId(cd.id); setInventarioSedeCorsoId(cd.id); }}
                 onAnnullaInventario={() => annullaInventarioSede(cd)}
                 onCambiaFaseRientro={(fase) => { setEdizioneSelId(cd.id); cambiaFaseRientro(cd, fase); }}
