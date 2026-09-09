@@ -8189,10 +8189,22 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
         </div>
 
         {onApriModelle && (
+          /* era una scritta in oro con una freccia: si leggeva come una
+             didascalia, e chi doveva assegnare le modelle non capiva che
+             ci si cliccava. Ora e' un tasto, largo quanto la scheda */
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <div onClick={onApriModelle} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, cursor: "pointer" }}>
-              Gestione modelle →
-            </div>
+            <button
+              onClick={onApriModelle}
+              style={{
+                width: "100%", ...fontBody, fontSize: 16.5, fontWeight: 700, color: "#fff", background: NAVY,
+                border: "none", borderRadius: 14, padding: "13px 16px", cursor: "pointer",
+                textTransform: "uppercase", letterSpacing: 0.4,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+              }}
+            >
+              <IconaTileModelle size={20} color="#fff" />
+              Gestione modelle
+            </button>
           </div>
         )}
       </div>
