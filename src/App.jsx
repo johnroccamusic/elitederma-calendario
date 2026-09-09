@@ -18208,7 +18208,7 @@ const ICONA_CESTINO_PATH = <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1
 // scopribile e comunque rotto su Safari iOS insieme a "zoom", vedi
 // useZoomScheda), sotto una certa soglia si passa a righe impilate in
 // verticale che si adattano da sole a qualunque schermo
-function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
+function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede, nascondiFasciaMese }) {
   // i corsi restano raggruppati per mese: l'ordinamento agisce dentro
   // ciascun mese, altrimenti il calendario perderebbe il suo filo
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
@@ -18230,10 +18230,12 @@ function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
              vogliono 40 pixel: attaccate, la fine di settembre e l'inizio
              di ottobre si leggevano come un elenco solo */
           <div key={chiaveMese} style={{ marginTop: iMese > 0 ? 40 : 0 }}>
-            <div style={{ padding: "6px 10px", background: BG, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
-              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
-            </div>
+            {!nascondiFasciaMese && (
+              <div style={{ padding: "6px 10px", background: BG, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
+                <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
+              </div>
+            )}
             {voci.map((cd, i) => renderRiga(cd, i === 0, true))}
           </div>
         ))}
@@ -18265,14 +18267,16 @@ function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
             {/* lo stacco fra un mese e l'altro: una riga vuota, perche' su
                 una tabella il margine non si puo' dare alla fascia */}
             {iMese > 0 && <tr><td colSpan={numeroColonne} style={{ height: 40 }} /></tr>}
-            <tr>
-              <td colSpan={numeroColonne} style={{ padding: "10px 12px", background: BG }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
-                  <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
-                </div>
-              </td>
-            </tr>
+            {!nascondiFasciaMese && (
+              <tr>
+                <td colSpan={numeroColonne} style={{ padding: "10px 12px", background: BG }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
+                    <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
+                  </div>
+                </td>
+              </tr>
+            )}
             {ordina(voci, valoriDate).map((cd, i) => renderRiga(cd, i === 0, false))}
           </React.Fragment>
         ))}
@@ -18351,16 +18355,48 @@ function CardCittaData({ c, renderRiga }) {
 // Cronologico, dove tutte le città stanno in un'unica scheda — qui la
 // sede va invece in una colonna propria, ben visibile, perché non c'è
 // più l'intestazione città della card a comunicarla
-function CardCronologico({ mesi, renderRiga }) {
+// Una scheda per mese, come in "Citta'" ce n'e' una per citta'. Prima
+// erano tutti i mesi dentro un foglio solo, separati da una fascia: un
+// elenco lungo diventava un muro in cui settembre, ottobre e novembre si
+// confondevano. Ogni mese e' un'isola, con il suo nome in testa e quanti
+// corsi contiene — e la fascia dentro la tabella non serve piu', lo dice
+// gia' l'intestazione della scheda.
+function CardMeseCronologico({ etichetta, gruppoMese, chiaveMese, renderRiga }) {
   const [zoom, controlliZoom] = useZoomScheda();
   const isMobile = useIsMobile();
+  const quanti = gruppoMese.voci.length;
   return (
+    <div style={{ marginBottom: isMobile ? 12 : 16 }}>
     <ZoomBox zoom={zoom}>
     <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 20 }}>
       {controlliZoom}
-      <TabellaDateCorsi mesi={mesi} renderRiga={renderRiga} mostraColonnaSede />
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 14, marginBottom: isMobile ? 10 : 18 }}>
+        <IconaCalendarioLeve size={isMobile ? 22 : 30} color={GOLD} />
+        <div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 30, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{toTitleCase(etichetta)}</div>
+          <div style={{ ...fontBody, fontSize: isMobile ? 12 : 15, color: MUTED }}>{quanti} cors{quanti === 1 ? "o" : "i"} programmat{quanti === 1 ? "o" : "i"}</div>
+        </div>
+      </div>
+      <TabellaDateCorsi mesi={{ [chiaveMese]: gruppoMese }} renderRiga={renderRiga} mostraColonnaSede nascondiFasciaMese />
     </div>
     </ZoomBox>
+    </div>
+  );
+}
+
+function CardCronologico({ mesi, renderRiga }) {
+  return (
+    <div>
+      {Object.keys(mesi).sort().map((chiaveMese) => (
+        <CardMeseCronologico
+          key={chiaveMese}
+          chiaveMese={chiaveMese}
+          etichetta={mesi[chiaveMese].etichetta}
+          gruppoMese={mesi[chiaveMese]}
+          renderRiga={renderRiga}
+        />
+      ))}
+    </div>
   );
 }
 
