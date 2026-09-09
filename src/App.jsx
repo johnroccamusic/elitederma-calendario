@@ -3618,9 +3618,14 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
   );
 }
 
-function TopBar({ title }) {
+// Il tondo di uscita accanto al titolo, come in tutte le altre pagine.
+// Tutti e nove i posti che usano questa barra passavano gia' `onBack`, ma
+// qui non veniva letto: da "Assegna logo", "Setting diplomi", "Cerca
+// corso" e le altre si usciva solo con il tasto indietro del telefono.
+function TopBar({ title, onBack, titoloIndietro = "Home" }) {
   return (
-    <div style={{ marginBottom: 22 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+      {onBack && <TastoLivelloPrecedente titolo={titoloIndietro} onClick={onBack} />}
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{title}</div>
     </div>
   );
@@ -16190,7 +16195,7 @@ function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack }) {
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Storico loghi" onBack={onBack} />
+      <TopBar title="Storico loghi" onBack={onBack} titoloIndietro="Assegna logo" />
       {/* Storico dei loghi emessi. Il cestino c'e' solo sul primo — che e'
           l'ultimo generato — perche' il progressivo e' una fila: togliendo
           un numero in mezzo resterebbe un buco che nessuno potrebbe piu'
