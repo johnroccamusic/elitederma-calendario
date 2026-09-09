@@ -36602,6 +36602,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
       nomeFornitore: (p.fornitore_id && fornitoreNomePerId[p.fornitore_id]) || "",
       giorniFermo: giorniFermo(p.nome),
+      // "in vendita" = lo si puo' comprare da qualche parte: sul sito
+      // (pubblicato su WooCommerce e non tenuto fuori) oppure al banco
+      // (ha un prezzo e nessuno lo esclude dalla vendita diretta, ne' lui
+      // ne' la sua categoria). Serve a "Fermi da oltre 90 giorni": un
+      // prodotto che non e' in vendita non puo' essere fermo — non e' mai
+      // partito. I consumabili dei corsi e il materiale interno finivano
+      // tutti li' dentro e coprivano quelli che davvero non si vendono.
+      inVendita:
+        (!!p.woo_product_id && p.stato === "publish" && !p.solo_offline && !forzatoSoloOffline)
+        || (p.prezzo_vendita != null && !p.escludi_vendita_diretta && !forzatoEscludi),
       stockTotale,
       riordinoCompleto: p.soglia_riordino != null && p.lead_time_giorni != null && !!p.fornitore_id,
       sottoScorta: p.conta_magazzino !== false && p.soglia_riordino != null && stockTotale != null && stockTotale < p.soglia_riordino,
@@ -36619,7 +36629,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
 
   const sottoScorta = prodottiConStato.filter((p) => p.sottoScorta);
   const senzaCosto = prodottiConStato.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
-  const fermi = prodottiConStato.filter((p) => p.giorniFermo > 90);
+  const fermi = prodottiConStato.filter((p) => p.inVendita && p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
   const giaOrdinatiMag = useMemo(
     () => new Set((riordiniInCorso || []).filter((r) => r.stato === "ordinato").map((r) => r.prodotto_id)),
@@ -36646,7 +36656,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   if (filtroRapido === "sottoscorta") prodottiVisti = prodottiVisti.filter((p) => p.sottoScorta);
   if (filtroRapido === "esauriti") prodottiVisti = prodottiVisti.filter((p) => p.esaurito);
   if (filtroRapido === "senzacosto") prodottiVisti = prodottiVisti.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
-  if (filtroRapido === "fermi") prodottiVisti = prodottiVisti.filter((p) => p.giorniFermo > 90);
+  if (filtroRapido === "fermi") prodottiVisti = prodottiVisti.filter((p) => p.inVendita && p.giorniFermo > 90);
 
   const prodottiOrdinati = [...prodottiVisti].sort((a, b) => {
     const { campo, direzione } = ordinamento;
