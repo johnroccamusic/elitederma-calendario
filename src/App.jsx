@@ -36729,12 +36729,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button
-              onClick={onApriAdvisor}
-              style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "11px 18px", cursor: "pointer" }}
-            >
-              Advisor <IconaChevronDestra size={14} color={MUTED} />
-            </button>
-            <button
               onClick={() => mostraVista("categorie")}
               style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "11px 18px", cursor: "pointer" }}
             >
