@@ -48346,19 +48346,34 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   const risultatiConsulenza = ricercaConsulenza.trim()
     ? prodottiShop.filter((p) => p.nome.toLowerCase().startsWith("consulenza") && p.nome.toLowerCase().includes(ricercaConsulenza.trim().toLowerCase())).slice(0, 8)
     : prodottiShop.filter((p) => p.nome.toLowerCase().startsWith("consulenza")).slice(0, 8);
-  // Quante se ne spediscono: una riga per pezzo, non una riga con un
-  // numero accanto. Il livello di riempimento e' di quel barattolo — tre
-  // barattoli tornano a tre livelli diversi — e un solo livello per tre
-  // pezzi non avrebbe piu' voluto dire niente all'inventario.
-  const [quanteConsulenze, setQuanteConsulenze] = useState("1");
+  // Si aggiunge la consulenza e basta: quante siano lo si dice dopo, col
+  // selettore sulla riga. Chiederlo prima voleva dire deciderlo prima di
+  // aver visto se quella era la consulenza giusta.
+  //
+  // Sotto restano una riga per pezzo: il livello di riempimento e' di quel
+  // barattolo — tre barattoli tornano a tre livelli diversi — e un livello
+  // solo per tre pezzi non vorrebbe piu' dire niente all'inventario.
+  const nuovaConsulenza = (prodottoId, n = 0) => ({
+    id: `${Date.now()}-${n}-${Math.random().toString(36).slice(2)}`,
+    prodotto_id: prodottoId, livello: 5,
+  });
   function aggiungiConsulenza(prodottoId) {
-    const quante = Math.max(1, Math.min(50, parseInt(quanteConsulenze, 10) || 1));
-    const nuove = Array.from({ length: quante }, (_, n) => ({
-      id: `${Date.now()}-${n}-${Math.random().toString(36).slice(2)}`,
-      prodotto_id: prodottoId, livello: 5,
-    }));
-    onSalvaCampi({ consulenze_edizione: [...consulenzeEdizione, ...nuove] });
-    setRicercaConsulenza(""); setPickerConsulenzaAperto(false); setQuanteConsulenze("1");
+    onSalvaCampi({ consulenze_edizione: [...consulenzeEdizione, nuovaConsulenza(prodottoId)] });
+    setRicercaConsulenza(""); setPickerConsulenzaAperto(false);
+  }
+  // il selettore sulla riga: alzandolo si aggiungono pezzi, abbassandolo si
+  // tolgono gli ultimi — i primi restano, col livello che qualcuno gli ha
+  // gia' messo
+  function impostaQuantitaConsulenza(prodottoId, quante) {
+    const n = Math.max(0, Math.min(99, Number(quante) || 0));
+    const altre = consulenzeEdizione.filter((r) => r.prodotto_id !== prodottoId);
+    const mie = consulenzeEdizione.filter((r) => r.prodotto_id === prodottoId);
+    const aggiornate = n <= mie.length
+      ? mie.slice(0, n)
+      : [...mie, ...Array.from({ length: n - mie.length }, (_, i) => nuovaConsulenza(prodottoId, i))];
+    // l'ordine originale non si perde: si riscrive l'elenco tenendo le
+    // altre consulenze dove stavano
+    onSalvaCampi({ consulenze_edizione: [...altre, ...aggiornate] });
   }
   function rimuoviConsulenza(id) {
     onSalvaCampi({ consulenze_edizione: consulenzeEdizione.filter((r) => r.id !== id) });
@@ -48517,9 +48532,15 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <div key={g.prodottoId} style={{ padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nomeProdotto(g.prodottoId)}</span>
-              <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 10, padding: "3px 9px", whiteSpace: "nowrap" }}>
-                {g.pezzi.length} pezz{g.pezzi.length === 1 ? "o" : "i"}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                <input
+                  type="number" min="0" max="99"
+                  style={{ ...inputStyle, width: 78, padding: "6px 8px", textAlign: "center" }}
+                  value={g.pezzi.length}
+                  onChange={(e) => impostaQuantitaConsulenza(g.prodottoId, e.target.value)}
+                />
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>pezz{g.pezzi.length === 1 ? "o" : "i"}</span>
+              </div>
               <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>disp. {prodottiShop.find((p) => p.id === g.prodottoId)?.quantita ?? 0}</span>
             </div>
             {g.pezzi.map((r, n) => (
@@ -48538,15 +48559,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         ))}
         {pickerConsulenzaAperto ? (
           <div style={{ marginTop: 8 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <input autoFocus style={inputStyle} placeholder="Cerca consulenza…" value={ricercaConsulenza} onChange={(e) => setRicercaConsulenza(e.target.value)} />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Quante</span>
-                <input inputMode="numeric" style={{ ...inputStyle, width: 62, textAlign: "center" }} value={quanteConsulenze} onChange={(e) => setQuanteConsulenze(e.target.value.replace(/\D/g, ""))} />
-              </div>
-            </div>
+            <input autoFocus style={inputStyle} placeholder="Cerca consulenza…" value={ricercaConsulenza} onChange={(e) => setRicercaConsulenza(e.target.value)} />
             <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
               {risultatiConsulenza.length === 0 ? (
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 8 }}>Nessuna consulenza trovata.</div>
