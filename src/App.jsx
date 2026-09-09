@@ -1095,6 +1095,13 @@ function IconaRegalo({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+function IconaGraffetta({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.6 1.6 0 0 1-2.3-2.3l7.8-7.8" />
+    </svg>
+  );
+}
 function IconaMatitaNota({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -5662,35 +5669,123 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
           // telefono in verticale: ogni pagamento diventa una scheda con i
           // campi su due colonne, così niente resta tagliato
           if (schedaVerticale) {
-            const campoCard = (label, valore, full) => (
-              <div style={{ gridColumn: full ? "1 / -1" : "auto", minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2 }}>{label}</div>
-                <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, wordBreak: "break-word" }}>{valore}</div>
+            // Da telefono ogni pagamento e' una scheda a se'. Prima erano
+            // dieci coppie etichetta/valore appoggiate sul bianco: tutte
+            // dello stesso peso, e per capire di che pagamento si trattava
+            // bisognava leggerle una per una. Qui ogni dato sta nella sua
+            // pastiglia con l'icona che lo dice — persona, sede, corso,
+            // calendario, denaro — e la scheda si scorre invece di
+            // leggersi. In cima il tipo di operazione e il suo stato, in
+            // fondo cosa si puo' farci.
+            const CHIP = "#F3F4F6";        // il fondo delle pastiglie
+            const CHIP_TONDO = "#E6E8EC";  // il tondo dell'icona dentro
+            const NOTA_BG = "#FAF4E9";     // la nota e' un'annotazione, non un dato: fondo crema
+            const AMBRA = "#B4801F";
+            const AMBRA_BG = "#FBEFD8";
+
+            const chip = (Icona, label, valore, opzioni = {}) => (
+              <div style={{
+                gridColumn: opzioni.full ? "1 / -1" : "auto", minWidth: 0,
+                display: "flex", alignItems: "center", gap: 10,
+                background: opzioni.sfondo || CHIP, borderRadius: 14, padding: "9px 12px",
+              }}>
+                <span style={{
+                  width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+                  background: opzioni.tondo || CHIP_TONDO, color: opzioni.coloreIcona || NAVY,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {/* color esplicito: qualche icona nasce con un colore
+                      suo (il pin e' oro), e qui devono parlare tutte con
+                      la stessa voce */}
+                  <Icona size={16} color={opzioni.coloreIcona || NAVY} />
+                </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, wordBreak: "break-word", lineHeight: 1.25 }}>{valore}</div>
+                </div>
+                {opzioni.freccia && <span style={{ color: MUTED, flexShrink: 0, display: "flex" }}><IconaChevronDestra size={15} /></span>}
               </div>
             );
             const valoreCoinvolti = (coinvolti, render) => coinvolti.map((co, i) => (
               <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ cursor: co.iscritto ? "pointer" : undefined, marginTop: i === 0 ? 0 : 2 }}>{render(co)}</div>
             ));
+            // i due tasti di contorno: icona sopra, parola sotto, larghi
+            // uguali. Erano due quadretti con la sola icona, e la matita
+            // accanto al cestino si prendeva per sbaglio
+            const tastoContorno = (Icona, testo, colore, onClick) => (
+              <button onClick={onClick} style={{
+                flex: "1 1 0", minWidth: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14,
+                padding: "9px 6px", cursor: "pointer", color: colore,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              }}>
+                <Icona size={19} />
+                <span style={{ ...fontBody, fontSize: 11, fontWeight: 700 }}>{testo}</span>
+              </button>
+            );
             return (
               <div>
                 {gruppi.map((g) => g.righe.map((a) => {
                   const coinvolti = calcolaCoinvolti(a);
+                  const inAttesa = tab === "attesa";
                   return (
-                    <div key={a.id} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
-                      <div style={{ ...gruppoStyle, marginBottom: 8 }}>{TITOLO_GRUPPO_ORIGINE[g.origine]}</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "9px 12px" }}>
-                        {campoCard("Allievo", valoreCoinvolti(coinvolti, (co) => (co.iscritto ? <b>{co.iscritto.nome} {co.iscritto.cognome}</b> : "—")))}
-                        {campoCard("Venditore", a.venditore_nome || "—")}
-                        {campoCard("Città", valoreCoinvolti(coinvolti, (co) => co.loc?.nome?.toUpperCase() || "?"))}
-                        {campoCard("Corso", valoreCoinvolti(coinvolti, (co) => co.corso?.nome?.toUpperCase() || "?"))}
-                        {campoCard("Data corso", valoreCoinvolti(coinvolti, (co) => (co.cd ? fmtDataCompatta(co.cd.data_inizio, co.cd.data_fine) : "—")))}
-                        {campoCard("Data pag.", a.data_pagamento ? fmtData(a.data_pagamento) : "—")}
-                        {campoCard("Importo", a.importo != null ? fmtEuroErp(a.importo) : "—")}
-                        {campoCard("Metodo", a.metodo || "—")}
-                        {campoCard("Nota", a.nota || "—", true)}
-                        {campoCard("File", a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri il file" style={{ fontSize: 15, fontWeight: 600, display: "inline-block", padding: "4px 0" }} /> : "—", true)}
+                    <div key={a.id} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: 14, marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                        <span style={{ width: 40, height: 40, borderRadius: 12, background: NOTA_BG, color: AMBRA, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                          <IconaRicevutaErp size={21} />
+                        </span>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", lineHeight: 1.15 }}>{TITOLO_GRUPPO_ORIGINE[g.origine]}</div>
+                          <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Dettagli operazione</div>
+                        </div>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0,
+                          background: inAttesa ? AMBRA_BG : "#EAF5EC", color: inAttesa ? AMBRA : "#2E7D32",
+                          borderRadius: 20, padding: "6px 10px", ...fontBody, fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+                        }}>
+                          {inAttesa ? <IconaOrologioCard size={13} /> : <IconaSpuntaCerchio size={13} />}
+                          {inAttesa ? "IN ATTESA" : "VERIFICATO"}
+                        </span>
                       </div>
-                      {tab === "attesa" && <div style={{ marginTop: 12 }}>{azioniRiga(a)}</div>}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        {chip(IconaPersonaSemplice, "Allievo", valoreCoinvolti(coinvolti, (co) => (co.iscritto ? `${co.iscritto.nome} ${co.iscritto.cognome}` : "—")))}
+                        {chip(IconaVenditoreRiga, "Venditore", a.venditore_nome || "—")}
+                        {chip(IconaPin, "Città", valoreCoinvolti(coinvolti, (co) => co.loc?.nome?.toUpperCase() || "?"))}
+                        {chip(IconaLaureaErp, "Corso", valoreCoinvolti(coinvolti, (co) => co.corso?.nome?.toUpperCase() || "?"))}
+                        {chip(IconaCalendarioCard, "Data corso", valoreCoinvolti(coinvolti, (co) => (co.cd ? fmtDataCompatta(co.cd.data_inizio, co.cd.data_fine) : "—")))}
+                        {chip(IconaOrologioCard, "Data pag.", a.data_pagamento ? fmtData(a.data_pagamento) : "—")}
+                        {chip(IconaBanconota, "Importo", a.importo != null ? fmtEuroErp(a.importo) : "—")}
+                        {chip(IconaCartaPos, "Metodo", a.metodo || "—")}
+                        {chip(IconaMatitaNota, "Nota", a.nota || "—", { full: true, sfondo: NOTA_BG, tondo: "#F1E6D2", coloreIcona: AMBRA })}
+                        {chip(
+                          IconaGraffetta,
+                          "File allegato",
+                          a.file_path
+                            ? <AllegatoLink percorso={a.file_path} etichetta="apri il file" style={{ fontSize: 12.5, fontWeight: 700 }} />
+                            : "—",
+                          { full: true, freccia: !!a.file_path }
+                        )}
+                      </div>
+                      {inAttesa && (
+                        <>
+                          <div style={{ height: 1, background: CREAM_BORDER, margin: "14px 0 12px" }} />
+                          <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+                            <button
+                              onClick={() => approva(a)}
+                              disabled={approvandoId === a.id}
+                              style={{
+                                flex: "2 1 0", minWidth: 0, ...fontBody, fontSize: 14, fontWeight: 700, color: "#fff", background: NAVY,
+                                border: "none", borderRadius: 14, padding: "10px 12px", cursor: approvandoId === a.id ? "default" : "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                              }}
+                            >
+                              <IconaSpuntaCerchio size={18} />
+                              {approvandoId === a.id ? "…" : "Approva"}
+                            </button>
+                            {tastoContorno(IconaMatitaNota, "Modifica", NAVY, () => setModificaAcconto(a))}
+                            {tastoContorno(IconaCestino, "Elimina", "#C0392B", () => eliminaAcconto(a))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 }))}
