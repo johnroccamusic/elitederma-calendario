@@ -14,6 +14,37 @@ import {
 // leggere/generare PDF (moduli iscrizione, diplomi, segnaposti) — con
 // l'import dinamico, Vite le mette in chunk separati scaricati solo al
 // primo utilizzo effettivo di quelle funzioni, non all'avvio dell'app.
+// Un modulo caricato a richiesta che non si scarica quasi mai e' un
+// guasto: e' l'app aggiornata sotto i piedi. Ogni build da' ai file nomi
+// nuovi, e una scheda rimasta aperta da prima del rilascio chiede un file
+// che sul server non c'e' piu'. Succede solo la prima volta che si usa
+// qualcosa di caricato a richiesta — i PDF di diplomi, segnaposti e
+// normativa — e l'errore che si vedeva ("error loading dynamically
+// imported module") non diceva niente a chi lo leggeva.
+function moduloNonPiuSulServer(errore) {
+  const t = String(errore?.message || errore || "").toLowerCase();
+  return t.includes("dynamically imported module")
+    || t.includes("importing a module script failed")
+    || t.includes("failed to fetch dynamically imported module");
+}
+// azzera la promessa memorizzata: senza, dopo un errore ogni tentativo
+// successivo ricadrebbe sulla stessa promessa gia' fallita
+async function conRicaricaSeVecchia(promessa, azzera) {
+  try {
+    return await promessa;
+  } catch (e) {
+    azzera?.();
+    if (moduloNonPiuSulServer(e)) {
+      window.alert("L'app è stata aggiornata mentre questa pagina era aperta: la ricarico e puoi riprovare.");
+      window.location.reload();
+      // la pagina sta per sparire: qui ci si ferma, invece di far
+      // proseguire un codice che lavorerebbe su moduli che non ci sono
+      await new Promise(() => {});
+    }
+    throw e;
+  }
+}
+
 let _pdfjsLibPromise = null;
 function getPdfjsLib() {
   if (!_pdfjsLibPromise) {
@@ -30,7 +61,7 @@ function getPdfjsLib() {
       return pdfjsLib;
     });
   }
-  return _pdfjsLibPromise;
+  return conRicaricaSeVecchia(_pdfjsLibPromise, () => { _pdfjsLibPromise = null; });
 }
 let _pdfLibPromise = null;
 function getPdfLib() {
@@ -39,7 +70,7 @@ function getPdfLib() {
       PDFDocument: pdfLib.PDFDocument, StandardFonts: pdfLib.StandardFonts, rgb: pdfLib.rgb, fontkit: fontkitMod.default,
     }));
   }
-  return _pdfLibPromise;
+  return conRicaricaSeVecchia(_pdfLibPromise, () => { _pdfLibPromise = null; });
 }
 
 const supabase = createClient(
@@ -26970,10 +27001,10 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
   useEffect(() => {
     let annullato = false;
     (async () => {
-      const [css, html] = await Promise.all([
+      const [css, html] = await conRicaricaSeVecchia(Promise.all([
         import("./normativa-pmu-css"),
         import("./normativa-pmu-html"),
-      ]);
+      ]));
       if (!annullato) setDocumento({ css: css.CSS_NORMATIVA_PMU, html: html.HTML_NORMATIVA_PMU });
     })();
     return () => { annullato = true; };
