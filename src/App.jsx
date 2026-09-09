@@ -48216,7 +48216,7 @@ function PannelloBollaRientro({ corsoData, kitDefinizioni, corsiKitProdotti, pro
     </div>
   );
 }
-function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onRientroRegistrato, onCambiaTagliaIscritto }) {
+function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onRientroRegistrato, onCambiaTagliaIscritto }) {
   // stessa intestazione (data/corso/città nel colore del corso) della
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
@@ -48235,6 +48235,36 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   // prepararne qualcuna in più oltre agli iscritti — resta finché non
   // lo si toglie a mano, anche se cambia chi si iscrive
   const nomeKit = (id) => kitDefinizioni.find((k) => k.id === id)?.nome || "—";
+
+  // Quello che si aggiunge DOPO aver allestito non esce dal magazzino da
+  // solo e non entra nella fotografia della spedizione: lo scarico e la
+  // foto si fanno una volta, quando si preme "Corso allestito". Il 9
+  // settembre 2026 tre kit di riserva del Laminazione di Roma sono stati
+  // messi dopo: in chiusura non c'erano da spuntare, e dal magazzino non
+  // erano mai usciti.
+  //
+  // Qui si confronta quello che c'e' adesso con quello che risulta gia'
+  // scaricato: se non coincidono lo si dice, e si offre di rimettere in
+  // pari. Automatico no — muovere il magazzino resta una cosa che si
+  // decide, non che succede mentre si scrive in una casella.
+  const daRiallineare = (() => {
+    if (!statoEdizione?.allestito_ts || !onAggiornaPacco) return null;
+    const scaricato = statoEdizione.scarico_per_kit || {};
+    const richiesti = totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corso?.id || null, statoEdizione.riserva_per_kit);
+    const differenzeKit = [...new Set([...Object.keys(richiesti), ...Object.keys(scaricato)])]
+      .map((kitId) => ({ nome: nomeKit(kitId), diff: (richiesti[kitId] || 0) - (scaricato[kitId] || 0) }))
+      .filter((r) => r.diff !== 0);
+    const dermScaricati = statoEdizione.scarico_dermografi || {};
+    const dermRichiesti = { ...dermografiRichiestiEdizione(iscrittiEdizione) };
+    Object.entries(statoEdizione.dermografi_riserva || {}).forEach(([m, q]) => {
+      if (q > 0) dermRichiesti[m] = (dermRichiesti[m] || 0) + Number(q);
+    });
+    const differenzeDerm = [...new Set([...Object.keys(dermRichiesti), ...Object.keys(dermScaricati)])]
+      .map((m) => ({ nome: etichettaDermografo(m), diff: (dermRichiesti[m] || 0) - (dermScaricati[m] || 0) }))
+      .filter((r) => r.diff !== 0);
+    const tutte = [...differenzeKit, ...differenzeDerm];
+    return tutte.length > 0 ? tutte : null;
+  })();
   const kitRichiesti = kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corso?.id || null);
   const riservaPerKit = statoEdizione.riserva_per_kit || {};
   const righeKitRichiesti = Object.entries(kitRichiesti).sort(
@@ -48327,6 +48357,18 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 
   return (
     <div>
+      {daRiallineare && (
+        <div style={{ ...cardStyle, padding: 14, marginBottom: 14, border: "1px solid #E6C97A", background: "#FBF3E0" }}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#8A6D1D" }}>Il pacco è cambiato dopo che il corso è stato allestito.</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", marginTop: 4, lineHeight: 1.45 }}>
+            Lo scarico dal magazzino e la fotografia della spedizione si fanno quando si preme “Corso allestito”: quello aggiunto dopo non è ancora uscito, e in chiusura non comparirà.
+            <span style={{ display: "block", marginTop: 4, fontWeight: 700 }}>
+              {daRiallineare.map((r) => `${r.nome}: ${r.diff > 0 ? "+" : ""}${r.diff}`).join(" · ")}
+            </span>
+          </div>
+          <Button variant="ghost" onClick={onAggiornaPacco} style={{ marginTop: 10 }}>Aggiorna il pacco</Button>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 18, minWidth: 0 }}>
         <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
           <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
@@ -49092,6 +49134,17 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 prodottiApertiMagazzino={prodottiApertiMagazzino}
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === edizioneSel.id)}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
+                onAggiornaPacco={async () => {
+                  if (!window.confirm("Il corso è già allestito: scarico dal magazzino quello che è stato aggiunto dopo e rifaccio la fotografia della spedizione?")) return;
+                  const ok = await sincronizzaMagazzino(edizioneSel);
+                  if (ok === false) return;
+                  const foto = componiSpedizione({
+                    stato: statoDi(edizioneSel.id),
+                    iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === edizioneSel.id),
+                    kitDefinizioni, corsoId: edizioneSel.corso_id,
+                  });
+                  await salvaCampiEdizione(edizioneSel.id, { spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString() });
+                }}
                 nomeUtente={utenteLoggato?.nome || null}
                 onRientroRegistrato={() => ricarica(["prodotti_shop", "logistica_kit_edizioni"])}
                 onCambiaTagliaIscritto={cambiaTagliaIscritto}
