@@ -1095,6 +1095,36 @@ function IconaRegalo({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+// Un valore che deve stare su una riga sola dentro una casella di
+// larghezza fissa: invece di troncarlo con i puntini, si rimpicciolisce il
+// carattere finche' ci sta. "Teresa Cassandra" in una pastiglia da 156
+// pixel non entra a 11,5 — ma a 9 si', e un nome letto piccolo e' pur
+// sempre un nome letto. Si scende di mezzo punto per volta e ci si ferma a
+// `minimo`: sotto quella misura non si legge piu' comunque, e li' l'ellissi
+// e' l'unica onesta.
+//
+// La misura si fa sul nodo vero, dopo che il browser lo ha disposto:
+// scrollWidth e' quanto il testo vorrebbe, clientWidth quanto ha. Nessuno
+// stato React di mezzo — si scrive direttamente lo stile, altrimenti ogni
+// misura farebbe un altro giro di render.
+function ValoreAdattato({ children, base = 11.5, minimo = 7, style }) {
+  const rif = React.useRef(null);
+  useLayoutEffect(() => {
+    const nodo = rif.current;
+    if (!nodo || !nodo.clientWidth) return;
+    let dimensione = base;
+    nodo.style.fontSize = `${dimensione}px`;
+    while (dimensione > minimo && nodo.scrollWidth > nodo.clientWidth) {
+      dimensione -= 0.5;
+      nodo.style.fontSize = `${dimensione}px`;
+    }
+  });
+  return (
+    <div ref={rif} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...style }}>
+      {children}
+    </div>
+  );
+}
 function IconaGraffetta({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -5686,10 +5716,10 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
             // La pastiglia e' alta 30 pixel esatti: dentro ci stanno
             // l'etichetta e il valore, uno sopra l'altro, e il tondo
             // dell'icona rimpicciolito di conseguenza. A questa altezza il
-            // valore non puo' andare a capo — un nome lungo si tronca con
-            // i puntini invece di sfondare la riga. La nota fa eccezione
-            // (opzioni.alta): li' il testo e' il contenuto, troncarlo
-            // vorrebbe dire non leggerlo.
+            // valore non puo' andare a capo, ma non si tronca: il carattere
+            // si rimpicciolisce quel tanto che basta a farcelo stare tutto
+            // (vedi ValoreAdattato). La nota fa eccezione (opzioni.alta):
+            // e' un testo lungo, e va a capo come si deve.
             const chip = (Icona, label, valore, opzioni = {}) => (
               <div style={{
                 gridColumn: opzioni.full ? "1 / -1" : "auto", minWidth: 0,
@@ -5710,12 +5740,11 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                 </span>
                 <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
                   <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}>{label}</div>
-                  <div style={{
-                    ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY, lineHeight: 1.2,
-                    ...(opzioni.alta
-                      ? { wordBreak: "break-word" }
-                      : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }),
-                  }}>{valore}</div>
+                  {opzioni.alta ? (
+                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY, lineHeight: 1.2, wordBreak: "break-word" }}>{valore}</div>
+                  ) : (
+                    <ValoreAdattato style={{ ...fontBody, fontWeight: 600, color: NAVY, lineHeight: 1.2 }}>{valore}</ValoreAdattato>
+                  )}
                 </div>
                 {opzioni.freccia && <span style={{ color: MUTED, flexShrink: 0, display: "flex" }}><IconaChevronDestra size={14} /></span>}
               </div>
