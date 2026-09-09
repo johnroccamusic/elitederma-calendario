@@ -6405,8 +6405,10 @@ function SezioneDateCorsi({
   const segnaleFiltri = `${isMobile}|${filtroCorsoHome}|${filtroCittaHome}|${filtroMasterHome}|${corsi.length}|${location.length}|${(master || []).length}`;
   const { ref: rigaFiltriRef, fontSize: fontFiltri } = useFontRigaAdattato(isMobile, segnaleFiltri, 13, 7);
   function apriDatePerCliente() {
-    const conFiltro = !!(ricercaDate.trim() || filtroCorsoHome || filtroCittaHome || filtroMasterHome);
-    if (!conFiltro) {
+    // Citta' o tipo di corso, o tutti e due: solo quei due filtri
+    // restringono davvero. Una ricerca a parole puo' lasciare dentro cento
+    // date, e l'obiettivo e' che ne esca un foglio solo.
+    if (!filtroCittaHome && !filtroCorsoHome) {
       setAvvisoVolantino("Elenco troppo esteso: devi prima applicare un filtro.");
       return;
     }
@@ -6415,6 +6417,10 @@ function SezioneDateCorsi({
       return;
     }
     const canvas = disegnaVolantinoCorsi({ corsiDate: corsiDateFiltrate, corsi, location });
+    if (!canvas) {
+      setAvvisoVolantino("Sono ancora troppe date per un foglio solo: stringi con l'altro filtro — città e tipo di corso insieme — oppure cerca un mese.");
+      return;
+    }
     setVolantino(canvas.toDataURL("image/png"));
   }
 
@@ -6812,11 +6818,14 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
     return tot + h;
   }, 0);
 
-  // si stringe finche' ci sta: mai sotto 0,45, sotto quella soglia un
-  // elenco non si legge piu' e tanto vale mandarne due
+  // si stringe finche' ci sta, ma mai sotto 0,55: sotto quella misura un
+  // elenco non si legge piu' su un telefono, e un foglio illeggibile non
+  // e' un foglio in meno da mandare, e' un foglio buttato. Se non basta si
+  // rinuncia e si chiede di stringere i filtri
   const disponibile = VOLANTINO_ALTEZZA - altezzaTestata - margine;
-  let k = 1;
-  if (altezzaCon(1) > disponibile) k = Math.max(0.45, disponibile / altezzaCon(1));
+  const necessaria = altezzaCon(1);
+  const k = necessaria <= disponibile ? 1 : disponibile / necessaria;
+  if (k < 0.55) return null;
 
   ctx.fillStyle = "#FAF7F1";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
