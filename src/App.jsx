@@ -48713,6 +48713,27 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // Il cancello sta qui e non sul tasto: allo scarico si arriva da quattro
   // punti diversi (aula allestita, pacco ritirato, rientro annullato,
   // inventario rifatto) e uno solo protetto non protegge niente.
+  // Le conferme di questa pagina non passano piu' da window.confirm. Dopo
+  // qualche finestra di fila il browser offre "non mostrare altre finestre
+  // di dialogo": chi la spunta si ritrova i tasti che non fanno niente,
+  // perche' confirm() da quel momento risponde "no" da sola e senza dirlo.
+  // E' successo il 9 settembre 2026 su "Materiale da consegnare", ed e'
+  // indistinguibile da un tasto rotto.
+  const [confermaAzione, setConfermaAzione] = useState(null);
+  const risolviConfermaRef = React.useRef(null);
+  function chiediConferma(testo) {
+    return new Promise((risolvi) => {
+      risolviConfermaRef.current = risolvi;
+      setConfermaAzione(testo);
+    });
+  }
+  function rispondiConferma(risposta) {
+    setConfermaAzione(null);
+    const risolvi = risolviConfermaRef.current;
+    risolviConfermaRef.current = null;
+    risolvi?.(risposta);
+  }
+
   const edizioniInLavorazioneRef = React.useRef(new Set());
   const [edizioneInLavorazione, setEdizioneInLavorazione] = useState(null);
   function iniziaLavorazione(corsoDataId) {
@@ -48956,7 +48977,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   }
   async function allestisciCorso(corsoData, allestire) {
     if (allestire) {
-      if (!window.confirm("Materiale consegnato in aula: scarico dal magazzino il materiale di questo corso?")) return;
+      if (!(await chiediConferma("Materiale consegnato in aula: scarico dal magazzino il materiale di questo corso?"))) return;
       const ok = await sincronizzaMagazzino(corsoData);
       if (ok === false) return;
       const foto = componiSpedizione({
@@ -48969,7 +48990,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       });
       return;
     }
-    if (!window.confirm("Tornando indietro il materiale rientra tutto in magazzino. Confermi?")) return;
+    if (!(await chiediConferma("Tornando indietro il materiale rientra tutto in magazzino. Confermi?"))) return;
     await ripristinaMagazzinoDaScarico(corsoData);
     await salvaCampiEdizione(corsoData.id, { allestito_ts: null });
   }
@@ -48996,7 +49017,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   }
   async function cambiaFaseLogistica(corsoData, fase) {
     if (fase === "ritirato_corriere") {
-      if (!window.confirm("Vuoi scaricare i prodotti in partenza dal magazzino?")) return;
+      if (!(await chiediConferma("Vuoi scaricare i prodotti in partenza dal magazzino?"))) return;
       // se lo scarico è bloccato (magazzino insufficiente) la fase NON
       // avanza: altrimenti risulterebbe "ritirato" senza scarico registrato
       const ok = await sincronizzaMagazzino(corsoData);
@@ -49170,7 +49191,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === edizioneSel.id)}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
                 onAggiornaPacco={async () => {
-                  if (!window.confirm("Il corso è già allestito: scarico dal magazzino quello che è stato aggiunto dopo e rifaccio la fotografia della spedizione?")) return;
+                  if (!(await chiediConferma("Il corso è già allestito: scarico dal magazzino quello che è stato aggiunto dopo e rifaccio la fotografia della spedizione?"))) return;
                   const ok = await sincronizzaMagazzino(edizioneSel);
                   if (ok === false) return;
                   const foto = componiSpedizione({
@@ -49208,6 +49229,16 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 
       {/* l'inventario di fine corso per i corsi in sede: si apre dal link
           accanto a "Inventario da fare" */}
+      {confermaAzione && (
+        <Modal title="Confermi?" onClose={() => rispondiConferma(false)} maxWidth={430}>
+          <div style={{ ...fontBody, fontSize: 14, color: NAVY, lineHeight: 1.5, marginTop: 4 }}>{confermaAzione}</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+            <Button onClick={() => rispondiConferma(true)} style={{ flex: 1 }}>Sì, procedi</Button>
+            <Button variant="ghost" onClick={() => rispondiConferma(false)} style={{ flex: 1 }}>Annulla</Button>
+          </div>
+        </Modal>
+      )}
+
       {inventarioSedeCorsoId && (() => {
         const cd = corsiDate.find((c) => c.id === inventarioSedeCorsoId);
         if (!cd) return null;
