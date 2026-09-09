@@ -20505,6 +20505,30 @@ function euroRiepilogo(n) {
 
 // Titolo di sezione con il filo che prosegue fino al bordo: dice dove
 // comincia un gruppo di numeri senza aggiungere una riga di testo.
+// Da telefono i numeri del riepilogo non sono tre riquadri ciascuno col
+// suo medaglione: sono tre cifre sotto un'etichetta comune, separate da un
+// filo. Le pastiglie con l'icona erano alte quanto tre righe di testo —
+// icona, etichetta a capo, importo — e da sole mandavano il saldo della
+// classe sotto il bordo dello schermo. L'icona di un portafoglio accanto a
+// "Lordo" non aggiunge poi niente che "Lordo" non dica gia'.
+function BloccoValoriRiepilogoMobile({ titolo, voci }) {
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, overflow: "hidden", marginBottom: 10 }}>
+      <div style={{ background: BG, padding: "5px 12px", ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2 }}>{titolo}</div>
+      <div style={{ display: "flex", alignItems: "stretch", background: "#fff" }}>
+        {voci.map((v, i) => (
+          <div key={v.etichetta} style={{ flex: "1 1 0", minWidth: 0, padding: "7px 9px", borderLeft: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ ...fontBody, fontSize: 8.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.2 }}>{v.etichetta}</div>
+            {/* la cifra si rimpicciolisce da sola se non ci sta: un terzo
+                di schermo non basta sempre a "€ 23.297,20" */}
+            <ValoreAdattato base={14} minimo={9} style={{ ...fontDisplay, fontWeight: 700, color: v.colore || NAVY, marginTop: 2 }}>{v.valore}</ValoreAdattato>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TitoloSezioneRiepilogo({ children }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
@@ -20983,16 +21007,16 @@ function PannelloRiepilogoAmministrativo({
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden", boxShadow: "0 16px 30px -16px rgba(14,27,51,0.25)" }}>
             <div
               onClick={() => setCostiAperto((v) => !v)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "18px 20px", cursor: "pointer" }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? 10 : 14, padding: isMobile ? "12px 14px" : "18px 20px", cursor: "pointer" }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
-                <div style={{ width: 42, height: 42, flexShrink: 0, borderRadius: "50%", border: `1px solid ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD }}>
-                  <IconaRiepilogoCircolare size={20} />
+              <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, minWidth: 0 }}>
+                <div style={{ width: isMobile ? 34 : 42, height: isMobile ? 34 : 42, flexShrink: 0, borderRadius: "50%", border: `1px solid ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD }}>
+                  <IconaRiepilogoCircolare size={isMobile ? 17 : 20} />
                 </div>
-                <div style={{ width: 1, alignSelf: "stretch", background: GOLD, opacity: 0.5, flexShrink: 0 }} />
+                {!isMobile && <div style={{ width: 1, alignSelf: "stretch", background: GOLD, opacity: 0.5, flexShrink: 0 }} />}
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Riepilogo amministrativo</div>
-                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Incassi, costi e saldo della classe</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.2 }}>Riepilogo amministrativo</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, color: MUTED }}>Incassi, costi e saldo della classe</div>
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -21005,19 +21029,36 @@ function PannelloRiepilogoAmministrativo({
             </div>
 
             {costiAperto && (
-              <div style={{ padding: "0 20px 20px" }}>
-                <TitoloSezioneRiepilogo>Incassi</TitoloSezioneRiepilogo>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 8 : 14, marginBottom: 14 }}>
-                  <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaPortafoglio} label="Lordo (iva incl.)" valore={euroRiepilogo(incassoLordoClasse)} />
-                  <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Netto (iva escl.)" valore={euroRiepilogo(incassoNettoClasse)} />
-                  <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaLibroContabile} label="IVA" valore={euroRiepilogo(ivaClasse)} />
-                </div>
-                <TitoloSezioneRiepilogo>Di cui</TitoloSezioneRiepilogo>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(120px, 1fr))", gap: isMobile ? 8 : 14, marginBottom: 22 }}>
-                  <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaCartaPos} label="Conto corrente" valore={euroRiepilogo(contoCorrenteClasse)} />
-                  <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Cash al corso" valore={euroRiepilogo(contantiClasse)} />
-                  <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Cash prima del corso" valore={euroRiepilogo(cashPrimaDelCorsoClasse)} />
-                </div>
+              <div style={{ padding: isMobile ? "0 14px 16px" : "0 20px 20px" }}>
+                {isMobile ? (
+                  <div style={{ marginBottom: 14 }}>
+                    <BloccoValoriRiepilogoMobile titolo="Incassi" voci={[
+                      { etichetta: "Lordo (iva incl.)", valore: euroRiepilogo(incassoLordoClasse) },
+                      { etichetta: "Netto (iva escl.)", valore: euroRiepilogo(incassoNettoClasse) },
+                      { etichetta: "IVA", valore: euroRiepilogo(ivaClasse) },
+                    ]} />
+                    <BloccoValoriRiepilogoMobile titolo="Di cui" voci={[
+                      { etichetta: "Conto corrente", valore: euroRiepilogo(contoCorrenteClasse) },
+                      { etichetta: "Cash al corso", valore: euroRiepilogo(contantiClasse) },
+                      { etichetta: "Cash prima del corso", valore: euroRiepilogo(cashPrimaDelCorsoClasse) },
+                    ]} />
+                  </div>
+                ) : (
+                  <>
+                    <TitoloSezioneRiepilogo>Incassi</TitoloSezioneRiepilogo>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 14 }}>
+                      <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaPortafoglio} label="Lordo (iva incl.)" valore={euroRiepilogo(incassoLordoClasse)} />
+                      <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Netto (iva escl.)" valore={euroRiepilogo(incassoNettoClasse)} />
+                      <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaLibroContabile} label="IVA" valore={euroRiepilogo(ivaClasse)} />
+                    </div>
+                    <TitoloSezioneRiepilogo>Di cui</TitoloSezioneRiepilogo>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 22 }}>
+                      <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaCartaPos} label="Conto corrente" valore={euroRiepilogo(contoCorrenteClasse)} />
+                      <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Cash al corso" valore={euroRiepilogo(contantiClasse)} />
+                      <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Cash prima del corso" valore={euroRiepilogo(cashPrimaDelCorsoClasse)} />
+                    </div>
+                  </>
+                )}
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
                   <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, whiteSpace: "nowrap" }}>Altri incassi al corso</div>
@@ -25547,37 +25588,67 @@ function PaginaProssimeContabilita({
           const terminato = oggi > cd.data_fine;
           return (
             <div key={cd.id} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: isMobile ? 14 : 16, marginBottom: 14, background: "#fff" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
-                  <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
-                    <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numero}</div>
-                    {sotto && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sotto}</div>}
+              {/* Da telefono l'intestazione sta su una riga sola: data,
+                  corso con la sua sede, quanti allievi, e il tasto per
+                  entrare in classe. Sotto non c'e' piu' la fila di quattro
+                  riquadri — gli allievi sono saliti qui, e lordo, netto e
+                  IVA erano gia' scritti tre centimetri piu' giu' dentro
+                  "Incassi": la scheda diceva due volte le stesse cifre e
+                  cominciava a scorrere prima di aver detto qualcosa. */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: isMobile ? 9 : 14, alignItems: "center", minWidth: 0, flex: isMobile ? "1 1 auto" : "0 1 auto" }}>
+                  <div style={{ background: coloreCorso, borderRadius: 12, padding: isMobile ? "7px 10px" : "10px 14px", textAlign: "center", flexShrink: 0 }}>
+                    <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? (isMobile ? 13 : 14) : (isMobile ? 17 : 20), fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numero}</div>
+                    {sotto && <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sotto}</div>}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{corso?.nome || "—"}</div>
-                    <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 14.5 : 19, fontWeight: 700, color: NAVY, lineHeight: 1.2, textTransform: isMobile ? "uppercase" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{corso?.nome || "—"}</div>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25, display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+                      {isMobile && <IconaPin size={12} color={NAVY} />}
+                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(loc?.nome || "—")}</span>
+                    </div>
                   </div>
+                  {isMobile && (
+                    <>
+                      <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                        <IconaGruppoTeam size={15} color={NAVY} />
+                        <div>
+                          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{conti.allievi}</div>
+                          <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Allievi</div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  {inCorso && <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#2E7D32" }}>IN CORSO</span>}
-                  {!inCorso && terminato && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED }}>Terminato</span>}
-                  <Button variant="ghost" onClick={() => onApriClasse(cd)}>Vedi classe ›</Button>
+                  {inCorso && <span style={{ ...fontDisplay, fontSize: isMobile ? 12 : 16, fontWeight: 700, color: "#2E7D32" }}>IN CORSO</span>}
+                  {!inCorso && terminato && <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: MUTED }}>Terminato</span>}
+                  <Button
+                    variant="ghost"
+                    onClick={() => onApriClasse(cd)}
+                    style={isMobile ? { fontSize: 12, padding: "7px 12px", borderRadius: 12, border: `1px solid ${GOLD}`, whiteSpace: "nowrap" } : {}}
+                  >
+                    Vedi classe ›
+                  </Button>
                 </div>
               </div>
 
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: 12 }}>
-                {[
-                  { etichetta: "Allievi", valore: String(conti.allievi), tinta: NAVY },
-                  { etichetta: "Lordo (iva incl.)", valore: fmtEuroErp(conti.incassoLordo), tinta: NAVY },
-                  { etichetta: "Netto (iva escl.)", valore: fmtEuroErp(conti.incassoNetto), tinta: NAVY },
-                  { etichetta: "IVA", valore: fmtEuroErp(conti.iva), tinta: MUTED },
-                ].map((v) => (
-                  <div key={v.etichetta} style={{ borderLeft: `3px solid ${GOLD}`, paddingLeft: 10 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{v.etichetta}</div>
-                    <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: v.tinta }}>{v.valore}</div>
-                  </div>
-                ))}
-              </div>
+              {!isMobile && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
+                  {[
+                    { etichetta: "Allievi", valore: String(conti.allievi), tinta: NAVY },
+                    { etichetta: "Lordo (iva incl.)", valore: fmtEuroErp(conti.incassoLordo), tinta: NAVY },
+                    { etichetta: "Netto (iva escl.)", valore: fmtEuroErp(conti.incassoNetto), tinta: NAVY },
+                    { etichetta: "IVA", valore: fmtEuroErp(conti.iva), tinta: MUTED },
+                  ].map((v) => (
+                    <div key={v.etichetta} style={{ borderLeft: `3px solid ${GOLD}`, paddingLeft: 10 }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{v.etichetta}</div>
+                      <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: v.tinta }}>{v.valore}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* il riepilogo amministrativo vero, non un riassunto: e' lo
                   stesso componente che si apre dentro la scheda del corso,
