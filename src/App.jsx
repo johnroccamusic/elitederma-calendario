@@ -102,6 +102,11 @@ const VERDE_TROVATA = "#E9F6EC";
 const ROSSO_DA_TROVARE = "#FDECEC";
 
 const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
+// Il titolo di una pagina, sempre lo stesso: Prompt 700, 24 fissi,
+// maiuscolo. Erano 19, 20, 21, 22, 24, 26, 28, 30, 32 — alcuni che si
+// rimpicciolivano da telefono e altri no — e passando da una pagina
+// all'altra il titolo cambiava taglia a ogni porta.
+const stileTitoloPagina = { fontFamily: "'Prompt',sans-serif", fontSize: 24, fontWeight: 700, textTransform: "uppercase", lineHeight: 1.15 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
 // serif elegante per il titolo del corso nell'intestazione scura
 // (Contabilità classe / schede di inserimento allievo): unico punto dove
@@ -3626,7 +3631,7 @@ function TopBar({ title, onBack, titoloIndietro = "Home" }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
       {onBack && <TastoLivelloPrecedente titolo={titoloIndietro} onClick={onBack} />}
-      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{title}</div>
+      <div style={{ ...stileTitoloPagina, color: NAVY }}>{title}</div>
     </div>
   );
 }
@@ -4970,7 +4975,7 @@ function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriP
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Analisi, report e KPI della tua Academy.</div>
         <GrigliaTasti
@@ -5624,7 +5629,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "40px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
         <TastoLivelloPrecedente titolo="Gestione corsi" onClick={onBack} />
-        <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textTransform: "uppercase" }}>Verifica Pagamenti</div>
+        <div style={{ ...stileTitoloPagina, color: NAVY, textTransform: "uppercase" }}>Verifica Pagamenti</div>
       </div>
       <div style={{ marginBottom: 18 }}>
         <PillolaSegmentata
@@ -6238,7 +6243,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
       </div>
       <div style={{ paddingLeft: 80, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
         <div>
-          <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Corsi chiusi da ciascun venditore nel periodo selezionato</div>
         </div>
         <button
@@ -7506,7 +7511,7 @@ function PaginaDashboardVenditori({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>
               {venditoreSel ? `Dashboard ${toTitleCase(venditoreSel.nome)}` : titolo}
             </div>
           </div>
@@ -8259,7 +8264,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Dashboard venditori" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Riepilogo Vendita prodotti</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Riepilogo Vendita prodotti</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>{nomeSoggetto ? toTitleCase(nomeSoggetto) : "—"} · Solo vendite al POS</div>
 
@@ -8448,7 +8453,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraDettaglioPunti(false)} />
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Provvigioni — dettaglio</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>Provvigioni — dettaglio</div>
           </div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Per codice referral usato dai tuoi clienti (online e al banco); i resi e gli annullamenti riducono l'importo.</div>
           {provvigioniMaster.gruppi.length === 0 ? (
@@ -8476,7 +8481,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraListaInventario(false)} />
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Chiusura corso</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>Chiusura corso</div>
           </div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Scegli il corso da chiudere — in cima anche quelli finiti da circa una settimana.</div>
           {corsiEleggibiliInventario.map((cd) => {
@@ -8509,7 +8514,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             </button>
           )}
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
+        <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 4 }}>
           {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
         </div>
         {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 10 }}>Area master</div>}
@@ -9082,7 +9087,7 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
     <div style={{ maxWidth: 760, margin: "0 auto", padding: isMobile ? "20px 16px 60px" : "32px 20px 60px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
         <TastoLivelloPrecedente titolo="Indietro" onClick={onBack} />
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Chiusura corso</div>
+        <div style={{ ...stileTitoloPagina, color: NAVY }}>Chiusura corso</div>
       </div>
       <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>
         {corso?.nome || "—"} · {toTitleCase(loc?.nome || "—")} · {fmtData(corsoData?.data_inizio)}
@@ -9576,7 +9581,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Dashboard master" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>
             Inventario {corso?.nome || "—"} {toTitleCase(loc?.nome || "—")} ({fmtDataCompatta(corsoData.data_inizio, corsoData.data_fine)})
           </div>
         </div>
@@ -10211,7 +10216,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
               titolo={agendaAperta && agendeVisibili.length > 1 ? "Agenda" : "Home"}
               onClick={() => (agendaAperta && agendeVisibili.length > 1 ? setAgendaApertaId(null) : onBack())}
             />
-            <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{agendaAperta ? agendaAperta.nome : titolo}</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>{agendaAperta ? agendaAperta.nome : titolo}</div>
           </div>
           {agendaAperta && (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -11508,7 +11513,7 @@ function PaginaGestioneModelle({
         </div>
         <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 4 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Fabbisogno, scadenze e assegnazioni</div>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -11790,7 +11795,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 16 : 26 }}>
           {programmatore
@@ -12754,7 +12759,7 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Password menù</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Password menù</div>
         </div>
 
         <div style={{ marginBottom: 28 }}>
@@ -14125,7 +14130,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
           titolo cominciava a meta' schermo */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
         {onBack && <TastoLivelloPrecedente titolo="Home" onClick={onBack} />}
-        <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textTransform: "uppercase" }}>{titolo}</div>
+        <div style={{ ...stileTitoloPagina, color: NAVY, textTransform: "uppercase" }}>{titolo}</div>
       </div>
       {!soloLettura && (
         <BarraTastiGestioneCorsi
@@ -25672,7 +25677,7 @@ function PaginaProssimeContabilita({
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
           <TastoLivelloPrecedente titolo="Gestione corsi" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 24 : 30, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
           I conti di ogni classe in ordine di data: quanto è già entrato, quanto resta da incassare in aula. I corsi finiti stanno nello storico.
@@ -26315,7 +26320,7 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         </div>
         <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 26, color: NAVY }}>{storico ? "Storico progetti" : titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{storico ? "Storico progetti" : titolo}</div>
           <button
             onClick={() => setStorico((v) => !v)}
             style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: storico ? BG_CHIARO : "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "9px 16px", cursor: "pointer" }}
@@ -26911,7 +26916,7 @@ function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi, categorie di spesa e organizzazione operativa dei corsi.</div>
         <GrigliaTasti
@@ -27376,7 +27381,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.</div>
 
@@ -28049,7 +28054,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>
           Le regole da rispettare e i documenti che le accompagnano.
@@ -28074,7 +28079,7 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Magazzino fisico, shop online e le vendite che ne derivano.</div>
         {/* "Gestione shop" (il front office) non ha più un tasto suo: si
@@ -28206,7 +28211,7 @@ function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione,
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>IVA su acquisti e vendite, per aliquota e per prodotto.</div>
 
@@ -28389,7 +28394,7 @@ function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, r
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Distingue corsi, prodotti ed esclusioni fra le righe vendute nello shop — usata per calcolare statistiche prodotto corrette.</div>
 
@@ -28596,7 +28601,7 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificaz
           <DettaglioClienteShop cliente={clienteAperto} />
         ) : (
           <>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 4 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Clienti dello shop online, raggruppati per account (o per email quando non c'è un account).</div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
@@ -29156,7 +29161,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
@@ -29739,7 +29744,7 @@ function PaginaDashboardAnalisi({
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
 
         <SezioneAnalisiAndamento
@@ -31238,7 +31243,7 @@ function PaginaRiconciliazione({
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Riconciliazione</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Riconciliazione</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Le fatture arrivate da Fatture in Cloud, abbinate agli impegni già presi.</div>
 
@@ -32607,7 +32612,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, impegni presi, documenti fornitore e scadenze attive/passive, in un unico posto.</div>
 
@@ -33336,7 +33341,7 @@ function PaginaInserimentoCostiRicavi({
         {importCsvAperto && (
           <PannelloImportCsv costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} onClose={() => setImportCsvAperto(false)} ricarica={ricarica} />
         )}
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Prima nota cassa</div>
+        <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 6 }}>Prima nota cassa</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le spese inserite manualmente, con modifica ed eliminazione.</div>
 
         <TabsAmministrazione
@@ -34231,7 +34236,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px calc(160px + env(safe-area-inset-bottom, 0px))" : "32px 32px 90px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: 12 }}>
           I pacchi da preparare: gli ordini dello shop online in lavorazione e le spedizioni vendute al banco, con i dati del cliente presi dal sito o scritti al POS.
@@ -34413,7 +34418,7 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: 16 }}>
           Quanto si copre con quello che c'è in magazzino, e cosa chiede un gesto adesso.
@@ -34458,7 +34463,7 @@ function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, or
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Chi ha comprato da noi: gli allievi dei corsi e i clienti dello shop.</div>
         <GrigliaTasti
@@ -34483,7 +34488,7 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Cosa parte da qui: i kit verso i corsi e i pacchi verso i clienti dello shop.</div>
         <GrigliaTasti
@@ -34600,7 +34605,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
         </div>
         <div style={{ paddingLeft: 80, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
           {origine === "woocommerce" && (
             <div style={{ textAlign: "right" }}>
               <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
@@ -35254,7 +35259,7 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche Totali Vendite Prodotti" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>{origine === "pos" ? "Solo i prodotti venduti al banco con il POS interno." : "Solo i prodotti venduti sullo shop online WooCommerce."}</div>
 
@@ -35384,7 +35389,7 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti usciti dal POS senza essere venduti — regalati, con nota obbligatoria sul motivo.</div>
 
@@ -35509,7 +35514,7 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit (materiale didattico/consumo).</div>
 
@@ -37427,7 +37432,7 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
           Cosa c'è fisicamente in ogni sede: si aggiorna da solo con gli inventari che le master dichiarano a fine corso.
@@ -39243,7 +39248,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
           Con le scorte di adesso, fino a quando riesci a coprire i corsi in calendario — e cosa devi ordinare.
@@ -40204,7 +40209,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo={rigaSelezionata ? "Ricerca" : "POS Vendita diretta"} onClick={rigaSelezionata ? tornaAllaRicerca : onChiudi} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 24, fontWeight: 700, color: NAVY }}>Resi / Annullamenti / Cambio</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Resi / Annullamenti / Cambio</div>
         </div>
 
         {!rigaSelezionata ? (
@@ -40414,7 +40419,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Somma di shop online e vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
 
@@ -40549,7 +40554,7 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Vendite al POS di ogni master, fino a oggi.</div>
 
@@ -41057,7 +41062,7 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Gestione Master</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Gestione Master</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Associa i master ai corsi e definisci i compensi in base al numero di allievi.</div>
 
@@ -41605,7 +41610,7 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Gestione Venditori</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Gestione Venditori</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Contatti, dati fiscali e classificazione gestionale di ogni venditore.</div>
 
@@ -42063,7 +42068,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>{sottotitolo}</div>
 
@@ -42675,7 +42680,7 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Gestione Hotel</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Gestione Hotel</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Anagrafica degli hotel usati come alloggio per le edizioni dei corsi.</div>
 
@@ -42973,7 +42978,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
             <IconaPin size={26} color={NAVY} />
           </div>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Location</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>Location</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginTop: 2 }}>Gestisci città e sedi accademiche</div>
           </div>
         </div>
@@ -43717,7 +43722,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
         </div>
         <div style={{ paddingLeft: 80, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>Tutti gli allievi che hanno acquistato almeno un corso.</div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -44201,7 +44206,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
         </div>
         <div style={{ paddingLeft: 80, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>
               Corsi pre-gestionale recuperati dagli archivi, più i corsi già conclusi nel gestionale ({tutte.length.toLocaleString("it-IT")} allieve).
             </div>
@@ -44869,7 +44874,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="POS Vendita diretta" onClick={() => setMostraStorico(false)} />
-            <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Storico vendite POS</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>Storico vendite POS</div>
           </div>
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 14 }}>
             <div style={{ overflowX: "auto" }}>
@@ -45420,7 +45425,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : titolo}</div>
+              <div style={{ ...stileTitoloPagina, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : titolo}</div>
               <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
             </div>
           </div>
@@ -45574,7 +45579,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div>
-              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : titolo}</div>
+              <div style={{ ...stileTitoloPagina, color: NAVY }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : titolo}</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
             </div>
           </div>
@@ -48387,7 +48392,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <div style={{ paddingLeft: incorporata ? 0 : 80, display: "flex", alignItems: "center", justifyContent: incorporata ? "flex-end" : "space-between", gap: 10, flexWrap: "wrap", marginBottom: incorporata ? 12 : 18 }}>
           {!incorporata && (
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{vista === "backoffice" ? "Back Office prodotti" : "Shop Online"}</div>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>{vista === "backoffice" ? "Back Office prodotti" : "Shop Online"}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>
               {vista === "backoffice"
                 ? "Categorie, prodotti e immagini dello shop online, sincronizzati con WooCommerce."
@@ -50039,7 +50044,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div>
-              <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{vistaStorico ? "Storico spedizioni" : titolo}</div>
+              <div style={{ ...stileTitoloPagina, color: NAVY }}>{vistaStorico ? "Storico spedizioni" : titolo}</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>
                 {vistaStorico ? "Corsi già conclusi: le schede restano consultabili qui, non spariscono più." : "Seleziona la fase raggiunta per ogni corso. La preparazione dei materiali resta qui a destra."}
               </div>
@@ -50236,7 +50241,7 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Spedizioni da evadere</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Spedizioni da evadere</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Vendite POS di prodotti non disponibili fisicamente al corso, da spedire a casa dell'allievo.</div>
 
@@ -50329,7 +50334,7 @@ function PaginaMagazziniLocali({ location, inventarioSede, magazzinoLocaleConsum
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Magazzini locali</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Magazzini locali</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Attrezzatura e consumabili già presenti in ogni città — usa questa vista per decidere cosa serve davvero spedire.</div>
 
@@ -51005,7 +51010,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Tipologie di kit</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Tipologie di kit</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
           Per ogni corso, i pacchetti selezionabili nel modulo di iscrizione ("Pacchetto/Kit") e il loro contenuto per la preparazione dei kit in Logistica prodotti.
@@ -52155,7 +52160,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Aggiungi, rinomina, riordina o disattiva le categorie e le sotto-voci di "Analisi costi di gestione".</div>
 
@@ -52562,7 +52567,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo={titoloPrecedente || "Prima nota cassa"} onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{spesaId ? "Modifica spesa" : "Nuova spesa"}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{spesaId ? "Modifica spesa" : "Nuova spesa"}</div>
         </div>
 
         {ambitoBloccato && (
@@ -52982,7 +52987,7 @@ function PaginaAbbonamentoForm({ abbonamentoId, corsi, location, corsiDate, even
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{abbonamentoId ? "Modifica abbonamento" : "Nuovo abbonamento o contratto"}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{abbonamentoId ? "Modifica abbonamento" : "Nuovo abbonamento o contratto"}</div>
         </div>
 
         <div style={{ ...cardStyle }}>
@@ -53197,7 +53202,7 @@ function PaginaBudgetCosti({ costiCategorie, location, corsi, costiBudget, ricar
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Prima nota cassa" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Budget</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Budget</div>
         </div>
 
         <div style={{ ...cardStyle }}>
@@ -53364,7 +53369,7 @@ function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, 
     <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 0 60px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, padding: "0 20px", flexWrap: "wrap" }}>
         <TastoLivelloPrecedente titolo="Verifica Pagamenti" onClick={onBack} />
-        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY }}>Schede associate</div>
+        <div style={{ ...stileTitoloPagina, color: NAVY }}>Schede associate</div>
       </div>
       <div style={{ overflowX: "auto", padding: "0 20px 20px" }}>
         <div style={{ display: "inline-flex", gap: 20, alignItems: "flex-start", justifyContent: "center", minWidth: "100%" }}>
