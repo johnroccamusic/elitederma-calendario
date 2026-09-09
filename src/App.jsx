@@ -6821,7 +6821,27 @@ function SezioneDateCorsi({
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
             Un foglio A4 con le date filtrate, senza posti liberi né iscritti: si copia e si incolla in chat.
           </div>
-          <img src={volantino} alt="Calendario corsi" style={{ width: "100%", height: "auto", display: "block", borderRadius: 10, border: `1px solid ${CREAM_BORDER}` }} />
+          {/* L'anteprima e' un A4: alta una volta e mezza la sua larghezza.
+              Lasciata libera si portava via tutto lo schermo del telefono e
+              spingeva "Copia immagine" e "Scarica" sotto il bordo — con i
+              tasti fuori vista la finestra non serve a niente. Qui si tiene
+              dentro quello che resta dell'altezza, tolti l'intestazione, i
+              tasti e lo spazio riservato in fondo: rimpicciolisce, ma si
+              vede tutta e i tasti restano sullo schermo. */}
+          <img
+            src={volantino}
+            alt="Calendario corsi"
+            style={{
+              width: "100%",
+              maxHeight: isMobile
+                ? "max(180px, calc(100dvh - 350px - env(safe-area-inset-bottom, 0px)))"
+                : "max(240px, calc(100dvh - 280px))",
+              objectFit: "contain",
+              display: "block",
+              borderRadius: 10,
+              border: `1px solid ${CREAM_BORDER}`,
+            }}
+          />
           <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
             <Button onClick={() => copiaVolantino(volantino, setAvvisoVolantino)} style={{ flex: "1 1 160px" }}>Copia immagine</Button>
             <Button variant="ghost" onClick={() => scaricaVolantino(volantino)} style={{ flex: "1 1 160px" }}>Scarica</Button>
