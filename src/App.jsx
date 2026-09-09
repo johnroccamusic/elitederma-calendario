@@ -5553,9 +5553,15 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
         <TastoLivelloPrecedente titolo="Gestione corsi" onClick={onBack} />
         <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textTransform: "uppercase" }}>Verifica Pagamenti</div>
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-        <TabPillola attivo={tab === "attesa"} onClick={() => setTab("attesa")}>Da verificare ({accontiDaVerificare.filter((a) => a.stato === "in_attesa").length})</TabPillola>
-        <TabPillola attivo={tab === "verificati"} onClick={() => setTab("verificati")}>Pagamenti verificati</TabPillola>
+      <div style={{ marginBottom: 18 }}>
+        <PillolaSegmentata
+          valore={tab}
+          onCambia={setTab}
+          voci={[
+            { chiave: "attesa", testo: `Da verificare (${accontiDaVerificare.filter((a) => a.stato === "in_attesa").length})` },
+            { chiave: "verificati", testo: "Pagamenti verificati" },
+          ]}
+        />
       </div>
 
       {righe.length === 0 ? (
