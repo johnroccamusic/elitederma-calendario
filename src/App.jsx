@@ -7301,7 +7301,7 @@ function etichettaIntervalloGiorni(dataInizio, dataFine) {
 // Master", stesso file, stesso bucket "allegati-iscritti" — qui è solo
 // in lettura, il caricamento resta un compito di chi gestisce
 // l'assegnazione)
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, onApriClasse, codiceReferral }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, onApriClasse, codiceReferral, onApriContabilita }) {
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
   const coloreCorso = corso?.colore || NAVY;
@@ -7312,6 +7312,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
   const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
+  const contabilitaVisibile = !!onApriContabilita && !!corsoData.token_master && oggiStr >= addGiorni(corsoData.data_inizio, -1);
   // click sul corpo della card: apre la "classe" DENTRO l'app (elenco allievi
   // con kit e taglia + gestione modelle), così ha l'header con Indietro/Home.
   return (
@@ -7330,11 +7331,26 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
           </div>
         </div>
-        {(inCorso || appenaTerminato) && (
-          <div style={{ ...fontDisplay, fontSize: inCorso ? 28 : 19, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>
-            {inCorso ? "IN CORSO" : "Appena terminato"}
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
+          {(inCorso || appenaTerminato) && (
+            <div style={{ ...fontDisplay, fontSize: inCorso ? 28 : 19, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>
+              {inCorso ? "IN CORSO" : "Appena terminato"}
+            </div>
+          )}
+          {/* Compare il giorno prima che il corso cominci: e' da li' che la
+              contabilita' serve davvero, e una classe ancora lontana con il
+              tasto acceso invita solo ad aprirla per niente. E' la stessa
+              pagina del link che si manda alla master — di sola lettura,
+              tranne la spunta "incassato". */}
+          {contabilitaVisibile && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onApriContabilita(corsoData); }}
+              style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 14px", cursor: "pointer", lineHeight: 1.2, textAlign: "center", flexShrink: 0 }}
+            >
+              Contabilità<br />Classe
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -7851,6 +7867,25 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     };
   }, [venditeShop, masterSelId, puntiMasterImpostazioni]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
+  // la contabilita' di una classe, aperta dal tasto sulla card: e' la
+  // stessa pagina del link che si manda alla master, con lo stesso
+  // cancello — passa da master_vista, che conosce solo la classe di quel
+  // token e restituisce i soli campi che la pagina disegna
+  const [contabilitaClasse, setContabilitaClasse] = useState(null);
+
+  if (contabilitaClasse) {
+    return (
+      <div>
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "4px 20px 0" }}>
+          <button onClick={() => { window.scrollTo(0, 0); setContabilitaClasse(null); }} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4 }}>
+            <IconaFrecciaSinistra size={20} />
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla dashboard</span>
+          </button>
+        </div>
+        <VistaMaster param={contabilitaClasse.token} />
+      </div>
+    );
+  }
 
   if (mostraDettaglioPunti && masterSel) {
     return (
@@ -8044,6 +8079,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
                 apribile={inFinestraInventario(cd)} onApriInventario={onApriChiusura} onApriClasse={onApriClasse}
                 codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
+                onApriContabilita={(riga) => { window.scrollTo(0, 0); setContabilitaClasse({ token: riga.token_master, nome: corsoById[riga.corso_id]?.nome || "" }); }}
               />
             ))}
           </>
