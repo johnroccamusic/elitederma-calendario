@@ -5683,27 +5683,41 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
             const AMBRA = "#B4801F";
             const AMBRA_BG = "#FBEFD8";
 
+            // La pastiglia e' alta 30 pixel esatti: dentro ci stanno
+            // l'etichetta e il valore, uno sopra l'altro, e il tondo
+            // dell'icona rimpicciolito di conseguenza. A questa altezza il
+            // valore non puo' andare a capo — un nome lungo si tronca con
+            // i puntini invece di sfondare la riga. La nota fa eccezione
+            // (opzioni.alta): li' il testo e' il contenuto, troncarlo
+            // vorrebbe dire non leggerlo.
             const chip = (Icona, label, valore, opzioni = {}) => (
               <div style={{
                 gridColumn: opzioni.full ? "1 / -1" : "auto", minWidth: 0,
-                display: "flex", alignItems: "center", gap: 10,
-                background: opzioni.sfondo || CHIP, borderRadius: 14, padding: "9px 12px",
+                height: opzioni.alta ? undefined : 30, boxSizing: "border-box",
+                display: "flex", alignItems: "center", gap: 8,
+                background: opzioni.sfondo || CHIP, borderRadius: 10,
+                padding: opzioni.alta ? "7px 10px" : "0 10px",
               }}>
                 <span style={{
-                  width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
                   background: opzioni.tondo || CHIP_TONDO, color: opzioni.coloreIcona || NAVY,
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                 }}>
                   {/* color esplicito: qualche icona nasce con un colore
                       suo (il pin e' oro), e qui devono parlare tutte con
                       la stessa voce */}
-                  <Icona size={16} color={opzioni.coloreIcona || NAVY} />
+                  <Icona size={13} color={opzioni.coloreIcona || NAVY} />
                 </span>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, wordBreak: "break-word", lineHeight: 1.25 }}>{valore}</div>
+                <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+                  <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}>{label}</div>
+                  <div style={{
+                    ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY, lineHeight: 1.2,
+                    ...(opzioni.alta
+                      ? { wordBreak: "break-word" }
+                      : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }),
+                  }}>{valore}</div>
                 </div>
-                {opzioni.freccia && <span style={{ color: MUTED, flexShrink: 0, display: "flex" }}><IconaChevronDestra size={15} /></span>}
+                {opzioni.freccia && <span style={{ color: MUTED, flexShrink: 0, display: "flex" }}><IconaChevronDestra size={14} /></span>}
               </div>
             );
             const valoreCoinvolti = (coinvolti, render) => coinvolti.map((co, i) => (
@@ -5755,7 +5769,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                         {chip(IconaOrologioCard, "Data pag.", a.data_pagamento ? fmtData(a.data_pagamento) : "—")}
                         {chip(IconaBanconota, "Importo", a.importo != null ? fmtEuroErp(a.importo) : "—")}
                         {chip(IconaCartaPos, "Metodo", a.metodo || "—")}
-                        {chip(IconaMatitaNota, "Nota", a.nota || "—", { full: true, sfondo: NOTA_BG, tondo: "#F1E6D2", coloreIcona: AMBRA })}
+                        {chip(IconaMatitaNota, "Nota", a.nota || "—", { full: true, alta: true, sfondo: NOTA_BG, tondo: "#F1E6D2", coloreIcona: AMBRA })}
                         {chip(
                           IconaGraffetta,
                           "File allegato",
