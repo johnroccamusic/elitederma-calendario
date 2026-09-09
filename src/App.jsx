@@ -6433,6 +6433,10 @@ function SezioneDateCorsi({
   // "Gestione corsi" lo passa: le altre pagine che riusano questo
   // componente restano invariate.
   stickyControlli, intestazioneSticky,
+  // in vista calendario titolo, pillole e filtri non restano appesi: sopra
+  // un calendario che scorre coprivano mezza schermata. Restano sospesi
+  // solo i tasti che il chiamante passa in intestazioneSticky
+  nascondiControlliInCalendario,
   // opzionali: ricerca, tab e modo tenuti da chi ospita questa sezione, così
   // sopravvivono all'andata e ritorno da una scheda. Se non arrivano, il
   // componente usa i propri, come ha sempre fatto
@@ -6576,10 +6580,21 @@ function SezioneDateCorsi({
 
   return (
     <div>
-      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: "transparent", paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
+      {/* In vista calendario resta appeso solo quello che il chiamante
+          passa come intestazione — i quattro tasti — e il resto (titolo,
+          pillole, filtri) scorre via: una striscia alta sospesa sopra un
+          calendario che si muove copriva mezza schermata. */}
+      <div
+        ref={controlliStickyRef}
+        style={stickyControlli && !(nascondiControlliInCalendario && vistaDateModo === "calendario")
+          ? { position: "sticky", top: 0, zIndex: 15, background: "transparent", paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 }
+          : undefined}
+      >
       {!(collassabileSuMobile && controlliCollassati) && (
       <>
-      {intestazioneSticky}
+      {stickyControlli && nascondiControlliInCalendario && vistaDateModo === "calendario"
+        ? <div style={{ position: "sticky", top: 0, zIndex: 15, paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0 }}>{intestazioneSticky}</div>
+        : intestazioneSticky}
       {!nascondiControlli && (
         <>
           {!nascondiTitolo && (
@@ -13815,6 +13830,21 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
     );
   }
 
+  // In vista calendario resta appesa solo la fila dei quattro tasti: il
+  // titolo, le pillole e i filtri sono una striscia alta, e appesa sopra un
+  // calendario che scorre copriva mezza schermata. Cosi' restano sospesi
+  // quattro quadrati e il calendario ci passa sotto.
+  const soloTastiGestioneCorsi = !soloLettura ? (
+    <BarraTastiGestioneCorsi
+      attivo="corsi"
+      numeroAccontiInAttesa={numeroAccontiInAttesa}
+      onAggiungiCorso={() => setMostraAggiungiCorso(true)}
+      onUltimeIscrizioni={onApriUltimeIscrizioni}
+      onProssimeContabilita={onApriProssimeContabilita}
+      onVerificaAcconti={onApriVerificaAcconti}
+    />
+  ) : null;
+
   const intestazioneGestioneCorsi = (
     <>
       {/* la via di ritorno: qui non c'era, e da Gestione corsi si usciva
@@ -13849,7 +13879,8 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         ricarica={ricarica} onApriData={soloLettura ? () => {} : onApriData}
         onApriIscritto={soloLettura ? undefined : onApriIscritto}
         nascondiTitolo
-        stickyControlli intestazioneSticky={intestazioneGestioneCorsi}
+        stickyControlli intestazioneSticky={modoDateGestione === "calendario" ? soloTastiGestioneCorsi : intestazioneGestioneCorsi}
+        nascondiControlliInCalendario
         {...(soloLettura ? { modoForzato: "elenco" } : {})}
         ricercaEsterna={ricercaDateGestione} setRicercaEsterna={setRicercaDateGestione}
         tabEsterna={tabDateGestione} setTabEsterna={setTabDateGestione}
