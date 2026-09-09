@@ -6433,21 +6433,6 @@ function SezioneDateCorsi({
   const [ricercaDateInterna, setRicercaDateInterna] = useState("");
   const ricercaDate = setRicercaEsterna ? (ricercaEsterna || "") : ricercaDateInterna;
   const setRicercaDate = setRicercaEsterna || setRicercaDateInterna;
-  // dimensione del testo SOLO nelle barre-evento del calendario incorporato
-  // (nome corso + sigla città), regolabile coi tasti +/- vicino a "Elenco":
-  // resta memorizzata in locale, così l'ultima misura scelta vale anche
-  // alle aperture successive
-  const [fontScale, setFontScale] = useState(() => {
-    const salvato = parseFloat(localStorage.getItem("corsiDateFontScale"));
-    return Number.isFinite(salvato) ? salvato : 1;
-  });
-  function cambiaFontScale(delta) {
-    setFontScale((prev) => {
-      const nuovo = Math.round(Math.min(1.4, Math.max(0.8, prev + delta)) * 100) / 100;
-      localStorage.setItem("corsiDateFontScale", String(nuovo));
-      return nuovo;
-    });
-  }
   // quando i controlli sono sticky (solo "Gestione corsi"), il Calendario
   // incorporato deve sapere quanto è alta questa barra fissa per far
   // scorrere il mese corrente esattamente sotto di essa, non dietro
@@ -6577,11 +6562,6 @@ function SezioneDateCorsi({
 
                 </>
               )}
-              <div style={{ display: "flex", alignItems: "center", marginLeft: isMobile ? 2 : 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff", flexShrink: 0 }}>
-                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: isMobile ? 20 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 33 : 30, height: isMobile ? 39 : 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
-                <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
-                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci il testo nelle barre del calendario" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: isMobile ? 20 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 33 : 30, height: isMobile ? 39 : 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
-              </div>
             </div>
           </div>
         </>
@@ -6723,7 +6703,7 @@ function SezioneDateCorsi({
         // spostabile solo dove è già consentito modificare le date (Gestione
         // corsi passa onEdit/onDelete; Dashboard venditori e Gestione modelle
         // restano di sola consultazione)
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} fontScaleBarre={fontScale} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} spostabile={!!onEdit} />
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} spostabile={!!onEdit} />
       )}
       </div>
 
