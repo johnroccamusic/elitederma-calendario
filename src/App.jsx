@@ -6317,7 +6317,7 @@ function PillolaSegmentata({ voci, valore, onCambia, compatto }) {
   return (
     <div style={{
       display: "inline-flex", alignItems: "stretch", flexShrink: 0,
-      background: "#F1ECE2", borderRadius: 22, padding: 4, gap: 2,
+      background: "#F1ECE2", borderRadius: 14, padding: 5, gap: 2,
     }}>
       {voci.map((v) => {
         const attivo = valore === v.chiave;
@@ -6327,7 +6327,7 @@ function PillolaSegmentata({ voci, valore, onCambia, compatto }) {
             onClick={() => onCambia(v.chiave)}
             style={{
               ...fontBody, fontSize: compatto ? 11 : 13, fontWeight: 700,
-              padding: compatto ? "6px 10px" : "8px 15px", borderRadius: 18, border: "none",
+              padding: compatto ? "10px 12px" : "13px 18px", borderRadius: 10, border: "none",
               background: attivo ? "#fff" : "transparent",
               color: attivo ? NAVY : MUTED,
               boxShadow: attivo ? "0 1px 3px rgba(14,27,51,0.12)" : "none",
