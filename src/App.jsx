@@ -54498,7 +54498,7 @@ export default function App() {
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 24px 0" }}>
           <BarraTastiGestioneCorsi
             attivo="acconti"
-            numeroAccontiInAttesa={accontiDaVerificare.length}
+            numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
             onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
             onUltimeIscrizioni={() => setView("ultimeiscrizioni")}
             onProssimeContabilita={() => setView("prossimecontabilita")}
@@ -55010,7 +55010,7 @@ export default function App() {
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 24px 0" }}>
           <BarraTastiGestioneCorsi
             attivo="contabilita"
-            numeroAccontiInAttesa={accontiDaVerificare.length}
+            numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
             onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
             onUltimeIscrizioni={() => setView("ultimeiscrizioni")}
             onProssimeContabilita={() => {}}
@@ -55253,7 +55253,7 @@ export default function App() {
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 24px 0" }}>
           <BarraTastiGestioneCorsi
             attivo="iscrizioni"
-            numeroAccontiInAttesa={accontiDaVerificare.length}
+            numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
             onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
             onUltimeIscrizioni={() => {}}
             onProssimeContabilita={() => setView("prossimecontabilita")}
