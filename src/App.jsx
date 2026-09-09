@@ -13682,25 +13682,40 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
       )}
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>{titolo}</div>
       {!soloLettura && (
-        <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 6 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: "wrap" }}>
-          <Button onClick={() => setMostraAggiungiCorso(true)} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Aggiungi Corso</Button>
-          <Button variant="ghost" onClick={onApriUltimeIscrizioni} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Ultime iscrizioni</Button>
-          {onApriProssimeContabilita && (
-            <Button variant="ghost" onClick={onApriProssimeContabilita} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Prossime contabilità</Button>
-          )}
-          {numeroAccontiInAttesa > 0 ? (
-            <>
-              <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+        // Quattro quadrati uguali su una riga, con il testo a capo dentro:
+        // erano pastiglie larghe quanto la parola, e quattro larghezze
+        // diverse in fila si leggevano come un elenco disordinato invece
+        // che come quattro scelte pari. Quadrati stanno anche sul telefono
+        // senza rimpicciolire il testo fino a non leggerlo.
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: isMobile ? 6 : 10, marginBottom: isMobile ? 14 : 22, maxWidth: 560, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
+          {[
+            { chiave: "aggiungi", testo: "Aggiungi corso", onClick: () => setMostraAggiungiCorso(true), primario: true },
+            { chiave: "iscrizioni", testo: "Ultime iscrizioni", onClick: onApriUltimeIscrizioni },
+            ...(onApriProssimeContabilita ? [{ chiave: "contabilita", testo: "Prossime contabilità", onClick: onApriProssimeContabilita }] : []),
+            numeroAccontiInAttesa > 0
+              ? { chiave: "acconti", testo: `Verifica pagamenti (${numeroAccontiInAttesa})`, onClick: onApriVerificaAcconti, urgente: true }
+              : { chiave: "acconti", testo: "Niente da verificare", onClick: onApriVerificaAcconti },
+          ].map((t) => (
+            <React.Fragment key={t.chiave}>
+              {t.urgente && <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>}
               <button
-                onClick={onApriVerificaAcconti}
-                style={{ ...fontBody, fontSize: isMobile ? 11 : 14, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: isMobile ? "7px 8px" : "10px 18px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, animation: "lampeggiaAcconti 1.1s ease-in-out infinite" }}
+                onClick={t.onClick}
+                style={{
+                  ...fontBody, fontSize: isMobile ? 12 : 14, fontWeight: 700, lineHeight: 1.2,
+                  aspectRatio: "1 / 1", minWidth: 0, boxSizing: "border-box", overflow: "hidden",
+                  display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
+                  padding: isMobile ? "6px 5px" : "10px 8px", borderRadius: isMobile ? 12 : 16, cursor: "pointer",
+                  overflowWrap: "anywhere",
+                  color: t.primario || t.urgente ? "#fff" : NAVY,
+                  background: t.urgente ? "#C0392B" : t.primario ? NAVY : "#fff",
+                  border: t.primario || t.urgente ? "none" : `1px solid ${CREAM_BORDER}`,
+                  animation: t.urgente ? "lampeggiaAcconti 1.1s ease-in-out infinite" : "none",
+                }}
               >
-                Verifica Pagamenti ({numeroAccontiInAttesa})
+                {t.testo}
               </button>
-            </>
-          ) : (
-            <Button variant="ghost" onClick={onApriVerificaAcconti} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Niente da verificare</Button>
-          )}
+            </React.Fragment>
+          ))}
         </div>
       )}
     </>
