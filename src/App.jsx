@@ -8495,8 +8495,14 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
 
       {/* 1 — Allievi */}
       <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
-        <div style={titoloBlocco}>1 · Allievi</div>
-        <div style={sottotitoloBlocco}>Sono tutti già spuntati come "kit consegnato": togli la spunta solo a chi non l'ha ricevuto.</div>
+        <div style={titoloBlocco}>1 · Controllo dei kit</div>
+        {/* In nero, non in grigio: e' l'istruzione che decide cosa rientra
+            in magazzino, non una nota di contorno. E si spunta chi NON ha
+            ritirato, non chi ha ritirato: le eccezioni sono poche, e
+            togliere una spunta a chi manca si scorda molto piu' facilmente
+            che metterne una. Dietro, il dato salvato resta lo stesso —
+            "kit consegnato" — solo scritto al contrario qui. */}
+        <div style={{ ...sottotitoloBlocco, color: NAVY }}>Segna solo chi non ha ritirato il kit perché era assente o per altre ragioni: quel kit torna in magazzino.</div>
         {iscrittiEdizione.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto.</div>}
         {iscrittiEdizione.map((i) => {
           const riga = consegnaDi(i.id);
@@ -8508,7 +8514,7 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
           return (
             <div key={i.id} style={rigaBase}>
               <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: confermata ? "default" : "pointer", flex: "1 1 220px", minWidth: 0 }}>
-                <input type="checkbox" disabled={confermata} checked={riga ? riga.kit_consegnato !== false : true} onChange={(e) => cambiaConsegna(i.id, { kit_consegnato: e.target.checked })} />
+                <input type="checkbox" disabled={confermata} checked={riga ? riga.kit_consegnato === false : false} onChange={(e) => cambiaConsegna(i.id, { kit_consegnato: !e.target.checked })} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{`${i.nome || ""} ${i.cognome || ""}`.trim()}</span>
                   <span style={{ display: "block", ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>{i.pacchetto_kit || "Nessun kit"}</span>
@@ -8516,8 +8522,11 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
               </label>
               {dermografoQui ? (
                 <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: confermata ? "default" : "pointer", flexShrink: 0, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                  <input type="checkbox" disabled={confermata} checked={riga ? riga.dermografo_consegnato !== false : true} onChange={(e) => cambiaConsegna(i.id, { dermografo_consegnato: e.target.checked })} />
-                  {etichettaDermografo(modello)}
+                  {/* girato come il kit qui accanto: due caselle sulla
+                      stessa riga con significato opposto sarebbero una
+                      trappola. Qui pero' il senso e' scritto, non dedotto */}
+                  <input type="checkbox" disabled={confermata} checked={riga ? riga.dermografo_consegnato === false : false} onChange={(e) => cambiaConsegna(i.id, { dermografo_consegnato: !e.target.checked })} />
+                  {etichettaDermografo(modello)} non ritirato
                 </label>
               ) : (
                 <span style={{ ...fontBody, fontSize: 12, color: nelKit ? NAVY : MUTED, flexShrink: 0 }}>
