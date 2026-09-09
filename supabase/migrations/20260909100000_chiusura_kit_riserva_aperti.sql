@@ -54,3 +54,15 @@ comment on table public.chiusura_corso_kit_riserva is
   'Per ogni tipo di kit di riserva di una chiusura: rientra integro o aperto.';
 comment on table public.chiusura_corso_kit_componenti is
   'Pezzi usciti dai kit di riserva aperti, con il motivo: venduti, o serviti a sostituire/integrare un altro kit.';
+
+-- Poi: uno per uno, non un tipo per volta. Di tre kit di riserva uno puo'
+-- tornare sigillato e due aperti, e una risposta sola per tre scatole non
+-- lo direbbe.
+alter table public.chiusura_corso_kit_riserva
+  add column if not exists indice integer not null default 1;
+alter table public.chiusura_corso_kit_riserva
+  drop constraint if exists chiusura_corso_kit_riserva_chiusura_id_kit_id_key;
+create unique index if not exists chiusura_corso_kit_riserva_unico
+  on public.chiusura_corso_kit_riserva (chiusura_id, kit_id, indice);
+comment on column public.chiusura_corso_kit_riserva.indice is
+  'Quale dei kit di riserva di quel tipo: 1, 2, 3... Ognuno rientra integro o aperto per conto suo.';

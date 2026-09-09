@@ -8345,10 +8345,11 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
   // integro o aperto, un tipo di kit per volta. La riga si crea al primo
   // tocco: finche' nessuno dichiara niente non esiste, e un elenco di
   // righe vuote non direbbe nulla in piu' del silenzio
-  const statoKitDi = (kitId) => kitRiserva.find((r) => r.kit_id === kitId)?.stato || null;
-  async function cambiaStatoKit(kitId, stato) {
+  const statoKitDi = (kitId, indice) => kitRiserva.find((r) => r.kit_id === kitId && (r.indice || 1) === indice)?.stato || null;
+  const kitApertoDi = (kitId) => kitRiserva.some((r) => r.kit_id === kitId && r.stato === "aperto");
+  async function cambiaStatoKit(kitId, indice, stato) {
     if (!chiusura) return;
-    const esistente = kitRiserva.find((r) => r.kit_id === kitId);
+    const esistente = kitRiserva.find((r) => r.kit_id === kitId && (r.indice || 1) === indice);
     // ripremendo lo stesso tasto si toglie la dichiarazione: "non lo so
     // ancora" deve restare uno stato raggiungibile
     const nuovo = esistente?.stato === stato ? null : stato;
@@ -8358,7 +8359,7 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
       return;
     }
     const { data } = await supabase.from("chiusura_corso_kit_riserva")
-      .insert({ chiusura_id: chiusura.id, kit_id: kitId, stato: nuovo }).select().single();
+      .insert({ chiusura_id: chiusura.id, kit_id: kitId, indice, stato: nuovo }).select().single();
     if (data) setKitRiserva((prev) => [...prev, data]);
   }
   async function aggiungiComponenteKit(kitId, prodottoId, destinazione) {
@@ -8642,48 +8643,58 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
         <div style={titoloBlocco}>2 · Kit di riserva</div>
         <div style={sottotitoloBlocco}>Segna quali kit di riserva rientreranno integri a Roma e quali sono quelli aperti.</div>
         {righeKit.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit spedito per questa edizione.</div>}
-        {righeKit.map((r) => {
-          const statoKit = statoKitDi(r.kitId);
-          return (
-            <div key={r.kitId}>
-              <RigaAttesa
-                tipo="kit" riferimento={r.kitId} atteso={r.atteso}
-                etichetta={r.nome}
-                dettaglio={`spediti ${r.spediti} · consegnati ${r.consegnati}`}
-              />
-              {/* le due colonne accanto al nome: sigillato torna a scaffale
-                  com'e', aperto no — e' la differenza che il magazzino deve
-                  sapere, e finora nessuno gliela diceva */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "8px 0 12px" }}>
-                {[["integro", "Kit integro"], ["aperto", "Kit aperto"]].map(([chiave, testo]) => (
-                  <button
-                    key={chiave}
-                    disabled={confermata}
-                    onClick={() => cambiaStatoKit(r.kitId, chiave)}
-                    style={{
-                      ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 14, padding: "7px 14px",
-                      cursor: confermata ? "default" : "pointer",
-                      color: statoKit === chiave ? "#fff" : NAVY,
-                      background: statoKit === chiave ? NAVY : "#fff",
-                      border: `1px solid ${statoKit === chiave ? NAVY : CREAM_BORDER}`,
-                    }}
-                  >{testo}</button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        {righeKit.map((r) => (
+          <div key={r.kitId}>
+            <RigaAttesa
+              tipo="kit" riferimento={r.kitId} atteso={r.atteso}
+              etichetta={r.nome}
+              dettaglio={`spediti ${r.spediti} · consegnati ${r.consegnati}`}
+            />
+            {/* uno per uno, non un tasto per tutto il tipo: di tre kit di
+                riserva uno puo' tornare sigillato e due aperti, e una
+                risposta sola per tre scatole non lo direbbe. Le due scelte
+                stanno a destra del pezzo, sulla sua riga.
+                Se di riserva non ne rientra nessuno non c'e' niente da
+                dichiarare, e i tasti non compaiono. */}
+            {Array.from({ length: Math.max(0, r.atteso) }, (_, n) => n + 1).map((indice) => {
+              const statoKit = statoKitDi(r.kitId, indice);
+              return (
+                <div key={indice} style={{ ...rigaBase, paddingLeft: 2 }}>
+                  <div style={{ flex: "1 1 140px", minWidth: 0, ...fontBody, fontSize: 13.5, color: NAVY }}>
+                    {r.nome} <span style={{ color: MUTED }}>n. {indice}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    {[["integro", "Kit integro"], ["aperto", "Kit aperto"]].map(([chiave, testo]) => (
+                      <button
+                        key={chiave}
+                        disabled={confermata}
+                        onClick={() => cambiaStatoKit(r.kitId, indice, chiave)}
+                        style={{
+                          ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 14, padding: "7px 14px",
+                          cursor: confermata ? "default" : "pointer",
+                          color: statoKit === chiave ? "#fff" : NAVY,
+                          background: statoKit === chiave ? NAVY : "#fff",
+                          border: `1px solid ${statoKit === chiave ? NAVY : CREAM_BORDER}`,
+                        }}
+                      >{testo}</button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       {/* 2b — Kit aperti: compare solo quando c'e' almeno un kit dichiarato
           aperto. Prima di quel momento non c'e' niente da dire, e una
           scheda vuota in mezzo alla chiusura si legge come un passo
           saltato */}
-      {righeKit.some((r) => statoKitDi(r.kitId) === "aperto") && (
+      {righeKit.some((r) => kitApertoDi(r.kitId)) && (
         <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
           <div style={titoloBlocco}>Kit aperti</div>
           <div style={{ ...sottotitoloBlocco, color: NAVY }}>Dimmi dei kit aperti cosa è stato tolto per sostituzione o venduto.</div>
-          {righeKit.filter((r) => statoKitDi(r.kitId) === "aperto").map((r) => {
+          {righeKit.filter((r) => kitApertoDi(r.kitId)).map((r) => {
             const componenti = (corsiKitProdotti || [])
               .filter((x) => x.kit_id === r.kitId && (x.tipo === "kit" || x.tipo === "accessorio") && x.prodotto_id)
               .map((x) => ({ id: x.prodotto_id, nome: nomeProdotto(x.prodotto_id) }))
