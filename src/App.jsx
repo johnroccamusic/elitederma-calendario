@@ -2807,10 +2807,22 @@ function prezzoAlPubblico(p) {
   if (p?.prezzo_vendita == null) return null;
   return round2(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? 22) / 100));
 }
+// Il lordo che finisce a un centesimo dal decimo si porta al decimo:
+// 39,89 diventa 39,90, 9,89 diventa 9,90, 46,99 diventa 47,00. Non e' un
+// vezzo: un prezzo a scaffale che finisce per 9 centesimi si legge come
+// un errore di conto, ed e' quello che succede con un netto tondo (32,70)
+// moltiplicato per 1,22 — viene 39,894 e l'arrotondamento lo lascia un
+// centesimo sotto.
+//
+// L'IVA si ricava dalla differenza, non si ricalcola: cosi' netto, IVA e
+// lordo tornano fra loro anche dopo la correzione, e il centesimo in piu'
+// sta dove deve stare.
 function calcolaIvaELordo(netto, aliquotaPct) {
   if (netto == null || aliquotaPct == null) return { iva: null, lordo: null };
-  const iva = round2(netto * (aliquotaPct / 100));
-  return { iva, lordo: round2(netto + iva) };
+  const lordoGrezzo = round2(netto + round2(netto * (aliquotaPct / 100)));
+  const centesimi = Math.round(lordoGrezzo * 100);
+  const lordo = centesimi % 10 === 9 ? round2((centesimi + 1) / 100) : lordoGrezzo;
+  return { iva: round2(lordo - netto), lordo };
 }
 // unico punto in cui si parte dal lordo (il toggle "netto/lordo" in
 // scheda prodotto): il netto si ricava all'indietro e si arrotonda
@@ -6593,7 +6605,7 @@ function SezioneDateCorsi({
       {!(collassabileSuMobile && controlliCollassati) && (
       <>
       {stickyControlli && nascondiControlliInCalendario && vistaDateModo === "calendario"
-        ? <div style={{ position: "sticky", top: 0, zIndex: 15, paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0 }}>{intestazioneSticky}</div>
+        ? <TastiSospesi>{intestazioneSticky}</TastiSospesi>
         : intestazioneSticky}
       {!nascondiControlli && (
         <>
@@ -13668,6 +13680,45 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
 // verificare non tingono piu' di rosso l'intero tasto — che in mezzo a tre
 // chiari sembrava un'altra cosa — ma portano il pallino rosso lampeggiante
 // col numero dentro, lo stesso dei tasti in home.
+// I quattro tasti in vista calendario devono restare dove sono, alla stessa
+// distanza dal bordo alto dello schermo, con il calendario che passa loro
+// sotto. Con `position: sticky` non ci si riusciva: sticky vive dentro il
+// proprio genitore, e li' il genitore e' alto quanto la barra stessa —
+// appena il calendario scorreva la barra se ne andava con lui, perche' il
+// calendario e' fuori da quel blocco. Serve `fixed`, piu' uno spazio vuoto
+// della stessa altezza che tenga il posto nel flusso.
+function TastiSospesi({ children }) {
+  const isMobile = useIsMobile();
+  const rif = React.useRef(null);
+  const [altezza, setAltezza] = useState(0);
+  useLayoutEffect(() => {
+    const nodo = rif.current;
+    if (!nodo) return;
+    const misura = () => setAltezza(nodo.offsetHeight);
+    misura();
+    // i tasti cambiano altezza quando il testo va a capo (schermo stretto)
+    // o quando compare il pallino delle verifiche: lo spazio riservato
+    // deve seguirli, altrimenti il calendario ci finisce sotto
+    const osservatore = typeof ResizeObserver !== "undefined" ? new ResizeObserver(misura) : null;
+    if (osservatore) osservatore.observe(nodo);
+    window.addEventListener("resize", misura);
+    return () => { if (osservatore) osservatore.disconnect(); window.removeEventListener("resize", misura); };
+  }, []);
+  const distanzaDalTop = isMobile ? 68 : 70;
+  return (
+    <>
+      <div style={{ position: "fixed", top: distanzaDalTop, left: 0, right: 0, zIndex: 15, pointerEvents: "none" }}>
+        <div ref={rif} style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0 24px" : "0 32px", pointerEvents: "auto" }}>
+          {children}
+        </div>
+      </div>
+      {/* lo spazio che la barra occupava prima di staccarsi dal flusso: da
+          desktop comprendeva anche il distacco dall'alto, da mobile no */}
+      <div aria-hidden style={{ height: altezza + (isMobile ? 0 : distanzaDalTop) }} />
+    </>
+  );
+}
+
 function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungiCorso, onUltimeIscrizioni, onProssimeContabilita, onVerificaAcconti }) {
   const isMobile = useIsMobile();
   const voci = [
@@ -13808,8 +13859,8 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
             calendario ci scorre sotto: entrando ad aggiungere un corso
             sparivano, e per andare altrove si doveva prima uscire */}
         {!soloLettura && (
-          <div style={{ position: "sticky", top: 0, zIndex: 15, paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, paddingBottom: 4 }}>
-            <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0 24px" : "0 32px" }}>
+          <TastiSospesi>
+            <div>
               <BarraTastiGestioneCorsi
                 attivo="aggiungi"
                 numeroAccontiInAttesa={numeroAccontiInAttesa}
@@ -13819,7 +13870,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
                 onVerificaAcconti={onApriVerificaAcconti}
               />
             </div>
-          </div>
+          </TastiSospesi>
         )}
         <Calendario
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
