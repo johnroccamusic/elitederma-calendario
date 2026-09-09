@@ -37899,6 +37899,7 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
   );
 }
 function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0, etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId, onAggiorna }) {
+  const isMobile = useIsMobile();
   const daAprire = avvisi.filter((a) => a.tipo === "apri_pacco");
   const daRiordinare = avvisi.filter((a) => a.tipo !== "apri_pacco");
   // dei prodotti che bloccano un corso se ne mostrano i primi: sono
@@ -37960,12 +37961,21 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
   // le due righe sotto al nome, ognuna con il suo calendarino: prima erano
   // un paragrafo unico e la data del corso finiva a capo in mezzo a quella
   // dell'ordine
+  // Da telefono le tre pastiglie stanno su una riga sola e si dividono la
+  // larghezza in parti uguali: a capo diventavano due piu' una, e quella
+  // sola sotto sembrava un avviso di un altro tipo. Ci stanno stringendo
+  // bordi e corpi, non tagliando le parole.
   function Pastiglia({ Icona, colore, bordo, sfondo, numero, righe }) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${bordo}`, background: sfondo, borderRadius: 12, padding: "8px 12px" }}>
-        <span style={{ display: "inline-flex", color: colore, flexShrink: 0 }}><Icona size={17} color={colore} /></span>
-        <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: colore }}>{numero}</span>
-        <span style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.2 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: isMobile ? 5 : 8,
+        border: `1px solid ${bordo}`, background: sfondo, borderRadius: 12,
+        padding: isMobile ? "7px 8px" : "8px 12px",
+        ...(isMobile ? { flex: "1 1 0", minWidth: 0 } : {}),
+      }}>
+        <span style={{ display: "inline-flex", color: colore, flexShrink: 0 }}><Icona size={isMobile ? 14 : 17} color={colore} /></span>
+        <span style={{ ...fontDisplay, fontSize: isMobile ? 15 : 18, fontWeight: 700, color: colore }}>{numero}</span>
+        <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: MUTED, lineHeight: 1.2, minWidth: 0 }}>
           {righe.map((r) => <span key={r} style={{ display: "block" }}>{r}</span>)}
         </span>
       </div>
@@ -37989,7 +37999,7 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
           <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Attenzione magazzino</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>Gli articoli che chiedono un intervento adesso.</div>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: isMobile ? 6 : 10, flexWrap: isMobile ? "nowrap" : "wrap", width: isMobile ? "100%" : undefined }}>
           {/* ogni pastiglia porta la sua icona e il testo su due righe: a
               colpo d'occhio si distinguono senza leggerle */}
           {bloccanti.length > 0 && (
