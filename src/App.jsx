@@ -7440,7 +7440,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
 // sopracciglia il secondo giorno, labbra il quinto ed eyeliner il sesto;
 // su un corso fatto in un altro modo viene fuori quello che c'e', invece
 // di tre voci scritte a mano che valgono per un corso solo.
-function RiepilogoModelleAllievo({ iscritto, colore, tinta, bordo }) {
+function RiepilogoModelleAllievo({ iscritto }) {
   const posti = (Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [])
     .map((m, indice) => ({ ...m, indice }))
     .sort((a, b) => {
@@ -7458,12 +7458,15 @@ function RiepilogoModelleAllievo({ iscritto, colore, tinta, bordo }) {
     if (!t) return "—";
     return toTitleCase(t.split(/\s+/)[0]);
   };
+  // acceso = blu pieno, spento = bianco col filetto. Il colore del corso
+  // qui non serve: la scheda lo dichiara gia' col suo bordo, e su tre
+  // caselle piccole un verde acceso urlava piu' del nome dell'allievo
   const cella = (acceso, testo) => (
     <span style={{
-      ...fontBody, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, lineHeight: 1,
-      padding: "4px 0", minWidth: 30, textAlign: "center", borderRadius: 6,
-      background: acceso ? colore : "#fff",
-      border: `1px solid ${acceso ? colore : CREAM_BORDER}`,
+      ...fontBody, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, lineHeight: 1,
+      padding: "6px 10px", minWidth: 34, textAlign: "center", borderRadius: 8,
+      background: acceso ? NAVY : "#fff",
+      border: `1px solid ${acceso ? NAVY : "#E3E6EC"}`,
       color: acceso ? "#fff" : MUTED,
     }}>{testo}</span>
   );
@@ -7475,22 +7478,22 @@ function RiepilogoModelleAllievo({ iscritto, colore, tinta, bordo }) {
     // voci corte, e in colonna prenderebbero mezza schermata per allievo;
     // se lo schermo e' davvero stretto scorre di lato invece di andare a capo
     <div style={{ flexBasis: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-      <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, width: 54, flexShrink: 0 }}>Modelle</span>
+      <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, width: 62, flexShrink: 0 }}>Modelle</span>
       <div style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "center", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
       {posti.map((m) => (
         <div key={m.indice} title={m.tipo || "trattamento non scelto"} style={{
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0,
-          background: tinta, border: `1px solid ${bordo}`, borderRadius: 8, padding: "5px 7px",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flexShrink: 0,
+          background: "#F1F3F6", borderRadius: 12, padding: "8px 10px",
         }}>
-          <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{etichetta(m.tipo)}</span>
-          <div style={{ display: "flex", gap: 4 }}>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{etichetta(m.tipo)}</span>
+          <div style={{ display: "flex", gap: 6 }}>
             {cella(!!m.mattina, "MAT")}
             {cella(!!m.pomeriggio, "POM")}
           </div>
         </div>
       ))}
       </div>
-      <span style={{ width: 54, flexShrink: 0 }} />
+      <span style={{ width: 62, flexShrink: 0 }} />
     </div>
   );
 }
@@ -7503,12 +7506,6 @@ function RiepilogoModelleAllievo({ iscritto, colore, tinta, bordo }) {
 // pagamenti: quelli non la riguardano.
 function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriModelle, onBack }) {
   const coloreCorso = corso?.colore || NAVY;
-  // la pastiglia della taglia prende una velatura del colore del corso: due
-  // cifre esadecimali di trasparenza in coda, che valgono solo se il colore
-  // e' scritto in esadecimale a sei cifre (lo sono tutti in anagrafica)
-  const esadecimale = /^#[0-9a-f]{6}$/i.test(coloreCorso);
-  const tintaCorso = esadecimale ? `${coloreCorso}12` : "#F6F7F9";
-  const bordoTinta = esadecimale ? `${coloreCorso}3A` : CREAM_BORDER;
   const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
@@ -7562,38 +7559,57 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
           {allievi.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo iscritto.</div>
           ) : allievi.map((i, idx) => (
-            <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-              <div style={{ width: 26, height: 26, borderRadius: "50%", background: coloreCorso, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontBody, fontSize: 13, fontWeight: 700 }}>{idx + 1}</div>
-
-              <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-                  <span style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.2 }}>
+            // Una scheda per allievo invece di una riga con un filetto
+            // sotto: sono tre blocchi diversi — chi e', come lo si
+            // raggiunge, le sue modelle — e in fila su una riga sola si
+            // leggevano come un elenco unico. Il numero sta in un tondo
+            // beige e non nel colore del corso: il corso lo dichiara gia'
+            // il bordo della scheda grande, e cinque pastiglie colorate in
+            // colonna coprivano i nomi.
+            <div key={i.id} style={{ background: "#fff", borderRadius: 16, padding: 14, marginBottom: 10, boxShadow: "0 1px 4px rgba(14,27,51,0.07)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#EFE3D6", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontDisplay, fontSize: 16, fontWeight: 700 }}>{idx + 1}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.2, lineHeight: 1.2, overflowWrap: "anywhere" }}>
                     {`${i.nome || ""} ${i.cognome || ""}`.trim()}
-                  </span>
-                  {i.tutor && <span style={{ ...fontBody, fontSize: 13, color: GOLD }}>: tutor {toTitleCase(i.tutor)}</span>}
-                </div>
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 1, lineHeight: 1.35 }}>
-                  {descrizioneKit(i) || "Nessun kit"}
+                  </div>
+                  {i.tutor && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 4 }}>
+                      <IconaPersonaSemplice size={14} color={MUTED} />
+                      <span style={{ ...fontBody, fontSize: 13.5, color: MUTED }}>Tutor <span style={{ color: GOLD }}>{toTitleCase(i.tutor)}</span></span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 3 }}>
+                    <IconaBorsaShop size={14} color={MUTED} />
+                    <span style={{ ...fontBody, fontSize: 13.5, color: MUTED, lineHeight: 1.35, overflowWrap: "anywhere" }}>{descrizioneKit(i) || "Nessun kit"}</span>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0, marginLeft: "auto" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: 108, background: tintaCorso, border: `1px solid ${bordoTinta}`, borderRadius: 12, padding: "5px 8px" }}>
-                  <IconaMaglietta size={14} color={coloreCorso} />
-                  <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>Taglia {i.taglia_divisa || "—"}</span>
+              {/* taglia, telefono e WhatsApp in una barra sola: sono i tre
+                  dati che servono per raggiungere una persona, e stanno
+                  insieme invece che sparsi in fondo alla riga */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F1F3F6", borderRadius: 12, padding: "9px 12px", marginTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <IconaMaglietta size={16} color={MUTED} />
+                  <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Taglia</span>
+                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: i.taglia_divisa ? NAVY : MUTED }}>{i.taglia_divisa || "—"}</span>
                 </div>
                 {i.telefono && (
                   <>
-                    <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
-                    <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 13, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
-                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex" }}>
-                      <IconaWhatsapp size={20} />
+                    <span style={{ width: 1, alignSelf: "stretch", background: "#DFE3E9" }} />
+                    <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", minWidth: 0 }}>
+                      <IconaTelefono size={16} color={MUTED} />
+                      <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, whiteSpace: "nowrap" }}>{i.telefono}</span>
+                    </a>
+                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", marginLeft: "auto", flexShrink: 0 }}>
+                      <IconaWhatsapp size={22} />
                     </a>
                   </>
                 )}
               </div>
 
-              <RiepilogoModelleAllievo iscritto={i} colore={coloreCorso} tinta={tintaCorso} bordo={bordoTinta} />
+              <RiepilogoModelleAllievo iscritto={i} />
             </div>
           ))}
         </div>
