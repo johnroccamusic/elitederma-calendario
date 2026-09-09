@@ -6543,7 +6543,23 @@ function SezioneDateCorsi({
       {!nascondiControlli && (
         <>
           {!nascondiTitolo && (
-            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12, textAlign: "center", textTransform: "uppercase" }}>{titolo || "Corsi in programmazione"}</div>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 10, textAlign: "center", textTransform: "uppercase" }}>{titolo || "Corsi in programmazione"}</div>
+          )}
+          {/* Sotto il titolo e al centro: non e' un modo di guardare
+              l'elenco come Elenco/Calendario, e' una cosa che si porta
+              fuori dall'app. Fra quelle due pastiglie sembrava una terza
+              vista. Il calendario intero pero' non si stampa: il tasto
+              pretende prima il filtro citta' o corso. */}
+          {!nascondiTitolo && (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <button
+                onClick={apriDatePerCliente}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "9px 16px", cursor: "pointer" }}
+              >
+                <IconaStampante size={16} color={NAVY} />
+                Stampa calendario
+              </button>
+            </div>
           )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "space-between", gap: isMobile ? 6 : 10, flexWrap: "wrap", marginBottom: 12 }}>
             <div style={{ display: "flex", gap: isMobile ? 3 : 6, flexShrink: 0 }}>
@@ -6555,10 +6571,7 @@ function SezioneDateCorsi({
                 <>
                   <TabPillola compatto={isMobile} attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
                   <TabPillola compatto={isMobile} attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
-                  {/* il calendario intero non si manda a un cliente: sono
-                      cento date di citta' che non ha chiesto. Il tasto
-                      pretende che si sia filtrato prima qualcosa */}
-                  <TabPillola compatto={isMobile} attivo={false} onClick={apriDatePerCliente}>Date per cliente</TabPillola>
+
                 </>
               )}
               <div style={{ display: "flex", alignItems: "center", marginLeft: isMobile ? 2 : 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff", flexShrink: 0 }}>
@@ -6712,7 +6725,7 @@ function SezioneDateCorsi({
       </div>
 
       {avvisoVolantino && (
-        <Modal title="Date per cliente" onClose={() => setAvvisoVolantino("")} maxWidth={420}>
+        <Modal title="Stampa calendario" onClose={() => setAvvisoVolantino("")} maxWidth={420}>
           <div style={{ ...fontBody, fontSize: 14, color: NAVY, lineHeight: 1.5, marginTop: 4 }}>{avvisoVolantino}</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
             Cerca una città, un corso o una master, oppure usa i filtri qui sopra: il foglio contiene esattamente le date che restano in elenco.
@@ -6722,11 +6735,11 @@ function SezioneDateCorsi({
       )}
 
       {volantino && (
-        <Modal title="Date per cliente" onClose={() => setVolantino(null)} maxWidth={720}>
+        <Modal title="Stampa calendario" onClose={() => setVolantino(null)} maxWidth={720}>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
             Un foglio A4 con le date filtrate, senza posti liberi né iscritti: si copia e si incolla in chat.
           </div>
-          <img src={volantino} alt="Date per cliente" style={{ width: "100%", height: "auto", display: "block", borderRadius: 10, border: `1px solid ${CREAM_BORDER}` }} />
+          <img src={volantino} alt="Calendario corsi" style={{ width: "100%", height: "auto", display: "block", borderRadius: 10, border: `1px solid ${CREAM_BORDER}` }} />
           <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
             <Button onClick={() => copiaVolantino(volantino, setAvvisoVolantino)} style={{ flex: "1 1 160px" }}>Copia immagine</Button>
             <Button variant="ghost" onClick={() => scaricaVolantino(volantino)} style={{ flex: "1 1 160px" }}>Scarica</Button>
