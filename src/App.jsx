@@ -6809,14 +6809,26 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
   const margine = 90;
   const larghezzaUtile = VOLANTINO_LARGHEZZA - margine * 2;
   // le misure di partenza, tutte in un posto: la scala le riduce insieme
-  const base = { citta: 40, mese: 24, riga: 27, spazioCitta: 46, spazioMese: 30, spazioRiga: 44, dopoMese: 12, dopoCitta: 26 };
+  // Le misure tutte qui, e ognuna dice una distanza sola: fra la citta' e
+  // il suo primo mese, fra il mese e la sua prima data, fra una data e la
+  // successiva, e i due respiri piu' larghi quando cambia mese o citta'.
+  // Prima erano compresse: "Roma", "SETTEMBRE 2026" e "Pmu Base" si
+  // toccavano, e tre livelli diversi sembravano una cosa sola.
+  const base = {
+    citta: 40, mese: 24, riga: 27,
+    dopoCitta: 52,   // dal nome della citta' al primo mese
+    dopoMese: 44,    // dal mese alla sua prima data
+    spazioRiga: 46,  // da una data alla successiva
+    fraMesi: 36,     // respiro prima del mese successivo
+    fraCitta: 64,    // respiro prima della citta' successiva
+  };
   const altezzaTestata = 250;
 
   const altezzaCon = (k) => gruppi.reduce((tot, g) => {
-    let h = base.spazioCitta * k + base.dopoCitta * k;
-    g.mesi.forEach((m) => { h += base.spazioMese * k + base.dopoMese * k + m.righe.length * base.spazioRiga * k; });
-    return tot + h;
-  }, 0);
+    let h = base.dopoCitta + base.fraCitta;
+    g.mesi.forEach((m) => { h += base.dopoMese + base.fraMesi + m.righe.length * base.spazioRiga; });
+    return tot + h * k;
+  }, 0) * 1;
 
   // si stringe finche' ci sta, ma mai sotto 0,55: sotto quella misura un
   // elenco non si legge piu' su un telefono, e un foglio illeggibile non
@@ -6854,13 +6866,14 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
     ctx.fillStyle = "#0E1B33";
     ctx.fillText(g.citta, margine, y);
     y += base.dopoCitta * k;
-    g.mesi.forEach((m) => {
+    g.mesi.forEach((m, iMese) => {
+      if (iMese > 0) y += base.fraMesi * k;
       ctx.font = `700 ${Math.round(base.mese * k)}px Poppins, Helvetica, Arial, sans-serif`;
       ctx.fillStyle = "#C9A26D";
       ctx.letterSpacing = `${Math.round(2 * k)}px`;
       ctx.fillText(m.mese, margine, y);
       ctx.letterSpacing = "0px";
-      y += base.dopoMese * k + base.spazioMese * k * 0.4;
+      y += base.dopoMese * k;
       m.righe.forEach((r) => {
         ctx.font = `600 ${Math.round(base.riga * k)}px Poppins, Helvetica, Arial, sans-serif`;
         ctx.fillStyle = "#0E1B33";
@@ -6878,9 +6891,8 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
         ctx.stroke();
         y += base.spazioRiga * k;
       });
-      y += base.spazioMese * k * 0.3;
     });
-    y += base.spazioCitta * k * 0.4;
+    y += base.fraCitta * k;
   });
 
   return canvas;
