@@ -8193,6 +8193,18 @@ function RigaRientroProdotto({ nome, quantita, onQuantita, onRimuovi }) {
 // nessuno conta davvero: qualunque numero scritto a mano sarebbe finto.
 // La verifica vera la fa Raf al ricevimento, che è l'unico con il tempo e
 // lo scaffale. Per questo il corso non si chiude qui.
+// Che fine ha fatto un pezzo uscito da un kit di riserva aperto. Le
+// quattro voci non sono sinonimi: il venduto e' un ricavo, gli altri tre
+// sono materiale finito dentro il kit di un allievo — per un errore di
+// composizione, per una mancanza o per un pezzo guasto — e per il
+// magazzino quel pezzo non torna comunque a scaffale.
+const DESTINAZIONI_KIT_APERTO = [
+  { chiave: "venduto", etichetta: "Venduto" },
+  { chiave: "sostituito_errato", etichetta: "Sostituito nei kit per pezzo errato" },
+  { chiave: "integrato_mancante", etichetta: "Integrato nei kit perché mancante" },
+  { chiave: "sostituito_guasto", etichetta: "Sostituito nei kit perché guasto" },
+];
+
 const MOTIVI_SCOSTAMENTO = [
   "Consumato durante il corso",
   "Rotto in aula",
@@ -8208,6 +8220,11 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
   const [consegne, setConsegne] = useState([]);
   const [dermografiRighe, setDermografiRighe] = useState([]);
   const [prelievi, setPrelievi] = useState([]);
+  // i kit di riserva: uno per uno, se rientrano sigillati o aperti — e dei
+  // soli aperti, cosa e' uscito da dentro
+  const [kitRiserva, setKitRiserva] = useState([]);
+  const [kitComponenti, setKitComponenti] = useState([]);
+  const [componenteScelto, setComponenteScelto] = useState({});
   const [caricando, setCaricando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   // gli scostamenti sulla bolla restano qui finché non si conferma: sono
@@ -8243,10 +8260,12 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
       .upsert({ corso_data_id: corsoData.id, master_id: masterLoggataId || null }, { onConflict: "corso_data_id" })
       .select().single();
     if (!riga) { setCaricando(false); return; }
-    const [c, d, p] = await Promise.all([
+    const [c, d, p, kr, kc] = await Promise.all([
       supabase.from("chiusura_corso_consegne").select("*").eq("chiusura_id", riga.id),
       supabase.from("chiusura_corso_dermografi").select("*").eq("chiusura_id", riga.id),
       supabase.from("chiusura_corso_prelievi").select("*").eq("chiusura_id", riga.id),
+      supabase.from("chiusura_corso_kit_riserva").select("*").eq("chiusura_id", riga.id),
+      supabase.from("chiusura_corso_kit_componenti").select("*").eq("chiusura_id", riga.id),
     ]);
     // le righe nascono già spuntate "consegnato": nel caso normale la
     // master non tocca niente, deflagga solo chi non ha ricevuto il kit
@@ -8280,6 +8299,8 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
     setConsegne(c2.data || []);
     setDermografiRighe((d2.data || []).sort((a, b) => a.modello.localeCompare(b.modello) || a.indice - b.indice));
     setPrelievi(p.data || []);
+    setKitRiserva(kr.data || []);
+    setKitComponenti(kc.data || []);
     setCaricando(false);
   }
 
@@ -8290,6 +8311,41 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
     setConsegne((prev) => prev.map((r) => (r.id === riga.id ? { ...r, ...campi } : r)));
     await supabase.from("chiusura_corso_consegne").update(campi).eq("id", riga.id);
   }
+  // integro o aperto, un tipo di kit per volta. La riga si crea al primo
+  // tocco: finche' nessuno dichiara niente non esiste, e un elenco di
+  // righe vuote non direbbe nulla in piu' del silenzio
+  const statoKitDi = (kitId) => kitRiserva.find((r) => r.kit_id === kitId)?.stato || null;
+  async function cambiaStatoKit(kitId, stato) {
+    if (!chiusura) return;
+    const esistente = kitRiserva.find((r) => r.kit_id === kitId);
+    // ripremendo lo stesso tasto si toglie la dichiarazione: "non lo so
+    // ancora" deve restare uno stato raggiungibile
+    const nuovo = esistente?.stato === stato ? null : stato;
+    if (esistente) {
+      setKitRiserva((prev) => prev.map((r) => (r.id === esistente.id ? { ...r, stato: nuovo } : r)));
+      await supabase.from("chiusura_corso_kit_riserva").update({ stato: nuovo }).eq("id", esistente.id);
+      return;
+    }
+    const { data } = await supabase.from("chiusura_corso_kit_riserva")
+      .insert({ chiusura_id: chiusura.id, kit_id: kitId, stato: nuovo }).select().single();
+    if (data) setKitRiserva((prev) => [...prev, data]);
+  }
+  async function aggiungiComponenteKit(kitId, prodottoId, destinazione) {
+    if (!chiusura || !prodottoId || !destinazione) return;
+    const { data } = await supabase.from("chiusura_corso_kit_componenti")
+      .insert({ chiusura_id: chiusura.id, kit_id: kitId, prodotto_id: prodottoId, quantita: 1, destinazione }).select().single();
+    if (data) setKitComponenti((prev) => [...prev, data]);
+    setComponenteScelto((prev) => ({ ...prev, [kitId]: "" }));
+  }
+  async function cambiaComponenteKit(id, campi) {
+    setKitComponenti((prev) => prev.map((r) => (r.id === id ? { ...r, ...campi } : r)));
+    await supabase.from("chiusura_corso_kit_componenti").update(campi).eq("id", id);
+  }
+  async function togliComponenteKit(id) {
+    setKitComponenti((prev) => prev.filter((r) => r.id !== id));
+    await supabase.from("chiusura_corso_kit_componenti").delete().eq("id", id);
+  }
+
   async function cambiaDermografo(id, campi) {
     setDermografiRighe((prev) => prev.map((r) => (r.id === id ? { ...r, ...campi } : r)));
     await supabase.from("chiusura_corso_dermografi").update(campi).eq("id", id);
@@ -8420,7 +8476,7 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
   // passi della chiusura, e in undici punti color sabbia si leggevano come
   // una didascalia del testo che sta sotto invece che come i titoli
   const titoloBlocco = { ...fontBody, fontSize: 22, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, lineHeight: 1.15 };
-  const sottotitoloBlocco = { ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.45 };
+  const sottotitoloBlocco = { ...fontBody, fontSize: 15.5, color: MUTED, marginBottom: 14, lineHeight: 1.45 };
   const rigaBase = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` };
   const confermata = chiusura?.stato && chiusura.stato !== "aperta";
   const risultatiPrelievo = ricercaPrelievo.trim()
@@ -8520,6 +8576,13 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
                 <input type="checkbox" disabled={confermata} checked={riga ? riga.kit_consegnato === false : false} onChange={(e) => cambiaConsegna(i.id, { kit_consegnato: !e.target.checked })} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{`${i.nome || ""} ${i.cognome || ""}`.trim()}</span>
+                  {(riga ? riga.kit_consegnato === false : false) && (
+                    // detto subito accanto al nome: la sola casella spuntata
+                    // non dice se il kit non e' stato ritirato o se e'
+                    // tornato indietro, e chi legge la bolla dopo non ha
+                    // modo di ricostruirlo
+                    <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", marginLeft: 8, whiteSpace: "nowrap" }}>Assente/Reso</span>
+                  )}
                   <span style={{ display: "block", ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>{i.pacchetto_kit || "Nessun kit"}</span>
                 </span>
               </label>
@@ -8546,16 +8609,113 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
       {/* 2 — Kit di riserva */}
       <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
         <div style={titoloBlocco}>2 · Kit di riserva</div>
-        <div style={sottotitoloBlocco}>Non li conti: è una sottrazione fra quanto ha spedito Raf e quanto è stato consegnato qui sopra.</div>
+        <div style={sottotitoloBlocco}>Segna quali kit di riserva rientreranno integri a Roma e quali sono quelli aperti.</div>
         {righeKit.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit spedito per questa edizione.</div>}
-        {righeKit.map((r) => (
-          <RigaAttesa
-            key={r.kitId} tipo="kit" riferimento={r.kitId} atteso={r.atteso}
-            etichetta={r.nome}
-            dettaglio={`spediti ${r.spediti} · consegnati ${r.consegnati}`}
-          />
-        ))}
+        {righeKit.map((r) => {
+          const statoKit = statoKitDi(r.kitId);
+          return (
+            <div key={r.kitId}>
+              <RigaAttesa
+                tipo="kit" riferimento={r.kitId} atteso={r.atteso}
+                etichetta={r.nome}
+                dettaglio={`spediti ${r.spediti} · consegnati ${r.consegnati}`}
+              />
+              {/* le due colonne accanto al nome: sigillato torna a scaffale
+                  com'e', aperto no — e' la differenza che il magazzino deve
+                  sapere, e finora nessuno gliela diceva */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "8px 0 12px" }}>
+                {[["integro", "Kit integro"], ["aperto", "Kit aperto"]].map(([chiave, testo]) => (
+                  <button
+                    key={chiave}
+                    disabled={confermata}
+                    onClick={() => cambiaStatoKit(r.kitId, chiave)}
+                    style={{
+                      ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 14, padding: "7px 14px",
+                      cursor: confermata ? "default" : "pointer",
+                      color: statoKit === chiave ? "#fff" : NAVY,
+                      background: statoKit === chiave ? NAVY : "#fff",
+                      border: `1px solid ${statoKit === chiave ? NAVY : CREAM_BORDER}`,
+                    }}
+                  >{testo}</button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* 2b — Kit aperti: compare solo quando c'e' almeno un kit dichiarato
+          aperto. Prima di quel momento non c'e' niente da dire, e una
+          scheda vuota in mezzo alla chiusura si legge come un passo
+          saltato */}
+      {righeKit.some((r) => statoKitDi(r.kitId) === "aperto") && (
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
+          <div style={titoloBlocco}>Kit aperti</div>
+          <div style={{ ...sottotitoloBlocco, color: NAVY }}>Dimmi dei kit aperti cosa è stato tolto per sostituzione o venduto.</div>
+          {righeKit.filter((r) => statoKitDi(r.kitId) === "aperto").map((r) => {
+            const componenti = (corsiKitProdotti || [])
+              .filter((x) => x.kit_id === r.kitId && (x.tipo === "kit" || x.tipo === "accessorio") && x.prodotto_id)
+              .map((x) => ({ id: x.prodotto_id, nome: nomeProdotto(x.prodotto_id) }))
+              .sort((a, b) => a.nome.localeCompare(b.nome, "it"));
+            const righeDelKit = kitComponenti.filter((x) => x.kit_id === r.kitId);
+            const scelto = componenteScelto[r.kitId] || "";
+            return (
+              <div key={r.kitId} style={{ marginBottom: 16 }}>
+                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{r.nome}</div>
+                {righeDelKit.map((x) => (
+                  <div key={x.id} style={{ ...rigaBase, alignItems: "flex-start" }}>
+                    <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nomeProdotto(x.prodotto_id)}</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                        {DESTINAZIONI_KIT_APERTO.map((d) => (
+                          <button
+                            key={d.chiave}
+                            disabled={confermata}
+                            onClick={() => cambiaComponenteKit(x.id, { destinazione: d.chiave })}
+                            style={{
+                              ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 12, padding: "5px 10px",
+                              cursor: confermata ? "default" : "pointer",
+                              color: x.destinazione === d.chiave ? "#fff" : NAVY,
+                              background: x.destinazione === d.chiave ? NAVY : "#fff",
+                              border: `1px solid ${x.destinazione === d.chiave ? NAVY : CREAM_BORDER}`,
+                            }}
+                          >{d.etichetta}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <input
+                        type="number" min="1" disabled={confermata}
+                        style={{ ...inputStyle, width: 68, padding: "6px 8px" }}
+                        value={x.quantita}
+                        onChange={(e) => cambiaComponenteKit(x.id, { quantita: Math.max(1, Number(e.target.value) || 1) })}
+                      />
+                      {!confermata && (
+                        <button onClick={() => togliComponenteKit(x.id)} title="Togli questa riga" style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+                          <IconaCestino size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!confermata && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                    <select
+                      style={{ ...inputStyle, flex: "1 1 220px", width: "auto", padding: "8px 10px" }}
+                      value={scelto}
+                      onChange={(e) => setComponenteScelto((prev) => ({ ...prev, [r.kitId]: e.target.value }))}
+                    >
+                      <option value="">— scegli il pezzo uscito dal kit —</option>
+                      {componenti.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    </select>
+                    <Button variant="ghost" disabled={!scelto} onClick={() => aggiungiComponenteKit(r.kitId, scelto, "venduto")}>+ Aggiungi</Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* 3 — Dermografi */}
       <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
