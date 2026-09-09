@@ -6593,7 +6593,7 @@ function SezioneDateCorsi({
   return (
     <div>
       {stickyControlli && <div ref={sentinellaRef} style={{ height: 1, marginBottom: -1 }} />}
-      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: barraIncollata ? BG : "transparent", paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
+      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: barraIncollata && vistaDateModo === "elenco" ? BG : "transparent", paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
       {!(collassabileSuMobile && controlliCollassati) && (
       <>
       {intestazioneSticky}
