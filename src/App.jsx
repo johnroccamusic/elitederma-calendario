@@ -23112,8 +23112,14 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["impostazioni_layout_iscrizioni"]);
   }
+  // Le maniglie per stirare testi e spazi in modalita' programmatore: il
+  // codice resta tutto — il trascinamento, il salvataggio su
+  // impostazioni_layout_iscrizioni, le misure gia' regolate — ma i pallini
+  // non si disegnano piu'. A layout fermo erano solo puntini tratteggiati
+  // sparsi in mezzo ai titoli. Per riaccenderle basta rimettere true qui.
+  const MANIGLIE_LAYOUT_ATTIVE = false;
   function manigliaSpazio(chiave) {
-    if (ruoloUtente !== "programmatore") return null;
+    if (!MANIGLIE_LAYOUT_ATTIVE || ruoloUtente !== "programmatore") return null;
     return (
       <ManigliaSpazioVerticale
         onPointerDown={(e) => iniziaRidimensionamentoSpazio(e, chiave)}
@@ -23123,7 +23129,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
     );
   }
   function manigliaRidimensiona(chiave, asse = "x") {
-    if (ruoloUtente !== "programmatore") return null;
+    if (!MANIGLIE_LAYOUT_ATTIVE || ruoloUtente !== "programmatore") return null;
     return (
       <ManigliaRidimensionaOrizzontale
         cursore={asse === "x" ? "ew-resize" : "ns-resize"}
@@ -23365,7 +23371,11 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
               </div>
               {loc?.nome && (
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: Math.round(spaziIscrizioni.pillolaFontSize * 1.125), padding: `${spaziIscrizioni.pillolaPaddingV}px ${Math.round(spaziIscrizioni.pillolaFontSize * 0.75)}px`, flexShrink: 0, marginLeft: "auto" }}>
+                  {/* da telefono la pastiglia sta appoggiata al titolo, e
+                      senza il filo d'oro: accanto a un nome grande quel
+                      bordo faceva rumore. Da scrivania resta com'era,
+                      spinta a destra */}
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: isMobile ? "none" : `1px solid ${GOLD}`, borderRadius: Math.round(spaziIscrizioni.pillolaFontSize * 1.125), padding: `${spaziIscrizioni.pillolaPaddingV}px ${Math.round(spaziIscrizioni.pillolaFontSize * 0.75)}px`, flexShrink: 0, marginLeft: isMobile ? 0 : "auto" }}>
                     <IconaPin size={Math.round(spaziIscrizioni.pillolaFontSize * 0.94)} color={GOLD} />
                     <span style={{ ...fontBody, fontSize: spaziIscrizioni.pillolaFontSize, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
                   </div>
@@ -23397,6 +23407,65 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
                   righe: [`${liberi} post${liberi === 1 ? "o" : "i"}`, liberi === 1 ? "libero" : "liberi"],
                 },
               ].filter(Boolean);
+              if (isMobile) {
+                // Da telefono le tre celle non sono tre colonnine di testo
+                // centrato dentro un riquadro crema: sono tre voci con la
+                // loro icona, l'etichetta accanto e il dato sotto. Il
+                // riquadro sparisce — a incorniciare c'e' gia' la scheda —
+                // e i posti liberi si staccano su verde: e' il numero che
+                // decide se si puo' iscrivere qualcuno, e in mezzo agli
+                // altri due si leggeva come un dato qualunque.
+                const { numero: giorni, sotto: siglaMese } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
+                const anno = String(corsoData.data_inizio || "").slice(0, 4);
+                const VERDE_FONDO = "#EFF4EC";
+                const VERDE = "#5F7F4B";
+                const cella = (chiave, Icona, label, contenuto, idx) => {
+                  const disponibilita = chiave === "disponibilita";
+                  return (
+                    <div key={chiave} style={{
+                      flex: "1 1 0", minWidth: 0,
+                      padding: disponibilita ? "7px 8px" : "7px 0 7px 9px",
+                      marginLeft: idx > 0 ? 0 : 0,
+                      borderLeft: idx > 0 && !disponibilita ? `1px solid ${CREAM_BORDER}` : "none",
+                      borderRadius: disponibilita ? 12 : 0,
+                      background: disponibilita ? VERDE_FONDO : "transparent",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                        <span style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, background: disponibilita ? "#E1EAD9" : BG_CHIARO, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                          <Icona size={13} color={disponibilita ? VERDE : GOLD} />
+                        </span>
+                        <span style={{ ...fontBody, fontSize: 8.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1, lineHeight: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                      </div>
+                      {contenuto}
+                    </div>
+                  );
+                };
+                return (
+                  <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 6, marginBottom: spaziIscrizioni.dopoDateBox }}>
+                    {cella("date", IconaDataAccento, "Date", (
+                      <>
+                        <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.15 }}>{giorni}</div>
+                        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>{[siglaMese, anno].filter(Boolean).join(" ")}</div>
+                      </>
+                    ), 0)}
+                    {corsoData.master_id && cella("master", IconaMasterAccento, "Master", (
+                      /* il nome su una riga sola: si rimpicciolisce quel
+                         tanto che serve invece di spezzarsi fra le lettere */
+                      <ValoreAdattato base={14.5} minimo={8.5} style={{ ...fontBody, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>
+                        {(master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?"}
+                      </ValoreAdattato>
+                    ), 1)}
+                    {cella("disponibilita", IconaDisponibilitaAccento, "Disponibilità", (
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 5, minWidth: 0 }}>
+                        <span style={{ ...fontDisplay, fontSize: 21, fontWeight: 700, color: liberi === 0 ? "#C0392B" : NAVY, lineHeight: 1 }}>{liberi}</span>
+                        <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 600, color: NAVY, lineHeight: 1.1 }}>
+                          post{liberi === 1 ? "o" : "i"}<br />liber{liberi === 1 ? "o" : "i"}
+                        </span>
+                      </div>
+                    ), 2)}
+                  </div>
+                );
+              }
               return (
                 <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: `${spaziIscrizioni.dateBoxPaddingV}px 14px`, marginBottom: spaziIscrizioni.dopoDateBox }}>
                   {/* Tre celle affiancate a qualunque larghezza, come sul
