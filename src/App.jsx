@@ -37573,7 +37573,11 @@ function righeScarico(prodotto, quantita, bundleComponenti, prodottiPerId) {
 // conferma negata per scendere sotto la scorta minima dello shop). Le
 // righe sullo stesso prodotto si sommano: due voci da 3 pezzi ciascuna
 // sono un unico scarico da 6, altrimenti ognuna si crederebbe coperta
-function preparaScarichi(righe, { suggerimento, sogliaInvalicabile = false, titoloBlocco } = {}) {
+// "mostraAvviso": dove far comparire il messaggio di blocco. Per difetto
+// window.alert, ma chi lo chiama puo' passare una finestra dell'app —
+// dopo qualche dialogo il browser offre "non mostrare altre finestre", e
+// da quel momento un blocco resta muto: il tasto sembra non fare niente.
+function preparaScarichi(righe, { suggerimento, sogliaInvalicabile = false, titoloBlocco, mostraAvviso } = {}) {
   const perProdotto = new Map();
   (righe || []).forEach(({ prodotto, quantita }) => {
     if (!prodotto || !(quantita > 0)) return;
@@ -37592,7 +37596,7 @@ function preparaScarichi(righe, { suggerimento, sogliaInvalicabile = false, tito
         : `${v.piano.disponibile} in stock`;
       return `• PRODOTTO ESAURITO "${v.prodotto.nome}": servono ${v.quantita} pezzi, ce ne sono ${disponibili}. Ne mancano ${v.piano.mancanti}.${extra ? " " + extra : ""}`;
     });
-    window.alert((titoloBlocco || "Operazione bloccata — nessuna giacenza può andare sotto zero:") + "\n\n" + righeMsg.join("\n"));
+    (mostraAvviso || window.alert)((titoloBlocco || "Operazione bloccata — nessuna giacenza può andare sotto zero:") + "\n\n" + righeMsg.join("\n"));
     return null;
   }
   return piani;
@@ -48720,6 +48724,8 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // E' successo il 9 settembre 2026 su "Materiale da consegnare", ed e'
   // indistinguibile da un tasto rotto.
   const [confermaAzione, setConfermaAzione] = useState(null);
+  const [avvisoAzione, setAvvisoAzione] = useState(null);
+  const mostraAvviso = (testo) => setAvvisoAzione(testo);
   const risolviConfermaRef = React.useRef(null);
   function chiediConferma(testo) {
     return new Promise((risolvi) => {
@@ -48801,7 +48807,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       if (target > 0) nuovoScaricoDermografi[modello] = target;
     });
     if (dermografiSenzaProdotto.length) {
-      window.alert(`Non trovo in magazzino: ${dermografiSenzaProdotto.join(", ")}.\n\nControlla che il prodotto esista in anagrafica con quel nome. Il resto del kit non è stato scaricato.`);
+      mostraAvviso(`Non trovo in magazzino: ${dermografiSenzaProdotto.join(", ")}.\n\nControlla che il prodotto esista in anagrafica con quel nome. Il resto del kit non è stato scaricato.`);
       return false;
     }
     new Set([...Object.keys(richiesti), ...Object.keys(scaricoAttuale)]).forEach((kitId) => {
@@ -48883,6 +48889,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       // si può allestire, e va detto subito con nome e data
       sogliaInvalicabile: true,
       titoloBlocco: `NON TI SARÀ POSSIBILE ALLESTIRE IL CORSO DEL ${fmtData(corsoData.data_inizio)}`,
+      mostraAvviso,
       suggerimento: (prodotto, mancanti) => {
         const box = prodottiShop.find((b) => b.prodotto_sfuso_id === prodotto.id && b.attivo !== false);
         if (box && (box.quantita || 0) > 0) {
@@ -48908,7 +48915,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     }
     const erroreScaricoKit = await applicaScarichi(pianiKit, { origine: "kit_corso", nota: "Scarico kit per il corso", riferimento: corsoData.id });
     if (erroreScaricoKit) {
-      window.alert("Scarico kit interrotto a metà — " + erroreScaricoKit + "\n\nControlla le giacenze in Gestione magazzino prima di riprovare.");
+      mostraAvviso("Scarico kit interrotto a metà — " + erroreScaricoKit + "\n\nControlla le giacenze in Gestione magazzino prima di riprovare.");
       return false;
     }
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati, scarico_dermografi: nuovoScaricoDermografi });
@@ -49229,6 +49236,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 
       {/* l'inventario di fine corso per i corsi in sede: si apre dal link
           accanto a "Inventario da fare" */}
+      {avvisoAzione && (
+        <Modal title="Non si può procedere" onClose={() => setAvvisoAzione(null)} maxWidth={520}>
+          <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.55, marginTop: 4, whiteSpace: "pre-wrap" }}>{avvisoAzione}</div>
+          <Button onClick={() => setAvvisoAzione(null)} style={{ width: "100%", marginTop: 18 }}>Ho capito</Button>
+        </Modal>
+      )}
+
       {confermaAzione && (
         <Modal title="Confermi?" onClose={() => rispondiConferma(false)} maxWidth={430}>
           <div style={{ ...fontBody, fontSize: 14, color: NAVY, lineHeight: 1.5, marginTop: 4 }}>{confermaAzione}</div>
