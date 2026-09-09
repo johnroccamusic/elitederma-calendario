@@ -8203,7 +8203,7 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
               }}
             >
               <IconaTileModelle size={20} color="#fff" />
-              Gestione modelle
+              Dettagli modelle
             </button>
           </div>
         )}
