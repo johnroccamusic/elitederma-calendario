@@ -48293,9 +48293,19 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   const risultatiConsulenza = ricercaConsulenza.trim()
     ? prodottiShop.filter((p) => p.nome.toLowerCase().startsWith("consulenza") && p.nome.toLowerCase().includes(ricercaConsulenza.trim().toLowerCase())).slice(0, 8)
     : prodottiShop.filter((p) => p.nome.toLowerCase().startsWith("consulenza")).slice(0, 8);
+  // Quante se ne spediscono: una riga per pezzo, non una riga con un
+  // numero accanto. Il livello di riempimento e' di quel barattolo — tre
+  // barattoli tornano a tre livelli diversi — e un solo livello per tre
+  // pezzi non avrebbe piu' voluto dire niente all'inventario.
+  const [quanteConsulenze, setQuanteConsulenze] = useState("1");
   function aggiungiConsulenza(prodottoId) {
-    onSalvaCampi({ consulenze_edizione: [...consulenzeEdizione, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, prodotto_id: prodottoId, livello: 5 }] });
-    setRicercaConsulenza(""); setPickerConsulenzaAperto(false);
+    const quante = Math.max(1, Math.min(50, parseInt(quanteConsulenze, 10) || 1));
+    const nuove = Array.from({ length: quante }, (_, n) => ({
+      id: `${Date.now()}-${n}-${Math.random().toString(36).slice(2)}`,
+      prodotto_id: prodottoId, livello: 5,
+    }));
+    onSalvaCampi({ consulenze_edizione: [...consulenzeEdizione, ...nuove] });
+    setRicercaConsulenza(""); setPickerConsulenzaAperto(false); setQuanteConsulenze("1");
   }
   function rimuoviConsulenza(id) {
     onSalvaCampi({ consulenze_edizione: consulenzeEdizione.filter((r) => r.id !== id) });
@@ -48430,17 +48440,48 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 
       <div style={labelStyle}>Consulenze</div>
       <div style={{ marginBottom: 20 }}>
-        {consulenzeEdizione.map((r) => (
-          <RigaConsulenza
-            key={r.id} nome={nomeProdotto(r.prodotto_id)} livello={r.livello}
-            disponibilita={prodottiShop.find((p) => p.id === r.prodotto_id)?.quantita ?? 0}
-            onCambiaLivello={(livello) => aggiornaLivelloConsulenza(r.id, livello)}
-            onRimuovi={() => rimuoviConsulenza(r.id)}
-          />
+        {/* raggruppate per prodotto: con cinque barattoli della stessa
+            consulenza, cinque righe uguali di fila non dicevano quanti ne
+            partono — il numero si contava a occhio. Sotto, il livello di
+            ciascun pezzo resta il suo */}
+        {Object.values(consulenzeEdizione.reduce((gruppi, r) => {
+          if (!gruppi[r.prodotto_id]) gruppi[r.prodotto_id] = { prodottoId: r.prodotto_id, pezzi: [] };
+          gruppi[r.prodotto_id].pezzi.push(r);
+          return gruppi;
+        }, {})).map((g) => (
+          <div key={g.prodottoId} style={{ padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nomeProdotto(g.prodottoId)}</span>
+              <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 10, padding: "3px 9px", whiteSpace: "nowrap" }}>
+                {g.pezzi.length} pezz{g.pezzi.length === 1 ? "o" : "i"}
+              </span>
+              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>disp. {prodottiShop.find((p) => p.id === g.prodottoId)?.quantita ?? 0}</span>
+            </div>
+            {g.pezzi.map((r, n) => (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                <span style={{ ...fontBody, fontSize: 11, color: MUTED, width: 22, flexShrink: 0 }}>n. {n + 1}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  {[1, 2, 3, 4, 5].map((q) => (
+                    <button key={q} onClick={() => aggiornaLivelloConsulenza(r.id, q === r.livello ? q - 1 : q)} title={`${q}/5`} style={{ width: 16, height: 16, borderRadius: "50%", border: `1px solid ${GOLD}`, background: q <= r.livello ? GOLD : "transparent", cursor: "pointer", padding: 0 }} />
+                  ))}
+                </div>
+                {r.livello === 0 && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B" }}>Rispedito vuoto</span>}
+                <button onClick={() => rimuoviConsulenza(r.id)} title="Togli questo pezzo" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 13, padding: 4, marginLeft: "auto" }}>✕</button>
+              </div>
+            ))}
+          </div>
         ))}
         {pickerConsulenzaAperto ? (
           <div style={{ marginTop: 8 }}>
-            <input autoFocus style={inputStyle} placeholder="Cerca consulenza…" value={ricercaConsulenza} onChange={(e) => setRicercaConsulenza(e.target.value)} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <input autoFocus style={inputStyle} placeholder="Cerca consulenza…" value={ricercaConsulenza} onChange={(e) => setRicercaConsulenza(e.target.value)} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Quante</span>
+                <input inputMode="numeric" style={{ ...inputStyle, width: 62, textAlign: "center" }} value={quanteConsulenze} onChange={(e) => setQuanteConsulenze(e.target.value.replace(/\D/g, ""))} />
+              </div>
+            </div>
             <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
               {risultatiConsulenza.length === 0 ? (
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 8 }}>Nessuna consulenza trovata.</div>
