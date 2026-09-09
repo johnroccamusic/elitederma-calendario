@@ -3259,13 +3259,27 @@ function slugify(testo) {
 // comparirebbe due volte, e sceglierne una nasconderebbe metà dei corsi
 // dell'altra. Qui le sedi si riducono a città distinte, e il valore del
 // filtro diventa il nome della città invece dell'id della sede
+// Roma, Milano e Napoli sono le sedi dove si tiene la gran parte dei
+// corsi, ed e' da li' che parte quasi ogni ricerca. In ordine alfabetico
+// finivano dopo Bari, Bologna, Catania, Firenze: si scorreva mezzo elenco
+// per arrivare alle tre piu' usate. Ora stanno in cima, in quest'ordine;
+// tutte le altre le seguono in ordine alfabetico come prima.
+const CITTA_IN_CIMA = ["ROMA", "MILANO", "NAPOLI"];
+function confrontaCitta(a, b) {
+  const posto = (n) => {
+    const i = CITTA_IN_CIMA.indexOf((n || "").trim().toUpperCase());
+    return i === -1 ? CITTA_IN_CIMA.length : i;
+  };
+  const pa = posto(a), pb = posto(b);
+  return pa !== pb ? pa - pb : (a || "").localeCompare(b || "", "it");
+}
 function cittaDistinte(location) {
   const perNome = new Map();
   (location || []).forEach((l) => {
     const nome = (l.nome || "").trim();
     if (nome && !perNome.has(nome.toUpperCase())) perNome.set(nome.toUpperCase(), { id: nome, nome });
   });
-  return [...perNome.values()].sort((a, b) => a.nome.localeCompare(b.nome, "it"));
+  return [...perNome.values()].sort((a, b) => confrontaCitta(a.nome, b.nome));
 }
 function cittaDiSede(location, locationId) {
   return ((location || []).find((l) => l.id === locationId)?.nome || "").trim();
@@ -10869,7 +10883,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
   }, [slotAttivi, oggiStr]);
 
   const tipologiePresenti = useMemo(() => Array.from(new Set(slotAttivi.map((s) => s.tipo))).sort(), [slotAttivi]);
-  const cittaPresenti = useMemo(() => Array.from(new Set(edizioni.map((e) => e.cittaNome))).sort(), [edizioni]);
+  const cittaPresenti = useMemo(() => Array.from(new Set(edizioni.map((e) => e.cittaNome))).sort(confrontaCitta), [edizioni]);
 
   const edizioniFiltrate = useMemo(() => {
     let arr = edizioni.filter((e) => e.richieste > 0);
