@@ -13576,13 +13576,86 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false }) {
+// I quattro tasti in cima a Gestione corsi. Sono un componente a se'
+// perche' devono restare anche nelle tre pagine dove portano — Ultime
+// iscrizioni, Prossime contabilita', Verifica pagamenti: entrandoci
+// sparivano, e per passare dall'una all'altra bisognava tornare indietro.
+//
+// Stessa veste dei tre della Dashboard venditori: quello aperto e' bianco
+// col bordo d'oro, gli altri beige con l'icona piu' scura. I pagamenti da
+// verificare non tingono piu' di rosso l'intero tasto — che in mezzo a tre
+// chiari sembrava un'altra cosa — ma portano il pallino rosso lampeggiante
+// col numero dentro, lo stesso dei tasti in home.
+function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungiCorso, onUltimeIscrizioni, onProssimeContabilita, onVerificaAcconti }) {
+  const isMobile = useIsMobile();
+  const voci = [
+    { chiave: "aggiungi", testo: "Aggiungi corso", Icona: IconaCorsoRiga, onClick: onAggiungiCorso },
+    { chiave: "iscrizioni", testo: "Ultime iscrizioni", Icona: IconaPersonaAggiungi, onClick: onUltimeIscrizioni },
+    ...(onProssimeContabilita ? [{ chiave: "contabilita", testo: "Prossime contabilità", Icona: IconaLibroContabile, onClick: onProssimeContabilita }] : []),
+    { chiave: "acconti", testo: "Verifica pagamenti", Icona: IconaRicevutaErp, onClick: onVerificaAcconti, badge: numeroAccontiInAttesa },
+  ];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${voci.length}, minmax(0, 1fr))`, gap: isMobile ? 8 : 14, maxWidth: 620, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
+      {voci.map((t) => {
+        const scelto = attivo === t.chiave;
+        return (
+          <div key={t.chiave} style={{ position: "relative", minWidth: 0, display: "flex" }}>
+            {t.badge > 0 && <style>{`@keyframes lampeggiaBadgeTasto { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }`}</style>}
+            <button
+              onClick={t.onClick}
+              style={{
+                ...fontDisplay, fontSize: isMobile ? 12 : 14.5, fontWeight: 700, lineHeight: 1.2,
+                width: "100%", aspectRatio: "1 / 1", minWidth: 0, boxSizing: "border-box", overflow: "hidden", cursor: "pointer",
+                // dall'alto e non centrati: centrando il contenuto, un testo
+                // su due righe spinge su la sua icona e le quattro non sono
+                // piu' in linea — ne' le icone ne' la prima riga delle scritte
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+                gap: isMobile ? 8 : 11, textAlign: "center", overflowWrap: "anywhere",
+                padding: isMobile ? "14px 5px 8px" : "20px 8px 12px", borderRadius: isMobile ? 14 : 18,
+                background: scelto ? "#fff" : "#FBF7F0",
+                border: `${scelto ? 2 : 1}px solid ${scelto ? GOLD : CREAM_BORDER}`,
+                color: scelto ? NAVY : GRAFITE,
+              }}
+            >
+              <span style={{
+                width: isMobile ? 36 : 48, height: isMobile ? 36 : 48, borderRadius: "50%", flexShrink: 0,
+                background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <t.Icona size={isMobile ? 18 : 24} color={GOLD} />
+              </span>
+              {t.testo}
+            </button>
+            {t.badge > 0 && (
+              <span
+                title={`${t.badge} da verificare`}
+                style={{
+                  position: "absolute", top: -6, right: -6,
+                  ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#fff", background: "#C0392B",
+                  borderRadius: 20, minWidth: isMobile ? 20 : 22, height: isMobile ? 20 : 22,
+                  display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px",
+                  animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite",
+                  boxShadow: "0 1px 3px rgba(14,27,51,0.3)",
+                }}
+              >{t.badge}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false, apriSubitoAggiungiCorso = false }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
   // il popup "Nuova data" già pronto su oggi, invece di dover passare
   // dalla vista Calendario e cliccare un giorno vuoto
-  const [mostraAggiungiCorso, setMostraAggiungiCorso] = useState(false);
+  const [mostraAggiungiCorso, setMostraAggiungiCorso] = useState(!!apriSubitoAggiungiCorso);
+  // "Aggiungi corso" premuto da una delle tre pagine figlie riporta qui e
+  // apre subito il modulo: tornare e ripremere sarebbe un passaggio in piu'
+  // per fare la stessa cosa
+  useEffect(() => { if (apriSubitoAggiungiCorso) setMostraAggiungiCorso(true); }, [apriSubitoAggiungiCorso]);
 
   // i filtri (corso/città/master/cronologico) vivono in App, non qui: così
   // restano impostati anche se si esce da "Gestione date" e ci si torna,
@@ -13668,54 +13741,14 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
       )}
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>{titolo}</div>
       {!soloLettura && (
-        // Quattro quadrati uguali su una riga, con il testo a capo dentro:
-        // erano pastiglie larghe quanto la parola, e quattro larghezze
-        // diverse in fila si leggevano come un elenco disordinato invece
-        // che come quattro scelte pari. Quadrati stanno anche sul telefono
-        // senza rimpicciolire il testo fino a non leggerlo.
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: isMobile ? 6 : 10, marginBottom: isMobile ? 14 : 22, maxWidth: 560, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
-          {[
-            { chiave: "aggiungi", testo: "Aggiungi corso", Icona: IconaCorsoRiga, onClick: () => setMostraAggiungiCorso(true), primario: true },
-            { chiave: "iscrizioni", testo: "Ultime iscrizioni", Icona: IconaPersonaAggiungi, onClick: onApriUltimeIscrizioni },
-            ...(onApriProssimeContabilita ? [{ chiave: "contabilita", testo: "Prossime contabilità", Icona: IconaLibroContabile, onClick: onApriProssimeContabilita }] : []),
-            numeroAccontiInAttesa > 0
-              ? { chiave: "acconti", testo: `Verifica pagamenti (${numeroAccontiInAttesa})`, Icona: IconaRicevutaErp, onClick: onApriVerificaAcconti, urgente: true }
-              : { chiave: "acconti", testo: "Niente da verificare", Icona: IconaRicevutaErp, onClick: onApriVerificaAcconti },
-          ].map((t) => (
-            <React.Fragment key={t.chiave}>
-              {t.urgente && <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>}
-              <button
-                onClick={t.onClick}
-                style={{
-                  ...fontBody, fontSize: isMobile ? 12 : 14, fontWeight: 700, lineHeight: 1.2,
-                  aspectRatio: "1 / 1", minWidth: 0, boxSizing: "border-box", overflow: "hidden",
-                  // dall'alto e non centrati: centrando il contenuto, un
-                  // testo su due righe spingeva su la sua icona e le
-                  // quattro non erano piu' in linea — ne' le icone ne' la
-                  // prima riga delle scritte
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", gap: isMobile ? 8 : 11, textAlign: "center",
-                  padding: isMobile ? "14px 5px 8px" : "20px 8px 12px", borderRadius: isMobile ? 12 : 16, cursor: "pointer",
-                  overflowWrap: "anywhere",
-                  color: t.primario || t.urgente ? "#fff" : NAVY,
-                  background: t.urgente ? "#C0392B" : t.primario ? NAVY : "#fff",
-                  border: t.primario || t.urgente ? "none" : `1px solid ${CREAM_BORDER}`,
-                  animation: t.urgente ? "lampeggiaAcconti 1.1s ease-in-out infinite" : "none",
-                }}
-              >
-                {/* il medaglione tondo color crema anche sui tasti pieni:
-                    e' lo stesso segno che marca le voci in tutta l'app, e
-                    su fondo blu o rosso un'icona nuda si sarebbe persa */}
-                <span style={{
-                  width: isMobile ? 32 : 42, height: isMobile ? 32 : 42, borderRadius: "50%", flexShrink: 0,
-                  background: "#F3E7D2", display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <t.Icona size={isMobile ? 17 : 22} color={NAVY} />
-                </span>
-                {t.testo}
-              </button>
-            </React.Fragment>
-          ))}
-        </div>
+        <BarraTastiGestioneCorsi
+          attivo="corsi"
+          numeroAccontiInAttesa={numeroAccontiInAttesa}
+          onAggiungiCorso={() => setMostraAggiungiCorso(true)}
+          onUltimeIscrizioni={onApriUltimeIscrizioni}
+          onProssimeContabilita={onApriProssimeContabilita}
+          onVerificaAcconti={onApriVerificaAcconti}
+        />
       )}
     </>
   );
@@ -52929,6 +52962,11 @@ export default function App() {
   // era l'unica cosa che si vedeva prima cliccando la card, e resta a un
   // tocco di distanza invece di sparire
   const [classeMasterModelle, setClasseMasterModelle] = useState(false);
+  // l'ordine di aprire subito "Aggiungi corso", dato da una delle tre
+  // pagine figlie. Si consuma appena si esce da Gestione corsi, o il
+  // modulo si riaprirebbe a ogni ritorno
+  const [aprireAggiungiCorso, setAprireAggiungiCorso] = useState(false);
+  useEffect(() => { if (view !== "gestionedate" && aprireAggiungiCorso) setAprireAggiungiCorso(false); }, [view, aprireAggiungiCorso]);
   // "mucchio" di prodotti aperti (non ripristinabili in magazzino):
   // una riga per prodotto+edizione, sommate per prodotto in Logistica
   // prodotti — alimentato dal tasto "Prodotti rientrati"
@@ -54359,6 +54397,7 @@ export default function App() {
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
           ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
           onApriIscritto={(i) => { setViewPrimaDiScheda("gestionedate"); apriIscritto(i); }}
+          apriSubitoAggiungiCorso={aprireAggiungiCorso}
           onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
           onApriProssimeContabilita={() => setView("prossimecontabilita")}
           onApriVerificaAcconti={() => setView("verificaacconti")}
@@ -54377,12 +54416,24 @@ export default function App() {
       )}
 
       {view === "verificaacconti" && (
+        <>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 24px 0" }}>
+          <BarraTastiGestioneCorsi
+            attivo="acconti"
+            numeroAccontiInAttesa={accontiDaVerificare.length}
+            onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
+            onUltimeIscrizioni={() => setView("ultimeiscrizioni")}
+            onProssimeContabilita={() => setView("prossimecontabilita")}
+            onVerificaAcconti={() => {}}
+          />
+        </div>
         <PaginaVerificaAcconti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           accontiDaVerificare={accontiDaVerificare}
           onApriIscritto={apriIscritto} onApriSchedeAffiancate={apriSchedeAffiancate} ricarica={fetchDati}
           onBack={() => setView("gestionedate")}
         />
+        </>
       )}
 
       {view === "schedeaffiancate" && (
@@ -54877,6 +54928,17 @@ export default function App() {
       )}
 
       {view === "prossimecontabilita" && (
+        <>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 24px 0" }}>
+          <BarraTastiGestioneCorsi
+            attivo="contabilita"
+            numeroAccontiInAttesa={accontiDaVerificare.length}
+            onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
+            onUltimeIscrizioni={() => setView("ultimeiscrizioni")}
+            onProssimeContabilita={() => {}}
+            onVerificaAcconti={() => setView("verificaacconti")}
+          />
+        </div>
         <PaginaProssimeContabilita
           quoteVenditoriSplit={quoteVenditoriSplit}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
@@ -54888,6 +54950,7 @@ export default function App() {
           onApriClasse={(cd) => apriData(cd)}
           onBack={() => setView("gestionedate")}
         />
+        </>
       )}
 
       {view === "normative" && (
@@ -55108,7 +55171,19 @@ export default function App() {
       )}
 
       {view === "ultimeiscrizioni" && (
+        <>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 24px 0" }}>
+          <BarraTastiGestioneCorsi
+            attivo="iscrizioni"
+            numeroAccontiInAttesa={accontiDaVerificare.length}
+            onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
+            onUltimeIscrizioni={() => {}}
+            onProssimeContabilita={() => setView("prossimecontabilita")}
+            onVerificaAcconti={() => setView("verificaacconti")}
+          />
+        </div>
         <UltimeIscrizioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriIscritto={apriIscritto} />
+        </>
       )}
 
       {view === "assegnazionemaster" && (
