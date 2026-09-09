@@ -7463,8 +7463,8 @@ function RiepilogoModelleAllievo({ iscritto }) {
   // caselle piccole un verde acceso urlava piu' del nome dell'allievo
   const cella = (acceso, testo) => (
     <span style={{
-      ...fontBody, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, lineHeight: 1,
-      padding: "6px 10px", minWidth: 34, textAlign: "center", borderRadius: 8,
+      ...fontBody, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1,
+      padding: "5px 0", flex: "1 1 0", minWidth: 0, textAlign: "center", borderRadius: 7,
       background: acceso ? NAVY : "#fff",
       border: `1px solid ${acceso ? NAVY : "#E3E6EC"}`,
       color: acceso ? "#fff" : MUTED,
@@ -7477,23 +7477,28 @@ function RiepilogoModelleAllievo({ iscritto }) {
     // dall'etichetta. Tutto su una riga sola anche da telefono — sono tre
     // voci corte, e in colonna prenderebbero mezza schermata per allievo;
     // se lo schermo e' davvero stretto scorre di lato invece di andare a capo
-    <div style={{ flexBasis: "100%", display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-      <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, width: 62, flexShrink: 0 }}>Modelle</span>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "center", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+      <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, width: 46, flexShrink: 0, lineHeight: 1.1 }}>Modelle</span>
+      {/* i gruppi si dividono lo spazio che c'e' e si stringono: prima
+          tenevano la loro misura e uscivano dalla scheda, e per vedere
+          l'eyeliner bisognava trascinare di lato una riga dentro una
+          scheda dentro una pagina che gia' scorre */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "center", gap: 6 }}>
       {posti.map((m) => (
         <div key={m.indice} title={m.tipo || "trattamento non scelto"} style={{
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flexShrink: 0,
-          background: "#F1F3F6", borderRadius: 12, padding: "8px 10px",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+          flex: "1 1 0", minWidth: 0,
+          background: "#F1F3F6", borderRadius: 10, padding: "6px 5px",
         }}>
-          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{etichetta(m.tipo)}</span>
-          <div style={{ display: "flex", gap: 6 }}>
+          <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center", overflowWrap: "anywhere", maxWidth: "100%" }}>{etichetta(m.tipo)}</span>
+          <div style={{ display: "flex", gap: 4, width: "100%" }}>
             {cella(!!m.mattina, "MAT")}
             {cella(!!m.pomeriggio, "POM")}
           </div>
         </div>
       ))}
       </div>
-      <span style={{ width: 62, flexShrink: 0 }} />
+      <span style={{ width: 46, flexShrink: 0 }} />
     </div>
   );
 }
