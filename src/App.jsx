@@ -36972,12 +36972,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             placeholder="Cerca prodotto…"
             style={{ flex: "1 1 260px", minWidth: 200, maxWidth: isMobile ? "100%" : "50%" }}
           />
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+          {/* categorie e fornitori dividono la riga a meta': impilati uno
+              sopra l'altro si prendevano due fasce intere per due tendine
+              quasi sempre ferme su "tutte" e "tutti" */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 320px", minWidth: 0 }}>
+            <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
               <option value="">Tutte le categorie</option>
               {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
-            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={fornitoreSel} onChange={(e) => setFornitoreSel(e.target.value)}>
+            <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={fornitoreSel} onChange={(e) => setFornitoreSel(e.target.value)}>
               <option value="">Tutti i fornitori</option>
               {[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")).map((f) => (
                 <option key={f.id} value={f.id}>{f.nome}</option>
@@ -36990,20 +36993,19 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             {/* la scelta della vista sta qui, appoggiata all'elenco che
                 governa, e non più in cima alla pagina fra i comandi */}
-            <div style={{ display: "flex", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, overflow: "hidden", background: "#fff" }}>
-              {[
-                { chiave: "elenco", etichetta: "Vista a elenco", icona: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg> },
-                { chiave: "categorie", etichetta: "Vista a categorie", icona: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg> },
-              ].map((v) => (
-                <button
-                  key={v.chiave}
-                  onClick={() => cambiaVistaAMano(v.chiave)}
-                  style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 15px", border: "none", cursor: "pointer", background: vistaProdotti === v.chiave ? NAVY : "transparent", color: vistaProdotti === v.chiave ? "#fff" : NAVY }}
-                >
-                  {v.icona}{v.etichetta}
-                </button>
-              ))}
-            </div>
+            {/* la stessa pillola segmentata di Elenco/Calendario e delle
+                altre schede dell'app: era un paio di tasti attaccati col
+                bordo tondo, e in mezzo a schermate che avevano gia' preso
+                questa forma sembrava un pezzo rimasto indietro */}
+            <PillolaSegmentata
+              compatto={isMobile}
+              valore={vistaProdotti}
+              onCambia={cambiaVistaAMano}
+              voci={[
+                { chiave: "elenco", testo: isMobile ? "Elenco" : "Vista a elenco", Icona: IconaElencoRighe },
+                { chiave: "categorie", testo: isMobile ? "Categorie" : "Vista a categorie", Icona: IconaGriglia },
+              ]}
+            />
             {/* compare solo quando c'è davvero qualcosa da azzerare: un tasto
                 sempre presente e quasi sempre inutile è solo rumore. Toglie
                 in un colpo ricerca, categoria, fornitore e filtro di stato —
