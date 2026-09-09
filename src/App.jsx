@@ -2803,25 +2803,30 @@ const ALIQUOTE_IVA_STANDARD = [0, 4, 5, 10, 22];
 // NETTO (l'IVA si gestisce in anagrafica), ma in tutti gli elenchi conta
 // il numero che paga il cliente — quello sul sito e sullo scontrino.
 // Mostrare il netto faceva sembrare sbagliato l'intero listino
-function prezzoAlPubblico(p) {
-  if (p?.prezzo_vendita == null) return null;
-  return round2(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? 22) / 100));
-}
 // Il lordo che finisce a un centesimo dal decimo si porta al decimo:
 // 39,89 diventa 39,90, 9,89 diventa 9,90, 46,99 diventa 47,00. Non e' un
 // vezzo: un prezzo a scaffale che finisce per 9 centesimi si legge come
 // un errore di conto, ed e' quello che succede con un netto tondo (32,70)
 // moltiplicato per 1,22 — viene 39,894 e l'arrotondamento lo lascia un
-// centesimo sotto.
-//
-// L'IVA si ricava dalla differenza, non si ricalcola: cosi' netto, IVA e
-// lordo tornano fra loro anche dopo la correzione, e il centesimo in piu'
-// sta dove deve stare.
+// centesimo sotto. Sta qui, in una funzione sola, perche' il prezzo al
+// pubblico si calcola in piu' punti (elenchi, POS, scheda prodotto, sito)
+// e devono dire tutti lo stesso numero.
+function arrotondaLordo(lordo) {
+  if (lordo == null || !Number.isFinite(lordo)) return lordo;
+  const centesimi = Math.round(lordo * 100);
+  return centesimi % 10 === 9 ? round2((centesimi + 1) / 100) : round2(lordo);
+}
+function prezzoAlPubblico(p) {
+  if (p?.prezzo_vendita == null) return null;
+  return arrotondaLordo(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? 22) / 100));
+}
+// Stessa regola del prezzo al pubblico (vedi arrotondaLordo). L'IVA si
+// ricava dalla differenza, non si ricalcola: cosi' netto, IVA e lordo
+// tornano fra loro anche dopo la correzione, e il centesimo in piu' sta
+// dove deve stare.
 function calcolaIvaELordo(netto, aliquotaPct) {
   if (netto == null || aliquotaPct == null) return { iva: null, lordo: null };
-  const lordoGrezzo = round2(netto + round2(netto * (aliquotaPct / 100)));
-  const centesimi = Math.round(lordoGrezzo * 100);
-  const lordo = centesimi % 10 === 9 ? round2((centesimi + 1) / 100) : lordoGrezzo;
+  const lordo = arrotondaLordo(netto + round2(netto * (aliquotaPct / 100)));
   return { iva: round2(lordo - netto), lordo };
 }
 // unico punto in cui si parte dal lordo (il toggle "netto/lordo" in
@@ -21327,7 +21332,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
     const p = prodottoDermografo(prodottiShop, modello);
     if (!p || p.prezzo_vendita == null) return null;
     const aliquota = p.aliquota_iva_vendita != null ? Number(p.aliquota_iva_vendita) : 22;
-    return round2(Number(p.prezzo_vendita) * (1 + aliquota / 100));
+    return arrotondaLordo(Number(p.prezzo_vendita) * (1 + aliquota / 100));
   }
   const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false, integrazioneId: null };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
@@ -46181,7 +46186,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       // il cliente, quello che si legge sul sito e quello che sta in testa a
       // chi lavora. Salvato resta comunque il netto (vedi BloccoPrezzoIva)
       prezzo: p.prezzo_vendita != null
-        ? String(round2(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? aliquotaIvaDefault) / 100)))
+        ? String(arrotondaLordo(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? aliquotaIvaDefault) / 100)))
         : "",
       modoVendita: "lordo",
       aliquotaVendita: p.aliquota_iva_vendita ?? aliquotaIvaDefault,
