@@ -7228,46 +7228,42 @@ function PaginaDashboardVenditori({
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli un venditore per vedere le sue chiusure e commissioni.</div>
         ) : (
           <>
-            <div style={{ display: "flex", flexDirection: "row", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
-              <button
-                onClick={() => setTabDashboardVenditore("corsi")}
-                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
-              >
-                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaPersonaAggiungi size={isMobile ? 20 : 24} color={GOLD} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-start", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 8 }}>
-                    <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "corsi" ? NAVY : MUTED }}>Iscrivi Allievo</div>
-                    <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
-                  </div>
-                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, fontStyle: "italic" }}>Tutti i corsi in programmazione</div>}
-                </div>
-              </button>
-              <button
-                onClick={() => setTabDashboardVenditore("performance")}
-                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
-              >
-                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaFrecciaTrend size={isMobile ? 20 : 24} color={GOLD} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
-                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>}
-                </div>
-              </button>
-              <button
-                onClick={() => setTabDashboardVenditore("iscrizioni")}
-                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
-              >
-                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaLaureaErp size={isMobile ? 20 : 24} color={GOLD} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "iscrizioni" ? NAVY : MUTED }}>Le tue iscrizioni</div>
-                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Gli allievi che hai iscritto</div>}
-                </div>
-              </button>
+            {/* Tre quadrati uguali con l'icona sopra e il nome sotto,
+                invece di una fascia divisa in tre: la fascia diceva quale
+                scheda si stava guardando con una sfumatura di grigio nel
+                titolo, che a colpo d'occhio non si vede. Il quadrato
+                scelto si riempie, e non serve leggerlo per saperlo. */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isMobile ? 8 : 14, maxWidth: 520, margin: "0 auto 22px" }}>
+              {[
+                { chiave: "corsi", testo: "Iscrivi allievo", Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
+                { chiave: "performance", testo: "Performance di vendita", Icona: IconaFrecciaTrend },
+                { chiave: "iscrizioni", testo: "Le tue iscrizioni", Icona: IconaLaureaErp },
+              ].map((t) => {
+                const attivo = tabDashboardVenditore === t.chiave;
+                return (
+                  <button
+                    key={t.chiave}
+                    onClick={() => setTabDashboardVenditore(t.chiave)}
+                    style={{
+                      aspectRatio: "1 / 1", minWidth: 0, boxSizing: "border-box", overflow: "hidden", cursor: "pointer",
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+                      gap: isMobile ? 8 : 11, textAlign: "center", padding: isMobile ? "14px 5px 8px" : "20px 8px 12px",
+                      borderRadius: isMobile ? 14 : 18,
+                      background: attivo ? "#fff" : "#FBF7F0",
+                      border: `${attivo ? 2 : 1}px solid ${attivo ? GOLD : CREAM_BORDER}`,
+                    }}
+                  >
+                    <span style={{
+                      width: isMobile ? 36 : 48, height: isMobile ? 36 : 48, borderRadius: "50%", flexShrink: 0,
+                      background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <t.Icona size={isMobile ? 18 : 24} color={GOLD} />
+                    </span>
+                    <span style={{ ...fontDisplay, fontSize: isMobile ? 12 : 14.5, fontWeight: 700, lineHeight: 1.2, color: attivo ? NAVY : GRAFITE, overflowWrap: "anywhere" }}>{t.testo}</span>
+                    {t.badge && <span style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>{t.badge}</span>}
+                  </button>
+                );
+              })}
             </div>
 
             {tabDashboardVenditore === "performance" && (
@@ -13683,8 +13679,12 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
                 style={{
                   ...fontBody, fontSize: isMobile ? 12 : 14, fontWeight: 700, lineHeight: 1.2,
                   aspectRatio: "1 / 1", minWidth: 0, boxSizing: "border-box", overflow: "hidden",
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: isMobile ? 6 : 9, textAlign: "center",
-                  padding: isMobile ? "6px 5px" : "10px 8px", borderRadius: isMobile ? 12 : 16, cursor: "pointer",
+                  // dall'alto e non centrati: centrando il contenuto, un
+                  // testo su due righe spingeva su la sua icona e le
+                  // quattro non erano piu' in linea — ne' le icone ne' la
+                  // prima riga delle scritte
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", gap: isMobile ? 8 : 11, textAlign: "center",
+                  padding: isMobile ? "14px 5px 8px" : "20px 8px 12px", borderRadius: isMobile ? 12 : 16, cursor: "pointer",
                   overflowWrap: "anywhere",
                   color: t.primario || t.urgente ? "#fff" : NAVY,
                   background: t.urgente ? "#C0392B" : t.primario ? NAVY : "#fff",
