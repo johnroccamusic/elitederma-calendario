@@ -18070,27 +18070,14 @@ function IndicatorePosti({ occupati, max, liberi, compatto = false }) {
   const completo = liberi === 0;
   const pct = max > 0 ? Math.min(100, Math.round((occupati / max) * 100)) : 0;
   if (compatto) {
-    // versione ridotta per la riga corso su mobile (tutto su una riga
-    // sola): stessi tre elementi (numeri/barra/liberi), solo più piccoli
+    // Da telefono: una riga sola, "1/10". Prima erano tre piani — i due
+    // numeri con le loro etichette, la barra, quanti posti restano — e in
+    // una riga alta quanto il nome del corso facevano da soli piu'
+    // altezza di tutto il resto, allungando l'elenco per niente. I posti
+    // liberi non si perdono: sono 10 meno 1, e si leggono a mente.
     return (
-      <div style={{ width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", gap: 8, marginBottom: 3 }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{occupati}</div>
-            <div style={{ ...fontBody, fontSize: 8, color: MUTED }}>iscritti</div>
-          </div>
-          <div style={{ width: 1, background: CREAM_BORDER }} />
-          <div style={{ textAlign: "center" }}>
-            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{max}</div>
-            <div style={{ ...fontBody, fontSize: 8, color: MUTED }}>posti</div>
-          </div>
-        </div>
-        <div style={{ height: 3, borderRadius: 2, background: "#EFE9DC", overflow: "hidden", marginBottom: 3 }}>
-          <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 2 }} />
-        </div>
-        <div style={{ textAlign: "center", ...fontBody, fontSize: 9, fontWeight: completo ? 700 : 400, color: completo ? GOLD : MUTED, whiteSpace: "nowrap" }}>
-          {completo ? "Completo" : `${liberi} liber${liberi === 1 ? "o" : "i"}`}
-        </div>
+      <div style={{ ...fontBody, fontSize: completo ? 10.5 : 13, fontWeight: 700, color: completo ? GOLD : NAVY, whiteSpace: "nowrap", textAlign: "right", lineHeight: 1.1 }}>
+        {completo ? "Completo" : <>{occupati}<span style={{ fontWeight: 400, color: MUTED }}>/{max}</span></>}
       </div>
     );
   }
@@ -18184,9 +18171,9 @@ function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
       <div>
         {gruppi.map(({ chiaveMese, gruppoMese, voci }) => (
           <div key={chiaveMese}>
-            <div style={{ padding: "10px 12px", background: BG, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
-              <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
+            <div style={{ padding: "6px 10px", background: BG, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
+              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
             </div>
             {voci.map((cd, i) => renderRiga(cd, i === 0, true))}
           </div>
@@ -18274,17 +18261,21 @@ function ZoomBox({ zoom, children }) {
 
 function CardCittaData({ c, renderRiga }) {
   const [zoom, controlliZoom] = useZoomScheda();
+  const isMobile = useIsMobile();
   const totaleCorsiCitta = Object.values(c.mesi).reduce((tot, m) => tot + m.voci.length, 0);
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: isMobile ? 12 : 16 }}>
     <ZoomBox zoom={zoom}>
-    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20 }}>
+    {/* da telefono la scheda si stringe tutta: il nome della citta' era
+        grande quanto un titolo di pagina e da solo si portava via due
+        righe di elenco */}
+    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 20 }}>
       {controlliZoom}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-        <IconaPin size={30} color={GOLD} />
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 14, marginBottom: isMobile ? 10 : 18 }}>
+        <IconaPin size={isMobile ? 22 : 30} color={GOLD} />
         <div>
-          <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{toTitleCase(c.nome)}</div>
-          <div style={{ ...fontBody, fontSize: 15, color: MUTED }}>{totaleCorsiCitta} cors{totaleCorsiCitta === 1 ? "o" : "i"} programmat{totaleCorsiCitta === 1 ? "o" : "i"}</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 30, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{toTitleCase(c.nome)}</div>
+          <div style={{ ...fontBody, fontSize: isMobile ? 12 : 15, color: MUTED }}>{totaleCorsiCitta} cors{totaleCorsiCitta === 1 ? "o" : "i"} programmat{totaleCorsiCitta === 1 ? "o" : "i"}</div>
         </div>
       </div>
       <TabellaDateCorsi mesi={c.mesi} renderRiga={renderRiga} mostraColonnaSede={false} />
@@ -18300,9 +18291,10 @@ function CardCittaData({ c, renderRiga }) {
 // più l'intestazione città della card a comunicarla
 function CardCronologico({ mesi, renderRiga }) {
   const [zoom, controlliZoom] = useZoomScheda();
+  const isMobile = useIsMobile();
   return (
     <ZoomBox zoom={zoom}>
-    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20 }}>
+    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 20 }}>
       {controlliZoom}
       <TabellaDateCorsi mesi={mesi} renderRiga={renderRiga} mostraColonnaSede />
     </div>
@@ -18401,8 +18393,8 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
       // hanno una larghezza fissa così non si schiacciano
       return (
         <div key={cd.id}>
-          <div onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}`, padding: "10px 4px", display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 3, height: 22, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
+          <div onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}`, padding: "7px 2px", display: "flex", alignItems: "center", gap: 7 }}>
+            <span style={{ width: 3, height: 18, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
             <div style={{ flex: "1 1 auto", minWidth: 0 }}>
               <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {toTitleCase(corso?.nome || "?")}
@@ -18413,7 +18405,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
               {fmtDataCompatta(cd.data_inizio, cd.data_fine).toUpperCase()}
             </div>
             {iscritti && (
-              <div style={{ flexShrink: 0, width: 72 }}>
+              <div style={{ flexShrink: 0, width: 46 }}>
                 <IndicatorePosti occupati={occupati} max={max} liberi={liberi} compatto />
               </div>
             )}
