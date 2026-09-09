@@ -6821,13 +6821,16 @@ function SezioneDateCorsi({
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
             Un foglio A4 con le date filtrate, senza posti liberi né iscritti: si copia e si incolla in chat.
           </div>
-          {/* L'anteprima e' un A4: alta una volta e mezza la sua larghezza.
-              Lasciata libera si portava via tutto lo schermo del telefono e
-              spingeva "Copia immagine" e "Scarica" sotto il bordo — con i
-              tasti fuori vista la finestra non serve a niente. Qui si tiene
-              dentro quello che resta dell'altezza, tolti l'intestazione, i
-              tasti e lo spazio riservato in fondo: rimpicciolisce, ma si
-              vede tutta e i tasti restano sullo schermo. */}
+          {/* I due tasti stanno in cima, subito sotto il titolo, e sono
+              piccoli. In fondo alla finestra non ci si arrivava: sotto
+              un'anteprima A4 — alta una volta e mezza la sua larghezza —
+              finivano fuori dallo schermo del telefono, e per trovarli
+              bisognava sapere di dover scorrere. Qui si vedono appena la
+              finestra si apre, qualunque sia l'altezza dell'anteprima. */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <Button onClick={() => copiaVolantino(volantino, setAvvisoVolantino)} style={{ flex: "1 1 0", fontSize: 12.5, padding: "7px 10px", borderRadius: 9 }}>Copia immagine</Button>
+            <Button variant="ghost" onClick={() => scaricaVolantino(volantino)} style={{ flex: "1 1 0", fontSize: 12.5, padding: "7px 10px", borderRadius: 9 }}>Scarica</Button>
+          </div>
           <img
             src={volantino}
             alt="Calendario corsi"
@@ -6842,10 +6845,6 @@ function SezioneDateCorsi({
               border: `1px solid ${CREAM_BORDER}`,
             }}
           />
-          <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-            <Button onClick={() => copiaVolantino(volantino, setAvvisoVolantino)} style={{ flex: "1 1 160px" }}>Copia immagine</Button>
-            <Button variant="ghost" onClick={() => scaricaVolantino(volantino)} style={{ flex: "1 1 160px" }}>Scarica</Button>
-          </div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.45 }}>
             Da telefono tieni premuto sull’immagine e scegli “Copia”: è il modo che funziona ovunque.
           </div>
