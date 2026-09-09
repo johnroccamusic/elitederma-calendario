@@ -8087,7 +8087,10 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 30px" }}>
+    /* in fondo ci vuole aria: l'ultima riga della scheda — "Gestione
+       modelle" — finiva sotto il dock del telefono, e da li' non si
+       poteva premere */
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: isMobile ? "4px 20px calc(env(safe-area-inset-bottom, 0px) + 120px)" : "4px 20px 30px" }}>
       <button onClick={onBack} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4, marginBottom: 10 }}>
         <IconaFrecciaSinistra size={20} />
         <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla dashboard</span>
