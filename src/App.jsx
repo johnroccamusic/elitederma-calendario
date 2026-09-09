@@ -6593,7 +6593,7 @@ function SezioneDateCorsi({
   return (
     <div>
       {stickyControlli && <div ref={sentinellaRef} style={{ height: 1, marginBottom: -1 }} />}
-      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: barraIncollata && vistaDateModo === "elenco" ? BG : "transparent", paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
+      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: barraIncollata ? BG : "transparent", paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
       {!(collassabileSuMobile && controlliCollassati) && (
       <>
       {intestazioneSticky}
@@ -13805,11 +13805,30 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
 
   if (mostraAggiungiCorso) {
     return (
-      <Calendario
-        corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
-        onApriData={onApriData} onBack={() => setMostraAggiungiCorso(false)} ricarica={ricarica}
-        apriPopupInizialeData={dataOggiStr()}
-      />
+      <div>
+        {/* i quattro tasti restano appesi in cima anche qui, e il
+            calendario ci scorre sotto: entrando ad aggiungere un corso
+            sparivano, e per andare altrove si doveva prima uscire */}
+        {!soloLettura && (
+          <div style={{ position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, paddingBottom: 4 }}>
+            <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0 24px" : "0 32px" }}>
+              <BarraTastiGestioneCorsi
+                attivo="aggiungi"
+                numeroAccontiInAttesa={numeroAccontiInAttesa}
+                onAggiungiCorso={() => {}}
+                onUltimeIscrizioni={onApriUltimeIscrizioni}
+                onProssimeContabilita={onApriProssimeContabilita}
+                onVerificaAcconti={onApriVerificaAcconti}
+              />
+            </div>
+          </div>
+        )}
+        <Calendario
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          onApriData={onApriData} onBack={() => setMostraAggiungiCorso(false)} ricarica={ricarica}
+          apriPopupInizialeData={dataOggiStr()}
+        />
+      </div>
     );
   }
 
