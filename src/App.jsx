@@ -6959,11 +6959,11 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
   // un elenco come quello di Roma stia a k vicino a 1, cioe' alla misura
   // piena.
   const base = {
-    citta: 44, mese: 26, riga: 52,
+    citta: 44, mese: 30, riga: 52,
     dopoCitta: 56,   // dal nome della citta' al primo mese
-    dopoMese: 40,    // dal mese alla sua prima data
+    dopoMese: 52,    // dal mese alla sua prima data
     spazioRiga: 66,  // da una data alla successiva
-    fraMesi: 30,     // respiro prima del mese successivo
+    fraMesi: 22,     // respiro prima del mese successivo
     fraCitta: 66,    // respiro prima della citta' successiva
   };
   const altezzaTestata = 250;
