@@ -47924,12 +47924,17 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                 pezzi lasciano davvero lo scaffale. */}
             <TastoFaseSede
               fatto={!!preparatoTs}
-              etichettaDaFare="Materiale da preparare" etichettaFatto="Materiale preparato"
-              onClick={(e) => { e.stopPropagation(); onPrepara(!preparatoTs); }}
+              spento={inLavorazione || !!allestitoTs}
+              etichettaDaFare={inLavorazione ? "Scarico in corso…" : "Materiale da preparare"}
+              etichettaFatto={inLavorazione ? "Rientro in corso…" : "Materiale preparato"}
+              onClick={(e) => { e.stopPropagation(); if (!allestitoTs) onPrepara(!preparatoTs); }}
             />
+            {/* una volta consegnato non si torna indietro: il tasto resta
+                verde e smette di rispondere. Quello che e' andato in aula
+                e' andato, e quello che avanza rientra dall'inventario */}
             <TastoFaseSede
               fatto={!!allestitoTs}
-              spento={inLavorazione || !preparatoTs}
+              spento={inLavorazione || !preparatoTs || !!allestitoTs}
               etichettaDaFare={inLavorazione ? "Scarico in corso…" : "Materiale da consegnare"}
               etichettaFatto={inLavorazione ? "Rientro in corso…" : "Materiale consegnato"}
               onClick={(e) => { e.stopPropagation(); if (preparatoTs) onAllestisci(!allestitoTs); }}
@@ -48975,16 +48980,18 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // "Materiale preparato": e' solo una spunta, non muove niente. Serve a
   // chi prepara le scatole per dire che ha finito, ore prima che il
   // materiale scenda in aula.
+  // Il materiale esce dal magazzino quando viene PREPARATO, non quando
+  // viene consegnato: e' quello il momento in cui i pezzi lasciano lo
+  // scaffale ed entrano nella scatola. Finche' resta "preparato" si puo'
+  // tornare indietro, rimetterli dentro, aggiungerne altri e rifare lo
+  // scarico; dopo "consegnato" non si tocca piu' niente.
   async function preparaMateriale(corsoData, preparare) {
-    if (!preparare && statoDi(corsoData.id).allestito_ts) {
-      window.alert("Il materiale risulta già consegnato: torna indietro prima da «Materiale consegnato».");
+    if (statoDi(corsoData.id).allestito_ts) {
+      mostraAvviso("Il materiale risulta già consegnato: da qui non si torna più indietro.");
       return;
     }
-    await salvaCampiEdizione(corsoData.id, { materiale_preparato_ts: preparare ? new Date().toISOString() : null });
-  }
-  async function allestisciCorso(corsoData, allestire) {
-    if (allestire) {
-      if (!(await chiediConferma("Materiale consegnato in aula: scarico dal magazzino il materiale di questo corso?"))) return;
+    if (preparare) {
+      if (!(await chiediConferma("Materiale preparato: scarico dal magazzino il materiale di questo corso?"))) return;
       const ok = await sincronizzaMagazzino(corsoData);
       if (ok === false) return;
       const foto = componiSpedizione({
@@ -48993,13 +49000,29 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         kitDefinizioni, corsoId: corsoData.corso_id,
       });
       await salvaCampiEdizione(corsoData.id, {
-        allestito_ts: new Date().toISOString(), spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString(),
+        materiale_preparato_ts: new Date().toISOString(),
+        spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString(),
       });
       return;
     }
     if (!(await chiediConferma("Tornando indietro il materiale rientra tutto in magazzino. Confermi?"))) return;
     await ripristinaMagazzinoDaScarico(corsoData);
-    await salvaCampiEdizione(corsoData.id, { allestito_ts: null });
+    await salvaCampiEdizione(corsoData.id, { materiale_preparato_ts: null });
+  }
+  // "Materiale consegnato" non muove piu' niente: i pezzi sono gia' fuori
+  // da quando il materiale e' stato preparato. Chiude, e da chiuso non si
+  // torna indietro — quello che e' andato in aula e' andato.
+  async function allestisciCorso(corsoData, allestire) {
+    if (!allestire) {
+      mostraAvviso("Il materiale è già stato consegnato: da qui non si torna indietro. Quello che avanza rientra dall'inventario di fine corso.");
+      return;
+    }
+    if (!statoDi(corsoData.id).materiale_preparato_ts) {
+      mostraAvviso("Prima segna «Materiale preparato»: è lì che il materiale esce dal magazzino.");
+      return;
+    }
+    if (!(await chiediConferma("Materiale consegnato in aula. Da qui non si torna più indietro: confermi?"))) return;
+    await salvaCampiEdizione(corsoData.id, { allestito_ts: new Date().toISOString() });
   }
   // rifare l'inventario: prima si toglie di nuovo dal magazzino quello che
   // il conteggio precedente ci aveva rimesso, altrimenti la seconda
@@ -49023,10 +49046,16 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     ricarica(["prodotti_shop"]);
   }
   async function cambiaFaseLogistica(corsoData, fase) {
-    if (fase === "ritirato_corriere") {
-      if (!(await chiediConferma("Vuoi scaricare i prodotti in partenza dal magazzino?"))) return;
+    // Lo scarico sta sul PACCO PREPARATO, non sul ritiro del corriere: e'
+    // quando il pacco si riempie che i pezzi lasciano lo scaffale, e fra
+    // preparazione e ritiro possono passare giorni in cui il magazzino
+    // direbbe di avere roba che sta gia' dentro una scatola. Fino al
+    // ritiro si puo' comunque tornare indietro, riaprire il pacco e
+    // aggiungere: il ripristino rimette dentro quello che era uscito.
+    if (fase === "da_preparare") {
+      if (!(await chiediConferma("Pacco preparato: scarico dal magazzino i prodotti che ci vanno dentro?"))) return;
       // se lo scarico è bloccato (magazzino insufficiente) la fase NON
-      // avanza: altrimenti risulterebbe "ritirato" senza scarico registrato
+      // avanza: altrimenti il pacco risulterebbe preparato senza scarico
       const ok = await sincronizzaMagazzino(corsoData);
       if (ok === false) return;
       const foto = componiSpedizione({
@@ -49042,11 +49071,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     await salvaCampiEdizione(corsoData.id, { fase });
   }
   async function tornaIndietroFaseLogistica(corsoData, faseTarget) {
-    // si esce da "ritirato_corriere" tornando indietro solo quando la
-    // fase ATTUALE è proprio quella: è lì che è scattato lo scarico,
-    // quindi è lì che va annullato
-    if (statoDi(corsoData.id).fase === "ritirato_corriere") {
-      if (!window.confirm("Tornando indietro, questi prodotti verranno tolti di nuovo dal magazzino. Confermi?")) return;
+    // si esce da "da_preparare" tornando indietro solo quando la fase
+    // ATTUALE è proprio quella: è lì che è scattato lo scarico, quindi è
+    // lì che va annullato — il pacco si riapre e i pezzi rientrano
+    if (statoDi(corsoData.id).fase === "da_preparare") {
+      if (!(await chiediConferma("Il pacco si riapre e i prodotti rientrano in magazzino. Confermi?"))) return;
       await ripristinaMagazzinoDaScarico(corsoData);
     }
     await salvaCampiEdizione(corsoData.id, { fase: faseTarget });
