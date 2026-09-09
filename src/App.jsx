@@ -6928,20 +6928,27 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
   // successiva, e i due respiri piu' larghi quando cambia mese o citta'.
   // Prima erano compresse: "Roma", "SETTEMBRE 2026" e "Pmu Base" si
   // toccavano, e tre livelli diversi sembravano una cosa sola.
-  // Tutto il doppio di prima: il foglio si guarda sul telefono di un
-  // cliente, dove il corpo di prima si leggeva solo ingrandendo. Le
-  // distanze raddoppiano insieme ai caratteri, altrimenti le righe si
-  // toccherebbero; e la soglia minima di k scende della stessa misura
-  // (vedi sotto), cosi' un elenco che oggi ci sta continua a starci.
+  // Il foglio si guarda sul telefono di un cliente, e quello che deve
+  // leggere sono i nomi dei corsi e le date: quelle righe passano da 27 a
+  // 52, quasi il doppio. Citta' e mese crescono appena — sono etichette,
+  // non contenuto — e le distanze intorno al mese si stringono: l'altezza
+  // dell'A4 e' quella, e ogni pixel speso in aria e' un pixel tolto al
+  // corpo delle righe.
+  //
+  // Raddoppiare tutto non si puo': dieci mesi con un corso ciascuno sono
+  // venti righe di testo, e a corpo doppio venti righe riempiono un A4
+  // senza un filo di spazio bianco. Il conto qui sotto e' fatto perche'
+  // un elenco come quello di Roma stia a k vicino a 1, cioe' alla misura
+  // piena.
   const base = {
-    citta: 80, mese: 48, riga: 54,
-    dopoCitta: 104,  // dal nome della citta' al primo mese
-    dopoMese: 88,    // dal mese alla sua prima data
-    spazioRiga: 92,  // da una data alla successiva
-    fraMesi: 72,     // respiro prima del mese successivo
-    fraCitta: 128,   // respiro prima della citta' successiva
+    citta: 44, mese: 26, riga: 52,
+    dopoCitta: 56,   // dal nome della citta' al primo mese
+    dopoMese: 40,    // dal mese alla sua prima data
+    spazioRiga: 66,  // da una data alla successiva
+    fraMesi: 30,     // respiro prima del mese successivo
+    fraCitta: 66,    // respiro prima della citta' successiva
   };
-  const altezzaTestata = 350;
+  const altezzaTestata = 250;
 
   const altezzaCon = (k) => gruppi.reduce((tot, g) => {
     let h = base.dopoCitta + base.fraCitta;
@@ -6949,16 +6956,15 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
     return tot + h * k;
   }, 0) * 1;
 
-  // si stringe finche' ci sta, ma mai sotto 0,275: e' la vecchia soglia
-  // dello 0,55 su misure diventate il doppio — cioe' esattamente lo stesso
-  // corpo minimo di prima. Sotto quella misura un elenco non si legge piu'
-  // su un telefono, e un foglio illeggibile non e' un foglio in meno da
-  // mandare, e' un foglio buttato: si rinuncia e si chiede di stringere i
-  // filtri
+  // si stringe finche' ci sta, ma mai sotto 0,3: su righe che partono da
+  // 52 e' lo stesso corpo minimo di prima (27 x 0,55). Sotto quella misura
+  // un elenco non si legge piu' su un telefono, e un foglio illeggibile
+  // non e' un foglio in meno da mandare, e' un foglio buttato: si rinuncia
+  // e si chiede di stringere i filtri
   const disponibile = VOLANTINO_ALTEZZA - altezzaTestata - margine;
   const necessaria = altezzaCon(1);
   const k = necessaria <= disponibile ? 1 : disponibile / necessaria;
-  if (k < 0.275) return null;
+  if (k < 0.3) return null;
 
   ctx.fillStyle = "#FAF7F1";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -6966,25 +6972,21 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "center";
   ctx.fillStyle = "#0E1B33";
-  // il nome raddoppiato sfora i margini del foglio: si parte da 124 e si
-  // scende finche' non ci sta dentro, invece di lasciarlo uscire
-  ctx.letterSpacing = "20px";
-  let dimTitolo = 124;
-  ctx.font = `700 ${dimTitolo}px Poppins, Helvetica, Arial, sans-serif`;
-  while (dimTitolo > 62 && ctx.measureText("ELITEDERMA").width > larghezzaUtile) {
-    dimTitolo -= 2;
-    ctx.font = `700 ${dimTitolo}px Poppins, Helvetica, Arial, sans-serif`;
-  }
-  ctx.fillText("ELITEDERMA", VOLANTINO_LARGHEZZA / 2, 170);
+  // la testata resta quella di sempre: e' l'intestazione della carta, non
+  // il contenuto. Ingrandirla toglieva altezza proprio alle righe che
+  // devono crescere
+  ctx.font = "700 62px Poppins, Helvetica, Arial, sans-serif";
+  ctx.letterSpacing = "10px";
+  ctx.fillText("ELITEDERMA", VOLANTINO_LARGHEZZA / 2, 120);
   ctx.letterSpacing = "0px";
-  ctx.font = "400 54px Poppins, Helvetica, Arial, sans-serif";
+  ctx.font = "400 27px Poppins, Helvetica, Arial, sans-serif";
   ctx.fillStyle = "#54585F";
-  ctx.fillText("Ecco i corsi da te richiesti", VOLANTINO_LARGHEZZA / 2, 256);
+  ctx.fillText("Ecco i corsi da te richiesti", VOLANTINO_LARGHEZZA / 2, 168);
   ctx.strokeStyle = "#C9A26D";
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(margine, 292);
-  ctx.lineTo(VOLANTINO_LARGHEZZA - margine, 292);
+  ctx.moveTo(margine, 200);
+  ctx.lineTo(VOLANTINO_LARGHEZZA - margine, 200);
   ctx.stroke();
 
   let y = altezzaTestata;
@@ -6998,7 +7000,7 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
       if (iMese > 0) y += base.fraMesi * k;
       ctx.font = `700 ${Math.round(base.mese * k)}px Poppins, Helvetica, Arial, sans-serif`;
       ctx.fillStyle = "#C9A26D";
-      ctx.letterSpacing = `${Math.round(4 * k)}px`;
+      ctx.letterSpacing = `${Math.round(2 * k)}px`;
       ctx.fillText(m.mese, margine, y);
       ctx.letterSpacing = "0px";
       y += base.dopoMese * k;
@@ -7006,16 +7008,16 @@ function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
         ctx.font = `600 ${Math.round(base.riga * k)}px Poppins, Helvetica, Arial, sans-serif`;
         ctx.fillStyle = "#0E1B33";
         ctx.textAlign = "left";
-        ctx.fillText(r.corso, margine + 28, y);
+        ctx.fillText(r.corso, margine + 20, y);
         ctx.textAlign = "right";
         ctx.fillText(r.quando, VOLANTINO_LARGHEZZA - margine, y);
         ctx.textAlign = "left";
         // il filetto sotto ogni riga: separa senza pesare come una tabella
         ctx.strokeStyle = "#E8E3D6";
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(margine + 28, y + 20 * k);
-        ctx.lineTo(VOLANTINO_LARGHEZZA - margine, y + 20 * k);
+        ctx.moveTo(margine + 20, y + 16 * k);
+        ctx.lineTo(VOLANTINO_LARGHEZZA - margine, y + 16 * k);
         ctx.stroke();
         y += base.spazioRiga * k;
       });
