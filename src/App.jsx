@@ -6394,12 +6394,30 @@ function SezioneDateCorsi({
   const setVistaDateTab = setTabEsterna || setVistaDateTabInterna;
   const setVistaDateModo = setModoEsterno || setVistaDateModoInterno;
   const isMobile = useIsMobile();
+  // "Date per cliente": l'elenco filtrato come immagine A4 da mandare su
+  // WhatsApp. Vive qui perche' e' la stessa lista che si vede a schermo.
+  const [volantino, setVolantino] = useState(null);
+  const [avvisoVolantino, setAvvisoVolantino] = useState("");
   // riga filtri su mobile: un unico font per tutti i pulsanti, ridotto
   // quel tanto che basta perché stiano tutti su una sola riga senza
   // troncare (vedi useFontRigaAdattato). Il "segnale" fa ricalcolare
   // quando cambiano le etichette (filtro attivo o numero di opzioni).
   const segnaleFiltri = `${isMobile}|${filtroCorsoHome}|${filtroCittaHome}|${filtroMasterHome}|${corsi.length}|${location.length}|${(master || []).length}`;
   const { ref: rigaFiltriRef, fontSize: fontFiltri } = useFontRigaAdattato(isMobile, segnaleFiltri, 13, 7);
+  function apriDatePerCliente() {
+    const conFiltro = !!(ricercaDate.trim() || filtroCorsoHome || filtroCittaHome || filtroMasterHome);
+    if (!conFiltro) {
+      setAvvisoVolantino("Elenco troppo esteso: devi prima applicare un filtro.");
+      return;
+    }
+    if (corsiDateFiltrate.length === 0) {
+      setAvvisoVolantino("Con questi filtri non c'è nessuna data da mandare.");
+      return;
+    }
+    const canvas = disegnaVolantinoCorsi({ corsiDate: corsiDateFiltrate, corsi, location });
+    setVolantino(canvas.toDataURL("image/png"));
+  }
+
   useEffect(() => {
     if (!registraInterceptaIndietro || nascondiControlli) return;
     if (vistaDateModo === "calendario") { registraInterceptaIndietro(() => setVistaDateModo("elenco")); return () => registraInterceptaIndietro(null); }
@@ -6531,6 +6549,10 @@ function SezioneDateCorsi({
                 <>
                   <TabPillola compatto={isMobile} attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
                   <TabPillola compatto={isMobile} attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+                  {/* il calendario intero non si manda a un cliente: sono
+                      cento date di citta' che non ha chiesto. Il tasto
+                      pretende che si sia filtrato prima qualcosa */}
+                  <TabPillola compatto={isMobile} attivo={false} onClick={apriDatePerCliente}>Date per cliente</TabPillola>
                 </>
               )}
               <div style={{ display: "flex", alignItems: "center", marginLeft: isMobile ? 2 : 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff", flexShrink: 0 }}>
@@ -6682,8 +6704,177 @@ function SezioneDateCorsi({
         <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} fontScaleBarre={fontScale} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} spostabile={!!onEdit} />
       )}
       </div>
+
+      {avvisoVolantino && (
+        <Modal title="Date per cliente" onClose={() => setAvvisoVolantino("")} maxWidth={420}>
+          <div style={{ ...fontBody, fontSize: 14, color: NAVY, lineHeight: 1.5, marginTop: 4 }}>{avvisoVolantino}</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+            Cerca una città, un corso o una master, oppure usa i filtri qui sopra: il foglio contiene esattamente le date che restano in elenco.
+          </div>
+          <Button onClick={() => setAvvisoVolantino("")} style={{ width: "100%", marginTop: 18 }}>Ho capito</Button>
+        </Modal>
+      )}
+
+      {volantino && (
+        <Modal title="Date per cliente" onClose={() => setVolantino(null)} maxWidth={720}>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
+            Un foglio A4 con le date filtrate, senza posti liberi né iscritti: si copia e si incolla in chat.
+          </div>
+          <img src={volantino} alt="Date per cliente" style={{ width: "100%", height: "auto", display: "block", borderRadius: 10, border: `1px solid ${CREAM_BORDER}` }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+            <Button onClick={() => copiaVolantino(volantino, setAvvisoVolantino)} style={{ flex: "1 1 160px" }}>Copia immagine</Button>
+            <Button variant="ghost" onClick={() => scaricaVolantino(volantino)} style={{ flex: "1 1 160px" }}>Scarica</Button>
+          </div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.45 }}>
+            Da telefono tieni premuto sull’immagine e scegli “Copia”: è il modo che funziona ovunque.
+          </div>
+        </Modal>
+      )}
     </div>
   );
+}
+
+// ---------- "Date per cliente": l'elenco filtrato come immagine ----------
+// Il venditore filtra (Roma, PMU, un mese) e ha bisogno di mandare quelle
+// date a un cliente su WhatsApp. Uno screenshot ritaglia male e porta
+// dentro posti liberi e iscritti, che al cliente non si dicono: qui si
+// disegna un A4 pulito con le sole informazioni che lo riguardano — dove,
+// quando, quale corso.
+//
+// Il foglio e' uno solo: se le date sono tante il carattere si stringe
+// finche' ci stanno tutte, invece di andare a pagina due — un'immagine
+// sola si inoltra, due si perdono per strada.
+// copiare l'immagine negli appunti funziona solo dove il browser lo
+// concede (e mai senza un gesto dell'utente): se non passa non si finge
+// riuscito, si dice di scaricarla
+async function copiaVolantino(dataUrl, avvisa) {
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    await navigator.clipboard.write([new window.ClipboardItem({ "image/png": blob })]);
+    avvisa("Immagine copiata: incollala in chat.");
+  } catch {
+    avvisa("Il browser non mi lascia copiare l'immagine: usa «Scarica», oppure tieni premuto sull'immagine e scegli «Copia».");
+  }
+}
+function scaricaVolantino(dataUrl) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = `date-corsi-${dataOggiStr()}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+const VOLANTINO_LARGHEZZA = 1240;   // A4 a 150 dpi
+const VOLANTINO_ALTEZZA = 1754;
+
+function righeVolantinoCorsi({ corsiDate, corsi, location }) {
+  const corsoDi = (id) => (corsi || []).find((c) => c.id === id);
+  const locDi = (id) => (location || []).find((l) => l.id === id);
+  const perCitta = new Map();
+  [...(corsiDate || [])]
+    .sort((a, b) => String(a.data_inizio).localeCompare(String(b.data_inizio)))
+    .forEach((cd) => {
+      const citta = toTitleCase(locDi(cd.location_id)?.nome || "—");
+      if (!perCitta.has(citta)) perCitta.set(citta, new Map());
+      const mesi = perCitta.get(citta);
+      const [aaaa, mm] = String(cd.data_inizio).split("-");
+      const chiaveMese = `${MESI[Number(mm) - 1]} ${aaaa}`.toUpperCase();
+      if (!mesi.has(chiaveMese)) mesi.set(chiaveMese, []);
+      const { numero, sotto } = etichettaIntervalloGiorni(cd.data_inizio, cd.data_fine);
+      mesi.get(chiaveMese).push({
+        corso: toTitleCase(corsoDi(cd.corso_id)?.nome || "—"),
+        quando: `${numero}${sotto ? ` ${sotto}` : ""}`,
+      });
+    });
+  return [...perCitta.entries()].map(([citta, mesi]) => ({
+    citta,
+    mesi: [...mesi.entries()].map(([mese, righe]) => ({ mese, righe })),
+  }));
+}
+
+function disegnaVolantinoCorsi({ corsiDate, corsi, location }) {
+  const gruppi = righeVolantinoCorsi({ corsiDate, corsi, location });
+  const canvas = document.createElement("canvas");
+  canvas.width = VOLANTINO_LARGHEZZA;
+  canvas.height = VOLANTINO_ALTEZZA;
+  const ctx = canvas.getContext("2d");
+
+  const margine = 90;
+  const larghezzaUtile = VOLANTINO_LARGHEZZA - margine * 2;
+  // le misure di partenza, tutte in un posto: la scala le riduce insieme
+  const base = { citta: 40, mese: 24, riga: 27, spazioCitta: 46, spazioMese: 30, spazioRiga: 44, dopoMese: 12, dopoCitta: 26 };
+  const altezzaTestata = 250;
+
+  const altezzaCon = (k) => gruppi.reduce((tot, g) => {
+    let h = base.spazioCitta * k + base.dopoCitta * k;
+    g.mesi.forEach((m) => { h += base.spazioMese * k + base.dopoMese * k + m.righe.length * base.spazioRiga * k; });
+    return tot + h;
+  }, 0);
+
+  // si stringe finche' ci sta: mai sotto 0,45, sotto quella soglia un
+  // elenco non si legge piu' e tanto vale mandarne due
+  const disponibile = VOLANTINO_ALTEZZA - altezzaTestata - margine;
+  let k = 1;
+  if (altezzaCon(1) > disponibile) k = Math.max(0.45, disponibile / altezzaCon(1));
+
+  ctx.fillStyle = "#FAF7F1";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#0E1B33";
+  ctx.font = "700 62px Poppins, Helvetica, Arial, sans-serif";
+  ctx.letterSpacing = "10px";
+  ctx.fillText("ELITEDERMA", VOLANTINO_LARGHEZZA / 2, 120);
+  ctx.letterSpacing = "0px";
+  ctx.font = "400 27px Poppins, Helvetica, Arial, sans-serif";
+  ctx.fillStyle = "#54585F";
+  ctx.fillText("Ecco i corsi da te richiesti", VOLANTINO_LARGHEZZA / 2, 168);
+  ctx.strokeStyle = "#C9A26D";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(margine, 200);
+  ctx.lineTo(VOLANTINO_LARGHEZZA - margine, 200);
+  ctx.stroke();
+
+  let y = altezzaTestata;
+  ctx.textAlign = "left";
+  gruppi.forEach((g) => {
+    ctx.font = `700 ${Math.round(base.citta * k)}px Poppins, Helvetica, Arial, sans-serif`;
+    ctx.fillStyle = "#0E1B33";
+    ctx.fillText(g.citta, margine, y);
+    y += base.dopoCitta * k;
+    g.mesi.forEach((m) => {
+      ctx.font = `700 ${Math.round(base.mese * k)}px Poppins, Helvetica, Arial, sans-serif`;
+      ctx.fillStyle = "#C9A26D";
+      ctx.letterSpacing = `${Math.round(2 * k)}px`;
+      ctx.fillText(m.mese, margine, y);
+      ctx.letterSpacing = "0px";
+      y += base.dopoMese * k + base.spazioMese * k * 0.4;
+      m.righe.forEach((r) => {
+        ctx.font = `600 ${Math.round(base.riga * k)}px Poppins, Helvetica, Arial, sans-serif`;
+        ctx.fillStyle = "#0E1B33";
+        ctx.textAlign = "left";
+        ctx.fillText(r.corso, margine + 14, y);
+        ctx.textAlign = "right";
+        ctx.fillText(r.quando, VOLANTINO_LARGHEZZA - margine, y);
+        ctx.textAlign = "left";
+        // il filetto sotto ogni riga: separa senza pesare come una tabella
+        ctx.strokeStyle = "#E8E3D6";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(margine + 14, y + 10 * k);
+        ctx.lineTo(VOLANTINO_LARGHEZZA - margine, y + 10 * k);
+        ctx.stroke();
+        y += base.spazioRiga * k;
+      });
+      y += base.spazioMese * k * 0.3;
+    });
+    y += base.spazioCitta * k * 0.4;
+  });
+
+  return canvas;
 }
 
 // login del venditore per la propria Dashboard: sceglie il proprio nome
