@@ -1028,6 +1028,21 @@ function IconaStoricoPos({ size = 18, color = NAVY }) {
     </svg>
   );
 }
+// tre righe con il pallino davanti: l'elenco, in contrapposizione al
+// calendario nella pillola che sceglie come guardare le date
+function IconaElencoRighe({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="4.5" cy="6.5" r="1.4" fill={color} stroke="none" />
+      <circle cx="4.5" cy="12" r="1.4" fill={color} stroke="none" />
+      <circle cx="4.5" cy="17.5" r="1.4" fill={color} stroke="none" />
+      <line x1="9" y1="6.5" x2="20" y2="6.5" />
+      <line x1="9" y1="12" x2="20" y2="12" />
+      <line x1="9" y1="17.5" x2="20" y2="17.5" />
+    </svg>
+  );
+}
+
 function IconaMenuPuntini({ size = 18, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -6294,6 +6309,40 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
 // colore normale con un rosso lampeggiante, per farsi notare anche fra
 // tante altre pillole — usato solo dove esplicitamente richiesto, il
 // resto delle TabPillola dell'app non cambia
+// Due scelte che si escludono, dentro una pillola sola: il fondo beige e'
+// il gruppo, la pastiglia bianca dice dove sei. Erano due tasti separati e
+// quello scelto si riempiva di blu — si leggeva come un'azione da premere
+// piu' che come la scheda in cui ci si trova.
+function PillolaSegmentata({ voci, valore, onCambia, compatto }) {
+  return (
+    <div style={{
+      display: "inline-flex", alignItems: "stretch", flexShrink: 0,
+      background: "#F1ECE2", borderRadius: 22, padding: 4, gap: 2,
+    }}>
+      {voci.map((v) => {
+        const attivo = valore === v.chiave;
+        return (
+          <button
+            key={v.chiave}
+            onClick={() => onCambia(v.chiave)}
+            style={{
+              ...fontBody, fontSize: compatto ? 11 : 13, fontWeight: 700,
+              padding: compatto ? "6px 10px" : "8px 15px", borderRadius: 18, border: "none",
+              background: attivo ? "#fff" : "transparent",
+              color: attivo ? NAVY : MUTED,
+              boxShadow: attivo ? "0 1px 3px rgba(14,27,51,0.12)" : "none",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: compatto ? 4 : 6, whiteSpace: "nowrap",
+            }}
+          >
+            {v.Icona && <v.Icona size={compatto ? 13 : 15} color={attivo ? NAVY : MUTED} />}
+            {v.testo}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function TabPillola({ attivo, onClick, children, compatto, urgente }) {
   return (
     <>
@@ -6550,15 +6599,27 @@ function SezioneDateCorsi({
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "space-between", gap: isMobile ? 6 : 10, flexWrap: "wrap", marginBottom: 12 }}>
-            <div style={{ display: "flex", gap: isMobile ? 3 : 6, flexShrink: 0 }}>
-              <TabPillola compatto={isMobile} attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>Programmati ({numeroInProgrammazione})</TabPillola>
-              <TabPillola compatto={isMobile} attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Passati</TabPillola>
-            </div>
+            <PillolaSegmentata
+              compatto={isMobile}
+              valore={vistaDateTab}
+              onCambia={setVistaDateTab}
+              voci={[
+                { chiave: "programmazione", testo: `Programmati (${numeroInProgrammazione})` },
+                { chiave: "archivio", testo: "Passati" },
+              ]}
+            />
             <div style={{ display: "flex", gap: isMobile ? 3 : 6, alignItems: "center", flexShrink: 0 }}>
               {!modoForzato && (
                 <>
-                  <TabPillola compatto={isMobile} attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
-                  <TabPillola compatto={isMobile} attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+                  <PillolaSegmentata
+                    compatto={isMobile}
+                    valore={vistaDateModo}
+                    onCambia={setVistaDateModo}
+                    voci={[
+                      { chiave: "elenco", testo: "Elenco", Icona: IconaElencoRighe },
+                      { chiave: "calendario", testo: "Calendario", Icona: IconaCalendarioCard },
+                    ]}
+                  />
 
                 </>
               )}
