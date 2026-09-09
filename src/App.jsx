@@ -18235,9 +18235,10 @@ function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede, nascondiFasciaM
       <div>
         {gruppi.map(({ chiaveMese, gruppoMese, voci }, iMese) => (
           /* fra l'ultima data di un mese e la fascia del mese dopo ci
-             vogliono 40 pixel: attaccate, la fine di settembre e l'inizio
-             di ottobre si leggevano come un elenco solo */
-          <div key={chiaveMese} style={{ marginTop: iMese > 0 ? 40 : 0 }}>
+             vogliono 15 pixel: attaccate, la fine di settembre e l'inizio
+             di ottobre si leggevano come un elenco solo — ma 40 aprivano
+             un buco che sembrava la fine della scheda */
+          <div key={chiaveMese} style={{ marginTop: iMese > 0 ? 15 : 0 }}>
             {!nascondiFasciaMese && (
               <div style={{ padding: "6px 10px", background: BG, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
@@ -18274,7 +18275,7 @@ function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede, nascondiFasciaM
           <React.Fragment key={chiaveMese}>
             {/* lo stacco fra un mese e l'altro: una riga vuota, perche' su
                 una tabella il margine non si puo' dare alla fascia */}
-            {iMese > 0 && <tr><td colSpan={numeroColonne} style={{ height: 40 }} /></tr>}
+            {iMese > 0 && <tr><td colSpan={numeroColonne} style={{ height: 15 }} /></tr>}
             {!nascondiFasciaMese && (
               <tr>
                 <td colSpan={numeroColonne} style={{ padding: "10px 12px", background: BG }}>
