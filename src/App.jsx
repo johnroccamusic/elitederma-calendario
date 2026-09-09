@@ -47934,10 +47934,10 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                 e' andato, e quello che avanza rientra dall'inventario */}
             <TastoFaseSede
               fatto={!!allestitoTs}
-              spento={inLavorazione || !preparatoTs || !!allestitoTs}
+              spento={inLavorazione || (!preparatoTs && !allestitoTs)}
               etichettaDaFare={inLavorazione ? "Scarico in corso…" : "Materiale da consegnare"}
               etichettaFatto={inLavorazione ? "Rientro in corso…" : "Materiale consegnato"}
-              onClick={(e) => { e.stopPropagation(); if (preparatoTs) onAllestisci(!allestitoTs); }}
+              onClick={(e) => { e.stopPropagation(); if (preparatoTs || allestitoTs) onAllestisci(!allestitoTs); }}
             />
             <TastoFaseSede
               fatto={!!inventarioTs}
@@ -49014,7 +49014,12 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // torna indietro — quello che e' andato in aula e' andato.
   async function allestisciCorso(corsoData, allestire) {
     if (!allestire) {
-      mostraAvviso("Il materiale è già stato consegnato: da qui non si torna indietro. Quello che avanza rientra dall'inventario di fine corso.");
+      // Si torna indietro, ma senza toccare il magazzino: i pezzi sono
+      // usciti alla preparazione, non alla consegna. Serve per rimediare a
+      // una spunta messa per sbaglio — bloccare del tutto voleva dire
+      // lasciare un corso incastrato per un clic.
+      if (!(await chiediConferma("Il materiale torna in stato «preparato». Il magazzino non si muove: i pezzi sono già usciti quando è stato preparato."))) return;
+      await salvaCampiEdizione(corsoData.id, { allestito_ts: null });
       return;
     }
     if (!statoDi(corsoData.id).materiale_preparato_ts) {
