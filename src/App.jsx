@@ -7510,6 +7510,7 @@ function RiepilogoModelleAllievo({ iscritto }) {
 // ha comprato e che taglia di divisa gli tocca. Niente cifre, niente
 // pagamenti: quelli non la riguardano.
 function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriModelle, onBack }) {
+  const isMobile = useIsMobile();
   const coloreCorso = corso?.colore || NAVY;
   const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
   const oggiStr = dataOggiStr();
@@ -7563,7 +7564,36 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
         <div style={{ marginTop: 14, paddingTop: 18, borderTop: `1px solid ${CREAM_BORDER}` }}>
           {allievi.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo iscritto.</div>
-          ) : allievi.map((i, idx) => (
+          ) : allievi.map((i, idx) => {
+            // taglia, telefono e WhatsApp in una barra sola: sono i tre dati
+            // che servono per raggiungere una persona, e stanno insieme
+            // invece che sparsi in fondo alla riga
+            const barraContatti = (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "#F1F3F6", borderRadius: 12, padding: "9px 12px",
+                ...(isMobile ? { marginTop: 12 } : { flexShrink: 0 }),
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <IconaMaglietta size={16} color={MUTED} />
+                  <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Taglia</span>
+                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: i.taglia_divisa ? NAVY : MUTED }}>{i.taglia_divisa || "—"}</span>
+                </div>
+                {i.telefono && (
+                  <>
+                    <span style={{ width: 1, alignSelf: "stretch", background: "#DFE3E9" }} />
+                    <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", minWidth: 0 }}>
+                      <IconaTelefono size={16} color={MUTED} />
+                      <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, whiteSpace: "nowrap" }}>{i.telefono}</span>
+                    </a>
+                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", marginLeft: isMobile ? "auto" : 0, flexShrink: 0 }}>
+                      <IconaWhatsapp size={22} />
+                    </a>
+                  </>
+                )}
+              </div>
+            );
+            return (
             // Una scheda per allievo invece di una riga con un filetto
             // sotto: sono tre blocchi diversi — chi e', come lo si
             // raggiunge, le sue modelle — e in fila su una riga sola si
@@ -7589,34 +7619,19 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
                     <span style={{ ...fontBody, fontSize: 13.5, color: MUTED, lineHeight: 1.35, overflowWrap: "anywhere" }}>{descrizioneKit(i) || "Nessun kit"}</span>
                   </div>
                 </div>
+                {/* Da scrivania la barra sale qui, in alto a destra: sotto
+                    occupava una riga intera per tre dati corti, e lo spazio
+                    a fianco di tutor e kit restava vuoto. Da telefono resta
+                    sotto — a fianco non ci starebbe. */}
+                {!isMobile && barraContatti}
               </div>
 
-              {/* taglia, telefono e WhatsApp in una barra sola: sono i tre
-                  dati che servono per raggiungere una persona, e stanno
-                  insieme invece che sparsi in fondo alla riga */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F1F3F6", borderRadius: 12, padding: "9px 12px", marginTop: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  <IconaMaglietta size={16} color={MUTED} />
-                  <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Taglia</span>
-                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: i.taglia_divisa ? NAVY : MUTED }}>{i.taglia_divisa || "—"}</span>
-                </div>
-                {i.telefono && (
-                  <>
-                    <span style={{ width: 1, alignSelf: "stretch", background: "#DFE3E9" }} />
-                    <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", minWidth: 0 }}>
-                      <IconaTelefono size={16} color={MUTED} />
-                      <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, whiteSpace: "nowrap" }}>{i.telefono}</span>
-                    </a>
-                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", marginLeft: "auto", flexShrink: 0 }}>
-                      <IconaWhatsapp size={22} />
-                    </a>
-                  </>
-                )}
-              </div>
+              {isMobile && barraContatti}
 
               <RiepilogoModelleAllievo iscritto={i} />
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {onApriModelle && (
