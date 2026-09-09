@@ -6497,6 +6497,22 @@ function SezioneDateCorsi({
   // resta sempre visibile. Da desktop, o nelle altre pagine che riusano
   // questo componente, il blocco resta sempre aperto, nessuna freccetta
   const collassabileSuMobile = isMobile && stickyControlli;
+  // Il fondo beige sotto titolo, tasti e filtri serviva a coprire le righe
+  // che passano dietro quando la pagina scorre. Fermi in cima pero' non
+  // c'e' niente da coprire, e quel rettangolo si vedeva come una lastra
+  // appoggiata sullo sfondo dell'app. Ora compare solo da scrollato: una
+  // sentinella invisibile sopra la barra dice quando la barra si e'
+  // incollata, e solo allora il fondo si accende.
+  const sentinellaRef = React.useRef(null);
+  const [barraIncollata, setBarraIncollata] = useState(false);
+  useEffect(() => {
+    if (!stickyControlli) return;
+    const el = sentinellaRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const osservatore = new IntersectionObserver(([voce]) => setBarraIncollata(!voce.isIntersecting), { threshold: 1 });
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, [stickyControlli]);
   const [controlliCollassati, setControlliCollassati] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -6570,7 +6586,8 @@ function SezioneDateCorsi({
 
   return (
     <div>
-      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
+      {stickyControlli && <div ref={sentinellaRef} style={{ height: 1, marginBottom: -1 }} />}
+      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: barraIncollata ? BG : "transparent", paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
       {!(collassabileSuMobile && controlliCollassati) && (
       <>
       {intestazioneSticky}
