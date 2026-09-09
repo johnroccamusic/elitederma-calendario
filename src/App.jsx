@@ -13669,12 +13669,12 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         // senza rimpicciolire il testo fino a non leggerlo.
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: isMobile ? 6 : 10, marginBottom: isMobile ? 14 : 22, maxWidth: 560, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
           {[
-            { chiave: "aggiungi", testo: "Aggiungi corso", onClick: () => setMostraAggiungiCorso(true), primario: true },
-            { chiave: "iscrizioni", testo: "Ultime iscrizioni", onClick: onApriUltimeIscrizioni },
-            ...(onApriProssimeContabilita ? [{ chiave: "contabilita", testo: "Prossime contabilità", onClick: onApriProssimeContabilita }] : []),
+            { chiave: "aggiungi", testo: "Aggiungi corso", Icona: IconaCorsoRiga, onClick: () => setMostraAggiungiCorso(true), primario: true },
+            { chiave: "iscrizioni", testo: "Ultime iscrizioni", Icona: IconaPersonaAggiungi, onClick: onApriUltimeIscrizioni },
+            ...(onApriProssimeContabilita ? [{ chiave: "contabilita", testo: "Prossime contabilità", Icona: IconaLibroContabile, onClick: onApriProssimeContabilita }] : []),
             numeroAccontiInAttesa > 0
-              ? { chiave: "acconti", testo: `Verifica pagamenti (${numeroAccontiInAttesa})`, onClick: onApriVerificaAcconti, urgente: true }
-              : { chiave: "acconti", testo: "Niente da verificare", onClick: onApriVerificaAcconti },
+              ? { chiave: "acconti", testo: `Verifica pagamenti (${numeroAccontiInAttesa})`, Icona: IconaRicevutaErp, onClick: onApriVerificaAcconti, urgente: true }
+              : { chiave: "acconti", testo: "Niente da verificare", Icona: IconaRicevutaErp, onClick: onApriVerificaAcconti },
           ].map((t) => (
             <React.Fragment key={t.chiave}>
               {t.urgente && <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>}
@@ -13683,7 +13683,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
                 style={{
                   ...fontBody, fontSize: isMobile ? 12 : 14, fontWeight: 700, lineHeight: 1.2,
                   aspectRatio: "1 / 1", minWidth: 0, boxSizing: "border-box", overflow: "hidden",
-                  display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: isMobile ? 6 : 9, textAlign: "center",
                   padding: isMobile ? "6px 5px" : "10px 8px", borderRadius: isMobile ? 12 : 16, cursor: "pointer",
                   overflowWrap: "anywhere",
                   color: t.primario || t.urgente ? "#fff" : NAVY,
@@ -13692,6 +13692,15 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
                   animation: t.urgente ? "lampeggiaAcconti 1.1s ease-in-out infinite" : "none",
                 }}
               >
+                {/* il medaglione tondo color crema anche sui tasti pieni:
+                    e' lo stesso segno che marca le voci in tutta l'app, e
+                    su fondo blu o rosso un'icona nuda si sarebbe persa */}
+                <span style={{
+                  width: isMobile ? 32 : 42, height: isMobile ? 32 : 42, borderRadius: "50%", flexShrink: 0,
+                  background: "#F3E7D2", display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <t.Icona size={isMobile ? 17 : 22} color={NAVY} />
+                </span>
                 {t.testo}
               </button>
             </React.Fragment>
