@@ -3568,29 +3568,37 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
             onChange={(e) => onTotale && onTotale(e.target.value)}
           />
         )}
-        {onPagato && (
-          <>
-            {filo}
-            <div style={{ paddingBottom: 3 }}><SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} /></div>
-          </>
-        )}
         {onRimuovi && (
           <button onClick={onRimuovi} title="Rimuovi questo pagamento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 2, display: "flex", alignSelf: "center", flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
           </button>
         )}
       </div>
+      {!onMetodo && onPagato && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+          <SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} />
+        </div>
+      )}
       {onMetodo && (
         <>
           <div style={{ height: 1, background: "#E6DFCE", margin: "12px 0 10px" }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>Metodo di pagamento:</span>
+          {/* lo stato in fondo alla riga dei metodi: da solo su una riga
+              sua si portava via un piano intero per due parole, e sta bene
+              dov'e' la domanda a cui risponde — come e' stata pagata, e se
+              e' stata pagata */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>
             {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
               <label key={opz} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", whiteSpace: "nowrap" }}>
                 <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
                 {opz}
               </label>
             ))}
+            {onPagato && (
+              <span style={{ marginLeft: "auto" }}>
+                <SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} />
+              </span>
+            )}
           </div>
         </>
       )}
