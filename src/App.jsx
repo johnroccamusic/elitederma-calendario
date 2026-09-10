@@ -3496,17 +3496,17 @@ function SemaforoPagamento({ pagato, onClick }) {
       onClick={onClick}
       title={pagato ? "Segna come da pagare" : "Segna come pagato"}
       style={{
-        ...fontBody, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-        border: "none", borderRadius: 12, padding: "9px 14px", flexShrink: 0,
-        display: "inline-flex", alignItems: "center", gap: 7,
+        ...fontBody, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        border: "none", borderRadius: 10, padding: "6px 10px", flexShrink: 0,
+        display: "inline-flex", alignItems: "center", gap: 5,
         background: pagato ? "#E7F3E9" : "#FBE4E1", color: pagato ? "#1F7A33" : "#C0392B",
       }}
     >
       {/* la spunta piena a sinistra: lo stato si legge dal colore e dal
           segno prima ancora della parola */}
       {pagato
-        ? <IconaSpuntaCerchio size={17} color="#1F7A33" />
-        : <IconaOrologioCard size={16} />}
+        ? <IconaSpuntaCerchio size={14} color="#1F7A33" />
+        : <IconaOrologioCard size={14} />}
       {pagato ? "Pagato" : "Da pagare"}
     </button>
   );
@@ -3586,10 +3586,10 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
               sua si portava via un piano intero per due parole, e sta bene
               dov'e' la domanda a cui risponde — come e' stata pagata, e se
               e' stata pagata */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12, color: NAVY }}>
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>
             {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
-              <label key={opz} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", whiteSpace: "nowrap" }}>
+              <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", whiteSpace: "nowrap" }}>
                 <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
                 {opz}
               </label>
