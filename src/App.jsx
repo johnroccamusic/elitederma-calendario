@@ -2866,30 +2866,31 @@ const ALIQUOTE_IVA_STANDARD = [0, 4, 5, 10, 22];
 // NETTO (l'IVA si gestisce in anagrafica), ma in tutti gli elenchi conta
 // il numero che paga il cliente — quello sul sito e sullo scontrino.
 // Mostrare il netto faceva sembrare sbagliato l'intero listino
-// Il lordo che finisce a un centesimo dal decimo si porta al decimo:
-// 39,89 diventa 39,90, 9,89 diventa 9,90, 46,99 diventa 47,00. Non e' un
-// vezzo: un prezzo a scaffale che finisce per 9 centesimi si legge come
-// un errore di conto, ed e' quello che succede con un netto tondo (32,70)
-// moltiplicato per 1,22 — viene 39,894 e l'arrotondamento lo lascia un
-// centesimo sotto. Sta qui, in una funzione sola, perche' il prezzo al
-// pubblico si calcola in piu' punti (elenchi, POS, scheda prodotto, sito)
-// e devono dire tutti lo stesso numero.
-function arrotondaLordo(lordo) {
-  if (lordo == null || !Number.isFinite(lordo)) return lordo;
-  const centesimi = Math.round(lordo * 100);
-  return centesimi % 10 === 9 ? round2((centesimi + 1) / 100) : round2(lordo);
-}
+// Il prezzo al pubblico: quello che paga il cliente, sul sito e sullo
+// scontrino. Di norma e' il netto piu' l'IVA; ma se sulla scheda del
+// prodotto e' stato scritto un prezzo forzato, vince quello.
+//
+// Prima c'era una regola automatica che portava al decimo i lordi che
+// cadevano a un centesimo (39,89 -> 39,90). Faceva la cosa giusta sui
+// pigmenti e la cosa sbagliata su tutto il resto: un centesimo aggiunto da
+// solo a un prodotto che non lo chiedeva e' un prezzo che nessuno ha
+// deciso. Meglio una casella dove si scrive il prezzo che si vuole.
+//
+// Sta qui, in una funzione sola, perche' il prezzo al pubblico si calcola
+// in piu' punti (elenchi, POS, scheda prodotto, sito) e devono dire tutti
+// lo stesso numero.
 function prezzoAlPubblico(p) {
+  if (p?.prezzo_lordo_forzato != null && p.prezzo_lordo_forzato !== "") return round2(Number(p.prezzo_lordo_forzato));
   if (p?.prezzo_vendita == null) return null;
-  return arrotondaLordo(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? 22) / 100));
+  return round2(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? 22) / 100));
 }
-// Stessa regola del prezzo al pubblico (vedi arrotondaLordo). L'IVA si
-// ricava dalla differenza, non si ricalcola: cosi' netto, IVA e lordo
-// tornano fra loro anche dopo la correzione, e il centesimo in piu' sta
-// dove deve stare.
-function calcolaIvaELordo(netto, aliquotaPct) {
+// L'IVA si ricava dalla differenza, non si ricalcola: cosi' netto, IVA e
+// lordo tornano sempre fra loro, anche quando il lordo e' stato deciso a
+// mano e non e' esattamente netto x aliquota.
+function calcolaIvaELordo(netto, aliquotaPct, lordoForzato) {
   if (netto == null || aliquotaPct == null) return { iva: null, lordo: null };
-  const lordo = arrotondaLordo(netto + round2(netto * (aliquotaPct / 100)));
+  const forzato = lordoForzato != null && lordoForzato !== "" ? round2(parseNum(lordoForzato)) : null;
+  const lordo = forzato != null ? forzato : round2(netto + round2(netto * (aliquotaPct / 100)));
   return { iva: round2(lordo - netto), lordo };
 }
 // unico punto in cui si parte dal lordo (il toggle "netto/lordo" in
@@ -22243,8 +22244,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   function listinoLordoDermografo(modello) {
     const p = prodottoDermografo(prodottiShop, modello);
     if (!p || p.prezzo_vendita == null) return null;
-    const aliquota = p.aliquota_iva_vendita != null ? Number(p.aliquota_iva_vendita) : 22;
-    return arrotondaLordo(Number(p.prezzo_vendita) * (1 + aliquota / 100));
+    return prezzoAlPubblico(p);
   }
   const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false, integrazioneId: null };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
@@ -47569,10 +47569,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       // il cliente, quello che si legge sul sito e quello che sta in testa a
       // chi lavora. Salvato resta comunque il netto (vedi BloccoPrezzoIva)
       prezzo: p.prezzo_vendita != null
-        ? String(arrotondaLordo(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? aliquotaIvaDefault) / 100)))
+        ? String(prezzoAlPubblico(p))
         : "",
       modoVendita: "lordo",
       aliquotaVendita: p.aliquota_iva_vendita ?? aliquotaIvaDefault,
+      prezzoLordoForzato: p.prezzo_lordo_forzato != null ? String(p.prezzo_lordo_forzato) : "",
       costo: p.costo_acquisto != null ? String(p.costo_acquisto) : "",
       modoAcquisto: "netto",
       aliquotaAcquisto: p.aliquota_iva_acquisto ?? aliquotaIvaDefault,
@@ -47974,6 +47975,8 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       // l'aliquota di vendita vale anche per la vetrina: senza, il prezzo
       // mostrato sullo shop non saprebbe più tornare da netto a lordo
       aliquota_iva_vendita: f.aliquotaVendita,
+      // il prezzo deciso a mano: vuoto vuol dire "calcolalo tu"
+      prezzo_lordo_forzato: String(f.prezzoLordoForzato ?? "").trim() === "" ? null : parseNum(f.prezzoLordoForzato),
       iva_verificata: true,
       soglia_riordino: interoOpzionale(f.scortaMinima),
       lead_time_giorni: interoOpzionale(f.leadTime),
@@ -48538,7 +48541,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const prezzoNetto = String(f.prezzo ?? "").trim() === ""
       ? null
       : (f.modoVendita === "netto" ? parseNum(f.prezzo) : nettoDaLordo(parseNum(f.prezzo), f.aliquotaVendita));
-    const prezzoLordo = calcolaIvaELordo(prezzoNetto, f.aliquotaVendita).lordo;
+    const prezzoLordo = calcolaIvaELordo(prezzoNetto, f.aliquotaVendita, f.prezzoLordoForzato).lordo;
     // margine sempre sui netti: l'IVA non deve sporcare il confronto
     const margine = costoNetto != null && prezzoNetto != null ? round2(prezzoNetto - costoNetto) : null;
     const marginePct = margine != null && prezzoNetto > 0 ? round2((margine / prezzoNetto) * 100) : null;
@@ -48642,6 +48645,30 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           />
         </div>
       )}
+      {/* Il prezzo al pubblico deciso a mano. Serve ai prezzi da scaffale:
+          32,70 piu' IVA fa 39,894, che arrotondato diventa 39,89 — e un
+          prezzo che finisce per nove centesimi si legge come un errore di
+          conto. Qui si scrive 39,90 e vince quello, ovunque: elenchi, POS,
+          sito. L'IVA diventa la differenza fra questo e il netto.
+          Lasciandolo vuoto il prezzo torna a essere netto piu' IVA. */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ flex: "0 1 200px", minWidth: 150 }}>
+          <Field label="Forza prezzo al pubblico a">
+            <input
+              style={{ ...inputStyle, fontWeight: 700 }}
+              inputMode="decimal"
+              placeholder={calcoloPrezzi.prezzoNetto != null ? `es. ${round2(calcoloPrezzi.prezzoNetto * (1 + (prodottoForm.aliquotaVendita || 0) / 100)).toFixed(2)}` : "es. 39.90"}
+              value={prodottoForm.prezzoLordoForzato || ""}
+              onChange={(e) => aggiornaForm({ prezzoLordoForzato: e.target.value })}
+            />
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 220px", minWidth: 0, ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.45, paddingBottom: 10 }}>
+          {String(prodottoForm.prezzoLordoForzato ?? "").trim() !== ""
+            ? <>Il cliente paga <b style={{ color: NAVY }}>{fmtEuroIva(round2(parseNum(prodottoForm.prezzoLordoForzato)))}</b>, e l'IVA e' la differenza rispetto al netto. Svuota la casella per tornare al calcolo automatico.</>
+            : <>Vuoto: il prezzo e' netto piu' IVA. Scrivi qui la cifra da esporre quando il calcolo lascia un numero scomodo (39,89 invece di 39,90).</>}
+        </div>
+      </div>
       {prodottoForm.tipoProdotto === "vetrina" && (
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: -6, marginBottom: 12, lineHeight: 1.35 }}>
           È il prezzo che il cliente vede sulla pagina del prodotto prima di scegliere la variante. L'incasso vero viene registrato sulla variante venduta.
