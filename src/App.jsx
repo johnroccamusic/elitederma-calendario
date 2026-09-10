@@ -20649,8 +20649,8 @@ function BottonePulsanteScheda({ p }) {
       // tutta la larghezza del tasto invece della meta' lasciata
       // dall'icona di fianco, e ci sta in due righe.
       style={{
-        ...fontDisplay, fontWeight: 600, fontSize: isMobile ? 9 : 12,
-        display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", justifyContent: "center", gap: isMobile ? 5 : 8,
+        ...fontDisplay, fontWeight: 600, fontSize: isMobile ? 8.5 : 10,
+        display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", justifyContent: "center", gap: isMobile ? 5 : 7,
         padding: isMobile ? "9px 3px" : "11px 10px",
         borderRadius: 12, cursor: p.disabled ? "default" : "pointer",
         // acceso = verde. Lo usa solo A.C.M., che a differenza degli altri
@@ -20666,7 +20666,9 @@ function BottonePulsanteScheda({ p }) {
         flex: "1 1 0", minWidth: isMobile ? 0 : 104, overflow: "hidden", boxSizing: "border-box",
       }}
     >
-      <p.Icona size={isMobile ? 32 : 16} color={GOLD} />
+      {/* stessa misura per tutte e cinque: alcune icone nascono a 16, altre
+          a 18 o 20, e in fila si vedeva che non erano sorelle */}
+      <p.Icona size={15} color={GOLD} />
       <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", minWidth: 0, overflowWrap: "break-word" }}>{p.etichetta}</span>
     </button>
   );
