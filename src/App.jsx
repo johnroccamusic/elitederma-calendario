@@ -8355,12 +8355,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
-  // Il riquadro della data e' marrone per tutti i corsi, non del colore
+  // Il riquadro della data e' blu notte per tutti i corsi, non del colore
   // del corso. Nella dashboard della master i corsi sono i suoi, pochi e
   // gia' distinti dal nome scritto grande accanto: un colore diverso per
   // ognuno non aggiungeva niente e faceva sembrare l'elenco una tavolozza.
-  // Piu' scuro dell'oro dell'app perche' ci va sopra il bianco.
-  const MARRONE_DATA = "#9C7A45";
+  // E' lo stesso blu dei titoli dell'app: il bianco sopra ci si legge
+  // netto, cosa che sull'oro non succedeva.
   const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
   // Delle quattro pastiglie di stato — programmato, in corso, appena
   // terminato, terminato — ne resta una sola: quella del corso che si sta
@@ -8412,7 +8412,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           contabilita' se l'ufficio l'ha aperta. */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 16, padding: spaziatura, flexWrap: "wrap" }}>
         <div style={{
-          background: MARRONE_DATA, borderRadius: 13, padding: isMobile ? "10px 11px" : "13px 14px", textAlign: "center", flexShrink: 0, minWidth: isMobile ? 50 : 62,
+          background: NAVY, borderRadius: 13, padding: isMobile ? "10px 11px" : "13px 14px", textAlign: "center", flexShrink: 0, minWidth: isMobile ? 50 : 62,
         }}>
           <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? (isMobile ? 11 : 13) : (isMobile ? 21 : 27), fontWeight: 700, color: "#fff", lineHeight: 1, whiteSpace: "nowrap" }}>{numero}</div>
           {sotto && <div style={{ ...fontBody, fontSize: isMobile ? 8 : 10, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 3 }}>{sotto}</div>}
