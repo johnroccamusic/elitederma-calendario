@@ -50473,7 +50473,7 @@ function TastoFaseSede({ fatto, spento, etichettaDaFare, etichettaFatto, onClick
     </button>
   );
 }
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const inSede = !!loc?.sede_centrale;
   const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
@@ -50527,10 +50527,10 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                 pezzi lasciano davvero lo scaffale. */}
             <TastoFaseSede
               fatto={!!preparatoTs}
-              spento={inLavorazione || !!allestitoTs}
+              spento={inLavorazione || (!!allestitoTs && !puoForzare)}
               etichettaDaFare={inLavorazione ? "Scarico in corso…" : "Materiale da preparare"}
               etichettaFatto={inLavorazione ? "Rientro in corso…" : "Materiale preparato"}
-              onClick={(e) => { e.stopPropagation(); if (!allestitoTs) onPrepara(!preparatoTs); }}
+              onClick={(e) => { e.stopPropagation(); if (!allestitoTs || puoForzare) onPrepara(!preparatoTs); }}
             />
             {/* una volta consegnato non si torna indietro: il tasto resta
                 verde e smette di rispondere. Quello che e' andato in aula
@@ -50548,10 +50548,12 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
               etichettaDaFare="Inventario da fare" etichettaFatto="Inventario eseguito"
               onClick={(e) => { e.stopPropagation(); if (allestitoTs && inventarioTs) onAnnullaInventario(); }}
             />
-            {/* tornare indietro di una fase, come nei corsi da spedire.
-                Prima si poteva solo ricliccare il riquadro verde, che
-                sembrava spento: un gesto che c'era ma non si vedeva */}
-            {(preparatoTs || allestitoTs) && !inventarioTs && !inLavorazione && (
+            {/* indietro si torna finche' il materiale non e' sceso in aula:
+                da "preparato" si rientra in magazzino, da "consegnato" no.
+                Consegnato vuol dire che le scatole sono aperte sul tavolo
+                e qualcuno ci ha gia' messo le mani. L'unico che passa
+                comunque e' chi programma */}
+            {!inventarioTs && !inLavorazione && (allestitoTs ? puoForzare : !!preparatoTs) && (
               <button
                 onClick={(e) => { e.stopPropagation(); if (allestitoTs) onAllestisci(false); else onPrepara(false); }}
                 title={allestitoTs ? "Torna a «Materiale preparato»" : "Torna a «Materiale da preparare»: il materiale rientra in magazzino"}
@@ -50582,7 +50584,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           {(() => {
             const idx = indiceFaseLogistica(FASI_LOGISTICA, faseCorrente);
             const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
-            return idx > 0 && idx <= iRitiro;
+            return idx > 0 && (idx <= iRitiro || puoForzare);
           })() && (
             <button
               onClick={(e) => { e.stopPropagation(); onTornaIndietroFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); }}
@@ -51283,7 +51285,13 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, bundleComponenti, inventarioSede, prodottiApertiMagazzino, utenteLoggato, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, bundleComponenti, inventarioSede, prodottiApertiMagazzino, utenteLoggato, ruoloUtente, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
+  // Chi programma non viene mai chiuso fuori. Le fasi servono a impedire
+  // che qualcuno cambi per distrazione una scatola gia' partita, non a
+  // impedire di rimediare a un errore: quando il dato in app e la realta'
+  // non coincidono qualcuno deve poterli riallineare, e quel qualcuno e'
+  // uno solo.
+  const puoForzare = ruoloUtente === "programmatore";
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -51625,8 +51633,8 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // tornare indietro, rimetterli dentro, aggiungerne altri e rifare lo
   // scarico; dopo "consegnato" non si tocca piu' niente.
   async function preparaMateriale(corsoData, preparare) {
-    if (statoDi(corsoData.id).allestito_ts) {
-      mostraAvviso("Il materiale risulta già consegnato: prima riporta indietro la consegna, poi si può rimettere mano alla preparazione.");
+    if (statoDi(corsoData.id).allestito_ts && !puoForzare) {
+      mostraAvviso("Il materiale risulta già consegnato in aula: da qui non si torna indietro.");
       return;
     }
     if (preparare) {
@@ -51654,9 +51662,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   async function allestisciCorso(corsoData, allestire) {
     if (!allestire) {
       // Si torna indietro, ma senza toccare il magazzino: i pezzi sono
-      // usciti alla preparazione, non alla consegna. Serve per rimediare a
-      // una spunta messa per sbaglio — bloccare del tutto voleva dire
-      // lasciare un corso incastrato per un clic.
+      // usciti alla preparazione, non alla consegna. Dalla consegna in poi
+      // il passaggio e' riservato a chi programma: e' la stessa regola del
+      // ritiro del corriere, per un corso che non ha corriere.
+      if (!puoForzare) {
+        mostraAvviso("Il materiale è già consegnato in aula: da qui non si torna indietro.");
+        return;
+      }
       if (!(await chiediConferma("Il materiale torna in stato «preparato». Il magazzino non si muove: i pezzi sono già usciti quando è stato preparato."))) return;
       await salvaCampiEdizione(corsoData.id, { allestito_ts: null });
       return;
@@ -51720,7 +51732,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     // una regola che vive solo nel bottone e' una regola che il prossimo
     // bottone non conosce
     const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
-    if (indiceFaseLogistica(FASI_LOGISTICA, statoDi(corsoData.id).fase) > iRitiro) {
+    if (!puoForzare && indiceFaseLogistica(FASI_LOGISTICA, statoDi(corsoData.id).fase) > iRitiro) {
       mostraAvviso("Il pacco è già stato ritirato dal corriere: da qui non si torna indietro.");
       return;
     }
@@ -51834,6 +51846,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 loc={locById[cd.location_id]}
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === cd.id)}
                 faseCorrente={statoDi(cd.id).fase}
+                puoForzare={puoForzare}
                 selezionato={edizioneSel?.id === cd.id}
                 onSeleziona={() => { setEdizioneSelId(cd.id); if (isMobile) setVistaMobile("dettaglio"); }}
                 onCambiaFase={(fase) => { setEdizioneSelId(cd.id); cambiaFaseLogistica(cd, fase); }}
@@ -51881,12 +51894,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                   // Dopo, cambiare una lista vorrebbe dire descrivere una
                   // scatola diversa da quella partita.
                   const st = statoDi(edizioneSel.id);
+                  if (puoForzare) return { soloLettura: false };
                   if (locById[edizioneSel.location_id]?.sede_centrale) {
-                    return { soloLettura: !!st.allestito_ts, motivoSoloLettura: "Il materiale risulta consegnato in aula. Per rimetterci mano torna indietro di una fase con la freccia, nella scheda del corso a sinistra." };
+                    return { soloLettura: !!st.allestito_ts, motivoSoloLettura: "Il materiale risulta consegnato in aula: da qui non si torna indietro. Fino a «Materiale preparato» invece si poteva ancora cambiare tutto." };
                   }
                   const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
                   const partito = indiceFaseLogistica(FASI_LOGISTICA, st.fase) > iRitiro;
-                  return { soloLettura: partito, motivoSoloLettura: "Il pacco è già stato ritirato dal corriere: la scatola è partita e non si torna indietro. Fino a «Bolla applicata» invece si può ancora cambiare tutto." };
+                  return { soloLettura: partito, motivoSoloLettura: "Il pacco è già stato ritirato dal corriere: la scatola è partita e non si torna indietro. Fino a «Bolla applicata» invece si poteva ancora cambiare tutto." };
                 })()}
                 kitDefinizioni={kitDefinizioni}
                 corsiKitProdotti={corsiKitProdotti}
@@ -57401,6 +57415,7 @@ export default function App() {
           corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} inventarioSede={inventarioSede}
           prodottiApertiMagazzino={prodottiApertiMagazzino}
           utenteLoggato={utenteLoggato}
+          ruoloUtente={ruoloUtente}
           onApriMagazziniLocali={apriMagazziniLocali}
           ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
           titolo={etichettaTasto("logisticaprodotti", "spedizionicorsi", "Spedizioni corsi")}
