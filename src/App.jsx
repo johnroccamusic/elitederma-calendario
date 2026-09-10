@@ -3528,6 +3528,16 @@ function SemaforoPagamento({ pagato, onClick, piu = 0 }) {
     </button>
   );
 }
+// Da telefono il titolo di un riquadro va su due righe: la prima parola
+// sopra, il resto sotto — "QUOTA / ACCONTO", "DA AVERE / AL CORSO". Su una
+// riga sola si portava via mezza larghezza, e quella larghezza serve ai
+// numeri.
+function titoloSuDueRighe(testo) {
+  const parole = String(testo || "").trim().split(/\s+/);
+  if (parole.length < 2) return [testo, null];
+  return [parole[0], parole.slice(1).join(" ")];
+}
+
 // "+ Aggiungi un altro acconto" e simili: testo in oro, senza cornice,
 // appoggiato in fondo a destra dentro la nuvola della quota.
 function TastoAggiungiQuota({ testo, onClick }) {
@@ -14043,30 +14053,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title={titolo} onBack={onBack} />
 
-      {/* L'interruttore delle maniglie di impaginazione. Sta qui e non fra
-          le voci dei tre gruppi perche' non apre una pagina: accende una
-          modalita'. Lo vede solo il programmatore — per tutti gli altri le
-          maniglie non esistono comunque. */}
-      {programmatore && (
-        <div style={{ ...cardStyle, padding: 16, marginBottom: 18, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minWidth: 0 }}>
-            <input
-              type="checkbox"
-              checked={maniglieAttive}
-              onChange={(e) => salvaManiglieAttive(e.target.checked)}
-              style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0 }}
-            />
-            <span style={{ minWidth: 0 }}>
-              <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, display: "block" }}>Maniglie di impaginazione</span>
-              <span style={{ ...fontBody, fontSize: 12, color: MUTED, display: "block", lineHeight: 1.5 }}>
-                Accende i punti da trascinare per spostare tasti e pannelli e per regolare gli spazi, in tutta l'app.
-                Spente, le pagine mostrano lo spazio vero che occupano gli elementi — che e' quello che vedono tutti gli altri.
-              </span>
-            </span>
-          </label>
-        </div>
-      )}
-
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 18, alignItems: "start" }}>
         {gruppiSetting.map((g) => (
           <div
@@ -14325,6 +14311,35 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
         </Modal>
       )}
 
+
+      {/* L'interruttore delle maniglie di trascinamento: in fondo, piccolo,
+          e solo per il programmatore. Non apre una pagina, accende una
+          modalita' — e per il resto del tempo non deve stare fra i piedi.
+          Spente, le pagine mostrano lo spazio vero degli elementi, che e'
+          quello che vedono tutti gli altri. */}
+      {programmatore && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
+          <button
+            type="button"
+            onClick={() => salvaManiglieAttive(!maniglieAttive)}
+            title="Accende o spegne i punti da trascinare per spostare tasti e pannelli, in tutta l'app"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              ...fontBody, fontSize: 12, fontWeight: 600, color: MUTED,
+              background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20,
+              padding: "7px 12px", cursor: "pointer",
+            }}
+          >
+            Maniglie trascinamento:
+            <span style={{
+              ...fontBody, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6,
+              color: maniglieAttive ? "#1F7A33" : MUTED,
+              background: maniglieAttive ? "#E7F3E9" : BG,
+              borderRadius: 12, padding: "3px 9px",
+            }}>{maniglieAttive ? "ON" : "OFF"}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
