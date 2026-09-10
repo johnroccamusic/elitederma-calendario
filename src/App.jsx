@@ -8562,9 +8562,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           ) : (
             <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 13, color: MUTED }}>Nessun biglietto caricato</div>
           )}
-          {corsoData.note_viaggio && (
-            <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, color: MUTED, marginTop: 8, lineHeight: 1.45, overflowWrap: "anywhere" }}>{corsoData.note_viaggio}</div>
-          )}
+          {/* Le note di viaggio NON si mostrano qui. Sono gli appunti
+              interni di chi prenota — trattative sul prezzo, camere,
+              cambi all'ultimo — e la master non deve leggerli. Le avevo
+              messe rifacendo la scheda dando per scontato che
+              riguardassero lei: non e' cosi'. Restano dove sono sempre
+              state, nella scheda del corso lato ufficio. */}
         </div>
 
         <div style={{ minWidth: 0, paddingLeft: isMobile ? 8 : 18, borderLeft: `1px solid ${CREAM_BORDER}` }}>
