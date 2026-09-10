@@ -7974,7 +7974,16 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
   const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
-  const contabilitaVisibile = !!onApriContabilita && !!corsoData.token_master && oggiStr >= addGiorni(corsoData.data_inizio, -1);
+  // Il tasto della contabilita' lo accende l'ufficio, con A.C.M. dentro la
+  // scheda del corso: prima compariva da solo il giorno prima e restava li'
+  // per sempre, e quella pagina dice quanto ha pagato ogni allievo. Ora
+  // serve che qualcuno lo abbia deciso per QUESTA classe — e il permesso
+  // vale solo fino alla fine del corso, dopo si chiude da se'.
+  const contabilitaVisibile = !!onApriContabilita
+    && !!corsoData.token_master
+    && !!corsoData.acm_attivo
+    && oggiStr <= corsoData.data_fine
+    && oggiStr >= addGiorni(corsoData.data_inizio, -1);
   // click sul corpo della card: apre la "classe" DENTRO l'app (elenco allievi
   // con kit e taglia + gestione modelle), così ha l'header con Indietro/Home.
   return (
@@ -14597,6 +14606,27 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
       return String(nuovo);
     });
   }
+  // A.C.M. — Accesso Contabilita' Master. Accende, per QUESTA edizione, il
+  // tasto "Contabilita' Classe" nella dashboard della master. Quella pagina
+  // dice quanto ha pagato ogni allievo: quando la master puo' vederla lo
+  // decide l'ufficio, edizione per edizione, non il calendario.
+  //
+  // Si spegne da solo alla fine del corso, ma senza nessun lavoro notturno
+  // che passi a chiudere gli interruttori rimasti aperti: dopo data_fine
+  // non viene piu' considerato valido (vedi acmValido). Un permesso che
+  // scade da se' non si dimentica acceso.
+  const acmScaduto = dataOggiStr() > corsoData.data_fine;
+  const acmAcceso = !!corsoData.acm_attivo && !acmScaduto;
+  async function commutaAcm() {
+    if (acmScaduto) { setMsg("Il corso e' finito: l'accesso alla contabilita' per la master si e' chiuso da solo."); return; }
+    const { error } = await supabase.from("corsi_date").update({ acm_attivo: !corsoData.acm_attivo }).eq("id", corsoData.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(!corsoData.acm_attivo
+      ? "A.C.M. acceso: la master vede la contabilita' di questa classe fino alla fine del corso."
+      : "A.C.M. spento: la master non vede piu' la contabilita' di questa classe.");
+    ricarica(["corsi_date"]);
+  }
+
   async function salvaModificaData(id) {
     if (!modDataInizio) { setMsg("Seleziona almeno una data d'inizio."); return; }
     const fine = modDataFine || modDataInizio;
@@ -20643,9 +20673,13 @@ function BottonePulsanteScheda({ p }) {
         ...fontDisplay, fontWeight: 600, fontSize: isMobile ? 9 : 12,
         display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", justifyContent: "center", gap: isMobile ? 5 : 8,
         padding: isMobile ? "9px 3px" : "11px 10px",
-        borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, cursor: p.disabled ? "default" : "pointer",
-        background: "#fff",
-        color: NAVY, opacity: p.disabled ? 0.5 : 1,
+        borderRadius: 12, cursor: p.disabled ? "default" : "pointer",
+        // acceso = verde. Lo usa solo A.C.M., che a differenza degli altri
+        // quattro non fa una cosa: dice uno stato, e uno stato si deve
+        // vedere senza leggere l'etichetta
+        border: `1px solid ${p.attivo ? "#9CCBA6" : CREAM_BORDER}`,
+        background: p.attivo ? "#E7F3E9" : "#fff",
+        color: p.attivo ? "#1F7A33" : NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
         flex: isMobile ? "1 1 0" : "1 1 130px", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
       }}
@@ -24053,6 +24087,14 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             },
           },
           { chiave: "modificadate", etichetta: "Modifica date", Icona: IconaCalendarioCard, onClick: apriModificaDateScheda },
+          {
+            chiave: "acm",
+            etichetta: acmScaduto ? "A.C.M. chiuso" : `A.C.M. ${acmAcceso ? "ON" : "OFF"}`,
+            Icona: IconaLibroContabile,
+            onClick: commutaAcm,
+            disabled: acmScaduto,
+            attivo: acmAcceso,
+          },
           ...(adminSbloccato ? [
             { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
             { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
