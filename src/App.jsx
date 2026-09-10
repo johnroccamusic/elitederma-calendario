@@ -4863,14 +4863,19 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     const stato = valoreCampo(riga, campoStato) || "no";
     const stile = VIAGGIO_STATI[stato];
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
+      // le quattro caselle hanno una misura fissa ciascuna, compresa
+      // l'ultima: lo spazio del "1 file" resta li' anche quando file non
+      // ce ne sono, altrimenti allegare un biglietto spostava di
+      // quaranta pixel tutto quello che segue, su quella riga e solo su
+      // quella
+      <div style={{ display: "grid", gridTemplateColumns: "18px 15px 34px 1fr", alignItems: "center", columnGap: 6 }}>
         <button
           onClick={() => salvaCampoGenerico(tabella, riga.id, campoStato, prossimoStatoViaggio(stato))}
           title={`${stile.etichetta} (clicca per cambiare)`}
           style={{ width: 18, height: 18, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: stile.colore, flexShrink: 0 }}
         />
         {stato === "non_occorre" ? (
-          <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: MUTED, whiteSpace: "nowrap" }}>In sede</span>
+          <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: MUTED, whiteSpace: "nowrap", gridColumn: "2 / -1" }}>In sede</span>
         ) : (
           <>
           {/* l'aeroplanino fra il pallino e il "+": il pallino dice a che
@@ -4883,7 +4888,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           </label>
           </>
         )}
-        {nBiglietti > 0 && (
+        {/* "In sede" si prende gia' le tre caselle a destra del pallino:
+            aggiungerne una quarta la manderebbe a capo */}
+        {stato !== "non_occorre" && (nBiglietti > 0 ? (
           <span
             onClick={() => cancellaBigliettiGenerico(tabella, riga.id, valoreCampo(riga, campoFile), campoFile)}
             title="Clicca per cancellare i file caricati"
@@ -4891,7 +4898,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           >
             {nBiglietti} file
           </span>
-        )}
+        ) : <span />)}
       </div>
     );
   }
@@ -4915,45 +4922,55 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   };
   function rigaIncaricoScheda({ chiave, indice, tipo, etichetta, selettore, azione, avvisata, onAvvisata, valoreNota, onNota, viaggio, alloggio, pagato, valoreNotaViaggio, onNotaViaggio }) {
     return (
-      // righe a righe alterne, bianco e crema chiarissimo: sono tre o
+      // Griglia, non piu' una fila elastica. Con il flex ogni cella si
+      // allargava o si stringeva secondo quello che aveva dentro, e la
+      // stessa colonna cadeva in un punto diverso su ogni riga: un nome
+      // corto e uno lungo, un file allegato e uno no, e tutto scivolava.
+      // Qui le colonne sono le stesse per tutte le righe e per tutte le
+      // schede — a essere elastiche sono solo le due note, che sono testo
+      // libero e non hanno una posizione da difendere.
+      //
+      // Righe a righe alterne, bianco e crema chiarissimo: sono tre o
       // quattro per scheda, tutte fatte degli stessi pezzi, e con lo
-      // sfondo unico l'occhio scivolava da una all'altra a meta' strada
-      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: indice % 2 ? "#FBFAF6" : "#fff", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "nowrap" }}>
+      // sfondo unico l'occhio scivolava da una all'altra a meta' strada.
+      <div key={chiave} style={{ ...GRIGLIA_INCARICHI, padding: "9px 14px", background: indice % 2 ? "#FBFAF6" : "#fff", borderTop: `1px solid ${CREAM_BORDER}` }}>
         {/* il ruolo dentro una pastiglia: e' l'unica cosa della riga che
             non si tocca e non cambia, e in chiaro fra tutti quei campi
             bianchi si perdeva */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flex: "0 0 86px", minWidth: 0, background: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).sfondo, borderRadius: 10, padding: "6px 6px", boxSizing: "border-box" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, background: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).sfondo, borderRadius: 10, padding: "6px 6px", boxSizing: "border-box" }}>
           <IconaPersonaSemplice size={13} color={(COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo} />
           <span style={{ ...fontScheda, fontSize: 10, fontWeight: 700, color: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo, whiteSpace: "nowrap" }}>{etichetta}</span>
         </div>
-        <div style={{ flex: "1 1 150px", minWidth: 120, display: "flex", alignItems: "center", gap: 6 }}>
-          {selettore}
-          {azione}
-        </div>
-        <div style={{ flex: "0 0 auto" }}>{flagAvvisata(avvisata, onAvvisata)}</div>
+        <div style={{ minWidth: 0, display: "flex", alignItems: "center" }}>{selettore}</div>
+        <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>{azione}</div>
+        <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>{flagAvvisata(avvisata, onAvvisata)}</div>
         <input
-          style={{ ...campoStyle, flex: "1 1 130px", minWidth: 92 }}
+          style={{ ...campoStyle, minWidth: 0 }}
           placeholder="Nota"
           defaultValue={valoreNota || ""}
           onBlur={(e) => { if (e.target.value !== (valoreNota || "")) onNota(e.target.value || null); }}
         />
-        <div style={{ flex: "0 0 auto" }}>{viaggio}</div>
+        <div style={{ minWidth: 0 }}>{viaggio}</div>
         {/* l'alloggio in una pastiglia con la sua icona dentro: era un
             link sottolineato in mezzo a campi bianchi e sembrava una
             nota, non un posto dove si entra */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "0 0 auto", whiteSpace: "nowrap", background: "#F1F2F6", borderRadius: 10, padding: "6px 10px" }}>
+        {/* l'alloggio ha sempre la stessa larghezza, corta o lunga che sia
+            la scritta: e' l'unico modo perche' quello che gli sta dopo non
+            si sposti da una riga all'altra. I nomi lunghi si tagliano coi
+            puntini e restano interi nel suggerimento */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, whiteSpace: "nowrap", background: "#F1F2F6", borderRadius: 10, padding: "6px 10px", overflow: "hidden" }}>
           <IconaEdificioErp size={14} color={NAVY} />
-          {alloggio}
+          <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{alloggio}</div>
         </div>
-        <div style={{ flex: "0 0 auto" }}>{pagato}</div>
+        <div style={{ minWidth: 0 }}>{pagato}</div>
         {onNotaViaggio ? (
           <input
-            style={{ ...campoStyle, flex: "3 1 200px", minWidth: 90 }}
+            style={{ ...campoStyle, minWidth: 0 }}
             placeholder="+ Nota"
             defaultValue={valoreNotaViaggio || ""}
             onBlur={(e) => { if (e.target.value !== (valoreNotaViaggio || "")) onNotaViaggio(e.target.value || null); }}
           />
-        ) : <div style={{ flex: "3 1 200px", minWidth: 90 }} />}
+        ) : <div />}
       </div>
     );
   }
@@ -4968,6 +4985,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // sinistra chi e' dove e quando, a destra una riga per ogni persona
   // incaricata.
   const LARGHEZZA_PANNELLO_SINISTRO = 200;
+  // Le colonne della fascia degli incarichi, uguali per ogni riga e per
+  // ogni scheda. Fisse tutte tranne le due note, che sono testo libero:
+  // sono le uniche che possono allargarsi o stringersi senza spostare
+  // nessun altro, perche' nessuno le confronta in verticale.
+  const GRIGLIA_INCARICHI = {
+    display: "grid",
+    gridTemplateColumns: "86px 150px 26px 44px minmax(104px,1fr) 142px 186px 96px minmax(104px,1fr)",
+    alignItems: "center",
+    columnGap: 8,
+  };
+  const ETICHETTE_INCARICHI = ["Ruolo", "Nome", "", "Stato", "Nota", "Viaggio", "Hotel", "Camera", "Note hotel"];
   function tabellaMese(righeMese) {
     return (
       <div style={{ marginBottom: 28 }}>
@@ -5047,6 +5075,14 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               </div>
 
               <div style={{ flex: 1, minWidth: 0, overflowX: "auto" }}>
+                {/* le intestazioni: con le colonne fisse hanno finalmente
+                    senso, prima avrebbero indicato posizioni che a ogni
+                    riga cadevano altrove */}
+                <div style={{ ...GRIGLIA_INCARICHI, padding: "7px 14px 5px" }}>
+                  {ETICHETTE_INCARICHI.map((testo, i) => (
+                    <div key={i} style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i === 2 || i === 3 ? "center" : "left", whiteSpace: "nowrap" }}>{testo}</div>
+                  ))}
+                </div>
                 {[
                   rigaIncaricoScheda({
                     chiave: `master-${cd.id}`,
