@@ -8404,12 +8404,13 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           {inCorso && (
             <>
               <style>{`@keyframes lampeggiaCorsoInCorso { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }`}</style>
-              {/* stessa scatola di "Scarica le slide" — stesso bordo, stesso
-                  raggio, stessa imbottitura — perche' stanno una accanto
-                  all'altra e due misure diverse si notano subito */}
+              {/* Alta quanto "Scarica le slide", che le sta accanto: stessa
+                  imbottitura piu' il pixel del bordo che qui non c'e'. Ma
+                  tutta tonda e senza filo — non e' un tasto, non si preme,
+                  e darle la faccia di un tasto vorrebbe dire farci provare. */}
               <span style={{
-                ...fontBody, fontSize: 15, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5",
-                border: "1px solid #A8D5AE", borderRadius: 14, padding: "9px 16px",
+                ...fontBody, fontSize: 15, fontWeight: 700, color: "#2E7D32", background: "#E1F1E4",
+                borderRadius: 999, padding: "10px 20px",
                 textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", lineHeight: 1.2,
                 animation: "lampeggiaCorsoInCorso 1.2s ease-in-out infinite",
               }}>
