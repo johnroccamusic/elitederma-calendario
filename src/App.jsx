@@ -4887,7 +4887,16 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // Una funzione sola perche' la riga della master e quelle degli altri
   // docenti sono identiche in tutto tranne il tasto a destra del nome
   // (uno aggiunge, gli altri tolgono) e la tabella su cui salvano.
-  function rigaIncaricoScheda({ chiave, indice, etichetta, selettore, azione, avvisata, onAvvisata, valoreNota, onNota, viaggio, alloggio, pagato, valoreNotaViaggio, onNotaViaggio }) {
+  // Un colore per ruolo. Scorrendo un elenco di corsi non si legge
+  // "Master", "Assistente", "Leva" trenta volte: si guarda il colore e si
+  // sa dove guardare. Sono tinte spente apposta — la riga accanto e' piena
+  // di campi da compilare, e una pastiglia accesa se li mangerebbe.
+  const COLORI_RUOLO = {
+    master: { sfondo: "#ECEDFA", testo: "#3D4A94" },
+    assistente: { sfondo: "#F7EEDE", testo: "#8A6A1B" },
+    leva: { sfondo: "#E7F2E9", testo: "#2E7D32" },
+  };
+  function rigaIncaricoScheda({ chiave, indice, tipo, etichetta, selettore, azione, avvisata, onAvvisata, valoreNota, onNota, viaggio, alloggio, pagato, valoreNotaViaggio, onNotaViaggio }) {
     return (
       // righe a righe alterne, bianco e crema chiarissimo: sono tre o
       // quattro per scheda, tutte fatte degli stessi pezzi, e con lo
@@ -4896,9 +4905,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         {/* il ruolo dentro una pastiglia: e' l'unica cosa della riga che
             non si tocca e non cambia, e in chiaro fra tutti quei campi
             bianchi si perdeva */}
-        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 122px", minWidth: 0, background: "#F1F0F7", borderRadius: 11, padding: "7px 11px", boxSizing: "border-box" }}>
-          <IconaPersonaSemplice size={16} color={MUTED} />
-          <span style={{ ...fontScheda, fontSize: 12.5, fontWeight: 600, color: NAVY }}>{etichetta}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 122px", minWidth: 0, background: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).sfondo, borderRadius: 11, padding: "7px 11px", boxSizing: "border-box" }}>
+          <IconaPersonaSemplice size={16} color={(COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo} />
+          <span style={{ ...fontScheda, fontSize: 12.5, fontWeight: 700, color: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo }}>{etichetta}</span>
         </div>
         <div style={{ flex: "1 1 190px", minWidth: 150, display: "flex", alignItems: "center", gap: 6 }}>
           {selettore}
@@ -5006,6 +5015,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   rigaIncaricoScheda({
                     chiave: `master-${cd.id}`,
                     indice: 0,
+                    tipo: "master",
                     etichetta: "Master",
                     selettore: (
                       <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(cd, "master_id") || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
@@ -5051,6 +5061,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   ...docenti.map((riga, i) => rigaIncaricoScheda({
                     chiave: riga.id,
                     indice: i + 1,
+                    tipo: riga.tipo,
                     etichetta: ETICHETTA_TIPO_DOCENTE[riga.tipo],
                     selettore: (
                       <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(riga, "persona_id") || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
