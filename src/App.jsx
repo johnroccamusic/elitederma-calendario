@@ -3568,35 +3568,36 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
   const filo = <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />;
   // l'euro sta dentro la casella, appoggiato a destra: e' l'unita' di
   // misura del campo, non un'altra cosa da leggere
-  // Da telefono la casella si stringe: intorno a un numero di quattro
-  // cifre non serve mezza riga di bianco, e quello che si risparmia qui
-  // e' quello che tiene titolo, importi e stato su una riga sola senza
-  // sfondare il foglio.
+  // Da telefono si toglie il bianco, non si spezzano le righe: bordi
+  // interni all'osso, niente simbolo dell'euro dentro la casella
+  // (l'etichetta dice gia' che e' un importo) e cifre centrate. Quello che
+  // resta e' quanto basta a contenere cinque cifre con i centesimi.
   const campoImporto = (etichetta, contenuto) => (
-    <div style={isMobile ? { flex: "0 1 108px", minWidth: 76 } : { flex: "1 1 0", minWidth: 0 }}>
-      <div style={{ ...fontBody, fontSize: 11 + piu, color: MUTED, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{etichetta}</div>
+    <div style={{ flex: "1 1 0", minWidth: 0 }}>
+      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{etichetta}</div>
       <div style={{ position: "relative" }}>
         {contenuto}
-        <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5 + piu, color: MUTED, pointerEvents: "none" }}>€</span>
+        {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
       </div>
     </div>
   );
   const stileImporto = (bloccato) => ({
-    ...campoAreaScheda, fontWeight: 700, fontSize: 14 + piu,
-    padding: isMobile ? "7px 7px" : "10px 12px",
-    paddingRight: isMobile ? 21 : 26,
+    ...campoAreaScheda, fontWeight: 700, fontSize: isMobile ? 13 : 14,
+    padding: isMobile ? "6px 3px" : "10px 12px",
+    paddingRight: isMobile ? 3 : 26,
+    textAlign: isMobile ? "center" : "left",
     background: bloccato ? "#EDF1F4" : "#fff", color: bloccato ? MUTED : NAVY,
   });
   return (
-    <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: 12, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
+    <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: isMobile ? 9 : 12, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 5 : 10, flexWrap: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 9, flexShrink: 0, paddingBottom: isMobile ? 5 : 8 }}>
           {Icona && (
-            <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Icona size={18} color={GOLD} />
+            <span style={{ width: isMobile ? 26 : 34, height: isMobile ? 26 : 34, borderRadius: isMobile ? 8 : 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icona size={isMobile ? 14 : 18} color={GOLD} />
             </span>
           )}
-          <span style={{ ...titoloAreaScheda, fontSize: titoloAreaScheda.fontSize + piu, lineHeight: 1.15 }}>
+          <span style={{ ...titoloAreaScheda, fontSize: isMobile ? 10 : titoloAreaScheda.fontSize, letterSpacing: isMobile ? 0.3 : 0.8, lineHeight: 1.15 }}>
             {titoloSopra}{titoloSotto && <><br />{titoloSotto}</>}
           </span>
         </div>
@@ -3641,17 +3642,20 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
               sua si portava via un piano intero per due parole, e sta bene
               dov'e' la domanda a cui risponde — come e' stata pagata, e se
               e' stata pagata */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12 + piu, color: NAVY }}>
-            <span style={{ ...fontBody, fontSize: 12 + piu, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 8, flexWrap: "nowrap", ...fontBody, fontSize: isMobile ? 9.5 : 12, color: NAVY }}>
+            {/* da telefono "Metodo:" sparisce: cinque nomi in fila davanti a
+                dei pallini si capiscono da soli, e quelle lettere sono la
+                differenza fra stare in riga e andare a capo */}
+            {!isMobile && <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>}
             {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
-              <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", whiteSpace: "nowrap" }}>
-                <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
+              <label key={opz} style={{ display: "flex", alignItems: "center", gap: isMobile ? 3 : 5, cursor: "pointer", whiteSpace: "nowrap" }}>
+                <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} style={isMobile ? { width: 11, height: 11, margin: 0, flexShrink: 0 } : undefined} />
                 {opz}
               </label>
             ))}
             {onPagato && (
               <span style={{ marginLeft: "auto" }}>
-                <SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} piu={piu} />
+                <SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} piu={isMobile ? -2 : 0} />
               </span>
             )}
           </div>
@@ -14699,6 +14703,9 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
 }
 
 const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 22, marginBottom: 18 };
+// la stessa scheda su uno schermo stretto: i bordi interni da 22 si
+// mangiavano quarantaquattro pixel di larghezza utile, che servono ai campi
+const cardStyleStretto = { ...cardStyle, padding: 11 };
 const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
 
@@ -23674,7 +23681,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   function propsSezione(chiave) {
     return {
       style: {
-        ...cardStyle,
+        ...(isMobile ? cardStyleStretto : cardStyle),
         display: "flex", flexDirection: "column",
         order: ordineSezioni.indexOf(chiave),
         marginBottom: spaziIscrizioni[`spazioDopo${chiave[0].toUpperCase()}${chiave.slice(1)}`] ?? 18,
@@ -23788,7 +23795,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: isMobile ? "28px 14px 160px" : "40px 20px 160px" }}>
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: isMobile ? "20px 8px 160px" : "40px 20px 160px" }}>
       {msgErrore && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2000 }}>
           <div style={{ ...cardStyle, maxWidth: 360, width: "100%", marginBottom: 0, textAlign: "center" }}>
@@ -24303,49 +24310,49 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   la vendita, e deve staccarsi dalle quote che stanno sotto.
                   Le caselle dei numeri restano bianche, o il dato si
                   perderebbe nel colore */}
-              <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: 12, flex: 1 }}>
+              <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: isMobile ? 9 : 12, flex: 1, minWidth: 0 }}>
             {/* stessa riga delle quote: medaglione, titolo, e i numeri di
                 fianco separati da fili. Il titolo su un piano suo faceva
                 di questo blocco un'altra fascia alta in mezzo alla scheda */}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
-                <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaRicevutaErp size={18} color={GOLD} />
+            <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 5 : 8, flexWrap: "nowrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 9, flexShrink: 0, paddingBottom: isMobile ? 5 : 8 }}>
+                <span style={{ width: isMobile ? 26 : 34, height: isMobile ? 26 : 34, borderRadius: isMobile ? 8 : 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaRicevutaErp size={isMobile ? 14 : 18} color={GOLD} />
                 </span>
-                <span style={{ ...titoloAreaScheda, fontSize: titoloAreaScheda.fontSize, lineHeight: 1.15 }}>
+                <span style={{ ...titoloAreaScheda, fontSize: isMobile ? 10 : titoloAreaScheda.fontSize, letterSpacing: isMobile ? 0.3 : 0.8, lineHeight: 1.15 }}>
                   {isMobile ? <>Dati<br />di vendita</> : "Dati di vendita"}
                 </span>
               </div>
               <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-              <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
+              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
                 <div style={{ position: "relative" }}>
-                  <input style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
-                  <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                  <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
+                  {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
                 </div>
               </div>
               {adminSbloccato && (
                 <>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
+                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota venditore (7%)</div>
                     <div style={{ position: "relative" }}>
-                      <input style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
-                      <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                      <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                      {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
                     </div>
                   </div>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
+                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota speciale</div>
                     <div style={{ position: "relative" }}>
                       <input
-                        style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: 14 }}
+                        style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14 }}
                         inputMode="decimal"
                         placeholder="es. 60.00"
                         value={quotaSpeciale}
                         onChange={(e) => setQuotaSpeciale(e.target.value)}
                       />
-                      <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                      {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
                     </div>
                   </div>
                 </>
