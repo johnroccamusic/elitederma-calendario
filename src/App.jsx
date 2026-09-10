@@ -8277,24 +8277,40 @@ function conteggioKitEdizione(iscrittiEdizione) {
 // TOTALI". Sono le due cose che la master guarda per prime aprendo la
 // scheda, e meritano di essere lette da lontano.
 // Prima la cifra, poi la parola: "8 ALLIEVI TOTALI" si legge come si dice.
+//
+// Sul telefono pero' non ci sta in riga, e va a capo: la didascalia
+// scende sotto l'icona, intera, con le parole spezzate fra una riga e
+// l'altra ma mai in mezzo — "ALLIEVI" e poi "TOTALI", non una lettera per
+// riga come faceva quando le si dava il permesso di rompersi ovunque.
 function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile }) {
-  const parola = (
-    <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, overflowWrap: "anywhere" }}>{etichetta}</span>
+  const medaglione = (
+    <span style={{
+      width: isMobile ? 32 : 52, height: isMobile ? 32 : 52, borderRadius: isMobile ? 10 : 14, background: "#F4F1EA",
+      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    }}>
+      <Icona size={isMobile ? 16 : 26} color={GOLD} />
+    </span>
   );
   const cifra = (
-    <span style={{ ...fontDisplay, fontSize: isMobile ? 21 : 27, fontWeight: 700, color: NAVY, lineHeight: 1, flexShrink: 0 }}>{numero}</span>
+    <span style={{ ...fontDisplay, fontSize: isMobile ? 20 : 27, fontWeight: 700, color: NAVY, lineHeight: 1, flexShrink: 0 }}>{numero}</span>
   );
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
-      <span style={{
-        width: isMobile ? 32 : 52, height: isMobile ? 32 : 52, borderRadius: isMobile ? 10 : 14, background: "#F4F1EA",
-        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-      }}>
-        <Icona size={isMobile ? 16 : 26} color={GOLD} />
-      </span>
-      <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10 }}>
-        {cifra}{parola}
+  // "break-word" e non "anywhere": si va a capo fra una parola e l'altra,
+  // e dentro una parola solo se da sola non ci sta
+  const parola = (
+    <span style={{ ...fontBody, fontSize: isMobile ? 9 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.25, overflowWrap: "break-word", wordBreak: "normal" }}>{etichetta}</span>
+  );
+  if (isMobile) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0, flex: "1 1 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>{medaglione}{cifra}</div>
+        {parola}
       </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: "1 1 auto" }}>
+      {medaglione}
+      <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: 10 }}>{cifra}{parola}</div>
     </div>
   );
 }
@@ -8354,6 +8370,15 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   // lampeggia.
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
+  // Il coupon di questa classe vive dal primo giorno di corso a una
+  // settimana dopo l'ultimo: prima non esiste ancora — lo genera il cron
+  // la mattina in cui il corso comincia — e dopo non serve piu'. Lasciarlo
+  // scritto sulla scheda per sempre vorrebbe dire farlo dettare a
+  // un'allieva a novembre per un corso di settembre.
+  const GIORNI_CODA_COUPON = 7;
+  const couponVisibile = !!codiceReferral
+    && oggiStr >= corsoData.data_inizio
+    && oggiStr <= addGiorni(corsoData.data_fine, GIORNI_CODA_COUPON);
   // Il tasto della contabilita' lo accende l'ufficio, con A.C.M. dentro la
   // scheda del corso: prima compariva da solo il giorno prima e restava li'
   // per sempre, e quella pagina dice quanto ha pagato ogni allievo. Ora
@@ -8469,7 +8494,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
                 {kit.map(([nome, n], idx) => (
                   <div key={idx} style={{ display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10, minWidth: 0 }}>
                     <span style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, lineHeight: 1.15, flexShrink: 0, width: isMobile ? 16 : 22, textAlign: "right" }}>{n}</span>
-                    <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.45, minWidth: 0, overflowWrap: "anywhere" }}>{nome}</span>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 9 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.35, minWidth: 0, overflowWrap: "break-word", wordBreak: "normal" }}>{nome}</span>
                   </div>
                 ))}
               </div>
@@ -8587,7 +8612,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             {t.testo}
           </button>
         ))}
-        {codiceReferral && (
+        {couponVisibile && (
           // Il coupon ha la stessa scatola dei pulsanti perche' sta sulla
           // stessa riga, ma non si preme: e' un codice da leggere e
           // dettare. Il colore lo tiene distinto dagli altri tre.
@@ -9606,25 +9631,19 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             {prossimeDate.length === 0 ? (
               <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessun corso in programma al momento.</div>
             ) : prossimeDate.map((cd) => (
-              /* Il coupon: prima quello dell'edizione, se qualcuno l'ha
-                 generato, altrimenti quello della master. Il passaggio da
-                 "coupon della master per sempre" a "coupon per edizione"
-                 ha lasciato scoperto il caso piu' comune — le edizioni con
-                 un coupon proprio sono due su tutte, le master che ne
-                 hanno uno sono diciassette — e sulla scheda non compariva
-                 piu' niente. Cosi' la master il suo codice ce l'ha sempre
-                 sotto gli occhi, e quando per una classe se ne genera uno
-                 dedicato quello ha la precedenza. */
+              /* Il coupon e' quello DELL'EDIZIONE, e soltanto quello. Il
+                 codice della master qui non entra: e' un altro oggetto —
+                 vale sempre e per chiunque — e usarlo come ripiego, come
+                 avevo fatto io, vuol dire dare agli allievi di questa
+                 classe un codice che non e' nato per loro. Se l'edizione
+                 non ce l'ha non si mostra niente: si rimedia dove i coupon
+                 nascono, non qui. */
               <CardDataMaster
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
                 apribile={inFinestraInventario(cd)} onApriInventario={onApriChiusura} onApriClasse={onApriClasse} onApriModelle={onApriModelle}
-                codiceReferral={
-                  (coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice
-                  || (coupon || []).find((c) => c.master_id === cd.master_id && !c.corsi_date_id)?.codice
-                  || null
-                }
+                codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
                 onApriContabilita={(riga) => { window.scrollTo(0, 0); setContabilitaClasse({ token: riga.token_master, nome: corsoById[riga.corso_id]?.nome || "" }); }}
               />
             ))}
