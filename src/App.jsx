@@ -8332,7 +8332,7 @@ function TitoloColonnaMaster({ Icona, testo, children }) {
   );
 }
 
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, onApriClasse, codiceReferral, onApriContabilita }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, onApriClasse, onApriModelle, codiceReferral, onApriContabilita }) {
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
@@ -8373,11 +8373,9 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
     // circondare l'intera scheda. La cornice e' quella di tutte le altre
     // — filo chiaro e un'ombra appena accennata.
     <div
-      onClick={onApriClasse ? () => onApriClasse(corsoData.id) : undefined}
       style={{
         background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, marginBottom: 14,
         boxShadow: "0 2px 12px rgba(14,27,51,0.05)", overflow: "hidden",
-        cursor: onApriClasse ? "pointer" : "default",
       }}
     >
       {/* Intestazione: la data in un riquadro, il nome del corso, la citta'
@@ -8556,23 +8554,47 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
         </div>
       </div>
 
-      {(apribile || codiceReferral) && (
-        <>
-          <div style={filo} />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: spaziatura }}>
-            {apribile ? (
-              <div onClick={(e) => { e.stopPropagation(); onApriInventario(corsoData.id); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, cursor: "pointer" }}>
-                Chiusura corso →
-              </div>
-            ) : <span />}
-            {codiceReferral && (
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#EA580C" }} onClick={(e) => e.stopPropagation()}>
-                Coupon code: {codiceReferral.toUpperCase()}
-              </div>
-            )}
+      {/* Alle aree si entra da qui, non premendo un punto qualsiasi della
+          scheda. Prima tutta la scheda era un tasto: si apriva la classe
+          anche volendo solo copiare il telefono dell'albergo, e non
+          c'era modo di dire "portami dalle modelle" senza passare prima
+          dalla classe. Ogni pulsante dice dove porta, e da ogni area si
+          torna qui con l'indietro. */}
+      <div style={filo} />
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flexWrap: "wrap", padding: spaziatura }}>
+        {[
+          onApriClasse && { testo: "Dettagli corso", onClick: () => onApriClasse(corsoData.id) },
+          onApriModelle && { testo: "Dettagli modelle", onClick: () => onApriModelle(corsoData.id) },
+          apribile && onApriInventario && { testo: "Inventario corso", onClick: () => onApriInventario(corsoData.id) },
+        ].filter(Boolean).map((t) => (
+          <button
+            key={t.testo}
+            onClick={(e) => { e.stopPropagation(); t.onClick(); }}
+            style={{
+              ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY,
+              background: "#F7F4EC", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12,
+              padding: isMobile ? "10px 14px" : "12px 20px", cursor: "pointer", whiteSpace: "nowrap",
+            }}
+          >
+            {t.testo}
+          </button>
+        ))}
+        {codiceReferral && (
+          // Il coupon ha la stessa scatola dei pulsanti perche' sta sulla
+          // stessa riga, ma non si preme: e' un codice da leggere e
+          // dettare. Il colore lo tiene distinto dagli altri tre.
+          <div
+            title="Il codice sconto da dare agli allievi di questa classe"
+            style={{
+              ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: "#C0392B",
+              background: "#FBF5F3", border: "1px solid #F0D4CE", borderRadius: 12,
+              padding: isMobile ? "10px 14px" : "12px 20px", whiteSpace: "nowrap", marginLeft: "auto",
+            }}
+          >
+            Coupon code: {codiceReferral.toUpperCase()}
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -9285,7 +9307,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, onApriInventarioSede, onApriChiusura, onApriClasse, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, onApriInventarioSede, onApriChiusura, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -9589,7 +9611,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
-                apribile={inFinestraInventario(cd)} onApriInventario={onApriChiusura} onApriClasse={onApriClasse}
+                apribile={inFinestraInventario(cd)} onApriInventario={onApriChiusura} onApriClasse={onApriClasse} onApriModelle={onApriModelle}
                 codiceReferral={
                   (coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice
                   || (coupon || []).find((c) => c.master_id === cd.master_id && !c.corsi_date_id)?.codice
@@ -55785,6 +55807,7 @@ export default function App() {
   // era l'unica cosa che si vedeva prima cliccando la card, e resta a un
   // tocco di distanza invece di sparire
   const [classeMasterModelle, setClasseMasterModelle] = useState(false);
+  const [modelleDallaScheda, setModelleDallaScheda] = useState(false);
   // l'ordine di aprire subito "Aggiungi corso", dato da una delle tre
   // pagine figlie. Si consuma appena si esce da Gestione corsi, o il
   // modulo si riaprirebbe a ogni ritorno
@@ -56736,7 +56759,13 @@ export default function App() {
   // diversi che prima stavano nella stessa pagina: il primo riguarda il
   // pacco che torna, il secondo cosa c'è stabilmente in quella sede
   function apriChiusuraCorso(corsoDataId) { scrollAppInCima(); setInventarioSedeCorsoDataId(corsoDataId); setView("chiusuracorso"); }
-  function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(false); setView("classemaster"); }
+  function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(false); setModelleDallaScheda(false); setView("classemaster"); }
+  // Le modelle aperte dal tasto sulla scheda, senza passare dalla classe.
+  // Ci si arriva anche da dentro la classe: la differenza la ricorda
+  // `modelleDallaScheda`, perche' l'indietro deve riportare da dove si e'
+  // partiti — alla dashboard se si e' arrivati dal tasto, alla classe se
+  // si e' arrivati da li'.
+  function apriModelleMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(true); setModelleDallaScheda(true); setView("classemaster"); }
   // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
   // permesso unico "agenda" da spuntare, ma una casella per ciascuna
   // agenda creata dal Programmatore (chiave "agenda_<id>", sia per gli
@@ -57674,6 +57703,7 @@ export default function App() {
           onApriInventarioSede={apriInventarioSede}
           onApriChiusura={apriChiusuraCorso}
           onApriClasse={apriClasseMaster}
+          onApriModelle={apriModelleMaster}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "dashboardmaster", "Dashboard master")}
         />
@@ -57694,9 +57724,13 @@ export default function App() {
           return (
             <div>
               <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 0" }}>
-                <button onClick={() => { scrollAppInCima(); setClasseMasterModelle(false); }} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: "8px 0" }}>
+                <button
+                  onClick={() => { scrollAppInCima(); if (modelleDallaScheda) { setModelleDallaScheda(false); setView("dashboardmaster"); } else setClasseMasterModelle(false); }}
+                  title="Indietro"
+                  style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: "8px 0" }}
+                >
                   <IconaFrecciaSinistra size={20} />
-                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla classe</span>
+                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>{modelleDallaScheda ? "Torna alla dashboard" : "Torna alla classe"}</span>
                 </button>
               </div>
               <VistaRicercaModelle corsoDataId={cd.id} mostraClasse={false} />
