@@ -3838,7 +3838,10 @@ function Gate({ onOk }) {
       ruolo = "user";
       utente = {
         id: masterTrovata.id, nome: masterTrovata.nome,
-        permessi: [...new Set(["dashboardmaster", ...(masterTrovata.permessi || []), ...(venditoreDellaMaster ? [...(venditoreDellaMaster.permessi || []), "dashboardvenditori"] : [])])],
+        // niente "dashboardmaster" d'ufficio: adesso e' una casella come
+        // le altre in Password Master, e se qualcuno la toglie l'accesso
+        // deve davvero chiudersi
+        permessi: [...new Set([...(masterTrovata.permessi || []), ...(venditoreDellaMaster ? [...(venditoreDellaMaster.permessi || []), "dashboardvenditori"] : [])])],
         chiave_sistema: null, masterId: masterTrovata.id,
         // il nome del venditore va tenuto distinto da quello della master:
         // le vendite/iscritti hanno "tutor" valorizzato col nome venditore
@@ -3852,7 +3855,10 @@ function Gate({ onOk }) {
       ruolo = "user";
       utente = {
         id: venditoreTrovato.id, nome: venditoreTrovato.nome,
-        permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori", ...(masterDelVenditore ? ["dashboardmaster", ...(masterDelVenditore.permessi || [])] : [])])],
+        // il venditore collegato a una master eredita i permessi di lei,
+        // "dashboardmaster" compreso se lei ce l'ha: se a lei e' stata
+        // tolta, non puo' rientrare dalla finestra
+        permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori", ...(masterDelVenditore ? (masterDelVenditore.permessi || []) : [])])],
         chiave_sistema: null, venditoreId: venditoreTrovato.id, venditoreNome: venditoreTrovato.nome,
         ...(masterDelVenditore ? { masterId: masterDelVenditore.id } : {}),
       };
@@ -13007,7 +13013,12 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
   const { larghezzaDi, maniglia } = useColonneRidimensionabili("passwordMaster_larghezzeColonne");
   const colonneMaster = [
     { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
-    ...TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => ({ chiave: t.chiave, larghezza: 84 })),
+    // "Dashboard master" c'e' come tutte le altre. Prima era esclusa
+    // perche' una master la sua dashboard ce l'ha per definizione, e una
+    // casella sempre accesa e' solo un modo per sbagliarsi spegnendola. Ma
+    // proprio quello serve: poterla spegnere per qualche giorno — durante
+    // dei lavori, o a chi in quel periodo non deve entrare.
+    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: 84 })),
     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
   ];
   const larghezzaTabellaMaster = colonneMaster.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
