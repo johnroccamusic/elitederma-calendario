@@ -170,6 +170,22 @@ function salvaLayoutCondiviso(chiave, valore) {
       .then(({ error }) => { if (error) console.warn("Impaginazione non salvata:", error.message); });
   }, 600);
 }
+// L'interruttore delle maniglie di impaginazione: quando e' spento, in
+// tutta l'app non si disegna nessun "⠿" e nessun cursore di
+// ridimensionamento, nemmeno in modalita' programmatore. Serve a vedere lo
+// spazio VERO che occupano i pannelli: le maniglie stanno appoggiate negli
+// angoli e in mezzo alle righe, e finche' ci sono si giudica un'impaginazione
+// che nessun altro vedra' mai. Si accende da Impostazioni quando c'e' da
+// spostare qualcosa, e si rispegne.
+//
+// Vive fra le impaginazioni condivise perche' e' esattamente quello: una
+// preferenza del programmatore, salvata una volta e valida ovunque.
+const CHIAVE_MANIGLIE = "maniglie_impaginazione";
+function useManiglieAttive() {
+  const [attive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
+  return attive === true;
+}
+
 // restituisce [valore, salva]: il valore parte dal predefinito, poi
 // arriva quello condiviso appena il database risponde
 function useLayoutCondiviso(chiave, predefinito) {
@@ -2416,6 +2432,7 @@ function TastoLivelloPrecedente({ titolo, onClick }) {
 //   sull'icona Home del breadcrumb, torna in cima — nessuna cartella
 //   dentro un'altra cartella, per restare semplice.
 function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ruoloUtente, onSalvaOrdine, onSalvaColonne, onSalvaEtichetta, consentiCartelle = false, colonneDesktop = 3 }) {
+  const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   // scelta del programmatore per QUESTA pagina, salvata — se non ha mai
@@ -2511,7 +2528,7 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
   }
 
   function maniglia(chiave) {
-    if (!programmatore) return null;
+    if (!programmatore || !maniglieAttive) return null;
     return (
       <span
         draggable
@@ -3511,65 +3528,6 @@ function SemaforoPagamento({ pagato, onClick, piu = 0 }) {
     </button>
   );
 }
-// Il modulo d'iscrizione da telefono resta disposto com'e' da scrivania:
-// i riquadri non si spezzano, non vanno a capo, non si riordinano. Si
-// disegna sempre su una tela larga `larghezza` e la si rimpicciolisce
-// quanto basta a entrare nello schermo — testo compreso.
-//
-// L'alternativa era far andare a capo ogni riquadro, ed e' quello che
-// faceva prima: su un telefono ogni quota diventava una colonna di
-// caselle e il modulo un rotolo. Meglio piccolo e uguale che grande e
-// sfilacciato — girando il telefono si legge senza fatica.
-//
-// L'altezza va misurata e imposta al contenitore: `transform: scale` non
-// occupa lo spazio che gli spetta, e sotto al modulo resterebbe una fascia
-// vuota alta quanto la parte rimpicciolita.
-function BoxLarghezzaFissa({ larghezza = 600, attivo, children }) {
-  const rifEsterno = React.useRef(null);
-  const rifInterno = React.useRef(null);
-  const [fattore, setFattore] = useState(1);
-  const [altezza, setAltezza] = useState(null);
-  useLayoutEffect(() => {
-    const esterno = rifEsterno.current;
-    const interno = rifInterno.current;
-    if (!attivo || !esterno || !interno) return undefined;
-    const misura = () => {
-      const disponibile = esterno.clientWidth;
-      if (!disponibile) return;
-      // se un riquadro insiste a essere piu' largo della tela, si
-      // rimpicciolisce di piu' invece di farsi tagliare il bordo destro:
-      // meglio tutto piccolo che meta' fuori dallo schermo
-      const largo = Math.max(larghezza, interno.scrollWidth || 0);
-      const f = Math.min(1, disponibile / largo);
-      setFattore(f);
-      setAltezza(Math.ceil(interno.offsetHeight * f));
-    };
-    misura();
-    const osservatore = typeof ResizeObserver !== "undefined" ? new ResizeObserver(misura) : null;
-    if (osservatore) { osservatore.observe(esterno); osservatore.observe(interno); }
-    window.addEventListener("resize", misura);
-    return () => { if (osservatore) osservatore.disconnect(); window.removeEventListener("resize", misura); };
-  });
-  if (!attivo) return children;
-  return (
-    <div ref={rifEsterno} style={{ overflow: "hidden", height: altezza != null ? altezza : undefined }}>
-      <div ref={rifInterno} style={{ width: larghezza, transformOrigin: "top left", transform: `scale(${fattore})` }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-// Da telefono il titolo di un riquadro va su due righe: la prima parola
-// sopra, il resto sotto — "QUOTA / ACCONTO", "DA AVERE / AL CORSO". Su una
-// riga sola si portava via mezza larghezza, e quella larghezza serve ai
-// numeri: spezzandolo si guadagna spazio da spendere in corpo del testo.
-function titoloSuDueRighe(testo) {
-  const parole = String(testo || "").trim().split(/\s+/);
-  if (parole.length < 2) return [testo, null];
-  return [parole[0], parole.slice(1).join(" ")];
-}
-
 // "+ Aggiungi un altro acconto" e simili: testo in oro, senza cornice,
 // appoggiato in fondo a destra dentro la nuvola della quota.
 function TastoAggiungiQuota({ testo, onClick }) {
@@ -3589,7 +3547,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
   // Da telefono il titolo va su due righe e tutto il resto cresce di tre
   // punti: lo spazio che il titolo lascia libero si spende in corpo del
   // testo, che e' quello che serve su uno schermo rimpicciolito.
-  const piu = isMobile ? 3 : 0;
+  const piu = 0;
   const [titoloSopra, titoloSotto] = isMobile ? titoloSuDueRighe(titolo) : [titolo, null];
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   // Titolo, i tre importi e lo stato su una riga sola, separati da fili
@@ -3621,7 +3579,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
   });
   return (
     <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: 12, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "nowrap" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
           {Icona && (
             <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -3673,7 +3631,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
               sua si portava via un piano intero per due parole, e sta bene
               dov'e' la domanda a cui risponde — come e' stata pagata, e se
               e' stata pagata */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", ...fontBody, fontSize: 12 + piu, color: NAVY }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12 + piu, color: NAVY }}>
             <span style={{ ...fontBody, fontSize: 12 + piu, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>
             {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
               <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -12057,6 +12015,7 @@ function nomeFileUnico(baseSicura, estensione, nomiEsistenti) {
 // locandina — su mobile, se il telefono lo supporta, tramite la
 // condivisione nativa così finisce direttamente nella galleria foto
 function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordineLocandine, onSalvaOrdineLocandine }) {
+  const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   const [locandine, setLocandine] = useState([]);
@@ -22021,6 +21980,7 @@ function PannelloRiepilogoAmministrativo({
 }
 
 function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+  const maniglieAttive = useManiglieAttive();
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -23586,12 +23546,12 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["impostazioni_layout_iscrizioni"]);
   }
-  // Le maniglie per stirare testi e spazi in modalita' programmatore: il
-  // codice resta tutto — il trascinamento, il salvataggio su
-  // impostazioni_layout_iscrizioni, le misure gia' regolate — ma i pallini
-  // non si disegnano piu'. A layout fermo erano solo puntini tratteggiati
-  // sparsi in mezzo ai titoli. Per riaccenderle basta rimettere true qui.
-  const MANIGLIE_LAYOUT_ATTIVE = false;
+  // Le maniglie per stirare testi e spazi: il codice c'e' tutto — il
+  // trascinamento, il salvataggio su impostazioni_layout_iscrizioni, le
+  // misure gia' regolate — ma si disegnano solo quando l'interruttore in
+  // Impostazioni e' acceso. Spente, la scheda mostra lo spazio vero dei
+  // suoi pannelli invece di quello occupato dai puntini.
+  const MANIGLIE_LAYOUT_ATTIVE = maniglieAttive;
   function manigliaSpazio(chiave) {
     if (!MANIGLIE_LAYOUT_ATTIVE || ruoloUtente !== "programmatore") return null;
     return (
@@ -23652,6 +23612,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // il trascinamento della card stessa; ogni card riceve anche
   // onDragOver/onDrop per fare da bersaglio (vedi propsSezione sotto)
   function manigliaSezione(chiave) {
+    if (!maniglieAttive) return null;
     if (ruoloUtente !== "programmatore") return null;
     return (
       <span
@@ -23720,6 +23681,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     ricarica(["impostazioni_layout_iscrizioni"]);
   }
   function manigliaRiga(sezione, chiave) {
+    if (!maniglieAttive) return null;
     if (ruoloUtente !== "programmatore") return null;
     return (
       <span
@@ -23786,7 +23748,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: isMobile ? "24px 10px 160px" : "40px 20px 160px" }}>
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: isMobile ? "28px 14px 160px" : "40px 20px 160px" }}>
       {msgErrore && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2000 }}>
           <div style={{ ...cardStyle, maxWidth: 360, width: "100%", marginBottom: 0, textAlign: "center" }}>
@@ -24069,7 +24031,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       )}
 
       {vista === "form" && (
-        <BoxLarghezzaFissa attivo={isMobile} larghezza={540}>
         <div
           onBlur={(e) => {
             // se il focus sta passando a un bottone (es. proprio "Fatto,
@@ -24306,45 +24267,45 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             {/* stessa riga delle quote: medaglione, titolo, e i numeri di
                 fianco separati da fili. Il titolo su un piano suo faceva
                 di questo blocco un'altra fascia alta in mezzo alla scheda */}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "nowrap" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
                 <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaRicevutaErp size={18} color={GOLD} />
                 </span>
-                <span style={{ ...titoloAreaScheda, fontSize: titoloAreaScheda.fontSize + (isMobile ? 3 : 0), lineHeight: 1.15 }}>
+                <span style={{ ...titoloAreaScheda, fontSize: titoloAreaScheda.fontSize, lineHeight: 1.15 }}>
                   {isMobile ? <>Dati<br />di vendita</> : "Dati di vendita"}
                 </span>
               </div>
               <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
               <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
                 <div style={{ position: "relative" }}>
-                  <input style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
-                  <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                  <input style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
+                  <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                 </div>
               </div>
               {adminSbloccato && (
                 <>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
                     <div style={{ position: "relative" }}>
-                      <input style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
-                      <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                      <input style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                      <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                     </div>
                   </div>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
                     <div style={{ position: "relative" }}>
                       <input
-                        style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14 }}
+                        style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: 14 }}
                         inputMode="decimal"
                         placeholder="es. 60.00"
                         value={quotaSpeciale}
                         onChange={(e) => setQuotaSpeciale(e.target.value)}
                       />
-                      <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                      <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                     </div>
                   </div>
                 </>
@@ -25051,7 +25012,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
         </div>
         </div>
-        </BoxLarghezzaFissa>
       )}
 
       {vista === "modelle" && (() => {
@@ -25286,7 +25246,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                             }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ ...fontBody, fontSize: isMobile ? 17 : 14, fontWeight: isMobile ? 700 : 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                              <span style={{ ...fontBody, fontSize: 14, fontWeight: isMobile ? 700 : 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#FDECEC", color: nostra ? "#8A6D1D" : "#C0392B" }}>
                                 {nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
                               </span>
@@ -30934,6 +30894,7 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
 // e leggibile, e la scheda sembra premuta invece che spenta.
 
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente, ordine, onSalvaOrdine }) {
+  const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
   const aiuto = (chiave) => ({ chiave: `amministrazione.${chiave}`, testo: AIUTI_TAB_AMMINISTRAZIONE[chiave], ruoloUtente });
   const trascinata = React.useRef(null);
