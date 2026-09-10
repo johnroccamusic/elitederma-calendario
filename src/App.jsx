@@ -23665,7 +23665,13 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     return {
       style: {
         order: ordineSez.indexOf(chiave),
-        marginBottom: spaziIscrizioni[chiaveSpazio] ?? 14,
+        // Quindici pixel fra una nuvola e l'altra, sempre gli stessi. Erano
+        // regolati uno per uno dalle maniglie del programmatore, e a furia
+        // di ritocchi erano diventati tutti diversi: fra "Presenza al
+        // corso" e "Quota acconto" non ce n'era proprio, e i due riquadri
+        // si toccavano. La misura salvata resta nel database, pronta se un
+        // giorno si riaccendono le maniglie (vedi MANIGLIE_LAYOUT_ATTIVE).
+        marginBottom: MANIGLIE_LAYOUT_ATTIVE ? (spaziIscrizioni[chiaveSpazio] ?? 14) : 15,
         opacity: inTrascinamento ? 0.5 : 1,
         outline: bersaglio ? `2px solid ${NAVY}` : "none",
         outlineOffset: 2,
