@@ -4956,6 +4956,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
           const docenti = docentiPerCorsoData[cd.id] || [];
           const concluso = cd.data_fine < dataOggiStr();
+          // Il nome del corso sta su una riga sola, sempre: se e' lungo si
+          // rimpicciolisce. Andando a capo si portava dietro l'altezza di
+          // tutta la scheda, e "Sexyline velvet individuale" spostava in
+          // basso anche la citta' e la sede — che con il nome non
+          // c'entrano niente.
+          const nomeCorso = corso?.nome?.toUpperCase() || "?";
+          const corpoNome = nomeCorso.length <= 12 ? 16 : nomeCorso.length <= 18 ? 14 : nomeCorso.length <= 24 ? 12 : 10.5;
           const sedeConfermata = !!valoreCampo(cd, "sede_confermata");
 
           return (
@@ -4968,7 +4975,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {/* A sinistra le cose che non cambiano riga per riga: quando,
                   quale corso, dove. Stanno ferme mentre a destra si
                   scorrono le persone. */}
-              <div style={{ flex: "0 0 290px", minWidth: 0, padding: "14px 16px", borderRight: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ flex: "0 0 290px", minWidth: 0, padding: "9px 14px", borderRight: `1px solid ${CREAM_BORDER}` }}>
                 {/* La data in una colonna sua e il nome del corso accanto,
                     non sotto. Prima stavano sulla stessa riga con il
                     permesso di andare a capo, e un nome lungo — "Sexyline
@@ -4980,22 +4987,22 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap" }}>{sopra}</div>
                     <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 1 }}>{sotto}</div>
                   </div>
-                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.15, minWidth: 0, overflowWrap: "break-word" }}>{corso?.nome?.toUpperCase() || "?"}</div>
+                  <div title={nomeCorso} style={{ ...fontDisplay, fontSize: corpoNome, fontWeight: 700, color: NAVY, lineHeight: 1.15, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nomeCorso}</div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: concluso ? MUTED : "#2E7D32", flexShrink: 0 }} />
                   <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: concluso ? MUTED : "#2E7D32" }}>{concluso ? "Concluso" : "Attivo"}</span>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
                   <IconaPin size={13} color={MUTED} />
                   <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, textTransform: "uppercase", overflowWrap: "anywhere" }}>{loc?.nome?.toUpperCase() || "?"}</span>
                 </div>
                 {/* la sede e il suo pallino: verde se e' stata avvisata,
                     rosso se no. Chi non ha ancora una sede assegnata
                     mostra "Gestisci" in rosso, che e' un invito */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
                   <IconaEdificioErp size={13} color={MUTED} />
                   {loc && valoreCampo(cd, "pagamento_sede") ? (
                     <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 6, overflowWrap: "anywhere" }}>
