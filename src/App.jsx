@@ -13370,7 +13370,51 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
   );
 }
 
-function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori, ricarica, onBack }) {
+// Le impostazioni sono una porta sola. Prima erano due — il tasto
+// "Impostazioni" in home e la rotellina nell'header — e non era mai
+// ovvio quale delle due contenesse cosa: le preferenze di qui, le
+// password di la'. Ora la rotellina apre entrambe le aree e il tasto in
+// home sparisce, assorbito.
+//
+// I due lucchetti pero' restano quelli di prima, e questo e' il punto
+// delicato. "Setting" si apre con il permesso che aveva il tasto in home;
+// "Utenti" chiede il codice della rotellina, come sempre, perche' li'
+// dentro si cambiano permessi e password di tutti. Unire le schermate non
+// vuol dire unire le chiavi: chi entrava solo nelle preferenze continua a
+// entrare solo li'.
+function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti, propsSetting, propsUtenti, onBack }) {
+  const isMobile = useIsMobile();
+  const [area, setArea] = useState(areaIniziale);
+
+  function scegliArea(nuova) {
+    if (nuova === area) return;
+    // il codice si chiede una volta per sessione: chiederlo a ogni
+    // passaggio fra le due linguette sarebbe una porta che sbatte
+    if (nuova === "utenti" && !onChiediAccessoUtenti()) return;
+    setArea(nuova);
+  }
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 0" : "32px 20px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+        <div style={{ ...stileTitoloPagina, color: NAVY }}>Impostazioni</div>
+      </div>
+
+      <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, width: "fit-content", marginBottom: 22 }}>
+        {[{ v: "setting", l: "Setting" }, { v: "utenti", l: "Utenti" }].map((a) => (
+          <button key={a.v} onClick={() => scegliArea(a.v)}
+            style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, padding: "9px 22px", borderRadius: 16, border: "none", background: area === a.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+            {a.l}
+          </button>
+        ))}
+      </div>
+
+      {area === "setting" ? <Impostazioni {...propsSetting} senzaIntestazione /> : <PaginaPasswordMenu {...propsUtenti} senzaIntestazione />}
+    </div>
+  );
+}
+function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori, ricarica, onBack, senzaIntestazione = false }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
@@ -13380,12 +13424,14 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
     ricarica(["password_menu"]);
   }
   return (
-    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: senzaIntestazione ? 0 : "100vh", padding: senzaIntestazione ? (isMobile ? "0 16px 60px" : "0 28px 60px") : (isMobile ? "24px 16px 60px" : "32px 28px 60px") }}>
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
-          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...stileTitoloPagina, color: NAVY }}>Password menù</div>
-        </div>
+        {!senzaIntestazione && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+            <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>Password menù</div>
+          </div>
+        )}
 
         <div style={{ marginBottom: 28 }}>
           <TabellaGestioneUtenti utentiApp={utentiApp} agende={agende} venditori={venditori} ricarica={ricarica} />
@@ -13906,7 +13952,7 @@ function DefinizioneProvvigioni() {
   );
 }
 
-function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
+function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
   const [maniglieAttive, salvaManiglieAttive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
@@ -14255,8 +14301,8 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title={titolo} onBack={onBack} />
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: senzaIntestazione ? "0 20px 40px" : "40px 20px" }}>
+      {!senzaIntestazione && <TopBar title={titolo} onBack={onBack} />}
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 18, alignItems: "start" }}>
         {gruppiSetting.map((g) => (
@@ -55223,6 +55269,9 @@ export default function App() {
   const tastieraAperta = useTastieraAperta();
   const appDaSchermataHome = useAppDaSchermataHome();
   const [view, setView] = useState("home");
+  // quale delle due aree delle impostazioni e' aperta: la scelta vive qui
+  // perche' chi apre decide dove atterrare (la rotellina su "Setting")
+  const [areaImpostazioni, setAreaImpostazioni] = useState("setting");
   const [provenienzaVenditeShop, setProvenienzaVenditeShop] = useState("magazzinoshop");
   // prodotto da aprire subito in "Gestione shop": valorizzato solo dal
   // click sul nome in "Gestione magazzino" (RigaProdottoMagazzino), che
@@ -55694,7 +55743,9 @@ export default function App() {
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali"],
+    // "agende" e "password_menu"/"utenti_app" (queste ultime gia' fra le
+    // essenziali) servono all'area "Utenti", che da ora vive qui dentro
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali", "agende"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
@@ -55741,7 +55792,6 @@ export default function App() {
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
     spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location"],
     contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
-    passwordmenu: ["password_menu", "utenti_app", "master", "agende", "venditori"],
     statisticamaster: ["vendite_shop", "prodotti_shop", "master", "target_vendite_prodotti"],
     gestionemaster: ["master", "venditori", "corsi", "corsi_date", "master_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionevenditori: ["venditori", "master"],
@@ -56223,21 +56273,29 @@ export default function App() {
   // richiesta; l'Amministratore e qualunque utente nominale ne restano
   // sempre esclusi (solo chi conosce la password del Programmatore può
   // cambiare permessi e password); lo Utente generico vede il prompt come sempre
-  function apriRotellinaPassword() {
-    if (ruoloUtente === "programmatore") { setView("passwordmenu"); return; }
-    if (ruoloUtente === "amministratore") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
-    if (utenteLoggato && utenteLoggato.chiave_sistema !== "__user") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
+  // Il permesso per l'area "Utenti", chiesto quando ci si entra e non
+  // quando si apre la rotellina: e' li' dentro che si cambiano permessi e
+  // password di tutti, mentre "Setting" ha sempre avuto un lucchetto piu'
+  // largo. Torna true se si puo' entrare.
+  // Una volta dato, il codice vale per il resto della sessione: chiederlo
+  // a ogni passaggio fra le due linguette sarebbe una porta che sbatte.
+  function chiediAccessoUtenti() {
+    if (ruoloUtente === "programmatore") return true;
+    if (sessionStorage.getItem("edc_utenti_ok") === "1") return true;
+    if (ruoloUtente === "amministratore") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return false; }
+    if (utenteLoggato && utenteLoggato.chiave_sistema !== "__user") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return false; }
     const codiceRichiesto = passwordSistema("__rotellina", CODICE_ROTELLINA);
     const codice = window.prompt("Codice per impostare le password del menù:");
-    if (codice === null) return;
-    if (codice === codiceRichiesto) {
-      setView("passwordmenu");
-    } else {
-      window.alert("Codice non corretto.");
-    }
+    if (codice === null) return false;
+    if (codice !== codiceRichiesto) { window.alert("Codice non corretto."); return false; }
+    sessionStorage.setItem("edc_utenti_ok", "1");
+    return true;
   }
+
   function apriStatistiche() { apriViewProtetta("statistiche"); }
-  function apriImpostazioni() { apriViewProtetta("impostazioni"); }
+  // La rotellina nell'header apre le impostazioni sull'area "Setting": lo
+  // stesso lucchetto che aveva il tasto in home, che da li' e' sparito.
+  function apriImpostazioni() { setAreaImpostazioni("setting"); apriViewProtetta("impostazioni"); }
   function apriGestioneDate() { apriViewProtetta("gestionedate"); }
   function apriErp() { apriViewProtetta("erp"); }
   function apriMagazzinoShop() { apriViewProtetta("magazzinoshop"); }
@@ -56551,9 +56609,9 @@ export default function App() {
                 </>
               )}
               <button
-                onClick={apriRotellinaPassword}
-                aria-label="Password menù"
-                title="Password menù"
+                onClick={apriImpostazioni}
+                aria-label="Impostazioni"
+                title="Impostazioni"
                 style={{ ...stileTastoDock, cursor: "pointer" }}
               >
                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -56645,9 +56703,9 @@ export default function App() {
                 }}
               >
           <button
-            onClick={apriRotellinaPassword}
-            aria-label="Password menù"
-            title="Password menù"
+            onClick={apriImpostazioni}
+            aria-label="Impostazioni"
+            title="Impostazioni"
             style={{
               background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
               width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
@@ -56762,7 +56820,6 @@ export default function App() {
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaGruppoTeam, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
               { chiave: "storicoallievi", title: "Storico Allievi", descrizione: "Corsi svolti prima del gestionale, recuperati dagli archivi", Icona: IconaStoricoPos, attivo: tastoAbilitato("storicoallievi"), onClick: apriStoricoAllievi },
               { chiave: "normative", title: "Normative", descrizione: "Le regole da rispettare e i documenti che le accompagnano", Icona: IconaTileNormative, attivo: tastoAbilitato("normative"), onClick: apriNormative },
-              { chiave: "impostazioni", title: "Impostazioni", descrizione: "Configura preferenze, utenti e permessi", Icona: IconaTileImpostazioni, attivo: tastoAbilitato("impostazioni"), onClick: apriImpostazioni },
               { chiave: "progettiincorso", title: "Progetti in corso", descrizione: "Cosa c'è da fare, chi ci sta lavorando e per quando", Icona: IconaTileLampadina, attivo: tastoAbilitato("progettiincorso"), onClick: apriProgetti, badge: progettiScaduti },
             ]}
           />
@@ -56792,7 +56849,29 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni ruoloUtente={ruoloUtente} corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} intestazioneSocieta={intestazioneSocieta} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
+        <PaginaImpostazioniHub
+          areaIniziale={areaImpostazioni}
+          onChiediAccessoUtenti={chiediAccessoUtenti}
+          onBack={() => setView("home")}
+          propsUtenti={{ passwordMenu, utentiApp, master, agende, venditori, ricarica: fetchDati, onBack: () => setView("home") }}
+          propsSetting={{
+            ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
+            venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi,
+            impostazioniIva, intestazioneSocieta, registraInterceptaIndietro,
+            ricarica: fetchDati,
+            onBack: () => setView("home"),
+            onApriFontDiplomi: () => setView("fontdiplomi"),
+            onApriSettingLoghi: () => setView("settingloghi"),
+            onApriTipologieKit: () => setView("contenutokit"),
+            onApriGestioneMaster: apriGestioneMaster,
+            onApriGestioneVenditori: apriGestioneVenditori,
+            onApriGestioneLeve: apriGestioneLeve,
+            onApriGestioneAssistenti: apriGestioneAssistenti,
+            onApriGestioneHotel: apriGestioneHotel,
+            onApriGestioneLocation: apriGestioneLocation,
+            titolo: etichettaTasto("home", "impostazioni", "Impostazioni"),
+          }}
+        />
       )}
 
       {view === "gestionedate" && (
@@ -57442,10 +57521,6 @@ export default function App() {
           corsi={corsi} kitDefinizioni={kitDefinizioni} setKitDefinizioni={setKitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
-      )}
-
-      {view === "passwordmenu" && (
-        <PaginaPasswordMenu passwordMenu={passwordMenu} utentiApp={utentiApp} master={master} agende={agende} venditori={venditori} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "statistiche" && (
