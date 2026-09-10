@@ -8247,7 +8247,87 @@ function etichettaIntervalloGiorni(dataInizio, dataFine) {
 // Master", stesso file, stesso bucket "allegati-iscritti" — qui è solo
 // in lettura, il caricamento resta un compito di chi gestisce
 // l'assegnazione)
+// I kit di un'edizione, contati per tipo. Estratto da
+// RiepilogoKitPacchetti perche' ora serve anche alla scheda della
+// dashboard master, che li mostra come numeri grossi invece che come
+// elenco: la stessa conta scritta due volte e' la stessa conta che fra
+// sei mesi da' due risultati diversi.
+//
+// Si raggruppa per kit E dermografo insieme: chi prepara deve leggere in
+// una riga sola cosa mettere nella scatola. "3 kit Pro" con il dermografo
+// sottinteso e' esattamente il modo in cui un dermografo non viene messo
+// — o ne viene messo uno di troppo.
+function conteggioKitEdizione(iscrittiEdizione) {
+  const conteggio = {};
+  (iscrittiEdizione || []).forEach((i) => {
+    if (!i.pacchetto_kit) return;
+    const modello = dermografoAcquistato(i);
+    const suffisso = !modello ? ""
+      : i.dermografo_consegna === "casa" ? ` + ${etichettaDermografo(modello)} già comprato e ricevuto`
+      : i.dermografo_consegna === "corso" ? ` + ${etichettaDermografo(modello)} da ritirare al corso`
+      : ` + ${etichettaDermografo(modello)}`;
+    const chiave = `${i.pacchetto_kit}${suffisso}`;
+    conteggio[chiave] = (conteggio[chiave] || 0) + 1;
+  });
+  return Object.entries(conteggio).sort((a, b) => b[1] - a[1]);
+}
+
+// Un numero grosso con la sua icona e la sua didascalia: "2 / ALLIEVI
+// TOTALI". Sono le due cose che la master guarda per prime aprendo la
+// scheda, e meritano di essere lette da lontano.
+function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
+      <span style={{
+        width: isMobile ? 40 : 52, height: isMobile ? 40 : 52, borderRadius: 14, background: "#F4F1EA",
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      }}>
+        <Icona size={isMobile ? 20 : 26} color={GOLD} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 27, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{numero}</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginTop: 3, overflowWrap: "anywhere" }}>{etichetta}</div>
+      </div>
+    </div>
+  );
+}
+
+// Il numero di telefono come pastiglia da premere, non come link in mezzo
+// al testo: sulla scheda della master serve una cosa sola, chiamare, e da
+// telefono un bersaglio grande e' la differenza fra chiamare e sbagliare.
+function TelefonoSchedaMaster({ numero, conWhatsapp = true }) {
+  if (!numero) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
+      <a
+        href={`tel:${numero}`}
+        style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 14px", textDecoration: "none" }}
+      >
+        <IconaTelefono size={15} /> {numero}
+      </a>
+      {conWhatsapp && (
+        <a href={`https://wa.me/${numeroWhatsapp(numero)}`} target="_blank" rel="noopener noreferrer" title="Contatta su WhatsApp" style={{ display: "flex" }}>
+          <IconaWhatsapp size={20} />
+        </a>
+      )}
+    </div>
+  );
+}
+
+// L'intestazione di una delle tre colonne in fondo alla scheda: icona,
+// parola in maiuscoletto, e a destra lo spazio per una pastiglia di stato.
+function TitoloColonnaMaster({ Icona, testo, children }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, flexWrap: "wrap" }}>
+      <span style={{ color: NAVY, display: "flex", flexShrink: 0 }}><Icona size={18} color={NAVY} /></span>
+      <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>{testo}</span>
+      {children}
+    </div>
+  );
+}
+
 function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, onApriClasse, codiceReferral, onApriContabilita }) {
+  const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
   const coloreCorso = corso?.colore || NAVY;
@@ -8258,6 +8338,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
   const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
+  const terminato = oggiStr > corsoData.data_fine;
   // Il tasto della contabilita' lo accende l'ufficio, con A.C.M. dentro la
   // scheda del corso: prima compariva da solo il giorno prima e restava li'
   // per sempre, e quella pagina dice quanto ha pagato ogni allievo. Ora
@@ -8268,35 +8349,66 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
     && !!corsoData.acm_attivo
     && oggiStr <= corsoData.data_fine
     && oggiStr >= addGiorni(corsoData.data_inizio, -1);
-  // click sul corpo della card: apre la "classe" DENTRO l'app (elenco allievi
-  // con kit e taglia + gestione modelle), così ha l'header con Indietro/Home.
+
+  // Le due pastiglie sotto al titolo: dove si tiene e a che punto e'. La
+  // seconda si legge da lontano ed e' l'unica informazione della scheda
+  // che cambia da sola con il passare dei giorni.
+  const statoTemporale = inCorso
+    ? { testo: "IN CORSO", colore: "#2E7D32", sfondo: "#E3F3E5" }
+    : appenaTerminato
+    ? { testo: "APPENA TERMINATO", colore: "#2E7D32", sfondo: "#E3F3E5" }
+    : terminato
+    ? { testo: "TERMINATO", colore: MUTED, sfondo: "#F1F1F4" }
+    : { testo: "PROGRAMMATO", colore: "#2563EB", sfondo: "#E8EFFC" };
+  const pastiglia = (p, i) => (
+    <span key={i} style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, fontWeight: 700, color: p.colore, background: p.sfondo, borderRadius: 20, padding: isMobile ? "4px 10px" : "5px 13px", textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>{p.testo}</span>
+  );
+
+  const kit = conteggioKitEdizione(iscrittiEdizione);
+  const divisoreVerticale = <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />;
+  const filo = { height: 1, background: CREAM_BORDER };
+  const spaziatura = isMobile ? "14px 14px" : "18px 20px";
+
   return (
+    // Niente piu' filo colorato tutt'intorno: il colore del corso resta
+    // solo sul riquadro della data, dove serve a riconoscerlo, invece di
+    // circondare l'intera scheda. La cornice e' quella di tutte le altre
+    // — filo chiaro e un'ombra appena accennata.
     <div
       onClick={onApriClasse ? () => onApriClasse(corsoData.id) : undefined}
-      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: onApriClasse ? "pointer" : "default" }}
+      style={{
+        background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, marginBottom: 14,
+        boxShadow: "0 2px 12px rgba(14,27,51,0.05)", overflow: "hidden",
+        cursor: onApriClasse ? "pointer" : "default",
+      }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numero}</div>
-            {sotto && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sotto}</div>}
+      {/* Intestazione: la data in un riquadro, il nome del corso, la citta'
+          e le due pastiglie. A destra i tasti che compaiono solo quando
+          servono davvero — le slide nella settimana del corso, la
+          contabilita' se l'ufficio l'ha aperta. */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 16, padding: spaziatura, flexWrap: "wrap" }}>
+        <div style={{
+          background: coloreCorso, borderRadius: 16, padding: isMobile ? "12px 14px" : "16px 18px", textAlign: "center", flexShrink: 0, minWidth: isMobile ? 62 : 78,
+        }}>
+          <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? (isMobile ? 13 : 16) : (isMobile ? 26 : 34), fontWeight: 700, color: "#fff", lineHeight: 1, whiteSpace: "nowrap" }}>{numero}</div>
+          {sotto && <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 4 }}>{sotto}</div>}
+        </div>
+
+        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 29, fontWeight: 700, color: NAVY, lineHeight: 1.1, textTransform: "uppercase", overflowWrap: "anywhere" }}>{corso?.nome || "—"}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+            <IconaPin size={isMobile ? 14 : 17} color={MUTED} />
+            <span style={{ ...fontDisplay, fontSize: isMobile ? 15 : 19, fontWeight: 500, color: MUTED, overflowWrap: "anywhere" }}>{toTitleCase(loc?.nome || "—")}</span>
           </div>
-          <div>
-            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{corso?.nome || "—"}</div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 9, flexWrap: "wrap" }}>
+            {[
+              { testo: loc?.sede_centrale ? "In sede" : "Corso in aula", colore: "#6B6250", sfondo: "#F2EEE4" },
+              statoTemporale,
+            ].map(pastiglia)}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
-          {(inCorso || appenaTerminato) && (
-            <div style={{ ...fontDisplay, fontSize: inCorso ? 28 : 19, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>
-              {inCorso ? "IN CORSO" : "Appena terminato"}
-            </div>
-          )}
-          {/* Compare il giorno prima che il corso cominci: e' da li' che la
-              contabilita' serve davvero, e una classe ancora lontana con il
-              tasto acceso invita solo ad aprirla per niente. E' la stessa
-              pagina del link che si manda alla master — di sola lettura,
-              tranne la spunta "incassato". */}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexShrink: 0, flexWrap: "wrap" }}>
           {/* le slide compaiono una settimana prima e spariscono con
               l'ultimo giorno del corso: e' il tempo in cui servono per
               prepararsi e per proiettarle, non uno di piu' */}
@@ -8306,7 +8418,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           {contabilitaVisibile && (
             <button
               onClick={(e) => { e.stopPropagation(); onApriContabilita(corsoData); }}
-              style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 14px", cursor: "pointer", lineHeight: 1.2, textAlign: "center", flexShrink: 0 }}
+              style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 14px", cursor: "pointer", lineHeight: 1.2, textAlign: "center" }}
             >
               Contabilità<br />Classe
             </button>
@@ -8314,95 +8426,116 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
         </div>
       </div>
 
-      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, borderLeft: `3px solid ${GOLD}`, paddingLeft: 9, marginBottom: 6 }}>
-          <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{iscrittiEdizione.length}</span>
-          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>Allievi totali</span>
-        </div>
-        <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} mostraTotale={false} />
+      <div style={filo} />
+
+      {/* I numeri: quanti allievi e quali kit. Prima erano un elenco con
+          una lineetta dorata a lato; qui sono due cifre grosse, che e'
+          quello che se ne fa chi apre la scheda. */}
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 22, padding: spaziatura, flexWrap: "wrap" }}>
+        <NumeroSchedaMaster Icona={IconaGruppoTeam} numero={iscrittiEdizione.length} etichetta="Allievi totali" isMobile={isMobile} />
+        {kit.map(([nome, n], idx) => (
+          <React.Fragment key={idx}>
+            {divisoreVerticale}
+            <NumeroSchedaMaster Icona={IconaPacchettoRiga} numero={n} etichetta={`Kit ${nome}`} isMobile={isMobile} />
+          </React.Fragment>
+        ))}
       </div>
 
-      {loc && (
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Sede del corso</div>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{loc.nome_sede ? toTitleCase(loc.nome_sede) : toTitleCase(loc.nome || "—")}</div>
-          {(loc.indirizzo || loc.nome) && (
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>
-              {[loc.indirizzo, loc.nome_sede ? toTitleCase(loc.nome || "") : null].filter(Boolean).join(" · ")}
-            </div>
-          )}
-          {loc.telefono && (
-            <a href={`tel:${loc.telefono}`} onClick={(e) => e.stopPropagation()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginTop: 2, display: "inline-block" }}>{loc.telefono}</a>
-          )}
-        </div>
-      )}
+      <div style={filo} />
 
-      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Dati di viaggio</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: statoViaggio.colore }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: statoViaggio.colore }} />
-            {statoViaggio.etichetta}
-          </div>
-        </div>
-
-        {(biglietti.length > 0 || hotelAssociato) && (
-          <>
-          {biglietti.length > 0 && (
-            <div style={{ marginBottom: hotelAssociato ? 12 : 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Biglietti scaricabili</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {biglietti.map((percorso, i) => (
-                  <span key={i} onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex" }}>
-                    <AllegatoLink percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
-                  </span>
-                ))}
+      {/* Le tre cose che servono il giorno del corso, affiancate: dove si
+          va, come ci si arriva, dove si dorme. Prima erano tre blocchi uno
+          sotto l'altro, e per arrivare all'albergo si scorreva. */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))",
+        gap: isMobile ? 18 : 0, padding: spaziatura,
+      }}>
+        <div style={{ minWidth: 0, paddingRight: isMobile ? 0 : 18 }}>
+          <TitoloColonnaMaster Icona={IconaEdificioErp} testo="Sede del corso" />
+          {loc ? (
+            <>
+              <div style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                {loc.nome_sede ? toTitleCase(loc.nome_sede) : toTitleCase(loc.nome || "—")}
               </div>
-            </div>
-          )}
-
-          {hotelAssociato && (
-            <div>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Alloggio</div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{toTitleCase(hotelAssociato.nome)}</div>
-                  {(hotelAssociato.indirizzo || hotelAssociato.citta) && (
-                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>
-                      {[hotelAssociato.indirizzo, hotelAssociato.civico].filter(Boolean).join(" ")}
-                      {hotelAssociato.indirizzo && hotelAssociato.citta ? " · " : ""}
-                      {hotelAssociato.citta ? toTitleCase(hotelAssociato.citta) : ""}
-                    </div>
-                  )}
+              {(loc.indirizzo || loc.nome) && (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, lineHeight: 1.45, overflowWrap: "anywhere" }}>
+                  {loc.indirizzo}
+                  {loc.indirizzo && loc.nome_sede ? <br /> : null}
+                  {loc.nome_sede ? toTitleCase(loc.nome || "") : ""}
                 </div>
-                {hotelAssociato.telefono && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                    <a href={`tel:${hotelAssociato.telefono}`} onClick={(e) => e.stopPropagation()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{hotelAssociato.telefono}</a>
-                    <a href={`https://wa.me/${numeroWhatsapp(hotelAssociato.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Contatta su WhatsApp" style={{ display: "flex" }}>
-                      <IconaWhatsapp size={18} />
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
+              )}
+              <TelefonoSchedaMaster numero={loc.telefono} conWhatsapp={false} />
+            </>
+          ) : (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Sede non ancora assegnata</div>
           )}
-          </>
-        )}
+        </div>
+
+        <div style={{ minWidth: 0, padding: isMobile ? 0 : "0 18px", borderLeft: isMobile ? "none" : `1px solid ${CREAM_BORDER}` }}>
+          <TitoloColonnaMaster Icona={IconaBustaInViaggio} testo="Dati di viaggio">
+            <span style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 11.5, fontWeight: 700, color: statoViaggio.colore, background: `${statoViaggio.colore}18`, borderRadius: 20, padding: "4px 10px", marginLeft: "auto", whiteSpace: "nowrap" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: statoViaggio.colore }} />
+              {statoViaggio.etichetta}
+            </span>
+          </TitoloColonnaMaster>
+          {biglietti.length > 0 ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                <IconaBigliettoSegnaposto size={16} color={GOLD} />
+                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Biglietti scaricabili</span>
+              </div>
+              {biglietti.map((percorso, i) => (
+                <div key={i} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: i < biglietti.length - 1 ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                  <AllegatoLink percorso={percorso} etichetta={`Biglietto ${i + 1}`} style={{ fontSize: 13.5, fontWeight: 600 }} />
+                  <IconaScaricaGiu size={16} color={NAVY} />
+                </div>
+              ))}
+            </>
+          ) : (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun biglietto caricato</div>
+          )}
+          {corsoData.note_viaggio && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 8, lineHeight: 1.45, overflowWrap: "anywhere" }}>{corsoData.note_viaggio}</div>
+          )}
+        </div>
+
+        <div style={{ minWidth: 0, paddingLeft: isMobile ? 0 : 18, borderLeft: isMobile ? "none" : `1px solid ${CREAM_BORDER}` }}>
+          <TitoloColonnaMaster Icona={IconaHotelRiga} testo="Alloggio" />
+          {hotelAssociato ? (
+            <>
+              <div style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{toTitleCase(hotelAssociato.nome)}</div>
+              {(hotelAssociato.indirizzo || hotelAssociato.citta) && (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, lineHeight: 1.45, overflowWrap: "anywhere" }}>
+                  {[hotelAssociato.indirizzo, hotelAssociato.civico].filter(Boolean).join(" ")}
+                  {hotelAssociato.indirizzo && hotelAssociato.citta ? <br /> : null}
+                  {hotelAssociato.citta ? toTitleCase(hotelAssociato.citta) : ""}
+                </div>
+              )}
+              <TelefonoSchedaMaster numero={hotelAssociato.telefono} />
+            </>
+          ) : (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun alloggio prenotato</div>
+          )}
+        </div>
       </div>
 
       {(apribile || codiceReferral) && (
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-          {apribile ? (
-            <div onClick={(e) => { e.stopPropagation(); onApriInventario(corsoData.id); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, cursor: "pointer" }}>
-              Chiusura corso →
-            </div>
-          ) : <span />}
-          {codiceReferral && (
-            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#EA580C" }} onClick={(e) => e.stopPropagation()}>
-              Coupon code: {codiceReferral.toUpperCase()}
-            </div>
-          )}
-        </div>
+        <>
+          <div style={filo} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: spaziatura }}>
+            {apribile ? (
+              <div onClick={(e) => { e.stopPropagation(); onApriInventario(corsoData.id); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, cursor: "pointer" }}>
+                Chiusura corso →
+              </div>
+            ) : <span />}
+            {codiceReferral && (
+              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#EA580C" }} onClick={(e) => e.stopPropagation()}>
+                Coupon code: {codiceReferral.toUpperCase()}
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -50664,24 +50797,7 @@ function totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riserva
 // questa edizione hanno scelto ciascun pacchetto/kit (iscritti.pacchetto_kit),
 // riusato sia nella riga del corso sia in cima a "Preparazione kit"
 function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true }) {
-  // si raggruppa per kit E dermografo insieme: chi prepara deve leggere in
-  // una riga sola cosa mettere nella scatola. "3 kit Pro" con il
-  // dermografo sottinteso è esattamente il modo in cui un dermografo non
-  // viene messo — o ne viene messo uno di troppo
-  const conteggio = {};
-  iscrittiEdizione.forEach((i) => {
-    if (!i.pacchetto_kit) return;
-    // chi prepara deve capire in una riga sola se il dermografo va messo
-    // nella scatola o se l'allievo ce l'ha già: sono due lavori diversi
-    const modello = dermografoAcquistato(i);
-    const suffisso = !modello ? ""
-      : i.dermografo_consegna === "casa" ? ` + ${etichettaDermografo(modello)} già comprato e ricevuto`
-      : i.dermografo_consegna === "corso" ? ` + ${etichettaDermografo(modello)} da ritirare al corso`
-      : ` + ${etichettaDermografo(modello)}`;
-    const chiave = `${i.pacchetto_kit}${suffisso}`;
-    conteggio[chiave] = (conteggio[chiave] || 0) + 1;
-  });
-  const voci = Object.entries(conteggio).sort((a, b) => b[1] - a[1]);
+  const voci = conteggioKitEdizione(iscrittiEdizione);
   if (voci.length === 0) return null;
   const totale = voci.reduce((s, [, n]) => s + n, 0);
   const righe = [...voci.map(([nome, n]) => [n, `KIT ${nome.toUpperCase()}`]), ...(mostraTotale ? [[totale, "KIT TOTALI"]] : [])];
