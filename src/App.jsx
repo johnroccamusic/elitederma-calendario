@@ -8105,6 +8105,7 @@ function slideDisponibiliPer(corsoData, oggiStr = dataOggiStr()) {
 // e' scritto nell'HTML: si chiede al momento del clic e vale cinque
 // minuti. Un link che vive nella pagina e' un link che si copia.
 function TastoScaricaSlide({ corso }) {
+  const isMobile = useIsMobile();
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState("");
 
@@ -8122,7 +8123,7 @@ function TastoScaricaSlide({ corso }) {
     <div onClick={(e) => e.stopPropagation()}>
       <button
         onClick={scarica}
-        style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "9px 14px", cursor: inCorso ? "default" : "pointer", lineHeight: 1.2, display: "inline-flex", alignItems: "center", gap: 7 }}
+        style={{ ...fontBody, fontSize: isMobile ? 11 : 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: 14, padding: isMobile ? "7px 10px" : "9px 14px", cursor: inCorso ? "default" : "pointer", lineHeight: 1.2, display: "inline-flex", alignItems: "center", gap: isMobile ? 5 : 7 }}
       >
         <IconaDiplomaRiga size={15} color={GOLD} />
         {inCorso ? "Preparo…" : "Scarica le slide"}
@@ -8286,10 +8287,10 @@ function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
       <span style={{
-        width: isMobile ? 40 : 52, height: isMobile ? 40 : 52, borderRadius: 14, background: "#F4F1EA",
+        width: isMobile ? 32 : 52, height: isMobile ? 32 : 52, borderRadius: isMobile ? 10 : 14, background: "#F4F1EA",
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       }}>
-        <Icona size={isMobile ? 20 : 26} color={GOLD} />
+        <Icona size={isMobile ? 16 : 26} color={GOLD} />
       </span>
       <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10 }}>
         {cifra}{parola}
@@ -8302,14 +8303,15 @@ function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile }) {
 // al testo: sulla scheda della master serve una cosa sola, chiamare, e da
 // telefono un bersaglio grande e' la differenza fra chiamare e sbagliare.
 function TelefonoSchedaMaster({ numero, conWhatsapp = true }) {
+  const isMobile = useIsMobile();
   if (!numero) return null;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
       <a
         href={`tel:${numero}`}
-        style={{ display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 14px", textDecoration: "none" }}
+        style={{ display: "inline-flex", alignItems: "center", gap: isMobile ? 5 : 8, ...fontBody, fontSize: isMobile ? 10.5 : 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "6px 9px" : "9px 14px", textDecoration: "none" }}
       >
-        <IconaTelefono size={15} /> {numero}
+        <IconaTelefono size={isMobile ? 12 : 15} /> {numero}
       </a>
       {conWhatsapp && (
         <a href={`https://wa.me/${numeroWhatsapp(numero)}`} target="_blank" rel="noopener noreferrer" title="Contatta su WhatsApp" style={{ display: "flex" }}>
@@ -8323,10 +8325,11 @@ function TelefonoSchedaMaster({ numero, conWhatsapp = true }) {
 // L'intestazione di una delle tre colonne in fondo alla scheda: icona,
 // parola in maiuscoletto, e a destra lo spazio per una pastiglia di stato.
 function TitoloColonnaMaster({ Icona, testo, children }) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, flexWrap: "wrap" }}>
-      <span style={{ color: NAVY, display: "flex", flexShrink: 0 }}><Icona size={18} color={NAVY} /></span>
-      <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>{testo}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 8, marginBottom: isMobile ? 7 : 9, flexWrap: "wrap" }}>
+      <span style={{ color: NAVY, display: "flex", flexShrink: 0 }}><Icona size={isMobile ? 14 : 18} color={NAVY} /></span>
+      <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.6 }}>{testo}</span>
       {children}
     </div>
   );
@@ -8407,8 +8410,8 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
                   tutta tonda e senza filo — non e' un tasto, non si preme,
                   e darle la faccia di un tasto vorrebbe dire farci provare. */}
               <span style={{
-                ...fontBody, fontSize: 15, fontWeight: 700, color: "#2E7D32", background: "#E1F1E4",
-                borderRadius: 999, padding: "10px 20px",
+                ...fontBody, fontSize: isMobile ? 11 : 15, fontWeight: 700, color: "#2E7D32", background: "#E1F1E4",
+                borderRadius: 999, padding: isMobile ? "7px 12px" : "10px 20px",
                 textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", lineHeight: 1.2,
                 animation: "lampeggiaCorsoInCorso 1.2s ease-in-out infinite",
               }}>
@@ -8425,7 +8428,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           {contabilitaVisibile && (
             <button
               onClick={(e) => { e.stopPropagation(); onApriContabilita(corsoData); }}
-              style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 14px", cursor: "pointer", lineHeight: 1.2, textAlign: "center" }}
+              style={{ ...fontBody, fontSize: isMobile ? 11 : 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "7px 10px" : "9px 14px", cursor: "pointer", lineHeight: 1.2, textAlign: "center" }}
             >
               Contabilità<br />Classe
             </button>
@@ -8438,7 +8441,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       {/* I numeri: quanti allievi e quali kit. Prima erano un elenco con
           una lineetta dorata a lato; qui sono due cifre grosse, che e'
           quello che se ne fa chi apre la scheda. */}
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 22, padding: spaziatura, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 22, padding: spaziatura, flexWrap: "nowrap" }}>
         <NumeroSchedaMaster Icona={IconaGruppoTeam} numero={iscrittiEdizione.length} etichetta="Allievi totali" isMobile={isMobile} />
         {/* I kit sono un elenco, non tanti riquadri affiancati: con quattro
             tipi, i riquadri andavano a capo e si sparpagliavano per mezza
@@ -8457,10 +8460,10 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             {divisoreVerticale}
             <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
               <span style={{
-                width: isMobile ? 40 : 52, height: isMobile ? 40 : 52, borderRadius: 14, background: "#F4F1EA",
+                width: isMobile ? 32 : 52, height: isMobile ? 32 : 52, borderRadius: isMobile ? 10 : 14, background: "#F4F1EA",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               }}>
-                <IconaPacchettoRiga size={isMobile ? 20 : 26} color={GOLD} />
+                <IconaPacchettoRiga size={isMobile ? 16 : 26} color={GOLD} />
               </span>
               <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: isMobile ? 5 : 7 }}>
                 {kit.map(([nome, n], idx) => (
@@ -8482,18 +8485,23 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           sotto l'altro, e per arrivare all'albergo si scorreva. */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))",
-        gap: isMobile ? 18 : 0, padding: spaziatura,
+        // Tre colonne anche da telefono. Su schermo stretto scendevano
+        // una sotto l'altra, e la scheda diventava un'altra cosa: la
+        // master che la guarda in aula ha in mano il telefono, e deve
+        // ritrovare le stesse cose negli stessi posti. Non si sposta
+        // niente, si stringe — testi piu' piccoli e meno aria.
+        gridTemplateColumns: "repeat(3, minmax(0,1fr))",
+        gap: 0, padding: spaziatura,
       }}>
-        <div style={{ minWidth: 0, paddingRight: isMobile ? 0 : 18 }}>
+        <div style={{ minWidth: 0, paddingRight: isMobile ? 8 : 18 }}>
           <TitoloColonnaMaster Icona={IconaEdificioErp} testo="Sede del corso" />
           {loc ? (
             <>
-              <div style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+              <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 14.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
                 {loc.nome_sede ? toTitleCase(loc.nome_sede) : toTitleCase(loc.nome || "—")}
               </div>
               {(loc.indirizzo || loc.nome) && (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, lineHeight: 1.45, overflowWrap: "anywhere" }}>
+                <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 13, color: MUTED, marginTop: 2, lineHeight: 1.45, overflowWrap: "anywhere" }}>
                   {loc.indirizzo}
                   {loc.indirizzo && loc.nome_sede ? <br /> : null}
                   {loc.nome_sede ? toTitleCase(loc.nome || "") : ""}
@@ -8502,13 +8510,13 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               <TelefonoSchedaMaster numero={loc.telefono} conWhatsapp={false} />
             </>
           ) : (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Sede non ancora assegnata</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 13, color: MUTED }}>Sede non ancora assegnata</div>
           )}
         </div>
 
-        <div style={{ minWidth: 0, padding: isMobile ? 0 : "0 18px", borderLeft: isMobile ? "none" : `1px solid ${CREAM_BORDER}` }}>
+        <div style={{ minWidth: 0, padding: isMobile ? "0 8px" : "0 18px", borderLeft: `1px solid ${CREAM_BORDER}` }}>
           <TitoloColonnaMaster Icona={IconaBustaInViaggio} testo="Dati di viaggio">
-            <span style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 11.5, fontWeight: 700, color: statoViaggio.colore, background: `${statoViaggio.colore}18`, borderRadius: 20, padding: "4px 10px", whiteSpace: "nowrap" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: isMobile ? 9 : 11.5, fontWeight: 700, color: statoViaggio.colore, background: `${statoViaggio.colore}18`, borderRadius: 20, padding: isMobile ? "3px 7px" : "4px 10px", whiteSpace: "nowrap" }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: statoViaggio.colore }} />
               {statoViaggio.etichetta}
             </span>
@@ -8517,30 +8525,30 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
                 <IconaBigliettoSegnaposto size={16} color={GOLD} />
-                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Biglietti scaricabili</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5 }}>Biglietti scaricabili</span>
               </div>
               {biglietti.map((percorso, i) => (
                 <div key={i} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: i < biglietti.length - 1 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                  <AllegatoLink percorso={percorso} etichetta={`Biglietto ${i + 1}`} style={{ fontSize: 13.5, fontWeight: 600 }} />
-                  <IconaScaricaGiu size={16} color={NAVY} />
+                  <AllegatoLink percorso={percorso} etichetta={`Biglietto ${i + 1}`} style={{ fontSize: isMobile ? 11 : 13.5, fontWeight: 600 }} />
+                  <IconaScaricaGiu size={isMobile ? 13 : 16} color={NAVY} />
                 </div>
               ))}
             </>
           ) : (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun biglietto caricato</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 13, color: MUTED }}>Nessun biglietto caricato</div>
           )}
           {corsoData.note_viaggio && (
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 8, lineHeight: 1.45, overflowWrap: "anywhere" }}>{corsoData.note_viaggio}</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, color: MUTED, marginTop: 8, lineHeight: 1.45, overflowWrap: "anywhere" }}>{corsoData.note_viaggio}</div>
           )}
         </div>
 
-        <div style={{ minWidth: 0, paddingLeft: isMobile ? 0 : 18, borderLeft: isMobile ? "none" : `1px solid ${CREAM_BORDER}` }}>
+        <div style={{ minWidth: 0, paddingLeft: isMobile ? 8 : 18, borderLeft: `1px solid ${CREAM_BORDER}` }}>
           <TitoloColonnaMaster Icona={IconaHotelRiga} testo="Alloggio" />
           {hotelAssociato ? (
             <>
-              <div style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{toTitleCase(hotelAssociato.nome)}</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 14.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{toTitleCase(hotelAssociato.nome)}</div>
               {(hotelAssociato.indirizzo || hotelAssociato.citta) && (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, lineHeight: 1.45, overflowWrap: "anywhere" }}>
+                <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 13, color: MUTED, marginTop: 2, lineHeight: 1.45, overflowWrap: "anywhere" }}>
                   {[hotelAssociato.indirizzo, hotelAssociato.civico].filter(Boolean).join(" ")}
                   {hotelAssociato.indirizzo && hotelAssociato.citta ? <br /> : null}
                   {hotelAssociato.citta ? toTitleCase(hotelAssociato.citta) : ""}
@@ -8549,7 +8557,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               <TelefonoSchedaMaster numero={hotelAssociato.telefono} />
             </>
           ) : (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun alloggio prenotato</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 13, color: MUTED }}>Nessun alloggio prenotato</div>
           )}
         </div>
       </div>
