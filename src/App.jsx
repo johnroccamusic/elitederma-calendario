@@ -13232,13 +13232,19 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
             di tenere centotrenta pixel buoni anche per "John". Il minimo
             di otto caratteri serve a poterci scrivere dentro un nome
             nuovo senza che la casella sia un francobollo. */}
-        <input
-          value={nome}
-          size={Math.max(8, (nome || "").length + 1)}
-          onChange={(e) => setNome(e.target.value)}
-          onBlur={salvaCampi}
-          style={{ ...inputStyle, width: "auto", minWidth: 0, padding: "6px 8px", fontSize: 11, fontWeight: 700 }}
-        />
+        {/* la casella va in un blocco suo: da quando e' lunga quanto il
+            nome, un nome corto le lasciava accanto lo spazio per la
+            pastiglia "SISTEMA", che si infilava di fianco invece di
+            stare sotto come per i nomi lunghi */}
+        <div>
+          <input
+            value={nome}
+            size={Math.max(8, (nome || "").length + 1)}
+            onChange={(e) => setNome(e.target.value)}
+            onBlur={salvaCampi}
+            style={{ ...inputStyle, width: "auto", minWidth: 0, padding: "6px 8px", fontSize: 11, fontWeight: 700 }}
+          />
+        </div>
         {sistema && (
           <div title="Riga di sistema: anche rinominata, resta l'identità Utente generico/Amministratore/Programmatore con i suoi permessi pieni — per un nuovo utente usa piuttosto '+ Genera nuovo utente'" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#8A6D1D", background: "#FBF0D6", border: "1px solid #E9D9A0", borderRadius: 6, padding: "1px 6px", display: "inline-block", marginTop: 4, textTransform: "uppercase", letterSpacing: 0.4 }}>
             Sistema
