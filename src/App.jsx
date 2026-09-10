@@ -8493,8 +8493,8 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: isMobile ? 5 : 7 }}>
                 {kit.map(([nome, n], idx) => (
                   <div key={idx} style={{ display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10, minWidth: 0 }}>
-                    <span style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, lineHeight: 1.15, flexShrink: 0, width: isMobile ? 16 : 22, textAlign: "right" }}>{n}</span>
-                    <span style={{ ...fontBody, fontSize: isMobile ? 9 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.35, minWidth: 0, overflowWrap: "break-word", wordBreak: "normal" }}>{nome}</span>
+                    <span style={{ ...fontDisplay, fontSize: isMobile ? 20 : 27, fontWeight: 700, color: NAVY, lineHeight: 1.15, flexShrink: 0, width: isMobile ? 18 : 26, textAlign: "right" }}>{n}</span>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 9 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.25, minWidth: 0, overflowWrap: "break-word", wordBreak: "normal" }}>{nome}</span>
                   </div>
                 ))}
               </div>
