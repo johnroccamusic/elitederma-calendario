@@ -3642,13 +3642,14 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
                 Caricato: <AllegatoLink percorso={valori.bonificoFilePath} etichetta="apri il file" />
               </div>
             ) : !soloLettura ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => onBonificoFile && onBonificoFile(e.target.files?.[0] || null)} />
-                  {valori.bonificoFileNuovo && <BadgeFileCaricato />}
-                </div>
+              /* "Ora non ho il file" accanto al campo, non sotto: e' la
+                 risposta alla stessa domanda — il file ce l'hai o no — e su
+                 una riga sua sembrava un'altra cosa da decidere */
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: "1 1 180px", minWidth: 150 }} onChange={(e) => onBonificoFile && onBonificoFile(e.target.files?.[0] || null)} />
+                {valori.bonificoFileNuovo && <BadgeFileCaricato />}
                 {mostraSaltaFile && onBonificoSkip && (
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap", flexShrink: 0 }}>
                     <input type="checkbox" checked={!!valori.bonificoSkip} onChange={(e) => onBonificoSkip(e.target.checked)} style={{ width: 14, height: 14 }} />
                     Ora non ho il file
                   </label>
@@ -24900,41 +24901,40 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             </div>
             {spaziatoreRiga("organizzativi", "tagliaDivisa")}
           </div>
+          {/* i due screen sotto una nuvola sola: sono la stessa cosa — una
+              foto che si allega se ce l'hai — e due riquadri identici uno
+              sopra l'altro raddoppiavano l'altezza per raddoppiare la
+              stessa domanda */}
           <div {...propsRiga("organizzativi", "screenAcconto")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("organizzativi", "screenAcconto")}
               <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
-          <IntestazioneArea Icona={IconaImmagineShop}>Screen acconto (opzionale)</IntestazioneArea>
-          <div>
-            {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
-              <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
-            )}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
-              {(fileScreenAcconto || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto)) && <BadgeFileCaricato />}
-            </div>
-          </div>
+                <IntestazioneArea Icona={IconaImmagineShop}>Screen (opzionali)</IntestazioneArea>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 220px", minWidth: 190 }}>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4 }}>Acconto</div>
+                    {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
+                      <div style={{ ...fontBody, fontSize: 12, color: MUTED, paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /></div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: "1 1 150px", minWidth: 130 }} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
+                      {(fileScreenAcconto || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto)) && <BadgeFileCaricato />}
+                    </div>
+                  </div>
+                  <div style={{ flex: "1 1 220px", minWidth: 190 }}>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4 }}>Recap</div>
+                    {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap && !fileScreenRecap && (
+                      <div style={{ ...fontBody, fontSize: 12, color: MUTED, paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /></div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: "1 1 150px", minWidth: 130 }} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
+                      {(fileScreenRecap || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap)) && <BadgeFileCaricato />}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             {spaziatoreRiga("organizzativi", "screenAcconto")}
-          </div>
-          <div {...propsRiga("organizzativi", "screenRecap")}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
-              {manigliaRiga("organizzativi", "screenRecap")}
-              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
-          <IntestazioneArea Icona={IconaImmagineShop}>Screen di recap (opzionale)</IntestazioneArea>
-          <div>
-            {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap && !fileScreenRecap && (
-              <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
-            )}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
-              {(fileScreenRecap || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap)) && <BadgeFileCaricato />}
-            </div>
-          </div>
-              </div>
-            </div>
-            {spaziatoreRiga("organizzativi", "screenRecap")}
           </div>
           <div {...propsRiga("organizzativi", "note")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
