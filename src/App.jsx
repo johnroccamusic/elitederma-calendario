@@ -13232,19 +13232,18 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
             di tenere centotrenta pixel buoni anche per "John". Il minimo
             di otto caratteri serve a poterci scrivere dentro un nome
             nuovo senza che la casella sia un francobollo. */}
-        {/* la casella va in un blocco suo: da quando e' lunga quanto il
-            nome, un nome corto le lasciava accanto lo spazio per la
-            pastiglia "SISTEMA", che si infilava di fianco invece di
-            stare sotto come per i nomi lunghi */}
-        <div>
-          <input
-            value={nome}
-            size={Math.max(8, (nome || "").length + 1)}
-            onChange={(e) => setNome(e.target.value)}
-            onBlur={salvaCampi}
-            style={{ ...inputStyle, width: "auto", minWidth: 0, padding: "6px 8px", fontSize: 11, fontWeight: 700 }}
-          />
-        </div>
+        {/* Tutte le caselle larghe uguali, e larghe quanto la colonna:
+            e' la COLONNA a essere stretta sul nome piu' lungo che c'e'
+            davvero nell'elenco (vedi `larghezzaColonnaNome`). Facendo il
+            contrario — ogni casella lunga quanto il suo nome — venivano
+            di sette misure diverse e la colonna restava larga uguale,
+            con il vuoto a destra di quelle corte. */}
+        <input
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          onBlur={salvaCampi}
+          style={{ ...inputStyle, width: "100%", padding: "6px 8px", fontSize: 11, fontWeight: 700 }}
+        />
         {sistema && (
           <div title="Riga di sistema: anche rinominata, resta l'identità Utente generico/Amministratore/Programmatore con i suoi permessi pieni — per un nuovo utente usa piuttosto '+ Genera nuovo utente'" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#8A6D1D", background: "#FBF0D6", border: "1px solid #E9D9A0", borderRadius: 6, padding: "1px 6px", display: "inline-block", marginTop: 4, textTransform: "uppercase", letterSpacing: 0.4 }}>
             Sistema
@@ -13348,7 +13347,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
   // la colonna del nome larga quanto il nome piu' lungo dell'elenco, non
   // quanto il piu' lungo immaginabile: sette pixel a carattere piu' l'aria
   // della casella, con un minimo perche' l'intestazione ci stia comunque
-  const larghezzaColonnaNome = Math.max(96, Math.min(200, 7 * Math.max(...righe.map((u) => (u.nome || "").length), 8) + 34));
+  const larghezzaColonnaNome = Math.max(92, Math.min(210, Math.ceil(6.4 * Math.max(...righe.map((u) => (u.nome || "").length), 8)) + 38));
   const colonneUtenti = [
     { chiave: "nome", larghezza: larghezzaColonnaNome }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
     { chiave: "amministratore", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "solocalendario", larghezza: LARGHEZZA_COLONNA_SPUNTA },
