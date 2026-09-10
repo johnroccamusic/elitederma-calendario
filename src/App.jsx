@@ -21120,7 +21120,10 @@ function rigaPagamentoIscritto(label, valore, metodo, isMobile, daPagare = false
     color: colore,
     minWidth: 0,
     whiteSpace: "nowrap",
-    ...(isMobile ? { fontSize: 11.5 } : {}),
+    // Sul telefono queste righe sono la scheda: chi la guarda e' in aula
+    // con l'allievo davanti e legge da mezzo metro. Undici punti e mezzo
+    // era la misura di una tabella affollata, non di tre righe di conti.
+    ...(isMobile ? { fontSize: 17 } : {}),
   };
   return (
     <>
@@ -21129,7 +21132,7 @@ function rigaPagamentoIscritto(label, valore, metodo, isMobile, daPagare = false
           telefono sta tre punti sopra al resto della riga. Puo' crescere
           senza rischi perche' l'unica colonna elastica e' quella
           dell'etichetta: a stringersi e' sempre la descrizione */}
-      <div style={{ ...cella, fontWeight: 700, textAlign: isMobile ? "right" : "left", ...(isMobile ? { fontSize: 14.5 } : {}) }}>{valore}</div>
+      <div style={{ ...cella, fontWeight: 700, textAlign: isMobile ? "right" : "left" }}>{valore}</div>
       <div style={{ ...cella, textAlign: "right" }}>{metodo}</div>
     </>
   );
@@ -21242,19 +21245,19 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
         )}
         {i.richiede_modelle && i.numero_modelle != null && (
           <>
-            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Modelle da pagare</div>
-            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Modelle da pagare</div>
+            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", ...(isMobile ? { fontSize: 17 } : {}) }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
           </>
         )}
         {i.taglia_divisa && (
           <>
-            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Taglia divisa</div>
+            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Taglia divisa</div>
             <div style={{ gridColumn: "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 22, color: NAVY }}>{i.taglia_divisa}</div>
           </>
         )}
         {i.accordi_commerciali && (
           <>
-            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Accordi commerciali</div>
+            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Accordi commerciali</div>
             <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.accordi_commerciali}</div>
           </>
         )}
