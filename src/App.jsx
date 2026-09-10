@@ -12948,9 +12948,7 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Venditore collegato (stessa persona)</div>
           {selVenditoreCollegato}
         </div>
-        {/* "Dashboard master" non compare: chi entra con la password di una
-            master la ottiene sempre, automaticamente (Gate.check) */}
-        {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => (
+        {TASTI_HOME.map((t) => (
           <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
             <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{t.etichetta}</span>
             <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
@@ -12980,9 +12978,7 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
         />
       </td>
       <td style={tdStyle}>{selVenditoreCollegato}</td>
-      {/* "Dashboard master" non compare: chi entra con la password di una
-          master la ottiene sempre, automaticamente (Gate.check) */}
-      {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => (
+      {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
         </td>
@@ -13050,7 +13046,7 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome master{maniglia("nome", larghezzaDi("nome", 140))}</ThOrdina>
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 84))}</th>
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
-                {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => (
+                {TASTI_HOME.map((t) => (
                   <th key={t.chiave} onDoubleClick={() => colonnaPerTutti(t.chiave, t.etichetta)} title="Doppio clic: dà o toglie questo permesso a tutte" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
                     {t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}
                   </th>
