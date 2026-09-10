@@ -9574,12 +9574,25 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             {prossimeDate.length === 0 ? (
               <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessun corso in programma al momento.</div>
             ) : prossimeDate.map((cd) => (
+              /* Il coupon: prima quello dell'edizione, se qualcuno l'ha
+                 generato, altrimenti quello della master. Il passaggio da
+                 "coupon della master per sempre" a "coupon per edizione"
+                 ha lasciato scoperto il caso piu' comune — le edizioni con
+                 un coupon proprio sono due su tutte, le master che ne
+                 hanno uno sono diciassette — e sulla scheda non compariva
+                 piu' niente. Cosi' la master il suo codice ce l'ha sempre
+                 sotto gli occhi, e quando per una classe se ne genera uno
+                 dedicato quello ha la precedenza. */
               <CardDataMaster
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
                 apribile={inFinestraInventario(cd)} onApriInventario={onApriChiusura} onApriClasse={onApriClasse}
-                codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
+                codiceReferral={
+                  (coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice
+                  || (coupon || []).find((c) => c.master_id === cd.master_id && !c.corsi_date_id)?.codice
+                  || null
+                }
                 onApriContabilita={(riga) => { window.scrollTo(0, 0); setContabilitaClasse({ token: riga.token_master, nome: corsoById[riga.corso_id]?.nome || "" }); }}
               />
             ))}
