@@ -14606,27 +14606,6 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
       return String(nuovo);
     });
   }
-  // A.C.M. — Accesso Contabilita' Master. Accende, per QUESTA edizione, il
-  // tasto "Contabilita' Classe" nella dashboard della master. Quella pagina
-  // dice quanto ha pagato ogni allievo: quando la master puo' vederla lo
-  // decide l'ufficio, edizione per edizione, non il calendario.
-  //
-  // Si spegne da solo alla fine del corso, ma senza nessun lavoro notturno
-  // che passi a chiudere gli interruttori rimasti aperti: dopo data_fine
-  // non viene piu' considerato valido (vedi acmValido). Un permesso che
-  // scade da se' non si dimentica acceso.
-  const acmScaduto = dataOggiStr() > corsoData.data_fine;
-  const acmAcceso = !!corsoData.acm_attivo && !acmScaduto;
-  async function commutaAcm() {
-    if (acmScaduto) { setMsg("Il corso e' finito: l'accesso alla contabilita' per la master si e' chiuso da solo."); return; }
-    const { error } = await supabase.from("corsi_date").update({ acm_attivo: !corsoData.acm_attivo }).eq("id", corsoData.id);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    setMsg(!corsoData.acm_attivo
-      ? "A.C.M. acceso: la master vede la contabilita' di questa classe fino alla fine del corso."
-      : "A.C.M. spento: la master non vede piu' la contabilita' di questa classe.");
-    ricarica(["corsi_date"]);
-  }
-
   async function salvaModificaData(id) {
     if (!modDataInizio) { setMsg("Seleziona almeno una data d'inizio."); return; }
     const fine = modDataFine || modDataInizio;
@@ -23521,6 +23500,27 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     } catch (e) {
       setMsg("Non sono riuscito a leggere automaticamente questo modulo PDF: da compilare a mano.");
     }
+  }
+
+  // A.C.M. — Accesso Contabilita' Master. Accende, per QUESTA edizione, il
+  // tasto "Contabilita' Classe" nella dashboard della master. Quella pagina
+  // dice quanto ha pagato ogni allievo: quando la master puo' vederla lo
+  // decide l'ufficio, edizione per edizione, non il calendario.
+  //
+  // Si spegne da solo alla fine del corso, ma senza nessun lavoro notturno
+  // che passi a chiudere gli interruttori rimasti aperti: dopo data_fine
+  // non viene piu' considerato valido (vedi acmValido). Un permesso che
+  // scade da se' non si dimentica acceso.
+  const acmScaduto = dataOggiStr() > corsoData.data_fine;
+  const acmAcceso = !!corsoData.acm_attivo && !acmScaduto;
+  async function commutaAcm() {
+    if (acmScaduto) { setMsg("Il corso e' finito: l'accesso alla contabilita' per la master si e' chiuso da solo."); return; }
+    const { error } = await supabase.from("corsi_date").update({ acm_attivo: !corsoData.acm_attivo }).eq("id", corsoData.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(!corsoData.acm_attivo
+      ? "A.C.M. acceso: la master vede la contabilita' di questa classe fino alla fine del corso."
+      : "A.C.M. spento: la master non vede piu' la contabilita' di questa classe.");
+    ricarica(["corsi_date"]);
   }
 
   async function salvaIscritto() {
