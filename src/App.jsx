@@ -21214,7 +21214,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
           numero. */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr) minmax(76px, auto) minmax(66px, auto)" : "1fr 9ch 9ch", columnGap: isMobile ? 8 : 14 }}>
         {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-          <div style={{ gridColumn: "1 / -1", fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Pagamenti</div>
+          <div style={{ gridColumn: "1 / -1", fontSize: isMobile ? 17 : 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: isMobile ? 0.3 : 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Pagamenti</div>
         )}
         {/* l'etichetta dice se quei soldi sono entrati o no: "Pagato in
             acconto" quando la quota è segnata pagata, "Da pagare in
