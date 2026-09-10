@@ -18652,40 +18652,27 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete, pulsanteExtra
 // indicatore "iscritti/posti" nella colonna Capienza: due numeri
 // affiancati da una lineetta verticale, barra di riempimento sotto, e
 // quanti liberi restano — o "Completo" in oro quando non ce ne sono più
+// Una riga sola, "1/10", e "Completo" in oro quando non resta posto.
+// Prima erano tre piani: i due numeri con le etichette "iscritti" e
+// "posti", la barra di riempimento, e quanti posti restano. Tre modi di
+// dire lo stesso, alti quanto tre righe di testo — da telefono
+// allungavano l'elenco, da scrivania si prendevano una colonna larga per
+// una frazione. I posti liberi non si perdono: sono 10 meno 1, e si
+// leggono a mente.
+//
+// `compatto` distingue solo la misura: da telefono il numero e' 13 e sta
+// a destra nella sua colonnina, da scrivania e' piu' grande e centrato
+// nella colonna Capienza.
 function IndicatorePosti({ occupati, max, liberi, compatto = false }) {
   const completo = liberi === 0;
-  const pct = max > 0 ? Math.min(100, Math.round((occupati / max) * 100)) : 0;
-  if (compatto) {
-    // Da telefono: una riga sola, "1/10". Prima erano tre piani — i due
-    // numeri con le loro etichette, la barra, quanti posti restano — e in
-    // una riga alta quanto il nome del corso facevano da soli piu'
-    // altezza di tutto il resto, allungando l'elenco per niente. I posti
-    // liberi non si perdono: sono 10 meno 1, e si leggono a mente.
-    return (
-      <div style={{ ...fontBody, fontSize: completo ? 10.5 : 13, fontWeight: 700, color: completo ? GOLD : NAVY, whiteSpace: "nowrap", textAlign: "right", lineHeight: 1.1 }}>
-        {completo ? "Completo" : <>{occupati}<span style={{ fontWeight: 400, color: MUTED }}>/{max}</span></>}
-      </div>
-    );
-  }
   return (
-    <div style={{ width: "100%" }}>
-      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", gap: 16, marginBottom: 7 }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{occupati}</div>
-          <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>iscritti</div>
-        </div>
-        <div style={{ width: 1, background: CREAM_BORDER }} />
-        <div style={{ textAlign: "center" }}>
-          <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{max}</div>
-          <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>posti</div>
-        </div>
-      </div>
-      <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", marginBottom: 6 }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 3 }} />
-      </div>
-      <div style={{ textAlign: "center", ...fontBody, fontSize: 13, fontWeight: completo ? 700 : 400, color: completo ? GOLD : MUTED }}>
-        {completo ? "Completo" : `${liberi} liber${liberi === 1 ? "o" : "i"}`}
-      </div>
+    <div style={{
+      ...fontBody, fontWeight: 700, whiteSpace: "nowrap", lineHeight: 1.1,
+      fontSize: completo ? (compatto ? 10.5 : 14) : (compatto ? 13 : 19),
+      color: completo ? GOLD : NAVY,
+      textAlign: compatto ? "right" : "center",
+    }}>
+      {completo ? "Completo" : <>{occupati}<span style={{ fontWeight: 400, color: MUTED }}>/{max}</span></>}
     </div>
   );
 }
