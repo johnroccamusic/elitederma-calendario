@@ -260,6 +260,37 @@ function useColonneRidimensionabili(chiave) {
   return { larghezzaDi, maniglia };
 }
 
+// Quanto e' larga una colonna di spunte con l'intestazione girata: basta
+// il quadratino piu' un po' d'aria. Prima erano 84 pixel, dettati dalla
+// parola scritta per lungo, non dalla casella.
+const LARGHEZZA_COLONNA_SPUNTA = 34;
+
+// L'intestazione di una colonna di spunte, scritta dal basso verso l'alto.
+//
+// Le colonne dei permessi sono decine — una per ogni tasto della home,
+// piu' una per ogni agenda — e scritte per lungo ognuna si portava via
+// ottantaquattro pixel per una parola sola. La tabella scorreva in
+// orizzontale piu' di quanto si riuscisse a seguirla, e per capire su
+// quale colonna si stava spuntando bisognava risalire con lo sguardo
+// ogni volta.
+//
+// Girate, ne bastano una trentina: le caselle si stringono e si vedono
+// tutte insieme. `writing-mode` mette il testo in colonna, la rotazione
+// lo raddrizza perche' parta dal basso invece che dall'alto — cosi' si
+// legge inclinando la testa a sinistra, che e' il verso naturale.
+//
+// Resta testo vero: si seleziona, si copia e cresce con il carattere.
+function IntestazioneVerticale({ children }) {
+  return (
+    <span style={{
+      writingMode: "vertical-rl", transform: "rotate(180deg)",
+      display: "inline-block", whiteSpace: "nowrap", lineHeight: 1, padding: "6px 0",
+    }}>
+      {children}
+    </span>
+  );
+}
+
 // la maniglia fra due colonne: invisibile finche' non ci passi sopra col
 // mouse, poi si accende una lineetta scura sul bordo. Senza quel segno
 // una colonna stretta sembrava non averla proprio
@@ -12842,7 +12873,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
     <select
       value={utente.venditore_id || ""}
       onChange={(e) => salvaVenditoreCollegato(e.target.value)}
-      style={{ ...inputStyle, padding: "6px 8px", fontSize: 13 }}
+      style={{ ...inputStyle, padding: "6px 8px", fontSize: 11 }}
     >
       <option value="">— nessuno —</option>
       {(venditori || []).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
@@ -12965,7 +12996,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   return (
     <tr>
       <td style={tdStyle}>
-        <input value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 130, padding: "6px 8px", fontSize: 13, fontWeight: 700 }} />
+        <input value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 130, padding: "6px 8px", fontSize: 11, fontWeight: 700 }} />
         {sistema && (
           <div title="Riga di sistema: anche rinominata, resta l'identità Utente generico/Amministratore/Programmatore con i suoi permessi pieni — per un nuovo utente usa piuttosto '+ Genera nuovo utente'" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#8A6D1D", background: "#FBF0D6", border: "1px solid #E9D9A0", borderRadius: 6, padding: "1px 6px", display: "inline-block", marginTop: 4, textTransform: "uppercase", letterSpacing: 0.4 }}>
             Sistema
@@ -12973,7 +13004,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
         )}
       </td>
       <td style={tdStyle}>
-        <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 13, textAlign: "center" }} />
+        <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 11, textAlign: "center" }} />
       </td>
       <td style={tdStyle}>{!sistema && selVenditoreCollegato}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkAmministratore}</td>
@@ -13068,10 +13099,10 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
   const { larghezzaDi, maniglia } = useColonneRidimensionabili("gestioneUtenti_larghezzeColonne");
   const colonneUtenti = [
     { chiave: "nome", larghezza: 120 }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
-    { chiave: "amministratore", larghezza: 78 }, { chiave: "solocalendario", larghezza: 78 },
-    { chiave: "modificamodelle", larghezza: 78 }, { chiave: "omaggipos", larghezza: 72 },
-    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: 84 })),
-    ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
+    { chiave: "amministratore", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "solocalendario", larghezza: LARGHEZZA_COLONNA_SPUNTA },
+    { chiave: "modificamodelle", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "omaggipos", larghezza: LARGHEZZA_COLONNA_SPUNTA },
+    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
+     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
     { chiave: "azioni", larghezza: 44 },
   ];
   const larghezzaTabellaUtenti = colonneUtenti.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
@@ -13113,10 +13144,10 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome utente{maniglia("nome", larghezzaDi("nome", 120))}</ThOrdina>
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 84))}</th>
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
-                <th style={{ ...thStyle, textAlign: "center" }}>Amministratore{maniglia("amministratore", larghezzaDi("amministratore", 78))}</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario{maniglia("solocalendario", larghezzaDi("solocalendario", 78))}</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>Modifica modelle{maniglia("modificamodelle", larghezzaDi("modificamodelle", 78))}</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>Omaggi POS{maniglia("omaggipos", larghezzaDi("omaggipos", 72))}</th>
+                <th style={{ ...thStyle, textAlign: "center" }}><IntestazioneVerticale>Amministratore</IntestazioneVerticale>{maniglia("amministratore", larghezzaDi("amministratore", LARGHEZZA_COLONNA_SPUNTA))}</th>
+                <th style={{ ...thStyle, textAlign: "center" }}><IntestazioneVerticale>Solo calendario</IntestazioneVerticale>{maniglia("solocalendario", larghezzaDi("solocalendario", LARGHEZZA_COLONNA_SPUNTA))}</th>
+                <th style={{ ...thStyle, textAlign: "center" }}><IntestazioneVerticale>Modifica modelle</IntestazioneVerticale>{maniglia("modificamodelle", larghezzaDi("modificamodelle", LARGHEZZA_COLONNA_SPUNTA))}</th>
+                <th style={{ ...thStyle, textAlign: "center" }}><IntestazioneVerticale>Omaggi POS</IntestazioneVerticale>{maniglia("omaggipos", larghezzaDi("omaggipos", LARGHEZZA_COLONNA_SPUNTA))}</th>
                 {TASTI_HOME.map((t) => (
                   <th
                     key={t.chiave}
@@ -13124,7 +13155,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                     title="Doppio clic: dà o toglie questo permesso a tutti"
                     style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}
                   >
-                    {t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}
+                    <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
                 {agende.map((a) => (
@@ -13134,7 +13165,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                     title="Doppio clic: dà o toglie questo permesso a tutti"
                     style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}
                   >
-                    Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}
+                    <IntestazioneVerticale>Agenda: {a.nome}</IntestazioneVerticale>{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
                 <th style={thStyle}></th>
@@ -13222,7 +13253,7 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
     <select
       value={masterRec.venditore_id || ""}
       onChange={(e) => salvaVenditoreCollegato(e.target.value)}
-      style={{ ...inputStyle, padding: "6px 8px", fontSize: 13 }}
+      style={{ ...inputStyle, padding: "6px 8px", fontSize: 11 }}
     >
       <option value="">— nessuno —</option>
       {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
@@ -13262,14 +13293,14 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
   const tdStyle = { padding: "10px 10px", borderBottom: `1px solid ${CREAM_BORDER}` };
   return (
     <tr>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{masterRec.nome}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY }}>{masterRec.nome}</td>
       <td style={tdStyle}>
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onBlur={salvaPassword}
           placeholder="Nessuna password"
-          style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 13, textAlign: "center" }}
+          style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 11, textAlign: "center" }}
         />
       </td>
       <td style={tdStyle}>{selVenditoreCollegato}</td>
@@ -13309,8 +13340,8 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
     // casella sempre accesa e' solo un modo per sbagliarsi spegnendola. Ma
     // proprio quello serve: poterla spegnere per qualche giorno — durante
     // dei lavori, o a chi in quel periodo non deve entrare.
-    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: 84 })),
-    ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
+    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
+     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
   ];
   const larghezzaTabellaMaster = colonneMaster.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   function colonnaPerTutti(chiave, etichetta) {
@@ -13343,12 +13374,12 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
                 {TASTI_HOME.map((t) => (
                   <th key={t.chiave} onDoubleClick={() => colonnaPerTutti(t.chiave, t.etichetta)} title="Doppio clic: dà o toglie questo permesso a tutte" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
-                    {t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}
+                    <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
                 {agende.map((a) => (
                   <th key={a.id} onDoubleClick={() => colonnaPerTutti(`agenda_${a.id}`, `Agenda: ${a.nome}`)} title="Doppio clic: dà o toglie questo permesso a tutte" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
-                    Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}
+                    <IntestazioneVerticale>Agenda: {a.nome}</IntestazioneVerticale>{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
               </tr>
@@ -13396,23 +13427,20 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
   // non puo' avere due chiavi per la stessa porta — e finche' erano due
   // caselle indipendenti bastava cambiarne una per averle diverse senza
   // accorgersene.
+  // La scritta "= master" accanto al campo non c'e' piu': la casella e'
+  // grigia e non si scrive, e questo lo dice gia'. Il perche' resta nel
+  // suggerimento che compare passandoci sopra, dove serve a chi se lo
+  // chiede invece che a tutti in mezzo alla colonna.
   const campoPassword = masterCollegata ? (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-      <input
-        style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 13, background: "#EDF1F4", color: MUTED }}
-        value={masterCollegata.password || ""}
-        disabled
-      />
-      <span
-        title={`E' la password della master ${masterCollegata.nome}: si cambia da "Password Master"`}
-        style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, whiteSpace: "nowrap" }}
-      >
-        = master
-      </span>
-    </div>
+    <input
+      title={`E' la password della master ${masterCollegata.nome}: si cambia da "Password Master"`}
+      style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 11, background: "#EDF1F4", color: MUTED }}
+      value={masterCollegata.password || ""}
+      disabled
+    />
   ) : (
     <input
-      style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 13 }}
+      style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 11 }}
       value={password}
       onChange={(e) => setPassword(e.target.value)}
       onBlur={salvaPassword}
@@ -13441,7 +13469,7 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
   const tdStyle = { padding: "10px 10px", borderBottom: `1px solid ${CREAM_BORDER}` };
   return (
     <tr>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{venditore.nome.toUpperCase()}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY }}>{venditore.nome.toUpperCase()}</td>
       <td style={tdStyle}>
         {campoPassword}
       </td>
@@ -13473,8 +13501,8 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
   const { larghezzaDi, maniglia } = useColonneRidimensionabili("passwordVenditori_larghezzeColonne");
   const colonneVenditori = [
     { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 140 },
-    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: 84 })),
-    ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
+    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
+     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
   ];
   const larghezzaTabellaVenditori = colonneVenditori.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   function colonnaPerTutti(chiave, etichetta) {
@@ -13506,12 +13534,12 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 140))}</th>
                 {TASTI_HOME.map((t) => (
                   <th key={t.chiave} onDoubleClick={() => colonnaPerTutti(t.chiave, t.etichetta)} title="Doppio clic: dà o toglie questo permesso a tutti" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
-                    {t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}
+                    <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
                 {agende.map((a) => (
                   <th key={a.id} onDoubleClick={() => colonnaPerTutti(`agenda_${a.id}`, `Agenda: ${a.nome}`)} title="Doppio clic: dà o toglie questo permesso a tutti" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
-                    Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}
+                    <IntestazioneVerticale>Agenda: {a.nome}</IntestazioneVerticale>{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
               </tr>
