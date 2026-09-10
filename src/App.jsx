@@ -8275,7 +8275,16 @@ function conteggioKitEdizione(iscrittiEdizione) {
 // Un numero grosso con la sua icona e la sua didascalia: "2 / ALLIEVI
 // TOTALI". Sono le due cose che la master guarda per prime aprendo la
 // scheda, e meritano di essere lette da lontano.
-function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile }) {
+// `etichettaPrima` mette la didascalia a sinistra della cifra invece che a
+// destra: cosi' i due blocchi si specchiano attorno al filo che li separa,
+// con le due cifre vicine al centro e le parole verso l'esterno.
+function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile, etichettaPrima = false }) {
+  const parola = (
+    <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, overflowWrap: "anywhere" }}>{etichetta}</span>
+  );
+  const cifra = (
+    <span style={{ ...fontDisplay, fontSize: isMobile ? 21 : 27, fontWeight: 700, color: NAVY, lineHeight: 1, flexShrink: 0 }}>{numero}</span>
+  );
   return (
     <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
       <span style={{
@@ -8284,9 +8293,8 @@ function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile }) {
       }}>
         <Icona size={isMobile ? 20 : 26} color={GOLD} />
       </span>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 27, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{numero}</div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginTop: 3, overflowWrap: "anywhere" }}>{etichetta}</div>
+      <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: isMobile ? 6 : 9 }}>
+        {etichettaPrima ? <>{parola}{cifra}</> : <>{cifra}{parola}</>}
       </div>
     </div>
   );
@@ -8330,7 +8338,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
-  const coloreCorso = corso?.colore || NAVY;
+  // Il riquadro della data e' marrone per tutti i corsi, non del colore
+  // del corso. Nella dashboard della master i corsi sono i suoi, pochi e
+  // gia' distinti dal nome scritto grande accanto: un colore diverso per
+  // ognuno non aggiungeva niente e faceva sembrare l'elenco una tavolozza.
+  // Piu' scuro dell'oro dell'app perche' ci va sopra il bianco.
+  const MARRONE_DATA = "#9C7A45";
   const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
   // "IN CORSO" mentre si svolge, "Appena terminato" nei 5 giorni dopo la
   // fine — la master deve accorgersi a colpo d'occhio del corso attivo
@@ -8388,10 +8401,10 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           contabilita' se l'ufficio l'ha aperta. */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 16, padding: spaziatura, flexWrap: "wrap" }}>
         <div style={{
-          background: coloreCorso, borderRadius: 16, padding: isMobile ? "12px 14px" : "16px 18px", textAlign: "center", flexShrink: 0, minWidth: isMobile ? 62 : 78,
+          background: MARRONE_DATA, borderRadius: 13, padding: isMobile ? "10px 11px" : "13px 14px", textAlign: "center", flexShrink: 0, minWidth: isMobile ? 50 : 62,
         }}>
-          <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? (isMobile ? 13 : 16) : (isMobile ? 26 : 34), fontWeight: 700, color: "#fff", lineHeight: 1, whiteSpace: "nowrap" }}>{numero}</div>
-          {sotto && <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 4 }}>{sotto}</div>}
+          <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? (isMobile ? 11 : 13) : (isMobile ? 21 : 27), fontWeight: 700, color: "#fff", lineHeight: 1, whiteSpace: "nowrap" }}>{numero}</div>
+          {sotto && <div style={{ ...fontBody, fontSize: isMobile ? 8 : 10, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 3 }}>{sotto}</div>}
         </div>
 
         <div style={{ flex: "1 1 200px", minWidth: 0 }}>
@@ -8432,11 +8445,11 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           una lineetta dorata a lato; qui sono due cifre grosse, che e'
           quello che se ne fa chi apre la scheda. */}
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 22, padding: spaziatura, flexWrap: "wrap" }}>
-        <NumeroSchedaMaster Icona={IconaGruppoTeam} numero={iscrittiEdizione.length} etichetta="Allievi totali" isMobile={isMobile} />
+        <NumeroSchedaMaster Icona={IconaGruppoTeam} numero={iscrittiEdizione.length} etichetta="Allievi totali" etichettaPrima isMobile={isMobile} />
         {kit.map(([nome, n], idx) => (
           <React.Fragment key={idx}>
             {divisoreVerticale}
-            <NumeroSchedaMaster Icona={IconaPacchettoRiga} numero={n} etichetta={`Kit ${nome}`} isMobile={isMobile} />
+            <NumeroSchedaMaster Icona={IconaPacchettoRiga} numero={n} etichetta={nome} isMobile={isMobile} />
           </React.Fragment>
         ))}
       </div>
@@ -8474,7 +8487,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
 
         <div style={{ minWidth: 0, padding: isMobile ? 0 : "0 18px", borderLeft: isMobile ? "none" : `1px solid ${CREAM_BORDER}` }}>
           <TitoloColonnaMaster Icona={IconaBustaInViaggio} testo="Dati di viaggio">
-            <span style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 11.5, fontWeight: 700, color: statoViaggio.colore, background: `${statoViaggio.colore}18`, borderRadius: 20, padding: "4px 10px", marginLeft: "auto", whiteSpace: "nowrap" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 11.5, fontWeight: 700, color: statoViaggio.colore, background: `${statoViaggio.colore}18`, borderRadius: 20, padding: "4px 10px", whiteSpace: "nowrap" }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: statoViaggio.colore }} />
               {statoViaggio.etichetta}
             </span>
