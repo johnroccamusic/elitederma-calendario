@@ -4947,6 +4947,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // era gia' uscito da sinistra. Qui ogni corso e' un blocco chiuso: a
   // sinistra chi e' dove e quando, a destra una riga per ogni persona
   // incaricata.
+  const LARGHEZZA_PANNELLO_SINISTRO = 200;
   function tabellaMese(righeMese) {
     return (
       <div style={{ marginBottom: 28 }}>
@@ -4962,7 +4963,15 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           // basso anche la citta' e la sede — che con il nome non
           // c'entrano niente.
           const nomeCorso = corso?.nome?.toUpperCase() || "?";
-          const corpoNome = nomeCorso.length <= 10 ? 16 : nomeCorso.length <= 14 ? 13.5 : nomeCorso.length <= 20 ? 11 : 9;
+          // Il corpo del nome si calcola dallo spazio che resta davvero,
+          // non a scalini sul numero di lettere. A scalini "Laminazione
+          // base" finiva a undici punti pur avendo aria da vendere: la
+          // soglia la faceva scattare la ventesima lettera, non il bordo.
+          // Qui invece il nome riempie sempre quello che ha, fino a un
+          // massimo — e sotto una certa misura si ferma e taglia, perche'
+          // un nome a sei punti non lo legge nessuno.
+          const spazioNome = LARGHEZZA_PANNELLO_SINISTRO - 24 - 10 - Math.ceil(sopra.length * 0.62 * 19);
+          const corpoNome = Math.max(8, Math.min(17, spazioNome / (nomeCorso.length * 0.63)));
           const sedeConfermata = !!valoreCampo(cd, "sede_confermata");
 
           return (
@@ -4975,7 +4984,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {/* A sinistra le cose che non cambiano riga per riga: quando,
                   quale corso, dove. Stanno ferme mentre a destra si
                   scorrono le persone. */}
-              <div style={{ flex: "0 0 220px", minWidth: 0, padding: "9px 12px", borderRight: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ flex: "0 0 " + LARGHEZZA_PANNELLO_SINISTRO + "px", minWidth: 0, padding: "9px 12px", borderRight: `1px solid ${CREAM_BORDER}` }}>
                 {/* La data in una colonna sua e il nome del corso accanto,
                     non sotto. Prima stavano sulla stessa riga con il
                     permesso di andare a capo, e un nome lungo — "Sexyline
