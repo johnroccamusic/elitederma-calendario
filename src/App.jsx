@@ -773,10 +773,14 @@ function IconaFrecciaUscita({ size = 20 }) {
   );
 }
 // in arrivo: la busta che sta ancora viaggiando
+// Un aereo visto da sopra, pieno. Il primo era di contorno come le altre
+// icone dell'app, ma un aereo non e' una busta o un calendario: e' fatto
+// di ali sottili e a quindici pixel il tratto le mangiava, restava uno
+// scarabocchio. Pieno si legge anche piccolo.
 function IconaAereo({ size = 15, color = "currentColor" }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17.8 19.8 16 14l-4.5 2.4v3.3l-1.6.9-.9-3.1-3.1-.9.9-1.6h3.3L12.5 10 6.7 8.2c-.6-.2-.7-1-.2-1.3l1.4-.8c.3-.2.6-.2.9-.1l5.1 1.8 2.2-3.8c.5-.9 1.6-1.2 2.5-.7s1.2 1.6.7 2.5l-2.2 3.8 1.8 5.1c.1.3.1.6-.1.9l-.8 1.4c-.3.5-1.1.4-1.3-.2z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <path d="M12 1.6c1 0 1.8 1.3 1.8 2.9v4.2l7.7 4.5v2.4l-7.7-2.3v4.3l2.5 1.8v1.7L12 20.1l-4.3.9v-1.7l2.5-1.8v-4.3L2.5 15.6v-2.4l7.7-4.5V4.5c0-1.6.8-2.9 1.8-2.9z" />
     </svg>
   );
 }
@@ -4934,8 +4938,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           onBlur={(e) => { if (e.target.value !== (valoreNota || "")) onNota(e.target.value || null); }}
         />
         <div style={{ flex: "0 0 auto" }}>{viaggio}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 auto", whiteSpace: "nowrap" }}>
-          <IconaEdificioErp size={16} color={MUTED} />
+        {/* l'alloggio in una pastiglia con la sua icona dentro: era un
+            link sottolineato in mezzo a campi bianchi e sembrava una
+            nota, non un posto dove si entra */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "0 0 auto", whiteSpace: "nowrap", background: "#F1F2F6", borderRadius: 10, padding: "6px 10px" }}>
+          <IconaEdificioErp size={14} color={NAVY} />
           {alloggio}
         </div>
         <div style={{ flex: "0 0 auto" }}>{pagato}</div>
@@ -5079,7 +5086,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     onNota: (v) => salvaCampo(cd.id, "note", v),
                     viaggio: cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file"),
                     alloggio: (
-                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
+                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
                         {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || "Gestisci"}
                       </button>
                     ),
@@ -5109,7 +5116,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     onNota: (v) => salvaCampoGenerico("corsi_date_docenti", riga.id, "note", v),
                     viaggio: cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file"),
                     alloggio: (
-                      <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
+                      <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
                         {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || "Gestisci"}
                       </button>
                     ),
