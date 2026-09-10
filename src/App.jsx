@@ -21140,7 +21140,32 @@ function rigaPagamentoIscritto(label, valore, metodo, isMobile, daPagare = false
 // destra di "Contabilità classe" (mostraQuotaVenditore=true, solo admin)
 // sia nella scheda verticale del link pubblico per le master
 // (mostraQuotaVenditore=false, la quota venditore resta un dato riservato)
-function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) {
+// Gli allegati di un iscritto: modulo d'iscrizione, screen dell'acconto,
+// screen del recap. Sono la stessa cosa in due posti diversi — dentro il
+// riepilogo per la master, e nella barra degli attrezzi per lo staff —
+// quindi vivono qui invece che scritti due volte.
+function AllegatiIscritto({ i, inLinea = false }) {
+  const elenco = [
+    i.file_iscrizione && { percorso: i.file_iscrizione, etichetta: "Modulo iscrizione" },
+    i.file_screen_acconto && { percorso: i.file_screen_acconto, etichetta: "Screen acconto" },
+    i.file_screen_recap && { percorso: i.file_screen_recap, etichetta: "Screen recap" },
+  ].filter(Boolean);
+  if (elenco.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: inLinea ? "row" : "column", gap: inLinea ? 12 : 8, alignItems: inLinea ? "center" : "flex-start", flexWrap: inLinea ? "wrap" : "nowrap", minWidth: 0 }}>
+      {elenco.map((f) => (
+        <div key={f.etichetta} style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <svg width={inLinea ? 14 : 15} height={inLinea ? 14 : 15} viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+          </svg>
+          <AllegatoLink percorso={f.percorso} etichetta={f.etichetta} style={inLinea ? { fontSize: 12, fontWeight: 700 } : undefined} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, senzaAllegati = false }) {
   return (
     <>
       {dermografoAcquistato(i) && (
@@ -21233,23 +21258,10 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
             <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.accordi_commerciali}</div>
           </>
         )}
-        {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
+        {!senzaAllegati && (i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
           <div style={{ gridColumn: "1 / -1", paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 4 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Allegati</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                i.file_iscrizione && { percorso: i.file_iscrizione, etichetta: "Modulo iscrizione" },
-                i.file_screen_acconto && { percorso: i.file_screen_acconto, etichetta: "Screen acconto" },
-                i.file_screen_recap && { percorso: i.file_screen_recap, etichetta: "Screen recap" },
-              ].filter(Boolean).map((f) => (
-                <div key={f.etichetta} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                  </svg>
-                  <AllegatoLink percorso={f.percorso} etichetta={f.etichetta} />
-                </div>
-              ))}
-            </div>
+            <AllegatiIscritto i={i} />
           </div>
         )}
       </div>
@@ -26469,6 +26481,13 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       borderBottom: `1px solid ${CREAM_BORDER}`,
                     }}
                   >
+                    {/* gli allegati salgono qui, all'estremita' opposta
+                        degli attrezzi: aprire il modulo d'iscrizione e'
+                        un'azione come stampare o modificare, non un dato
+                        da leggere in fondo alla scheda dopo i soldi */}
+                    <div style={{ marginRight: "auto", minWidth: 0 }}>
+                      <AllegatiIscritto i={i} inLinea />
+                    </div>
                     <button
                       onClick={() => toggleRistampaDiploma(i)}
                       title="Ristampa solo questo (nel PDF di Stampa diplomi e Stampa segnaposti)"
@@ -26626,7 +26645,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
                     <div style={{ display: isMobile ? "block" : "table-cell", width: isMobile ? "auto" : "66.667%", verticalAlign: "top", padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
-                      <RiepilogoVenditaIscritto i={i} isMobile={isMobile} mostraQuotaVenditore={true} />
+                      <RiepilogoVenditaIscritto i={i} isMobile={isMobile} mostraQuotaVenditore={true} senzaAllegati />
 
                       {/* "Da incassare" resta dentro la colonna bianca,
                           allineato come Pagamenti/Allegati: il celeste
