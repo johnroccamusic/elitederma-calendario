@@ -12904,11 +12904,21 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
   async function persist(campi) {
     return supabase.from("master").update(campi).eq("id", masterRec.id);
   }
+  // Se questa master e' anche un venditore, la password e' UNA: quella
+  // della master, ricopiata sul venditore collegato. Erano due caselle
+  // separate per la stessa persona, e bastava cambiarne una per ritrovarsi
+  // con due chiavi diverse per la stessa porta — con la seconda che, non
+  // usata da nessuno, restava quella vecchia per mesi.
+  async function allineaPasswordVenditore(nuovaPassword) {
+    if (!masterRec.venditore_id) return;
+    await supabase.from("venditori").update({ password: (nuovaPassword || "").trim() || "0000" }).eq("id", masterRec.venditore_id);
+  }
   async function salvaPassword() {
     if ((masterRec.password || "") === password.trim()) return;
     const { error } = await persist({ password: password.trim() || null });
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    ricarica(["master"]);
+    await allineaPasswordVenditore(password);
+    ricarica(["master", "venditori"]);
   }
   async function toggleTasto(chiave, checked) {
     const attuali = permessiLocali;
@@ -12921,7 +12931,14 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
   async function salvaVenditoreCollegato(venditoreId) {
     const { error } = await persist({ venditore_id: venditoreId || null });
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    ricarica(["master"]);
+    // appena si collega, il venditore prende la password della master:
+    // altrimenti resterebbe la sua vecchia, e la casella qui sotto — che
+    // da adesso non si puo' piu' scrivere — mostrerebbe una cosa e la
+    // porta ne aprirebbe un'altra
+    if (venditoreId) {
+      await supabase.from("venditori").update({ password: (masterRec.password || "").trim() || "0000" }).eq("id", venditoreId);
+    }
+    ricarica(["master", "venditori"]);
   }
   const selVenditoreCollegato = (
     <select
@@ -13074,7 +13091,7 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
 // venditori, unica fonte per crearli/rinominarli/eliminarli) e la
 // password non si legge mai in chiaro: digitarne una nuova e premere
 // "Imposta password" la sostituisce via la Edge Function dedicata
-function RigaTabellaVenditore({ venditore, agende, ricarica }) {
+function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) {
   const isMobile = useIsMobile();
   const [permessiLocali, setPermessiLocali] = useState(venditore.permessi || []);
   useEffect(() => { setPermessiLocali(venditore.permessi || []); }, [venditore.permessi]);
@@ -13096,7 +13113,26 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["venditori"]);
   }
-  const campoPassword = (
+  // Se questo venditore e' la stessa persona di una master, la password
+  // non si scrive qui: e' quella della master, ricopiata. Una persona sola
+  // non puo' avere due chiavi per la stessa porta — e finche' erano due
+  // caselle indipendenti bastava cambiarne una per averle diverse senza
+  // accorgersene.
+  const campoPassword = masterCollegata ? (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+      <input
+        style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 13, background: "#EDF1F4", color: MUTED }}
+        value={masterCollegata.password || ""}
+        disabled
+      />
+      <span
+        title={`E' la password della master ${masterCollegata.nome}: si cambia da "Password Master"`}
+        style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, whiteSpace: "nowrap" }}
+      >
+        = master
+      </span>
+    </div>
+  ) : (
     <input
       style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 13 }}
       value={password}
@@ -13151,7 +13187,7 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
 // (dal tasto "Dashboard venditori" in home) trova subito la sua Dashboard
 // venditori, senza dover scegliere o inserire altro, e vede in home solo
 // i tasti qui spuntati — esattamente come un utente nominale
-function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
+function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
   const venditoriOrdinati = ordina(venditori, { nome: (v) => v.nome || "" });
@@ -13180,7 +13216,7 @@ function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun venditore definito in Impostazioni.</div>
       ) : isMobile ? (
         <div>
-          {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} agende={agende} ricarica={ricarica} />)}
+          {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} agende={agende} ricarica={ricarica} />)}
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
@@ -13203,7 +13239,7 @@ function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
               </tr>
             </thead>
             <tbody>
-              {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} agende={agende} ricarica={ricarica} />)}
+              {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} agende={agende} ricarica={ricarica} />)}
             </tbody>
           </table>
         </div>
@@ -13235,7 +13271,7 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
 
         <TabellaPasswordMaster master={master} agende={agende} venditori={venditori} ricarica={ricarica} />
 
-        <TabellaPasswordVenditori venditori={venditori} agende={agende} ricarica={ricarica} />
+        <TabellaPasswordVenditori venditori={venditori} master={master} agende={agende} ricarica={ricarica} />
 
         <div style={{ maxWidth: 400 }}>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password di questa rotellina</div>
