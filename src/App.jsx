@@ -8001,6 +8001,323 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
 // sopracciglia il secondo giorno, labbra il quinto ed eyeliner il sesto;
 // su un corso fatto in un altro modo viene fuori quello che c'e', invece
 // di tre voci scritte a mano che valgono per un corso solo.
+// ============================================================
+// "Riepilogo all'iscrizione" — la fotografia della scheda
+// ============================================================
+// La scheda allievo e' un record vivo: quando l'amministrazione corregge
+// una residenza o sistema un pagamento, il valore di prima sparisce. Il
+// venditore pero' deve poter rivedere quello che aveva scritto lui, e noi
+// dobbiamo poterlo confrontare con quello che e' diventato.
+//
+// Da qui la colonna `snapshot_iscrizione`: una copia della riga scritta a
+// ogni salvataggio fatto DA UN VENDITORE e mai a un salvataggio nostro.
+// Le iscrizioni piu' vecchie della colonna non ce l'hanno: per loro si
+// mostra la scheda di adesso, che e' il meglio che si possa dire.
+//
+// Questa pagina non modifica niente: e' un foglio da leggere.
+function datiRiepilogoIscrizione(iscritto) {
+  const grezzo = iscritto?.snapshot_iscrizione;
+  if (grezzo && typeof grezzo === "object" && grezzo.nome !== undefined) return grezzo;
+  return iscritto || {};
+}
+
+function CartaRiepilogo({ Icona, titolo, children, tinta = GOLD, sfondo = "#FAF5EC", bordo = "#EDE3D2" }) {
+  return (
+    <div style={{ background: sfondo, border: `1px solid ${bordo}`, borderRadius: 14, padding: 14, breakInside: "avoid" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 11 }}>
+        <span style={{ width: 26, height: 26, borderRadius: 8, background: "#EFE3CE", color: tinta, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icona size={15} color={tinta} />
+        </span>
+        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>{titolo}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// una coppia etichetta/valore: il valore sta in una casella bianca come nel
+// modulo vero, cosi' si riconosce dove finisce un dato e comincia l'altro
+function CampoRiepilogo({ etichetta, valore, tinta, larghezza = "1 1 120px", forte }) {
+  const vuoto = valore == null || valore === "" || valore === false;
+  return (
+    <div style={{ flex: larghezza, minWidth: 0 }}>
+      <div style={{ ...fontBody, fontSize: 10, color: MUTED, marginBottom: 3 }}>{etichetta}</div>
+      <div style={{
+        ...fontBody, fontSize: forte ? 14 : 12.5, fontWeight: forte ? 700 : 600,
+        color: vuoto ? MUTED : NAVY, background: tinta || "#fff",
+        border: `1px solid ${tinta ? "transparent" : "#E7DFD0"}`, borderRadius: 8,
+        padding: "8px 10px", minHeight: 17, wordBreak: "break-word",
+      }}>{vuoto ? "—" : valore}</div>
+    </div>
+  );
+}
+
+function RigaCampi({ children }) {
+  return <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>{children}</div>;
+}
+
+function EtichettaStato({ testo, colore, sfondo }) {
+  return (
+    <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: colore, background: sfondo, borderRadius: 8, padding: "5px 10px", whiteSpace: "nowrap" }}>{testo}</span>
+  );
+}
+
+// una delle tre quote (acconto, pre corso, saldo): imponibile, IVA come
+// differenza — mai scorporata a mano — totale, metodo e se e' stata pagata
+function QuotaRiepilogo({ titolo, Icona, d, prefisso, statoNoto = true, tinta }) {
+  const imponibile = d[`${prefisso}_imponibile`];
+  const totale = d[`${prefisso}_totale`];
+  const metodo = d[`${prefisso}_metodo`];
+  const interessi = d[`${prefisso}_interessi`];
+  const pagato = prefisso === "saldo" ? !!d.incassato : !!d[`${prefisso}_pagato`];
+  const iva = imponibile != null && totale != null ? round2(totale - imponibile) : null;
+  const extra = Array.isArray(d[`${prefisso}_extra`]) ? d[`${prefisso}_extra`] : [];
+  if (imponibile == null && totale == null && !metodo && extra.length === 0) return null;
+  return (
+    <CartaRiepilogo Icona={Icona} titolo={titolo} tinta={tinta}>
+      <RigaCampi>
+        <CampoRiepilogo etichetta="Imponibile" valore={imponibile != null ? fmtEuroErp2(imponibile) : null} />
+        <CampoRiepilogo etichetta="IVA" valore={iva != null ? fmtEuroErp2(iva) : null} tinta="#E8EEF6" />
+        <CampoRiepilogo etichetta="Totale" valore={totale != null ? fmtEuroErp2(totale) : null} />
+      </RigaCampi>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <CampoRiepilogo etichetta="Metodo" valore={metodo} larghezza="1 1 130px" />
+        {metodo === "Rate" && interessi > 0 && <CampoRiepilogo etichetta="Interessi" valore={fmtEuroErp2(interessi)} larghezza="0 1 110px" />}
+        {statoNoto && (
+          <div style={{ alignSelf: "flex-end", paddingBottom: 8 }}>
+            {pagato
+              ? <EtichettaStato testo="Pagato" colore="#2E7D32" sfondo="#E7F3E9" />
+              : <EtichettaStato testo="Da pagare" colore="#C0392B" sfondo="#FBE4E1" />}
+          </div>
+        )}
+      </div>
+      {extra.map((r, idx) => {
+        const ivaExtra = r.imponibile != null && r.totale != null ? round2(r.totale - r.imponibile) : null;
+        return (
+          <div key={idx} style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${CREAM_BORDER}` }}>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamento aggiuntivo {idx + 1}</div>
+            <RigaCampi>
+              <CampoRiepilogo etichetta="Imponibile" valore={r.imponibile != null ? fmtEuroErp2(r.imponibile) : null} />
+              <CampoRiepilogo etichetta="IVA" valore={ivaExtra != null ? fmtEuroErp2(ivaExtra) : null} tinta="#E8EEF6" />
+              <CampoRiepilogo etichetta="Totale" valore={r.totale != null ? fmtEuroErp2(r.totale) : null} />
+              <CampoRiepilogo etichetta="Metodo" valore={r.metodo} />
+            </RigaCampi>
+          </div>
+        );
+      })}
+    </CartaRiepilogo>
+  );
+}
+
+function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titoloChiusura = "Torna indietro" }) {
+  const isMobile = useIsMobile();
+  const d = datiRiepilogoIscrizione(iscritto);
+  const nomeCompleto = `${d.nome || ""} ${d.cognome || ""}`.trim().toUpperCase() || "—";
+
+  // I totali sono somme dei campi salvati, non un ricalcolo: l'IVA e' la
+  // differenza fra totale e imponibile, quota per quota. "Restano da
+  // pagare" e' quello che non risulta ancora incassato.
+  const quote = ["acconto", "precorso", "saldo"];
+  const totaleSenzaIva = round2(quote.reduce((s, q) => s + (d[`${q}_imponibile`] || 0), 0)
+    + ["acconto", "precorso"].reduce((s, q) => s + (Array.isArray(d[`${q}_extra`]) ? d[`${q}_extra`] : []).reduce((s2, r) => s2 + (r.imponibile || 0), 0), 0));
+  const totaleConIva = round2(quote.reduce((s, q) => s + (d[`${q}_totale`] || 0), 0)
+    + ["acconto", "precorso"].reduce((s, q) => s + (Array.isArray(d[`${q}_extra`]) ? d[`${q}_extra`] : []).reduce((s2, r) => s2 + (r.totale || 0), 0), 0));
+  const interessiTotali = round2(quote.reduce((s, q) => s + (d[`${q}_metodo`] === "Rate" ? (d[`${q}_interessi`] || 0) : 0), 0));
+  const restanoDaPagare = round2(
+    (d.acconto_pagato ? 0 : (d.acconto_totale || 0))
+    + (d.precorso_pagato ? 0 : (d.precorso_totale || 0))
+    + (d.incassato ? 0 : (d.saldo_totale || 0))
+  );
+
+  const modelle = Array.isArray(d.tipi_modelle) ? d.tipi_modelle : [];
+  const dermografo = d.dermografo || d.dermografo_scelta;
+  const giorni = Array.isArray(d.giorni_presenza) ? d.giorni_presenza : [];
+
+  return (
+    <div style={{ maxWidth: 1000, margin: "0 auto", padding: isMobile ? "4px 16px calc(env(safe-area-inset-bottom, 0px) + 120px)" : "4px 20px 40px" }}>
+      {onChiudi && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <TastoLivelloPrecedente titolo={titoloChiusura} onClick={onChiudi} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Riepilogo all'iscrizione</div>
+        </div>
+      )}
+
+      <div style={{ ...cardStyle, padding: isMobile ? 14 : 20 }}>
+        {/* intestazione: a sinistra di che foglio si tratta, a destra di chi */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
+          <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 3, whiteSpace: "nowrap" }}>Scheda allievo</span>
+          <span style={{ flex: 1, height: 1, background: GOLD, opacity: 0.5, minWidth: 20 }} />
+          <span style={{ ...fontDisplay, fontSize: isMobile ? 20 : 30, fontWeight: 700, color: NAVY, textAlign: "right", lineHeight: 1.1 }}>{nomeCompleto}</span>
+        </div>
+
+        {(corso || loc || corsoData) && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+            {[corso?.nome?.toUpperCase(), toTitleCase(loc?.nome || ""), corsoData ? fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine) : null].filter(Boolean).join(" · ")}
+            {d.ts && <> · iscritto il {fmtData(String(d.ts).slice(0, 10))}</>}
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, alignItems: "start" }}>
+          <CartaRiepilogo Icona={IconaPersonaSemplice} titolo="Dati dell'allievo">
+            <RigaCampi>
+              <CampoRiepilogo etichetta="Nome" valore={d.nome} />
+              <CampoRiepilogo etichetta="Cognome" valore={d.cognome} />
+            </RigaCampi>
+            <RigaCampi>
+              <CampoRiepilogo etichetta="Tutor" valore={d.tutor} />
+              <CampoRiepilogo etichetta="Numero di telefono" valore={d.telefono} />
+            </RigaCampi>
+            <RigaCampi>
+              <CampoRiepilogo etichetta="Email" valore={d.email} larghezza="1 1 100%" />
+            </RigaCampi>
+            {(d.indirizzo_residenza || d.citta_residenza || d.cap_residenza) && (
+              <RigaCampi>
+                <CampoRiepilogo etichetta="Indirizzo" valore={d.indirizzo_residenza} larghezza="1 1 160px" />
+                <CampoRiepilogo etichetta="Città" valore={d.citta_residenza} />
+                <CampoRiepilogo etichetta="CAP" valore={d.cap_residenza} larghezza="0 1 80px" />
+              </RigaCampi>
+            )}
+            <RigaCampi>
+              <CampoRiepilogo etichetta="Richiede fattura" valore={d.richiede_fattura ? "Sì" : "No"} larghezza="1 1 100%" />
+            </RigaCampi>
+            {d.richiede_fattura && (
+              <>
+                <RigaCampi>
+                  <CampoRiepilogo etichetta="Ditta" valore={d.fattura_ditta} larghezza="1 1 160px" />
+                  <CampoRiepilogo etichetta="P. IVA / CF" valore={d.fattura_piva} />
+                </RigaCampi>
+                <RigaCampi>
+                  <CampoRiepilogo etichetta="Indirizzo" valore={[d.fattura_indirizzo, d.fattura_civico].filter(Boolean).join(" ")} larghezza="1 1 160px" />
+                  <CampoRiepilogo etichetta="Città" valore={d.fattura_citta} />
+                  <CampoRiepilogo etichetta="Prov." valore={d.fattura_prov} larghezza="0 1 70px" />
+                  <CampoRiepilogo etichetta="CAP" valore={d.fattura_cap} larghezza="0 1 80px" />
+                </RigaCampi>
+                <RigaCampi>
+                  <CampoRiepilogo etichetta="Codice destinatario" valore={d.fattura_cod_dest} />
+                  <CampoRiepilogo etichetta="PEC" valore={d.fattura_pec} />
+                </RigaCampi>
+              </>
+            )}
+          </CartaRiepilogo>
+
+          <div style={{ display: "grid", gap: 12 }}>
+            <CartaRiepilogo Icona={IconaRicevutaErp} titolo="Dati di vendita">
+              <RigaCampi>
+                <CampoRiepilogo etichetta="Totale pattuito per la vendita (senza IVA)" valore={d.totale_pattuito != null ? fmtEuroErp2(d.totale_pattuito) : null} larghezza="1 1 100%" forte />
+              </RigaCampi>
+              <RigaCampi>
+                <CampoRiepilogo etichetta="Tipo di corso" valore={d.tipo_corso} />
+                {d.quota_speciale != null && <CampoRiepilogo etichetta="Quota speciale venditore" valore={fmtEuroErp2(d.quota_speciale)} />}
+              </RigaCampi>
+              {giorni.length > 0 && (
+                <RigaCampi>
+                  <CampoRiepilogo etichetta="Presenza al corso" valore={`Corso parziale — giorni ${giorni.join(", ")}`} larghezza="1 1 100%" />
+                </RigaCampi>
+              )}
+            </CartaRiepilogo>
+
+            <CartaRiepilogo Icona={IconaLaureaErp} titolo="Pacchetto / Kit">
+              <RigaCampi>
+                <CampoRiepilogo etichetta="Pacchetto/Kit" valore={d.pacchetto_kit} />
+                <CampoRiepilogo etichetta="Tipo di offerta" valore={d.tipo_offerta} />
+              </RigaCampi>
+              {dermografo && (
+                <>
+                  <RigaCampi>
+                    <CampoRiepilogo etichetta="Dermografo" valore={etichettaDermografo(dermografo)} larghezza="1 1 160px" />
+                    <CampoRiepilogo etichetta="Consegna" valore={d.dermografo_consegna === "casa" ? "Già ricevuto a casa" : d.dermografo_consegna === "corso" ? "Da ritirare al corso" : d.dermografo_consegna} />
+                  </RigaCampi>
+                  <RigaCampi>
+                    <CampoRiepilogo etichetta="Listino" valore={d.dermografo_prezzo_listino != null ? fmtEuroErp2(d.dermografo_prezzo_listino) : null} />
+                    <CampoRiepilogo etichetta="Sconto" valore={d.dermografo_sconto != null ? fmtEuroErp2(d.dermografo_sconto) : null} />
+                    <CampoRiepilogo etichetta="Totale" valore={d.dermografo_totale != null ? fmtEuroErp2(d.dermografo_totale) : null} />
+                  </RigaCampi>
+                  <RigaCampi>
+                    <CampoRiepilogo etichetta="Metodo" valore={d.dermografo_metodo} />
+                    <CampoRiepilogo etichetta="Stato" valore={d.dermografo_pagato ? "Pagato" : "Da pagare"} />
+                  </RigaCampi>
+                </>
+              )}
+            </CartaRiepilogo>
+          </div>
+
+          <QuotaRiepilogo titolo="Quota acconto" Icona={IconaCartaPos} d={d} prefisso="acconto" />
+          <QuotaRiepilogo titolo="Quota pre corso" Icona={IconaCalendarioCard} d={d} prefisso="precorso" />
+          <QuotaRiepilogo titolo="Da avere al corso" Icona={IconaBanconota} d={d} prefisso="saldo" />
+
+          <CartaRiepilogo Icona={IconaPortafoglio} titolo="Pagherà in totale" sfondo="#F4EDDF" bordo="#E4D6B8">
+            <RigaCampi>
+              <CampoRiepilogo etichetta="Totale senza IVA" valore={fmtEuroErp2(totaleSenzaIva)} />
+              <CampoRiepilogo etichetta="Totale con IVA" valore={fmtEuroErp2(totaleConIva)} tinta="#E8EEF6" />
+              {interessiTotali > 0 && <CampoRiepilogo etichetta="Totale con interessi" valore={fmtEuroErp2(round2(totaleConIva + interessiTotali))} />}
+            </RigaCampi>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, padding: "10px 12px", borderRadius: 10, background: "#FBF1D9", border: "1px solid #E8D9A0" }}>
+              <IconaPortafoglio size={17} />
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Restano da pagare:</span>
+              <span style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: restanoDaPagare > 0 ? "#C0392B" : "#2E7D32", marginLeft: "auto" }}>{fmtEuroErp2(restanoDaPagare)}</span>
+            </div>
+          </CartaRiepilogo>
+
+          <div style={{ gridColumn: isMobile ? "auto" : "1 / -1" }}>
+            <CartaRiepilogo Icona={IconaClipboardErp} titolo="Dati organizzativi">
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+                <div>
+                  <RigaCampi>
+                    <CampoRiepilogo etichetta="Accordi commerciali" valore={d.accordi_commerciali} larghezza="1 1 100%" />
+                  </RigaCampi>
+                  <RigaCampi>
+                    <CampoRiepilogo etichetta="Richiede modelle a pagamento?" valore={d.richiede_modelle ? "Sì" : "No"} larghezza="1 1 100%" />
+                  </RigaCampi>
+                  {d.richiede_modelle && (
+                    <>
+                      <RigaCampi>
+                        <CampoRiepilogo etichetta="Quante modelle" valore={d.numero_modelle != null ? String(d.numero_modelle) : null} />
+                        <CampoRiepilogo etichetta="Prezzo speciale modelle" valore={d.prezzo_speciale_modelle != null ? fmtEuroErp2(d.prezzo_speciale_modelle) : null} />
+                      </RigaCampi>
+                      {modelle.map((m, idx) => (
+                        <RigaCampi key={idx}>
+                          <CampoRiepilogo
+                            etichetta={`Trattamento modella ${idx + 1}${m?.giorno != null ? ` — giorno ${m.giorno}` : ""}`}
+                            valore={m?.tipo ? toTitleCase(String(m.tipo)) : null}
+                            larghezza="1 1 100%"
+                          />
+                        </RigaCampi>
+                      ))}
+                    </>
+                  )}
+                </div>
+                <div>
+                  <RigaCampi>
+                    <CampoRiepilogo etichetta="Taglia divisa" valore={d.taglia_divisa || "NO DIVISA"} larghezza="1 1 100%" />
+                  </RigaCampi>
+                  <RigaCampi>
+                    <CampoRiepilogo etichetta="Note" valore={d.note} larghezza="1 1 100%" />
+                  </RigaCampi>
+                  {[
+                    { etichetta: "Modulo d'iscrizione", percorso: d.file_iscrizione },
+                    { etichetta: "Screen acconto", percorso: d.file_screen_acconto },
+                    { etichetta: "Screen di recap", percorso: d.file_screen_recap },
+                    { etichetta: "Bonifico acconto", percorso: d.acconto_bonifico_file },
+                    { etichetta: "Bonifico pre corso", percorso: d.precorso_bonifico_file },
+                    { etichetta: "Bonifico saldo", percorso: d.saldo_bonifico_file },
+                  ].filter((a) => a.percorso).map((a) => (
+                    <div key={a.etichetta} style={{ marginBottom: 8 }}>
+                      <div style={{ ...fontBody, fontSize: 10, color: MUTED, marginBottom: 3 }}>{a.etichetta}</div>
+                      <div style={{ background: "#fff", border: "1px solid #E7DFD0", borderRadius: 8, padding: "8px 10px" }}>
+                        <AllegatoLink percorso={a.percorso} etichetta="apri il file" style={{ fontSize: 12.5, fontWeight: 700 }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CartaRiepilogo>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RiepilogoModelleAllievo({ iscritto }) {
   const posti = (Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [])
     .map((m, indice) => ({ ...m, indice }))
@@ -21582,7 +21899,7 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
-function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -21757,6 +22074,10 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
   // sulla classe, preme "Riepilogo amministrativo" e il codice glielo si
   // chiede li', come sempre.
   const [costiAperto, setCostiAperto] = useState((sottoVistaIniziale?.costiAperto ?? false) && adminSbloccato);
+  // l'allievo di cui si sta guardando la fotografia dell'iscrizione: per un
+  // venditore e' l'unica vista possibile, per noi si apre dal tasto in cima
+  // alla scheda
+  const [riepilogoIscritto, setRiepilogoIscritto] = useState(null);
 
   // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
   // quale iscritto in modifica, contabilità aperta o no): è così che i
@@ -22279,7 +22600,12 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
     setVista("form");
   }
 
+  // Un venditore non apre la scheda: apre la fotografia della propria
+  // iscrizione, che si legge e basta. Vale per qualunque allievo della
+  // classe, anche iscritto da un collega: quello che si vede e' sempre il
+  // riepilogo di com'era al momento dell'iscrizione.
   function apriModificaCompleta(i) {
+    if (venditoreLoggato) { setRiepilogoIscritto(i); window.scrollTo(0, 0); return; }
     setNome(i.nome); setCognome(i.cognome); setNote(i.note || "");
     setTutor(i.tutor || ""); setTelefono(i.telefono || "");
     setCittaResidenza(i.citta_residenza || ""); setIndirizzoResidenza(i.indirizzo_residenza || ""); setCapResidenza(i.cap_residenza || ""); setEmailIscritto(i.email || "");
@@ -22742,6 +23068,23 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
       setPagSaldo((prev) => ({ ...prev, bonificoFilePath: pathBonificoSaldo, bonificoFileNuovo: null }));
       setAccontoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoAccontoExtra[idx], bonificoFileNuovo: null, bonificoSegnalato: segnalatiAccontoExtra[idx] })));
       setPrecorsoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoPrecorsoExtra[idx], bonificoFileNuovo: null, bonificoSegnalato: segnalatiPrecorsoExtra[idx] })));
+
+      // La fotografia dell'iscrizione: si riscrive a ogni salvataggio
+      // fatto DA UN VENDITORE, mai a uno dell'amministrazione. Cosi'
+      // contiene sempre l'ultima versione lasciata da chi ha venduto, e le
+      // nostre correzioni non la toccano piu'. Si rilegge la riga invece di
+      // ricostruirla dal modulo: quello che finisce nella fotografia e'
+      // esattamente quello che e' finito nel database, residenza e allegati
+      // compresi, che vengono salvati con chiamate loro.
+      if (venditoreLoggato && idIscritto) {
+        const { data: rigaSalvata } = await supabase.from("iscritti").select("*").eq("id", idIscritto).maybeSingle();
+        if (rigaSalvata) {
+          const { snapshot_iscrizione: _vecchia, ...fotografia } = rigaSalvata;
+          await supabase.from("iscritti").update({
+            snapshot_iscrizione: { ...fotografia, _fotografata_il: new Date().toISOString(), _fotografata_da: venditoreLoggato.nome || null },
+          }).eq("id", idIscritto);
+        }
+      }
 
       ricarica(["iscritti", "acconti_da_verificare"]);
       return true;
@@ -23300,6 +23643,21 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
   }
 
   // riga "etichetta / importo / metodo" della sezione Pagamenti: da
+  // la fotografia prende tutta la pagina: non e' un pannello dentro la
+  // scheda, e' un altro foglio
+  if (riepilogoIscritto) {
+    return (
+      <RiepilogoIscrizione
+        iscritto={(iscritti || []).find((x) => x.id === riepilogoIscritto.id) || riepilogoIscritto}
+        corso={corso}
+        loc={loc}
+        corsoData={corsoData}
+        onChiudi={() => { setRiepilogoIscritto(null); window.scrollTo(0, 0); }}
+        titoloChiusura={venditoreLoggato ? "Classe" : "Scheda allievo"}
+      />
+    );
+  }
+
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px 160px" }}>
       {msgErrore && (
@@ -23596,6 +23954,23 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, modelleSolaLettur
           }}
           style={{ display: "flex", flexDirection: "column" }}
         >
+        {/* La fotografia di com'era la scheda quando il venditore l'ha
+            compilata. Sta in cima perche' e' la prima domanda che ci si fa
+            aprendo una scheda corretta piu' volte: "ma lui cos'aveva
+            scritto?" */}
+        {modificandoId && (
+          <button
+            onClick={() => { const i = (iscritti || []).find((x) => x.id === modificandoId); if (i) { setRiepilogoIscritto(i); window.scrollTo(0, 0); } }}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%",
+              ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: BG_CHIARO,
+              border: `1px solid ${GOLD}`, borderRadius: 14, padding: "10px 14px", cursor: "pointer", marginBottom: 14,
+            }}
+          >
+            <IconaClipboardErp size={16} color={GOLD} />
+            Riepilogo all'iscrizione
+          </button>
+        )}
         <div {...propsSezione("anagrafica")}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -55872,6 +56247,7 @@ export default function App() {
           quoteVenditoriSplit={quoteVenditoriSplit}
           key={schedaKey}
           ruoloUtente={ruoloUtente}
+          venditoreLoggato={venditoreLoggato}
           puoAssegnareModelle={puoAprireVista("gestionemodelle")}
           codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
           kitDefinizioni={kitDefinizioni}
