@@ -14697,11 +14697,17 @@ const CONFIG_DIPLOMI_DEFAULT = {
   nome_pos_x: 50, nome_pos_y: 45, nome_font_size: 24, nome_colore: "#ffffff", nome_allineamento: "center",
   data_pos_x: 50, data_pos_y: 65, data_font_size: 16, data_colore: "#ffffff", data_allineamento: "center",
   firma_pos_x: 50, firma_pos_y: 80, firma_font_size: 16, firma_colore: "#ffffff", firma_allineamento: "center",
-  // due linee verticali trascinabili che limitano solo la larghezza del
-  // nome allievo (non città/data né firma, né il resto del diploma): se
-  // il nome supera questa larghezza il font si rimpicciolisce in stampa
+  // due linee verticali trascinabili per il nome allievo: se il nome
+  // supera questa larghezza il font si rimpicciolisce in stampa
   nome_limite_sx: 20,
   nome_limite_dx: 80,
+  // e due per la firma della master. Qui i limiti non solo la stringono:
+  // la POSIZIONANO. La firma si scrive al centro fra i due segni, quindi
+  // firma_pos_x non serve piu' — un punto di ancoraggio piu' due limiti
+  // sono tre numeri per dire una cosa che se ne fa dire due, e prima o poi
+  // si contraddicono.
+  firma_limite_sx: 25,
+  firma_limite_dx: 75,
 };
 // i 3 testi scritti sui diplomi: chiave dei campi in font_diplomi, colore
 // dell'indicatore nell'editor visivo ed etichetta del testo di prova
@@ -15266,7 +15272,7 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
   const [dimensioniCanvas, setDimensioniCanvas] = useState(null);
   const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
   const [elementoTrascinato, setElementoTrascinato] = useState(null);
-  const [limiteNomeTrascinato, setLimiteNomeTrascinato] = useState(null); // "sx" | "dx" | null
+  const [limiteNomeTrascinato, setLimiteNomeTrascinato] = useState(null); // "nome-sx" | "firma-dx" | null
   const canvasRef = React.useRef(null);
   const contenitoreRef = React.useRef(null);
   const dragRef = React.useRef(null);
@@ -15602,7 +15608,11 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
     const rect = contenitoreRef.current.getBoundingClientRect();
     const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
     const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
-    setConfig((c) => ({ ...c, [`${d.chiave}_pos_x`]: x, [`${d.chiave}_pos_y`]: y }));
+    // la firma non si sposta in orizzontale: sta al centro fra i suoi due
+    // segni, e si muove trascinando quelli
+    setConfig((c) => (d.chiave === "firma"
+      ? { ...c, firma_pos_y: y }
+      : { ...c, [`${d.chiave}_pos_x`]: x, [`${d.chiave}_pos_y`]: y }));
   }
   function fineDrag() {
     const d = dragRef.current;
@@ -15612,30 +15622,43 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
     // durante il trascinamento la posizione è già stata aggiornata (in
     // tempo reale) nello stato locale da muoviDrag: qui la si salva solo,
     // rileggendola dallo stato attuale invece di ricalcolarla
-    aggiorna({ [`${d.chiave}_pos_x`]: config[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: config[`${d.chiave}_pos_y`] });
+    aggiorna(d.chiave === "firma"
+      ? { firma_pos_y: config.firma_pos_y }
+      : { [`${d.chiave}_pos_x`]: config[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: config[`${d.chiave}_pos_y`] });
   }
 
-  // due linee verticali trascinabili che limitano solo la larghezza del
-  // nome allievo: città/data e firma non ne sono toccate
-  function iniziaDragLimiteNome(e, lato) {
+  // Le linee verticali che limitano la larghezza di un testo: due per il
+  // nome allievo e due per la firma della master. Citta' e data non ne
+  // hanno — quel testo e' sempre corto e sta dove lo si mette.
+  //
+  // Un limite non scavalca mai l'altro: restano almeno due punti percentuali
+  // di distanza, altrimenti si finisce con una larghezza zero e un carattere
+  // che si rimpicciolisce all'infinito.
+  function iniziaDragLimiteNome(e, campo, lato) {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragLimiteNomeRef.current = { lato, pointerId: e.pointerId };
-    setLimiteNomeTrascinato(lato);
+    dragLimiteNomeRef.current = { campo, lato, pointerId: e.pointerId };
+    setLimiteNomeTrascinato(`${campo}-${lato}`);
   }
   function muoviDragLimiteNome(e) {
     const d = dragLimiteNomeRef.current;
     if (!d || e.pointerId !== d.pointerId || !contenitoreRef.current) return;
     const rect = contenitoreRef.current.getBoundingClientRect();
     const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-    setConfig((c) => ({ ...c, [`nome_limite_${d.lato}`]: x }));
+    setConfig((c) => ({
+      ...c,
+      [`${d.campo}_limite_${d.lato}`]: d.lato === "sx"
+        ? Math.min(x, (c[`${d.campo}_limite_dx`] ?? 100) - 2)
+        : Math.max(x, (c[`${d.campo}_limite_sx`] ?? 0) + 2),
+    }));
   }
   function fineDragLimiteNome() {
     const d = dragLimiteNomeRef.current;
     if (!d) return;
     dragLimiteNomeRef.current = null;
     setLimiteNomeTrascinato(null);
-    aggiorna({ [`nome_limite_${d.lato}`]: config[`nome_limite_${d.lato}`] });
+    const chiave = `${d.campo}_limite_${d.lato}`;
+    aggiorna({ [chiave]: config[chiave] });
   }
 
   const traduzioneAllineamento = { left: "flex-start", center: "center", right: "flex-end" };
@@ -15646,7 +15669,11 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
       <div style={subStyle}>
         Impostazioni globali per la stampa dei diplomi: i 3 font e la posizione di nome, città/data e firma sono
         uguali per tutti i corsi. Carica qui un diploma di riferimento per vedere dove finiranno i testi e
-        trascinarli nel punto giusto.
+        trascinarli nel punto giusto. Le linee tratteggiate segnano fin dove puo' arrivare un testo: quelle
+        <b style={{ color: "#C0392B" }}> rosse</b> per il nome dell'allievo, quelle
+        <b style={{ color: "#EA580C" }}> arancioni</b> per la firma della master. Se il testo le supera, in stampa
+        il carattere si rimpicciolisce da solo quel tanto che basta a starci dentro. La firma non si trascina in
+        orizzontale: si scrive sempre al centro fra i suoi due segni, quindi per spostarla si spostano quelli.
       </div>
 
       <div style={cardStyle}>
@@ -15709,19 +15736,22 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
                 finché non si disegna, nessun disegno finché non c'è il
                 canvas) */}
             <canvas ref={canvasRef} style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}` }} />
-            {["sx", "dx"].map((lato) => (
+            {[
+              { campo: "nome", colore: "#C0392B", cosa: "del nome allievo" },
+              { campo: "firma", colore: "#EA580C", cosa: "della firma" },
+            ].flatMap(({ campo, colore, cosa }) => ["sx", "dx"].map((lato) => (
               <div
-                key={lato}
-                onPointerDown={(e) => iniziaDragLimiteNome(e, lato)}
+                key={`${campo}-${lato}`}
+                onPointerDown={(e) => iniziaDragLimiteNome(e, campo, lato)}
                 onPointerMove={muoviDragLimiteNome}
                 onPointerUp={fineDragLimiteNome}
                 onPointerCancel={fineDragLimiteNome}
-                title="Trascina per impostare la larghezza massima del nome allievo"
+                title={`Trascina per impostare la larghezza massima ${cosa}`}
                 style={{
                   position: "absolute",
                   top: 0,
                   bottom: 0,
-                  left: `${config[`nome_limite_${lato}`]}%`,
+                  left: `${config[`${campo}_limite_${lato}`] ?? (lato === "sx" ? 25 : 75)}%`,
                   width: 20,
                   transform: "translateX(-50%)",
                   cursor: "ew-resize",
@@ -15730,9 +15760,9 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
                   touchAction: "none",
                 }}
               >
-                <div style={{ width: 0, height: "100%", borderLeft: `2px dashed #C0392B`, background: limiteNomeTrascinato === lato ? "rgba(192,57,43,0.08)" : "transparent" }} />
+                <div style={{ width: 0, height: "100%", borderLeft: `2px dashed ${colore}`, background: limiteNomeTrascinato === `${campo}-${lato}` ? `${colore}16` : "transparent" }} />
               </div>
-            ))}
+            )))}
             {ELEMENTI_DIPLOMA.map(({ chiave, colore, testoProva, campoFont, famigliaFont }) => (
               <div
                 key={chiave}
@@ -15742,31 +15772,56 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
                 onPointerCancel={fineDrag}
                 style={{
                   position: "absolute",
-                  left: `${config[`${chiave}_pos_x`]}%`,
+                  left: chiave === "firma"
+                    ? `${((Number(config.firma_limite_sx ?? 25) + Number(config.firma_limite_dx ?? 75)) / 2)}%`
+                    : `${config[`${chiave}_pos_x`]}%`,
                   top: `${config[`${chiave}_pos_y`]}%`,
                   transform: "translate(-50%, -50%)",
                   display: "flex",
-                  justifyContent: traduzioneAllineamento[config[`${chiave}_allineamento`]] || "center",
+                  justifyContent: chiave === "firma" ? "center" : (traduzioneAllineamento[config[`${chiave}_allineamento`]] || "center"),
                   minWidth: 40,
-                  cursor: "grab",
+                  // la firma occupa esattamente lo spazio fra i suoi due
+                  // segni: cosi' si vede subito se il nome ci sta o no
+                  ...(chiave === "firma" ? { width: `${Math.max(2, Number(config.firma_limite_dx ?? 75) - Number(config.firma_limite_sx ?? 25))}%` } : {}),
+                  cursor: chiave === "firma" ? "ns-resize" : "grab",
                   padding: 4,
                   border: `2px dashed ${colore}`,
                   borderRadius: 4,
+                  boxSizing: "border-box",
                   background: elementoTrascinato === chiave ? `${colore}22` : "transparent",
                 }}
               >
-                <span
-                  style={{
-                    fontSize: config[`${chiave}_font_size`] * scalaAnteprimaTesto,
-                    color: config[`${chiave}_colore`],
-                    fontFamily: config[campoFont] ? famigliaFont : undefined,
-                    whiteSpace: "nowrap",
-                    userSelect: "none",
-                    pointerEvents: "none",
-                  }}
-                >
-                  {testoProva}
-                </span>
+                {chiave === "firma" ? (
+                  /* stessa regola della stampa: il carattere scende finche'
+                     la firma non sta fra i due segni */
+                  <ValoreAdattato
+                    base={config.firma_font_size * scalaAnteprimaTesto}
+                    minimo={6}
+                    style={{
+                      color: config.firma_colore,
+                      fontFamily: config[campoFont] ? famigliaFont : undefined,
+                      userSelect: "none",
+                      pointerEvents: "none",
+                      textAlign: "center",
+                      width: "100%",
+                    }}
+                  >
+                    {testoProva}
+                  </ValoreAdattato>
+                ) : (
+                  <span
+                    style={{
+                      fontSize: config[`${chiave}_font_size`] * scalaAnteprimaTesto,
+                      color: config[`${chiave}_colore`],
+                      fontFamily: config[campoFont] ? famigliaFont : undefined,
+                      whiteSpace: "nowrap",
+                      userSelect: "none",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {testoProva}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -15799,15 +15854,22 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
                   onChange={(e) => aggiorna({ [`${chiave}_colore`]: e.target.value })}
                   style={{ width: 36, height: 30, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6 }}
                 />
-                <select
-                  value={config[`${chiave}_allineamento`]}
-                  onChange={(e) => aggiorna({ [`${chiave}_allineamento`]: e.target.value })}
-                  style={{ ...inputStyle, width: "auto" }}
-                >
-                  <option value="left">Sinistra</option>
-                  <option value="center">Centro</option>
-                  <option value="right">Destra</option>
-                </select>
+                {chiave === "firma" ? (
+                  /* la firma non ha un allineamento da scegliere: si scrive
+                     al centro fra i suoi due segni arancioni. Lasciare una
+                     tendina che non cambia niente e' peggio che toglierla */
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Centrata fra i due segni arancioni</span>
+                ) : (
+                  <select
+                    value={config[`${chiave}_allineamento`]}
+                    onChange={(e) => aggiorna({ [`${chiave}_allineamento`]: e.target.value })}
+                    style={{ ...inputStyle, width: "auto" }}
+                  >
+                    <option value="left">Sinistra</option>
+                    <option value="center">Centro</option>
+                    <option value="right">Destra</option>
+                  </select>
+                )}
               </div>
             ))}
           </div>
@@ -22528,9 +22590,24 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           colore: config.data_colore, allineamento: config.data_allineamento, font: fontData,
         });
         if (testoFirma) {
+          // La firma sta fra i suoi due segni: si scrive al centro fra
+          // loro, e se non ci sta il carattere scende finche' non entra.
+          // Una master che si chiama "Maria Antonietta Della Valle" e una
+          // che si chiama "Ada" devono stare tutte e due dentro la stessa
+          // riga, senza che nessuno vada a ritoccare il corpo a mano.
+          const sxFirma = Number(config.firma_limite_sx ?? 25);
+          const dxFirma = Number(config.firma_limite_dx ?? 75);
+          const larghezzaMaxFirma = Math.max(0, (dxFirma - sxFirma) / 100 * larghezzaPaginaDiploma);
+          let firmaFontSize = config.firma_font_size;
+          if (larghezzaMaxFirma > 0) {
+            const larghezzaTestoFirma = fontFirma.widthOfTextAtSize(testoFirma, firmaFontSize);
+            if (larghezzaTestoFirma > larghezzaMaxFirma) {
+              firmaFontSize = Math.max(6, (larghezzaMaxFirma / larghezzaTestoFirma) * firmaFontSize);
+            }
+          }
           disegnaTestoDiploma(pagina, testoFirma, {
-            posX: config.firma_pos_x, posY: config.firma_pos_y, fontSize: config.firma_font_size,
-            colore: config.firma_colore, allineamento: config.firma_allineamento, font: fontFirma,
+            posX: (sxFirma + dxFirma) / 2, posY: config.firma_pos_y, fontSize: firmaFontSize,
+            colore: config.firma_colore, allineamento: "center", font: fontFirma,
           });
         }
       }
