@@ -8047,6 +8047,156 @@ function PaginaDashboardVenditori({
   );
 }
 
+// ---------- Slide dei corsi ------------------------------------------
+//
+// Un PDF per corso: le slide che la master proietta in aula. Si caricano
+// da Setting e si scaricano dalla dashboard master, ma solo nella
+// finestra in cui servono — da una settimana prima dell'inizio alla fine
+// del corso. Prima non serve, dopo non deve piu' girare.
+//
+// Il PDF sta in un secchio NON pubblico, ed e' l'unico dei nostri.
+// Il motivo: se l'indirizzo fosse pubblico e definitivo, far sparire il
+// link dalla scheda non impedirebbe niente a chi l'ha salvato — la
+// finestra sarebbe una tendina davanti a una porta aperta. Cosi' invece
+// il collegamento si firma al momento del clic, dura pochi minuti e lo
+// firma solo chi e' dentro la finestra.
+const BUCKET_SLIDE = "slide-corsi";
+const GIORNI_ANTICIPO_SLIDE = 7;
+
+// La finestra in cui le slide si possono scaricare: da una settimana
+// prima dell'inizio all'ultimo giorno del corso, estremi compresi.
+function slideDisponibiliPer(corsoData, oggiStr = dataOggiStr()) {
+  if (!corsoData?.data_inizio || !corsoData?.data_fine) return false;
+  return oggiStr >= addGiorni(corsoData.data_inizio, -GIORNI_ANTICIPO_SLIDE) && oggiStr <= corsoData.data_fine;
+}
+
+// Il tasto che la master vede sulla scheda del corso. Il collegamento non
+// e' scritto nell'HTML: si chiede al momento del clic e vale cinque
+// minuti. Un link che vive nella pagina e' un link che si copia.
+function TastoScaricaSlide({ corso }) {
+  const [inCorso, setInCorso] = useState(false);
+  const [errore, setErrore] = useState("");
+
+  async function scarica(e) {
+    e.stopPropagation();
+    if (inCorso) return;
+    setInCorso(true); setErrore("");
+    const { data, error } = await supabase.storage.from(BUCKET_SLIDE).createSignedUrl(corso.slide_pdf_path, 300);
+    setInCorso(false);
+    if (error || !data?.signedUrl) { setErrore("Slide non disponibili, avvisa la sede."); return; }
+    window.open(data.signedUrl, "_blank", "noopener");
+  }
+
+  return (
+    <div onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={scarica}
+        style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "9px 14px", cursor: inCorso ? "default" : "pointer", lineHeight: 1.2, display: "inline-flex", alignItems: "center", gap: 7 }}
+      >
+        <IconaDiplomaRiga size={15} color={GOLD} />
+        {inCorso ? "Preparo…" : "Scarica le slide"}
+      </button>
+      {errore && <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", marginTop: 4 }}>{errore}</div>}
+    </div>
+  );
+}
+
+function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
+  const isMobile = useIsMobile();
+  const [caricando, setCaricando] = useState(false);
+  const haSlide = !!corso.slide_pdf_path;
+
+  async function carica(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.type !== "application/pdf") { onMessaggio("Le slide vanno caricate in PDF."); return; }
+    setCaricando(true); onMessaggio("");
+
+    // il nome del file lo decidiamo noi: quello scelto da chi carica puo'
+    // avere accenti, spazi e virgolette, e finirebbe dentro un indirizzo
+    const percorso = `${corso.id}/${Date.now()}.pdf`;
+    const { error } = await supabase.storage.from(BUCKET_SLIDE).upload(percorso, file, { contentType: "application/pdf", upsert: true });
+    if (error) { setCaricando(false); onMessaggio("Caricamento non riuscito: " + error.message); return; }
+
+    // il vecchio si cancella solo DOPO che il nuovo e' salito: se qualcosa
+    // va storto meglio due file che nessuno
+    const vecchio = corso.slide_pdf_path;
+    const { error: erroreDb } = await supabase.from("corsi")
+      .update({ slide_pdf_path: percorso, slide_pdf_nome: file.name, slide_caricato_il: new Date().toISOString() })
+      .eq("id", corso.id);
+    setCaricando(false);
+    if (erroreDb) { onMessaggio("Salvato il file ma non la scheda: " + testoErrore(erroreDb)); return; }
+    if (vecchio && vecchio !== percorso) await supabase.storage.from(BUCKET_SLIDE).remove([vecchio]);
+    onMessaggio(`Slide caricate per ${corso.nome}.`);
+    ricarica(["corsi"]);
+  }
+
+  async function rimuovi() {
+    if (!window.confirm(`Tolgo le slide di ${corso.nome}? Le master non potranno più scaricarle.`)) return;
+    const percorso = corso.slide_pdf_path;
+    const { error } = await supabase.from("corsi")
+      .update({ slide_pdf_path: null, slide_pdf_nome: null, slide_caricato_il: null })
+      .eq("id", corso.id);
+    if (error) { onMessaggio("Non rimosse: " + testoErrore(error)); return; }
+    if (percorso) await supabase.storage.from(BUCKET_SLIDE).remove([percorso]);
+    onMessaggio(`Slide rimosse da ${corso.nome}.`);
+    ricarica(["corsi"]);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 0", borderBottom: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+      <span style={{ width: 10, height: 10, borderRadius: "50%", background: corso.colore || NAVY, flexShrink: 0 }} />
+      <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{corso.nome}</div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: haSlide ? "#2E7D32" : MUTED, marginTop: 1, overflowWrap: "anywhere" }}>
+          {haSlide
+            ? `${corso.slide_pdf_nome || "slide.pdf"}${corso.slide_caricato_il ? ` · caricate il ${fmtData(String(corso.slide_caricato_il).slice(0, 10))}` : ""}`
+            : "Nessuna slide caricata"}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+        <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: haSlide ? NAVY : "#fff", background: haSlide ? "#fff" : NAVY, border: `1px solid ${haSlide ? CREAM_BORDER : NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: caricando ? "default" : "pointer", whiteSpace: "nowrap" }}>
+          {caricando ? "Carico…" : haSlide ? "Sostituisci" : "Carica PDF"}
+          <input type="file" accept="application/pdf" onChange={carica} disabled={caricando} style={{ display: "none" }} />
+        </label>
+        {haSlide && (
+          <button onClick={rimuovi} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C9C2`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+            Rimuovi
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PaginaSlideCorsi({ corsi, ricarica, onBack, titolo = "Associa slide del corso" }) {
+  const [msg, setMsg] = useState("");
+  const elenco = [...(corsi || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
+  const conSlide = elenco.filter((c) => c.slide_pdf_path).length;
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title={titolo} onBack={onBack} />
+
+      <div style={{ ...cardStyle }}>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.55, marginBottom: 16 }}>
+          Un PDF per corso: sono le slide che la master proietta in aula. Le trova da sola nella sua dashboard, sulla scheda del corso,
+          <b> da una settimana prima dell'inizio fino all'ultimo giorno</b>. Prima non compare, dopo il tasto sparisce e il file non si scarica più.
+        </div>
+        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>
+          {conSlide} corsi su {elenco.length} hanno le slide
+        </div>
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.includes("non") || msg.includes("Non") ? "#C0392B" : "#2E7D32", margin: "10px 0" }}>{msg}</div>}
+        {elenco.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun corso definito.</div>}
+        {elenco.map((c) => (
+          <RigaSlideCorso key={c.id} corso={c} ricarica={ricarica} onMessaggio={setMsg} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Dashboard master ----------
 // riquadro data compatto per CardDataMaster: un solo giorno "19", un
 // intervallo nello stesso mese "17-19", un intervallo a cavallo di due
@@ -8116,6 +8266,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               tasto acceso invita solo ad aprirla per niente. E' la stessa
               pagina del link che si manda alla master — di sola lettura,
               tranne la spunta "incassato". */}
+          {/* le slide compaiono una settimana prima e spariscono con
+              l'ultimo giorno del corso: e' il tempo in cui servono per
+              prepararsi e per proiettarle, non uno di piu' */}
+          {corso?.slide_pdf_path && slideDisponibiliPer(corsoData, oggiStr) && (
+            <TastoScaricaSlide corso={corso} />
+          )}
           {contabilitaVisibile && (
             <button
               onClick={(e) => { e.stopPropagation(); onApriContabilita(corsoData); }}
@@ -13952,7 +14108,7 @@ function DefinizioneProvvigioni() {
   );
 }
 
-function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
+function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
   const [maniglieAttive, salvaManiglieAttive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
@@ -14206,6 +14362,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
       voci: [
         { chiave: "corsi", etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
+        { chiave: "slidecorsi", etichetta: "Associa slide del corso", Icona: IconaDiplomaRiga, onClick: onApriSlideCorsi },
         { chiave: "provvigioni", etichetta: "Definizione provvigioni", Icona: IconaTargetRiga, onClick: () => setShowProvvigioniModal(true) },
         { chiave: "tipimodelle", etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
         { chiave: "hotel", etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
@@ -55778,6 +55935,7 @@ export default function App() {
     spesaform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "spese", "spese_attribuzioni"],
     abbonamentoform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi", "abbonamenti_attribuzioni"],
     fontdiplomi: ["font_diplomi", "segnaposti_config"],
+    slidecorsi: ["corsi"],
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
@@ -56863,6 +57021,7 @@ export default function App() {
             onApriFontDiplomi: () => setView("fontdiplomi"),
             onApriSettingLoghi: () => setView("settingloghi"),
             onApriTipologieKit: () => setView("contenutokit"),
+            onApriSlideCorsi: () => setView("slidecorsi"),
             onApriGestioneMaster: apriGestioneMaster,
             onApriGestioneVenditori: apriGestioneVenditori,
             onApriGestioneLeve: apriGestioneLeve,
@@ -56872,6 +57031,10 @@ export default function App() {
             titolo: etichettaTasto("home", "impostazioni", "Impostazioni"),
           }}
         />
+      )}
+
+      {view === "slidecorsi" && (
+        <PaginaSlideCorsi corsi={corsi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "gestionedate" && (
