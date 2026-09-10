@@ -2922,7 +2922,7 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
   // calcola il programma: in ogni caso comanda quello che hai scritto tu.
   const lordoDigitato = modo === "lordo" && inputTesto.trim() !== "" ? round2(parseNum(inputTesto)) : null;
   const { iva, lordo } = calcolaIvaELordo(netto, aliquota, lordoDigitato);
-  const aliquotaÈStandard = ALIQUOTE_IVA_STANDARD.includes(Number(aliquota));
+  const aliquotaEStandard = ALIQUOTE_IVA_STANDARD.includes(Number(aliquota));
 
   function cambiaModo(nuovoModo) {
     if (nuovoModo === modo) return;
@@ -2939,44 +2939,76 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
   // caratteri e spaziature ridotte, e con il selettore Netto/Lordo su una
   // riga sua invece che accanto al campo
   const stretto = useIsMobile();
-  const etichetta = { ...fontBody, fontSize: stretto ? 9.5 : 12, color: MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.2 };
-  const campo = stretto ? { ...inputStyle, padding: "7px 8px", fontSize: 12.5 } : inputStyle;
+  const etichetta = { ...fontBody, fontSize: stretto ? 9 : 10.5, color: MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, lineHeight: 1.2 };
+  const campo = { ...inputStyle, padding: stretto ? "8px 22px 8px 9px" : "11px 26px 11px 12px", fontSize: stretto ? 14 : 17, fontWeight: 700, borderRadius: 10 };
+  // il titolo dice anche cosa sta chiedendo la casella: "prezzo lordo" o
+  // "prezzo netto" cambia sotto il nome invece di ripetersi come etichetta
+  // sopra il campo, dove rubava una riga per dire una parola
+  const Icona = titolo.toLowerCase().startsWith("acquisto") ? IconaCarrelloPos : IconaCatEtichetta;
 
   return (
-    <div style={{ padding: stretto ? 8 : 12, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#FAF8F2", minWidth: 0 }}>
-      <div style={{ ...fontBody, fontSize: stretto ? 11.5 : 12.5, fontWeight: 700, color: NAVY, marginBottom: stretto ? 6 : 10 }}>{titolo}</div>
-      <div style={{ display: "flex", flexDirection: stretto ? "column" : "row", gap: stretto ? 6 : 10, marginBottom: stretto ? 6 : 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={etichetta}>{stretto ? (modo === "netto" ? "Prezzo netto" : "Prezzo lordo") : `Prezzo ${modo === "netto" ? "netto (IVA esclusa)" : "lordo (IVA inclusa)"}${obbligatorio ? "" : " — opzionale"}`}</div>
-          <input style={campo} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
-        </div>
-        <div style={{ display: "flex", alignItems: stretto ? "stretch" : "flex-end", marginBottom: stretto ? 0 : 14 }}>
-          <div style={{ display: "flex", flex: stretto ? 1 : undefined, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, overflow: "hidden" }}>
-            <button type="button" onClick={() => cambiaModo("netto")} style={{ ...fontBody, flex: stretto ? 1 : undefined, fontSize: stretto ? 11 : 12, fontWeight: 700, padding: stretto ? "6px 8px" : "10px 12px", border: "none", cursor: "pointer", background: modo === "netto" ? NAVY : "#fff", color: modo === "netto" ? "#fff" : NAVY }}>Netto</button>
-            <button type="button" onClick={() => cambiaModo("lordo")} style={{ ...fontBody, flex: stretto ? 1 : undefined, fontSize: stretto ? 11 : 12, fontWeight: 700, padding: stretto ? "6px 8px" : "10px 12px", border: "none", cursor: "pointer", background: modo === "lordo" ? NAVY : "#fff", color: modo === "lordo" ? "#fff" : NAVY }}>Lordo</button>
+    <div style={{ padding: stretto ? 10 : 14, borderRadius: 14, border: `1px solid ${CREAM_BORDER}`, background: "#FAF6EE", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: stretto ? 8 : 10, marginBottom: stretto ? 8 : 12 }}>
+        <span style={{ width: stretto ? 30 : 38, height: stretto ? 30 : 38, borderRadius: 10, background: "#EFE3CE", color: GOLD, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icona size={stretto ? 16 : 20} color={GOLD} />
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: stretto ? 14 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{titolo}{obbligatorio ? " *" : ""}</div>
+          <div style={{ ...fontBody, fontSize: stretto ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.3 }}>
+            {modo === "netto" ? "Prezzo netto (IVA esclusa)" : "Prezzo lordo (IVA inclusa)"}
           </div>
         </div>
       </div>
-      <div style={{ display: "flex", gap: stretto ? 6 : 10, alignItems: "flex-end", marginBottom: stretto ? 6 : 10 }}>
+
+      <div style={{ display: "flex", alignItems: "center", gap: stretto ? 6 : 8, marginBottom: stretto ? 8 : 12 }}>
+        <div style={{ position: "relative", flex: "1 1 0", minWidth: 0 }}>
+          <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
+          <span style={{ position: "absolute", right: stretto ? 8 : 11, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: stretto ? 12 : 14, color: MUTED, pointerEvents: "none" }}>€</span>
+        </div>
+        {/* Netto e Lordo attaccati al campo: sono due modi di leggere quel
+            numero, non due impostazioni che stanno altrove */}
+        <div style={{ display: "flex", flexShrink: 0, borderRadius: 10, overflow: "hidden", border: `1px solid ${CREAM_BORDER}` }}>
+          {["netto", "lordo"].map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => cambiaModo(m)}
+              style={{
+                ...fontBody, fontSize: stretto ? 10.5 : 12.5, fontWeight: 700, padding: stretto ? "9px 8px" : "12px 12px",
+                border: "none", cursor: "pointer", whiteSpace: "nowrap",
+                background: modo === m ? NAVY : "#fff", color: modo === m ? "#fff" : NAVY,
+              }}
+            >
+              {m === "netto" ? "Netto" : "Lordo"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: stretto ? 6 : 10, alignItems: "flex-end", marginBottom: stretto ? 8 : 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={etichetta}>Aliquota IVA</div>
           <select
-            style={campo}
-            value={aliquotaÈStandard ? String(Number(aliquota)) : "altra"}
+            style={{ ...campo, fontWeight: 600, background: "#F1EDE4" }}
+            value={aliquotaEStandard ? String(Number(aliquota)) : "altra"}
             onChange={(e) => onCambiaAliquota(e.target.value === "altra" ? aliquota : Number(e.target.value))}
           >
             {ALIQUOTE_IVA_STANDARD.map((a) => <option key={a} value={a}>{a}%</option>)}
             <option value="altra">Altra…</option>
           </select>
         </div>
-        {!aliquotaÈStandard && (
+        {!aliquotaEStandard && (
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={etichetta}>{stretto ? "Personalizzata %" : "Aliquota personalizzata (%)"}</div>
             <input style={campo} inputMode="decimal" value={aliquota ?? ""} onChange={(e) => onCambiaAliquota(parseNum(e.target.value))} placeholder="es. 15" />
           </div>
         )}
       </div>
-      <div style={{ ...fontBody, fontSize: stretto ? 10.5 : 12.5, color: MUTED, lineHeight: 1.3 }}>
+
+      {/* la riga di verifica: da netto a lordo, con l'aliquota usata. E' il
+          posto dove ci si accorge di aver scritto il numero nel modo
+          sbagliato */}
+      <div style={{ ...fontBody, fontSize: stretto ? 10 : 12, color: MUTED, lineHeight: 1.35, background: "#F1EDE4", borderRadius: 10, padding: stretto ? "7px 9px" : "9px 12px" }}>
         {netto != null
           ? <>{fmtEuroIva(netto)} netto → <b style={{ color: NAVY }}>{fmtEuroIva(lordo)}</b> lordo, IVA {aliquota}%</>
           : "Nessun prezzo inserito."}
