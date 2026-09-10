@@ -14390,7 +14390,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
       voci: [
         { chiave: "corsi", etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
-        { chiave: "slidecorsi", etichetta: "Associa slide del corso", Icona: IconaDiplomaRiga, onClick: onApriSlideCorsi },
         { chiave: "provvigioni", etichetta: "Definizione provvigioni", Icona: IconaTargetRiga, onClick: () => setShowProvvigioniModal(true) },
         { chiave: "tipimodelle", etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
         { chiave: "hotel", etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
@@ -14408,10 +14407,15 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       ],
     },
     {
-      // nasce vuoto di proposito: e' il gruppo in cui chi programma
-      // trascina le voci che riguardano i corsi, prendendole dagli altri
+      // Nato vuoto: era il gruppo in cui chi programma trascina le voci
+      // che riguardano i corsi, prendendole dagli altri. Le slide sono la
+      // prima a nascerci dentro invece di arrivarci trascinata — perche'
+      // e' del corso e di nient'altro, e metterla altrove voleva dire
+      // farla ritrovare in una scheda dove nessuno la cerca.
       chiave: "corsi", titolo: "Corsi", coloreBg: "#EDE4F5", Icona: IconaCorsoRiga,
-      voci: [],
+      voci: [
+        { chiave: "slidecorsi", etichetta: "Associa slide del corso", Icona: IconaDiplomaRiga, onClick: onApriSlideCorsi },
+      ],
     },
     {
       chiave: "venditeprodotti", titolo: "Vendite prodotti", coloreBg: "#F5DCC8", Icona: IconaGruppoVenditeProdotti,
