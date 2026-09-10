@@ -3489,14 +3489,14 @@ function postiMaxEffettivi(cd, corso, loc) {
 // semaforo() già in uso altrove nell'app (Sì/NO verde/rosso), qui applicato
 // a una singola riga di pagamento (acconto/pre corso, comprese le righe
 // aggiunte con "+")
-function SemaforoPagamento({ pagato, onClick }) {
+function SemaforoPagamento({ pagato, onClick, piu = 0 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={pagato ? "Segna come da pagare" : "Segna come pagato"}
       style={{
-        ...fontBody, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        ...fontBody, fontSize: 11.5 + piu, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
         border: "none", borderRadius: 10, padding: "6px 10px", flexShrink: 0,
         display: "inline-flex", alignItems: "center", gap: 5,
         background: pagato ? "#E7F3E9" : "#FBE4E1", color: pagato ? "#1F7A33" : "#C0392B",
@@ -3505,8 +3505,8 @@ function SemaforoPagamento({ pagato, onClick }) {
       {/* la spunta piena a sinistra: lo stato si legge dal colore e dal
           segno prima ancora della parola */}
       {pagato
-        ? <IconaSpuntaCerchio size={14} color="#1F7A33" />
-        : <IconaOrologioCard size={14} />}
+        ? <IconaSpuntaCerchio size={14 + piu} color="#1F7A33" />
+        : <IconaOrologioCard size={14 + piu} />}
       {pagato ? "Pagato" : "Da pagare"}
     </button>
   );
@@ -3555,6 +3555,16 @@ function BoxLarghezzaFissa({ larghezza = 600, attivo, children }) {
   );
 }
 
+// Da telefono il titolo di un riquadro va su due righe: la prima parola
+// sopra, il resto sotto — "QUOTA / ACCONTO", "DA AVERE / AL CORSO". Su una
+// riga sola si portava via mezza larghezza, e quella larghezza serve ai
+// numeri: spezzandolo si guadagna spazio da spendere in corpo del testo.
+function titoloSuDueRighe(testo) {
+  const parole = String(testo || "").trim().split(/\s+/);
+  if (parole.length < 2) return [testo, null];
+  return [parole[0], parole.slice(1).join(" ")];
+}
+
 // "+ Aggiungi un altro acconto" e simili: testo in oro, senza cornice,
 // appoggiato in fondo a destra dentro la nuvola della quota.
 function TastoAggiungiQuota({ testo, onClick }) {
@@ -3570,6 +3580,12 @@ function TastoAggiungiQuota({ testo, onClick }) {
 }
 
 function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip, azioneInFondo }) {
+  const isMobile = useIsMobile();
+  // Da telefono il titolo va su due righe e tutto il resto cresce di tre
+  // punti: lo spazio che il titolo lascia libero si spende in corpo del
+  // testo, che e' quello che serve su uno schermo rimpicciolito.
+  const piu = isMobile ? 3 : 0;
+  const [titoloSopra, titoloSotto] = isMobile ? titoloSuDueRighe(titolo) : [titolo, null];
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   // Titolo, i tre importi e lo stato su una riga sola, separati da fili
   // verticali; il metodo di pagamento sotto, dietro una linea. Prima erano
@@ -3581,15 +3597,15 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
   // misura del campo, non un'altra cosa da leggere
   const campoImporto = (etichetta, contenuto) => (
     <div style={{ flex: "1 1 0", minWidth: 0 }}>
-      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4 }}>{etichetta}</div>
+      <div style={{ ...fontBody, fontSize: 11 + piu, color: MUTED, marginBottom: 4 }}>{etichetta}</div>
       <div style={{ position: "relative" }}>
         {contenuto}
-        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5 + piu, color: MUTED, pointerEvents: "none" }}>€</span>
       </div>
     </div>
   );
   const stileImporto = (bloccato) => ({
-    ...campoAreaScheda, paddingRight: 26, fontWeight: 700,
+    ...campoAreaScheda, paddingRight: 26 + piu, fontWeight: 700, fontSize: 14 + piu,
     background: bloccato ? "#EDF1F4" : "#fff", color: bloccato ? MUTED : NAVY,
   });
   return (
@@ -3601,7 +3617,9 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
               <Icona size={18} color={GOLD} />
             </span>
           )}
-          <span style={titoloAreaScheda}>{titolo}</span>
+          <span style={{ ...titoloAreaScheda, fontSize: titoloAreaScheda.fontSize + piu, lineHeight: 1.15 }}>
+            {titoloSopra}{titoloSotto && <><br />{titoloSotto}</>}
+          </span>
         </div>
         {filo}
         {campoImporto("Imponibile", (
@@ -3644,8 +3662,8 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
               sua si portava via un piano intero per due parole, e sta bene
               dov'e' la domanda a cui risponde — come e' stata pagata, e se
               e' stata pagata */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", ...fontBody, fontSize: 12, color: NAVY }}>
-            <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", ...fontBody, fontSize: 12 + piu, color: NAVY }}>
+            <span style={{ ...fontBody, fontSize: 12 + piu, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>
             {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
               <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", whiteSpace: "nowrap" }}>
                 <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
@@ -3654,7 +3672,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
             ))}
             {onPagato && (
               <span style={{ marginLeft: "auto" }}>
-                <SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} />
+                <SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} piu={piu} />
               </span>
             )}
           </div>
@@ -24282,38 +24300,40 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaRicevutaErp size={18} color={GOLD} />
                 </span>
-                <span style={titoloAreaScheda}>Dati di vendita</span>
+                <span style={{ ...titoloAreaScheda, fontSize: titoloAreaScheda.fontSize + (isMobile ? 3 : 0), lineHeight: 1.15 }}>
+                  {isMobile ? <>Dati<br />di vendita</> : "Dati di vendita"}
+                </span>
               </div>
               <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
               <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
                 <div style={{ position: "relative" }}>
-                  <input style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
-                  <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                  <input style={{ ...campoAreaScheda, paddingRight: isMobile ? 29 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
+                  <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                 </div>
               </div>
               {adminSbloccato && (
                 <>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
                     <div style={{ position: "relative" }}>
-                      <input style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
-                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                      <input style={{ ...campoAreaScheda, paddingRight: isMobile ? 29 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                     </div>
                   </div>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
                     <div style={{ position: "relative" }}>
                       <input
-                        style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700 }}
+                        style={{ ...campoAreaScheda, paddingRight: isMobile ? 29 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14 }}
                         inputMode="decimal"
                         placeholder="es. 60.00"
                         value={quotaSpeciale}
                         onChange={(e) => setQuotaSpeciale(e.target.value)}
                       />
-                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                     </div>
                   </div>
                 </>
