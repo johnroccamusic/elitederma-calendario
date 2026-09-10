@@ -4962,7 +4962,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           // basso anche la citta' e la sede — che con il nome non
           // c'entrano niente.
           const nomeCorso = corso?.nome?.toUpperCase() || "?";
-          const corpoNome = nomeCorso.length <= 12 ? 16 : nomeCorso.length <= 18 ? 14 : nomeCorso.length <= 24 ? 12 : 10.5;
+          const corpoNome = nomeCorso.length <= 10 ? 16 : nomeCorso.length <= 14 ? 13.5 : nomeCorso.length <= 20 ? 11 : 9;
           const sedeConfermata = !!valoreCampo(cd, "sede_confermata");
 
           return (
@@ -4975,7 +4975,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {/* A sinistra le cose che non cambiano riga per riga: quando,
                   quale corso, dove. Stanno ferme mentre a destra si
                   scorrono le persone. */}
-              <div style={{ flex: "0 0 290px", minWidth: 0, padding: "9px 14px", borderRight: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ flex: "0 0 220px", minWidth: 0, padding: "9px 12px", borderRight: `1px solid ${CREAM_BORDER}` }}>
                 {/* La data in una colonna sua e il nome del corso accanto,
                     non sotto. Prima stavano sulla stessa riga con il
                     permesso di andare a capo, e un nome lungo — "Sexyline
