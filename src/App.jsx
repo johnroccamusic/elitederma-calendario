@@ -3535,7 +3535,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
     background: bloccato ? "#EDF1F4" : "#fff", color: bloccato ? MUTED : NAVY,
   });
   return (
-    <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `1px solid ${GOLD}`, borderRadius: 16, padding: 12, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
+    <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: 12, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
           {Icona && (
@@ -24221,7 +24221,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   la vendita, e deve staccarsi dalle quote che stanno sotto.
                   Le caselle dei numeri restano bianche, o il dato si
                   perderebbe nel colore */}
-              <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `1px solid ${GOLD}`, borderRadius: 16, padding: 12, flex: 1 }}>
+              <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: 12, flex: 1 }}>
             {/* stessa riga delle quote: medaglione, titolo, e i numeri di
                 fianco separati da fili. Il titolo su un piano suo faceva
                 di questo blocco un'altra fascia alta in mezzo alla scheda */}
