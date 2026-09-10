@@ -4905,11 +4905,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         {/* il ruolo dentro una pastiglia: e' l'unica cosa della riga che
             non si tocca e non cambia, e in chiaro fra tutti quei campi
             bianchi si perdeva */}
-        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 122px", minWidth: 0, background: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).sfondo, borderRadius: 11, padding: "7px 11px", boxSizing: "border-box" }}>
-          <IconaPersonaSemplice size={16} color={(COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo} />
-          <span style={{ ...fontScheda, fontSize: 12.5, fontWeight: 700, color: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo }}>{etichetta}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flex: "0 0 86px", minWidth: 0, background: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).sfondo, borderRadius: 10, padding: "6px 6px", boxSizing: "border-box" }}>
+          <IconaPersonaSemplice size={13} color={(COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo} />
+          <span style={{ ...fontScheda, fontSize: 10, fontWeight: 700, color: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo, whiteSpace: "nowrap" }}>{etichetta}</span>
         </div>
-        <div style={{ flex: "1 1 114px", minWidth: 92, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ flex: "1 1 150px", minWidth: 120, display: "flex", alignItems: "center", gap: 6 }}>
           {selettore}
           {azione}
         </div>
