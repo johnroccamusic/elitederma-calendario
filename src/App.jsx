@@ -4887,11 +4887,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // Una funzione sola perche' la riga della master e quelle degli altri
   // docenti sono identiche in tutto tranne il tasto a destra del nome
   // (uno aggiunge, gli altri tolgono) e la tabella su cui salvano.
-  function rigaIncaricoScheda({ chiave, etichetta, selettore, azione, avvisata, onAvvisata, valoreNota, onNota, viaggio, alloggio, pagato, valoreNotaViaggio, onNotaViaggio }) {
+  function rigaIncaricoScheda({ chiave, indice, etichetta, selettore, azione, avvisata, onAvvisata, valoreNota, onNota, viaggio, alloggio, pagato, valoreNotaViaggio, onNotaViaggio }) {
     return (
-      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 118px", minWidth: 0 }}>
-          <IconaPersonaSemplice size={17} />
+      // righe a righe alterne, bianco e crema chiarissimo: sono tre o
+      // quattro per scheda, tutte fatte degli stessi pezzi, e con lo
+      // sfondo unico l'occhio scivolava da una all'altra a meta' strada
+      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: indice % 2 ? "#FBFAF6" : "#fff", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+        {/* il ruolo dentro una pastiglia: e' l'unica cosa della riga che
+            non si tocca e non cambia, e in chiaro fra tutti quei campi
+            bianchi si perdeva */}
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 122px", minWidth: 0, background: "#F1F0F7", borderRadius: 11, padding: "7px 11px", boxSizing: "border-box" }}>
+          <IconaPersonaSemplice size={16} color={MUTED} />
           <span style={{ ...fontScheda, fontSize: 12.5, fontWeight: 600, color: NAVY }}>{etichetta}</span>
         </div>
         <div style={{ flex: "1 1 190px", minWidth: 150, display: "flex", alignItems: "center", gap: 6 }}>
@@ -4999,6 +5005,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                 {[
                   rigaIncaricoScheda({
                     chiave: `master-${cd.id}`,
+                    indice: 0,
                     etichetta: "Master",
                     selettore: (
                       <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(cd, "master_id") || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
@@ -5041,8 +5048,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     valoreNotaViaggio: cd.note_viaggio,
                     onNotaViaggio: (v) => salvaCampo(cd.id, "note_viaggio", v),
                   }),
-                  ...docenti.map((riga) => rigaIncaricoScheda({
+                  ...docenti.map((riga, i) => rigaIncaricoScheda({
                     chiave: riga.id,
+                    indice: i + 1,
                     etichetta: ETICHETTA_TIPO_DOCENTE[riga.tipo],
                     selettore: (
                       <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(riga, "persona_id") || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
