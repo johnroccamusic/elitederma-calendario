@@ -20660,7 +20660,10 @@ function BottonePulsanteScheda({ p }) {
         background: p.attivo ? "#E7F3E9" : "#fff",
         color: p.attivo ? "#1F7A33" : NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
-        flex: isMobile ? "1 1 0" : "1 1 130px", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
+        // base 0 anche da scrivania: con la misura fissa a 130 il quinto
+        // tasto non ci stava e finiva su una riga sua, largo quanto tutta
+        // la barra. Cosi' i cinque si dividono lo spazio e restano in fila
+        flex: "1 1 0", minWidth: isMobile ? 0 : 104, overflow: "hidden", boxSizing: "border-box",
       }}
     >
       <p.Icona size={isMobile ? 32 : 16} color={GOLD} />
