@@ -8343,13 +8343,14 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   // Piu' scuro dell'oro dell'app perche' ci va sopra il bianco.
   const MARRONE_DATA = "#9C7A45";
   const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
-  // "IN CORSO" mentre si svolge, "Appena terminato" nei 5 giorni dopo la
-  // fine — la master deve accorgersi a colpo d'occhio del corso attivo
-  // o appena chiuso, senza dover guardare le date
+  // Delle quattro pastiglie di stato — programmato, in corso, appena
+  // terminato, terminato — ne resta una sola: quella del corso che si sta
+  // svolgendo. Le altre tre dicevano una cosa che la data scritta accanto
+  // gia' diceva, e in un elenco di corsi futuri erano tutte uguali. Questa
+  // no: e' l'unica che chiede di fare qualcosa adesso, e infatti
+  // lampeggia.
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
-  const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
-  const terminato = oggiStr > corsoData.data_fine;
   // Il tasto della contabilita' lo accende l'ufficio, con A.C.M. dentro la
   // scheda del corso: prima compariva da solo il giorno prima e restava li'
   // per sempre, e quella pagina dice quanto ha pagato ogni allievo. Ora
@@ -8360,20 +8361,6 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
     && !!corsoData.acm_attivo
     && oggiStr <= corsoData.data_fine
     && oggiStr >= addGiorni(corsoData.data_inizio, -1);
-
-  // Le due pastiglie sotto al titolo: dove si tiene e a che punto e'. La
-  // seconda si legge da lontano ed e' l'unica informazione della scheda
-  // che cambia da sola con il passare dei giorni.
-  const statoTemporale = inCorso
-    ? { testo: "IN CORSO", colore: "#2E7D32", sfondo: "#E3F3E5" }
-    : appenaTerminato
-    ? { testo: "APPENA TERMINATO", colore: "#2E7D32", sfondo: "#E3F3E5" }
-    : terminato
-    ? { testo: "TERMINATO", colore: MUTED, sfondo: "#F1F1F4" }
-    : { testo: "PROGRAMMATO", colore: "#2563EB", sfondo: "#E8EFFC" };
-  const pastiglia = (p, i) => (
-    <span key={i} style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, fontWeight: 700, color: p.colore, background: p.sfondo, borderRadius: 20, padding: isMobile ? "4px 10px" : "5px 13px", textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>{p.testo}</span>
-  );
 
   const kit = conteggioKitEdizione(iscrittiEdizione);
   const divisoreVerticale = <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />;
@@ -8411,15 +8398,25 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             <IconaPin size={isMobile ? 14 : 17} color={MUTED} />
             <span style={{ ...fontDisplay, fontSize: isMobile ? 15 : 19, fontWeight: 500, color: MUTED, overflowWrap: "anywhere" }}>{toTitleCase(loc?.nome || "—")}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 9, flexWrap: "wrap" }}>
-            {[
-              { testo: loc?.sede_centrale ? "In sede" : "Corso in aula", colore: "#6B6250", sfondo: "#F2EEE4" },
-              statoTemporale,
-            ].map(pastiglia)}
-          </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexShrink: 0, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto", flexShrink: 0, flexWrap: "wrap" }}>
+          {inCorso && (
+            <>
+              <style>{`@keyframes lampeggiaCorsoInCorso { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }`}</style>
+              {/* stessa scatola di "Scarica le slide" — stesso bordo, stesso
+                  raggio, stessa imbottitura — perche' stanno una accanto
+                  all'altra e due misure diverse si notano subito */}
+              <span style={{
+                ...fontBody, fontSize: 15, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5",
+                border: "1px solid #A8D5AE", borderRadius: 14, padding: "9px 16px",
+                textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", lineHeight: 1.2,
+                animation: "lampeggiaCorsoInCorso 1.2s ease-in-out infinite",
+              }}>
+                In corso
+              </span>
+            </>
+          )}
           {/* le slide compaiono una settimana prima e spariscono con
               l'ultimo giorno del corso: e' il tempo in cui servono per
               prepararsi e per proiettarle, non uno di piu' */}
