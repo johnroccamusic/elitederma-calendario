@@ -3494,72 +3494,105 @@ function SemaforoPagamento({ pagato, onClick }) {
     <button
       type="button"
       onClick={onClick}
+      title={pagato ? "Segna come da pagare" : "Segna come pagato"}
       style={{
-        ...fontBody, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-        border: "none", borderRadius: 8, padding: "6px 14px", flexShrink: 0,
-        background: pagato ? "#E8F5E9" : "#FDECEC", color: pagato ? "#2E7D32" : "#C0392B",
+        ...fontBody, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        border: "none", borderRadius: 12, padding: "9px 14px", flexShrink: 0,
+        display: "inline-flex", alignItems: "center", gap: 7,
+        background: pagato ? "#E7F3E9" : "#FBE4E1", color: pagato ? "#1F7A33" : "#C0392B",
       }}
     >
+      {/* la spunta piena a sinistra: lo stato si legge dal colore e dal
+          segno prima ancora della parola */}
+      {pagato
+        ? <IconaSpuntaCerchio size={17} color="#1F7A33" />
+        : <IconaOrologioCard size={16} />}
       {pagato ? "Pagato" : "Da pagare"}
     </button>
   );
 }
 function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip }) {
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
+  // Titolo, i tre importi e lo stato su una riga sola, separati da fili
+  // verticali; il metodo di pagamento sotto, dietro una linea. Prima erano
+  // tre piani — titolo, poi tre caselle, poi i pallini con lo stato in
+  // fondo a destra — e ogni quota si prendeva mezza schermata: con tre
+  // quote piu' i pagamenti aggiuntivi, la scheda diventava un rotolo.
+  const filo = <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />;
+  // l'euro sta dentro la casella, appoggiato a destra: e' l'unita' di
+  // misura del campo, non un'altra cosa da leggere
+  const campoImporto = (etichetta, contenuto) => (
+    <div style={{ flex: "1 1 96px", minWidth: 82 }}>
+      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4 }}>{etichetta}</div>
+      <div style={{ position: "relative" }}>
+        {contenuto}
+        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+      </div>
+    </div>
+  );
+  const stileImporto = (bloccato) => ({
+    ...campoAreaScheda, paddingRight: 26, fontWeight: 700,
+    background: bloccato ? "#EDF1F4" : "#fff", color: bloccato ? MUTED : NAVY,
+  });
   return (
-    <div style={{ ...areaSchedaIscritto, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, color: GOLD }}>
-          {Icona && <Icona size={18} color={GOLD} />}
+    <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `1px solid ${GOLD}`, borderRadius: 16, padding: 12, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
+          {Icona && (
+            <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icona size={18} color={GOLD} />
+            </span>
+          )}
           <span style={titoloAreaScheda}>{titolo}</span>
         </div>
+        {filo}
+        {campoImporto("Imponibile", (
+          <input
+            style={stileImporto(soloLettura || imponibileBloccato)}
+            inputMode="decimal"
+            value={valori.imponibile}
+            disabled={soloLettura || imponibileBloccato}
+            onChange={(e) => onImponibile && onImponibile(e.target.value)}
+          />
+        ))}
+        {filo}
+        {campoImporto("IVA 22%", <input style={stileImporto(true)} value={ivaDiQuota(valori)} disabled />)}
+        {filo}
+        {campoImporto(
+          titolo === "Quota acconto" && valori.metodo === "Rate" ? "Totale (senza interessi)" : "Totale",
+          <input
+            style={stileImporto(soloLettura || totaleBloccato)}
+            inputMode="decimal"
+            value={valori.totale}
+            disabled={soloLettura || totaleBloccato}
+            onChange={(e) => onTotale && onTotale(e.target.value)}
+          />
+        )}
+        {onPagato && (
+          <>
+            {filo}
+            <div style={{ paddingBottom: 3 }}><SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} /></div>
+          </>
+        )}
         {onRimuovi && (
-          <button onClick={onRimuovi} title="Rimuovi questo pagamento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 2, display: "flex" }}>
+          <button onClick={onRimuovi} title="Rimuovi questo pagamento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 2, display: "flex", alignSelf: "center", flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
           </button>
         )}
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 90px" }}>
-          <Field label="Imponibile">
-            <input
-              style={{ ...campoAreaScheda, background: soloLettura || imponibileBloccato ? "#EDF1F4" : "#fff", color: soloLettura || imponibileBloccato ? MUTED : NAVY }}
-              inputMode="decimal"
-              value={valori.imponibile}
-              disabled={soloLettura || imponibileBloccato}
-              onChange={(e) => onImponibile && onImponibile(e.target.value)}
-            />
-          </Field>
-        </div>
-        <div style={{ flex: "1 1 90px" }}>
-          <Field label="IVA 22%">
-            <input style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }} value={ivaDiQuota(valori)} disabled />
-          </Field>
-        </div>
-        <div style={{ flex: "1 1 90px" }}>
-          <Field label={titolo === "Quota acconto" && valori.metodo === "Rate" ? "Totale (senza interessi)" : "Totale"}>
-            <input
-              style={{ ...campoAreaScheda, background: soloLettura || totaleBloccato ? "#EDF1F4" : "#fff", color: soloLettura || totaleBloccato ? MUTED : NAVY }}
-              inputMode="decimal"
-              value={valori.totale}
-              disabled={soloLettura || totaleBloccato}
-              onChange={(e) => onTotale && onTotale(e.target.value)}
-            />
-          </Field>
-        </div>
-      </div>
       {onMetodo && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
+        <>
+          <div style={{ height: 1, background: "#E6DFCE", margin: "12px 0 10px" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>Metodo di pagamento:</span>
             {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
-              <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+              <label key={opz} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", whiteSpace: "nowrap" }}>
                 <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
                 {opz}
               </label>
             ))}
           </div>
-          {onPagato && <SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} />}
-        </div>
+        </>
       )}
       {onMetodo && valori.metodo === "Rate" && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
