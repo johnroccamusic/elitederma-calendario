@@ -13692,6 +13692,7 @@ function DefinizioneProvvigioni() {
 }
 
 function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
+  const [maniglieAttive, salvaManiglieAttive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -14041,6 +14042,30 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title={titolo} onBack={onBack} />
+
+      {/* L'interruttore delle maniglie di impaginazione. Sta qui e non fra
+          le voci dei tre gruppi perche' non apre una pagina: accende una
+          modalita'. Lo vede solo il programmatore — per tutti gli altri le
+          maniglie non esistono comunque. */}
+      {programmatore && (
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 18, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minWidth: 0 }}>
+            <input
+              type="checkbox"
+              checked={maniglieAttive}
+              onChange={(e) => salvaManiglieAttive(e.target.checked)}
+              style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0 }}
+            />
+            <span style={{ minWidth: 0 }}>
+              <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, display: "block" }}>Maniglie di impaginazione</span>
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED, display: "block", lineHeight: 1.5 }}>
+                Accende i punti da trascinare per spostare tasti e pannelli e per regolare gli spazi, in tutta l'app.
+                Spente, le pagine mostrano lo spazio vero che occupano gli elementi — che e' quello che vedono tutti gli altri.
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 18, alignItems: "start" }}>
         {gruppiSetting.map((g) => (
