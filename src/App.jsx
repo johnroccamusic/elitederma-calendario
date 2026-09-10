@@ -47230,9 +47230,35 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       const { error: erroreCat } = await supabase.from("prodotti_categorie").insert(f.categorieIds.map((id) => ({ prodotto_id: idProdotto, categoria_id: id })));
       if (erroreCat) return { errore: "Prodotto salvato, ma le categorie no: " + erroreCat.message };
     }
+    // Le foto si salvano anche qui. Su questo ramo — prodotto senza
+    // prezzo, "solo offline", variante non pubblicabile — prima non le
+    // scriveva nessuno: il file finiva nel bucket, il salvataggio diceva
+    // "Prodotto salvato", e riaprendo la scheda tornava la foto vecchia.
+    // Sullo shop l'elenco lo riscrive l'edge function con quello che
+    // risponde WooCommerce; qui non c'e' nessun sito a rispondere, quindi
+    // si scrive quello che c'e' nella scheda. Un prodotto interno ha
+    // diritto alle sue immagini quanto uno in vendita: servono a
+    // riconoscerlo in magazzino.
+    const { error: erroreRimuoviImg } = await supabase.from("prodotti_immagini").delete().eq("prodotto_id", idProdotto);
+    if (erroreRimuoviImg) return { errore: "Prodotto salvato, ma le immagini no: " + erroreRimuoviImg.message };
+    const immaginiDaSalvare = (f.immagini || []).filter((im) => im?.url);
+    if (immaginiDaSalvare.length) {
+      const { error: erroreImg } = await supabase.from("prodotti_immagini").insert(
+        immaginiDaSalvare.map((im, indice) => ({
+          prodotto_id: idProdotto,
+          url: im.url,
+          // se la foto era gia' passata dal sito il suo codice resta, cosi'
+          // il giorno che il prodotto torna in vendita WooCommerce la
+          // riconosce invece di scaricarne un'altra copia
+          woo_image_id: im.wooImageId ?? null,
+          ordine: indice,
+        }))
+      );
+      if (erroreImg) return { errore: "Prodotto salvato, ma le immagini no: " + erroreImg.message };
+    }
     const erroreInterni = await salvaDatiInterni(idProdotto, calcolo, f, componentiSnapshot);
     if (erroreInterni) return { errore: "Prodotto salvato, ma i dati di magazzino no: " + erroreInterni };
-    return { idProdotto, tabelle: ["prodotti_shop", "prodotti_categorie", "categorie_prodotti"] };
+    return { idProdotto, tabelle: ["prodotti_shop", "prodotti_categorie", "prodotti_immagini", "categorie_prodotti"] };
   }
 
   async function salvaProdotto(esciDopo) {
