@@ -2915,7 +2915,13 @@ function fmtEuroIva(n) {
 // derivato dal campo+modo attuali: è l'unico valore poi salvato.
 function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambiaModo, aliquota, onCambiaAliquota, obbligatorio }) {
   const netto = modo === "netto" ? (inputTesto.trim() === "" ? null : parseNum(inputTesto)) : nettoDaLordo(inputTesto.trim() === "" ? null : parseNum(inputTesto), aliquota);
-  const { iva, lordo } = calcolaIvaELordo(netto, aliquota);
+  // Se scrivi il LORDO, il lordo e' quello che hai scritto: si ricava il
+  // netto e basta. Prima si ricavava il netto e poi da quel netto si
+  // ricalcolava il lordo — 39,90 diventava 32,70 e da li' 39,89, e il
+  // numero digitato spariva sotto le dita. Se scrivi il netto, il lordo lo
+  // calcola il programma: in ogni caso comanda quello che hai scritto tu.
+  const lordoDigitato = modo === "lordo" && inputTesto.trim() !== "" ? round2(parseNum(inputTesto)) : null;
+  const { iva, lordo } = calcolaIvaELordo(netto, aliquota, lordoDigitato);
   const aliquotaÈStandard = ALIQUOTE_IVA_STANDARD.includes(Number(aliquota));
 
   function cambiaModo(nuovoModo) {
@@ -47975,8 +47981,32 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       // l'aliquota di vendita vale anche per la vetrina: senza, il prezzo
       // mostrato sullo shop non saprebbe più tornare da netto a lordo
       aliquota_iva_vendita: f.aliquotaVendita,
-      // il prezzo deciso a mano: vuoto vuol dire "calcolalo tu"
-      prezzo_lordo_forzato: String(f.prezzoLordoForzato ?? "").trim() === "" ? null : parseNum(f.prezzoLordoForzato),
+      // Il prezzo al pubblico, quando non e' semplicemente netto+IVA.
+      //
+      // Il caso che contava e che non funzionava: scrivi 39,90 in modalita'
+      // LORDO, il programma ne ricava il netto (39,90 / 1,22 = 32,7049,
+      // salvato 32,70) e da li' in poi ricalcola il lordo da quel netto —
+      // 32,70 x 1,22 = 39,894, cioe' 39,89. Il centesimo si perdeva nel
+      // giro di andata e ritorno, e il prezzo che avevi scritto non era
+      // piu' da nessuna parte.
+      //
+      // Adesso in modalita' lordo il numero digitato E' il prezzo, e viene
+      // tenuto. Si scrive solo se serve davvero: se il giro torna esatto
+      // (26,80 -> 32,70 -> 26,80) non c'e' niente da forzare e il campo
+      // resta vuoto. In modalita' netto comanda il netto, e vale quello che
+      // c'e' scritto nella casella "Forza prezzo" — vuota compresa.
+      prezzo_lordo_forzato: (() => {
+        const aMano = String(f.prezzoLordoForzato ?? "").trim();
+        if (aMano !== "") return parseNum(aMano);
+        if (f.modoVendita !== "lordo") return null;
+        const scritto = String(f.prezzo ?? "").trim();
+        if (scritto === "") return null;
+        const lordoScritto = round2(parseNum(scritto));
+        const lordoCalcolato = calcolo.prezzoNetto != null
+          ? round2(calcolo.prezzoNetto * (1 + (Number(f.aliquotaVendita) || 0) / 100))
+          : null;
+        return lordoCalcolato === lordoScritto ? null : lordoScritto;
+      })(),
       iva_verificata: true,
       soglia_riordino: interoOpzionale(f.scortaMinima),
       lead_time_giorni: interoOpzionale(f.leadTime),
@@ -48666,7 +48696,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <div style={{ flex: "1 1 220px", minWidth: 0, ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.45, paddingBottom: 10 }}>
           {String(prodottoForm.prezzoLordoForzato ?? "").trim() !== ""
             ? <>Il cliente paga <b style={{ color: NAVY }}>{fmtEuroIva(round2(parseNum(prodottoForm.prezzoLordoForzato)))}</b>, e l'IVA e' la differenza rispetto al netto. Svuota la casella per tornare al calcolo automatico.</>
-            : <>Vuoto: il prezzo e' netto piu' IVA. Scrivi qui la cifra da esporre quando il calcolo lascia un numero scomodo (39,89 invece di 39,90).</>}
+            : <>Vuoto: comanda il calcolo netto piu' IVA. Non serve compilarlo se il prezzo lo scrivi qui sopra in modalita' <b>Lordo</b>: quel numero viene tenuto com'e', e la casella si riempie da sola al salvataggio quando il giro netto/IVA non ci torna esatto.</>}
         </div>
       </div>
       {prodottoForm.tipoProdotto === "vetrina" && (
