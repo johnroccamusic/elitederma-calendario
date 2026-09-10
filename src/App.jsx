@@ -27513,9 +27513,16 @@ function round1Erp(n) {
 // numerico di Date (anno, mese, giorno) invece che da stringa: evita lo
 // sfasamento di un giorno che "new Date(stringa)" introdurrebbe in alcuni
 // fusi orari, perché legge un istante UTC con i getter in ora locale
-function rangePeriodoErp(periodo) {
+function rangePeriodoErp(periodo, dataDa) {
   const oggi = new Date();
   const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // "da questa data a oggi": le tre finestre fisse rispondono a "come sta
+  // andando adesso", questa risponde a "come e' andata da quando e'
+  // successa quella cosa" — un aumento di prezzi, l'apertura di una sede,
+  // l'inizio della contabilita' vera. Il confronto col periodo precedente
+  // continua a funzionare: rangePrecedenteErp prende comunque la finestra
+  // della stessa lunghezza subito prima
+  if (periodo === "dadata" && dataDa) return { inizio: dataDa, fine: fmt(oggi) };
   if (periodo === "30giorni") {
     const inizio = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() - 29);
     return { inizio: fmt(inizio), fine: fmt(oggi) };
@@ -30373,6 +30380,10 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   const { ordine: ordineSedi, cambiaOrdine: cambiaOrdineSedi, ordina: ordinaSedi } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
+  // il 1 gennaio come punto di partenza proposto: e' quello che quasi
+  // sempre si vuole quando si chiede "da quando", e chi ne vuole un altro
+  // lo cambia con un click
+  const [dataDa, setDataDa] = useState(`${new Date().getFullYear()}-01-01`);
   const [sedeSel, setSedeSel] = useState("");
   const [confrontoAnnualeAperto, setConfrontoAnnualeAperto] = useState(false);
 
@@ -30380,7 +30391,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const costiCategorieById = useMemo(() => Object.fromEntries((costiCategorie || []).map((c) => [c.id, c])), [costiCategorie]);
 
-  const range = rangePeriodoErp(periodo);
+  const range = rangePeriodoErp(periodo, dataDa);
   const rangePrec = rangePrecedenteErp(range);
 
   const kpi = useMemo(
@@ -30454,8 +30465,24 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>Ecco come sta andando Elitederma, {fmtDataLunga(dataOggiStr())}.</div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        {/* il campo data compare solo quando serve: tenerlo sempre in
+            vista, spento, farebbe credere che il periodo sia quello anche
+            quando e' attiva una delle tre finestre fisse */}
+        {periodo === "dadata" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Dal</span>
+            <input
+              type="date"
+              value={dataDa}
+              max={dataOggiStr()}
+              onChange={(e) => setDataDa(e.target.value)}
+              style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 12px" }}
+            />
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>a oggi</span>
+          </div>
+        )}
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((p) => (
+          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "dadata", l: "Da una data" }].map((p) => (
             <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
               {p.l}
             </button>
