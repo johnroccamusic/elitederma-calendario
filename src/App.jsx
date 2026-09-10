@@ -24786,14 +24786,19 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
           {richiedeModelle === "si" && (
             <>
-              <div style={{ display: "flex", gap: 14 }}>
-                <div style={{ flex: 1 }}>
-                  <Field label="Quante modelle">
+              {/* i tre numeri delle modelle su una riga sola: quante, quanto
+                  costano, e l'eventuale prezzo concordato. Il terzo campo
+                  stava sotto, con un'etichetta lunga due righe che spiegava
+                  quello che si capisce compilandolo — se ci scrivi un
+                  numero, quel numero vince */}
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 110px", minWidth: 100 }}>
+                  <Field label="Quante modelle" minLabelHeight={30}>
                     <input type="number" min="0" style={inputStyle} value={numeroModelle} onChange={(e) => setNumeroModelle(e.target.value)} />
                   </Field>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Da pagare per modelle">
+                <div style={{ flex: "1 1 110px", minWidth: 100 }}>
+                  <Field label="Da pagare per modelle" minLabelHeight={30}>
                     <input
                       style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
                       value={
@@ -24807,10 +24812,18 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                     />
                   </Field>
                 </div>
+                <div style={{ flex: "1 1 110px", minWidth: 100 }}>
+                  <Field label="Prezzo speciale" minLabelHeight={30}>
+                    <input
+                      style={inputStyle}
+                      inputMode="decimal"
+                      title="Se compilato sostituisce il calcolo automatico"
+                      value={prezzoSpecialeModelle}
+                      onChange={(e) => setPrezzoSpecialeModelle(e.target.value)}
+                    />
+                  </Field>
+                </div>
               </div>
-              <Field label="Prezzo speciale modelle (opzionale — se compilato sostituisce il calcolo automatico)">
-                <input style={inputStyle} inputMode="decimal" value={prezzoSpecialeModelle} onChange={(e) => setPrezzoSpecialeModelle(e.target.value)} />
-              </Field>
               {tipiModelle.length > 0 && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Trattamento di ogni modella</div>
