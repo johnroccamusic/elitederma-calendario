@@ -3511,7 +3511,65 @@ function SemaforoPagamento({ pagato, onClick }) {
     </button>
   );
 }
-function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip }) {
+// Il modulo d'iscrizione da telefono resta disposto com'e' da scrivania:
+// i riquadri non si spezzano, non vanno a capo, non si riordinano. Si
+// disegna sempre su una tela larga `larghezza` e la si rimpicciolisce
+// quanto basta a entrare nello schermo — testo compreso.
+//
+// L'alternativa era far andare a capo ogni riquadro, ed e' quello che
+// faceva prima: su un telefono ogni quota diventava una colonna di
+// caselle e il modulo un rotolo. Meglio piccolo e uguale che grande e
+// sfilacciato — girando il telefono si legge senza fatica.
+//
+// L'altezza va misurata e imposta al contenitore: `transform: scale` non
+// occupa lo spazio che gli spetta, e sotto al modulo resterebbe una fascia
+// vuota alta quanto la parte rimpicciolita.
+function BoxLarghezzaFissa({ larghezza = 600, attivo, children }) {
+  const rifEsterno = React.useRef(null);
+  const rifInterno = React.useRef(null);
+  const [fattore, setFattore] = useState(1);
+  const [altezza, setAltezza] = useState(null);
+  useLayoutEffect(() => {
+    const esterno = rifEsterno.current;
+    const interno = rifInterno.current;
+    if (!attivo || !esterno || !interno) return undefined;
+    const misura = () => {
+      const disponibile = esterno.clientWidth;
+      if (!disponibile) return;
+      setFattore(Math.min(1, disponibile / larghezza));
+      setAltezza(Math.ceil(interno.offsetHeight * Math.min(1, disponibile / larghezza)));
+    };
+    misura();
+    const osservatore = typeof ResizeObserver !== "undefined" ? new ResizeObserver(misura) : null;
+    if (osservatore) { osservatore.observe(esterno); osservatore.observe(interno); }
+    window.addEventListener("resize", misura);
+    return () => { if (osservatore) osservatore.disconnect(); window.removeEventListener("resize", misura); };
+  });
+  if (!attivo) return children;
+  return (
+    <div ref={rifEsterno} style={{ overflow: "hidden", height: altezza != null ? altezza : undefined }}>
+      <div ref={rifInterno} style={{ width: larghezza, transformOrigin: "top left", transform: `scale(${fattore})` }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// "+ Aggiungi un altro acconto" e simili: testo in oro, senza cornice,
+// appoggiato in fondo a destra dentro la nuvola della quota.
+function TastoAggiungiQuota({ testo, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "none", border: "none", padding: "2px 0", cursor: "pointer", whiteSpace: "nowrap" }}
+    >
+      + {testo}
+    </button>
+  );
+}
+
+function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip, azioneInFondo }) {
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   // Titolo, i tre importi e lo stato su una riga sola, separati da fili
   // verticali; il metodo di pagamento sotto, dietro una linea. Prima erano
@@ -3522,7 +3580,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
   // l'euro sta dentro la casella, appoggiato a destra: e' l'unita' di
   // misura del campo, non un'altra cosa da leggere
   const campoImporto = (etichetta, contenuto) => (
-    <div style={{ flex: "1 1 96px", minWidth: 82 }}>
+    <div style={{ flex: "1 1 0", minWidth: 0 }}>
       <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4 }}>{etichetta}</div>
       <div style={{ position: "relative" }}>
         {contenuto}
@@ -3536,7 +3594,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
   });
   return (
     <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: 12, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "nowrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
           {Icona && (
             <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -3586,7 +3644,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
               sua si portava via un piano intero per due parole, e sta bene
               dov'e' la domanda a cui risponde — come e' stata pagata, e se
               e' stata pagata */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12, color: NAVY }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", ...fontBody, fontSize: 12, color: NAVY }}>
             <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>
             {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
               <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -3661,6 +3719,11 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
           </Field>
         </div>
       )}
+      {/* "Aggiungi un altro..." sta dentro la nuvola a cui si riferisce,
+          non fra una nuvola e l'altra: staccato, con il suo bordo
+          tratteggiato, sembrava un terzo riquadro invece del seguito di
+          quello sopra */}
+      {azioneInFondo && <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>{azioneInFondo}</div>}
     </div>
   );
 }
@@ -23694,7 +23757,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px 160px" }}>
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: isMobile ? "24px 10px 160px" : "40px 20px 160px" }}>
       {msgErrore && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2000 }}>
           <div style={{ ...cardStyle, maxWidth: 360, width: "100%", marginBottom: 0, textAlign: "center" }}>
@@ -23977,6 +24040,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       )}
 
       {vista === "form" && (
+        <BoxLarghezzaFissa attivo={isMobile} larghezza={600}>
         <div
           onBlur={(e) => {
             // se il focus sta passando a un bottone (es. proprio "Fatto,
@@ -24213,7 +24277,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             {/* stessa riga delle quote: medaglione, titolo, e i numeri di
                 fianco separati da fili. Il titolo su un piano suo faceva
                 di questo blocco un'altra fascia alta in mezzo alla scheda */}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "nowrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
                 <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaRicevutaErp size={18} color={GOLD} />
@@ -24221,7 +24285,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 <span style={titoloAreaScheda}>Dati di vendita</span>
               </div>
               <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-              <div style={{ flex: "1 1 0", minWidth: 74 }}>
+              <div style={{ flex: "1 1 0", minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
                 <div style={{ position: "relative" }}>
                   <input style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
@@ -24231,7 +24295,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               {adminSbloccato && (
                 <>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  <div style={{ flex: "1 1 0", minWidth: 74 }}>
+                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
                     <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
                     <div style={{ position: "relative" }}>
                       <input style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
@@ -24239,7 +24303,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                     </div>
                   </div>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  <div style={{ flex: "1 1 0", minWidth: 74 }}>
+                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
                     <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
                     <div style={{ position: "relative" }}>
                       <input
@@ -24515,6 +24579,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             onBonificoFile={(f) => { setPagAcconto((prev) => ({ ...prev, bonificoFileNuovo: f })); if (f) setPagAccontoPagato(true); }}
             mostraSaltaFile={adminSbloccato}
             onBonificoSkip={(v) => setPagAcconto((prev) => ({ ...prev, bonificoSkip: v }))}
+            azioneInFondo={accontoExtra.length === 0
+              ? <TastoAggiungiQuota testo="Aggiungi un altro acconto" onClick={() => setAccontoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])} />
+              : null}
           />
           {accontoExtra.map((riga, idx) => (
             <BloccoQuota
@@ -24533,15 +24600,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               onBonificoFile={(f) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f, pagato: f ? true : r.pagato } : r)))}
               mostraSaltaFile={adminSbloccato}
               onBonificoSkip={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoSkip: v } : r)))}
+              azioneInFondo={idx === accontoExtra.length - 1
+                ? <TastoAggiungiQuota testo="Aggiungi un altro acconto" onClick={() => setAccontoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])} />
+                : null}
             />
           ))}
-          <button
-            type="button"
-            onClick={() => setAccontoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "#fff", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", width: "100%" }}
-          >
-            + Aggiungi un altro acconto
-          </button>
               </div>
             </div>
             {spaziatoreRiga("contabili", "quotaAcconto")}
@@ -24564,6 +24627,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             onBonificoFile={(f) => { setPagPrecorso((prev) => ({ ...prev, bonificoFileNuovo: f })); if (f) setPagPrecorsoPagato(true); }}
             mostraSaltaFile={adminSbloccato}
             onBonificoSkip={(v) => setPagPrecorso((prev) => ({ ...prev, bonificoSkip: v }))}
+            azioneInFondo={precorsoExtra.length === 0
+              ? <TastoAggiungiQuota testo="Aggiungi un'altra quota pre corso" onClick={() => setPrecorsoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])} />
+              : null}
           />
           {precorsoExtra.map((riga, idx) => (
             <BloccoQuota
@@ -24581,15 +24647,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               onBonificoFile={(f) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f, pagato: f ? true : r.pagato } : r)))}
               mostraSaltaFile={adminSbloccato}
               onBonificoSkip={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoSkip: v } : r)))}
+              azioneInFondo={idx === precorsoExtra.length - 1
+                ? <TastoAggiungiQuota testo="Aggiungi un'altra quota pre corso" onClick={() => setPrecorsoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])} />
+                : null}
             />
           ))}
-          <button
-            type="button"
-            onClick={() => setPrecorsoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "#fff", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", width: "100%" }}
-          >
-            + Aggiungi un'altra quota pre corso
-          </button>
               </div>
             </div>
             {spaziatoreRiga("contabili", "quotaPrecorso")}
@@ -24958,6 +25020,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
         </div>
         </div>
+        </BoxLarghezzaFissa>
       )}
 
       {vista === "modelle" && (() => {
