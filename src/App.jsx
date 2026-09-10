@@ -8540,13 +8540,18 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
     // dall'etichetta. Tutto su una riga sola anche da telefono — sono tre
     // voci corte, e in colonna prenderebbero mezza schermata per allievo;
     // se lo schermo e' davvero stretto scorre di lato invece di andare a capo
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-      <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, width: 46, flexShrink: 0, lineHeight: 1.1 }}>Modelle</span>
+    // I gruppi si centrano rispetto alla scheda, e la scritta "MODELLE"
+    // non entra nel conto: sta appoggiata a sinistra senza occupare
+    // spazio, altrimenti spingerebbe i trattamenti fuori asse di mezza
+    // parola. Il centro e' quello dei trattamenti, che sono la cosa da
+    // guardare.
+    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 10, minHeight: 44 }}>
+      <span style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.1 }}>Modelle</span>
       {/* i gruppi si dividono lo spazio che c'e' e si stringono: prima
           tenevano la loro misura e uscivano dalla scheda, e per vedere
           l'eyeliner bisognava trascinare di lato una riga dentro una
           scheda dentro una pagina che gia' scorre */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "center", gap: 6 }}>
+      <div style={{ maxWidth: "100%", minWidth: 0, display: "flex", justifyContent: "center", gap: 6, paddingLeft: 56, paddingRight: 8, boxSizing: "border-box" }}>
       {senzaPosti ? (
         <div style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED, textAlign: "center" }}>
           {iscritto?.richiede_modelle ? "Nessuna modella ancora assegnata" : "Porta la sua modella — non ancora segnata"}
@@ -8556,7 +8561,10 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
         return (
           <div key={tipo} title={m ? tipo : `${tipo} — non previsto per questo allievo`} style={{
             display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            flex: "1 1 0", minWidth: 0,
+            // larghezza fissa uguale per tutti: i gruppi non si allargano
+            // a riempire la riga, cosi' restano incolonnati fra un allievo
+            // e l'altro e il blocco si puo' centrare davvero
+            flex: "0 1 150px", minWidth: 92,
             background: "#F1F3F6", borderRadius: 10, padding: "6px 5px",
             opacity: m ? 1 : 0.35,
           }}>
@@ -8569,7 +8577,6 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
         );
       })}
       </div>
-      <span style={{ width: 46, flexShrink: 0 }} />
     </div>
   );
 }
@@ -8705,6 +8712,9 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
 
               {isMobile && barraContatti}
 
+              {/* qui non si tocca: e' la classe come la vede la master, e
+                  chi assegna le modelle non e' lei. Gli amministratori le
+                  modificano da Contabilita' classe o da Assegna modelle */}
               <RiepilogoModelleAllievo iscritto={i} colonne={colonneModelle} />
             </div>
             );
@@ -25973,9 +25983,16 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   {/* le modelle di questo allievo, in fondo alla sua scheda:
                       chi fa i conti in aula si trova davanti anche il conto
                       delle modelle, e finora doveva andarle a cercare in
-                      un'altra pagina per sapere quali giorni erano coperti */}
+                      un'altra pagina per sapere quali giorni erano coperti.
+                      Mattina e pomeriggio si premono anche da qui: e' lo
+                      stesso dato di "Assegna modelle" e della vista globale
+                      — una casella sola, tre porte per arrivarci. */}
                   <div style={{ padding: "0 20px 16px" }}>
-                    <RiepilogoModelleAllievo iscritto={i} colonne={colonneModelleClasse(listaIscritti)} />
+                    <RiepilogoModelleAllievo
+                      iscritto={i}
+                      colonne={colonneModelleClasse(listaIscritti)}
+                      onCambia={modelleSolaLettura ? undefined : (indice, campo, valore) => aggiornaModellaSlot(i.id, indice, campo, valore)}
+                    />
                   </div>
                   </div>
 
