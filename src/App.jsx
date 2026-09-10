@@ -773,6 +773,13 @@ function IconaFrecciaUscita({ size = 20 }) {
   );
 }
 // in arrivo: la busta che sta ancora viaggiando
+function IconaAereo({ size = 15, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.8 19.8 16 14l-4.5 2.4v3.3l-1.6.9-.9-3.1-3.1-.9.9-1.6h3.3L12.5 10 6.7 8.2c-.6-.2-.7-1-.2-1.3l1.4-.8c.3-.2.6-.2.9-.1l5.1 1.8 2.2-3.8c.5-.9 1.6-1.2 2.5-.7s1.2 1.6.7 2.5l-2.2 3.8 1.8 5.1c.1.3.1.6-.1.9l-.8 1.4c-.3.5-1.1.4-1.3-.2z" />
+    </svg>
+  );
+}
 function IconaBustaInViaggio({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -4861,10 +4868,16 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         {stato === "non_occorre" ? (
           <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: MUTED, whiteSpace: "nowrap" }}>In sede</span>
         ) : (
+          <>
+          {/* l'aeroplanino fra il pallino e il "+": il pallino dice a che
+              punto sta il viaggio, il "+" carica i biglietti, e in mezzo
+              non c'era niente che dicesse di cosa si sta parlando */}
+          <IconaAereo size={15} color={stile.colore} />
           <label style={{ ...fontScheda, fontSize: 16, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "3px 10px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: 1 }}>
             +
             <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBigliettiGenerico(tabella, riga.id, valoreCampo(riga, campoFile), campoFile, e.target.files); e.target.value = ""; }} />
           </label>
+          </>
         )}
         {nBiglietti > 0 && (
           <span
