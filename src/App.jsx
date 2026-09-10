@@ -22531,10 +22531,19 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     const larghezzaTesto = font.widthOfTextAtSize(testo, fontSize);
     const ancoraX = (posX / 100) * width;
     const x = allineamento === "left" ? ancoraX : allineamento === "right" ? ancoraX - larghezzaTesto : ancoraX - larghezzaTesto / 2;
-    // approssimazione: la percentuale rappresenta il centro verticale del
-    // testo, non la sua baseline — spostare di metà font size la
-    // avvicina al centro reale senza bisogno di misure di ascent/descent
-    const y = height - (posY / 100) * height - fontSize * 0.35;
+    // La percentuale dice dove sta il CENTRO del testo, non la sua
+    // baseline. Prima si scendeva di un trentacinque per cento del corpo,
+    // un numero buono per un carattere e sbagliato per un altro: e infatti
+    // firma e data — che hanno font loro — venivano stampate piu' in alto
+    // di dove si vedevano nell'anteprima, mentre il nome ci azzeccava.
+    //
+    // Ora la misura la da' il font: quanto sale sopra la baseline. Meta' di
+    // quella altezza sotto il centro chiesto ed ecco la baseline giusta,
+    // qualunque carattere sia — corsivo di firma compreso.
+    const sopraLaBaseline = typeof font.heightAtSize === "function"
+      ? font.heightAtSize(fontSize, { descender: false })
+      : fontSize * 0.7;
+    const y = height - (posY / 100) * height - sopraLaBaseline / 2;
     const { r, g, b } = hexInRgb01(colore);
     page.drawText(testo, { x, y, size: fontSize, font, color: rgbFn(r, g, b) });
   }
