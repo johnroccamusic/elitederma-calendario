@@ -4879,167 +4879,196 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     );
   }
 
+  // Una riga di incarico dentro la scheda: chi fa cosa e tutto quello che
+  // gli sta attorno — se e' stato avvisato, la nota, il viaggio, dove
+  // dorme, se l'albergo e' pagato. Sono le stesse celle della tabella di
+  // prima, messe in fila invece che sotto quattordici intestazioni.
+  //
+  // Una funzione sola perche' la riga della master e quelle degli altri
+  // docenti sono identiche in tutto tranne il tasto a destra del nome
+  // (uno aggiunge, gli altri tolgono) e la tabella su cui salvano.
+  function rigaIncaricoScheda({ chiave, etichetta, selettore, azione, avvisata, onAvvisata, valoreNota, onNota, viaggio, alloggio, pagato, valoreNotaViaggio, onNotaViaggio }) {
+    return (
+      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 118px", minWidth: 0 }}>
+          <IconaPersonaSemplice size={17} />
+          <span style={{ ...fontScheda, fontSize: 12.5, fontWeight: 600, color: NAVY }}>{etichetta}</span>
+        </div>
+        <div style={{ flex: "1 1 190px", minWidth: 150, display: "flex", alignItems: "center", gap: 6 }}>
+          {selettore}
+          {azione}
+        </div>
+        <div style={{ flex: "0 0 auto" }}>{flagAvvisata(avvisata, onAvvisata)}</div>
+        <input
+          style={{ ...campoStyle, flex: "1 1 170px", minWidth: 120 }}
+          placeholder="Nota"
+          defaultValue={valoreNota || ""}
+          onBlur={(e) => { if (e.target.value !== (valoreNota || "")) onNota(e.target.value || null); }}
+        />
+        <div style={{ flex: "0 0 auto" }}>{viaggio}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 auto" }}>
+          <IconaEdificioErp size={16} color={MUTED} />
+          {alloggio}
+        </div>
+        <div style={{ flex: "0 0 auto" }}>{pagato}</div>
+        {onNotaViaggio ? (
+          <input
+            style={{ ...campoStyle, flex: "1 1 150px", minWidth: 110 }}
+            placeholder="+ Nota"
+            defaultValue={valoreNotaViaggio || ""}
+            onBlur={(e) => { if (e.target.value !== (valoreNotaViaggio || "")) onNotaViaggio(e.target.value || null); }}
+          />
+        ) : <div style={{ flex: "1 1 150px", minWidth: 110 }} />}
+      </div>
+    );
+  }
+
+  // Una scheda per edizione, non piu' una riga di tabella.
+  //
+  // La tabella aveva quattordici colonne e un corso occupava da una a
+  // quattro righe, con le prime quattro celle unite in verticale: per
+  // capire di chi fosse una riga bisognava risalire con lo sguardo fino
+  // al nome del corso, e con la pagina scorsa in orizzontale quel nome
+  // era gia' uscito da sinistra. Qui ogni corso e' un blocco chiuso: a
+  // sinistra chi e' dove e quando, a destra una riga per ogni persona
+  // incaricata.
   function tabellaMese(righeMese) {
     return (
-      <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, marginBottom: 28, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.2)" }}>
-        <table style={{ borderCollapse: "collapse", width: larghezzaTabella, tableLayout: "fixed" }}>
-          <colgroup>{COLONNE.map((c, i) => <col key={i} style={{ width: c.larghezza }} />)}</colgroup>
-          <thead>
-            <tr>
-              {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
-                <th key={i} style={{
-                  ...thStyle, position: "relative",
-                  textAlign: (etichetta === "Sede" || COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)) ? "center" : thStyle.textAlign,
-                  lineHeight: COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta) ? 1.25 : thStyle.lineHeight,
-                  // separatore tra le intestazioni: senza, due etichette
-                  // corte in colonne strette (es. "Avvisata"/"Note") sembrano
-                  // incollate anche quando ciascuna sta nella sua colonna
-                  borderLeft: i > 0 ? `1px solid ${CREAM_BORDER}` : "none",
-                }}>
-                  {COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)
-                    ? COLONNE_HEADER_SU_DUE_RIGHE.get(etichetta).map((riga, r) => <div key={r}>{riga}</div>)
-                    : etichetta}
-                  <div
-                    onPointerDown={(e) => iniziaRidimensionamento(e, i)}
-                    onPointerMove={muoviRidimensionamento}
-                    onPointerUp={fineRidimensionamento}
-                    onPointerCancel={fineRidimensionamento}
-                    style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
-                  />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {righeMese.map((cd, indice) => {
-              const corso = corsoById[cd.corso_id];
-              const loc = locById[cd.location_id];
-              const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
-              const docenti = docentiPerCorsoData[cd.id] || [];
-              const rowSpanGruppo = 1 + docenti.length;
-              // corsi alternati bianco / grigio chiarissimo, per riconoscere
-              // a colpo d'occhio dove finisce un corso e inizia il prossimo
-              const sfondoGruppo = indice % 2 === 1 ? "#EEEEEE" : "#fff";
-              const cellaGruppo = { ...celStyle, background: sfondoGruppo };
-              return (
-                <React.Fragment key={cd.id}>
-                  <tr>
-                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 13, color: NAVY, textAlign: "center", verticalAlign: "top", borderLeft: `8px solid ${corso?.colore || NAVY}` }}>
-                      <div>{sopra}</div>
-                      <div style={{ fontSize: 10, color: MUTED }}>{sotto}</div>
-                    </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 13, color: NAVY, fontWeight: 700, verticalAlign: "top" }}>
-                      {corso?.nome?.toUpperCase() || "?"}
-                    </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
-                      {loc && valoreCampo(cd, "pagamento_sede") ? (
-                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 7 }}>
-                          {loc.nome_sede ? toTitleCase(loc.nome_sede) : toTitleCase(loc.nome)}
-                          <span title={valoreCampo(cd, "sede_confermata") ? "Sede avvisata" : "Sede non ancora avvisata"} style={{ width: 13, height: 13, borderRadius: "50%", background: valoreCampo(cd, "sede_confermata") ? "#2E7D32" : "#C0392B", flexShrink: 0 }} />
-                        </button>
-                      ) : (
-                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
-                          Gestisci
-                        </button>
-                      )}
-                    </td>
-                    <td style={{ ...cellaGruppo, verticalAlign: "top", paddingTop: 3 }}>
-                      <div>
-                        <span style={etichettaTipoStyle}>Master</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(cd, "master_id") || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
-                          <option value="">—</option>
-                          {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-                        </select>
-                        <div style={{ position: "relative", flexShrink: 0 }}>
-                          <button onClick={() => apriAggiungiDocente(cd)} title="Aggiungi un docente (master, assistente o leva)" style={pulsantePiuDocenteStyle}>+</button>
-                          {corsoDataAggiungiDocente?.id === cd.id && (
-                            <div style={{ position: "absolute", top: "calc(100% + 10px)", left: -8, zIndex: 30, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 10px 28px -8px rgba(14,27,51,0.35)", padding: 14, width: 220 }}>
-                              <div style={{ position: "absolute", top: -7, left: 14, width: 12, height: 12, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderTop: "none", borderRight: "none", transform: "rotate(135deg)" }} />
-                              <Field label="Aggiungi">
-                                <select style={inputStyle} value={tipoDocenteScelto} onChange={(e) => setTipoDocenteScelto(e.target.value)}>
-                                  <option value="master">Master</option>
-                                  <option value="assistente">Assistente</option>
-                                  <option value="leva">Leva</option>
-                                </select>
-                              </Field>
-                              <div style={{ display: "flex", gap: 8 }}>
-                                <Button onClick={confermaAggiungiDocente}>Aggiungi</Button>
-                                <Button variant="ghost" onClick={() => setCorsoDataAggiungiDocente(null)}>Annulla</Button>
-                              </div>
+      <div style={{ marginBottom: 28 }}>
+        {righeMese.map((cd) => {
+          const corso = corsoById[cd.corso_id];
+          const loc = locById[cd.location_id];
+          const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
+          const docenti = docentiPerCorsoData[cd.id] || [];
+          const concluso = cd.data_fine < dataOggiStr();
+          const sedeConfermata = !!valoreCampo(cd, "sede_confermata");
+
+          return (
+            <div key={cd.id} style={{
+              display: "flex", alignItems: "stretch", background: "#fff",
+              border: `1px solid ${CREAM_BORDER}`, borderLeft: `6px solid ${corso?.colore || NAVY}`,
+              borderRadius: 16, marginBottom: 12, overflow: "hidden",
+              boxShadow: "0 6px 18px -12px rgba(14,27,51,0.28)", opacity: concluso ? 0.72 : 1,
+            }}>
+              {/* A sinistra le cose che non cambiano riga per riga: quando,
+                  quale corso, dove. Stanno ferme mentre a destra si
+                  scorrono le persone. */}
+              <div style={{ flex: "0 0 250px", minWidth: 0, padding: "14px 16px", borderRight: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap" }}>{sopra}</div>
+                  <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1, overflowWrap: "anywhere" }}>{corso?.nome?.toUpperCase() || "?"}</div>
+                </div>
+                <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 1 }}>{sotto}</div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: concluso ? MUTED : "#2E7D32", flexShrink: 0 }} />
+                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: concluso ? MUTED : "#2E7D32" }}>{concluso ? "Concluso" : "Attivo"}</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+                  <IconaPin size={13} color={MUTED} />
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, textTransform: "uppercase", overflowWrap: "anywhere" }}>{loc?.nome?.toUpperCase() || "?"}</span>
+                </div>
+                {/* la sede e il suo pallino: verde se e' stata avvisata,
+                    rosso se no. Chi non ha ancora una sede assegnata
+                    mostra "Gestisci" in rosso, che e' un invito */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                  <IconaEdificioErp size={13} color={MUTED} />
+                  {loc && valoreCampo(cd, "pagamento_sede") ? (
+                    <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 6, overflowWrap: "anywhere" }}>
+                      {loc.nome_sede ? toTitleCase(loc.nome_sede) : toTitleCase(loc.nome)}
+                      <span title={sedeConfermata ? "Sede avvisata" : "Sede non ancora avvisata"} style={{ width: 11, height: 11, borderRadius: "50%", background: sedeConfermata ? "#2E7D32" : "#C0392B", flexShrink: 0 }} />
+                    </button>
+                  ) : (
+                    <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}>
+                      Gestisci
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {[
+                  rigaIncaricoScheda({
+                    chiave: `master-${cd.id}`,
+                    etichetta: "Master",
+                    selettore: (
+                      <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(cd, "master_id") || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
+                        <option value="">—</option>
+                        {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                      </select>
+                    ),
+                    azione: (
+                      <div style={{ position: "relative", flexShrink: 0 }}>
+                        <button onClick={() => apriAggiungiDocente(cd)} title="Aggiungi un docente (master, assistente o leva)" style={pulsantePiuDocenteStyle}>+</button>
+                        {corsoDataAggiungiDocente?.id === cd.id && (
+                          <div style={{ position: "absolute", top: "calc(100% + 10px)", left: -8, zIndex: 30, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 10px 28px -8px rgba(14,27,51,0.35)", padding: 14, width: 220 }}>
+                            <div style={{ position: "absolute", top: -7, left: 14, width: 12, height: 12, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderTop: "none", borderRight: "none", transform: "rotate(135deg)" }} />
+                            <Field label="Aggiungi">
+                              <select style={inputStyle} value={tipoDocenteScelto} onChange={(e) => setTipoDocenteScelto(e.target.value)}>
+                                <option value="master">Master</option>
+                                <option value="assistente">Assistente</option>
+                                <option value="leva">Leva</option>
+                              </select>
+                            </Field>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <Button onClick={confermaAggiungiDocente}>Aggiungi</Button>
+                              <Button variant="ghost" onClick={() => setCorsoDataAggiungiDocente(null)}>Annulla</Button>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
-                    </td>
-                    <td style={{ ...cellaGruppo, textAlign: "center" }}>
-                      {flagAvvisata(!!valoreCampo(cd, "avvisata"), () => salvaCampo(cd.id, "avvisata", !valoreCampo(cd, "avvisata")))}
-                    </td>
-                    <td style={cellaGruppo}>
-                      <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
-                    </td>
-                    <td style={cellaGruppo}>
-                      {cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file")}
-                    </td>
-                    <td style={cellaGruppo}>
-                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
+                    ),
+                    avvisata: !!valoreCampo(cd, "avvisata"),
+                    onAvvisata: () => salvaCampo(cd.id, "avvisata", !valoreCampo(cd, "avvisata")),
+                    valoreNota: cd.note,
+                    onNota: (v) => salvaCampo(cd.id, "note", v),
+                    viaggio: cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file"),
+                    alloggio: (
+                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
                         {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || "Gestisci"}
                       </button>
-                    </td>
-                    <td style={cellaGruppo}>
-                      {cellaHotelPagato(cd, cd.id)}
-                    </td>
-                    <td style={cellaGruppo}>
-                      <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
-                    </td>
-                  </tr>
-                  {docenti.map((riga) => (
-                    <tr key={riga.id}>
-                      <td style={{ ...cellaGruppo, verticalAlign: "top", paddingTop: 3 }}>
-                        <div>
-                          <span style={etichettaTipoStyle}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(riga, "persona_id") || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
-                            <option value="">—</option>
-                            {opzioniPersonaDocente(cd, riga).map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
-                          </select>
-                          <button onClick={() => rimuoviDocente(riga)} title="Rimuovi questa riga" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0 }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
-                          </button>
-                        </div>
-                      </td>
-                      <td style={{ ...cellaGruppo, textAlign: "center" }}>
-                        {flagAvvisata(!!valoreCampo(riga, "avvisata"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "avvisata", !valoreCampo(riga, "avvisata")))}
-                      </td>
-                      <td style={cellaGruppo}>
-                        <input style={campoStyle} defaultValue={riga.note || ""} onBlur={(e) => { if (e.target.value !== (riga.note || "")) salvaCampoGenerico("corsi_date_docenti", riga.id, "note", e.target.value || null); }} />
-                      </td>
-                      <td style={cellaGruppo}>
-                        {cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file")}
-                      </td>
-                      <td style={cellaGruppo}>
-                        <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
-                          {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || "Gestisci"}
-                        </button>
-                      </td>
-                      <td style={cellaGruppo}>
-                        {cellaHotelPagato(riga, cd.id)}
-                      </td>
-                      <td style={cellaGruppo}>
-                        {riga.tipo !== "leva" && (
-                          <input style={campoStyle} defaultValue={riga.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (riga.note_viaggio || "")) salvaCampoGenerico("corsi_date_docenti", riga.id, "note_viaggio", e.target.value || null); }} />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                    ),
+                    pagato: cellaHotelPagato(cd, cd.id),
+                    valoreNotaViaggio: cd.note_viaggio,
+                    onNotaViaggio: (v) => salvaCampo(cd.id, "note_viaggio", v),
+                  }),
+                  ...docenti.map((riga) => rigaIncaricoScheda({
+                    chiave: riga.id,
+                    etichetta: ETICHETTA_TIPO_DOCENTE[riga.tipo],
+                    selettore: (
+                      <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(riga, "persona_id") || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
+                        <option value="">—</option>
+                        {opzioniPersonaDocente(cd, riga).map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
+                      </select>
+                    ),
+                    azione: (
+                      <button onClick={() => rimuoviDocente(riga)} title="Rimuovi questa riga" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                      </button>
+                    ),
+                    avvisata: !!valoreCampo(riga, "avvisata"),
+                    onAvvisata: () => salvaCampoGenerico("corsi_date_docenti", riga.id, "avvisata", !valoreCampo(riga, "avvisata")),
+                    valoreNota: riga.note,
+                    onNota: (v) => salvaCampoGenerico("corsi_date_docenti", riga.id, "note", v),
+                    viaggio: cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file"),
+                    alloggio: (
+                      <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
+                        {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || "Gestisci"}
+                      </button>
+                    ),
+                    pagato: cellaHotelPagato(riga, cd.id),
+                    // le leve non viaggiano: la nota di viaggio non ha
+                    // senso per loro, e lasciarla vuota invitava a
+                    // scriverci dentro qualcosa che nessuno rileggeva
+                    valoreNotaViaggio: riga.note_viaggio,
+                    onNotaViaggio: riga.tipo === "leva" ? null : (v) => salvaCampoGenerico("corsi_date_docenti", riga.id, "note_viaggio", v),
+                  })),
+                ]}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   }
