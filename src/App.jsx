@@ -25364,8 +25364,12 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
             const aPosto = i.incassato || daIncassare === 0;
             const coloreIncasso = aPosto ? "#2E7D32" : "#C0392B";
+            // in "Contabilita' classe" ogni scheda e' alta e piena di
+            // numeri: da telefono dieci pixel fra una e l'altra non
+            // bastavano a capire dove finiva un allievo e cominciava il
+            // successivo. Trenta si', e si scorre lo stesso
             return (
-            <div key={i.id} style={{ ...cardStyle, padding: mostraGestione ? 0 : 16, marginBottom: 10, overflow: "hidden" }}>
+            <div key={i.id} style={{ ...cardStyle, padding: mostraGestione ? 0 : 16, marginBottom: isMobile && mostraGestione ? 30 : 10, overflow: "hidden" }}>
               {!mostraGestione && (
                 // fuori da "Contabilità classe": scheda semplice, solo nome e telefono
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 10 }}>
