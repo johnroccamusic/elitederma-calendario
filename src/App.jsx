@@ -4953,12 +4953,20 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {/* A sinistra le cose che non cambiano riga per riga: quando,
                   quale corso, dove. Stanno ferme mentre a destra si
                   scorrono le persone. */}
-              <div style={{ flex: "0 0 250px", minWidth: 0, padding: "14px 16px", borderRight: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap" }}>{sopra}</div>
-                  <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1, overflowWrap: "anywhere" }}>{corso?.nome?.toUpperCase() || "?"}</div>
+              <div style={{ flex: "0 0 290px", minWidth: 0, padding: "14px 16px", borderRight: `1px solid ${CREAM_BORDER}` }}>
+                {/* La data in una colonna sua e il nome del corso accanto,
+                    non sotto. Prima stavano sulla stessa riga con il
+                    permesso di andare a capo, e un nome lungo — "Sexyline
+                    velvet individuale" — si portava dietro tutto: scendeva
+                    sotto il numero e il mese finiva in fondo, staccato
+                    dalla data a cui appartiene. */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ flexShrink: 0 }}>
+                    <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap" }}>{sopra}</div>
+                    <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 1 }}>{sotto}</div>
+                  </div>
+                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.15, minWidth: 0, overflowWrap: "break-word" }}>{corso?.nome?.toUpperCase() || "?"}</div>
                 </div>
-                <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 1 }}>{sotto}</div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9 }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: concluso ? MUTED : "#2E7D32", flexShrink: 0 }} />
