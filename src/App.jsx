@@ -22083,6 +22083,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // cerca le modelle ha bisogno di vedere chi manca — trattamento e
   // "reperita da" li ha gia' scelti, e li riapre quando servono.
   const [schedeCompatte, setSchedeCompatte] = useState(true);
+  // "elenco" e' la vista di lavoro, una riga per posto modella con nome e
+  // telefono da scrivere. "globale" e' un colpo d'occhio: un allievo per
+  // riga e, di fianco, i suoi trattamenti con mattina o pomeriggio accesi
+  // — la stessa griglia che la master vede nella sua dashboard.
+  const [vistaModelle, setVistaModelle] = useState("elenco");
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
@@ -25154,12 +25159,62 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             {/* fondo bianco invece che trasparente: i tasti stanno sopra la
                 trama dorata dell'intestazione, e da li' il loro contorno
                 sottile spariva */}
-            <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <PillolaSegmentata
+                compatto={isMobile}
+                valore={vistaModelle}
+                onCambia={setVistaModelle}
+                voci={[
+                  { chiave: "elenco", testo: "Vista elenco", Icona: IconaElencoRighe },
+                  { chiave: "globale", testo: "Vista globale", Icona: IconaGrigliaTabella },
+                ]}
+              />
               <Button variant="ghost" style={{ background: "#fff", fontSize: 17 }} onClick={() => setSoloDaTrovare((v) => !v)}>{soloDaTrovare ? "Vedi tutta la classe" : "Vedi solo da trovare"}</Button>
-              <Button variant="ghost" style={{ background: "#fff", fontSize: 17 }} onClick={() => setSchedeCompatte((v) => !v)}>{schedeCompatte ? "Espandi" : "Comprimi"}</Button>
+              {vistaModelle === "elenco" && (
+                <Button variant="ghost" style={{ background: "#fff", fontSize: 17 }} onClick={() => setSchedeCompatte((v) => !v)}>{schedeCompatte ? "Espandi" : "Comprimi"}</Button>
+              )}
             </div>
           </div>
         );
+
+        // La vista globale sta prima di tutto il resto perche' non dipende
+        // da come e' fatto il corso: e' un elenco di allievi con accanto i
+        // loro trattamenti, e vale sia per i corsi con i giorni impostati
+        // sia per quelli senza.
+        if (vistaModelle === "globale") {
+          const conModelle = listaIscritti.filter((i) => Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+          const visibili = (soloDaTrovare ? conModelle.filter((i) => i.richiede_modelle) : conModelle)
+            .slice()
+            .sort((a, b) => `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it"));
+          return (
+            <div>
+              {testataAssegnaModelle}
+              {visibili.length === 0 && (
+                <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>
+                  {soloDaTrovare ? "Nessuna modella ancora da trovare." : "Nessun iscritto di questa classe ha richiesto modelle."}
+                </div>
+              )}
+              {visibili.map((i) => {
+                const nostra = !!i.richiede_modelle;
+                return (
+                  <div key={i.id} style={{ ...cardStyle, padding: isMobile ? 12 : 16, marginBottom: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                    <div style={{ flex: "1 1 150px", minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY }}>
+                        {toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim())}
+                      </div>
+                      {!nostra && (
+                        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.3, marginTop: 2 }}>Ha la sua modella</div>
+                      )}
+                    </div>
+                    <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", justifyContent: "flex-end" }}>
+                      <RiepilogoModelleAllievo iscritto={i} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
 
         // corso senza template giorni impostato: comportamento identico a
         // prima di questa funzionalità, nessuna rottura per i corsi già
