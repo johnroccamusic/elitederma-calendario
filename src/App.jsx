@@ -8275,10 +8275,8 @@ function conteggioKitEdizione(iscrittiEdizione) {
 // Un numero grosso con la sua icona e la sua didascalia: "2 / ALLIEVI
 // TOTALI". Sono le due cose che la master guarda per prime aprendo la
 // scheda, e meritano di essere lette da lontano.
-// `etichettaPrima` mette la didascalia a sinistra della cifra invece che a
-// destra: cosi' i due blocchi si specchiano attorno al filo che li separa,
-// con le due cifre vicine al centro e le parole verso l'esterno.
-function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile, etichettaPrima = false }) {
+// Prima la cifra, poi la parola: "8 ALLIEVI TOTALI" si legge come si dice.
+function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile }) {
   const parola = (
     <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, overflowWrap: "anywhere" }}>{etichetta}</span>
   );
@@ -8293,8 +8291,8 @@ function NumeroSchedaMaster({ Icona, numero, etichetta, isMobile, etichettaPrima
       }}>
         <Icona size={isMobile ? 20 : 26} color={GOLD} />
       </span>
-      <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: isMobile ? 6 : 9 }}>
-        {etichettaPrima ? <>{parola}{cifra}</> : <>{cifra}{parola}</>}
+      <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10 }}>
+        {cifra}{parola}
       </div>
     </div>
   );
@@ -8444,29 +8442,35 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       {/* I numeri: quanti allievi e quali kit. Prima erano un elenco con
           una lineetta dorata a lato; qui sono due cifre grosse, che e'
           quello che se ne fa chi apre la scheda. */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 22, padding: spaziatura, flexWrap: "wrap" }}>
-        <NumeroSchedaMaster Icona={IconaGruppoTeam} numero={iscrittiEdizione.length} etichetta="Allievi totali" etichettaPrima isMobile={isMobile} />
-        {/* I kit sono un elenco, non tanti riquadri affiancati. Con un tipo
-            solo la differenza non si vedeva; con quattro, i riquadri
-            andavano a capo e si sparpagliavano per mezza scheda, uno per
-            riga ma ognuno alla sua altezza. Una colonna sola, numero a
-            sinistra e nome accanto, si legge dall'alto in basso e occupa
-            un quarto dello spazio. */}
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 22, padding: spaziatura, flexWrap: "wrap" }}>
+        <NumeroSchedaMaster Icona={IconaGruppoTeam} numero={iscrittiEdizione.length} etichetta="Allievi totali" isMobile={isMobile} />
+        {/* I kit sono un elenco, non tanti riquadri affiancati: con quattro
+            tipi, i riquadri andavano a capo e si sparpagliavano per mezza
+            scheda. Una colonna sola, numero a sinistra e nome accanto.
+            Tre accorgimenti perche' resti in riga anche quando i nomi sono
+            lunghi:
+            - il numero sta in una colonna di larghezza fissa, allineato a
+              destra, cosi' i nomi partono tutti dalla stessa verticale
+              qualunque sia la cifra;
+            - il nome va a capo dentro la sua colonna e le righe successive
+              restano incolonnate sotto la prima, non sotto il numero;
+            - l'icona sta al centro dell'elenco, non in cima, come sta al
+              centro del numero degli allievi qui accanto. */}
         {kit.length > 0 && (
           <>
             {divisoreVerticale}
-            <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
               <span style={{
                 width: isMobile ? 40 : 52, height: isMobile ? 40 : 52, borderRadius: 14, background: "#F4F1EA",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               }}>
                 <IconaPacchettoRiga size={isMobile ? 20 : 26} color={GOLD} />
               </span>
-              <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3, paddingTop: 2 }}>
+              <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: isMobile ? 5 : 7 }}>
                 {kit.map(([nome, n], idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-                    <span style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, lineHeight: 1.1, flexShrink: 0, minWidth: isMobile ? 14 : 18 }}>{n}</span>
-                    <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.3, overflowWrap: "anywhere" }}>{nome}</span>
+                  <div key={idx} style={{ display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10, minWidth: 0 }}>
+                    <span style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY, lineHeight: 1.15, flexShrink: 0, width: isMobile ? 16 : 22, textAlign: "right" }}>{n}</span>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.45, minWidth: 0, overflowWrap: "anywhere" }}>{nome}</span>
                   </div>
                 ))}
               </div>
