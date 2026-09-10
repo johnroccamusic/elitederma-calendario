@@ -4901,7 +4901,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
       // righe a righe alterne, bianco e crema chiarissimo: sono tre o
       // quattro per scheda, tutte fatte degli stessi pezzi, e con lo
       // sfondo unico l'occhio scivolava da una all'altra a meta' strada
-      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: indice % 2 ? "#FBFAF6" : "#fff", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: indice % 2 ? "#FBFAF6" : "#fff", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "nowrap" }}>
         {/* il ruolo dentro una pastiglia: e' l'unica cosa della riga che
             non si tocca e non cambia, e in chiaro fra tutti quei campi
             bianchi si perdeva */}
@@ -4909,31 +4909,31 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           <IconaPersonaSemplice size={16} color={(COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo} />
           <span style={{ ...fontScheda, fontSize: 12.5, fontWeight: 700, color: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo }}>{etichetta}</span>
         </div>
-        <div style={{ flex: "1 1 190px", minWidth: 150, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ flex: "1 1 114px", minWidth: 92, display: "flex", alignItems: "center", gap: 6 }}>
           {selettore}
           {azione}
         </div>
         <div style={{ flex: "0 0 auto" }}>{flagAvvisata(avvisata, onAvvisata)}</div>
         <input
-          style={{ ...campoStyle, flex: "1 1 170px", minWidth: 120 }}
+          style={{ ...campoStyle, flex: "1 1 130px", minWidth: 92 }}
           placeholder="Nota"
           defaultValue={valoreNota || ""}
           onBlur={(e) => { if (e.target.value !== (valoreNota || "")) onNota(e.target.value || null); }}
         />
         <div style={{ flex: "0 0 auto" }}>{viaggio}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 auto", whiteSpace: "nowrap" }}>
           <IconaEdificioErp size={16} color={MUTED} />
           {alloggio}
         </div>
         <div style={{ flex: "0 0 auto" }}>{pagato}</div>
         {onNotaViaggio ? (
           <input
-            style={{ ...campoStyle, flex: "1 1 150px", minWidth: 110 }}
+            style={{ ...campoStyle, flex: "3 1 200px", minWidth: 90 }}
             placeholder="+ Nota"
             defaultValue={valoreNotaViaggio || ""}
             onBlur={(e) => { if (e.target.value !== (valoreNotaViaggio || "")) onNotaViaggio(e.target.value || null); }}
           />
-        ) : <div style={{ flex: "1 1 150px", minWidth: 110 }} />}
+        ) : <div style={{ flex: "3 1 200px", minWidth: 90 }} />}
       </div>
     );
   }
@@ -5010,7 +5010,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                 </div>
               </div>
 
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ flex: 1, minWidth: 0, overflowX: "auto" }}>
                 {[
                   rigaIncaricoScheda({
                     chiave: `master-${cd.id}`,
