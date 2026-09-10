@@ -9082,6 +9082,10 @@ function colonneModelleClasse(iscritti) {
 // si premono e la riga diventa un posto dove lavorare, non solo da
 // guardare. Senza, restano quello che erano: un riepilogo.
 function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
+  // Sul telefono i gruppi crescono di meta': MAT e POM non sono etichette
+  // da leggere, sono due bottoni da centrare col pollice in aula, e a
+  // cinque pixel d'imbottitura erano bersagli da mouse.
+  const isMobile = useIsMobile();
   const posti = (Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [])
     .map((m, indice) => ({ ...m, indice }))
     .sort((a, b) => {
@@ -9129,11 +9133,11 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
       title={onClick ? (acceso ? "Togli" : "Segna") : undefined}
       style={{
       cursor: onClick ? "pointer" : "default",
-      ...fontBody, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1,
+      ...fontBody, fontSize: isMobile ? 11.5 : 9.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1,
       // larghezza minima: MAT e POM non si accavallano mai, nemmeno in una
       // colonna stretta. Prima si sovrapponevano e non si leggeva ne' l'uno
       // ne' l'altro
-      padding: "5px 2px", flex: "1 1 0", minWidth: 30, textAlign: "center", borderRadius: 7,
+      padding: isMobile ? "9px 3px" : "5px 2px", flex: "1 1 0", minWidth: 30, textAlign: "center", borderRadius: 7,
       background: acceso ? NAVY : "#fff",
       border: `1px solid ${acceso ? NAVY : "#E3E6EC"}`,
       color: acceso ? "#fff" : MUTED,
@@ -9151,8 +9155,8 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
     // spazio, altrimenti spingerebbe i trattamenti fuori asse di mezza
     // parola. Il centro e' quello dei trattamenti, che sono la cosa da
     // guardare.
-    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 10, minHeight: 44 }}>
-      <span style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.1 }}>Modelle</span>
+    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 10, minHeight: isMobile ? 66 : 44 }}>
+      <span style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 11 : 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.1 }}>Modelle</span>
       {/* i gruppi si dividono lo spazio che c'e' e si stringono: prima
           tenevano la loro misura e uscivano dalla scheda, e per vedere
           l'eyeliner bisognava trascinare di lato una riga dentro una
@@ -9166,15 +9170,15 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
         const m = postoDi(tipo);
         return (
           <div key={tipo} title={m ? tipo : `${tipo} — non previsto per questo allievo`} style={{
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? 7 : 4,
             // larghezza fissa uguale per tutti: i gruppi non si allargano
             // a riempire la riga, cosi' restano incolonnati fra un allievo
             // e l'altro e il blocco si puo' centrare davvero
             flex: "0 1 150px", minWidth: 92,
-            background: "#F1F3F6", borderRadius: 10, padding: "6px 5px",
+            background: "#F1F3F6", borderRadius: 10, padding: isMobile ? "10px 7px" : "6px 5px",
             opacity: m ? 1 : 0.35,
           }}>
-            <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{etichetta(tipo)}</span>
+            <span style={{ ...fontBody, fontSize: isMobile ? 12 : 10, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{etichetta(tipo)}</span>
             <div style={{ display: "flex", gap: 4, width: "100%" }}>
               {cella(!!m?.mattina, "MAT", onCambia && m ? () => onCambia(m.indice, "mattina", !m.mattina) : undefined)}
               {cella(!!m?.pomeriggio, "POM", onCambia && m ? () => onCambia(m.indice, "pomeriggio", !m.pomeriggio) : undefined)}
