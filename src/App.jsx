@@ -31353,6 +31353,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
   // scritte, e un elenco si riordina, del markup no.
   const schede = [
     { chiave: "primanota", titolo: "Prima nota cassa", sotto: "Movimenti e registrazioni", Icona: IconaRicevutaErp, onClick: onApriPrimaNotaCassa },
+    { chiave: "banca", titolo: "Movimenti banca", sotto: "Estratto conto da riconciliare", Icona: IconaEdificioErp },
     { chiave: "impegni", titolo: `Quadro impegni (${impegniCount})`, sotto: "Impegni presi e da saldare", Icona: IconaCalendarioCard },
     { chiave: "documenti", titolo: `Fatture ricevute (${documentiCount})`, sotto: "Gestione fornitori", Icona: IconaCartellaShop },
     { chiave: "notecredito", titolo: `Note di credito (${noteCreditoCount})`, sotto: "Emissione e gestione", Icona: IconaCartellaShop },
@@ -33020,6 +33021,437 @@ function PannelloCassaContanti({
   );
 }
 
+// ---------- Movimenti della banca ------------------------------------
+//
+// L'estratto conto della Banca Popolare del Lazio entra da qui, e da qui
+// diventa prima nota. Si caricano DUE file scaricati dall'home banking,
+// perche' nessuno dei due da solo basta:
+//
+// - l'OFX porta l'identificativo che la banca assegna a ogni movimento
+//   (il FITID). Verificato scaricando due volte lo stesso periodo: gli
+//   identificativi coincidono uno per uno, quindi ricaricare un mese gia'
+//   caricato non crea doppioni. E' l'unica chiave di cui fidarsi;
+// - il CSV porta la descrizione intera e il saldo progressivo. L'OFX
+//   taglia la descrizione a 255 caratteri, e nei due casi in cui succede
+//   quello che si perde e' proprio il numero di fattura in fondo.
+//
+// Quindi: identificativo dall'OFX, testo dal CSV. Se arriva un file solo
+// si lavora lo stesso, dicendo pero' cosa manca.
+
+// "1.234,56" -> 1234.56 — il punto e' separatore di migliaia, non decimale
+function numeroBanca(v) {
+  if (v == null) return null;
+  const pulito = String(v).trim().replace(/\./g, "").replace(",", ".");
+  if (pulito === "") return null;
+  const n = parseFloat(pulito);
+  return Number.isFinite(n) ? round2(n) : null;
+}
+
+// "10/09/2026" -> "2026-09-10"
+function dataBanca(v) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(v || "").trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+// Il CSV della banca mette fra virgolette i campi che contengono un ";",
+// e capita: certe descrizioni ce l'hanno dentro. Uno split secco spezza
+// la riga nel punto sbagliato, quindi le virgolette si contano a mano.
+function dividiRigaCsvBanca(riga, sep = ";") {
+  const campi = [];
+  let corrente = "", dentroVirgolette = false;
+  for (let i = 0; i < riga.length; i++) {
+    const c = riga[i];
+    if (c === '"') {
+      if (dentroVirgolette && riga[i + 1] === '"') { corrente += '"'; i++; }
+      else dentroVirgolette = !dentroVirgolette;
+    } else if (c === sep && !dentroVirgolette) { campi.push(corrente); corrente = ""; }
+    else corrente += c;
+  }
+  campi.push(corrente);
+  return campi.map((v) => v.trim());
+}
+
+// L'OFX della banca e' SGML, non XML: i tag non si chiudono e il valore e'
+// quello che sta fra il tag e il fine riga. Nessun parser XML lo digerisce,
+// e non serve: si legge a blocchi.
+function leggiEstrattoOfx(testo) {
+  const iso = (v) => {
+    const m = /^(\d{4})(\d{2})(\d{2})/.exec(String(v || "").trim());
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  };
+  const primo = (tag) => {
+    const m = new RegExp(`<${tag}>([^\\r\\n<]*)`).exec(testo);
+    return m ? m[1].trim() : null;
+  };
+  const movimenti = [];
+  for (const blocco of testo.split("<STMTTRN>").slice(1)) {
+    const corpo = blocco.split("</STMTTRN>")[0];
+    const campo = (tag) => {
+      const m = new RegExp(`<${tag}>([^\\r\\n<]*)`).exec(corpo);
+      return m ? m[1].trim() : null;
+    };
+    const importo = campo("TRNAMT");
+    const data = iso(campo("DTPOSTED"));
+    if (importo == null || !data) continue;
+    movimenti.push({
+      riferimento: campo("FITID"),
+      data_operazione: data,
+      data_valuta: iso(campo("DTAVAIL")),
+      importo: round2(parseFloat(importo)),
+      memo: campo("MEMO") || "",
+    });
+  }
+  return {
+    conto: primo("ACCTID"),
+    abi: primo("BANKID"),
+    saldoFinale: numeroBanca(primo("BALAMT")?.replace(".", ",")),
+    dal: iso(primo("DTSTART")),
+    al: iso(primo("DTEND")),
+    movimenti,
+  };
+}
+
+function leggiEstrattoCsv(testo) {
+  const righe = testo.split(/\r?\n/).filter((r) => r.trim() !== "");
+  if (righe.length < 2) return [];
+  // il separatore lo decide chi scarica: si riconosce da quale carattere
+  // spezza l'intestazione in piu' pezzi
+  const sep = [";", "\t", ","].find((s) => dividiRigaCsvBanca(righe[0], s).length >= 5) || ";";
+  const intestazione = dividiRigaCsvBanca(righe[0], sep).map((h) => h.toLowerCase());
+  const dove = (frammento) => intestazione.findIndex((h) => h.includes(frammento));
+  const iDataMov = dove("data movimento"), iDataVal = dove("data valuta");
+  const iDescr = dove("descrizione"), iCausale = dove("causale");
+  const iImporto = dove("importo"), iSaldo = dove("saldo"), iNota = dove("nota");
+  if (iDataMov < 0 || iImporto < 0) return [];
+  return righe.slice(1).map((r) => {
+    const c = dividiRigaCsvBanca(r, sep);
+    const prendi = (i) => (i >= 0 ? c[i] || "" : "");
+    return {
+      data_operazione: dataBanca(prendi(iDataMov)),
+      data_valuta: dataBanca(prendi(iDataVal)),
+      descrizione: prendi(iDescr),
+      causale: prendi(iCausale),
+      importo: numeroBanca(prendi(iImporto)),
+      saldo: numeroBanca(prendi(iSaldo)),
+      nota: prendi(iNota),
+    };
+  }).filter((m) => m.data_operazione && m.importo != null);
+}
+
+// Chi c'e' dall'altra parte del movimento. La banca infila tutto in una
+// frase sola e ogni tipo di operazione ha la sua forma: qui si prova a
+// tirar fuori il nome per rendere la lista leggibile. Se nessuna forma si
+// riconosce si lascia il testo della banca: meglio grezzo che sbagliato.
+// Sui 378 movimenti di luglio-settembre ne riconosce 367; gli altri sono
+// spese della banca stessa (canoni, bolli, competenze), che una
+// controparte non ce l'hanno.
+function controparteBanca(descrizione, causale) {
+  const d = String(descrizione || "").trim();
+  const forme = [
+    // "Bonifico O/C:NOME BICBANCA.coordinate Note: ..."
+    /O\/C:\s*(.+?)\s+[A-Z]{4}[A-Z0-9]{2,8}\.[A-Z0-9]/,
+    // "VS. DISP N. ... A FAVORE DI NOME NOP. ..."
+    /A FAVORE DI\s+(.+?)\s+NOP\./i,
+    // "BONIFICO DA VOI DISPOSTO NOP ... A FAVORE DI NOME C. ..."
+    /A FAVORE DI\s+(?!\d+\s+BENEF)(.+?)(?:\s+C\.\s|\s*$)/i,
+    // addebito diretto: "Cred.<identificativo> NOME Deb...." — a volte
+    // "Deb." e' attaccato al nome, senza spazio
+    /Cred\.\s*(?:[A-Z]{2}\d{2}[A-Z]{3}[A-Z0-9]+\s+)?(.+?)\s*Deb\./,
+    // POS: dopo il numero della carta c'e' l'esercente
+    /con carta\s+\S+\s+\*\d+\s*(.+)$/i,
+    // F24 e simili passano dal circuito interbancario
+    /Descr\.SIA:\s*(.+?)\s{2,}/i,
+    /Descr\.SIA:\s*(.+)$/i,
+    // bonifici esteri: "... ben. NOME"
+    /\bben\.\s*(.+)$/i,
+  ];
+  for (const forma of forme) {
+    const m = forma.exec(d);
+    if (m && m[1] && m[1].trim().length >= 2) return m[1].trim().replace(/[,;]$/, "").slice(0, 70);
+  }
+  return d.slice(0, 70) || causale || "Movimento";
+}
+
+// Appaia i due file per data + importo, consumando le righe man mano: due
+// movimenti identici nello stesso giorno restano distinti perche' se ne
+// prende uno per volta invece di riusare sempre il primo.
+function unisciEstrattoBanca(ofx, righeCsv, nomeFile) {
+  const conto = ofx?.conto || "BPL";
+  const disponibili = (righeCsv || []).map((r) => ({ r, usata: false }));
+
+  // senza OFX si lavora sul solo CSV: nessun identificativo della banca,
+  // l'impronta si calcola dai campi. Funziona, ma e' una supposizione:
+  // vale la pena dirlo a chi carica.
+  const sorgente = ofx?.movimenti?.length
+    ? ofx.movimenti.map((m) => ({ ...m }))
+    : (righeCsv || []).map((r) => ({ riferimento: null, data_operazione: r.data_operazione, data_valuta: r.data_valuta, importo: r.importo, memo: `${r.causale} ${r.descrizione}`.trim() }));
+
+  // il progressivo serve solo quando l'identificativo non c'e': distingue
+  // due movimenti uguali nello stesso giorno dentro lo stesso file
+  const contatoreGiorno = {};
+
+  return sorgente.map((m) => {
+    const c = ofx?.movimenti?.length
+      ? disponibili.find((d) => !d.usata && d.r.data_operazione === m.data_operazione && d.r.importo === m.importo)
+      : null;
+    if (c) c.usata = true;
+    const csv = c?.r || (ofx?.movimenti?.length ? null : righeCsv.find((r) => r.data_operazione === m.data_operazione && r.importo === m.importo));
+
+    const causale = csv?.causale || null;
+    // la descrizione buona e' quella del CSV, intera. Se manca si usa il
+    // memo dell'OFX, che pero' ha la causale incollata davanti: si toglie,
+    // altrimenti finisce scritta due volte
+    let descrizione = csv?.descrizione || "";
+    if (!descrizione) {
+      descrizione = m.memo || "";
+      if (causale && descrizione.startsWith(causale)) descrizione = descrizione.slice(causale.length).trim();
+    }
+
+    const giorno = m.data_operazione;
+    contatoreGiorno[giorno] = (contatoreGiorno[giorno] || 0) + 1;
+    const progressivo = contatoreGiorno[giorno] - 1;
+
+    // l'impronta: l'identificativo della banca se c'e' — e' quello che
+    // rende innocuo ricaricare lo stesso periodo — altrimenti i campi
+    // messi in fila, con il progressivo a separare i doppi veri
+    const impronta = m.riferimento
+      ? `${conto}:${m.riferimento}`
+      : `${conto}|${giorno}|${m.importo}|${(descrizione || "").slice(0, 120)}|${progressivo}`;
+
+    return {
+      conto,
+      data_operazione: giorno,
+      data_valuta: m.data_valuta || csv?.data_valuta || null,
+      importo: m.importo,
+      descrizione: descrizione || "",
+      causale,
+      saldo: csv?.saldo ?? null,
+      progressivo,
+      impronta,
+      stato: "nuovo",
+      nota: csv?.nota || null,
+      file_origine: nomeFile || null,
+    };
+  });
+}
+
+function PannelloMovimentiBanca() {
+  const isMobile = useIsMobile();
+  const [movimenti, setMovimenti] = useState(null);
+  const [filtro, setFiltro] = useState("nuovo");
+  const [anteprima, setAnteprima] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [importando, setImportando] = useState(false);
+  const [leggendo, setLeggendo] = useState(false);
+
+  async function carica() {
+    // il tetto e' alto ma esiste: con qualche anno di estratti conto la
+    // lista va spezzata per periodo, e allora si vedra' che serve
+    const { data: righe, error } = await supabase
+      .from("movimenti_banca")
+      .select("*")
+      .order("data_operazione", { ascending: false })
+      .order("progressivo", { ascending: true })
+      .limit(1500);
+    if (error) { setMsg(`Non riesco a leggere i movimenti: ${testoErrore(error)}`); setMovimenti([]); return; }
+    setMovimenti(righe || []);
+  }
+  useEffect(() => { carica(); }, []);
+
+  async function scegliFile(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setLeggendo(true); setMsg(""); setAnteprima(null);
+
+    const testi = await Promise.all(files.map((f) => f.text().then((t) => ({ nome: f.name, testo: t }))));
+    const fileOfx = testi.find((t) => /<OFX>|OFXHEADER/i.test(t.testo));
+    const fileCsv = testi.find((t) => t !== fileOfx && /data movimento/i.test(t.testo.slice(0, 500)));
+
+    if (!fileOfx && !fileCsv) {
+      setLeggendo(false);
+      setMsg("Questi file non sembrano un estratto conto: servono l'OFX e il CSV scaricati dall'home banking.");
+      return;
+    }
+
+    const ofx = fileOfx ? leggiEstrattoOfx(fileOfx.testo) : null;
+    const righeCsv = fileCsv ? leggiEstrattoCsv(fileCsv.testo) : [];
+    const letti = unisciEstrattoBanca(ofx, righeCsv, (fileOfx || fileCsv).nome);
+
+    // la contabilita' parte dal 1 luglio: quello che viene prima non entra
+    const dentro = letti.filter((m) => m.data_operazione >= INIZIO_CONTABILITA);
+    const fuori = letti.length - dentro.length;
+
+    const impronteEsistenti = new Set((movimenti || []).map((m) => m.impronta));
+    const nuovi = dentro.filter((m) => !impronteEsistenti.has(m.impronta));
+
+    setLeggendo(false);
+    setAnteprima({
+      righe: nuovi,
+      letti: letti.length,
+      giaPresenti: dentro.length - nuovi.length,
+      fuoriPeriodo: fuori,
+      conOfx: !!ofx?.movimenti?.length,
+      conCsv: righeCsv.length > 0,
+      appaiati: ofx?.movimenti?.length ? dentro.filter((m) => m.saldo != null).length : 0,
+      dal: dentro.length ? dentro[dentro.length - 1].data_operazione : null,
+      al: dentro.length ? dentro[0].data_operazione : null,
+      conto: ofx?.conto || null,
+    });
+  }
+
+  async function confermaImport() {
+    if (!anteprima?.righe?.length) return;
+    setImportando(true); setMsg("");
+    // a blocchi: un insert da mille righe in un colpo solo e' il modo piu'
+    // sicuro di prendersi un timeout a meta' strada
+    const blocchi = [];
+    for (let i = 0; i < anteprima.righe.length; i += 200) blocchi.push(anteprima.righe.slice(i, i + 200));
+    for (const blocco of blocchi) {
+      // ignoreDuplicates: l'impronta e' unica a livello di tabella, quindi
+      // anche se due persone caricassero lo stesso file insieme non si
+      // rompe niente — le righe gia' presenti vengono semplicemente saltate
+      const { error } = await supabase.from("movimenti_banca").upsert(blocco, { onConflict: "impronta", ignoreDuplicates: true });
+      if (error) { setImportando(false); setMsg(`Import interrotto: ${testoErrore(error)}`); await carica(); return; }
+    }
+    setImportando(false);
+    setMsg(`Importati ${anteprima.righe.length} movimenti.`);
+    setAnteprima(null);
+    await carica();
+  }
+
+  async function cambiaStato(riga, stato) {
+    const { error } = await supabase.from("movimenti_banca").update({ stato }).eq("id", riga.id);
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
+    setMovimenti((prec) => (prec || []).map((m) => (m.id === riga.id ? { ...m, stato } : m)));
+  }
+
+  const tutti = movimenti || [];
+  const nuovi = tutti.filter((m) => m.stato === "nuovo");
+  const ignorati = tutti.filter((m) => m.stato === "ignorato");
+  const riconciliati = tutti.filter((m) => m.stato === "riconciliato");
+  const visibili = filtro === "tutti" ? tutti : tutti.filter((m) => m.stato === filtro);
+
+  const entrate = round2(visibili.filter((m) => Number(m.importo) > 0).reduce((s, m) => s + Number(m.importo), 0));
+  const uscite = round2(visibili.filter((m) => Number(m.importo) < 0).reduce((s, m) => s + Number(m.importo), 0));
+
+  return (
+    <div>
+      {/* il caricamento: sta in cima perche' e' la prima cosa che si fa
+          entrando, e sparisce visivamente appena la lista si riempie */}
+      <div style={{ ...cardStyle, padding: isMobile ? 14 : 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <IconaEdificioErp size={20} color={GOLD} />
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Carica l'estratto conto</div>
+          <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 18, padding: "9px 16px", cursor: "pointer", marginLeft: "auto" }}>
+            {leggendo ? "Leggo…" : "Scegli i file"}
+            <input type="file" accept=".ofx,.csv,.OFX,.CSV" multiple onChange={scegliFile} style={{ display: "none" }} />
+          </label>
+        </div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+          Dall'home banking, movimenti dal {fmtData(INIZIO_CONTABILITA)} in poi: scarica una volta in <b>OFX</b> e una in <b>CSV</b> (separatore punto e virgola), poi selezionali qui tutti e due insieme.
+          L'OFX porta l'identificativo che impedisce i doppioni, il CSV la descrizione per intero.
+        </div>
+
+        {anteprima && (
+          <div style={{ marginTop: 14, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14 }}>
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 10 }}>
+              {[
+                { etichetta: "Letti dal file", valore: anteprima.letti },
+                { etichetta: "Nuovi da importare", valore: anteprima.righe.length, accento: true },
+                { etichetta: "Già presenti", valore: anteprima.giaPresenti },
+                { etichetta: `Prima del ${fmtData(INIZIO_CONTABILITA)}`, valore: anteprima.fuoriPeriodo },
+              ].map((r) => (
+                <div key={r.etichetta}>
+                  <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{r.etichetta}</div>
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: r.accento ? GOLD : NAVY }}>{r.valore}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
+              {anteprima.conto ? `Conto ${anteprima.conto}. ` : ""}
+              {anteprima.dal ? `Dal ${fmtData(anteprima.dal)} al ${fmtData(anteprima.al)}. ` : ""}
+              {!anteprima.conOfx && "Manca l'OFX: senza l'identificativo della banca il controllo dei doppioni si basa su data, importo e descrizione. Funziona, ma è meno sicuro."}
+              {anteprima.conOfx && !anteprima.conCsv && "Manca il CSV: le descrizioni più lunghe di 255 caratteri arriveranno tagliate."}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={confermaImport} disabled={importando || anteprima.righe.length === 0}
+                style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: anteprima.righe.length ? NAVY : MUTED, border: "none", borderRadius: 18, padding: "10px 18px", cursor: anteprima.righe.length && !importando ? "pointer" : "default" }}>
+                {importando ? "Importo…" : anteprima.righe.length ? `Importa ${anteprima.righe.length} movimenti` : "Niente di nuovo da importare"}
+              </button>
+              <button onClick={() => setAnteprima(null)}
+                style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: "10px 18px", cursor: "pointer" }}>
+                Annulla
+              </button>
+            </div>
+          </div>
+        )}
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.startsWith("Import") && !msg.includes("interrotto") ? "#2E7D32" : "#C0392B", marginTop: 12 }}>{msg}</div>}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        <TabPillola attivo={filtro === "nuovo"} onClick={() => setFiltro("nuovo")}>Da sistemare ({nuovi.length})</TabPillola>
+        <TabPillola attivo={filtro === "riconciliato"} onClick={() => setFiltro("riconciliato")}>Riconciliati ({riconciliati.length})</TabPillola>
+        <TabPillola attivo={filtro === "ignorato"} onClick={() => setFiltro("ignorato")}>Ignorati ({ignorati.length})</TabPillola>
+        <TabPillola attivo={filtro === "tutti"} onClick={() => setFiltro("tutti")}>Tutti ({tutti.length})</TabPillola>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 14 }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Entrate</div>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#2E7D32" }}>{fmtEuroErp2(entrate)}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Uscite</div>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#C0392B" }}>{fmtEuroErp2(uscite)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ ...cardStyle }}>
+        {movimenti === null && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Carico…</div>}
+        {movimenti !== null && visibili.length === 0 && (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>
+            {tutti.length === 0 ? "Nessun movimento importato: carica l'estratto conto qui sopra." : "Nessun movimento in questo stato."}
+          </div>
+        )}
+        {elencoConIntestazioniMese(visibili, (m) => m.data_operazione, (m) => {
+          const importo = Number(m.importo) || 0;
+          const chips = [m.causale, m.stato === "ignorato" ? "Ignorato" : null].filter(Boolean);
+          return (
+            <RigaAmministrazione
+              key={m.id}
+              data={m.data_operazione}
+              titolo={controparteBanca(m.descrizione, m.causale)}
+              sottotitolo={m.descrizione}
+              chips={chips}
+              importo={fmtEuroErp2(importo)}
+              coloreImporto={importo < 0 ? "#C0392B" : "#2E7D32"}
+            >
+              <div style={{ flex: "0 0 auto", display: "flex", gap: 6 }}>
+                {m.stato === "nuovo" ? (
+                  <button onClick={() => cambiaStato(m, "ignorato")} title="Non entra in prima nota: giroconti, movimenti tecnici"
+                    style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "7px 12px", cursor: "pointer" }}>
+                    Ignora
+                  </button>
+                ) : (
+                  <button onClick={() => cambiaStato(m, "nuovo")}
+                    style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "7px 12px", cursor: "pointer" }}>
+                    Rimetti
+                  </button>
+                )}
+              </div>
+            </RigaAmministrazione>
+          );
+        })}
+        {tutti.length >= 1500 && (
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, paddingTop: 12 }}>
+            Mostro i 1500 movimenti più recenti.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PannelloCassaConsulenze() {
   const isMobile = useIsMobile();
   const [incassi, setIncassi] = useState(null);
@@ -33633,6 +34065,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
           />
         )}
         {tab === "consulenze" && <PannelloCassaConsulenze />}
+        {tab === "banca" && <PannelloMovimentiBanca />}
 
         {tab === "impegni" && (
           <div>
