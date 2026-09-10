@@ -50574,7 +50574,16 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           {FASI_LOGISTICA.map((f) => (
             <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }} />
           ))}
-          {indiceFaseLogistica(FASI_LOGISTICA, faseCorrente) > 0 && (
+          {/* indietro si torna fino al ritiro, non oltre. Finche' il
+              pacco e' in casa si puo' riaprire, aggiungere, rifare la
+              bolla; quando il corriere se l'e' portato via quella scatola
+              e' fuori dalle nostre mani, e dire in app che non e' ancora
+              partita vorrebbe dire raccontarsi una cosa che non e' vera */}
+          {(() => {
+            const idx = indiceFaseLogistica(FASI_LOGISTICA, faseCorrente);
+            const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
+            return idx > 0 && idx <= iRitiro;
+          })() && (
             <button
               onClick={(e) => { e.stopPropagation(); onTornaIndietroFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); }}
               title="Torna alla fase precedente"
@@ -51035,7 +51044,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         <div style={{ ...cardStyle, padding: 14, marginBottom: 14, border: "1px solid #A8C4E8", background: "#EDF3FB" }}>
           <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#1F4E8C" }}>Liste e prodotti chiusi</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: "#1F4E8C", marginTop: 4, lineHeight: 1.45 }}>
-            {motivoSoloLettura || "Il materiale è già partito: da qui non si cambia più niente."} Per rimettere mano alle liste torna indietro di una fase nella scheda del corso, a sinistra.
+            {motivoSoloLettura || "Il materiale è già partito: da qui non si cambia più niente."}
           </div>
         </div>
       )}
@@ -51706,6 +51715,15 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     await salvaCampiEdizione(corsoData.id, { fase });
   }
   async function tornaIndietroFaseLogistica(corsoData, faseTarget) {
+    // il ritiro del corriere e' il punto di non ritorno: la scatola non e'
+    // piu' qui. Il tasto gia' non compare, ma il divieto sta anche qui —
+    // una regola che vive solo nel bottone e' una regola che il prossimo
+    // bottone non conosce
+    const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
+    if (indiceFaseLogistica(FASI_LOGISTICA, statoDi(corsoData.id).fase) > iRitiro) {
+      mostraAvviso("Il pacco è già stato ritirato dal corriere: da qui non si torna indietro.");
+      return;
+    }
     // si esce da "da_preparare" tornando indietro solo quando la fase
     // ATTUALE è proprio quella: è lì che è scattato lo scarico, quindi è
     // lì che va annullato — il pacco si riapre e i pezzi rientrano
@@ -51864,11 +51882,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                   // scatola diversa da quella partita.
                   const st = statoDi(edizioneSel.id);
                   if (locById[edizioneSel.location_id]?.sede_centrale) {
-                    return { soloLettura: !!st.allestito_ts, motivoSoloLettura: "Il materiale risulta consegnato in aula." };
+                    return { soloLettura: !!st.allestito_ts, motivoSoloLettura: "Il materiale risulta consegnato in aula. Per rimetterci mano torna indietro di una fase con la freccia, nella scheda del corso a sinistra." };
                   }
                   const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
                   const partito = indiceFaseLogistica(FASI_LOGISTICA, st.fase) > iRitiro;
-                  return { soloLettura: partito, motivoSoloLettura: "Il pacco è già stato ritirato dal corriere." };
+                  return { soloLettura: partito, motivoSoloLettura: "Il pacco è già stato ritirato dal corriere: la scatola è partita e non si torna indietro. Fino a «Bolla applicata» invece si può ancora cambiare tutto." };
                 })()}
                 kitDefinizioni={kitDefinizioni}
                 corsiKitProdotti={corsiKitProdotti}
