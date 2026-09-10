@@ -3536,8 +3536,13 @@ function BoxLarghezzaFissa({ larghezza = 600, attivo, children }) {
     const misura = () => {
       const disponibile = esterno.clientWidth;
       if (!disponibile) return;
-      setFattore(Math.min(1, disponibile / larghezza));
-      setAltezza(Math.ceil(interno.offsetHeight * Math.min(1, disponibile / larghezza)));
+      // se un riquadro insiste a essere piu' largo della tela, si
+      // rimpicciolisce di piu' invece di farsi tagliare il bordo destro:
+      // meglio tutto piccolo che meta' fuori dallo schermo
+      const largo = Math.max(larghezza, interno.scrollWidth || 0);
+      const f = Math.min(1, disponibile / largo);
+      setFattore(f);
+      setAltezza(Math.ceil(interno.offsetHeight * f));
     };
     misura();
     const osservatore = typeof ResizeObserver !== "undefined" ? new ResizeObserver(misura) : null;
@@ -3595,17 +3600,23 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
   const filo = <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />;
   // l'euro sta dentro la casella, appoggiato a destra: e' l'unita' di
   // misura del campo, non un'altra cosa da leggere
+  // Da telefono la casella si stringe: intorno a un numero di quattro
+  // cifre non serve mezza riga di bianco, e quello che si risparmia qui
+  // e' quello che tiene titolo, importi e stato su una riga sola senza
+  // sfondare il foglio.
   const campoImporto = (etichetta, contenuto) => (
-    <div style={{ flex: "1 1 0", minWidth: 0 }}>
-      <div style={{ ...fontBody, fontSize: 11 + piu, color: MUTED, marginBottom: 4 }}>{etichetta}</div>
+    <div style={isMobile ? { flex: "0 1 108px", minWidth: 76 } : { flex: "1 1 0", minWidth: 0 }}>
+      <div style={{ ...fontBody, fontSize: 11 + piu, color: MUTED, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{etichetta}</div>
       <div style={{ position: "relative" }}>
         {contenuto}
-        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5 + piu, color: MUTED, pointerEvents: "none" }}>€</span>
+        <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5 + piu, color: MUTED, pointerEvents: "none" }}>€</span>
       </div>
     </div>
   );
   const stileImporto = (bloccato) => ({
-    ...campoAreaScheda, paddingRight: 26 + piu, fontWeight: 700, fontSize: 14 + piu,
+    ...campoAreaScheda, fontWeight: 700, fontSize: 14 + piu,
+    padding: isMobile ? "7px 7px" : "10px 12px",
+    paddingRight: isMobile ? 21 : 26,
     background: bloccato ? "#EDF1F4" : "#fff", color: bloccato ? MUTED : NAVY,
   });
   return (
@@ -24058,7 +24069,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       )}
 
       {vista === "form" && (
-        <BoxLarghezzaFissa attivo={isMobile} larghezza={600}>
+        <BoxLarghezzaFissa attivo={isMobile} larghezza={540}>
         <div
           onBlur={(e) => {
             // se il focus sta passando a un bottone (es. proprio "Fatto,
@@ -24305,35 +24316,35 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 </span>
               </div>
               <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
                 <div style={{ position: "relative" }}>
-                  <input style={{ ...campoAreaScheda, paddingRight: isMobile ? 29 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
-                  <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                  <input style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
+                  <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                 </div>
               </div>
               {adminSbloccato && (
                 <>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                  <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
                     <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
                     <div style={{ position: "relative" }}>
-                      <input style={{ ...campoAreaScheda, paddingRight: isMobile ? 29 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
-                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                      <input style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                      <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                     </div>
                   </div>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                  <div style={isMobile ? { flex: "0 1 118px", minWidth: 82 } : { flex: "1 1 0", minWidth: 0 }}>
                     <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
                     <div style={{ position: "relative" }}>
                       <input
-                        style={{ ...campoAreaScheda, paddingRight: isMobile ? 29 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14 }}
+                        style={{ ...campoAreaScheda, padding: isMobile ? "7px 7px" : "10px 12px", paddingRight: isMobile ? 21 : 26, fontWeight: 700, fontSize: isMobile ? 17 : 14 }}
                         inputMode="decimal"
                         placeholder="es. 60.00"
                         value={quotaSpeciale}
                         onChange={(e) => setQuotaSpeciale(e.target.value)}
                       />
-                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                      <span style={{ position: "absolute", right: isMobile ? 7 : 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 15.5 : 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                     </div>
                   </div>
                 </>
