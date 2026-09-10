@@ -24225,7 +24225,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             {/* stessa riga delle quote: medaglione, titolo, e i numeri di
                 fianco separati da fili. Il titolo su un piano suo faceva
                 di questo blocco un'altra fascia alta in mezzo alla scheda */}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
                 <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaRicevutaErp size={18} color={GOLD} />
@@ -24233,8 +24233,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 <span style={titoloAreaScheda}>Dati di vendita</span>
               </div>
               <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-              <div style={{ flex: "1 1 130px", minWidth: 110 }}>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
+              <div style={{ flex: "1 1 0", minWidth: 74 }}>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
                 <div style={{ position: "relative" }}>
                   <input style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
                   <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
@@ -24243,16 +24243,16 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               {adminSbloccato && (
                 <>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  <div style={{ flex: "1 1 110px", minWidth: 96 }}>
-                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
+                  <div style={{ flex: "1 1 0", minWidth: 74 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
                     <div style={{ position: "relative" }}>
                       <input style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
                       <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
                     </div>
                   </div>
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  <div style={{ flex: "1 1 110px", minWidth: 96 }}>
-                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
+                  <div style={{ flex: "1 1 0", minWidth: 74 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
                     <div style={{ position: "relative" }}>
                       <input
                         style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700 }}
