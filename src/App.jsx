@@ -170,6 +170,32 @@ function salvaLayoutCondiviso(chiave, valore) {
       .then(({ error }) => { if (error) console.warn("Impaginazione non salvata:", error.message); });
   }, 600);
 }
+// Impostazioni che restano. Stessa cassetta delle impaginazioni condivise
+// — chiave e valore su `impostazioni_layout_tabelle` — ma senza il filtro
+// del ruolo: un'impaginazione la fissa chi programma, una scelta di lavoro
+// la fissa chi lavora, e deve ritrovarsela domani e dall'altro
+// dispositivo. Non e' un filtro da rifare ogni volta che si apre la
+// pagina: e' come si e' deciso di guardare i conti.
+function salvaImpostazioneCondivisa(chiave, valore) {
+  LAYOUT_CACHE[chiave] = valore;
+  notificaLayout(chiave);
+  clearTimeout(LAYOUT_TIMER[chiave]);
+  LAYOUT_TIMER[chiave] = setTimeout(() => {
+    supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" })
+      .then(({ error }) => { if (error) console.warn("Impostazione non salvata:", error.message); });
+  }, 600);
+}
+function useImpostazioneCondivisa(chiave, predefinito) {
+  const [valore, setValore] = useState(() => LAYOUT_CACHE[chiave] ?? predefinito);
+  useEffect(() => {
+    if (!LAYOUT_ASCOLTATORI[chiave]) LAYOUT_ASCOLTATORI[chiave] = new Set();
+    LAYOUT_ASCOLTATORI[chiave].add(setValore);
+    caricaLayoutCondiviso(chiave);
+    return () => { LAYOUT_ASCOLTATORI[chiave].delete(setValore); };
+  }, [chiave]);
+  return [valore ?? predefinito, (nuovo) => salvaImpostazioneCondivisa(chiave, nuovo)];
+}
+
 // L'interruttore delle maniglie di impaginazione: quando e' spento, in
 // tutta l'app non si disegna nessun "⠿" e nessun cursore di
 // ridimensionamento, nemmeno in modalita' programmatore. Serve a vedere lo
@@ -3536,6 +3562,44 @@ function modelleTotaleDi(i) {
   if (i.prezzo_speciale_modelle != null) return i.prezzo_speciale_modelle;
   return round2((i.numero_modelle || 0) * 60);
 }
+// Quanto e' ENTRATO davvero da un allievo, non quanto e' stato promesso.
+//
+// Due accortezze che sembrano dettagli e non lo sono.
+//
+// La prima: si contano solo le quote con la spunta "pagato". Acconto e
+// pre-corso hanno il loro flag (`acconto_pagato`, `precorso_pagato`) e le
+// rate aggiuntive pure; darli per incassati perche' sono scritti in
+// scheda vuol dire contare soldi che non sono arrivati.
+//
+// La seconda: si prende l'IMPONIBILE, non il totale. Nel cruscotto i costi
+// sono sempre al netto di IVA, e mettere un ricavo lordo di fronte a un
+// costo netto gonfia il margine del 22%. Dove l'imponibile non e' stato
+// scritto si ripiega sul totale: meglio un dato con l'IVA dentro che una
+// riga che sparisce dal conto.
+function importoNettoQuota(imponibile, totale) {
+  return imponibile != null ? Number(imponibile) || 0 : Number(totale) || 0;
+}
+// solo gli anticipi: acconto, pre-corso e le loro rate aggiuntive
+function anticipiIncassatiDi(i) {
+  let totale = 0;
+  if (i.acconto_pagato) totale += importoNettoQuota(i.acconto_imponibile, i.acconto_totale);
+  (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r) => {
+    if (r?.pagato) totale += importoNettoQuota(r.imponibile, r.totale);
+  });
+  if (i.precorso_pagato) totale += importoNettoQuota(i.precorso_imponibile, i.precorso_totale);
+  (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r) => {
+    if (r?.pagato) totale += importoNettoQuota(r.imponibile, r.totale);
+  });
+  return round2(totale);
+}
+// tutto l'incassato: gli anticipi piu' il saldo, ma solo dove qualcuno ha
+// spuntato "incassato". Le modelle si aggiungono li' perche' e' li' che si
+// pagano, al corso, insieme al saldo
+function incassatoDi(i) {
+  const saldo = i.incassato ? importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i) : 0;
+  return round2(anticipiIncassatiDi(i) + saldo);
+}
+
 // posti massimi effettivi di un'edizione: il numero scelto per la data (o, in mancanza,
 // quello di default del corso) non può mai superare il tetto massimo della sede
 function postiMaxEffettivi(cd, corso, loc) {
@@ -27513,16 +27577,20 @@ function round1Erp(n) {
 // numerico di Date (anno, mese, giorno) invece che da stringa: evita lo
 // sfasamento di un giorno che "new Date(stringa)" introdurrebbe in alcuni
 // fusi orari, perché legge un istante UTC con i getter in ora locale
-function rangePeriodoErp(periodo, dataDa) {
+function rangePeriodoErp(periodo, dataDa, dataProspettiva) {
   const oggi = new Date();
   const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // "prospettiva": dalla data di partenza a una data futura. Qui si guarda
+  // avanti, quindi i corsi ancora da tenere DEVONO contare — e contano per
+  // il pattuito, che e' quello che ci si aspetta di incassare
+  if (periodo === "prospettiva" && dataDa && dataProspettiva) return { inizio: dataDa, fine: dataProspettiva };
   // "da questa data a oggi": le tre finestre fisse rispondono a "come sta
   // andando adesso", questa risponde a "come e' andata da quando e'
   // successa quella cosa" — un aumento di prezzi, l'apertura di una sede,
   // l'inizio della contabilita' vera. Il confronto col periodo precedente
   // continua a funzionare: rangePrecedenteErp prende comunque la finestra
   // della stessa lunghezza subito prima
-  if (periodo === "dadata" && dataDa) return { inizio: dataDa, fine: fmt(oggi) };
+  if (periodo === "andamento" && dataDa) return { inizio: dataDa, fine: fmt(oggi) };
   if (periodo === "30giorni") {
     const inizio = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() - 29);
     return { inizio: fmt(inizio), fine: fmt(oggi) };
@@ -27649,10 +27717,35 @@ function riepilogoMensilePrimaNota(spesePagate) {
 // ricavi/costi/allievi/riempimento/cash flow/crediti di un insieme di
 // edizioni filtrate per periodo + sede — riusata sia per i KPI del
 // periodo corrente/precedente sia per ogni riga di "Andamento per sede"
-function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio, fine, sedeId, corsoById, locById }) {
-  const cdFiltrate = corsiDate.filter((cd) => cd.data_inizio >= inizio && cd.data_inizio <= fine && (!sedeId || cd.location_id === sedeId));
+// `soloTrascorsi`: conta quello che e' successo, non quello che e' stato
+// promesso. Senza, un corso di novembre con dieci iscritti entra nei
+// ricavi di oggi per intero — e i suoi costi pure — anche se non si e'
+// ancora tenuto e i soldi non sono arrivati. Va bene per "quanto vale
+// l'anno", non va bene per "quanto ho incassato da questa data".
+//
+// Con la bandiera accesa si ragiona per cassa — quello che e' entrato e
+// quello che e' uscito a oggi — e valgono tre regole:
+//   - entra solo l'incassato: acconti e pre-corso sempre, il saldo solo
+//     dove e' spuntato "incassato". Il resto e' credito, non ricavo;
+//   - un corso ancora da tenere porta i suoi anticipi ma nessun costo:
+//     non si e' tenuto, quindi non ha speso niente;
+//   - i costi restano quelli dei corsi gia' conclusi piu' le spese
+//     registrate, che nella tabella sono gia' tutte pagate.
+function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio, fine, sedeId, corsoById, locById, soloTrascorsi = false }) {
+  const oggiKpi = dataOggiStr();
+  const cdNelPeriodo = corsiDate.filter((cd) => cd.data_inizio >= inizio && cd.data_inizio <= fine && (!sedeId || cd.location_id === sedeId));
+  // "conclusa" guarda la data di fine, non quella di inizio: un corso
+  // cominciato ieri e che finisce domani non e' ancora stato erogato
+  const conclusaKpi = (cd) => (cd.data_fine || cd.data_inizio) <= oggiKpi;
+  const cdFiltrate = soloTrascorsi ? cdNelPeriodo.filter(conclusaKpi) : cdNelPeriodo;
   const idsCd = new Set(cdFiltrate.map((cd) => cd.id));
   const iscrittiFiltrati = iscritti.filter((i) => idsCd.has(i.corso_data_id));
+
+  // dei corsi che devono ancora tenersi resta solo la cassa gia' entrata
+  const idsDaVenire = new Set(soloTrascorsi ? cdNelPeriodo.filter((cd) => !conclusaKpi(cd)).map((cd) => cd.id) : []);
+  const anticipiDaVenire = idsDaVenire.size
+    ? round2(iscritti.filter((i) => idsDaVenire.has(i.corso_data_id)).reduce((s, i) => s + anticipiIncassatiDi(i), 0))
+    : 0;
   // incassi non legati a un'iscrizione (es. vendita di un prodotto in
   // accademia): stesso trattamento "al netto di IVA" dei ricavi corsi,
   // così restano confrontabili nello stesso KPI
@@ -27661,7 +27754,17 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
     return !sedeId || e.sede_id === sedeId;
   });
   const totaleEntrateManuali = round2(entrateManualiValide.reduce((s, e) => s + (e.imponibile || 0), 0));
-  const ricavi = round2(iscrittiFiltrati.reduce((s, i) => s + (i.totale_pattuito || 0), 0) + totaleEntrateManuali);
+  // quello che e' entrato davvero: anticipi e pre-corso sempre, il saldo
+  // solo dove qualcuno ha spuntato "incassato", piu' gli anticipi dei
+  // corsi ancora da tenere. Quello che resta da avere non sparisce: e'
+  // "Crediti da incassare", qui sotto, che e' il posto giusto per una
+  // cosa che ancora non e' successa
+  const incassatoReale = round2(iscrittiFiltrati.reduce((s, i) => s + incassatoDi(i), 0) + anticipiDaVenire);
+  // in modalita' cassa il ricavo E' l'incassato: non il pattuito, che
+  // comprende saldi che devono ancora arrivare
+  const ricavi = soloTrascorsi
+    ? round2(incassatoReale + totaleEntrateManuali)
+    : round2(iscrittiFiltrati.reduce((s, i) => s + (i.totale_pattuito || 0), 0) + totaleEntrateManuali);
   const costiClasse = round2(cdFiltrate.reduce((s, cd) => s + costoClasseErp(cd), 0));
   const quoteVenditore = round2(iscrittiFiltrati.reduce((s, i) => s + (i.quota_venditore || 0), 0));
   // spese di "Analisi costi di gestione": sull'imponibile, coerente coi
@@ -27697,7 +27800,6 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   // "cash flow": incassato realmente (acconto/precorso arrivati prima +
   // saldo solo se già spuntato "incassato") meno i costi — non è un vero
   // saldo di cassa bancario (non tracciato), ma un incassato netto reale
-  const incassatoReale = round2(iscrittiFiltrati.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.incassato ? (i.saldo_totale || 0) + modelleTotaleDi(i) : 0), 0));
   const cashFlow = round2(incassatoReale - costi);
   const creditiDaIncassare = round2(iscrittiFiltrati.filter((i) => !i.incassato).reduce((s, i) => s + (i.saldo_totale || 0) + modelleTotaleDi(i), 0));
   const pagamentiAperti = iscrittiFiltrati.filter((i) => !i.incassato && (i.saldo_totale || 0) + modelleTotaleDi(i) > 0).length;
@@ -30379,11 +30481,13 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
 function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, costiCategorie, entrateManuali }) {
   const { ordine: ordineSedi, cambiaOrdine: cambiaOrdineSedi, ordina: ordinaSedi } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
-  const [periodo, setPeriodo] = useState("anno");
-  // il 1 gennaio come punto di partenza proposto: e' quello che quasi
-  // sempre si vuole quando si chiede "da quando", e chi ne vuole un altro
-  // lo cambia con un click
-  const [dataDa, setDataDa] = useState(`${new Date().getFullYear()}-01-01`);
+  const [periodo, setPeriodo] = useState("andamento");
+  // Le due date non sono un filtro: sono l'impostazione dell'analisi. Si
+  // scrivono una volta e restano — domani, e anche aprendo l'app dal
+  // telefono. Per questo stanno nelle impostazioni condivise e non in uno
+  // stato che muore chiudendo la pagina.
+  const [dataDa, setDataDa] = useImpostazioneCondivisa("analisi_data_partenza", `${new Date().getFullYear()}-01-01`);
+  const [dataProspettiva, setDataProspettiva] = useImpostazioneCondivisa("analisi_data_prospettiva", `${new Date().getFullYear()}-12-31`);
   const [sedeSel, setSedeSel] = useState("");
   const [confrontoAnnualeAperto, setConfrontoAnnualeAperto] = useState(false);
 
@@ -30391,16 +30495,27 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const costiCategorieById = useMemo(() => Object.fromEntries((costiCategorie || []).map((c) => [c.id, c])), [costiCategorie]);
 
-  const range = rangePeriodoErp(periodo, dataDa);
+  const range = rangePeriodoErp(periodo, dataDa, dataProspettiva);
   const rangePrec = rangePrecedenteErp(range);
+  // Le due domande sono diverse e vanno contate in modo diverso.
+  //
+  // "Andamento ad oggi" e' cassa: da quella data a oggi, quanto e' entrato
+  // e quanto e' uscito davvero. Un saldo che deve ancora arrivare non e'
+  // un incasso, e un corso non ancora tenuto non ha prodotto ricavo.
+  //
+  // "Prospettiva di guadagno" guarda avanti, e allora vale il contrario:
+  // conta il pattuito, corsi futuri compresi, perche' la domanda e'
+  // proprio "quanto mi aspetto di incassare da qui a quella data".
+  const perCassa = periodo === "andamento";
+  const inProspettiva = periodo === "prospettiva";
 
   const kpi = useMemo(
-    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById }),
-    [corsiDate, iscritti, spese, costiCategorieById, entrateManuali, range.inizio, range.fine, sedeSel, corsoById, locById]
+    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById, soloTrascorsi: perCassa }),
+    [corsiDate, iscritti, spese, costiCategorieById, entrateManuali, range.inizio, range.fine, sedeSel, corsoById, locById, perCassa]
   );
   const kpiPrec = useMemo(
-    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById }),
-    [corsiDate, iscritti, spese, costiCategorieById, entrateManuali, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById]
+    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById, soloTrascorsi: perCassa }),
+    [corsiDate, iscritti, spese, costiCategorieById, entrateManuali, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById, perCassa]
   );
 
   const varRicavi = variazionePctErp(kpi.ricavi, kpiPrec.ricavi);
@@ -30428,7 +30543,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
     const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
     const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
     const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
-    const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
+    const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById, soloTrascorsi: perCassa });
     return { etichetta: MESI_ABBR[mese0], ricavi: k.ricavi, costi: k.costi };
   });
   const maxBarra = Math.max(1, ...andamentoMensile.flatMap((m) => [m.ricavi, m.costi]));
@@ -30436,8 +30551,8 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   const sediConDati = location.filter((l) => corsiDate.some((cd) => cd.location_id === l.id && cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine));
   const righeSedi = (sediConDati.length ? sediConDati : location)
     .map((l) => {
-      const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
-      const kPrec = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById });
+      const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById, soloTrascorsi: perCassa });
+      const kPrec = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById, soloTrascorsi: perCassa });
       return { location: l, ...k, trend: variazionePctErp(k.ricavi, kPrec.ricavi) };
     })
     .sort((a, b) => b.ricavi - a.ricavi);
@@ -30464,31 +30579,69 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
       <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Analisi andamento</div>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>Ecco come sta andando Elitederma, {fmtDataLunga(dataOggiStr())}.</div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-        {/* il campo data compare solo quando serve: tenerlo sempre in
-            vista, spento, farebbe credere che il periodo sia quello anche
-            quando e' attiva una delle tre finestre fisse */}
-        {periodo === "dadata" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Dal</span>
+      {/* Le due date stanno in alto e da sole, sopra ai pulsanti, perche'
+          non sono un'opzione fra le altre: sono i due estremi entro cui
+          tutto il resto della pagina fa i conti. Si scrivono una volta e
+          restano. */}
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 12 : 16, marginBottom: 12, display: "flex", gap: isMobile ? 14 : 30, flexWrap: "wrap", alignItems: "flex-end" }}>
+        {[
+          { chiave: "da", etichetta: "Analisi dal", valore: dataDa, salva: setDataDa },
+          { chiave: "a", etichetta: "Prospettiva fino al", valore: dataProspettiva, salva: setDataProspettiva },
+        ].map((c) => (
+          <div key={c.chiave} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{c.etichetta}</div>
             <input
               type="date"
-              value={dataDa}
-              max={dataOggiStr()}
-              onChange={(e) => setDataDa(e.target.value)}
-              style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 12px" }}
+              value={c.valore || ""}
+              onChange={(e) => c.salva(e.target.value)}
+              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px" }}
             />
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>a oggi</span>
           </div>
-        )}
-        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "dadata", l: "Da una data" }].map((p) => (
-            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
-              {p.l}
-            </button>
-          ))}
-          </div>
+        ))}
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 220px", lineHeight: 1.5, minWidth: 0 }}>
+          Restano impostate: le ritrovi domani e anche aprendo l'app dal telefono.
         </div>
+      </div>
+
+      {/* i modi di leggere lo stesso periodo, uno per riquadro */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0,1fr))" : "repeat(5, minmax(0,1fr))", gap: isMobile ? 7 : 12, marginBottom: 18 }}>
+        {[
+          { v: "andamento", l: "Andamento ad oggi", sub: `Dal ${fmtData(dataDa)} a oggi`, Icona: IconaGraficoSu },
+          { v: "prospettiva", l: "Prospettiva di guadagno", sub: `Fino al ${fmtData(dataProspettiva)}`, Icona: IconaTargetRiga },
+          { v: "30giorni", l: "Ultimi 30 giorni", sub: "Finestra mobile", Icona: IconaOrologioCard },
+          { v: "trimestre", l: "Trimestre", sub: "Ultimi 90 giorni", Icona: IconaCalendarioCard },
+          { v: "anno", l: "Anno", sub: "Anno solare intero", Icona: IconaCalendarioCard },
+        ].map((v) => {
+          const attivo = periodo === v.v;
+          return (
+            <button key={v.v} onClick={() => setPeriodo(v.v)}
+              style={{
+                width: "100%", minWidth: 0, boxSizing: "border-box", cursor: "pointer", textAlign: "center",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+                gap: isMobile ? 4 : 6, padding: isMobile ? "10px 4px" : "14px 10px",
+                borderRadius: isMobile ? 12 : 18,
+                background: attivo ? BG : "#FBF7F0",
+                border: `${attivo ? 2 : 1}px solid ${attivo ? GOLD : CREAM_BORDER}`,
+                aspectRatio: "1 / 1", overflow: "hidden",
+              }}>
+              <span style={{ width: isMobile ? 30 : 46, height: isMobile ? 30 : 46, borderRadius: "50%", flexShrink: 0, background: "#F3E7D2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <v.Icona size={isMobile ? 16 : 22} color={GOLD} />
+              </span>
+              <span style={{ ...fontDisplay, fontSize: isMobile ? 10.5 : 13, fontWeight: 700, color: NAVY, lineHeight: 1.15, overflowWrap: "anywhere" }}>{v.l}</span>
+              {!isMobile && <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, lineHeight: 1.25, overflowWrap: "anywhere" }}>{v.sub}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* dire a voce come si sta contando: i due modi danno numeri diversi
+          sullo stesso periodo, e senza una riga di spiegazione sembra un
+          errore invece che una domanda diversa */}
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
+        {periodo === "andamento" && "Solo cassa: entra quello che è stato incassato davvero — anticipi e rate con la spunta \"pagato\", saldi segnati come incassati — ed esce quello che è stato pagato. Quello che resta da avere è qui sotto, in \"Crediti da incassare\"."}
+        {periodo === "prospettiva" && "Previsione: conta tutto il pattuito delle iscrizioni, compresi i corsi che devono ancora tenersi. Non è cassa — è quello che ci si aspetta di incassare entro quella data."}
+        {periodo !== "andamento" && periodo !== "prospettiva" && "Finestra fissa sul pattuito, senza tenere conto di cosa sia già stato incassato."}
+      </div>
 
         {confrontoAnnualeAperto && (
           <PannelloConfrontoAnnuale
@@ -30514,9 +30667,30 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
-          <CardKpiErp titolo="Ricavi totali" valore={fmtEuroErp(kpi.ricavi)} variazione={varRicavi} sub="vs stesso periodo precedente" Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
-          <CardKpiErp titolo="Costi operativi" valore={fmtEuroErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
-          <CardKpiErp titolo="Utile netto" valore={fmtEuroErp(kpi.utile)} variazione={varUtile} sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`} Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
+          {/* in modalita' cassa i primi tre numeri non sono piu' gli
+              stessi: e' incassato contro pagato, non pattuito contro
+              impegnato. Cambia la parola, altrimenti si legge un numero
+              credendo che sia l'altro */}
+          {/* i primi tre riquadri cambiano nome col modo di contare: in
+              cassa e' incassato contro pagato, in prospettiva e' atteso
+              contro impegnato. Lo stesso numero sotto due nomi diversi
+              sarebbe il modo piu' rapido per leggerne uno credendo che
+              sia l'altro */}
+          <CardKpiErp
+            titolo={perCassa ? "Incassato" : inProspettiva ? "Ricavi attesi" : "Ricavi totali"}
+            valore={fmtEuroErp(kpi.ricavi)} variazione={varRicavi}
+            sub={perCassa ? `Entrato dal ${fmtData(dataDa)} a oggi` : inProspettiva ? `Pattuito fino al ${fmtData(dataProspettiva)}` : "vs stesso periodo precedente"}
+            Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
+          <CardKpiErp
+            titolo={perCassa ? "Pagato" : "Costi operativi"}
+            valore={fmtEuroErp(kpi.costi)} variazione={varCosti} variazioneInvertita
+            sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% ${perCassa ? "dell'incassato" : inProspettiva ? "dei ricavi attesi" : "dei ricavi"}` : "—"}
+            Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
+          <CardKpiErp
+            titolo={perCassa ? "Differenza di cassa" : inProspettiva ? "Guadagno atteso" : "Utile netto"}
+            valore={fmtEuroErp(kpi.utile)} variazione={varUtile}
+            sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`}
+            Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
           <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
         </div>
 
