@@ -2681,7 +2681,7 @@ const campoAreaScheda = { ...inputStyle, background: "#fff", border: "1px solid 
 // il titolo in cima a ogni area: icona a sinistra, testo maiuscolo e
 // spaziato. Le icone stanno solo qui — accanto ai metodi di pagamento no,
 // lì bastano i cerchietti
-const titoloAreaScheda = { ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 };
+const titoloAreaScheda = { ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 };
 function IntestazioneArea({ Icona, children }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12, color: GOLD }}>
