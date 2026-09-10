@@ -50548,6 +50548,18 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
               etichettaDaFare="Inventario da fare" etichettaFatto="Inventario eseguito"
               onClick={(e) => { e.stopPropagation(); if (allestitoTs && inventarioTs) onAnnullaInventario(); }}
             />
+            {/* tornare indietro di una fase, come nei corsi da spedire.
+                Prima si poteva solo ricliccare il riquadro verde, che
+                sembrava spento: un gesto che c'era ma non si vedeva */}
+            {(preparatoTs || allestitoTs) && !inventarioTs && !inLavorazione && (
+              <button
+                onClick={(e) => { e.stopPropagation(); if (allestitoTs) onAllestisci(false); else onPrepara(false); }}
+                title={allestitoTs ? "Torna a «Materiale preparato»" : "Torna a «Materiale da preparare»: il materiale rientra in magazzino"}
+                style={{ background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px", flexShrink: 0 }}
+              >
+                <IconaFrecciaSinistra size={14} />
+              </button>
+            )}
             {allestitoTs && !inventarioTs && (
               <button
                 onClick={(e) => { e.stopPropagation(); onApriInventarioSede(); }}
@@ -50840,7 +50852,7 @@ function PannelloBollaRientro({ corsoData, kitDefinizioni, corsiKitProdotti, pro
     </div>
   );
 }
-function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onRientroRegistrato, onCambiaTagliaIscritto }) {
+function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onRientroRegistrato, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
   // stessa intestazione (data/corso/città nel colore del corso) della
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
@@ -51019,6 +51031,19 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
       </div>
 
+      {soloLettura && (
+        <div style={{ ...cardStyle, padding: 14, marginBottom: 14, border: "1px solid #A8C4E8", background: "#EDF3FB" }}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#1F4E8C" }}>Liste e prodotti chiusi</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: "#1F4E8C", marginTop: 4, lineHeight: 1.45 }}>
+            {motivoSoloLettura || "Il materiale è già partito: da qui non si cambia più niente."} Per rimettere mano alle liste torna indietro di una fase nella scheda del corso, a sinistra.
+          </div>
+        </div>
+      )}
+      {/* un fieldset spento spegne da solo tutto quello che contiene:
+          campi, tendine e bottoni. Meglio un contenitore solo che quindici
+          controlli disattivati a mano, che alla prossima riga aggiunta ci
+          si dimentica di disattivare */}
+      <fieldset disabled={soloLettura} style={{ border: "none", margin: 0, padding: 0, minInlineSize: 0, opacity: soloLettura ? 0.65 : 1 }}>
       <div style={labelStyle}>Kit previsti (dagli iscritti)</div>
       <div style={{ marginBottom: 20 }}>
         {righeKitRichiesti.length === 0 ? (
@@ -51235,6 +51260,8 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           ))}
         </div>
       )}
+
+      </fieldset>
 
       <PannelloBollaRientro
         corsoData={corsoData} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
@@ -51590,7 +51617,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // scarico; dopo "consegnato" non si tocca piu' niente.
   async function preparaMateriale(corsoData, preparare) {
     if (statoDi(corsoData.id).allestito_ts) {
-      mostraAvviso("Il materiale risulta già consegnato: da qui non si torna più indietro.");
+      mostraAvviso("Il materiale risulta già consegnato: prima riporta indietro la consegna, poi si può rimettere mano alla preparazione.");
       return;
     }
     if (preparare) {
@@ -51629,7 +51656,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       mostraAvviso("Prima segna «Materiale preparato»: è lì che il materiale esce dal magazzino.");
       return;
     }
-    if (!(await chiediConferma("Materiale consegnato in aula. Da qui non si torna più indietro: confermi?"))) return;
+    if (!(await chiediConferma("Materiale consegnato in aula. Da qui liste e prodotti si chiudono: per rimetterci mano bisogna tornare indietro di una fase. Confermi?"))) return;
     await salvaCampiEdizione(corsoData.id, { allestito_ts: new Date().toISOString() });
   }
   // rifare l'inventario: prima si toglie di nuovo dal magazzino quello che
@@ -51827,6 +51854,22 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 corso={corsoById[edizioneSel.corso_id]}
                 loc={locById[edizioneSel.location_id]}
                 statoEdizione={statoDi(edizioneSel.id)}
+                {...(() => {
+                  // Da che momento non si tocca piu' niente. Sono due
+                  // momenti diversi perche' sono due viaggi diversi: in
+                  // sede centrale il materiale attraversa un corridoio e
+                  // il punto di non ritorno e' la consegna in aula; per
+                  // gli altri corsi e' il corriere che porta via il pacco.
+                  // Dopo, cambiare una lista vorrebbe dire descrivere una
+                  // scatola diversa da quella partita.
+                  const st = statoDi(edizioneSel.id);
+                  if (locById[edizioneSel.location_id]?.sede_centrale) {
+                    return { soloLettura: !!st.allestito_ts, motivoSoloLettura: "Il materiale risulta consegnato in aula." };
+                  }
+                  const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
+                  const partito = indiceFaseLogistica(FASI_LOGISTICA, st.fase) > iRitiro;
+                  return { soloLettura: partito, motivoSoloLettura: "Il pacco è già stato ritirato dal corriere." };
+                })()}
                 kitDefinizioni={kitDefinizioni}
                 corsiKitProdotti={corsiKitProdotti}
                 prodottiShop={prodottiShop}
