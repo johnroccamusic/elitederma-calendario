@@ -8418,7 +8418,10 @@ function colonneModelleClasse(iscritti) {
   return [...perTipo.values()].sort((a, b) => (a.giorno === b.giorno ? a.tipo.localeCompare(b.tipo, "it") : a.giorno - b.giorno)).map((x) => x.tipo);
 }
 
-function RiepilogoModelleAllievo({ iscritto, colonne }) {
+// `onCambia(indicePosto, campo, valore)`: se c'e', le caselle MAT e POM
+// si premono e la riga diventa un posto dove lavorare, non solo da
+// guardare. Senza, restano quello che erano: un riepilogo.
+function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
   const posti = (Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [])
     .map((m, indice) => ({ ...m, indice }))
     .sort((a, b) => {
@@ -8451,16 +8454,26 @@ function RiepilogoModelleAllievo({ iscritto, colonne }) {
     if (!t) return "—";
     return toTitleCase(t);
   };
-  // quanto spazio si prende una colonna: proporzionale alla lunghezza del
-  // suo nome, con un minimo che tiene MAT e POM affiancati
-  const peso = (tipo) => Math.max(7, String(tipo || "").trim().length);
+  // Le colonne sono tutte della stessa larghezza. Farle proporzionali al
+  // nome sembrava sensato — "Sopracciglia" e' lungo il doppio di "Labbra"
+  // — ma in una colonna stretta MAT e POM finivano uno sopra l'altro, e
+  // due caselle schiacciate valgono meno di un nome accorciato. Se il nome
+  // non ci sta si tronca con i puntini, e per intero resta nel titolo.
   // acceso = blu pieno, spento = bianco col filetto. Il colore del corso
   // qui non serve: la scheda lo dichiara gia' col suo bordo, e su tre
   // caselle piccole un verde acceso urlava piu' del nome dell'allievo
-  const cella = (acceso, testo) => (
-    <span style={{
+  const cella = (acceso, testo, onClick) => (
+    <span
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      title={onClick ? (acceso ? "Togli" : "Segna") : undefined}
+      style={{
+      cursor: onClick ? "pointer" : "default",
       ...fontBody, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1,
-      padding: "5px 0", flex: "1 1 0", minWidth: 0, textAlign: "center", borderRadius: 7,
+      // larghezza minima: MAT e POM non si accavallano mai, nemmeno in una
+      // colonna stretta. Prima si sovrapponevano e non si leggeva ne' l'uno
+      // ne' l'altro
+      padding: "5px 2px", flex: "1 1 0", minWidth: 30, textAlign: "center", borderRadius: 7,
       background: acceso ? NAVY : "#fff",
       border: `1px solid ${acceso ? NAVY : "#E3E6EC"}`,
       color: acceso ? "#fff" : MUTED,
@@ -8489,14 +8502,14 @@ function RiepilogoModelleAllievo({ iscritto, colonne }) {
         return (
           <div key={tipo} title={m ? tipo : `${tipo} — non previsto per questo allievo`} style={{
             display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            flex: `${peso(tipo)} 1 0`, minWidth: 0,
+            flex: "1 1 0", minWidth: 0,
             background: "#F1F3F6", borderRadius: 10, padding: "6px 5px",
             opacity: m ? 1 : 0.35,
           }}>
             <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{etichetta(tipo)}</span>
             <div style={{ display: "flex", gap: 4, width: "100%" }}>
-              {cella(!!m?.mattina, "MAT")}
-              {cella(!!m?.pomeriggio, "POM")}
+              {cella(!!m?.mattina, "MAT", onCambia && m ? () => onCambia(m.indice, "mattina", !m.mattina) : undefined)}
+              {cella(!!m?.pomeriggio, "POM", onCambia && m ? () => onCambia(m.indice, "pomeriggio", !m.pomeriggio) : undefined)}
             </div>
           </div>
         );
@@ -23219,7 +23232,22 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
         prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
-        tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : [],
+        // I posti modella NON si scrivono da qui, e c'e' un motivo grosso.
+        // Questo salvataggio parte anche da solo — autosalva, all'uscita da
+        // un campo qualunque — e si portava dietro la copia dei posti letta
+        // quando la scheda era stata aperta. Nel frattempo pero' quei posti
+        // vengono riempiti altrove (Assegna modelle, il link della master,
+        // la pagina modelle), e riscriverli da qui cancellava mattina,
+        // pomeriggio, nome e telefono inseriti nel mentre.
+        //
+        // Peggio ancora: con "richiede modelle" a NO scriveva un elenco
+        // VUOTO. Ma "porta la sua modella" non vuol dire "nessun posto" —
+        // quei posti esistono proprio per segnare chi porta. Bastava aprire
+        // la scheda di un'allieva e uscire da un campo per azzerarli tutti.
+        //
+        // I trattamenti scelti in questa scheda si applicano dopo il
+        // salvataggio, con una fusione che tocca solo il "tipo" e il
+        // "giorno" e lascia stare il resto: vedi allineaTipiModelle.
         giorni_presenza: corsoParziale ? giorniPresenza : null,
         // dermografo a parte: si salva solo se il pacchetto lo prevede,
         // altrimenti le caselle si svuotano — un kit cambiato non deve
@@ -23301,6 +23329,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       setPagSaldo((prev) => ({ ...prev, bonificoFilePath: pathBonificoSaldo, bonificoFileNuovo: null }));
       setAccontoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoAccontoExtra[idx], bonificoFileNuovo: null, bonificoSegnalato: segnalatiAccontoExtra[idx] })));
       setPrecorsoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoPrecorsoExtra[idx], bonificoFileNuovo: null, bonificoSegnalato: segnalatiPrecorsoExtra[idx] })));
+
+      // i trattamenti scelti in scheda si applicano ai posti esistenti
+      // senza cancellare quello che c'e' dentro (vedi allineaTipiModelle)
+      if (idIscritto && richiedeModelle === "si") await allineaTipiModelle(idIscritto, tipiModelle);
 
       // La fotografia dell'iscrizione: si riscrive a ogni salvataggio
       // fatto DA UN VENDITORE, mai a uno dell'amministrazione. Cosi'
@@ -23512,6 +23544,37 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // iscritto: si salva subito, niente tasto "Salva" separato — nome/
   // telefono passano dal gruppo (vedi gruppoModellaAggiornaCampo) perché
   // possono essere condivisi con altri posti dello stesso allievo
+  // Applica al database i trattamenti scelti nella scheda d'iscrizione
+  // SENZA cancellare quello che nel frattempo e' stato segnato altrove.
+  // Rilegge la riga, e per ogni posto cambia solo "tipo" e "giorno" —
+  // mattina, pomeriggio, nome della modella, telefono e gruppo restano
+  // quelli che sono. Se in scheda i posti sono di piu' se ne aggiungono,
+  // se sono di meno si tolgono dalla coda.
+  //
+  // Non si scrive niente quando in scheda l'elenco e' vuoto: "vuoto" qui
+  // vuol dire "questa scheda non se ne occupa", non "cancellali".
+  async function allineaTipiModelle(iscrittoId, dallaScheda) {
+    if (!iscrittoId || !Array.isArray(dallaScheda) || dallaScheda.length === 0) return;
+    const { data: riga } = await supabase.from("iscritti").select("tipi_modelle").eq("id", iscrittoId).maybeSingle();
+    const attuali = Array.isArray(riga?.tipi_modelle) ? riga.tipi_modelle : [];
+    const nuovo = dallaScheda.map((m, i) => {
+      const esistente = attuali[i] || {};
+      return {
+        ...esistente,
+        tipo: m.tipo || esistente.tipo || "",
+        giorno: m.giorno ?? esistente.giorno ?? null,
+        mattina: !!esistente.mattina,
+        pomeriggio: !!esistente.pomeriggio,
+        nome_modella: esistente.nome_modella || "",
+        telefono_modella: esistente.telefono_modella || "",
+        gruppo_id: esistente.gruppo_id ?? null,
+      };
+    });
+    const uguali = JSON.stringify(nuovo) === JSON.stringify(attuali);
+    if (uguali) return;
+    await supabase.from("iscritti").update({ tipi_modelle: nuovo }).eq("id", iscrittoId);
+  }
+
   // Si rilegge SEMPRE l'elenco dal database prima di riscriverlo, invece di
   // fidarsi di quello che c'e' in pagina: fra un salvataggio e l'altro il
   // dato in memoria puo' essere vecchio di un secondo — o di un'ora, se un
@@ -25255,7 +25318,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       )}
                     </div>
                     <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", justifyContent: "flex-end" }}>
-                      <RiepilogoModelleAllievo iscritto={i} colonne={colonneModelleClasse(conModelle)} />
+                      <RiepilogoModelleAllievo
+                        iscritto={i}
+                        colonne={colonneModelleClasse(conModelle)}
+                        onCambia={modelleSolaLettura ? undefined : (indice, campo, valore) => aggiornaModellaSlot(i.id, indice, campo, valore)}
+                      />
                     </div>
                   </div>
                 );
