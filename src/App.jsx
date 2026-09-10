@@ -2209,14 +2209,18 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
 // spunta verde ben visibile accanto ai campi di upload file, per confermare
 // a colpo d'occhio che un file (nuovo o già caricato in precedenza) è
 // presente, senza dover leggere la scritta piccola del browser sull'input
-function BadgeFileCaricato() {
+// `stretto`: la versione da schermo piccolo — segno piu' minuto e una
+// parola sola. Su un telefono "File caricato" per intero costa piu' della
+// casella che dovrebbe accompagnare.
+function BadgeFileCaricato({ stretto = false }) {
+  const d = stretto ? 16 : 22;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#2E7D32", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <span style={{ display: "inline-flex", alignItems: "center", gap: stretto ? 4 : 6, color: "#2E7D32", fontWeight: 700, fontSize: stretto ? 10.5 : 14, flexShrink: 0, whiteSpace: "nowrap" }}>
+      <svg width={d} height={d} viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="11" fill="#E8F5E9" stroke="#2E7D32" strokeWidth="2" />
         <path d="M7 12.5l3.2 3.2L17 8.5" stroke="#2E7D32" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      File caricato
+      {stretto ? "Caricato" : "File caricato"}
     </span>
   );
 }
@@ -24144,12 +24148,27 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               <IntestazioneArea Icona={IconaCaricaFile}>Carica modulo di iscrizione</IntestazioneArea>
               <div>
                 {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
-                  <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, color: NAVY, marginBottom: 8 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
                 )}
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <CampoFileTrascinabile accept="application/pdf,image/*" style={{ ...campoAreaScheda, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
-                  <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione || soloLettura}>Leggi dati dal modulo</Button>
-                  {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato />}
+                {/* casella, tasto di lettura e conferma su una riga sola,
+                    anche da telefono: il tasto si accorcia in "Leggi dati" e
+                    la conferma in "Caricato", invece di scendere ognuno su
+                    una riga sua */}
+                <div style={{ display: "flex", gap: isMobile ? 6 : 8, alignItems: "center", flexWrap: isMobile ? "nowrap" : "wrap" }}>
+                  <CampoFileTrascinabile
+                    accept="application/pdf,image/*"
+                    style={{ ...campoAreaScheda, flex: "1 1 0", minWidth: 0, ...(isMobile ? { fontSize: 11, padding: "6px 6px" } : {}) }}
+                    onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)}
+                  />
+                  <Button
+                    variant="ghost"
+                    onClick={rileggiModuloForzato}
+                    disabled={!fileIscrizione || soloLettura}
+                    style={isMobile ? { fontSize: 11, padding: "7px 8px", borderRadius: 9, whiteSpace: "nowrap", flexShrink: 0 } : { whiteSpace: "nowrap", flexShrink: 0 }}
+                  >
+                    {isMobile ? "Leggi dati" : "Leggi dati dal modulo"}
+                  </Button>
+                  {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato stretto={isMobile} />}
                 </div>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
                   <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
