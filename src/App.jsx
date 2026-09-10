@@ -8466,7 +8466,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       {/* I numeri: quanti allievi e quali kit. Prima erano un elenco con
           una lineetta dorata a lato; qui sono due cifre grosse, che e'
           quello che se ne fa chi apre la scheda. */}
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 22, padding: spaziatura, flexWrap: "nowrap" }}>
+      <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 10 : 22, padding: spaziatura, flexWrap: "nowrap" }}>
         <NumeroSchedaMaster Icona={IconaGruppoTeam} numero={iscrittiEdizione.length} etichetta="Allievi totali" isMobile={isMobile} />
         {/* I kit sono un elenco, non tanti riquadri affiancati: con quattro
             tipi, i riquadri andavano a capo e si sparpagliavano per mezza
@@ -8483,7 +8483,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
         {kit.length > 0 && (
           <>
             {divisoreVerticale}
-            <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
+            <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 9 : 12, minWidth: 0, flex: "1 1 auto" }}>
               <span style={{
                 width: isMobile ? 32 : 52, height: isMobile ? 32 : 52, borderRadius: isMobile ? 10 : 14, background: "#F4F1EA",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -13227,7 +13227,18 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   return (
     <tr>
       <td style={tdStyle}>
-        <input value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 130, padding: "6px 8px", fontSize: 11, fontWeight: 700 }} />
+        {/* `size` e non una larghezza fissa: la casella e' lunga quanto
+            il nome che contiene e finisce dove finisce la parola, invece
+            di tenere centotrenta pixel buoni anche per "John". Il minimo
+            di otto caratteri serve a poterci scrivere dentro un nome
+            nuovo senza che la casella sia un francobollo. */}
+        <input
+          value={nome}
+          size={Math.max(8, (nome || "").length + 1)}
+          onChange={(e) => setNome(e.target.value)}
+          onBlur={salvaCampi}
+          style={{ ...inputStyle, width: "auto", minWidth: 0, padding: "6px 8px", fontSize: 11, fontWeight: 700 }}
+        />
         {sistema && (
           <div title="Riga di sistema: anche rinominata, resta l'identità Utente generico/Amministratore/Programmatore con i suoi permessi pieni — per un nuovo utente usa piuttosto '+ Genera nuovo utente'" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#8A6D1D", background: "#FBF0D6", border: "1px solid #E9D9A0", borderRadius: 6, padding: "1px 6px", display: "inline-block", marginTop: 4, textTransform: "uppercase", letterSpacing: 0.4 }}>
             Sistema
@@ -13328,8 +13339,12 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
   // colonne strette e trascinabili: sono una quindicina di caselle da
   // spuntare, e a larghezza automatica la tabella usciva dallo schermo
   const { larghezzaDi, maniglia } = useColonneRidimensionabili("gestioneUtenti_larghezzeColonne");
+  // la colonna del nome larga quanto il nome piu' lungo dell'elenco, non
+  // quanto il piu' lungo immaginabile: sette pixel a carattere piu' l'aria
+  // della casella, con un minimo perche' l'intestazione ci stia comunque
+  const larghezzaColonnaNome = Math.max(96, Math.min(200, 7 * Math.max(...righe.map((u) => (u.nome || "").length), 8) + 34));
   const colonneUtenti = [
-    { chiave: "nome", larghezza: 120 }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
+    { chiave: "nome", larghezza: larghezzaColonnaNome }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
     { chiave: "amministratore", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "solocalendario", larghezza: LARGHEZZA_COLONNA_SPUNTA },
     { chiave: "modificamodelle", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "omaggipos", larghezza: LARGHEZZA_COLONNA_SPUNTA },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
