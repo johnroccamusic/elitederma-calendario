@@ -25849,6 +25849,13 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       )}
                     </div>
                   </div>
+                  {/* le modelle di questo allievo, in fondo alla sua scheda:
+                      chi fa i conti in aula si trova davanti anche il conto
+                      delle modelle, e finora doveva andarle a cercare in
+                      un'altra pagina per sapere quali giorni erano coperti */}
+                  <div style={{ padding: "0 20px 16px" }}>
+                    <RiepilogoModelleAllievo iscritto={i} colonne={colonneModelleClasse(listaIscritti)} />
+                  </div>
                   </div>
 
                   {spostaIscrittoId === i.id && (
