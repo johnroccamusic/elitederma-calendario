@@ -8441,14 +8441,19 @@ function RiepilogoModelleAllievo({ iscritto, colonne }) {
   // significasse "porta la sua" o "ce ne siamo dimenticati".
   const senzaPosti = posti.length === 0;
 
-  // "SOPRACCIGLIA OMBRETTO" in una casella larga poco piu' di due
-  // caselle non ci sta: si scrive la prima parola, che e' quella che
-  // distingue, e il resto resta nel titolo per chi passa sopra
+  // Il nome del trattamento si scrive per intero: "Sopracciglia" e'
+  // lungo il doppio di "Labbra", e la sua casella e' larga il doppio —
+  // non tutte uguali. Le proporzioni pero' sono le stesse per tutti gli
+  // allievi della classe, cosi' le colonne restano incolonnate anche se
+  // non hanno la stessa larghezza fra loro.
   const etichetta = (tipo) => {
     const t = String(tipo || "").trim();
     if (!t) return "—";
-    return toTitleCase(t.split(/\s+/)[0]);
+    return toTitleCase(t);
   };
+  // quanto spazio si prende una colonna: proporzionale alla lunghezza del
+  // suo nome, con un minimo che tiene MAT e POM affiancati
+  const peso = (tipo) => Math.max(7, String(tipo || "").trim().length);
   // acceso = blu pieno, spento = bianco col filetto. Il colore del corso
   // qui non serve: la scheda lo dichiara gia' col suo bordo, e su tre
   // caselle piccole un verde acceso urlava piu' del nome dell'allievo
@@ -8484,11 +8489,11 @@ function RiepilogoModelleAllievo({ iscritto, colonne }) {
         return (
           <div key={tipo} title={m ? tipo : `${tipo} — non previsto per questo allievo`} style={{
             display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            flex: "1 1 0", minWidth: 0,
+            flex: `${peso(tipo)} 1 0`, minWidth: 0,
             background: "#F1F3F6", borderRadius: 10, padding: "6px 5px",
             opacity: m ? 1 : 0.35,
           }}>
-            <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center", overflowWrap: "anywhere", maxWidth: "100%" }}>{etichetta(tipo)}</span>
+            <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{etichetta(tipo)}</span>
             <div style={{ display: "flex", gap: 4, width: "100%" }}>
               {cella(!!m?.mattina, "MAT")}
               {cella(!!m?.pomeriggio, "POM")}
