@@ -8399,7 +8399,26 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
   );
 }
 
-function RiepilogoModelleAllievo({ iscritto }) {
+// L'elenco dei trattamenti della CLASSE, in ordine di giorno: e' la
+// griglia di colonne su cui si incolonnano tutti gli allievi. Chi ha solo
+// l'eyeliner lo trova nella colonna dell'eyeliner, non spalmato su tutta
+// la riga — cosi' scorrendo l'elenco si legge una tabella, non una fila di
+// blocchi di larghezza diversa.
+function colonneModelleClasse(iscritti) {
+  const perTipo = new Map();
+  (iscritti || []).forEach((i) => {
+    (Array.isArray(i?.tipi_modelle) ? i.tipi_modelle : []).forEach((m) => {
+      const tipo = String(m?.tipo || "").trim();
+      if (!tipo) return;
+      const giorno = m?.giorno == null ? 99 : Number(m.giorno);
+      const gia = perTipo.get(tipo.toUpperCase());
+      if (!gia || giorno < gia.giorno) perTipo.set(tipo.toUpperCase(), { tipo, giorno });
+    });
+  });
+  return [...perTipo.values()].sort((a, b) => (a.giorno === b.giorno ? a.tipo.localeCompare(b.tipo, "it") : a.giorno - b.giorno)).map((x) => x.tipo);
+}
+
+function RiepilogoModelleAllievo({ iscritto, colonne }) {
   const posti = (Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [])
     .map((m, indice) => ({ ...m, indice }))
     .sort((a, b) => {
@@ -8407,7 +8426,20 @@ function RiepilogoModelleAllievo({ iscritto }) {
       const gb = b.giorno == null ? 99 : Number(b.giorno);
       return ga === gb ? a.indice - b.indice : ga - gb;
     });
-  if (posti.length === 0) return null;
+  // Le colonne della classe se le conosciamo, altrimenti quelle di questo
+  // allievo. Un allievo senza nessun posto assegnato non sparisce: la riga
+  // resta, con le caselle vuote — "non risulta niente" e "non lo sappiamo"
+  // devono potersi distinguere.
+  const intestazioni = (colonne && colonne.length > 0)
+    ? colonne
+    : posti.map((m) => m.tipo).filter(Boolean);
+  if (intestazioni.length === 0) return null;
+  const postoDi = (tipo) => posti.find((m) => String(m.tipo || "").trim().toUpperCase() === String(tipo).trim().toUpperCase()) || null;
+  // Nessun posto assegnato: la riga resta, ma al posto di tre gruppi
+  // spenti si scrive perche' sono vuoti. Prima l'allievo spariva del tutto
+  // dall'elenco delle modelle, e chi guardava non poteva sapere se
+  // significasse "porta la sua" o "ce ne siamo dimenticati".
+  const senzaPosti = posti.length === 0;
 
   // "SOPRACCIGLIA OMBRETTO" in una casella larga poco piu' di due
   // caselle non ci sta: si scrive la prima parola, che e' quella che
@@ -8443,19 +8475,27 @@ function RiepilogoModelleAllievo({ iscritto }) {
           l'eyeliner bisognava trascinare di lato una riga dentro una
           scheda dentro una pagina che gia' scorre */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "center", gap: 6 }}>
-      {posti.map((m) => (
-        <div key={m.indice} title={m.tipo || "trattamento non scelto"} style={{
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-          flex: "1 1 0", minWidth: 0,
-          background: "#F1F3F6", borderRadius: 10, padding: "6px 5px",
-        }}>
-          <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center", overflowWrap: "anywhere", maxWidth: "100%" }}>{etichetta(m.tipo)}</span>
-          <div style={{ display: "flex", gap: 4, width: "100%" }}>
-            {cella(!!m.mattina, "MAT")}
-            {cella(!!m.pomeriggio, "POM")}
-          </div>
+      {senzaPosti ? (
+        <div style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED, textAlign: "center" }}>
+          {iscritto?.richiede_modelle ? "Nessuna modella ancora assegnata" : "Porta la sua modella — non ancora segnata"}
         </div>
-      ))}
+      ) : intestazioni.map((tipo) => {
+        const m = postoDi(tipo);
+        return (
+          <div key={tipo} title={m ? tipo : `${tipo} — non previsto per questo allievo`} style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+            flex: "1 1 0", minWidth: 0,
+            background: "#F1F3F6", borderRadius: 10, padding: "6px 5px",
+            opacity: m ? 1 : 0.35,
+          }}>
+            <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center", overflowWrap: "anywhere", maxWidth: "100%" }}>{etichetta(tipo)}</span>
+            <div style={{ display: "flex", gap: 4, width: "100%" }}>
+              {cella(!!m?.mattina, "MAT")}
+              {cella(!!m?.pomeriggio, "POM")}
+            </div>
+          </div>
+        );
+      })}
       </div>
       <span style={{ width: 46, flexShrink: 0 }} />
     </div>
@@ -8477,6 +8517,9 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
   const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
   // in ordine alfabetico di cognome: è così che si chiama l'appello, non
   // nell'ordine in cui sono arrivate le iscrizioni
+  // le colonne dei trattamenti sono quelle della classe, uguali per tutti:
+  // cosi' le caselle di un allievo stanno sotto quelle dell'allievo sopra
+  const colonneModelle = colonneModelleClasse(iscrittiEdizione);
   const allievi = [...(iscrittiEdizione || [])].sort((a, b) =>
     `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it")
   );
@@ -8590,7 +8633,7 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
 
               {isMobile && barraContatti}
 
-              <RiepilogoModelleAllievo iscritto={i} />
+              <RiepilogoModelleAllievo iscritto={i} colonne={colonneModelle} />
             </div>
             );
           })}
@@ -25207,7 +25250,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       )}
                     </div>
                     <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", justifyContent: "flex-end" }}>
-                      <RiepilogoModelleAllievo iscritto={i} />
+                      <RiepilogoModelleAllievo iscritto={i} colonne={colonneModelleClasse(conModelle)} />
                     </div>
                   </div>
                 );
