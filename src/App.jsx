@@ -24215,37 +24215,54 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   la vendita, e deve staccarsi dalle quote che stanno sotto.
                   Le caselle dei numeri restano bianche, o il dato si
                   perderebbe nel colore */}
-              <div style={{ ...areaSchedaIscritto, flex: 1 }}>
-            <IntestazioneArea Icona={IconaRicevutaErp}>Dati di vendita</IntestazioneArea>
-            <div style={{ display: "flex", gap: 14 }}>
-              <div style={{ flex: 1 }}>
-                <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
-                  <input style={campoAreaScheda} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
-                </Field>
+              <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `1px solid ${GOLD}`, borderRadius: 16, padding: 12, flex: 1 }}>
+            {/* stessa riga delle quote: medaglione, titolo, e i numeri di
+                fianco separati da fili. Il titolo su un piano suo faceva
+                di questo blocco un'altra fascia alta in mezzo alla scheda */}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, paddingBottom: 8 }}>
+                <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F3E8D2", border: `1px solid ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaRicevutaErp size={18} color={GOLD} />
+                </span>
+                <span style={titoloAreaScheda}>Dati di vendita</span>
+              </div>
+              <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
+              <div style={{ flex: "1 1 130px", minWidth: 110 }}>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
+                <div style={{ position: "relative" }}>
+                  <input style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
+                  <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                </div>
               </div>
               {adminSbloccato && (
                 <>
-                  <div style={{ flex: 1 }}>
-                    <Field label="Quota venditore (7%)" minLabelHeight={34}>
-                      <input style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
-                    </Field>
+                  <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
+                  <div style={{ flex: "1 1 110px", minWidth: 96 }}>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota venditore (7%)</div>
+                    <div style={{ position: "relative" }}>
+                      <input style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                    </div>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <Field label="Quota speciale" minLabelHeight={34}>
+                  <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
+                  <div style={{ flex: "1 1 110px", minWidth: 96 }}>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 4, lineHeight: 1.2 }}>Quota speciale</div>
+                    <div style={{ position: "relative" }}>
                       <input
-                        style={campoAreaScheda}
+                        style={{ ...campoAreaScheda, paddingRight: 26, fontWeight: 700 }}
                         inputMode="decimal"
                         placeholder="es. 60.00"
                         value={quotaSpeciale}
                         onChange={(e) => setQuotaSpeciale(e.target.value)}
                       />
-                    </Field>
+                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>
+                    </div>
                   </div>
                 </>
               )}
             </div>
             {adminSbloccato && quotaSpeciale !== "" && (
-              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 10 }}>
                 La quota speciale sostituisce ovunque la quota venditore del 7%.
               </div>
             )}
