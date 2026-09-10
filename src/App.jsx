@@ -27326,7 +27326,20 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
                 {STATI_PROGETTO.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
               </select>
             ) : (
-              <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 20, padding: isMobile ? "5px 11px" : "7px 14px", whiteSpace: "nowrap", flexShrink: 0 }}>{st.etichetta}</span>
+              /* La pastiglia si clicca e gira: TO DO, ON GOING, DONE, e
+                 daccapo. Cambiare "a che punto e'" e' il gesto piu'
+                 frequente di questa pagina — un progetto cambia stato
+                 tre volte e nome mai — e chiedere di entrare in modifica
+                 per farlo voleva dire quattro clic per uno. Su un
+                 progetto archiviato resta ferma: e' storia, non lavoro. */
+              <button
+                type="button"
+                onClick={archiviato ? undefined : () => onSalva({ stato: STATI_PROGETTO[(STATI_PROGETTO.findIndex((o) => o.chiave === st.chiave) + 1) % STATI_PROGETTO.length].chiave })}
+                title={archiviato ? undefined : "Clicca per passare allo stato successivo"}
+                style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, fontWeight: 700, color: st.colore, background: st.sfondo, border: "none", borderRadius: 20, padding: isMobile ? "5px 11px" : "7px 14px", whiteSpace: "nowrap", flexShrink: 0, cursor: archiviato ? "default" : "pointer" }}
+              >
+                {st.etichetta}
+              </button>
             )}
             {divisore}
             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
