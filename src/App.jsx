@@ -37376,35 +37376,58 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
   // prop: si vede il cambio "tornare indietro da solo" anche quando sul
   // database e' andato a buon fine.
   const [metodoCorretto, setMetodoCorretto] = useState({});
-  async function cambiaMetodoPagamento(v, nuovo) {
+  const [msgMetodo, setMsgMetodo] = useState("");
+  // La conferma sta DENTRO la riga, non in una finestra del browser.
+  //
+  // window.confirm sembrava la strada corta. Ma dopo qualche dialogo di
+  // fila il browser offre "impedisci a questa pagina di creare altre
+  // finestre di dialogo", e da quel momento confirm risponde di no da
+  // solo: non chiede niente, non dice niente, restituisce false. Il
+  // codice leggeva quel false come "l'utente ha annullato" e non
+  // scriveva. A schermo si vedeva la tendina tornare indietro da sola,
+  // identica a un rifiuto del database — che infatti non c'entrava
+  // niente: la stessa scrittura, fatta fuori dall'app, passava.
+  //
+  // Una conferma disegnata da noi non puo' essere zittita da nessuno.
+  const [confermaMetodo, setConfermaMetodo] = useState(null);
+  function chiediCambioMetodo(v, nuovo) {
     if (cambiandoMetodo || !nuovo || nuovo === v.metodo_pagamento) return;
-    const daContanti = v.metodo_pagamento === "contanti";
+    setMsgMetodo("");
     const totale = round2(v.totale || 0);
     const senzaIva = nuovo === "contanti" && !v.richiede_fattura;
     const imponibile = senzaIva ? totale : round2(totale / 1.22);
     const iva = round2(totale - imponibile);
-    const spiegazione = senzaIva
-      ? `L'IVA di ${fmtEuroErp2(v.totale_iva || 0)} viene tolta: in contanti senza fattura non si genera imposta, e l'imponibile diventa ${fmtEuroErp2(imponibile)}.`
-      : `L'IVA viene scorporata: ${fmtEuroErp2(imponibile)} di imponibile e ${fmtEuroErp2(iva)} di imposta.`;
-    if (!window.confirm(`Vuoi cambiare modalità di pagamento?\n\nDa ${daContanti ? "contanti" : "POS"} a ${nuovo === "contanti" ? "contanti" : "POS"}.\n${spiegazione}\n\nIl totale incassato resta ${fmtEuroErp2(totale)}.`)) return;
-    setCambiandoMetodo(v.id);
+    setConfermaMetodo({
+      id: v.id, nuovo, imponibile, iva, totale,
+      da: v.metodo_pagamento === "contanti" ? "Contanti" : "POS",
+      a: nuovo === "contanti" ? "Contanti" : "POS",
+      spiegazione: senzaIva
+        ? `Via l'IVA di ${fmtEuroErp2(v.totale_iva || 0)}: in contanti senza fattura non si genera imposta. Imponibile ${fmtEuroErp2(imponibile)}.`
+        : `IVA scorporata: ${fmtEuroErp2(imponibile)} di imponibile e ${fmtEuroErp2(iva)} di imposta.`,
+    });
+  }
+  async function confermaCambioMetodo() {
+    const c = confermaMetodo;
+    if (!c) return;
+    setCambiandoMetodo(c.id);
     const { data: righe, error } = await supabase.from("vendite_shop")
-      .update({ metodo_pagamento: nuovo, totale_imponibile: imponibile, totale_iva: iva })
-      .eq("id", v.id)
+      .update({ metodo_pagamento: c.nuovo, totale_imponibile: c.imponibile, totale_iva: c.iva })
+      .eq("id", c.id)
       .select("id, metodo_pagamento, totale_imponibile, totale_iva");
     setCambiandoMetodo(null);
-    if (error) { window.alert("Non cambiato: " + testoErrore(error)); return; }
+    setConfermaMetodo(null);
+    if (error) { setMsgMetodo("Non cambiato: " + testoErrore(error)); return; }
     // Un update che non torna NESSUNA riga non e' un errore per il
     // database: e' il modo in cui le regole di accesso dicono di no, e lo
-    // dicono in silenzio. Finora quel silenzio si vedeva come "l'ho
-    // cambiato e si e' rimesso da solo": ora lo dice.
+    // dicono in silenzio. Anche quel silenzio ora si legge.
     if (!righe || righe.length === 0) {
-      window.alert(`Il database non ha aggiornato nessuna riga: la modifica NON è passata.\n\nÈ il caso dei permessi di scrittura, o della riga non più esistente. L'incasso resta ${daContanti ? "contanti" : "POS"}.`);
+      setMsgMetodo(`Il database non ha aggiornato nessuna riga: la modifica non è passata (permessi di scrittura, o riga non più esistente). L'incasso resta ${c.da}.`);
       ricarica(["vendite_shop"]);
       return;
     }
     const confermata = righe[0];
-    setMetodoCorretto((prev) => ({ ...prev, [v.id]: { metodo_pagamento: confermata.metodo_pagamento, totale_imponibile: confermata.totale_imponibile, totale_iva: confermata.totale_iva } }));
+    setMetodoCorretto((prev) => ({ ...prev, [c.id]: { metodo_pagamento: confermata.metodo_pagamento, totale_imponibile: confermata.totale_imponibile, totale_iva: confermata.totale_iva } }));
+    setMsgMetodo(`Incasso cambiato da ${c.da} a ${c.a}. Il totale resta ${fmtEuroErp2(c.totale)}.`);
     ricarica(["vendite_shop"]);
   }
   // appena la lista ricaricata porta lo stesso valore, la correzione
@@ -37589,6 +37612,13 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
           ))}
         </div>
 
+        {/* l'esito del cambio di incasso si legge qui: niente finestre
+            del browser, che si possono zittire */}
+        {msgMetodo && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: msgMetodo.startsWith("Incasso cambiato") ? "#2E7D32" : "#C0392B", background: msgMetodo.startsWith("Incasso cambiato") ? "#EDF7EE" : "#FDECEC", border: `1px solid ${msgMetodo.startsWith("Incasso cambiato") ? "#C7E3CB" : "#F3C9C9"}`, borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+            {msgMetodo}
+          </div>
+        )}
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
@@ -37669,11 +37699,28 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                                 adesso, si sceglie cosa deve esserci, e
                                 scegliere quello che c'e' gia' non fa
                                 niente. */}
-                            {v.metodo_pagamento ? (
+                            {!v.metodo_pagamento ? (
+                              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>
+                            ) : confermaMetodo && confermaMetodo.id === v.id ? (
+                              <div style={{ display: "inline-block", background: "#FFF8E8", border: "1px solid #E8D4B0", borderRadius: 8, padding: "7px 9px", whiteSpace: "normal", maxWidth: 250 }}>
+                                <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY }}>Da {confermaMetodo.da} a {confermaMetodo.a}?</div>
+                                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2, lineHeight: 1.35 }}>{confermaMetodo.spiegazione}</div>
+                                <div style={{ display: "flex", gap: 6, marginTop: 7 }}>
+                                  <button onClick={confermaCambioMetodo} disabled={cambiandoMetodo === v.id}
+                                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>
+                                    {cambiandoMetodo === v.id ? "Cambio…" : "Conferma"}
+                                  </button>
+                                  <button onClick={() => setConfermaMetodo(null)}
+                                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>
+                                    Annulla
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
                               <select
                                 value={v.metodo_pagamento}
                                 disabled={cambiandoMetodo === v.id}
-                                onChange={(e) => cambiaMetodoPagamento(v, e.target.value)}
+                                onChange={(e) => chiediCambioMetodo(v, e.target.value)}
                                 title="Come è stato incassato"
                                 style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "4px 8px",
                                   border: `1px solid ${v.metodo_pagamento === "contanti" ? "#E8D4B0" : "#C9CEEA"}`,
@@ -37684,7 +37731,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                                 <option value="pos">POS</option>
                                 <option value="contanti">Contanti</option>
                               </select>
-                            ) : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
+                            )}
                           </td>
                         )}
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, position: "relative" }}>
