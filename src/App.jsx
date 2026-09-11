@@ -2304,9 +2304,11 @@ function BadgeFileCaricato({ stretto = false }) {
 // cambia larghezza con lo schermo e con quante colonne si sono scelte, e
 // un raggio da 18 pixel su un tasto piccolo e' un altro raggio.
 const CHIAVE_ASPETTO_TASTI = "aspetto_tasti";
+// "icona" e' in pixel e non in percentuale: e' un disegno, e un disegno
+// ha una misura sua. Le altre due seguono la cella, questa no.
 const ASPETTO_TASTI_DEFAULT = {
-  mobile: { dimensione: 82, raggio: 22, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
-  desktop: { dimensione: 90, raggio: 7, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+  mobile: { dimensione: 82, raggio: 22, icona: 40, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
+  desktop: { dimensione: 90, raggio: 7, icona: 80, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
 };
 // i 64 colori: otto file da otto. La prima e' la scala dei grigi, la
 // seconda i crema e i taupe di casa, le altre sei le famiglie che
@@ -2333,6 +2335,7 @@ function aspettoTastoDi(salvato, quale) {
   return {
     dimensione: numero("dimensione"),
     raggio: numero("raggio"),
+    icona: numero("icona"),
     colore: v.colore || base.colore,
     ombra: { ...base.ombra, ...(v.ombra || {}) },
   };
@@ -2403,7 +2406,7 @@ function TileHome({
           outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
         }}>
           {maniglia}
-          <Icona size={40} color={coloreTesto} />
+          <Icona size={aspettoMobile.icona} color={coloreTesto} />
           {!attivo && (
             <span style={{ position: "absolute", top: 4, right: 4, ...fontBody, fontSize: 6.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "1.5px 5px" }}>Non attivo</span>
           )}
@@ -2468,7 +2471,7 @@ function TileHome({
       )}
       {ricca ? (
         <>
-          <div style={{ color: coloreTesto, marginBottom: isMobile ? 6 : 12 }}><Icona size={isMobile ? 26 : 80} color={coloreTesto} /></div>
+          <div style={{ color: coloreTesto, marginBottom: isMobile ? 6 : 12 }}><Icona size={isMobile ? 26 : aspettoDesktop.icona} color={coloreTesto} /></div>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 17, fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : 7, lineHeight: 1.2 }}>{title}</div>
           {descrizione && (
             <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12, color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
@@ -14057,7 +14060,7 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
           border: forma === "desktop" ? `1px solid ${CREAM_BORDER}` : "none",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <IconaTilePos size={36} color={NAVY} />
+          <IconaTilePos size={aspetto.icona} color={NAVY} />
         </div>
       </div>
       <span style={{ ...fontBody, fontSize: 13.5, fontWeight: selezionato ? 700 : 600, color: selezionato ? NAVY : MUTED }}>{etichetta}</span>
@@ -14078,12 +14081,12 @@ function PaginaAspettoApp() {
   const corrente = aspetto[quale];
   const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi } });
 
-  const piuMeno = (etichetta, campo, min, max, aiutoMeno, aiutoPiu) => (
+  const piuMeno = (etichetta, campo, min, max, unita, aiutoMeno, aiutoPiu) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
       <button onClick={() => cambia({ [campo]: Math.max(min, corrente[campo] - 1) })} title={aiutoMeno}
         style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
-      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 42, textAlign: "center" }}>{corrente[campo]}%</span>
+      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{corrente[campo]}{unita}</span>
       <button onClick={() => cambia({ [campo]: Math.min(max, corrente[campo] + 1) })} title={aiutoPiu}
         style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
     </div>
@@ -14123,8 +14126,9 @@ function PaginaAspettoApp() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-          {piuMeno("Dimensione", "dimensione", 40, 100, "Tasto più piccolo dentro la sua cella", "Tasto più grande dentro la sua cella")}
-          {piuMeno("Raggio", "raggio", 0, 50, "Angoli più squadrati", "Angoli più tondi")}
+          {piuMeno("Dimensione", "dimensione", 40, 100, "%", "Tasto più piccolo dentro la sua cella", "Tasto più grande dentro la sua cella")}
+          {piuMeno("Raggio", "raggio", 0, 50, "%", "Angoli più squadrati", "Angoli più tondi")}
+          {piuMeno("Icona", "icona", 10, 140, " px", "Icona più piccola", "Icona più grande")}
         </div>
 
         <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Colore del pulsante</div>
