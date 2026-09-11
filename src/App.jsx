@@ -22376,7 +22376,7 @@ function PannelloRiepilogoAmministrativo({
     contanti: contantiClasse, pos: posClasse, daIncassare: daIncassareClasse,
     venditeContanti: venditeAlCorsoContanti, venditePos: venditeAlCorsoPos, venditeTotale: venditeAlCorsoTotale,
     totaleCosti: totaleCostiClasse, risultato: risultatoClasse,
-    totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse,
+    totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse, cashMancante: cashMancanteClasse,
   } = contiClasse;
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
@@ -22953,9 +22953,15 @@ function PannelloRiepilogoAmministrativo({
                     </div>
                     <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 0" : "0 0 auto", minWidth: 0 }}>
                       <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Cash pulito in busta</div>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
-                      {venditeAlCorsoContanti > 0 && (
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 22, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
+                      {venditeAlCorsoContanti > 0 && cassaContantiClasse > 0 && (
                         <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, color: MUTED, marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>di cui € {venditeAlCorsoContanti} di vendite</div>
+                      )}
+                      {/* il contante mancante non sparisce: solo, non si
+                          scrive piu' come una busta negativa — e' quello
+                          che qualcuno ha dovuto mettere da fuori */}
+                      {cashMancanteClasse > 0 && (
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, fontWeight: 700, color: "#C0392B", marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>€ {cashMancanteClasse} messi da fuori</div>
                       )}
                     </div>
                     <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={isMobile ? { alignSelf: "center", flex: "1 1 0", minWidth: 0, padding: "9px 4px", fontSize: 11 } : { alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
@@ -27613,11 +27619,20 @@ function contiRiepilogoClasse({
     totaleCosti, risultato: round2(daIncassare - totaleCosti),
     totaleCashDaPagare,
     // "Cash pulito in busta": il cash incassato FISICAMENTE al corso meno
-    // tutto il cash da pagare. Puo' venire negativo, e allora va integrato
-    // da altrove.
+    // tutto il cash da pagare.
+    //
+    // Non puo' andare sotto zero, e non e' una finezza contabile: in busta
+    // ci sono banconote. Se le spese in contanti superano quello che si e'
+    // incassato, in busta non resta un debito — resta niente, e la
+    // differenza l'ha messa qualcuno di tasca sua o e' arrivata da un'altra
+    // cassa. Quella differenza si chiama `cashMancante` e si mostra
+    // accanto, invece di far comparire un totale negativo che nessuno puo'
+    // contare.
+    //
     // Il contante delle vendite non si somma piu' qui: adesso e' gia'
     // dentro "contanti", e aggiungerlo di nuovo lo conterebbe due volte
-    cassaContanti: round2(contanti - totaleCashDaPagare),
+    cassaContanti: Math.max(0, round2(contanti - totaleCashDaPagare)),
+    cashMancante: Math.max(0, round2(totaleCashDaPagare - contanti)),
     allievi: listaIscritti.length,
   };
 }
