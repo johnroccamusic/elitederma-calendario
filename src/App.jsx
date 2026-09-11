@@ -26733,7 +26733,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                         <div
                           onClick={nienteDaIncassare ? undefined : () => toggleIncassato(i)}
                           style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                            display: "flex", alignItems: "center", justifyContent: nienteDaIncassare ? "flex-end" : "space-between", gap: 12,
                             marginTop: 16, padding: isMobile ? "14px 14px" : "12px 14px",
                             // il colore segue quello che c'e' scritto: se la
                             // cifra e' verde perche' non c'e' niente da
@@ -26742,7 +26742,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                             borderRadius: 14, cursor: nienteDaIncassare ? "default" : "pointer",
                           }}
                         >
-                          <div style={{ minWidth: 0 }}>
+                          <div style={{ minWidth: 0, textAlign: nienteDaIncassare ? "right" : "left" }}>
                             <div style={{ ...fontBody, fontSize: isMobile ? 13 : 11, fontWeight: 700, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
                               {i.incassato ? "Incassato" : "Da incassare"}
                             </div>
@@ -27025,13 +27025,13 @@ function VistaMaster({ param }) {
                 <div
                   onClick={nienteDaIncassare ? undefined : () => toggleIncassato(i)}
                   style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                    display: "flex", alignItems: "center", justifyContent: nienteDaIncassare ? "flex-end" : "space-between", gap: 12,
                     marginTop: 16, padding: isMobile ? "14px 14px" : "12px 14px",
                     background: aPosto ? "#E9F6EC" : "#FDEEEC",
                     borderRadius: 14, cursor: nienteDaIncassare ? "default" : "pointer",
                   }}
                 >
-                  <div style={{ minWidth: 0 }}>
+                  <div style={{ minWidth: 0, textAlign: nienteDaIncassare ? "right" : "left" }}>
                     <div style={{ ...fontBody, fontSize: isMobile ? 13 : 11, fontWeight: 700, color: colore, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
                       {i.incassato ? "Incassato" : "Da incassare"}
                     </div>
