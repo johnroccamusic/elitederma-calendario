@@ -31372,12 +31372,13 @@ async function generaCodiceReferralUnivoco(nome) {
 // generano coupon. Una percentuale unica, oppure quattro percentuali —
 // una per fascia di margine — che si applicano sempre sul lordo, cosi'
 // il numero e' lo stesso al POS e sul sito.
-function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile }) {
+function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile, soloFasce = false }) {
   const elenco = fasceScontoValide(fasce);
-  const aFasce = tipo === "fasce";
+  const aFasce = soloFasce || tipo === "fasce";
   const equivalenteWoo = aFasce ? percentualeWooDaFasce(prodottiShop, elenco) : null;
   return (
     <div style={{ marginBottom: 14 }}>
+      {!soloFasce && (
       <div style={{ display: "inline-flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: aFasce ? 12 : 0, flexWrap: "wrap" }}>
         {[{ v: "semplice", l: "Percentuale unica" }, { v: "fasce", l: "Sconto a fasce" }].map((o) => (
           <button
@@ -31386,6 +31387,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
           >{o.l}</button>
         ))}
       </div>
+      )}
       {aFasce && (
         <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? 12 : 16, background: "#fff" }}>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45, maxWidth: 640 }}>
@@ -31591,42 +31593,21 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   // esiste. Chi non lo tocca continua a prendere quello del template.
   // La regola che vale per i referral fissi delle master. Sta a monte
   // dell'elenco perche' e' una scelta sola per tutte: o ognuna ha la sua
-  // percentuale (e allora la si scrive sulla sua riga), o si sconta a
-  // fasce di margine, e allora le fasce sono le stesse per tutte — un
-  // prodotto che rende poco rende poco a chiunque lo venda.
-  const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "semplice", fasce: FASCE_SCONTO_DEFAULT });
-  const referralAFasce = regolaReferralMaster?.tipo === "fasce";
+  // fasce di margine, uguali per tutte: un prodotto che rende poco rende
+  // poco a chiunque lo venda, e una percentuale per persona voleva dire
+  // due strade per la stessa cosa, con meta' dei codici fatti in un modo
+  // e meta' nell'altro.
+  const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   const fasceReferral = fasceScontoValide(regolaReferralMaster?.fasce);
-  const [scontoPerMaster, setScontoPerMaster] = useState({});
-  function scontoDiMaster(m) {
-    const scelto = scontoPerMaster[m.id];
-    const esistente = couponPerMasterId[m.id];
-    return {
-      percentuale: scelto?.percentuale ?? (esistente ? String(esistente.valore) : String(regoleReferralAutomatico?.percentuale_sconto ?? "")),
-      base: scelto?.base ?? BASE_SCONTO_VALIDA(esistente?.base_sconto || regoleReferralAutomatico?.base_sconto),
-    };
-  }
-  function cambiaScontoMaster(m, campi) {
-    const attuale = scontoDiMaster(m);
-    setScontoPerMaster((prev) => ({ ...prev, [m.id]: { ...attuale, ...campi } }));
-  }
   async function proponiCodiceReferral(m) {
     const codice = await generaCodiceReferralUnivoco(m.nome);
     setCodiceProposto((prev) => ({ ...prev, [m.id]: codice }));
   }
   async function confermaReferral(m) {
     if (!regoleReferralAutomatico) { setMsgTipo("errore"); setMsg('Configura prima le regole nella tab "Generazione automatica".'); return; }
-    // quanto e su cosa: quello scritto sulla riga di questa master,
-    // altrimenti quello del template automatico
-    const scelta = scontoDiMaster(m);
-    const percentualeScelta = parseNum(scelta.percentuale);
-    // a fasce la percentuale sulla riga non serve: lo sconto lo dicono le
-    // quattro fasce, uguali per tutte
-    if (!referralAFasce && !(percentualeScelta > 0)) { setMsgTipo("errore"); setMsg("Scrivi una percentuale di sconto maggiore di zero per questa master."); return; }
-    if (referralAFasce && !fasceReferral.some((f) => f.percentuale > 0)) { setMsgTipo("errore"); setMsg("Le quattro fasce sono tutte a zero: nessuno sconto da applicare."); return; }
-    const sceltaSconto = referralAFasce
-      ? { percentuale: percentualeWooDaFasce(prodottiShop, fasceReferral), base: "lordo" }
-      : { percentuale: percentualeScelta, base: BASE_SCONTO_VALIDA(scelta.base) };
+    // lo sconto lo dicono le quattro fasce, uguali per tutte
+    if (!fasceReferral.some((f) => f.percentuale > 0)) { setMsgTipo("errore"); setMsg("Le quattro fasce sono tutte a zero: nessuno sconto da applicare."); return; }
+    const sceltaSconto = { percentuale: percentualeWooDaFasce(prodottiShop, fasceReferral), base: "lordo" };
     setMasterCreandoId(m.id); setMsg("");
     const codiceScelto = (codiceProposto[m.id] || (await generaCodiceReferralUnivoco(m.nome))).toLowerCase();
     // nel registro PRIMA di creare il coupon vero: se qualcosa fallisce dopo,
@@ -31641,9 +31622,9 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       base_sconto: sceltaSconto.base,
       valore: sceltaSconto.percentuale,
       // a fasce il "valore" e' gia' la media sul lordo, quindi coincide
-      valore_woo: referralAFasce ? sceltaSconto.percentuale : percentualeWooEquivalente(sceltaSconto.percentuale, sceltaSconto.base, margineMedioCatalogo),
-      tipo_regola_sconto: referralAFasce ? "fasce" : "semplice",
-      fasce_sconto: referralAFasce ? fasceReferral : null,
+      valore_woo: sceltaSconto.percentuale,
+      tipo_regola_sconto: "fasce",
+      fasce_sconto: fasceReferral,
       valido_da: null,
       valido_fino_a: null,
       ambito: "tutto",
@@ -31907,17 +31888,18 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
               Un referral code per master, per sempre: crealo una volta, da quel momento le vendite fatte con quel codice risulteranno nella sua dashboard.
             </div>
+            {/* Qui la regola e' una sola: lo sconto a fasce. Una
+                percentuale per master non aveva senso — un prodotto che
+                rende poco rende poco a chiunque lo venda — e tenerla
+                come alternativa voleva dire due strade per la stessa
+                cosa, con la meta' dei codici fatti in un modo e l'altra
+                meta' nell'altro. */}
             <SceltaRegolaSconto
-              tipo={regolaReferralMaster?.tipo} fasce={regolaReferralMaster?.fasce}
-              onCambiaTipo={(v) => setRegolaReferralMaster({ tipo: v, fasce: fasceReferral })}
-              onCambiaFasce={(f) => setRegolaReferralMaster({ tipo: regolaReferralMaster?.tipo || "semplice", fasce: f })}
+              soloFasce
+              fasce={regolaReferralMaster?.fasce}
+              onCambiaFasce={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: f })}
               prodottiShop={prodottiShop} isMobile={isMobile}
             />
-            {referralAFasce && (
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
-                Con lo sconto a fasce la percentuale sulla riga di ciascuna master non serve: lo sconto lo dicono le quattro fasce, uguali per tutte.
-              </div>
-            )}
             {masterOrdinate.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master trovata.</div>
             ) : masterOrdinate.map((m) => {
@@ -31925,32 +31907,17 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               return (
                 <div key={m.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, minWidth: 150 }}>{toTitleCase(m.nome)}</div>
-                  {/* Lo sconto di QUESTA master: quanto e su cosa. Un
-                      referral code esiste per dare a una persona un
-                      accordo suo, e finora prendevano tutte quello del
-                      template. Su un coupon gia' creato i due campi
-                      dicono com'e' fatto e non si toccano: la percentuale
-                      e' gia' su WooCommerce, e cambiarla qui lo
-                      disallineerebbe in silenzio. */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", visibility: referralAFasce && !esistente ? "hidden" : "visible" }}>
-                    <input
-                      type="number" min="0" step="0.01" disabled={!!esistente}
-                      value={scontoDiMaster(m).percentuale}
-                      onChange={(e) => cambiaScontoMaster(m, { percentuale: e.target.value })}
-                      title={esistente ? "Sconto del codice già creato" : "Percentuale di sconto per questa master"}
-                      style={{ ...inputStyle, width: 78, padding: "7px 9px", textAlign: "right", background: esistente ? BG : "#fff", color: esistente ? MUTED : NAVY }}
-                    />
-                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED }}>%</span>
-                    <select
-                      disabled={!!esistente}
-                      value={scontoDiMaster(m).base}
-                      onChange={(e) => cambiaScontoMaster(m, { base: e.target.value })}
-                      title={esistente ? "Base del codice già creato" : "Su cosa si legge la percentuale"}
-                      style={{ ...inputStyle, width: 200, padding: "7px 9px", background: esistente ? BG : "#fff", color: esistente ? MUTED : NAVY }}
-                    >
-                      {Object.entries(ETICHETTA_BASE_SCONTO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                    </select>
-                  </div>
+                  {/* Nessuna percentuale per master: lo sconto lo dicono
+                      le quattro fasce qui sopra, uguali per tutte. Su un
+                      codice gia' creato si mostra quanto vale oggi, e non
+                      si tocca: quella percentuale e' gia' su
+                      WooCommerce, cambiarla qui lo disallineerebbe in
+                      silenzio. */}
+                  {esistente && (
+                    <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>
+                      {esistente.tipo_regola_sconto === "fasce" ? "A fasce" : `${fmtPctErp(Number(esistente.valore))} ${(ETICHETTA_BASE_SCONTO[esistente.base_sconto] || "").toLowerCase()}`}
+                    </span>
+                  )}
                   {esistente ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{esistente.codice}</span>
