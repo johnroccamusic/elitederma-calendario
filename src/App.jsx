@@ -38793,8 +38793,15 @@ const COLONNE_MAGAZZINO = [
   { label: "No shop", campo: null, larghezza: 64 },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 72 },
   { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84 },
+  // Il lordo e il netto uno accanto all'altro. Il margine si e' sempre
+  // calcolato sul netto — com'e' giusto, l'IVA non e' ricavo — ma in
+  // tabella si vedeva solo il lordo, e il conto non tornava a occhio:
+  // 39,90 meno 10,00 non fa il 69,4% che c'era scritto. Fa il 69,4% su
+  // 32,70, che e' il netto. Ora quel numero sta li' e il conto si legge.
+  { label: "Prezzo netto vendita", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 78 },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
+  { label: "Margine €", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 70 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
@@ -39272,6 +39279,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           </span>
         </td>
     ),
+    "Prezzo netto vendita": (
+        <td style={tdStyle} title="Prezzo di vendita senza IVA: e' questo che si confronta con il costo di acquisto, che e' netto anche lui">
+          <span style={{ ...fontBody, fontSize: 11, color: NAVY }}>
+            {p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}
+          </span>
+        </td>
+    ),
     "Costo acquisto": (
         <td style={tdStyle} title={p.isBundle ? "Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" : "Si modifica solo dalla scheda prodotto (clic sul nome)"}>
           <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 11, color: p.isBundle ? MUTED : NAVY }}>
@@ -39280,7 +39294,10 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         </td>
     ),
     "Margine %": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title="Quanto resta del prezzo netto, tolto il costo di acquisto">{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+    ),
+    "Margine €": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title="Prezzo netto di vendita meno costo di acquisto: quanto si guadagna su un pezzo">{p.margineEuro != null ? fmtEuroErp2(p.margineEuro) : "N/D"}</td>
     ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
@@ -39508,15 +39525,28 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // l'ordine delle colonne, come l'ha lasciato chi le ha spostate. Si
   // parte sempre dall'elenco vero: quello salvato dice solo la sequenza,
   // e una colonna aggiunta dopo (o tolta dal codice) non puo' rompere la
-  // tabella — le sconosciute si buttano, le mancanti tornano in coda
+  // tabella — le sconosciute si buttano.
+  //
+  // Le mancanti finivano in coda, e una colonna nuova che ha senso solo
+  // accanto a un'altra (il netto accanto al lordo) nasceva in fondo alla
+  // riga, staccata da quella che spiega. Ora entra dove sta nell'elenco
+  // vero: subito dopo la colonna che la precede li', se quella c'e'.
   const [ordineColonne, setOrdineColonne] = useLayoutCondiviso(CHIAVE_ORDINE_MAGAZZINO, []);
   const colonneMagazzino = useMemo(() => {
     const perEtichetta = new Map(COLONNE_MAGAZZINO.map((c) => [c.label, c]));
     const ordinate = (Array.isArray(ordineColonne) ? ordineColonne : [])
       .map((label) => perEtichetta.get(COLONNE_MAGAZZINO_RINOMINATE[label] || label))
       .filter(Boolean);
-    const gia = new Set(ordinate.map((c) => c.label));
-    return [...ordinate, ...COLONNE_MAGAZZINO.filter((c) => !gia.has(c.label))];
+    if (!ordinate.length) return COLONNE_MAGAZZINO;
+    const elenco = ordinate.slice();
+    COLONNE_MAGAZZINO.forEach((c, i) => {
+      if (elenco.some((x) => x.label === c.label)) return;
+      const precedente = COLONNE_MAGAZZINO[i - 1];
+      const dove = precedente ? elenco.findIndex((x) => x.label === precedente.label) : -1;
+      if (dove === -1) elenco.push(c);
+      else elenco.splice(dove + 1, 0, c);
+    });
+    return elenco;
   }, [ordineColonne]);
   // trascinamento di un titolo: la colonna presa e quella sotto il dito
   const [colonnaTrascinata, setColonnaTrascinata] = useState(null);
@@ -39769,6 +39799,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       : null;
     const costoEffettivo = isBundle ? costoBundleCalcolato : p.costo_acquisto;
     const margine = costoEffettivo != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - costoEffettivo) / p.prezzo_vendita) * 100) : null;
+    // gli stessi due numeri della percentuale, in euro: e' la domanda che
+    // si fa davanti a un ordine ("quanto ci guadagno su un pezzo"), e una
+    // percentuale da sola non risponde — il 69% di 3,50 e il 69% di 39,90
+    // sono lo stesso margine e due affari diversi
+    const margineEuro = costoEffettivo != null && p.prezzo_vendita != null ? round2(p.prezzo_vendita - costoEffettivo) : null;
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
@@ -39781,6 +39816,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       quantitaVenduta: venduto.quantita,
       fatturato: round2(venduto.fatturato),
       margine,
+      margineEuro,
       categorieIds,
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
       nomeFornitore: (p.fornitore_id && fornitoreNomePerId[p.fornitore_id]) || "",
@@ -40278,7 +40314,13 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                       onClick={() => ordinaPer(col.campo)}
                       onContextMenu={(e) => rinominaColonna(e, col.label)}
                       title={`${col.campo ? (ruoloUtente === "programmatore" ? "Clicca per ordinare · tasto destro per rinominare · " : "Clicca per ordinare · ") : ""}trascina il titolo per spostare la colonna`}
-                      style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, borderLeft: colonnaSopra === col.label ? `2px solid ${NAVY}` : "2px solid transparent", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative", opacity: colonnaTrascinata === col.label ? 0.45 : 1 }}
+                      style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, borderLeft: colonnaSopra === col.label ? `2px solid ${NAVY}` : "2px solid transparent",
+                        // i titoli vanno a capo: tagliati con i puntini
+                        // ("PREZZO V…", "COSTO ACQ…") si leggevano solo
+                        // allargando la colonna, e due colonne di prezzo
+                        // accanto che cominciano uguali non si
+                        // distinguevano piu' l'una dall'altra
+                        whiteSpace: "normal", overflowWrap: "break-word", lineHeight: 1.25, verticalAlign: "bottom", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative", opacity: colonnaTrascinata === col.label ? 0.45 : 1 }}
                     >
                       {etichettaColonna(col.label)}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
                       {/* la maniglia sta tutta dentro la sua colonna:
