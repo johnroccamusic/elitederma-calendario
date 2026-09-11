@@ -97,6 +97,18 @@ Deno.serve(async (req) => {
   if (riga.spesa_minima != null) payloadWoo.minimum_amount = String(riga.spesa_minima);
   if (riga.non_cumulabile) payloadWoo.individual_use = true;
   if (riga.limita_a_email?.length) payloadWoo.email_restrictions = riga.limita_a_email;
+  // Sconto a fasce: le fasce viaggiano SUL COUPON, in un campo nascosto.
+  // Il frammento installato sul sito (elitederma-sconto-fasce.php) le
+  // legge, guarda quanto rende il prodotto nel carrello (campo
+  // `_ed_margine_pct`, scritto da woo-allinea-margini) e applica la
+  // percentuale della sua fascia, riga per riga — esattamente come il
+  // POS. Il campo "amount" resta la media: se il frammento non c'e' o
+  // viene disattivato il coupon continua a funzionare, semplicemente
+  // torna a essere una percentuale sola. Meglio uno sconto approssimato
+  // che un carrello rotto.
+  if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
+    payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }];
+  }
 
   try {
     const rispostaWoo = await fetch(`${siteUrl}/wp-json/wc/v3/coupons`, {

@@ -31381,6 +31381,23 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
   const elenco = fasceScontoValide(fasce);
   const aFasce = soloFasce || tipo === "fasce";
   const equivalenteWoo = aFasce ? percentualeWooDaFasce(prodottiShop, elenco) : null;
+  // Perche' il sito possa scontare a fasce deve sapere quanto rende ogni
+  // prodotto: glielo si scrive addosso, una volta, e vale per tutti i
+  // coupon. Si rifa' quando cambiano i costi o i prezzi — non quando
+  // cambiano le fasce, che viaggiano sul coupon.
+  const [allineando, setAllineando] = useState(false);
+  const [msgAllineamento, setMsgAllineamento] = useState("");
+  async function allineaMarginiSuWoo() {
+    setAllineando(true); setMsgAllineamento("");
+    const { data, error } = await supabase.functions.invoke("woo-allinea-margini", { body: {} });
+    setAllineando(false);
+    if (error || data?.errore) { setMsgAllineamento("Errore: " + (data?.errore || error.message)); return; }
+    setMsgAllineamento(
+      `${data.scritti} prodotti allineati su WooCommerce` +
+      (data.senzaCosto ? ` · ${data.senzaCosto} senza costo di acquisto, quelli non prenderanno sconto` : "") +
+      (data.errori?.length ? ` · ${data.errori.length} errori: ${data.errori[0]}` : "")
+    );
+  }
   return (
     <div style={{ marginBottom: 14 }}>
       {!soloFasce && (
@@ -31416,10 +31433,28 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
               </div>
             ))}
           </div>
-          <div style={{ ...fontBody, fontSize: 12, color: "#B7791F", fontWeight: 700, marginTop: 10, lineHeight: 1.4 }}>
-            Su WooCommerce verrà scritto {fmtPctErp(equivalenteWoo)} sul lordo: il sito non conosce i margini e non può
-            cambiare percentuale da prodotto a prodotto, quindi usa la media delle fasce sul catalogo. Al POS resta esatto,
-            prodotto per prodotto.
+          {/* Il sito sconta a fasce davvero, non a media, ma solo se sa
+              quanto rende ogni prodotto: questo tasto glielo scrive. Da
+              rifare quando cambiano costi o prezzi. */}
+          <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 14, paddingTop: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <Button variant="ghost" onClick={allineaMarginiSuWoo} disabled={allineando}>
+                {allineando ? "Scrivo su WooCommerce…" : "Allinea i margini su WooCommerce"}
+              </Button>
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4, minWidth: 0 }}>
+                Il sito applica le fasce prodotto per prodotto solo se sa quanto rende ciascuno. Si rifà quando cambiano
+                costi o prezzi, non quando cambiano le fasce.
+              </span>
+            </div>
+            {msgAllineamento && (
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, marginTop: 8, color: msgAllineamento.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>
+                {msgAllineamento}
+              </div>
+            )}
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.4 }}>
+              Se il frammento sul sito venisse disattivato, il coupon resta valido e applica {fmtPctErp(equivalenteWoo)} a
+              tutto: nessun carrello si rompe, ma le fasce non valgono più.
+            </div>
           </div>
         </div>
       )}
