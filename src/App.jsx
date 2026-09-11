@@ -22358,8 +22358,22 @@ function PannelloRiepilogoAmministrativo({
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_date_docenti"]);
   }
-  const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
+  const { righeSpeseTutte: righeSpeseGrezze, totaleSpeseAutomaticheClasse } =
     calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit }, { splitOverride, giorniPresenzaOverride });
+  // La quota in contante di una riga puo' essere gia' uscita dalla busta e
+  // gia' registrata come spesa pagata (tasto "Pagamenti effettuati"). Da
+  // quel momento non e' piu' "cash da pagare": sta fra le spese della
+  // classe, e continuare a sottrarla dalla busta la conterebbe due volte.
+  //
+  // La chiave e' "cash_<tipo>_<rigaId>" e non "<tipo>_<rigaId>" come nello
+  // scadenziario: quella li' e' della quota bonifico della stessa riga, e
+  // le due meta' si pagano in momenti diversi e per strade diverse.
+  const chiaveCashRiga = (r) => `cash_${r.tipo}_${r.rigaId}`;
+  const chiaviSpeseEsistenti = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave).map((x) => x.origine_scadenziario_chiave));
+  const righeSpeseTutte = righeSpeseGrezze.map((r) => ({ ...r, cashGiaRegistrato: chiaviSpeseEsistenti.has(chiaveCashRiga(r)) }));
+  // quello che il tasto "Pagamenti effettuati" registrerebbe adesso
+  const cashDaRegistrare = righeSpeseTutte.filter((r) => (r.cash || 0) > 0 && !r.cashGiaRegistrato);
+  const totaleCashDaRegistrare = round2(cashDaRegistrare.reduce((s, r) => s + r.cash, 0));
   // Tutti i conti della classe vengono da contiRiepilogoClasse, la stessa
   // funzione che alimenta "Prossime contabilità": qui dentro non ci sono
   // piu' formule proprie, cosi' i due posti non possono divergere. Gli
@@ -22417,6 +22431,43 @@ function PannelloRiepilogoAmministrativo({
   // Segna la busta come rientrata (o annulla). All'ingresso si congela
   // l'importo: da quel momento la cassa contanti somma quel numero, non
   // ricalcola la classe.
+  // "Pagamenti effettuati": il momento in cui i contanti sono usciti
+  // davvero dalle mani di chi era in aula. E' un gesto diverso dalla busta
+  // che rientra — a Milano si paga tutto il giorno stesso, la busta con
+  // quel che resta arriva a Roma giorni dopo — e vanno tenuti separati,
+  // altrimenti quelle uscite comparirebbero in prima nota con la data
+  // sbagliata, o non comparirebbero affatto finche' la busta e' in viaggio.
+  //
+  // Da qui in poi quelle righe non sono piu' previsioni: sono spese pagate,
+  // con la loro data, e la prima nota le mostra come uscite di cassa.
+  const [registrandoCash, setRegistrandoCash] = useState(false);
+  const [dataPagamentiCash, setDataPagamentiCash] = useState(corsoData.data_fine || dataOggiStr());
+  async function registraPagamentiCash() {
+    if (cashDaRegistrare.length === 0) return;
+    const elenco = cashDaRegistrare.map((r) => `· ${r.nome}: ${fmtEuroErp2(r.cash)}`).join("\n");
+    if (!window.confirm(
+      `Registrare ${cashDaRegistrare.length} pagament${cashDaRegistrare.length === 1 ? "o" : "i"} in contanti del ${fmtData(dataPagamentiCash)}?\n\n${elenco}\n\nTotale ${fmtEuroErp2(totaleCashDaRegistrare)}.\n\nDiventano spese pagate e compaiono in prima nota come uscite di cassa di quella data.`
+    )) return;
+    setRegistrandoCash(true);
+    const righe = cashDaRegistrare.map((r) => ({
+      descrizione: r.nome,
+      tipo_ambito: "classe", classe_id: corsoData.id, sede_id: corsoData.location_id, corso_id: corsoData.corso_id,
+      // pagati in contanti senza fattura: nessuna IVA da scorporare, come
+      // per le vendite al banco. Se poi la fattura arriva, la spesa si
+      // corregge dalla sua riga.
+      imponibile: round2(r.cash), iva_percentuale: 0, totale: round2(r.cash),
+      importo_pagato_cash: round2(r.cash),
+      data_documento: corsoData.data_fine || dataPagamentiCash,
+      stato: "pagata", data_pagamento: dataPagamentiCash, metodo_pagamento: "Contanti",
+      origine: "automatico", origine_scadenziario_chiave: chiaveCashRiga(r),
+    }));
+    const { error } = await supabase.from("spese").insert(righe);
+    setRegistrandoCash(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(`${righe.length} pagament${righe.length === 1 ? "o" : "i"} in contanti registrat${righe.length === 1 ? "o" : "i"}: ora sono in prima nota.`);
+    ricarica(["spese"]);
+  }
+
   async function segnaBustaRientrata(rientrata) {
     const campi = rientrata
       ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse }
@@ -22965,6 +23016,41 @@ function PannelloRiepilogoAmministrativo({
                       )}
                     </div>
                     <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={isMobile ? { alignSelf: "center", flex: "1 1 0", minWidth: 0, padding: "9px 4px", fontSize: 11 } : { alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
+                  </div>
+
+                  {/* "Pagamenti effettuati" sta prima della busta perche'
+                      viene prima nel tempo: a Milano si paga tutto il giorno
+                      del corso, la busta con quel che resta arriva a Roma
+                      giorni dopo. Sono due fatti distinti — i soldi usciti e
+                      i soldi rientrati — e tenerli sullo stesso tasto vuol
+                      dire scrivere le uscite in prima nota con la data in
+                      cui e' arrivata la busta, che non e' quando sono state
+                      pagate. */}
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>
+                        {cashDaRegistrare.length > 0 ? "Pagamenti in contanti da registrare" : "Pagamenti in contanti registrati"}
+                      </div>
+                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                        {cashDaRegistrare.length > 0
+                          ? `${cashDaRegistrare.length} voc${cashDaRegistrare.length === 1 ? "e" : "i"} per ${euroRiepilogo(totaleCashDaRegistrare)} — finché non le registri non sono in prima nota.`
+                          : "Le quote in contanti di questa classe sono già spese pagate in prima nota."}
+                      </div>
+                    </div>
+                    {cashDaRegistrare.length > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <input
+                          type="date"
+                          value={dataPagamentiCash}
+                          onChange={(e) => setDataPagamentiCash(e.target.value)}
+                          title="Il giorno in cui i contanti sono usciti davvero"
+                          style={{ ...inputStyle, width: "auto", padding: "7px 9px", fontSize: 12.5 }}
+                        />
+                        <Button onClick={registraPagamentiCash} disabled={registrandoCash}>
+                          {registrandoCash ? "Registro…" : "Pagamenti effettuati"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   {/* La busta entra nella cassa contanti quando
@@ -27605,7 +27691,9 @@ function contiRiepilogoClasse({
     + costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const totaleCashDaPagare = round2(
-    righeSpeseTutte.reduce((s, r) => s + (r.cash || 0), 0)
+    // una riga il cui contante e' gia' stato registrato come spesa non si
+    // conta qui: la si ritrova nella somma delle spese vere, sotto
+    righeSpeseTutte.reduce((s, r) => s + (r.cashGiaRegistrato ? 0 : (r.cash || 0)), 0)
     + speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
   );
   const daIncassare = round2(contanti + pos);
