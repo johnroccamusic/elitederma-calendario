@@ -3008,7 +3008,7 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
   // riga sua invece che accanto al campo
   const stretto = useIsMobile();
   const etichetta = { ...fontBody, fontSize: stretto ? 9 : 10.5, color: MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, lineHeight: 1.2 };
-  const campo = { ...inputStyle, padding: stretto ? "8px 22px 8px 9px" : "11px 26px 11px 12px", fontSize: stretto ? 14 : 17, fontWeight: 700, borderRadius: 10 };
+  const campo = { ...inputStyle, padding: stretto ? "8px 22px 8px 9px" : "11px 22px 11px 10px", fontSize: stretto ? 14 : 15, fontWeight: 700, borderRadius: 10 };
   // il titolo dice anche cosa sta chiedendo la casella: "prezzo lordo" o
   // "prezzo netto" cambia sotto il nome invece di ripetersi come etichetta
   // sopra il campo, dove rubava una riga per dire una parola
@@ -3031,7 +3031,7 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
       <div style={{ display: "flex", alignItems: "center", gap: stretto ? 6 : 8, marginBottom: stretto ? 8 : 12 }}>
         <div style={{ position: "relative", flex: "1 1 0", minWidth: 0 }}>
           <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
-          <span style={{ position: "absolute", right: stretto ? 8 : 11, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: stretto ? 12 : 14, color: MUTED, pointerEvents: "none" }}>€</span>
+          <span style={{ position: "absolute", right: stretto ? 8 : 9, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: stretto ? 12 : 12, color: MUTED, pointerEvents: "none" }}>€</span>
         </div>
         {/* Netto e Lordo attaccati al campo: sono due modi di leggere quel
             numero, non due impostazioni che stanno altrove */}
@@ -3042,7 +3042,7 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
               type="button"
               onClick={() => cambiaModo(m)}
               style={{
-                ...fontBody, fontSize: stretto ? 10.5 : 12.5, fontWeight: 700, padding: stretto ? "9px 8px" : "12px 12px",
+                ...fontBody, fontSize: stretto ? 10.5 : 10.5, fontWeight: 700, padding: stretto ? "9px 8px" : "12px 7px",
                 border: "none", cursor: "pointer", whiteSpace: "nowrap",
                 background: modo === m ? NAVY : "#fff", color: modo === m ? "#fff" : NAVY,
               }}
