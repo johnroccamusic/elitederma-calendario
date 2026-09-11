@@ -21137,7 +21137,10 @@ function rigaPagamentoIscritto(label, valore, metodo, isMobile, daPagare = false
           senza rischi perche' l'unica colonna elastica e' quella
           dell'etichetta: a stringersi e' sempre la descrizione */}
       <div style={{ ...cella, fontWeight: 700, textAlign: isMobile ? "right" : "left" }}>{valore}</div>
-      <div style={{ ...cella, textAlign: "right" }}>{metodo}</div>
+      {/* un filo sottile fra la cifra e il metodo: sono due cose diverse
+          — quanto e come — e appaiate senza niente in mezzo si leggevano
+          come una frase sola */}
+      <div style={{ ...cella, textAlign: "right", borderLeft: `1px solid ${CREAM_BORDER}`, paddingLeft: 10 }}>{metodo}</div>
     </>
   );
 }
@@ -21172,6 +21175,17 @@ function AllegatiIscritto({ i, inLinea = false }) {
   );
 }
 
+// Importi come li scrive un italiano: punto per le migliaia, virgola per
+// i centesimi, e i centesimi solo quando ci sono. "3123.8 €" era il
+// numero cosi' come esce dal database — con il punto al posto della
+// virgola e uno zero mancante — e su una scheda che si legge in aula
+// davanti all'allievo e' la prima cosa che fa sembrare il conto sbagliato.
+function euroScheda(n) {
+  const v = Number(n) || 0;
+  const decimali = Math.round(v * 100) % 100 === 0 ? 0 : 2;
+  return `${v.toLocaleString("it-IT", { minimumFractionDigits: decimali, maximumFractionDigits: decimali })} €`;
+}
+
 function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, senzaAllegati = false }) {
   return (
     <>
@@ -21182,9 +21196,9 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
         </div>
       )}
       {i.pacchetto_kit && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pacchetto/Kit</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: NAVY }}>{i.pacchetto_kit}</div>
+        <div style={{ marginBottom: 18, background: "#EFF1FA", borderRadius: 12, padding: isMobile ? "10px 12px" : "8px 10px" }}>
+          <div style={{ fontSize: isMobile ? 12 : 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Pacchetto/Kit</div>
+          <div style={{ fontSize: isMobile ? 22 : 18, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>{i.pacchetto_kit}</div>
         </div>
       )}
 
@@ -21192,16 +21206,16 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
         const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
         const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
         const celle = [
-          i.totale_pattuito != null && { chiave: "pattuito", label: "Totale pattuito", valore: `${i.totale_pattuito} €` },
-          (i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && { chiave: "pagato", label: "Totale pagato", valore: conRate !== netto ? `${conRate} €` : `${netto} €` },
-          mostraQuotaVenditore && i.quota_venditore != null && { chiave: "venditore", label: "Quota venditore", valore: `${i.quota_venditore} €` },
+          i.totale_pattuito != null && { chiave: "pattuito", label: "Totale pattuito", valore: euroScheda(i.totale_pattuito) },
+          (i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && { chiave: "pagato", label: "Totale pagato", valore: euroScheda(conRate !== netto ? conRate : netto) },
+          mostraQuotaVenditore && i.quota_venditore != null && { chiave: "venditore", label: "Quota venditore", valore: euroScheda(i.quota_venditore) },
         ].filter(Boolean);
         return (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, 1fr)`, marginBottom: 18 }}>
             {celle.map((c, ci) => (
               <div key={c.chiave} style={{ minWidth: 0, paddingLeft: ci > 0 ? 12 : 0, paddingRight: 10, borderLeft: ci > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                <div style={{ fontSize: 12, color: NAVY, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.label}</div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.valore}</div>
+                <div style={{ fontSize: isMobile ? 13 : 12, color: MUTED, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.label}</div>
+                <div style={{ fontSize: isMobile ? 20 : 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.valore}</div>
               </div>
             ))}
           </div>
@@ -21225,7 +21239,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
             acconto" finché non lo è */}
         {i.acconto_totale != null && rigaPagamentoIscritto(
           i.acconto_pagato ? "Pagato in acconto" : "Da pagare in acconto",
-          `${totQuota(i, "acconto")} €${i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}`,
+          `${euroScheda(totQuota(i, "acconto"))}${i.acconto_interessi ? ` (interessi ${euroScheda(i.acconto_interessi)})` : ""}`,
           i.acconto_metodo || "?",
           isMobile,
           !i.acconto_pagato,
@@ -21233,7 +21247,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
         )}
         {i.precorso_totale != null && rigaPagamentoIscritto(
           i.precorso_pagato ? "Pagato pre corso" : "Da pagare pre corso",
-          `${totQuota(i, "precorso")} €${i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}`,
+          `${euroScheda(totQuota(i, "precorso"))}${i.precorso_interessi ? ` (interessi ${euroScheda(i.precorso_interessi)})` : ""}`,
           i.precorso_metodo || "?",
           isMobile,
           !i.precorso_pagato,
@@ -21241,16 +21255,22 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
         )}
         {i.saldo_totale != null && rigaPagamentoIscritto(
           "Importo da pagare al corso",
-          `${i.saldo_totale} €`,
+          euroScheda(i.saldo_totale),
           i.saldo_metodo || "?",
           isMobile,
           false,
           "Saldo al corso"
         )}
+        {/* Modelle, taglia e accordi finivano sotto "Pagamenti" senza che
+            nessuno lo dicesse, e la taglia della divisa in mezzo alle
+            cifre sembrava un importo. Hanno una loro intestazione. */}
+        {((i.richiede_modelle && i.numero_modelle != null) || i.taglia_divisa || i.accordi_commerciali) && (
+          <div style={{ gridColumn: "1 / -1", fontSize: isMobile ? 17 : 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: isMobile ? 0.3 : 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Dati operativi</div>
+        )}
         {i.richiede_modelle && i.numero_modelle != null && (
           <>
             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Modelle da pagare</div>
-            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", ...(isMobile ? { fontSize: 17 } : {}) }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", ...(isMobile ? { fontSize: 17 } : {}) }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {euroScheda(modelleTotaleDi(i))}{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
           </>
         )}
         {i.taglia_divisa && (
@@ -26660,29 +26680,36 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                           fino in fondo alla scheda, senza una riga a parte
                           che lo tagli */}
                       {mostraIncasso && (
+                        // La cifra da incassare in una fascia sua, del
+                        // colore di quello che dice: rossa finche' i soldi
+                        // non ci sono, verde quando arrivano. Era una riga
+                        // come le altre, in fondo a una colonna di conti, e
+                        // la cosa piu' importante della scheda si leggeva
+                        // per ultima e come tutto il resto.
                         <div
                           onClick={() => toggleIncassato(i)}
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 10,
-                            paddingTop: 14,
-                            marginTop: 4,
-                            borderTop: `1px solid ${CREAM_BORDER}`,
-                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                            marginTop: 16, padding: isMobile ? "14px 14px" : "12px 14px",
+                            background: i.incassato ? "#E9F6EC" : "#FDEEEC",
+                            borderRadius: 14, cursor: "pointer",
                           }}
                         >
-                          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "baseline", gap: isMobile ? 2 : 8 }}>
-                            <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ ...fontBody, fontSize: isMobile ? 13 : 11, fontWeight: 700, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
                               {i.incassato ? "Incassato" : "Da incassare"}
-                            </span>
-                            <span style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap" }}>{daIncassare} €</span>
+                            </div>
+                            <div style={{ ...fontBody, fontSize: isMobile ? 30 : 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap", lineHeight: 1.1 }}>{euroScheda(daIncassare)}</div>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, fontWeight: i.incassato ? 400 : 700, color: coloreIncasso }}>
-                            <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
+                          <span style={{
+                            ...fontBody, fontSize: isMobile ? 15 : 14, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
+                            borderRadius: 12, padding: isMobile ? "12px 20px" : "10px 16px",
+                            background: i.incassato ? "#fff" : coloreIncasso,
+                            color: i.incassato ? coloreIncasso : "#fff",
+                            border: i.incassato ? `1px solid ${coloreIncasso}` : "none",
+                          }}>
                             {i.incassato ? "Incassato" : "Incassa"}
-                          </div>
+                          </span>
                         </div>
                       )}
                     </div>
@@ -26789,7 +26816,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                     return <div style={{ fontWeight: 700 }}>Totale pagato: {netto} €{conRate !== netto && ` — con rate: ${conRate} €`}</div>;
                   })()}
                   {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
-                  {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>}
+                  {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {euroScheda(modelleTotaleDi(i))}{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>}
                   {(i.saldo_totale != null || i.numero_modelle != null) && (
                     <div style={{ fontWeight: 700 }}>
                       Da incassare: {round2((i.saldo_totale || 0) + modelleTotaleDi(i))} € — {i.incassato ? "INCASSATO" : "NON INCASSATO"}
