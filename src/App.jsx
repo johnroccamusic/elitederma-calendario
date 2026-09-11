@@ -26482,6 +26482,12 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
             const aPosto = i.incassato || daIncassare === 0;
             const coloreIncasso = aPosto ? "#2E7D32" : "#C0392B";
+            // Zero da incassare vuol dire che non c'e' niente da incassare:
+            // il tasto "Incassa" li' non fa niente di utile e la spunta non
+            // ha un significato — segnare "incassato" una cifra che non
+            // esiste. Resta la riga, che dice appunto che il conto e'
+            // chiuso, ma senza niente da premere.
+            const nienteDaIncassare = daIncassare === 0;
             // in "Contabilita' classe" ogni scheda e' alta e piena di
             // numeri: da telefono dieci pixel fra una e l'altra non
             // bastavano a capire dove finiva un allievo e cominciava il
@@ -26725,12 +26731,15 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                         // la cosa piu' importante della scheda si leggeva
                         // per ultima e come tutto il resto.
                         <div
-                          onClick={() => toggleIncassato(i)}
+                          onClick={nienteDaIncassare ? undefined : () => toggleIncassato(i)}
                           style={{
                             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
                             marginTop: 16, padding: isMobile ? "14px 14px" : "12px 14px",
-                            background: i.incassato ? "#E9F6EC" : "#FDEEEC",
-                            borderRadius: 14, cursor: "pointer",
+                            // il colore segue quello che c'e' scritto: se la
+                            // cifra e' verde perche' non c'e' niente da
+                            // prendere, la fascia non puo' essere rossa
+                            background: aPosto ? "#E9F6EC" : "#FDEEEC",
+                            borderRadius: 14, cursor: nienteDaIncassare ? "default" : "pointer",
                           }}
                         >
                           <div style={{ minWidth: 0 }}>
@@ -26739,15 +26748,17 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                             </div>
                             <div style={{ ...fontBody, fontSize: isMobile ? 30 : 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap", lineHeight: 1.1 }}>{euroScheda(daIncassare)}</div>
                           </div>
-                          <span style={{
-                            ...fontBody, fontSize: isMobile ? 15 : 14, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
-                            borderRadius: 12, padding: isMobile ? "12px 20px" : "10px 16px",
-                            background: i.incassato ? "#fff" : coloreIncasso,
-                            color: i.incassato ? coloreIncasso : "#fff",
-                            border: i.incassato ? `1px solid ${coloreIncasso}` : "none",
-                          }}>
-                            {i.incassato ? "Incassato" : "Incassa"}
-                          </span>
+                          {!nienteDaIncassare && (
+                            <span style={{
+                              ...fontBody, fontSize: isMobile ? 15 : 14, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
+                              borderRadius: 12, padding: isMobile ? "12px 20px" : "10px 16px",
+                              background: i.incassato ? "#fff" : coloreIncasso,
+                              color: i.incassato ? coloreIncasso : "#fff",
+                              border: i.incassato ? `1px solid ${coloreIncasso}` : "none",
+                            }}>
+                              {i.incassato ? "Incassato" : "Incassa"}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
