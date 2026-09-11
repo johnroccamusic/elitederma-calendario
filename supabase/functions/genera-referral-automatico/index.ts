@@ -128,12 +128,13 @@ Deno.serve(async (req) => {
         .gt("prezzo_vendita", 0);
       let netto = 0, margine = 0, lordo = 0, sconto = 0;
       const fasce = Array.isArray(regole.fasce_sconto) ? regole.fasce_sconto : [];
+      // sei fasce: cinque larghe 16,5 punti di margine e l'ultima 17,5,
+      // cosi' da 0 a 100 non resta scoperto niente
+      const CONFINI_FASCE = [16.5, 33, 49.5, 66, 82.5, 100];
       const pctFascia = (m: number | null) => {
         if (m == null) return 0;
-        if (m <= 25) return Number(fasce[0]?.percentuale) || 0;
-        if (m <= 50) return Number(fasce[1]?.percentuale) || 0;
-        if (m <= 75) return Number(fasce[2]?.percentuale) || 0;
-        return Number(fasce[3]?.percentuale) || 0;
+        const i = CONFINI_FASCE.findIndex((limite) => m <= limite);
+        return Number(fasce[i === -1 ? CONFINI_FASCE.length - 1 : i]?.percentuale) || 0;
       };
       (catalogo || []).forEach((p: any) => {
         const nettoP = Number(p.prezzo_vendita);
