@@ -2380,9 +2380,19 @@ function useAspettoTasti() {
 // quella variabile, e cambiano tutti all'istante senza che un solo
 // componente debba ridisegnarsi.
 //
-// PULSANTI — tutti quelli dell'app, tolti i quadrati della home, che
-// hanno gia' la loro e si escludono da soli con `data-tasto-home`. Qui
-// serve una regola vera e non una variabile, perche' i pulsanti non
+// PULSANTI — tutti quelli dell'app, con due esclusioni.
+//
+// La prima sono i quadrati della home, che hanno gia' la loro ombra e si
+// tolgono di mezzo da soli con `data-niente-ombra`.
+//
+// La seconda sono i pulsanti SENZA SFONDO. Un'ombra e' il distacco di
+// una superficie dal foglio, e se la superficie non c'e' resta solo una
+// sbavatura grigia appoggiata al testo — succedeva alle righe del menu
+// Impostazioni, che sono pulsanti larghi quanto la pagina e trasparenti:
+// l'ombra si vedeva come una fascia sotto ogni riga. Non e' un caso da
+// togliere a mano, e' una regola: niente sfondo, niente ombra.
+//
+// Qui serve una regola vera e non una variabile, perche' i pulsanti non
 // passano da uno stile comune: sono scritti uno per uno. E siccome uno
 // stile scritto sull'elemento vince sempre su una regola come questa,
 // ogni pulsante che si e' scelto la sua ombra a mano se la tiene.
@@ -2391,7 +2401,7 @@ function StiliGlobaliAspetto() {
   return (
     <style>{`
 :root { --ombra-aree: ${ombraCssTasto(aspetto.aree.ombra)}; }
-button:not([data-tasto-home]) { box-shadow: ${ombraCssTasto(aspetto.pulsanti.ombra)}; }
+button:not([data-niente-ombra]):not([style*="background: transparent"]):not([style*="background: none"]) { box-shadow: ${ombraCssTasto(aspetto.pulsanti.ombra)}; }
 `}</style>
   );
 }
@@ -2429,7 +2439,7 @@ function TileHome({
   if (isMobile && ricca) {
     return (
       <button
-        data-tasto-home="1"
+        data-niente-ombra="1"
         onClick={attivo ? onClick : undefined}
         disabled={!attivo}
         draggable={draggableTasto}
@@ -2480,7 +2490,7 @@ function TileHome({
   }
   return (
     <button
-      data-tasto-home="1"
+      data-niente-ombra="1"
       onClick={attivo ? onClick : undefined}
       disabled={!attivo}
       draggable={draggableTasto}
@@ -14096,7 +14106,7 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
   return (
     <button
       onClick={onClick}
-      data-tasto-home="1"
+      data-niente-ombra="1"
       style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}
     >
       <div style={{
@@ -14133,7 +14143,7 @@ function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, seleziona
   return (
     <button
       onClick={onClick}
-      data-tasto-home="1"
+      data-niente-ombra="1"
       style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}
     >
       <div style={{
@@ -14263,7 +14273,7 @@ function PaginaAspettoApp() {
             const scelto = String(corrente.colore).toUpperCase() === c.toUpperCase();
             return (
               <button
-                key={c} onClick={() => cambia({ colore: c })} title={c} data-tasto-home="1"
+                key={c} onClick={() => cambia({ colore: c })} title={c} data-niente-ombra="1"
                 style={{
                   aspectRatio: "1 / 1", width: "100%", borderRadius: 6, cursor: "pointer", background: c,
                   border: scelto ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`,
