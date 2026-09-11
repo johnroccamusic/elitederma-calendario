@@ -327,6 +327,7 @@ const CHIAVE_ETICHETTE_MAGAZZINO = "gestioneMagazzino_etichetteColonne";
 // l'ordine in cui stanno le colonne, spostabile trascinando i titoli
 const CHIAVE_ORDINE_MAGAZZINO = "gestioneMagazzino_ordineColonne";
 const CHIAVE_PER_PAGINA_MAGAZZINO = "gestioneMagazzino_perPagina";
+const CHIAVE_COLONNE_POS = "pos_colonneProdotti";
 // quanto spazio prende la colonna di sinistra ("Da gestire oggi") rispetto
 // agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
 const CHIAVE_DIVISIONE_MAGAZZINO = "gestioneMagazzino_divisioneColonne";
@@ -49030,6 +49031,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     </>
   );
 
+  // Quante schede per riga. Erano tre fisse, decise su uno schermo solo:
+  // su un iPad in verticale sono larghe e se ne vedono sei, su un monitor
+  // grande ne starebbero cinque e invece restava mezzo schermo vuoto. Chi
+  // vende al banco guarda immagini, non nomi: quante gliene stanno
+  // davanti cambia quanto e' veloce. Da telefono non si sceglie — li' e'
+  // un elenco, non una griglia.
+  const [colonnePos, setColonnePos] = useImpostazioneCondivisa(CHIAVE_COLONNE_POS, 3);
+  const colonneProdottiPos = Math.min(6, Math.max(2, Number(colonnePos) || 3));
   const elencoProdotti = isMobile ? (
     <div>
       {prodottiPagina.map((p) => {
@@ -49062,7 +49071,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       )}
     </div>
   ) : (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${colonneProdottiPos}, minmax(0, 1fr))`, gap: 12 }}>
       {prodottiPagina.map((p) => {
         const disponibili = disponibiliDi(p.id);
         const esaurito = disponibili <= 0;
@@ -49312,6 +49321,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1, minWidth: 220 }} />
+              {/* quante schede per riga: sta accanto alla ricerca perche'
+                  e' l'altro comando che decide cosa si ha davanti, e
+                  perche' la si cambia guardando la griglia, non entrando
+                  in un pannello di impostazioni */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, background: BG, borderRadius: 20, padding: "4px 6px", flexShrink: 0 }}>
+                <button
+                  onClick={() => setColonnePos(Math.max(2, colonneProdottiPos - 1))}
+                  disabled={colonneProdottiPos <= 2}
+                  title="Schede più grandi, meno per riga"
+                  style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, fontSize: 17, lineHeight: 1, cursor: colonneProdottiPos <= 2 ? "default" : "pointer", opacity: colonneProdottiPos <= 2 ? 0.4 : 1 }}
+                >−</button>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 16, textAlign: "center" }}>{colonneProdottiPos}</span>
+                <button
+                  onClick={() => setColonnePos(Math.min(6, colonneProdottiPos + 1))}
+                  disabled={colonneProdottiPos >= 6}
+                  title="Schede più piccole, più per riga"
+                  style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: NAVY, color: "#fff", fontSize: 17, lineHeight: 1, cursor: colonneProdottiPos >= 6 ? "default" : "pointer", opacity: colonneProdottiPos >= 6 ? 0.4 : 1 }}
+                >+</button>
+              </div>
             </div>
             <StrisciaCategoriePos
               categorie={categorieOrdinate}
