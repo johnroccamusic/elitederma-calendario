@@ -32718,8 +32718,15 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
 // che apre numero/data fattura + scadenza (pre-compilata se già nota da
 // Assegnazione Master → Gestisci) + copia fattura opzionale — al salvataggio
 // nasce la spesa vera (stato "Fatturata") e la riga sparisce da qui
-function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura }) {
+function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura, onPagaDaCassa }) {
   const [aperto, setAperto] = useState(false);
+  // Un impegno ha due sbocchi, non uno: o arriva la fattura e si va in
+  // scadenziario, oppure lo si paga in contanti e finisce dritto in prima
+  // nota. Finora c'era solo il primo, e chi pagava dalla cassa doveva
+  // registrare la spesa a mano da un'altra pagina — e quasi sempre senza
+  // data, che e' come non registrarla.
+  const [pagandoCassa, setPagandoCassa] = useState(false);
+  const [dataCassa, setDataCassa] = useState(dataOggiStr());
   const [numeroFattura, setNumeroFattura] = useState("");
   const [dataFattura, setDataFattura] = useState(dataOggiStr());
   const [scadenza, setScadenza] = useState(scadenzaSuggerita || "");
@@ -32763,9 +32770,28 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
         {disabilitato ? (
           <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
         ) : !aperto ? (
-          <button onClick={() => setAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", flexShrink: 0 }}>
-            Registra fattura
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+            {onPagaDaCassa && (
+              <>
+                <input type="date" title="Il giorno in cui i contanti sono usciti" value={dataCassa} onChange={(e) => setDataCassa(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "7px 9px", fontSize: 12 }} />
+                <button
+                  onClick={async () => {
+                    if (!window.confirm(`Pagare "${nome}" dalla cassa contanti il ${fmtData(dataCassa)}?\n\nDiventa una spesa pagata di ${fmtEuroErp(totale)} e compare in prima nota come uscita di cassa di quel giorno.`)) return;
+                    setPagandoCassa(true);
+                    await onPagaDaCassa({ dataPagamento: dataCassa });
+                    setPagandoCassa(false);
+                  }}
+                  disabled={pagandoCassa}
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 16, padding: "9px 14px", cursor: pagandoCassa ? "default" : "pointer", opacity: pagandoCassa ? 0.6 : 1 }}
+                >
+                  {pagandoCassa ? "Registro…" : "Pagato da cassa"}
+                </button>
+              </>
+            )}
+            <button onClick={() => setAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer" }}>
+              Registra fattura
+            </button>
+          </div>
         ) : null}
       </RigaAmministrazione>
       {aperto && !disabilitato && (
@@ -35031,6 +35057,28 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
+  // "Pagato da cassa": l'impegno non aspetta piu' nessuna fattura, i
+  // contanti sono usciti. Diventa una spesa pagata con quella data, quindi
+  // una riga di prima nota. Senza IVA, come tutto quello che si paga in
+  // contanti senza documento: se la fattura arrivasse poi, si corregge
+  // dalla riga della spesa.
+  async function pagaImpegnoDaCassa(item, { dataPagamento }) {
+    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
+    const { error } = await supabase.from("spese").insert({
+      descrizione: item.nome,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: item.sottocategoriaId,
+      tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
+      imponibile: round2(item.totale), iva_percentuale: 0, totale: round2(item.totale),
+      importo_pagato_cash: round2(item.totale),
+      data_documento: item.corsoData?.data_fine || dataPagamento,
+      stato: "pagata", data_pagamento: dataPagamento, metodo_pagamento: "Contanti",
+      origine: "automatico", origine_scadenziario_chiave: item.chiave,
+    });
+    if (error) { setMsgImpegni("Errore: " + testoErrore(error)); return; }
+    setMsgImpegni(`"${item.nome}" pagato dalla cassa contanti: ora è in prima nota.`);
+    ricarica(["spese"]);
+  }
   async function segnaPagataVirtuale(item, { file, dataPagamento }) {
     setMsg("");
     let allegatoPath = null;
@@ -35221,6 +35269,7 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
                       .filter((x) => x.key !== item.key && x.tipo === item.tipo && x.fornitore && x.fornitore === item.fornitore)
                       .map((x) => ({ ...x, corsoLabel: etichettaCorso(x.corsoData) }))}
                     onRegistraFattura={(dati, altriSelezionati) => registraFattura(item, dati, altriSelezionati)}
+                    onPagaDaCassa={item.sottocategoriaId ? (dati) => pagaImpegnoDaCassa(item, dati) : null}
                   />
                 ))}
               </div>
