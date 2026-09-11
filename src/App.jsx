@@ -2309,12 +2309,13 @@ const CHIAVE_ASPETTO_TASTI = "aspetto_tasti";
 const ASPETTO_TASTI_DEFAULT = {
   mobile: { dimensione: 82, raggio: 22, icona: 40, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
   desktop: { dimensione: 90, raggio: 7, icona: 80, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
-  // Un'ombra sola per TUTTE le nuvole — le pastiglie colorate dietro i
-  // testi, 321 in giro per l'app — e una per tutti gli altri pulsanti,
-  // quelli che non sono i quadrati della home. Non si dividono fra
+  // Un'ombra sola per TUTTE le aree che reggono i dati — i pannelli
+  // bianchi delle tabelle, le schede citta', gli elenchi — e una per
+  // tutti gli altri pulsanti, quelli che non sono i quadrati della home
+  // (i sotto-tasti delle sezioni ci rientrano). Non si dividono fra
   // telefono e computer: e' una scelta di tono, e il tono non cambia con
   // lo schermo.
-  nuvole: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+  aree: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
   pulsanti: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
 };
 // i 64 colori: otto file da otto. La prima e' la scala dei grigi, la
@@ -2365,40 +2366,31 @@ function useAspettoTasti() {
   return [{
     mobile: aspettoTastoDi(salvato, "mobile"),
     desktop: aspettoTastoDi(salvato, "desktop"),
-    nuvole: ombraAspettoDi(salvato, "nuvole"),
+    aree: ombraAspettoDi(salvato, "aree"),
     pulsanti: ombraAspettoDi(salvato, "pulsanti"),
   }, salva];
 }
 
-// Le due ombre generali, date con una regola di stile invece che riga
-// per riga.
+// Le due ombre generali, date in un punto solo invece che riga per riga.
 //
-// Le nuvole sono 321 pastiglie scritte a mano in una quarantina di forme
-// diverse: darle una per una vorrebbe dire toccare 321 punti oggi e
-// ricordarsi di toccarne uno in piu' ogni volta che se ne scrive una
-// nuova. Qui invece si riconoscono da come sono fatte — sfondo, angoli
-// tondi e un'imbottitura verticale di una cifra sola — che e' esattamente
-// cio' che distingue una pastiglia da un riquadro: un riquadro ha
-// un'imbottitura da 12, 14, 22. I selettori guardano l'attributo `style`
-// scritto in pagina, e questo permette di prenderle tutte senza
-// nominarle.
+// AREE DATI — i pannelli bianchi che reggono tabelle ed elenchi. Sono
+// 273 usi di cardStyle piu' una sessantina scritti a mano, e tutti
+// dichiarano `boxShadow: var(--ombra-aree, none)`: qui si scrive il valore di
+// quella variabile, e cambiano tutti all'istante senza che un solo
+// componente debba ridisegnarsi.
 //
-// Per i pulsanti vale lo stesso, tolti i quadrati della home — che hanno
-// gia' la loro ombra e si escludono da soli con `data-tasto-home`. E
-// siccome uno stile scritto direttamente sull'elemento vince sempre su
-// una regola come queste, ogni pulsante che si e' scelto la sua ombra a
-// mano se la tiene.
+// PULSANTI — tutti quelli dell'app, tolti i quadrati della home, che
+// hanno gia' la loro e si escludono da soli con `data-tasto-home`. Qui
+// serve una regola vera e non una variabile, perche' i pulsanti non
+// passano da uno stile comune: sono scritti uno per uno. E siccome uno
+// stile scritto sull'elemento vince sempre su una regola come questa,
+// ogni pulsante che si e' scelto la sua ombra a mano se la tiene.
 function StiliGlobaliAspetto() {
   const [aspetto] = useAspettoTasti();
-  const ombraNuvole = ombraCssTasto(aspetto.nuvole.ombra);
-  const ombraPulsanti = ombraCssTasto(aspetto.pulsanti.ombra);
-  const selettoriNuvole = ["span", "div", "label"]
-    .flatMap((tag) => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${tag}[style*="border-radius"][style*="background"][style*="padding: ${n}px"]`))
-    .join(",\n");
   return (
     <style>{`
-${selettoriNuvole} { box-shadow: ${ombraNuvole}; }
-button:not([data-tasto-home]) { box-shadow: ${ombraPulsanti}; }
+:root { --ombra-aree: ${ombraCssTasto(aspetto.aree.ombra)}; }
+button:not([data-tasto-home]) { box-shadow: ${ombraCssTasto(aspetto.pulsanti.ombra)}; }
 `}</style>
   );
 }
@@ -6285,7 +6277,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                   const coinvolti = calcolaCoinvolti(a);
                   const inAttesa = tab === "attesa";
                   return (
-                    <div key={a.id} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: 14, marginBottom: 12 }}>
+                    <div key={a.id} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: 14, marginBottom: 12 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                         <span style={{ width: 40, height: 40, borderRadius: 12, background: NOTA_BG, color: AMBRA, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                           <IconaRicevutaErp size={21} />
@@ -6780,7 +6772,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
         <b>{filtrati.length}</b>&nbsp;chiusure&nbsp;<span style={{ color: MUTED }}>·</span>&nbsp;<b>{numeroTipologieVendute}</b>&nbsp;tipologie&nbsp;<span style={{ color: MUTED }}>·</span>&nbsp;<b>{numeroVenditoriConVendite}</b>&nbsp;venditori
       </div>
 
-      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 20, marginBottom: 8 }}>
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: "var(--ombra-aree, none)", padding: 20, marginBottom: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
           <div>
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Chiusure per corso e venditore</div>
@@ -7407,7 +7399,7 @@ function SezioneDateCorsi({
       {/* una ricerca che non trova niente non dice se la persona non c'è o
           se è un filtro rimasto attivo (o la tab sbagliata) a nasconderla */}
       {terminiRicerca.length > 0 && corsiDateFiltrate.length === 0 && (
-        <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 14, marginBottom: 16 }}>
+        <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: "var(--ombra-aree, none)", padding: 14, marginBottom: 16 }}>
           {fuoriDaCiCheSiGuarda.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
               Nessun corso e nessun allievo corrisponde a «{ricercaDate.trim()}».
@@ -14130,7 +14122,7 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
 
 const NOME_ELEMENTO_ASPETTO = {
   mobile: "Pulsante mobile", desktop: "Pulsante desktop",
-  nuvole: "Nuvole", pulsanti: "Altri pulsanti",
+  aree: "Aree dati", pulsanti: "Altri pulsanti",
 };
 
 // Le due ombre generali si giudicano su un esempio vero: una pastiglia
@@ -14149,12 +14141,16 @@ function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, seleziona
         background: selezionato ? "rgba(14,27,51,0.05)" : "transparent",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10,
       }}>
-        {tipo === "nuvola" ? (
-          <>
-            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 8, padding: "3px 9px", boxShadow: ombraCssTasto(ombra) }}>ROMA</span>
-            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "3px 9px", boxShadow: ombraCssTasto(ombra) }}>Contanti</span>
-            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F7EC", borderRadius: 8, padding: "3px 9px", boxShadow: ombraCssTasto(ombra) }}>Incassato</span>
-          </>
+        {tipo === "area" ? (
+          <div style={{ width: 118, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 10, boxShadow: ombraCssTasto(ombra) }}>
+            <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Corsi</div>
+            {["Pmu Base", "Micro Base"].map((n, i) => (
+              <div key={n} style={{ display: "flex", justifyContent: "space-between", gap: 6, padding: "4px 0", borderTop: i ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY }}>{n}</span>
+                <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>{i ? "18 OTT" : "11 OTT"}</span>
+              </div>
+            ))}
+          </div>
         ) : (
           <>
             <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", boxShadow: ombraCssTasto(ombra) }}>Dettagli corso</span>
@@ -14180,7 +14176,7 @@ function PaginaAspettoApp() {
   const corrente = aspetto[quale];
   // nuvole e pulsanti hanno la sola ombra: i comandi di forma e colore
   // non avrebbero niente da toccare
-  const soloOmbra = quale === "nuvole" || quale === "pulsanti";
+  const soloOmbra = quale === "aree" || quale === "pulsanti";
   const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi } });
 
   const piuMeno = (etichetta, campo, min, max, unita, aiutoMeno, aiutoPiu) => (
@@ -14220,16 +14216,17 @@ function PaginaAspettoApp() {
         <div style={{ height: 1, background: CREAM_BORDER, margin: "20px 0 16px" }} />
         <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>Il resto dell'app</div>
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12, maxWidth: 520 }}>
-          Una sola ombra per tutte le nuvole colorate dietro i testi, e una per tutti gli altri pulsanti dell'app.
-          Non si dividono fra telefono e computer. Chi si è già scelto la sua ombra a mano se la tiene.
+          Una sola ombra per tutte le aree bianche che reggono i dati — tabelle, elenchi, schede — e una per tutti gli
+          altri pulsanti dell'app, compresi i sotto-tasti delle sezioni. Non si dividono fra telefono e computer.
+          Chi si è già scelto la sua ombra a mano se la tiene.
         </div>
         <div style={{ display: "flex", gap: isMobile ? 18 : 34, flexWrap: "wrap", justifyContent: isMobile ? "center" : "flex-start" }}>
           <AnteprimaOmbraGenerale
-            etichetta="Nuvole" sottotitolo="le pastiglie dietro i testi" tipo="nuvola"
-            ombra={aspetto.nuvole.ombra} selezionato={quale === "nuvole"} onClick={() => setQuale("nuvole")}
+            etichetta="Aree dati" sottotitolo="i pannelli che reggono i dati" tipo="area"
+            ombra={aspetto.aree.ombra} selezionato={quale === "aree"} onClick={() => setQuale("aree")}
           />
           <AnteprimaOmbraGenerale
-            etichetta="Altri pulsanti" sottotitolo="tutti tranne i quadrati" tipo="pulsante"
+            etichetta="Altri pulsanti" sottotitolo="compresi i sotto-tasti" tipo="pulsante"
             ombra={aspetto.pulsanti.ombra} selezionato={quale === "pulsanti"} onClick={() => setQuale("pulsanti")}
           />
         </div>
@@ -15866,7 +15863,10 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   );
 }
 
-const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 22, marginBottom: 18 };
+// L'ombra non e' un valore ma una variabile CSS: la si cambia in un
+// punto solo (StiliGlobaliAspetto) e tutti e 273 gli usi di cardStyle la
+// seguono all'istante, senza che nessun componente debba ridisegnarsi.
+const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 22, marginBottom: 18, boxShadow: "var(--ombra-aree, none)" };
 // la stessa scheda su uno schermo stretto: i bordi interni da 22 si
 // mangiavano quarantaquattro pixel di larghezza utile, che servono ai campi
 const cardStyleStretto = { ...cardStyle, padding: 11 };
@@ -20183,7 +20183,7 @@ function CardCittaData({ c, renderRiga }) {
     {/* da telefono la scheda si stringe tutta: il nome della citta' era
         grande quanto un titolo di pagina e da solo si portava via due
         righe di elenco */}
-    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 20 }}>
+    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? 12 : 20 }}>
       {controlliZoom}
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 14, marginBottom: isMobile ? 10 : 18 }}>
         <IconaPin size={isMobile ? 22 : 30} color={GOLD} />
@@ -20216,7 +20216,7 @@ function CardMeseCronologico({ etichetta, gruppoMese, chiaveMese, renderRiga }) 
   return (
     <div style={{ marginBottom: isMobile ? 12 : 16 }}>
     <ZoomBox zoom={zoom}>
-    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 20 }}>
+    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? 12 : 20 }}>
       {controlliZoom}
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 9 : 14, marginBottom: isMobile ? 10 : 18 }}>
         <IconaCalendarioLeve size={isMobile ? 22 : 30} color={GOLD} />
@@ -31844,7 +31844,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
           non sono un'opzione fra le altre: sono i due estremi entro cui
           tutto il resto della pagina fa i conti. Si scrivono una volta e
           restano. */}
-      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 12 : 16, marginBottom: 12, display: "flex", gap: isMobile ? 14 : 30, flexWrap: "wrap", alignItems: "flex-end" }}>
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? 12 : 16, marginBottom: 12, display: "flex", gap: isMobile ? 14 : 30, flexWrap: "wrap", alignItems: "flex-end" }}>
         {[
           { chiave: "da", etichetta: "Analisi dal", valore: dataDa, salva: setDataDa },
           { chiave: "a", etichetta: "Prospettiva fino al", valore: dataProspettiva, salva: setDataProspettiva },
@@ -37231,7 +37231,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
         {vista === "storico" ? (
           <TabellaStoricoSpedizioni voci={voci} onApriOrdine={setOrdineAperto} isMobile={isMobile} />
         ) : voci.length === 0 ? (
-          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
+          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
             {vista === "dagestire"
               ? "Niente da spedire in questo momento: nessun ordine dello shop in lavorazione e nessuna spedizione dal banco in attesa."
               : "Nessun ordine completato da mostrare."}
@@ -37284,7 +37284,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
 function TabellaStoricoSpedizioni({ voci, onApriOrdine, isMobile }) {
   if (voci.length === 0) {
     return (
-      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
         Nessuna spedizione chiusa da mostrare.
       </div>
     );
