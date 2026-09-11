@@ -53729,10 +53729,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           )}
 
           {(!isMobile || vistaMobile === "dettaglio") && (
-          {/* niente filo colorato nemmeno qui: quale corso si sta
-              guardando lo dicono la tessera della data e il nome scritto
-              grande in cima, non una cornice alta quanto la pagina */}
-          <div style={{ ...cardStyle, marginBottom: 0, borderRadius: 16 }}>
+          <div
+            // niente filo colorato nemmeno qui: quale corso si sta
+            // guardando lo dicono la tessera della data e il nome
+            // scritto grande in cima, non una cornice alta quanto la
+            // pagina
+            style={{ ...cardStyle, marginBottom: 0, borderRadius: 16 }}
+          >
             {!edizioneSel ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
             ) : (
