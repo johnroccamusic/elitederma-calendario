@@ -17588,6 +17588,12 @@ function ControlliOmbra({ titolo, ombra, onCambia }) {
           {freccia("→", { x: ombra.x + 1 }, "Sposta l’ombra a destra")}
           {vuoto}{freccia("↓", { y: ombra.y + 1 }, "Sposta l’ombra in basso")}{vuoto}
         </div>
+        {/* i due numeri della direzione. Senza, una direzione trovata a
+            forza di freccette resta in quel pulsante e basta: per
+            rifarla identica altrove bisognerebbe ricontare i clic. */}
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, marginTop: 5, textAlign: "center", width: 90, letterSpacing: 0.3 }}>
+          X {ombra.x} · Y {ombra.y}
+        </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {piuMeno("Intensità", ombra.intensita, "intensita", 0, 100, "Più grigia", "Più nera")}
