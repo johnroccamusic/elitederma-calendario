@@ -26973,6 +26973,7 @@ function VistaMaster({ param }) {
           const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
           const aPosto = i.incassato || daIncassare === 0;
           const colore = aPosto ? "#2E7D32" : "#C0392B";
+          const nienteDaIncassare = daIncassare === 0;
           return (
             // stessa scheda della Contabilita' classe, senza gli attrezzi
             // che qui non servono (stampa, modifica, sposta, elimina): la
@@ -27017,26 +27018,36 @@ function VistaMaster({ param }) {
                   </div>
                 )}
 
+                {/* Stessa fascia della Contabilita' classe: il colore segue
+                    quello che c'e' scritto, e a zero da incassare non c'e'
+                    niente da premere — segnare "incassato" una cifra che
+                    non esiste non vuol dire niente. */}
                 <div
-                  onClick={() => toggleIncassato(i)}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, paddingTop: 14, marginTop: 4, borderTop: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}
+                  onClick={nienteDaIncassare ? undefined : () => toggleIncassato(i)}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                    marginTop: 16, padding: isMobile ? "14px 14px" : "12px 14px",
+                    background: aPosto ? "#E9F6EC" : "#FDEEEC",
+                    borderRadius: 14, cursor: nienteDaIncassare ? "default" : "pointer",
+                  }}
                 >
-                  {/* la cifra sta attaccata alla casella, non all'altro
-                      capo della riga: si preme guardando quanto si sta
-                      incassando, e con l'importo a sinistra e la spunta a
-                      destra l'occhio doveva attraversare tutta la scheda */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 14, marginLeft: "auto", flexWrap: "wrap" }}>
-                    <div style={{ minWidth: 0, textAlign: "right" }}>
-                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: colore, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                        {i.incassato ? "Incassato" : "Da incassare"}
-                      </div>
-                      <div style={{ ...fontBody, fontSize: 26, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>{daIncassare} €</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 13 : 11, fontWeight: 700, color: colore, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
+                      {i.incassato ? "Incassato" : "Da incassare"}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, fontWeight: i.incassato ? 400 : 700, color: colore, flexShrink: 0 }}>
-                      <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
-                      {i.incassato ? "Incassato" : "Incassa"}
-                    </div>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 30 : 22, fontWeight: 800, color: colore, whiteSpace: "nowrap", lineHeight: 1.1 }}>{euroScheda(daIncassare)}</div>
                   </div>
+                  {!nienteDaIncassare && (
+                    <span style={{
+                      ...fontBody, fontSize: isMobile ? 15 : 14, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
+                      borderRadius: 12, padding: isMobile ? "12px 20px" : "10px 16px",
+                      background: i.incassato ? "#fff" : colore,
+                      color: i.incassato ? colore : "#fff",
+                      border: i.incassato ? `1px solid ${colore}` : "none",
+                    }}>
+                      {i.incassato ? "Incassato" : "Incassa"}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
