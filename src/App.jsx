@@ -36099,9 +36099,52 @@ function etichettaStatoVenditaShop(stato) {
 // payload originale di WooCommerce (indirizzi, coupon, spese di spedizione)
 // pesa troppo per tenerlo caricato per mille ordini, quindi si legge qui,
 // una riga sola, quando si apre la scheda
-function ModaleDettaglioOrdine({ vendita, onChiudi }) {
+function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], onAssociato }) {
   const [payload, setPayload] = useState(null);
   const [caricando, setCaricando] = useState(false);
+  // Associare una vendita a un corso dopo che e' stata fatta.
+  //
+  // Il POS chiede la classe solo se quel giorno un corso e' in aula, e chi
+  // vende se ne dimentica o registra la vendita il giorno dopo: finora
+  // quella vendita restava orfana per sempre, e il corso non la vedeva nei
+  // suoi conti. Qui si rimedia.
+  //
+  // Associare NON tocca i soldi: niente sconto, niente ricalcolo, nessun
+  // coupon applicato a posteriori. Cambia solo a quale classe appartiene,
+  // e quindi dove viene contata quando si guarda quale corso ha reso di
+  // piu'. Lo sconto, se non e' stato fatto al momento della vendita, non
+  // si fa dopo.
+  const [corsoScelto, setCorsoScelto] = useState("");
+  const [associando, setAssociando] = useState(false);
+  const oggiAssoc = dataOggiStr();
+  const corsoAssociato = vendita?.corso_data_id
+    ? (() => {
+        const cd = (corsiDate || []).find((x) => x.id === vendita.corso_data_id);
+        return cd ? { cd, nome: (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "—" } : null;
+      })()
+    : null;
+  // corsi gia' iniziati, dal piu' recente: una vendita fatta in aula
+  // appartiene a un corso che e' cominciato, non a uno di novembre
+  const corsiAssociabili = (corsiDate || [])
+    .filter((cd) => cd.data_inizio <= oggiAssoc)
+    .sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""))
+    .slice(0, 60);
+  async function associaACorso() {
+    if (!corsoScelto) return;
+    setAssociando(true);
+    const { error } = await supabase.from("vendite_shop").update({ corso_data_id: corsoScelto }).eq("id", vendita.id);
+    setAssociando(false);
+    if (error) { window.alert("Non associata: " + testoErrore(error)); return; }
+    onAssociato?.();
+  }
+  async function togliAssociazione() {
+    if (!window.confirm("Togliere questa vendita dal corso a cui è associata?")) return;
+    setAssociando(true);
+    const { error } = await supabase.from("vendite_shop").update({ corso_data_id: null }).eq("id", vendita.id);
+    setAssociando(false);
+    if (error) { window.alert("Non tolta: " + testoErrore(error)); return; }
+    onAssociato?.();
+  }
   useEffect(() => {
     if (!vendita?.id) return;
     let annullato = false;
@@ -36144,6 +36187,40 @@ function ModaleDettaglioOrdine({ vendita, onChiudi }) {
         <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 10, padding: "3px 10px" }}>{etichettaMovimento}</span>
         <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}</span>
       </div>
+
+      {/* L'occasione della vendita: in aula durante un corso, oppure al
+          banco. Si puo' correggere anche dopo, perche' il POS la classe la
+          chiede solo se quel giorno c'e' un corso — e chi vende se ne
+          dimentica. */}
+      {vendita?.origine === "pos" && (
+        <div style={{ background: BG, borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 7 }}>Frangente</div>
+          {corsoAssociato ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 8, padding: "4px 10px" }}>
+                {corsoAssociato.nome.toUpperCase()} · {fmtData(corsoAssociato.cd.data_inizio)}
+              </span>
+              <button onClick={togliAssociazione} disabled={associando} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                togli
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <select value={corsoScelto} onChange={(e) => setCorsoScelto(e.target.value)} style={{ ...inputStyle, flex: "1 1 260px", minWidth: 0 }}>
+                <option value="">Associa a un corso…</option>
+                {corsiAssociabili.map((cd) => {
+                  const nome = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "—";
+                  return <option key={cd.id} value={cd.id}>{fmtData(cd.data_inizio)} — {nome.toUpperCase()}</option>;
+                })}
+              </select>
+              <Button onClick={associaACorso} disabled={!corsoScelto || associando}>{associando ? "Associo…" : "Associa"}</Button>
+            </div>
+          )}
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 7, lineHeight: 1.45 }}>
+            Associare non cambia i soldi: nessuno sconto viene applicato ora, e gli importi restano quelli della vendita. Cambia solo a quale classe viene contata.
+          </div>
+        </div>
+      )}
 
       <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Prodotti</div>
       <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 14 }}>
@@ -37463,7 +37540,14 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
         </div>
       </div>
 
-      {ordineAperto && <ModaleDettaglioOrdine vendita={ordineAperto} onChiudi={() => setOrdineAperto(null)} />}
+      {ordineAperto && (
+        <ModaleDettaglioOrdine
+          vendita={ordineAperto}
+          corsi={corsi} corsiDate={corsiDate}
+          onAssociato={() => { setOrdineAperto(null); ricarica(["vendite_shop"]); }}
+          onChiudi={() => setOrdineAperto(null)}
+        />
+      )}
     </div>
   );
 }
