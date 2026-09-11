@@ -47209,6 +47209,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     : corsiInCorsoOggi;
   const [corsoPosId, setCorsoPosId] = useState("");
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
+  // Una master che vende mentre e' al corso trova il corso gia' scelto e
+  // il suo codice sconto gia' applicato, senza doverli cercare.
+  //
+  // Non e' una comodita': lo sconto della classe e' un diritto degli
+  // allievi di quel corso, e affidarlo al fatto che la master si ricordi
+  // di aprire una tendina mentre sta vendendo fra una lezione e l'altra
+  // vuol dire che a volte non viene fatto — e chi ci rimette e' l'allieva,
+  // che non sa nemmeno che le spettava.
+  //
+  // Solo con UN corso eleggibile: se una master ne ha due in aula nello
+  // stesso giorno, quale sia la vendita giusta lo sa lei, non noi. E solo
+  // per le master: un venditore in sede vede tutti i corsi del giorno e
+  // non e' detto che stia vendendo per uno di quelli.
+  const unicoCorsoDiOggi = operatore?.tipo === "master" && corsiEleggibiliPos.length === 1 ? corsiEleggibiliPos[0].id : null;
+  useEffect(() => {
+    if (!unicoCorsoDiOggi || corsoPosId) return;
+    setCorsoPosId(unicoCorsoDiOggi);
+    applicaCouponDelCorso(unicoCorsoDiOggi);
+  }, [unicoCorsoDiOggi, corsoPosId]);
   // "Prelevato dai kit in loco": il pezzo venduto è stato tirato fuori da un
   // kit presente in aula. Dal magazzino centrale era già uscito quando Raf
   // ha spedito il pacco: scaricarlo di nuovo qui lo conterebbe due volte.
@@ -47472,8 +47491,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setCarrello((prev) => prev.filter((r) => r.prodottoId !== prodottoId));
   }
   function svuotaCarrello() { setCarrello([]); }
+  // Il coupon di un'edizione: uno solo, quello nato per quella classe.
+  function couponDellEdizione(corsoDataId) {
+    if (!corsoDataId) return null;
+    return (coupon || []).find((c) => c.corsi_date_id === corsoDataId) || null;
+  }
+  function applicaCouponDelCorso(corsoDataId) {
+    const c = couponDellEdizione(corsoDataId);
+    setCouponValore(c ? String(c.valore) : "");
+    setCouponAttivo(c || null);
+  }
   function nuovaVendita() {
-    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setCouponValore(""); setCouponAttivo(null); setMetodoPagamento("pos"); setNote(""); setMsg("");
+    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
+    // il coupon non si azzera e basta: se la vendita e' legata a un corso
+    // si rimette quello della classe. Altrimenti la master applicava lo
+    // sconto alla prima vendita e non alla seconda, senza accorgersene
+    applicaCouponDelCorso(corsoPosId);
     setSpedizioneAttiva(false); setSpedIscrittoId("");
     setSpedNome(""); setSpedCognome(""); setSpedIndirizzo(""); setSpedCivico(""); setSpedCitta(""); setSpedCap(""); setSpedProvincia("");
     setSpedCitofono(""); setSpedInterno(""); setSpedCellulare("");
@@ -47786,9 +47819,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <select style={inputStyle} value={corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
               setCorsoPosId(nuovoId); setSpedIscrittoId("");
-              const couponEdizione = (coupon || []).find((c) => c.corsi_date_id === nuovoId);
-              setCouponValore(couponEdizione ? String(couponEdizione.valore) : "");
-              setCouponAttivo(couponEdizione || null);
+              applicaCouponDelCorso(nuovoId);
             }}>
               <option value="">— vendita non legata a un corso —</option>
               {corsiEleggibiliPos.map((cd) => (
@@ -47796,6 +47827,20 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               ))}
             </select>
           </Field>
+          {/* lo sconto del corso si vede: applicato in silenzio sarebbe
+              solo un numero che compare nel totale, e chi vende non
+              saprebbe se e' quello giusto */}
+          {corsoPosSel && couponAttivo && couponAttivo.corsi_date_id === corsoPosSel.id && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
+              Sconto del corso applicato: −{couponAttivo.valore}%
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
+            </div>
+          )}
+          {corsoPosSel && !couponDellEdizione(corsoPosSel.id) && (
+            <div style={{ ...fontBody, fontSize: 12, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
+              Questa classe non ha ancora un codice sconto: lo sconto va messo a mano.
+            </div>
+          )}
           {corsoPosSel && (
             <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginTop: -6, marginBottom: 12 }}>
               <input type="checkbox" checked={prelevatoDaiKit} onChange={(e) => setPrelevatoDaiKit(e.target.checked)} style={{ marginTop: 3 }} />
