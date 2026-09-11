@@ -26640,11 +26640,17 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap", rowGap: 6 }}>
                             <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
                             <InterruttoreSiNo acceso={!!i.ricontattato} onClick={() => toggleRicontattato(i)} titolo={i.ricontattato ? "Ricontattato — premi per togliere" : "Non ricontattato — premi per segnare"} />
+                            {/* Sul telefono la casella e' quattro volte
+                                piu' larga, e il limite di caratteri sale
+                                con lei: una casella grande dove entrano
+                                cinque lettere e' una casella grande vuota.
+                                Su schermo grande resta stretta — li' la
+                                riga ha altre cose da tenere. */}
                             <input
-                              maxLength={5}
+                              maxLength={isMobile ? 20 : 5}
                               defaultValue={(i.note_ricontatto || "").toUpperCase()}
                               onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
-                              style={{ ...inputStyle, width: "6ch", flex: "0 0 auto", fontSize: 12, padding: "4px 6px", textAlign: "center", textTransform: "uppercase" }}
+                              style={{ ...inputStyle, width: isMobile ? "24ch" : "6ch", flex: "0 0 auto", fontSize: isMobile ? 14 : 12, padding: isMobile ? "7px 8px" : "4px 6px", textAlign: "center", textTransform: "uppercase" }}
                             />
                             {i.telefono && (
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
