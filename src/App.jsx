@@ -37173,10 +37173,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
   // Serve perche' capita di sbagliare il tasto al momento della vendita, e
   // finora l'unico rimedio era cancellare tutto e rifare.
   const [cambiandoMetodo, setCambiandoMetodo] = useState(null);
-  async function cambiaMetodoPagamento(v) {
-    if (cambiandoMetodo) return;
+  async function cambiaMetodoPagamento(v, nuovo) {
+    if (cambiandoMetodo || !nuovo || nuovo === v.metodo_pagamento) return;
     const daContanti = v.metodo_pagamento === "contanti";
-    const nuovo = daContanti ? "pos" : "contanti";
     const totale = round2(v.totale || 0);
     const senzaIva = nuovo === "contanti" && !v.richiede_fattura;
     const imponibile = senzaIva ? totale : round2(totale / 1.22);
@@ -37426,29 +37425,29 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                             e finora l'elenco non lo diceva */}
                         {origine === "pos" && (
                           <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
-                            {/* Si cambia al primo clic, e il secondo di un
-                                doppio clic viene ignorato.
-                                A clic singolo e basta, chi faceva doppio clic
-                                otteneva due cambi di fila — contanti, POS,
-                                contanti — e sembrava che non funzionasse
-                                niente. Con il solo "onDoubleClick" invece non
-                                funzionava davvero da telefono e da tablet,
-                                dove il doppio clic non arriva. Guardando
-                                `detail` (quante volte di fila e' stato
-                                premuto) si prendono tutti e due i casi: il
-                                gesto vale una volta sola, comunque lo si
-                                faccia. */}
+                            {/* Una tendina, non un tasto che si commuta.
+                                Un tasto che cambia stato a ogni pressione
+                                obbliga a indovinare il gesto — uno o due
+                                clic? — e a ogni tentativo sbagliato cambia
+                                comunque qualcosa. Qui si vede cosa c'e'
+                                adesso, si sceglie cosa deve esserci, e
+                                scegliere quello che c'e' gia' non fa
+                                niente. */}
                             {v.metodo_pagamento ? (
-                              <button
-                                type="button"
-                                onClick={(e) => { if (e.detail > 1) return; cambiaMetodoPagamento(v); }}
+                              <select
+                                value={v.metodo_pagamento}
                                 disabled={cambiandoMetodo === v.id}
-                                title="Clicca per cambiare modalità di pagamento"
-                                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "3px 9px", border: "none", cursor: cambiandoMetodo === v.id ? "default" : "pointer",
+                                onChange={(e) => cambiaMetodoPagamento(v, e.target.value)}
+                                title="Come è stato incassato"
+                                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "4px 8px",
+                                  border: `1px solid ${v.metodo_pagamento === "contanti" ? "#E8D4B0" : "#C9CEEA"}`,
+                                  cursor: cambiandoMetodo === v.id ? "default" : "pointer",
                                   color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
-                                  background: v.metodo_pagamento === "contanti" ? "#F7EEDE" : "#ECEDFA" }}>
-                                {cambiandoMetodo === v.id ? "Cambio…" : v.metodo_pagamento === "contanti" ? "Contanti" : "POS"}
-                              </button>
+                                  background: v.metodo_pagamento === "contanti" ? "#F7EEDE" : "#ECEDFA" }}
+                              >
+                                <option value="pos">POS</option>
+                                <option value="contanti">Contanti</option>
+                              </select>
                             ) : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
                           </td>
                         )}
