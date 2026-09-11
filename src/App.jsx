@@ -47553,10 +47553,31 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   function nuovaVendita() {
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
-    // il coupon non si azzera e basta: se la vendita e' legata a un corso
-    // si rimette quello della classe. Altrimenti la master applicava lo
-    // sconto alla prima vendita e non alla seconda, senza accorgersene
-    applicaCouponDelCorso(corsoPosId);
+    // Il coupon fra una vendita e l'altra: dura quanto e' stato pensato
+    // per durare, non quanto resta aperta la pagina.
+    //
+    // - lo sconto del corso, se la spunta e' accesa, si rimette sempre:
+    //   vale per tutta la classe, non per un carrello. Prima si azzerava e
+    //   la master lo applicava alla prima vendita e non alla seconda,
+    //   senza accorgersene;
+    // - un codice a uso singolo sparisce dopo il carrello in cui e' stato
+    //   usato: e' esattamente quello che vuol dire "uno solo";
+    // - un codice a piu' usi resta, finche' non lo si cancella a mano o
+    //   finche' non scade — e la scadenza la controlla
+    //   trovaCouponPerCodice, che rifiuta un codice fuori dalla sua
+    //   finestra.
+    if (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) {
+      applicaCouponDelCorso(corsoPosId);
+    } else {
+      const ancoraValido = couponAttivo && couponAttivo.utilizzi_max !== 1 && trovaCouponPerCodice(couponAttivo.codice);
+      if (ancoraValido) {
+        setCouponAttivo(ancoraValido);
+        setCouponValore(String(ancoraValido.valore));
+        setCouponCodiceTesto(String(ancoraValido.codice || "").toUpperCase());
+      } else {
+        setCouponAttivo(null); setCouponValore(""); setCouponCodiceTesto("");
+      }
+    }
     setSpedizioneAttiva(false); setSpedIscrittoId("");
     setSpedNome(""); setSpedCognome(""); setSpedIndirizzo(""); setSpedCivico(""); setSpedCitta(""); setSpedCap(""); setSpedProvincia("");
     setSpedCitofono(""); setSpedInterno(""); setSpedCellulare("");
@@ -47990,7 +48011,19 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             />
             {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
               couponAttivo ? (
-                <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 4 }}>Codice valido: −{couponAttivo.valore}%</div>
+                <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 4 }}>
+                  Codice valido: −{couponAttivo.valore}%
+                  {/* quanto durera': un codice a uso singolo sparisce dopo
+                      questo carrello, e saperlo prima evita di cercarlo
+                      alla vendita dopo credendo che sia sparito per errore */}
+                  <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, marginTop: 2 }}>
+                    {couponAttivo.utilizzi_max === 1
+                      ? "Uso singolo: dopo questa vendita si toglie da solo."
+                      : couponAttivo.valido_fino_a
+                      ? `Resta fino al ${fmtData(couponAttivo.valido_fino_a)}, o finché non lo cancelli.`
+                      : "Resta finché non lo cancelli."}
+                  </span>
+                </div>
               ) : (
                 <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 4 }}>Codice non valido o scaduto: nessuno sconto.</div>
               )
