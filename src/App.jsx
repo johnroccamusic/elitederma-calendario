@@ -2401,7 +2401,7 @@ function StiliGlobaliAspetto() {
   return (
     <style>{`
 :root { --ombra-aree: ${ombraCssTasto(aspetto.aree.ombra)}; }
-button:not([data-niente-ombra]):not([style*="background: transparent"]):not([style*="background: none"]) { box-shadow: ${ombraCssTasto(aspetto.pulsanti.ombra)}; }
+button:not([data-niente-ombra]):not([style*="background: transparent"]):not([style*="background: none"]):not([style*="rgba(0, 0, 0, 0)"]) { box-shadow: ${ombraCssTasto(aspetto.pulsanti.ombra)}; }
 `}</style>
   );
 }
@@ -52334,7 +52334,12 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
   return (
     <div
       onClick={onSeleziona}
-      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#fff" }}
+      // Niente filo colorato attorno alla scheda: con sei corsi in
+      // colonna erano sei cornici di sei colori diversi, e il colore —
+      // che serve a riconoscere il corso — finiva per essere la cosa piu'
+      // grossa della pagina. Resta dov'e' utile e basta: sulla tessera
+      // della data. Alla scheda bastano l'ombra e il bordo di sempre.
+      style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#fff", boxShadow: "var(--ombra-aree, none)" }}
     >
       <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
@@ -52405,6 +52410,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
             {allestitoTs && !inventarioTs && (
               <button
                 onClick={(e) => { e.stopPropagation(); onApriInventarioSede(); }}
+                data-niente-ombra="1"
                 style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", alignSelf: "center", padding: "0 4px", whiteSpace: "nowrap" }}
               >
                 Cosa torna in magazzino →
@@ -53671,8 +53677,15 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         )}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
           {(!isMobile || vistaMobile === "lista") && (
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}</div>
+          <div
+            // Nessun foglio bianco sotto: ogni corso e' gia' una scheda
+            // con la sua ombra, e chiuderle tutte dentro un altro
+            // riquadro bianco voleva dire bianco su bianco — il contorno
+            // delle schede spariva e il gruppo sembrava un blocco solo.
+            // Restano il titolo e lo spazio.
+            style={{ ...cardStyle, background: "transparent", border: "none", boxShadow: "none", padding: 0, marginBottom: 0 }}
+          >
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}</div>
             {vistaStorico && (
               <CampoRicerca value={ricercaStorico} onChange={(e) => setRicercaStorico(e.target.value)} placeholder="Cerca corso o città…" style={{ marginBottom: 10 }} />
             )}
@@ -53716,7 +53729,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           )}
 
           {(!isMobile || vistaMobile === "dettaglio") && (
-          <div style={{ ...cardStyle, marginBottom: 0, ...(edizioneSel ? { border: `2px solid ${corsoById[edizioneSel.corso_id]?.colore || NAVY}`, borderRadius: 16 } : {}) }}>
+          {/* niente filo colorato nemmeno qui: quale corso si sta
+              guardando lo dicono la tessera della data e il nome scritto
+              grande in cima, non una cornice alta quanto la pagina */}
+          <div style={{ ...cardStyle, marginBottom: 0, borderRadius: 16 }}>
             {!edizioneSel ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
             ) : (
