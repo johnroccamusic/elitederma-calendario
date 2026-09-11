@@ -21186,6 +21186,39 @@ function euroScheda(n) {
   return `${v.toLocaleString("it-IT", { minimumFractionDigits: decimali, maximumFractionDigits: decimali })} €`;
 }
 
+// Un interruttore vero al posto di due pallini.
+//
+// I due pallini erano due bersagli distinti che facevano la stessa cosa, e
+// lo stato lo dicevano solo col colore: acceso uno, spento l'altro. Chi
+// guardava di fretta vedeva due cerchi e doveva ricordarsi che il verde e'
+// a destra. Qui la levetta sta a sinistra o a destra e dentro c'e' scritto
+// quello che e' — NO in rosso, SI in verde — e si preme dove capita.
+function InterruttoreSiNo({ acceso, onClick, titolo }) {
+  const colore = acceso ? "#2E7D32" : "#C0392B";
+  const cliccabile = typeof onClick === "function";
+  return (
+    <button
+      type="button"
+      onClick={cliccabile ? onClick : undefined}
+      title={titolo}
+      style={{
+        position: "relative", width: 62, height: 26, borderRadius: 999, border: "none", padding: 0,
+        background: colore, cursor: cliccabile ? "pointer" : "default", flexShrink: 0, display: "block",
+      }}
+    >
+      <span style={{
+        ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 0.4,
+        position: "absolute", top: "50%", transform: "translateY(-50%)", left: acceso ? 11 : 32,
+        transition: "left 160ms ease",
+      }}>{acceso ? "SÌ" : "NO"}</span>
+      <span style={{
+        position: "absolute", top: 3, left: acceso ? 39 : 3, width: 20, height: 20, borderRadius: "50%",
+        background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.28)", transition: "left 160ms ease",
+      }} />
+    </button>
+  );
+}
+
 function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, senzaAllegati = false }) {
   return (
     <>
@@ -26598,27 +26631,29 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                               {idx + 1}. {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
                             </span>
                             {i.tutor && <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0 }}>· {i.tutor}</span>}
-                            {i.telefono && (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                                <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 15, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
-                                <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
-                                  <IconaWhatsapp size={30} />
-                                </a>
-                              </span>
-                            )}
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                            <span style={{ ...fontBody, fontSize: 11.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
+                          {/* Ricontattato e telefono sulla stessa riga: sono
+                              le due cose che si fanno da questa testata —
+                              guardare se e' stato chiamato e chiamarlo — e
+                              stavano su due righe separate da un nome che
+                              nel frattempo aveva gia' preso tutto lo spazio */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap", rowGap: 6 }}>
+                            <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
+                            <InterruttoreSiNo acceso={!!i.ricontattato} onClick={() => toggleRicontattato(i)} titolo={i.ricontattato ? "Ricontattato — premi per togliere" : "Non ricontattato — premi per segnare"} />
                             <input
                               maxLength={5}
                               defaultValue={(i.note_ricontatto || "").toUpperCase()}
                               onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
                               style={{ ...inputStyle, width: "6ch", flex: "0 0 auto", fontSize: 12, padding: "4px 6px", textAlign: "center", textTransform: "uppercase" }}
                             />
-                            <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                              <span onClick={() => toggleRicontattato(i)} title="Non ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
-                              <span onClick={() => toggleRicontattato(i)} title="Ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
-                            </div>
+                            {i.telefono && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+                                <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 15, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                                <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
+                                  <IconaWhatsapp size={30} />
+                                </a>
+                              </span>
+                            )}
                           </div>
                         </>
                       ) : (
@@ -26642,10 +26677,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, ...fontBody, fontSize: 14, color: NAVY }}>
                         Ricontattato
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <span onClick={() => toggleRicontattato(i)} title="Non ricontattato" style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
-                          <span onClick={() => toggleRicontattato(i)} title="Ricontattato" style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
-                        </div>
+                        <InterruttoreSiNo acceso={!!i.ricontattato} onClick={() => toggleRicontattato(i)} titolo={i.ricontattato ? "Ricontattato — premi per togliere" : "Non ricontattato — premi per segnare"} />
                       </div>
                       <textarea
                         rows={2}
@@ -26936,28 +26968,27 @@ function VistaMaster({ param }) {
                     {idx + 1}. {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
                   </span>
                   {i.tutor && <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0 }}>· {i.tutor}</span>}
+                </div>
+                {/* stessa riga dello staff — ricontattato a sinistra,
+                    telefono a destra — ma l'interruttore qui si legge e
+                    basta: l'unica cosa che il link concede di cambiare e'
+                    l'incassato */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap", rowGap: 6 }}>
+                  <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
+                  <InterruttoreSiNo acceso={!!i.ricontattato} titolo={i.ricontattato ? "Ricontattato" : "Non ricontattato"} />
+                  {i.note_ricontatto && (
+                    <span style={{ ...fontBody, fontSize: 12, color: NAVY, textTransform: "uppercase", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "4px 8px", flexShrink: 0 }}>
+                      {i.note_ricontatto}
+                    </span>
+                  )}
                   {i.telefono && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
                       <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 15, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
                       <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
                         <IconaWhatsapp size={30} />
                       </a>
                     </span>
                   )}
-                </div>
-                {/* il semaforo e la nota qui si leggono e basta: l'unica cosa
-                    che il link concede di cambiare e' l'incassato */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                  <span style={{ ...fontBody, fontSize: 11.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
-                  {i.note_ricontatto && (
-                    <span style={{ ...fontBody, fontSize: 12, color: NAVY, textTransform: "uppercase", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "4px 8px", flexShrink: 0 }}>
-                      {i.note_ricontatto}
-                    </span>
-                  )}
-                  <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                    <span title="Non ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)" }} />
-                    <span title="Ricontattato" style={{ width: 16, height: 16, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)" }} />
-                  </div>
                 </div>
               </div>
 
