@@ -326,6 +326,7 @@ const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
 const CHIAVE_ETICHETTE_MAGAZZINO = "gestioneMagazzino_etichetteColonne";
 // l'ordine in cui stanno le colonne, spostabile trascinando i titoli
 const CHIAVE_ORDINE_MAGAZZINO = "gestioneMagazzino_ordineColonne";
+const CHIAVE_PER_PAGINA_MAGAZZINO = "gestioneMagazzino_perPagina";
 // quanto spazio prende la colonna di sinistra ("Da gestire oggi") rispetto
 // agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
 const CHIAVE_DIVISIONE_MAGAZZINO = "gestioneMagazzino_divisioneColonne";
@@ -39932,9 +39933,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // suggerimenti } — i suggerimenti sono le quantità già spuntate
   const [ordineFornitore, setOrdineFornitore] = useState(null);
 
-  // 15 righe per pagina, con la stessa impaginazione a cerchi numerati
-  // già usata altrove nell'app — evita di scorrere centinaia di prodotti
-  const PER_PAGINA_MAGAZZINO = 15;
+  // Quante righe per pagina. Erano 15 fisse, e con oltre 250 prodotti
+  // voleva dire diciassette pagine da sfogliare per cercarne uno: chi
+  // lavora sul magazzino preferisce scorrere che cliccare. Adesso lo
+  // decide chi guarda, e la scelta resta — anche domani, anche da un
+  // altro dispositivo.
+  const PASSI_PER_PAGINA_MAGAZZINO = [25, 50, 100, 200, "tutti"];
+  const [perPaginaMagazzino, setPerPaginaMagazzino] = useImpostazioneCondivisa(CHIAVE_PER_PAGINA_MAGAZZINO, 25);
+  const tutteLeRighe = perPaginaMagazzino === "tutti";
+  const PER_PAGINA_MAGAZZINO = tutteLeRighe ? Math.max(1, prodottiOrdinati.length) : Number(perPaginaMagazzino) || 25;
   const totalePagineMagazzino = Math.max(1, Math.ceil(prodottiOrdinati.length / PER_PAGINA_MAGAZZINO));
   const paginaMagazzinoClamp = Math.min(paginaMagazzino, totalePagineMagazzino - 1);
   const prodottiPaginaMagazzino = prodottiOrdinati.slice(paginaMagazzinoClamp * PER_PAGINA_MAGAZZINO, paginaMagazzinoClamp * PER_PAGINA_MAGAZZINO + PER_PAGINA_MAGAZZINO);
@@ -40235,6 +40242,34 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 { chiave: "categorie", testo: isMobile ? "Categorie" : "Vista a categorie", Icona: IconaGriglia },
               ]}
             />
+            {/* Quanti prodotti per pagina, subito accanto alle due viste:
+                e' una scelta su come si guarda l'elenco, e sta dove si
+                sceglie come guardarlo — non in fondo alla tabella, dove
+                si troverebbe solo dopo aver scorso tutte le righe che si
+                voleva evitare di scorrere.
+                Compare solo con la vista a elenco: la vista a categorie
+                non ha pagine, e un comando che non governa niente e'
+                peggio di un comando che manca. */}
+            {vistaProdotti === "elenco" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>Per pagina</span>
+                <div style={{ display: "flex", background: BG, borderRadius: isMobile ? 12 : 20, padding: 4, gap: 2, boxSizing: "border-box" }}>
+                  {PASSI_PER_PAGINA_MAGAZZINO.map((n) => {
+                    const scelto = perPaginaMagazzino === n;
+                    return (
+                      <button
+                        key={String(n)}
+                        onClick={() => { setPerPaginaMagazzino(n); setPaginaMagazzino(0); }}
+                        title={n === "tutti" ? "Tutti i prodotti in una pagina sola" : `${n} prodotti per pagina`}
+                        style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 600, padding: isMobile ? "6px 7px" : "7px 12px", borderRadius: isMobile ? 9 : 16, border: "none", minWidth: 0, whiteSpace: "nowrap", background: scelto ? NAVY : "transparent", color: scelto ? "#fff" : NAVY, cursor: "pointer" }}
+                      >
+                        {n === "tutti" ? "Tutti" : n}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {/* compare solo quando c'è davvero qualcosa da azzerare: un tasto
                 sempre presente e quasi sempre inutile è solo rumore. Toglie
                 in un colpo ricerca, categoria, fornitore e filtro di stato —
