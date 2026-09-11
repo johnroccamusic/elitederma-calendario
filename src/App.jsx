@@ -2309,6 +2309,13 @@ const CHIAVE_ASPETTO_TASTI = "aspetto_tasti";
 const ASPETTO_TASTI_DEFAULT = {
   mobile: { dimensione: 82, raggio: 22, icona: 40, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
   desktop: { dimensione: 90, raggio: 7, icona: 80, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+  // Un'ombra sola per TUTTE le nuvole — le pastiglie colorate dietro i
+  // testi, 321 in giro per l'app — e una per tutti gli altri pulsanti,
+  // quelli che non sono i quadrati della home. Non si dividono fra
+  // telefono e computer: e' una scelta di tono, e il tono non cambia con
+  // lo schermo.
+  nuvole: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+  pulsanti: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
 };
 // i 64 colori: otto file da otto. La prima e' la scala dei grigi, la
 // seconda i crema e i taupe di casa, le altre sei le famiglie che
@@ -2347,9 +2354,53 @@ function ombraCssTasto(o) {
   if (!o || !Number(o.intensita)) return "none";
   return `${Number(o.x) || 0}px ${Number(o.y) || 0}px ${Number(o.sfocatura) || 0}px rgba(14,27,51,${(Number(o.intensita) / 100).toFixed(3)})`;
 }
+// nuvole e pulsanti hanno solo l'ombra: nient'altro di loro si regola
+// da qui, e leggerli con la stessa funzione dei tasti restituirebbe una
+// manciata di campi che non esistono
+function ombraAspettoDi(salvato, quale) {
+  return { ombra: { ...ASPETTO_TASTI_DEFAULT[quale].ombra, ...((salvato && salvato[quale] && salvato[quale].ombra) || {}) } };
+}
 function useAspettoTasti() {
   const [salvato, salva] = useImpostazioneCondivisa(CHIAVE_ASPETTO_TASTI, null);
-  return [{ mobile: aspettoTastoDi(salvato, "mobile"), desktop: aspettoTastoDi(salvato, "desktop") }, salva];
+  return [{
+    mobile: aspettoTastoDi(salvato, "mobile"),
+    desktop: aspettoTastoDi(salvato, "desktop"),
+    nuvole: ombraAspettoDi(salvato, "nuvole"),
+    pulsanti: ombraAspettoDi(salvato, "pulsanti"),
+  }, salva];
+}
+
+// Le due ombre generali, date con una regola di stile invece che riga
+// per riga.
+//
+// Le nuvole sono 321 pastiglie scritte a mano in una quarantina di forme
+// diverse: darle una per una vorrebbe dire toccare 321 punti oggi e
+// ricordarsi di toccarne uno in piu' ogni volta che se ne scrive una
+// nuova. Qui invece si riconoscono da come sono fatte — sfondo, angoli
+// tondi e un'imbottitura verticale di una cifra sola — che e' esattamente
+// cio' che distingue una pastiglia da un riquadro: un riquadro ha
+// un'imbottitura da 12, 14, 22. I selettori guardano l'attributo `style`
+// scritto in pagina, e questo permette di prenderle tutte senza
+// nominarle.
+//
+// Per i pulsanti vale lo stesso, tolti i quadrati della home — che hanno
+// gia' la loro ombra e si escludono da soli con `data-tasto-home`. E
+// siccome uno stile scritto direttamente sull'elemento vince sempre su
+// una regola come queste, ogni pulsante che si e' scelto la sua ombra a
+// mano se la tiene.
+function StiliGlobaliAspetto() {
+  const [aspetto] = useAspettoTasti();
+  const ombraNuvole = ombraCssTasto(aspetto.nuvole.ombra);
+  const ombraPulsanti = ombraCssTasto(aspetto.pulsanti.ombra);
+  const selettoriNuvole = ["span", "div", "label"]
+    .flatMap((tag) => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${tag}[style*="border-radius"][style*="background"][style*="padding: ${n}px"]`))
+    .join(",\n");
+  return (
+    <style>{`
+${selettoriNuvole} { box-shadow: ${ombraNuvole}; }
+button:not([data-tasto-home]) { box-shadow: ${ombraPulsanti}; }
+`}</style>
+  );
 }
 
 // card grande della home (griglia 4 colonne): icona, titolo, una riga di
@@ -2385,6 +2436,7 @@ function TileHome({
   if (isMobile && ricca) {
     return (
       <button
+        data-tasto-home="1"
         onClick={attivo ? onClick : undefined}
         disabled={!attivo}
         draggable={draggableTasto}
@@ -2435,6 +2487,7 @@ function TileHome({
   }
   return (
     <button
+      data-tasto-home="1"
       onClick={attivo ? onClick : undefined}
       disabled={!attivo}
       draggable={draggableTasto}
@@ -8430,6 +8483,10 @@ function PaginaSlideCorsi({ corsi, ricarica, onBack, titolo = "Associa slide del
 }
 
 // ---------- Dashboard master ----------
+// La tessera della data nella dashboard della master. Blu, non il blu
+// notte dell'app: NAVY e' #0E1B33 e su un riquadro pieno, grande come
+// questo, si legge nero.
+const BLU_DATA_MASTER = "#1F4485";
 // riquadro data compatto per CardDataMaster: un solo giorno "19", un
 // intervallo nello stesso mese "17-19", un intervallo a cavallo di due
 // mesi "28 ago-2 set" — mai solo il primo giorno, la master deve
@@ -8559,8 +8616,9 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   // del corso. Nella dashboard della master i corsi sono i suoi, pochi e
   // gia' distinti dal nome scritto grande accanto: un colore diverso per
   // ognuno non aggiungeva niente e faceva sembrare l'elenco una tavolozza.
-  // E' lo stesso blu dei titoli dell'app: il bianco sopra ci si legge
-  // netto, cosa che sull'oro non succedeva.
+  // Blu vero, non il blu notte dei titoli: quello e' cosi' scuro che a
+  // colpo d'occhio legge nero, e la tessera della data e' la prima cosa
+  // che si guarda in questa scheda. Il bianco sopra resta netto.
   const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
   // Delle quattro pastiglie di stato — programmato, in corso, appena
   // terminato, terminato — ne resta una sola: quella del corso che si sta
@@ -8612,7 +8670,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           contabilita' se l'ufficio l'ha aperta. */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 16, padding: spaziatura, flexWrap: "wrap" }}>
         <div style={{
-          background: NAVY, borderRadius: 13, padding: isMobile ? "10px 11px" : "13px 14px", textAlign: "center", flexShrink: 0, minWidth: isMobile ? 50 : 62,
+          background: BLU_DATA_MASTER, borderRadius: 13, padding: isMobile ? "10px 11px" : "13px 14px", textAlign: "center", flexShrink: 0, minWidth: isMobile ? 50 : 62,
         }}>
           <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? (isMobile ? 11 : 13) : (isMobile ? 21 : 27), fontWeight: 700, color: "#fff", lineHeight: 1, whiteSpace: "nowrap" }}>{numero}</div>
           {sotto && <div style={{ ...fontBody, fontSize: isMobile ? 8 : 10, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 3 }}>{sotto}</div>}
@@ -14045,6 +14103,7 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
   return (
     <button
       onClick={onClick}
+      data-tasto-home="1"
       style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}
     >
       <div style={{
@@ -14069,6 +14128,46 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
   );
 }
 
+const NOME_ELEMENTO_ASPETTO = {
+  mobile: "Pulsante mobile", desktop: "Pulsante desktop",
+  nuvole: "Nuvole", pulsanti: "Altri pulsanti",
+};
+
+// Le due ombre generali si giudicano su un esempio vero: una pastiglia
+// colorata come quelle sparse nell'app, e un pulsante come quelli delle
+// barre. Un quadrato grigio non direbbe niente.
+function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, selezionato, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      data-tasto-home="1"
+      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}
+    >
+      <div style={{
+        width: 150, height: 150, boxSizing: "border-box",
+        border: `1px dashed ${selezionato ? NAVY : CREAM_BORDER}`, borderRadius: 10,
+        background: selezionato ? "rgba(14,27,51,0.05)" : "transparent",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10,
+      }}>
+        {tipo === "nuvola" ? (
+          <>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 8, padding: "3px 9px", boxShadow: ombraCssTasto(ombra) }}>ROMA</span>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "3px 9px", boxShadow: ombraCssTasto(ombra) }}>Contanti</span>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F7EC", borderRadius: 8, padding: "3px 9px", boxShadow: ombraCssTasto(ombra) }}>Incassato</span>
+          </>
+        ) : (
+          <>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", boxShadow: ombraCssTasto(ombra) }}>Dettagli corso</span>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 16, padding: "8px 14px", boxShadow: ombraCssTasto(ombra) }}>Conferma</span>
+          </>
+        )}
+      </div>
+      <span style={{ ...fontBody, fontSize: 13.5, fontWeight: selezionato ? 700 : 600, color: selezionato ? NAVY : MUTED }}>{etichetta}</span>
+      <span style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: -4 }}>{sottotitolo}</span>
+    </button>
+  );
+}
+
 // I tasti quadrati della home hanno due disegni — lo squircle del
 // telefono e il quadrato della scrivania — e finora erano scritti nel
 // codice. Qui si regolano come si regola l'ombra dei loghi: si sceglie
@@ -14079,6 +14178,9 @@ function PaginaAspettoApp() {
   const [aspetto, salvaAspetto] = useAspettoTasti();
   const [quale, setQuale] = useState("mobile");
   const corrente = aspetto[quale];
+  // nuvole e pulsanti hanno la sola ombra: i comandi di forma e colore
+  // non avrebbero niente da toccare
+  const soloOmbra = quale === "nuvole" || quale === "pulsanti";
   const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi } });
 
   const piuMeno = (etichetta, campo, min, max, unita, aiutoMeno, aiutoPiu) => (
@@ -14101,6 +14203,7 @@ function PaginaAspettoApp() {
       </div>
 
       <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18 }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>I quadrati della home</div>
         <div style={{ display: "flex", gap: isMobile ? 18 : 34, flexWrap: "wrap", justifyContent: isMobile ? "center" : "flex-start" }}>
           <AnteprimaTastoAspetto
             etichetta="Pulsante mobile" sottotitolo="come lo vedi sul telefono"
@@ -14113,18 +14216,43 @@ function PaginaAspettoApp() {
             selezionato={quale === "desktop"} onClick={() => setQuale("desktop")}
           />
         </div>
+
+        <div style={{ height: 1, background: CREAM_BORDER, margin: "20px 0 16px" }} />
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>Il resto dell'app</div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12, maxWidth: 520 }}>
+          Una sola ombra per tutte le nuvole colorate dietro i testi, e una per tutti gli altri pulsanti dell'app.
+          Non si dividono fra telefono e computer. Chi si è già scelto la sua ombra a mano se la tiene.
+        </div>
+        <div style={{ display: "flex", gap: isMobile ? 18 : 34, flexWrap: "wrap", justifyContent: isMobile ? "center" : "flex-start" }}>
+          <AnteprimaOmbraGenerale
+            etichetta="Nuvole" sottotitolo="le pastiglie dietro i testi" tipo="nuvola"
+            ombra={aspetto.nuvole.ombra} selezionato={quale === "nuvole"} onClick={() => setQuale("nuvole")}
+          />
+          <AnteprimaOmbraGenerale
+            etichetta="Altri pulsanti" sottotitolo="tutti tranne i quadrati" tipo="pulsante"
+            ombra={aspetto.pulsanti.ombra} selezionato={quale === "pulsanti"} onClick={() => setQuale("pulsanti")}
+          />
+        </div>
       </div>
 
       <div style={{ ...cardStyle, padding: isMobile ? 16 : 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
-            Stai modificando: {quale === "mobile" ? "pulsante mobile" : "pulsante desktop"}
+            Stai modificando: {NOME_ELEMENTO_ASPETTO[quale]}
           </div>
-          <Button variant="ghost" onClick={() => { if (window.confirm("Rimettere questo pulsante com'era all'inizio?")) salvaAspetto({ ...aspetto, [quale]: ASPETTO_TASTI_DEFAULT[quale] }); }}>
+          <Button variant="ghost" onClick={() => salvaAspetto({ ...aspetto, [quale]: ASPETTO_TASTI_DEFAULT[quale] })}>
             Rimetti com'era
           </Button>
         </div>
 
+        {soloOmbra ? (
+          <>
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Ombra</div>
+            <ControlliOmbra titolo={NOME_ELEMENTO_ASPETTO[quale]} ombra={corrente.ombra} onCambia={(o) => cambia({ ombra: o })} />
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>Intensità a zero vuol dire nessuna ombra.</div>
+          </>
+        ) : (
+        <>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
           {piuMeno("Dimensione", "dimensione", 40, 100, "%", "Tasto più piccolo dentro la sua cella", "Tasto più grande dentro la sua cella")}
           {piuMeno("Raggio", "raggio", 0, 50, "%", "Angoli più squadrati", "Angoli più tondi")}
@@ -14137,7 +14265,7 @@ function PaginaAspettoApp() {
             const scelto = String(corrente.colore).toUpperCase() === c.toUpperCase();
             return (
               <button
-                key={c} onClick={() => cambia({ colore: c })} title={c}
+                key={c} onClick={() => cambia({ colore: c })} title={c} data-tasto-home="1"
                 style={{
                   aspectRatio: "1 / 1", width: "100%", borderRadius: 6, cursor: "pointer", background: c,
                   border: scelto ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`,
@@ -14151,13 +14279,15 @@ function PaginaAspettoApp() {
 
         <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Ombra del pulsante</div>
         <ControlliOmbra
-          titolo={quale === "mobile" ? "Pulsante mobile" : "Pulsante desktop"}
+          titolo={NOME_ELEMENTO_ASPETTO[quale]}
           ombra={corrente.ombra}
           onCambia={(o) => cambia({ ombra: o })}
         />
         <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
           Intensità a zero vuol dire nessuna ombra.
         </div>
+        </>
+        )}
       </div>
     </div>
   );
@@ -58138,6 +58268,10 @@ export default function App() {
         : 104,
       paddingBottom: isMobile ? 16 : 24,
     }}>
+      {/* le due ombre generali di Impostazioni -> Aspetto dell'app: una
+          regola sola, valida ovunque, invece di 321 pastiglie toccate a
+          mano */}
+      <StiliGlobaliAspetto />
       {!isMobile && (
         // Il dock da scrivania. Prima era una barra in cima, sopra il
         // contenuto: la si guardava per forza anche quando non serviva, e
