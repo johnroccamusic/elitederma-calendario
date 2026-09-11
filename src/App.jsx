@@ -2454,29 +2454,36 @@ function IconaColonne({ n, size = 16, color = "currentColor" }) {
 // lo stesso spazio, e un tasto "indietro" che sta sempre nello stesso
 // punto si preme senza cercarlo. Verso Home l'icona e' la casetta: e' il
 // posto che si riconosce prima di leggerne il nome.
-function TastoLivelloPrecedente({ titolo, onClick }) {
+function TastoLivelloPrecedente({ titolo, onClick, soloIcona = false }) {
   const versoHome = String(titolo || "").trim().toLowerCase() === "home";
   const Icona = versoHome ? IconaCasa : IconaCartellaShop;
+  // "soloIcona": dove il tondo sta in fila col titolo il nome scritto
+  // dentro non serve — lo dice gia' il titolo della pagina accanto, e
+  // senza quelle tre righe minuscole il cerchio si stringe e si allinea
+  // al testo invece di sbordarci sotto. Il nome resta nel tooltip.
+  const lato = soloIcona ? 48 : 68;
   return (
     <button
       onClick={onClick}
       title={titolo}
       style={{
-        width: 68, height: 68, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box",
+        width: lato, height: lato, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
         background: "#fff", border: `1px solid ${CREAM_BORDER}`, padding: "0 6px", cursor: "pointer",
         overflow: "hidden",
       }}
     >
-      <Icona size={16} color={NAVY} />
+      <Icona size={soloIcona ? 20 : 16} color={NAVY} />
       {/* il nome sta DENTRO il tondo e va a capo dove capita, anche in
           mezzo a una parola: in un cerchio da 68 "Amministrazione" non ci
           sta su una riga, e tagliarla con i puntini vorrebbe dire non
           leggerla affatto */}
-      <span style={{
-        ...fontBody, fontSize: 8.5, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center",
-        overflowWrap: "anywhere", wordBreak: "break-word", maxWidth: "100%",
-      }}>{titolo}</span>
+      {!soloIcona && (
+        <span style={{
+          ...fontBody, fontSize: 8.5, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center",
+          overflowWrap: "anywhere", wordBreak: "break-word", maxWidth: "100%",
+        }}>{titolo}</span>
+      )}
     </button>
   );
 }
@@ -37277,13 +37284,18 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        {/* il tondo di uscita non occupa una riga sua: sta a sinistra
-            del titolo, e la pagina comincia piu' in alto */}
-        <div style={{ position: "relative", height: 0, zIndex: 2 }}>
-          <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
-        </div>
-        <div style={{ paddingLeft: 80, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        {/* Il tondo di uscita stava appoggiato sopra la pagina con un
+            blocco alto zero: restava piu' basso del titolo e si
+            sovrapponeva alla riga descrittiva, che partiva da bordo
+            pagina. Ora sono una riga sola — tondo, poi titolo e
+            descrizione incolonnati — cosi' il tondo si allinea al testo
+            e la descrizione comincia dove comincia il titolo. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} soloIcona />
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginTop: 4 }}>{origine === "pos" ? "Vendite fatte al banco con il POS interno." : "Ordini arrivati dallo shop online WooCommerce."}</div>
+          </div>
           {origine === "woocommerce" && (
             <div style={{ textAlign: "right" }}>
               <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
@@ -37291,7 +37303,6 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
             </div>
           )}
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>{origine === "pos" ? "Vendite fatte al banco con il POS interno." : "Ordini arrivati dallo shop online WooCommerce."}</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
