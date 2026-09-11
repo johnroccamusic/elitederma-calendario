@@ -37174,6 +37174,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
   // finora l'unico rimedio era cancellare tutto e rifare.
   const [cambiandoMetodo, setCambiandoMetodo] = useState(null);
   async function cambiaMetodoPagamento(v) {
+    if (cambiandoMetodo) return;
     const daContanti = v.metodo_pagamento === "contanti";
     const nuovo = daContanti ? "pos" : "contanti";
     const totale = round2(v.totale || 0);
@@ -37428,9 +37429,15 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                             {v.metodo_pagamento ? (
                               <button
                                 type="button"
-                                onClick={() => cambiaMetodoPagamento(v)}
+                                // doppio clic, non singolo: a clic singolo
+                                // un doppio clic faceva due cambi di fila —
+                                // contanti, POS, contanti — e sembrava che
+                                // non funzionasse niente. E un incasso non si
+                                // cambia per un tocco di troppo mentre si
+                                // scorre l'elenco.
+                                onDoubleClick={() => cambiaMetodoPagamento(v)}
                                 disabled={cambiandoMetodo === v.id}
-                                title="Cambia modalità di pagamento"
+                                title="Doppio clic per cambiare modalità di pagamento"
                                 style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "3px 9px", border: "none", cursor: cambiandoMetodo === v.id ? "default" : "pointer",
                                   color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
                                   background: v.metodo_pagamento === "contanti" ? "#F7EEDE" : "#ECEDFA" }}>
