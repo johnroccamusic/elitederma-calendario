@@ -24,6 +24,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../_shared/codiceReferral.js";
 
+// La stessa cifra detta come la capisce WooCommerce: una percentuale sul
+// prezzo al pubblico. Sul netto basta dividere per l'aliquota; sul
+// margine si passa dal margine medio del catalogo, perche' il sito non
+// sa quanto costa un prodotto.
+const ALIQUOTA_IVA_STANDARD = 22;
+function percentualeWooEquivalente(percentuale: number, base: string, margineMedioPct: number) {
+  const pct = Number(percentuale) || 0;
+  if (!(pct > 0)) return pct;
+  const fattoreIva = 1 + ALIQUOTA_IVA_STANDARD / 100;
+  if (base === "netto") return Math.round((pct / fattoreIva) * 100) / 100;
+  if (base === "margine") return Math.round(((pct * (Number(margineMedioPct) || 0)) / 100 / fattoreIva) * 100) / 100;
+  return Math.round(pct * 100) / 100;
+}
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -98,6 +112,29 @@ Deno.serve(async (req) => {
     const masterById: Record<string, { id: string; nome: string }> = {};
     (masterInfo || []).forEach((m: any) => { masterById[m.id] = m; });
 
+    // Su cosa si legge la percentuale, e quanto vale tradotta per il
+    // sito. WooCommerce conosce solo percentuali sul prezzo al pubblico:
+    // sul netto la conversione e' esatta, sul margine e' la migliore
+    // possibile (il margine cambia da prodotto a prodotto, una
+    // percentuale sola non lo segue riga per riga — al POS invece si').
+    const baseSconto = ["lordo", "netto", "margine"].includes(regole.base_sconto) ? regole.base_sconto : "lordo";
+    let margineMedio = 0;
+    if (baseSconto === "margine") {
+      const { data: catalogo } = await supabase
+        .from("prodotti_shop")
+        .select("prezzo_vendita, costo_acquisto")
+        .gt("prezzo_vendita", 0)
+        .not("costo_acquisto", "is", null);
+      let netto = 0, margine = 0;
+      (catalogo || []).forEach((p: any) => {
+        const m = Number(p.prezzo_vendita) - Number(p.costo_acquisto);
+        if (!(m > 0)) return;
+        netto += Number(p.prezzo_vendita);
+        margine += m;
+      });
+      margineMedio = netto > 0 ? (margine / netto) * 100 : 0;
+    }
+
     const risultati: { master: string; corsoDataId: string; codice?: string; errore?: string }[] = [];
     for (const corso of corsiDaGenerare as any[]) {
       const m = masterById[corso.master_id];
@@ -121,8 +158,12 @@ Deno.serve(async (req) => {
         // su cosa si legge la percentuale lo decide il template: sul
         // prezzo (come WooCommerce sa fare da se') o sul margine del
         // singolo prodotto, calcolato riga per riga al POS
-        base_sconto: regole.base_sconto === "margine" ? "margine" : "prezzo",
+        base_sconto: baseSconto,
         valore: regole.percentuale_sconto,
+        // quanto scrivere su WooCommerce perche' tolga gli stessi euro
+        // che toglierebbe il POS: il sito sa fare solo percentuali sul
+        // prezzo al pubblico
+        valore_woo: percentualeWooEquivalente(regole.percentuale_sconto, baseSconto, margineMedio),
         valido_da: validoDa,
         valido_fino_a: validoFinoA,
         ambito: "tutto",

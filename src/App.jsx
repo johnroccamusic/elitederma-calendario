@@ -3095,11 +3095,9 @@ const ALIQUOTE_IVA_STANDARD = [0, 4, 5, 10, 22];
 // sconta: meglio non scontare che regalare qualcosa di cui non si sa
 // quanto vale. Nel catalogo oggi sono venti prodotti su centosettantasei.
 //
-// Il margine e' un valore netto, mentre il prezzo che si sconta e'
-// quello al pubblico: lo sconto porta con se' la sua IVA, altrimenti
-// togliendo un importo netto da un prezzo lordo il margine cederebbe
-// meno del dovuto — su un'aliquota al 22 cederebbe il 12,3% invece del
-// 15%.
+// Alla lettera: margine di dieci euro, quindici per cento, sconto di un
+// euro e cinquanta. Niente ritocchi per l'IVA — lo sconto e' quello, ed
+// e' quello che il cliente non paga.
 function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
   if (!prodotto || !(percentuale > 0) || !(quantita > 0)) return 0;
   const costo = prodotto.costo_acquisto;
@@ -3107,8 +3105,46 @@ function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
   if (costo == null || costo === "" || netto == null || !(Number(netto) > 0)) return 0;
   const margineNetto = Number(netto) - Number(costo);
   if (!(margineNetto > 0)) return 0;
-  const aliquota = prodotto.aliquota_iva_vendita ?? 22;
-  return round2(margineNetto * (percentuale / 100) * (1 + aliquota / 100) * quantita);
+  return round2(margineNetto * (percentuale / 100) * quantita);
+}
+// ---------- La stessa cifra, detta come la capisce WooCommerce ----------
+// Il sito sa fare una cosa sola: una percentuale sul prezzo al pubblico.
+// Non sa quanto costa un prodotto e non sa scorporare. Quindi quando la
+// base scelta e' il netto o il margine, su WooCommerce si scrive una
+// percentuale DIVERSA, scelta perche' tolga gli stessi euro che toglie
+// il POS.
+//
+// Sul netto e' esatta: il netto e' il lordo diviso l'aliquota, quindi il
+// 15% del netto e' il 12,30% del lordo. Sempre, su qualunque carrello.
+//
+// Sul margine e' la migliore possibile e non di piu': il margine cambia
+// da prodotto a prodotto — qui va dal 21% al 100% — e una percentuale
+// sola non puo' seguirlo riga per riga. Si usa il margine medio del
+// catalogo pesato sui prezzi, cioe' il margine del carrello tipico: chi
+// compra roba a margine alto riceve un po' meno del dovuto, chi compra a
+// margine basso un po' di piu', e sul totale degli ordini torna. Il POS
+// invece resta esatto, riga per riga.
+const ALIQUOTA_IVA_STANDARD = 22;
+function marginePercentualeMedio(prodotti) {
+  let netto = 0, margine = 0;
+  (prodotti || []).forEach((p) => {
+    const prezzo = Number(p?.prezzo_vendita);
+    const costo = p?.costo_acquisto;
+    if (!(prezzo > 0) || costo == null || costo === "") return;
+    const m = prezzo - Number(costo);
+    if (!(m > 0)) return;
+    netto += prezzo;
+    margine += m;
+  });
+  return netto > 0 ? (margine / netto) * 100 : 0;
+}
+function percentualeWooEquivalente(percentuale, base, margineMedioPct) {
+  const pct = Number(percentuale) || 0;
+  if (!(pct > 0)) return pct;
+  const fattoreIva = 1 + ALIQUOTA_IVA_STANDARD / 100;
+  if (base === "netto") return round2(pct / fattoreIva);
+  if (base === "margine") return round2((pct * (Number(margineMedioPct) || 0)) / 100 / fattoreIva);
+  return round2(pct);
 }
 // lo sconto dell'intero carrello, riga per riga. Non si puo' scorciare
 // con una percentuale sul totale: due carrelli con lo stesso totale e
@@ -31365,6 +31401,8 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       // solo dove c'e' una percentuale da leggere
       base_sconto: tipoSconto === "percent" ? BASE_SCONTO_VALIDA(baseSconto) : "lordo",
       valore: valoreNum,
+      // quanto scrivere davvero su WooCommerce perche' tolga gli stessi euro
+      valore_woo: tipoSconto === "percent" ? percentualeWooEquivalente(valoreNum, BASE_SCONTO_VALIDA(baseSconto), margineMedioCatalogo) : valoreNum,
       valido_da: validoDa || null,
       valido_fino_a: validoFinoA || null,
       ambito,
@@ -31416,6 +31454,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   // un referral code per master, per sempre (non uno per corso): la
   // lista mostra chi ne ha già uno e chi no, generarne uno nuovo lo crea
   // subito su WooCommerce con le regole del template automatico
+  // il margine del carrello tipico: serve a tradurre in percentuale sul
+  // lordo uno sconto pensato sul margine, perche' WooCommerce sa fare
+  // solo quello
+  const margineMedioCatalogo = useMemo(() => marginePercentualeMedio(prodottiShop), [prodottiShop]);
   const couponPerMasterId = useMemo(() => {
     const mappa = {};
     // solo i codici "jolly" legati alla sola master (non quelli generati
@@ -31470,6 +31512,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       tipo_sconto: "percent",
       base_sconto: sceltaSconto.base,
       valore: sceltaSconto.percentuale,
+      valore_woo: percentualeWooEquivalente(sceltaSconto.percentuale, sceltaSconto.base, margineMedioCatalogo),
       valido_da: null,
       valido_fino_a: null,
       ambito: "tutto",
@@ -31642,8 +31685,11 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
           {tipoSconto === "percent" && (
             <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: -6, marginBottom: 10, lineHeight: 1.4 }}>
               {AIUTO_BASE_SCONTO[baseSconto]}
-              {baseSconto !== "lordo" && (
-                <> <b style={{ color: "#B7791F" }}>Sul sito WooCommerce applica comunque la percentuale sul lordo: questa base vale al POS.</b></>
+              {baseSconto !== "lordo" && parseNum(valore) > 0 && (
+                <> <b style={{ color: "#B7791F" }}>
+                  Su WooCommerce verrà scritto {fmtPctErp(percentualeWooEquivalente(parseNum(valore), baseSconto, margineMedioCatalogo))} sul lordo, che toglie gli stessi euro
+                  {baseSconto === "margine" ? " sul carrello tipico (il sito non sa i costi, quindi non può seguire il margine prodotto per prodotto: al POS resta esatto)" : ""}.
+                </b></>
               )}
             </div>
           )}

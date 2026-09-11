@@ -79,7 +79,12 @@ Deno.serve(async (req) => {
   const payloadWoo: Record<string, unknown> = {
     code: riga.codice,
     discount_type: riga.tipo_sconto,
-    amount: String(riga.valore),
+    // Quello che va sul sito e' "valore_woo": la percentuale sul prezzo
+    // al pubblico che toglie gli stessi euro della base scelta (netto o
+    // margine). Dove la base e' gia' il lordo i due numeri coincidono, e
+    // sui coupon creati prima che questa colonna esistesse e' vuota:
+    // allora vale "valore", cioe' esattamente com'era.
+    amount: String(riga.valore_woo ?? riga.valore),
   };
   if (riga.descrizione) payloadWoo.description = riga.descrizione;
   if (riga.valido_fino_a) payloadWoo.date_expires = riga.valido_fino_a;

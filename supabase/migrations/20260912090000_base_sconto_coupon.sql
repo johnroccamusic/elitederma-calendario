@@ -34,3 +34,16 @@ comment on column public.coupon.base_sconto is
   'Su cosa si legge la percentuale: ''prezzo'' (sul prezzo al pubblico, come WooCommerce) oppure ''margine'' (sul guadagno del singolo prodotto, calcolato riga per riga; un prodotto senza costo di acquisto non si sconta).';
 comment on column public.regole_referral_automatico.base_sconto is
   'Base di default per i referral generati in automatico. Vedi coupon.base_sconto.';
+
+-- WooCommerce sa fare una cosa sola: una percentuale sul prezzo al
+-- pubblico. Quando la base scelta e' il netto o il margine, sul sito si
+-- scrive una percentuale DIVERSA, calcolata perche' tolga gli stessi
+-- euro che toglierebbe il POS. Sul netto la conversione e' esatta (basta
+-- dividere per l'aliquota); sul margine e' la migliore possibile, perche'
+-- il margine cambia da prodotto a prodotto e una percentuale sola non
+-- puo' seguirlo riga per riga.
+alter table public.coupon
+  add column if not exists valore_woo numeric;
+
+comment on column public.coupon.valore_woo is
+  'La percentuale realmente scritta su WooCommerce. Coincide con "valore" quando base_sconto = lordo; per netto e margine è la percentuale sul lordo che sconta gli stessi euro. Nulla = usa "valore".';
