@@ -22370,9 +22370,50 @@ function PannelloRiepilogoAmministrativo({
   // le due meta' si pagano in momenti diversi e per strade diverse.
   const chiaveCashRiga = (r) => `cash_${r.tipo}_${r.rigaId}`;
   const chiaviSpeseEsistenti = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave).map((x) => x.origine_scadenziario_chiave));
-  const righeSpeseTutte = righeSpeseGrezze.map((r) => ({ ...r, cashGiaRegistrato: chiaviSpeseEsistenti.has(chiaveCashRiga(r)) }));
+  // Una quota in contante puo' uscire dalla busta per due strade: o e'
+  // stata pagata davvero (spesa registrata), oppure e' stata rinviata
+  // perche' il contante del corso non bastava — e allora diventa un
+  // impegno, da saldare piu' avanti per bonifico o dalla cassa centrale.
+  // In tutti e due i casi smette di pesare sulla busta di questo corso.
+  const impegniPerChiave = new Map((impegni || []).filter((x) => x.chiave_origine).map((x) => [x.chiave_origine, x]));
+  const righeSpeseTutte = righeSpeseGrezze.map((r) => {
+    const chiave = chiaveCashRiga(r);
+    const impegnoCash = impegniPerChiave.get(chiave) || null;
+    return {
+      ...r,
+      cashPagato: chiaviSpeseEsistenti.has(chiave),
+      cashRinviato: !!impegnoCash,
+      impegnoCash,
+      cashGiaRegistrato: chiaviSpeseEsistenti.has(chiave) || !!impegnoCash,
+    };
+  });
   // quello che il tasto "Pagamenti effettuati" registrerebbe adesso
   const cashDaRegistrare = righeSpeseTutte.filter((r) => (r.cash || 0) > 0 && !r.cashGiaRegistrato);
+
+  // "Non dal cash del corso": la quota esce dalla busta e diventa un
+  // impegno. Serve quando in aula il contante non basta a coprire quello
+  // che era previsto in contanti: senza questo si era costretti a fingere
+  // di averlo pagato, o a lasciare la busta in rosso.
+  async function rinviaCashAgliImpegni(r) {
+    const chiave = chiaveCashRiga(r);
+    if (!window.confirm(`Togliere ${fmtEuroErp2(r.cash)} di "${r.nome}" dal contante di questo corso?\n\nVa nel Quadro impegni, dove si potrà aspettare la fattura oppure pagarlo dalla cassa contanti.`)) return;
+    const { error } = await supabase.from("impegno").insert({
+      descrizione: `${r.nome} — contanti non coperti`,
+      origine_tipo: "classe_cash", origine_id: corsoData.id, chiave_origine: chiave,
+      importo_previsto: round2(r.cash), data_prevista: corsoData.data_fine || dataOggiStr(), stato: "aperto",
+    });
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("Spostato nel Quadro impegni: non pesa più sulla busta di questo corso.");
+    ricarica(["impegno"]);
+  }
+  async function riportaCashSulCorso(r) {
+    if (!r.impegnoCash) return;
+    if (!window.confirm(`Rimettere ${fmtEuroErp2(r.cash)} di "${r.nome}" a carico del contante di questo corso?\n\nL'impegno viene tolto dal Quadro impegni.`)) return;
+    const { error } = await supabase.from("impegno").delete().eq("id", r.impegnoCash.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("Rimesso a carico della busta.");
+    ricarica(["impegno"]);
+  }
   const totaleCashDaRegistrare = round2(cashDaRegistrare.reduce((s, r) => s + r.cash, 0));
   // Tutti i conti della classe vengono da contiRiepilogoClasse, la stessa
   // funzione che alimenta "Prossime contabilità": qui dentro non ci sono
@@ -22778,10 +22819,33 @@ function PannelloRiepilogoAmministrativo({
                               <input style={{ ...campoCompattoQui, textAlign: "right" }} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
                             )}
                           </div>
-                          {/* nessun cestino su queste righe: sono voci fisse,
-                              non si cancellano. La colonna pero' c'e', o le
-                              due tabelle non si incolonnerebbero piu' */}
-                          <div />
+                          {/* La colonna del cestino: su queste righe non si
+                              cancella niente — sono voci fisse — ma e' il
+                              posto dove si dice che la quota in contanti
+                              non la copre questo corso. */}
+                          <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {(r.cash || 0) > 0 && !r.cashPagato && (
+                              <button
+                                type="button"
+                                onClick={() => (r.cashRinviato ? riportaCashSulCorso(r) : rinviaCashAgliImpegni(r))}
+                                title={r.cashRinviato
+                                  ? "È nel Quadro impegni: premi per rimetterlo a carico del contante di questo corso"
+                                  : "Il contante del corso non basta: manda questa quota nel Quadro impegni"}
+                                style={{
+                                  ...fontBody, fontSize: 9.5, fontWeight: 700, lineHeight: 1,
+                                  border: `1px solid ${r.cashRinviato ? "#A8C4E8" : CREAM_BORDER}`, borderRadius: 7,
+                                  background: r.cashRinviato ? "#EDF3FB" : "#fff",
+                                  color: r.cashRinviato ? "#1F4E8C" : MUTED,
+                                  padding: "4px 6px", cursor: "pointer", whiteSpace: "nowrap",
+                                }}
+                              >
+                                {r.cashRinviato ? "impegni" : "↗"}
+                              </button>
+                            )}
+                            {r.cashPagato && (
+                              <span title="Contante già registrato come spesa pagata" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>pagato</span>
+                            )}
+                          </div>
                           <div style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
                             {r.giorni != null && (
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -23090,7 +23154,7 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
-function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   const maniglieAttive = useManiglieAttive();
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -56076,7 +56140,7 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
 // callback di navigazione interna (onBack/onCambiaSottoVista/…) sono no-op
 // qui, perché in questa vista non esiste una cronologia condivisa tra le
 // colonne — "← Indietro" in alto chiude l'intera vista e basta
-function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
+function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 0 60px" }}>
@@ -56101,7 +56165,7 @@ function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, 
                   corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
                   master={master} fontDiplomi={fontDiplomi}
                   segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
-                  spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
+                  spese={spese} impegni={impegni} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
                   venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop} venditeShop={venditeShop}
                   accontiDaVerificare={accontiDaVerificare}
                   ricarica={ricarica}
@@ -56700,7 +56764,9 @@ export default function App() {
     calendario: ["corsi", "location", "corsi_date", "iscritti", "master"],
     cerca: ["corsi", "location", "corsi_date", "iscritti"],
     cercaiscritto: ["corsi", "location", "corsi_date", "iscritti"],
-    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
+    // "impegno" serve al riepilogo amministrativo: una quota in contanti
+    // puo' essere rinviata agli impegni quando il cash del corso non basta
+    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "impegno", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
   };
 
   async function caricaIniziale() {
@@ -57824,6 +57890,7 @@ export default function App() {
       {view === "schedeaffiancate" && (
         <VistaSchedeAffiancate
           utentiApp={utentiApp}
+          impegni={impegnoTabella}
           quoteVenditoriSplit={quoteVenditoriSplit}
           iscrittiArr={schedeAffiancateIscritti}
           ruoloUtente={ruoloUtente}
@@ -58556,6 +58623,7 @@ export default function App() {
       {view === "scheda" && corsoDataApertaObj && (
         <SchedaData
           utentiApp={utentiApp}
+          impegni={impegnoTabella}
           quoteVenditoriSplit={quoteVenditoriSplit}
           key={schedaKey}
           ruoloUtente={ruoloUtente}
