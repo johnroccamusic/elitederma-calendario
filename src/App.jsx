@@ -47871,7 +47871,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
 // origine="pos"), così compare da sola nei totali di "Vendite shop" e
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, titolo = "POS Vendita diretta" }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, titolo = "POS Vendita diretta" }) {
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
   // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
@@ -47933,13 +47933,50 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // Una master vede solo i corsi assegnati a lei; un venditore, non
   // essendo assegnato a un corso specifico, vede tutti quelli in corso
   // oggi in una qualunque sede.
-  const oggiStrPos = dataOggiStr();
+  // Che giorno e', controllato davvero e non solo quando qualcosa si
+  // ridisegna. Il POS di un corso resta aperto per ore, e a cavallo
+  // della mezzanotte dell'ultimo giorno la pagina non si accorgerebbe di
+  // niente: il corso finito resterebbe collegato, e la prima vendita del
+  // giorno dopo finirebbe nella busta di una classe chiusa. Si guarda
+  // ogni minuto e si aggiorna solo quando la data cambia davvero.
+  const [oggiStrPos, setOggiStrPos] = useState(() => dataOggiStr());
+  useEffect(() => {
+    const t = setInterval(() => {
+      const adesso = dataOggiStr();
+      setOggiStrPos((prec) => (prec === adesso ? prec : adesso));
+    }, 60000);
+    return () => clearInterval(t);
+  }, []);
   const corsiInCorsoOggi = (corsiDate || []).filter((cd) => cd.data_inizio <= oggiStrPos && cd.data_fine >= oggiStrPos);
   const corsiEleggibiliPos = operatore?.tipo === "master"
     ? corsiInCorsoOggi.filter((cd) => cd.master_id === operatore.id)
     : corsiInCorsoOggi;
   const [corsoPosId, setCorsoPosId] = useState("");
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
+  // Capita che un amministratore dia una mano a una master vendendo dal
+  // proprio telefono. La vendita e' sua, non di chi tiene il telefono:
+  // punti, provvigione e riconoscimento devono andare alla master. Ma
+  // non sempre — a volte si vende al corso e basta, e allora la spunta
+  // si toglie.
+  //
+  // Vale solo per amministratore e programmatore: una master che vende
+  // dal suo POS e' gia' se stessa, e un venditore non puo' regalare a
+  // qualcun altro una provvigione.
+  const puoAttribuireAllaMaster = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
+  const masterDelCorso = corsoPosSel ? (master || []).find((m) => m.id === corsoPosSel.master_id) || null : null;
+  const [attribuisciAllaMaster, setAttribuisciAllaMaster] = useState(true);
+  const venditaVaAllaMaster = puoAttribuireAllaMaster && !!masterDelCorso && attribuisciAllaMaster;
+  // Il corso scelto resta fra una vendita e l'altra, ma non oltre la sua
+  // fine: passata la mezzanotte dell'ultimo giorno esce dai corsi di
+  // oggi, e un collegamento a una classe che non c'e' piu' e' peggio di
+  // nessun collegamento.
+  useEffect(() => {
+    if (corsoPosId && !corsiEleggibiliPos.some((cd) => cd.id === corsoPosId)) {
+      setCorsoPosId("");
+      setScontoCorsoAttivo(false);
+      setCouponAttivo(null); setCouponValore(""); setCouponCodiceTesto("");
+    }
+  }, [corsoPosId, corsiEleggibiliPos]);
   // Una master che vende mentre e' al corso trova il corso gia' scelto e
   // il suo codice sconto gia' applicato, senza doverli cercare.
   //
@@ -48310,6 +48347,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setFattCodDest(""); setFattPec(""); setFattIndirizzo(""); setFattCivico(""); setFattCap(""); setFattCitta(""); setFattProv("");
     setOmaggioAttivo(false);
     setPrelevatoDaiKit(false);
+    // Il corso collegato NON si azzera, e con lui l'attribuzione alla
+    // master. Al banco di un corso si vende una cosa dietro l'altra: far
+    // riscegliere la classe a ogni scontrino vuol dire che alla terza
+    // vendita qualcuno se ne dimentica, e quei soldi finiscono fuori
+    // dalla busta del corso e fuori dai punti della master. Si toglie
+    // quando lo si toglie, o quando il corso finisce.
+    //
     // la simulazione non si spegne da sola: chi prova fa piu' prove di
     // fila, e riaccenderla ogni volta sarebbe il modo di dimenticarsene
   }
@@ -48396,9 +48440,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       metodo_pagamento: omaggioAttivo ? null : metodoPagamento,
       note: note.trim() || null,
       tipo_movimento: omaggioAttivo ? "omaggio" : "vendita",
-      operatore_tipo: operatore.tipo,
-      operatore_id: operatore.id,
-      operatore_nome: operatore.nome,
+      // Chi "ha fatto" la vendita, cioe' a chi contano punti e
+      // provvigione. Normalmente e' chi la sta battendo; quando un
+      // amministratore vende per conto della master del corso e lascia
+      // la spunta, e' la master.
+      operatore_tipo: venditaVaAllaMaster ? "master" : operatore.tipo,
+      operatore_id: venditaVaAllaMaster ? masterDelCorso.id : operatore.id,
+      operatore_nome: venditaVaAllaMaster ? masterDelCorso.nome : operatore.nome,
+      // e qui resta scritto chi l'ha battuta davvero: su un incasso non
+      // e' un dettaglio da perdere
+      registrata_da_tipo: venditaVaAllaMaster ? operatore.tipo : null,
+      registrata_da_id: venditaVaAllaMaster ? operatore.id : null,
+      registrata_da_nome: venditaVaAllaMaster ? operatore.nome : null,
       corso_data_id: corsoPosSel?.id || null,
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
@@ -48483,7 +48536,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // sulle prove non matura niente, e un omaggio ha righe a zero quindi
       // non produce margine da dividere.
       let provvigione = null;
-      if (operatore.tipo === "master" && !datiVendita.simulazione && !omaggioAttivo) {
+      if (datiVendita.operatore_tipo === "master" && !datiVendita.simulazione && !omaggioAttivo) {
         const canaleProvvigione = corsoPosSel ? "corso" : (couponAttivo ? "referral" : null);
         provvigione = await congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale: canaleProvvigione });
       }
@@ -48636,6 +48689,31 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               ))}
             </select>
           </Field>
+          {/* Vendendo per conto della master la vendita e' sua: punti,
+              provvigione e riconoscimento vanno a lei. Togliendo la
+              spunta resta legata al corso — i contanti in quella busta,
+              i pezzi scaricati da quel magazzino — ma senza accreditare
+              nulla a nessuno. */}
+          {puoAttribuireAllaMaster && masterDelCorso && (
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={attribuisciAllaMaster}
+                onChange={(e) => setAttribuisciAllaMaster(e.target.checked)}
+                style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: NAVY, cursor: "pointer" }}
+              />
+              <span style={{ minWidth: 0 }}>
+                <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
+                  Vendita di {toTitleCase(masterDelCorso.nome)}
+                </span>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, display: "block", lineHeight: 1.35, marginTop: 2 }}>
+                  {attribuisciAllaMaster
+                    ? "Punti e provvigione vanno a lei; resta scritto che l’hai battuta tu."
+                    : "La vendita resta legata al corso, ma non conta come vendita della master."}
+                </span>
+              </span>
+            </label>
+          )}
           {/* lo sconto del corso si vede: applicato in silenzio sarebbe
               solo un numero che compare nel totale, e chi vende non
               saprebbe se e' quello giusto */}
@@ -57836,7 +57914,7 @@ export default function App() {
     magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "location", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
     advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "prodotti_immagini", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
-    pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
+    pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti", "master"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
     catalogocategoriecosti: ["costi_categorie", "costi_sottocategorie", "spese", "costi_soglie_allerta"],
     budgetcosti: ["costi_categorie", "location", "corsi", "costi_budget"],
@@ -59288,7 +59366,7 @@ export default function App() {
           prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
           utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato} targetVenditeProdotti={targetVenditeProdotti}
           ruoloUtente={ruoloUtente} corsiDate={corsiDate} corsi={corsi} location={location} iscritti={iscritti} coupon={coupon}
-          bundleComponenti={bundleComponenti}
+          bundleComponenti={bundleComponenti} master={master}
           titolo={etichettaTasto("home", "pos", "POS Vendita diretta")}
         />
       )}
