@@ -9155,13 +9155,21 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
     // spazio, altrimenti spingerebbe i trattamenti fuori asse di mezza
     // parola. Il centro e' quello dei trattamenti, che sono la cosa da
     // guardare.
-    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 10, minHeight: isMobile ? 66 : 44 }}>
-      <span style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: isMobile ? 11 : 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.1 }}>Modelle</span>
+    // Su schermo largo "MODELLE" sta appoggiata a sinistra senza occupare
+    // spazio, cosi' i gruppi restano centrati sulla scheda. Sul telefono
+    // quel trucco non regge: lo spazio a sinistra non c'e', la scritta
+    // finiva sopra la prima casella. Li' diventa un titolo sopra i gruppi,
+    // centrato, e i gruppi si prendono tutta la riga da un bordo all'altro.
+    <div style={{ position: "relative", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", justifyContent: "center", gap: isMobile ? 6 : 0, marginTop: 10, minHeight: isMobile ? 66 : 44 }}>
+      <span style={{
+        ...fontBody, fontSize: isMobile ? 11 : 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.1,
+        ...(isMobile ? {} : { position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }),
+      }}>Modelle</span>
       {/* i gruppi si dividono lo spazio che c'e' e si stringono: prima
           tenevano la loro misura e uscivano dalla scheda, e per vedere
           l'eyeliner bisognava trascinare di lato una riga dentro una
           scheda dentro una pagina che gia' scorre */}
-      <div style={{ maxWidth: "100%", minWidth: 0, display: "flex", justifyContent: "center", gap: 6, paddingLeft: 56, paddingRight: 8, boxSizing: "border-box" }}>
+      <div style={{ width: isMobile ? "100%" : undefined, maxWidth: "100%", minWidth: 0, display: "flex", justifyContent: "center", gap: 6, paddingLeft: isMobile ? 0 : 56, paddingRight: isMobile ? 0 : 8, boxSizing: "border-box" }}>
       {senzaPosti ? (
         <div style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED, textAlign: "center" }}>
           {iscritto?.richiede_modelle ? "Nessuna modella ancora assegnata" : "Porta la sua modella — non ancora segnata"}
@@ -9171,10 +9179,13 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
         return (
           <div key={tipo} title={m ? tipo : `${tipo} — non previsto per questo allievo`} style={{
             display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? 7 : 4,
-            // larghezza fissa uguale per tutti: i gruppi non si allargano
-            // a riempire la riga, cosi' restano incolonnati fra un allievo
-            // e l'altro e il blocco si puo' centrare davvero
-            flex: "0 1 150px", minWidth: 92,
+            // Su schermo largo larghezza fissa uguale per tutti, cosi' i
+            // gruppi restano incolonnati fra un allievo e l'altro. Sul
+            // telefono invece si allargano a riempire la riga: incolonnarli
+            // non serve a niente quando si guarda una scheda per volta, e
+            // lasciare un margine a destra e uno a sinistra vuol dire solo
+            // caselle piu' strette.
+            flex: isMobile ? "1 1 0" : "0 1 150px", minWidth: isMobile ? 0 : 92,
             background: "#F1F3F6", borderRadius: 10, padding: isMobile ? "10px 7px" : "6px 5px",
             opacity: m ? 1 : 0.35,
           }}>
