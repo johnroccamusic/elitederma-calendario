@@ -36862,6 +36862,34 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
     if (error || data?.errore) { window.alert("Stato non cambiato: " + (data?.errore || error.message)); return; }
     ricarica(["vendite_shop", "prodotti_shop"]);
   }
+  // Cambiare come e' stato incassato non e' solo cambiare un'etichetta:
+  // contanti senza fattura non genera IVA, POS si'. Quindi qui si
+  // ricalcola imponibile e imposta con la stessa regola del POS — il
+  // totale incassato non si tocca mai, si sposta solo la ripartizione.
+  //
+  // Serve perche' capita di sbagliare il tasto al momento della vendita, e
+  // finora l'unico rimedio era cancellare tutto e rifare.
+  const [cambiandoMetodo, setCambiandoMetodo] = useState(null);
+  async function cambiaMetodoPagamento(v) {
+    const daContanti = v.metodo_pagamento === "contanti";
+    const nuovo = daContanti ? "pos" : "contanti";
+    const totale = round2(v.totale || 0);
+    const senzaIva = nuovo === "contanti" && !v.richiede_fattura;
+    const imponibile = senzaIva ? totale : round2(totale / 1.22);
+    const iva = round2(totale - imponibile);
+    const spiegazione = senzaIva
+      ? `L'IVA di ${fmtEuroErp2(v.totale_iva || 0)} viene tolta: in contanti senza fattura non si genera imposta, e l'imponibile diventa ${fmtEuroErp2(imponibile)}.`
+      : `L'IVA viene scorporata: ${fmtEuroErp2(imponibile)} di imponibile e ${fmtEuroErp2(iva)} di imposta.`;
+    if (!window.confirm(`Vuoi cambiare modalità di pagamento?\n\nDa ${daContanti ? "contanti" : "POS"} a ${nuovo === "contanti" ? "contanti" : "POS"}.\n${spiegazione}\n\nIl totale incassato resta ${fmtEuroErp2(totale)}.`)) return;
+    setCambiandoMetodo(v.id);
+    const { error } = await supabase.from("vendite_shop")
+      .update({ metodo_pagamento: nuovo, totale_imponibile: imponibile, totale_iva: iva })
+      .eq("id", v.id);
+    setCambiandoMetodo(null);
+    if (error) { window.alert("Non cambiato: " + testoErrore(error)); return; }
+    ricarica(["vendite_shop"]);
+  }
+
   const { ordine: ordineOrdini, cambiaOrdine: cambiaOrdineOrdini, ordina: ordinaOrdini } = useOrdinamentoTabella();
   const { ordine: ordineProdotti, cambiaOrdine: cambiaOrdineProdotti, ordina: ordinaProdotti } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
@@ -37073,11 +37101,16 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
                         {origine === "pos" && (
                           <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                             {v.metodo_pagamento ? (
-                              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "3px 9px",
-                                color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
-                                background: v.metodo_pagamento === "contanti" ? "#F7EEDE" : "#ECEDFA" }}>
-                                {v.metodo_pagamento === "contanti" ? "Contanti" : "POS"}
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => cambiaMetodoPagamento(v)}
+                                disabled={cambiandoMetodo === v.id}
+                                title="Cambia modalità di pagamento"
+                                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "3px 9px", border: "none", cursor: cambiandoMetodo === v.id ? "default" : "pointer",
+                                  color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
+                                  background: v.metodo_pagamento === "contanti" ? "#F7EEDE" : "#ECEDFA" }}>
+                                {cambiandoMetodo === v.id ? "Cambio…" : v.metodo_pagamento === "contanti" ? "Contanti" : "POS"}
+                              </button>
                             ) : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
                           </td>
                         )}
@@ -47126,7 +47159,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const couponNum = couponValore === "" ? 0 : parseNum(couponValore);
   const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, couponNum > 0 ? subtotale * (couponNum / 100) : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
   const totaleNetto = round2(subtotale - scontoApplicato);
-  const imponibile = round2(totaleNetto / 1.22);
+  // L'IVA si scorpora solo se quella vendita un documento fiscale ce
+  // l'ha. Una vendita in contanti senza fattura non genera IVA: non c'e'
+  // un'imposta da versare, quindi l'imponibile e' il totale e l'IVA e'
+  // zero. Scorporarla lo stesso voleva dire dichiarare nei riepiloghi
+  // un'imposta che nessuno versera' — e sottostimare di un quinto
+  // l'imponibile di quelle vendite.
+  //
+  // Il POS resta l'unico posto dove si decide: piu' avanti (scheda
+  // corso, riepiloghi, statistiche) l'IVA non si ricalcola mai, si legge
+  // la differenza fra totale e imponibile registrati qui.
+  const senzaIva = metodoPagamento === "contanti" && !fattAttiva;
+  const imponibile = senzaIva ? totaleNetto : round2(totaleNetto / 1.22);
   const iva = round2(totaleNetto - imponibile);
   // omaggio: il magazzino si scarica lo stesso, ma non entra un euro —
   // il totale "da incassare" e le sue componenti diventano sempre zero
