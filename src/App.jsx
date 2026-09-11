@@ -37426,18 +37426,24 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                             e finora l'elenco non lo diceva */}
                         {origine === "pos" && (
                           <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                            {/* Si cambia al primo clic, e il secondo di un
+                                doppio clic viene ignorato.
+                                A clic singolo e basta, chi faceva doppio clic
+                                otteneva due cambi di fila — contanti, POS,
+                                contanti — e sembrava che non funzionasse
+                                niente. Con il solo "onDoubleClick" invece non
+                                funzionava davvero da telefono e da tablet,
+                                dove il doppio clic non arriva. Guardando
+                                `detail` (quante volte di fila e' stato
+                                premuto) si prendono tutti e due i casi: il
+                                gesto vale una volta sola, comunque lo si
+                                faccia. */}
                             {v.metodo_pagamento ? (
                               <button
                                 type="button"
-                                // doppio clic, non singolo: a clic singolo
-                                // un doppio clic faceva due cambi di fila —
-                                // contanti, POS, contanti — e sembrava che
-                                // non funzionasse niente. E un incasso non si
-                                // cambia per un tocco di troppo mentre si
-                                // scorre l'elenco.
-                                onDoubleClick={() => cambiaMetodoPagamento(v)}
+                                onClick={(e) => { if (e.detail > 1) return; cambiaMetodoPagamento(v); }}
                                 disabled={cambiandoMetodo === v.id}
-                                title="Doppio clic per cambiare modalità di pagamento"
+                                title="Clicca per cambiare modalità di pagamento"
                                 style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "3px 9px", border: "none", cursor: cambiandoMetodo === v.id ? "default" : "pointer",
                                   color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
                                   background: v.metodo_pagamento === "contanti" ? "#F7EEDE" : "#ECEDFA" }}>
