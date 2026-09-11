@@ -328,6 +328,7 @@ const CHIAVE_ETICHETTE_MAGAZZINO = "gestioneMagazzino_etichetteColonne";
 const CHIAVE_ORDINE_MAGAZZINO = "gestioneMagazzino_ordineColonne";
 const CHIAVE_PER_PAGINA_MAGAZZINO = "gestioneMagazzino_perPagina";
 const CHIAVE_COLONNE_POS = "pos_colonneProdotti";
+const CHIAVE_REGOLA_REFERRAL_MASTER = "referralMaster_regolaSconto";
 // quanto spazio prende la colonna di sinistra ("Da gestire oggi") rispetto
 // agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
 const CHIAVE_DIVISIONE_MAGAZZINO = "gestioneMagazzino_divisioneColonne";
@@ -3125,6 +3126,67 @@ function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
 // compra roba a margine alto riceve un po' meno del dovuto, chi compra a
 // margine basso un po' di piu', e sul totale degli ordini torna. Il POS
 // invece resta esatto, riga per riga.
+// ---------- Sconto a fasce ----------
+// Una percentuale diversa a seconda di quanto rende il prodotto. Lo
+// sconto "sul margine" fa una proporzione esatta; a fasce si decide a
+// mano, e si puo' dire "sotto il 25% non sconto niente" — cosa che una
+// proporzione non sa dire.
+//
+// Le quattro fasce sono fisse e coprono tutto: nessun prodotto puo'
+// cascare fra due. La percentuale si applica sempre sul LORDO, cosi' e'
+// lo stesso numero al POS e sul sito.
+const FASCE_MARGINE = [
+  { da: 0, a: 25 },
+  { da: 26, a: 50 },
+  { da: 51, a: 75 },
+  { da: 76, a: 100 },
+];
+const FASCE_SCONTO_DEFAULT = FASCE_MARGINE.map((f) => ({ ...f, percentuale: 0 }));
+function fasceScontoValide(fasce) {
+  const elenco = Array.isArray(fasce) ? fasce : [];
+  return FASCE_MARGINE.map((f, i) => ({
+    da: f.da, a: f.a,
+    percentuale: Number(elenco[i]?.percentuale) || 0,
+  }));
+}
+// il margine di un prodotto in percentuale, o null se non si sa — senza
+// costo di acquisto non c'e' fascia e non c'e' sconto
+function marginePercentualeDi(prodotto) {
+  const netto = Number(prodotto?.prezzo_vendita);
+  const costo = prodotto?.costo_acquisto;
+  if (!(netto > 0) || costo == null || costo === "") return null;
+  return ((netto - Number(costo)) / netto) * 100;
+}
+function percentualeFasciaDi(prodotto, fasce) {
+  const m = marginePercentualeDi(prodotto);
+  if (m == null) return 0;
+  const elenco = fasceScontoValide(fasce);
+  if (m <= 25) return elenco[0].percentuale;
+  if (m <= 50) return elenco[1].percentuale;
+  if (m <= 75) return elenco[2].percentuale;
+  return elenco[3].percentuale;
+}
+function scontoAFasceCarrello(righe, prodottoPerId, fasce) {
+  return round2((righe || []).reduce((s, r) => {
+    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce);
+    return s + (pct > 0 ? (r.prezzo * r.quantita * pct) / 100 : 0);
+  }, 0));
+}
+// La percentuale unica da scrivere su WooCommerce quando lo sconto e' a
+// fasce: il sito non sa i margini, quindi non puo' cambiare percentuale
+// da prodotto a prodotto. Si usa la media delle fasce pesata sui prezzi
+// del catalogo — il carrello tipico — e sul totale degli ordini torna.
+function percentualeWooDaFasce(prodotti, fasce) {
+  let lordo = 0, sconto = 0;
+  (prodotti || []).forEach((p) => {
+    const netto = Number(p?.prezzo_vendita);
+    if (!(netto > 0)) return;
+    const prezzoLordo = netto * (1 + (p.aliquota_iva_vendita ?? ALIQUOTA_IVA_STANDARD) / 100);
+    lordo += prezzoLordo;
+    sconto += (prezzoLordo * percentualeFasciaDi(p, fasce)) / 100;
+  });
+  return lordo > 0 ? round2((sconto / lordo) * 100) : 0;
+}
 const ALIQUOTA_IVA_STANDARD = 22;
 function marginePercentualeMedio(prodotti) {
   let netto = 0, margine = 0;
@@ -31306,6 +31368,58 @@ async function generaCodiceReferralUnivoco(nome) {
   }
 }
 
+// La scelta fra le due regole di sconto, uguale nei due pannelli che
+// generano coupon. Una percentuale unica, oppure quattro percentuali —
+// una per fascia di margine — che si applicano sempre sul lordo, cosi'
+// il numero e' lo stesso al POS e sul sito.
+function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile }) {
+  const elenco = fasceScontoValide(fasce);
+  const aFasce = tipo === "fasce";
+  const equivalenteWoo = aFasce ? percentualeWooDaFasce(prodottiShop, elenco) : null;
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "inline-flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: aFasce ? 12 : 0, flexWrap: "wrap" }}>
+        {[{ v: "semplice", l: "Percentuale unica" }, { v: "fasce", l: "Sconto a fasce" }].map((o) => (
+          <button
+            key={o.v} onClick={() => onCambiaTipo(o.v)}
+            style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, fontWeight: 700, padding: isMobile ? "7px 12px" : "8px 16px", borderRadius: 16, border: "none", whiteSpace: "nowrap", cursor: "pointer", background: (tipo === "fasce") === (o.v === "fasce") ? NAVY : "transparent", color: (tipo === "fasce") === (o.v === "fasce") ? "#fff" : NAVY }}
+          >{o.l}</button>
+        ))}
+      </div>
+      {aFasce && (
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? 12 : 16, background: "#fff" }}>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45, maxWidth: 640 }}>
+            Quanto rende un prodotto decide quanto si sconta. Le percentuali si applicano <b style={{ color: NAVY }}>sul lordo</b>,
+            quindi sono lo stesso numero al POS e sul sito. Un prodotto senza costo di acquisto non ha margine noto,
+            non cade in nessuna fascia e non si sconta.
+          </div>
+          <div style={{ display: "flex", gap: isMobile ? 8 : 14, flexWrap: "wrap" }}>
+            {elenco.map((f, i) => (
+              <div key={f.da} style={{ flex: "1 1 130px", minWidth: 120 }}>
+                <Field label={`Margine ${f.da}–${f.a}%`}>
+                  <input
+                    type="number" min="0" max="100" step="0.01" style={inputStyle}
+                    value={f.percentuale}
+                    onChange={(e) => {
+                      const nuove = elenco.map((x, k) => (k === i ? { ...x, percentuale: e.target.value === "" ? 0 : parseNum(e.target.value) } : x));
+                      onCambiaFasce(nuove);
+                    }}
+                  />
+                </Field>
+              </div>
+            ))}
+          </div>
+          <div style={{ ...fontBody, fontSize: 12, color: "#B7791F", fontWeight: 700, marginTop: 10, lineHeight: 1.4 }}>
+            Su WooCommerce verrà scritto {fmtPctErp(equivalenteWoo)} sul lordo: il sito non conosce i margini e non può
+            cambiare percentuale da prodotto a prodotto, quindi usa la media delle fasce sul catalogo. Al POS resta esatto,
+            prodotto per prodotto.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
   const { ordine: ordineClassifica, cambiaOrdine: cambiaOrdineClassifica, ordina: ordinaClassifica } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
@@ -31475,6 +31589,14 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   // template automatico, e non c'era modo di dare a una master un
   // accordo diverso — che e' invece la ragione per cui un referral code
   // esiste. Chi non lo tocca continua a prendere quello del template.
+  // La regola che vale per i referral fissi delle master. Sta a monte
+  // dell'elenco perche' e' una scelta sola per tutte: o ognuna ha la sua
+  // percentuale (e allora la si scrive sulla sua riga), o si sconta a
+  // fasce di margine, e allora le fasce sono le stesse per tutte — un
+  // prodotto che rende poco rende poco a chiunque lo venda.
+  const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "semplice", fasce: FASCE_SCONTO_DEFAULT });
+  const referralAFasce = regolaReferralMaster?.tipo === "fasce";
+  const fasceReferral = fasceScontoValide(regolaReferralMaster?.fasce);
   const [scontoPerMaster, setScontoPerMaster] = useState({});
   function scontoDiMaster(m) {
     const scelto = scontoPerMaster[m.id];
@@ -31498,8 +31620,13 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     // altrimenti quello del template automatico
     const scelta = scontoDiMaster(m);
     const percentualeScelta = parseNum(scelta.percentuale);
-    if (!(percentualeScelta > 0)) { setMsgTipo("errore"); setMsg("Scrivi una percentuale di sconto maggiore di zero per questa master."); return; }
-    const sceltaSconto = { percentuale: percentualeScelta, base: BASE_SCONTO_VALIDA(scelta.base) };
+    // a fasce la percentuale sulla riga non serve: lo sconto lo dicono le
+    // quattro fasce, uguali per tutte
+    if (!referralAFasce && !(percentualeScelta > 0)) { setMsgTipo("errore"); setMsg("Scrivi una percentuale di sconto maggiore di zero per questa master."); return; }
+    if (referralAFasce && !fasceReferral.some((f) => f.percentuale > 0)) { setMsgTipo("errore"); setMsg("Le quattro fasce sono tutte a zero: nessuno sconto da applicare."); return; }
+    const sceltaSconto = referralAFasce
+      ? { percentuale: percentualeWooDaFasce(prodottiShop, fasceReferral), base: "lordo" }
+      : { percentuale: percentualeScelta, base: BASE_SCONTO_VALIDA(scelta.base) };
     setMasterCreandoId(m.id); setMsg("");
     const codiceScelto = (codiceProposto[m.id] || (await generaCodiceReferralUnivoco(m.nome))).toLowerCase();
     // nel registro PRIMA di creare il coupon vero: se qualcosa fallisce dopo,
@@ -31513,7 +31640,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       tipo_sconto: "percent",
       base_sconto: sceltaSconto.base,
       valore: sceltaSconto.percentuale,
-      valore_woo: percentualeWooEquivalente(sceltaSconto.percentuale, sceltaSconto.base, margineMedioCatalogo),
+      // a fasce il "valore" e' gia' la media sul lordo, quindi coincide
+      valore_woo: referralAFasce ? sceltaSconto.percentuale : percentualeWooEquivalente(sceltaSconto.percentuale, sceltaSconto.base, margineMedioCatalogo),
+      tipo_regola_sconto: referralAFasce ? "fasce" : "semplice",
+      fasce_sconto: referralAFasce ? fasceReferral : null,
       valido_da: null,
       valido_fino_a: null,
       ambito: "tutto",
@@ -31586,6 +31716,8 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     const { error } = await supabase.from("regole_referral_automatico").update({
       percentuale_sconto: parseNum(regoleForm.percentuale_sconto) || 0,
       base_sconto: BASE_SCONTO_VALIDA(regoleForm.base_sconto),
+      tipo_regola_sconto: regoleForm.tipo_regola_sconto === "fasce" ? "fasce" : "semplice",
+      fasce_sconto: fasceScontoValide(regoleForm.fasce_sconto),
       giorni_validita_dopo_corso: Number(regoleForm.giorni_validita_dopo_corso) || 0,
       valido_durante_corso: !!regoleForm.valido_durante_corso,
       non_cumulabile: !!regoleForm.non_cumulabile,
@@ -31775,6 +31907,17 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
               Un referral code per master, per sempre: crealo una volta, da quel momento le vendite fatte con quel codice risulteranno nella sua dashboard.
             </div>
+            <SceltaRegolaSconto
+              tipo={regolaReferralMaster?.tipo} fasce={regolaReferralMaster?.fasce}
+              onCambiaTipo={(v) => setRegolaReferralMaster({ tipo: v, fasce: fasceReferral })}
+              onCambiaFasce={(f) => setRegolaReferralMaster({ tipo: regolaReferralMaster?.tipo || "semplice", fasce: f })}
+              prodottiShop={prodottiShop} isMobile={isMobile}
+            />
+            {referralAFasce && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
+                Con lo sconto a fasce la percentuale sulla riga di ciascuna master non serve: lo sconto lo dicono le quattro fasce, uguali per tutte.
+              </div>
+            )}
             {masterOrdinate.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master trovata.</div>
             ) : masterOrdinate.map((m) => {
@@ -31789,7 +31932,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                       dicono com'e' fatto e non si toccano: la percentuale
                       e' gia' su WooCommerce, e cambiarla qui lo
                       disallineerebbe in silenzio. */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", visibility: referralAFasce && !esistente ? "hidden" : "visible" }}>
                     <input
                       type="number" min="0" step="0.01" disabled={!!esistente}
                       value={scontoDiMaster(m).percentuale}
@@ -31837,15 +31980,25 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
             ) : (
               <div style={{ ...cardStyle }}>
+                <SceltaRegolaSconto
+                  tipo={regoleForm.tipo_regola_sconto} fasce={regoleForm.fasce_sconto}
+                  onCambiaTipo={(v) => setRegoleForm({ ...regoleForm, tipo_regola_sconto: v })}
+                  onCambiaFasce={(f) => setRegoleForm({ ...regoleForm, fasce_sconto: f })}
+                  prodottiShop={prodottiShop} isMobile={isMobile}
+                />
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 180px" }}><Field label="Percentuale sconto (%)"><input type="number" min="0" step="0.01" style={inputStyle} value={regoleForm.percentuale_sconto} onChange={(e) => setRegoleForm({ ...regoleForm, percentuale_sconto: e.target.value })} /></Field></div>
-                  <div style={{ flex: "1 1 220px" }}>
-                    <Field label="La percentuale si legge">
-                      <select style={inputStyle} value={BASE_SCONTO_VALIDA(regoleForm.base_sconto)} onChange={(e) => setRegoleForm({ ...regoleForm, base_sconto: e.target.value })}>
-                        {Object.entries(ETICHETTA_BASE_SCONTO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                      </select>
-                    </Field>
-                  </div>
+                  {regoleForm.tipo_regola_sconto !== "fasce" && (
+                    <>
+                      <div style={{ flex: "1 1 180px" }}><Field label="Percentuale sconto (%)"><input type="number" min="0" step="0.01" style={inputStyle} value={regoleForm.percentuale_sconto} onChange={(e) => setRegoleForm({ ...regoleForm, percentuale_sconto: e.target.value })} /></Field></div>
+                      <div style={{ flex: "1 1 220px" }}>
+                        <Field label="La percentuale si legge">
+                          <select style={inputStyle} value={BASE_SCONTO_VALIDA(regoleForm.base_sconto)} onChange={(e) => setRegoleForm({ ...regoleForm, base_sconto: e.target.value })}>
+                            {Object.entries(ETICHETTA_BASE_SCONTO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                          </select>
+                        </Field>
+                      </div>
+                    </>
+                  )}
                   <div style={{ flex: "1 1 220px" }}><Field label="Validità dopo la fine del corso (giorni)"><input type="number" min="0" style={inputStyle} value={regoleForm.giorni_validita_dopo_corso} onChange={(e) => setRegoleForm({ ...regoleForm, giorni_validita_dopo_corso: e.target.value })} /></Field></div>
                 </div>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
@@ -48366,15 +48519,20 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // mano resta quello che e' sempre stato — e' un importo deciso caso
   // per caso, non una regola.
   const baseCoupon = BASE_SCONTO_VALIDA(couponAttivo?.base_sconto);
-  const couponSulMargine = baseCoupon === "margine";
-  const scontoCoupon = scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
+  const couponAFasce = couponAttivo?.tipo_regola_sconto === "fasce";
+  const couponSulMargine = !couponAFasce && baseCoupon === "margine";
+  const scontoCoupon = couponAFasce
+    ? scontoAFasceCarrello(carrello, prodottiPerId, couponAttivo.fasce_sconto)
+    : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
-  const righeSenzaMargine = couponNum > 0 && couponSulMargine
-    ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
-    : [];
-  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, couponNum > 0 ? scontoCoupon : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
+  const righeSenzaMargine = couponAFasce
+    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], couponAttivo.fasce_sconto) <= 0)
+    : couponNum > 0 && couponSulMargine
+      ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
+      : [];
+  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, (couponNum > 0 || couponAFasce) ? scontoCoupon : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
   const totaleNetto = round2(subtotale - scontoApplicato);
   // L'IVA si scorpora solo se quella vendita un documento fiscale ce
   // l'ha. Una vendita in contanti senza fattura non genera IVA: non c'e'

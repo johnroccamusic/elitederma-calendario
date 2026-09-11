@@ -118,21 +118,34 @@ Deno.serve(async (req) => {
     // possibile (il margine cambia da prodotto a prodotto, una
     // percentuale sola non lo segue riga per riga — al POS invece si').
     const baseSconto = ["lordo", "netto", "margine"].includes(regole.base_sconto) ? regole.base_sconto : "lordo";
+    const aFasce = regole.tipo_regola_sconto === "fasce";
     let margineMedio = 0;
-    if (baseSconto === "margine") {
+    let percentualeMediaFasce = 0;
+    if (baseSconto === "margine" || aFasce) {
       const { data: catalogo } = await supabase
         .from("prodotti_shop")
-        .select("prezzo_vendita, costo_acquisto")
-        .gt("prezzo_vendita", 0)
-        .not("costo_acquisto", "is", null);
-      let netto = 0, margine = 0;
+        .select("prezzo_vendita, costo_acquisto, aliquota_iva_vendita")
+        .gt("prezzo_vendita", 0);
+      let netto = 0, margine = 0, lordo = 0, sconto = 0;
+      const fasce = Array.isArray(regole.fasce_sconto) ? regole.fasce_sconto : [];
+      const pctFascia = (m: number | null) => {
+        if (m == null) return 0;
+        if (m <= 25) return Number(fasce[0]?.percentuale) || 0;
+        if (m <= 50) return Number(fasce[1]?.percentuale) || 0;
+        if (m <= 75) return Number(fasce[2]?.percentuale) || 0;
+        return Number(fasce[3]?.percentuale) || 0;
+      };
       (catalogo || []).forEach((p: any) => {
-        const m = Number(p.prezzo_vendita) - Number(p.costo_acquisto);
-        if (!(m > 0)) return;
-        netto += Number(p.prezzo_vendita);
-        margine += m;
+        const nettoP = Number(p.prezzo_vendita);
+        const costo = p.costo_acquisto;
+        const m = costo == null ? null : ((nettoP - Number(costo)) / nettoP) * 100;
+        if (m != null && m > 0) { netto += nettoP; margine += nettoP - Number(costo); }
+        const lordoP = nettoP * (1 + (Number(p.aliquota_iva_vendita ?? 22) || 0) / 100);
+        lordo += lordoP;
+        sconto += (lordoP * pctFascia(m)) / 100;
       });
       margineMedio = netto > 0 ? (margine / netto) * 100 : 0;
+      percentualeMediaFasce = lordo > 0 ? Math.round((sconto / lordo) * 10000) / 100 : 0;
     }
 
     const risultati: { master: string; corsoDataId: string; codice?: string; errore?: string }[] = [];
@@ -158,12 +171,14 @@ Deno.serve(async (req) => {
         // su cosa si legge la percentuale lo decide il template: sul
         // prezzo (come WooCommerce sa fare da se') o sul margine del
         // singolo prodotto, calcolato riga per riga al POS
-        base_sconto: baseSconto,
-        valore: regole.percentuale_sconto,
+        base_sconto: aFasce ? "lordo" : baseSconto,
+        valore: aFasce ? percentualeMediaFasce : regole.percentuale_sconto,
+        tipo_regola_sconto: aFasce ? "fasce" : "semplice",
+        fasce_sconto: aFasce ? regole.fasce_sconto : null,
         // quanto scrivere su WooCommerce perche' tolga gli stessi euro
         // che toglierebbe il POS: il sito sa fare solo percentuali sul
         // prezzo al pubblico
-        valore_woo: percentualeWooEquivalente(regole.percentuale_sconto, baseSconto, margineMedio),
+        valore_woo: aFasce ? percentualeMediaFasce : percentualeWooEquivalente(regole.percentuale_sconto, baseSconto, margineMedio),
         valido_da: validoDa,
         valido_fino_a: validoFinoA,
         ambito: "tutto",
