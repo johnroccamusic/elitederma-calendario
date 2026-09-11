@@ -2293,6 +2293,62 @@ function BadgeFileCaricato({ stretto = false }) {
   );
 }
 
+// ---------- Aspetto dei tasti ----------
+// Forma, colore e ombra dei tasti quadrati della home — e di tutte le
+// pagine che riusano TileHome. Mobile e desktop si regolano separati
+// perche' sono due disegni diversi: lo squircle stile app da una parte,
+// il quadrato col filo di bordo dall'altra, e quello che sta bene a uno
+// non sta bene all'altro.
+//
+// Le misure stanno in percentuale e non in pixel: la cella della griglia
+// cambia larghezza con lo schermo e con quante colonne si sono scelte, e
+// un raggio da 18 pixel su un tasto piccolo e' un altro raggio.
+const CHIAVE_ASPETTO_TASTI = "aspetto_tasti";
+const ASPETTO_TASTI_DEFAULT = {
+  mobile: { dimensione: 82, raggio: 22, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
+  desktop: { dimensione: 90, raggio: 7, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+};
+// i 64 colori: otto file da otto. La prima e' la scala dei grigi, la
+// seconda i crema e i taupe di casa, le altre sei le famiglie che
+// ricorrono nell'app. Abbastanza da trovare il tono giusto, poche
+// abbastanza da sceglierlo a colpo d'occhio invece che con un
+// contagocce.
+const PALETTE_64_TASTI = [
+  "#FFFFFF", "#F5F5F5", "#E6E6E6", "#CCCCCC", "#999999", "#666666", "#333333", "#000000",
+  "#FDFBF6", "#F7F1E6", "#EFE4D2", "#E2D3BB", "#CDB999", "#B39B76", "#8E7A59", "#5E5039",
+  "#FDECEC", "#F9C9C9", "#F19C9C", "#E56A6A", "#D64545", "#B93232", "#8F2424", "#611717",
+  "#FFF3E0", "#FFE0B2", "#FFCC80", "#FFB74D", "#FB8C00", "#EF6C00", "#C75B00", "#8A3F00",
+  "#E9F7EC", "#C7EBD0", "#9BDBAA", "#66C680", "#34A853", "#2E7D32", "#1F5C25", "#143D18",
+  "#E0F7FA", "#B2EBF2", "#80DEEA", "#4DD0E1", "#26A69A", "#00897B", "#00695C", "#004D40",
+  "#E8EEF7", "#C5D5EC", "#94B2DC", "#5C85C6", "#3563A8", "#1F4485", "#14305F", "#0E1B33",
+  "#F3E5F5", "#E1BEE7", "#CE93D8", "#BA68C8", "#9C27B0", "#7B1FA2", "#5B1477", "#3A0D4D",
+];
+// legge le misure di "mobile" o "desktop" rimettendo al loro posto i
+// valori di prima dove non e' stato deciso niente: cosi' un salvataggio
+// parziale non svuota il resto
+function aspettoTastoDi(salvato, quale) {
+  const base = ASPETTO_TASTI_DEFAULT[quale];
+  const v = (salvato && salvato[quale]) || {};
+  const numero = (campo) => (v[campo] == null || v[campo] === "" || isNaN(Number(v[campo])) ? base[campo] : Number(v[campo]));
+  return {
+    dimensione: numero("dimensione"),
+    raggio: numero("raggio"),
+    colore: v.colore || base.colore,
+    ombra: { ...base.ombra, ...(v.ombra || {}) },
+  };
+}
+// L'ombra come la vuole il CSS. Intensita' zero vuol dire "nessuna
+// ombra": e' cosi' che si toglie, senza aggiungere un interruttore che
+// direbbe la stessa cosa una seconda volta.
+function ombraCssTasto(o) {
+  if (!o || !Number(o.intensita)) return "none";
+  return `${Number(o.x) || 0}px ${Number(o.y) || 0}px ${Number(o.sfocatura) || 0}px rgba(14,27,51,${(Number(o.intensita) / 100).toFixed(3)})`;
+}
+function useAspettoTasti() {
+  const [salvato, salva] = useImpostazioneCondivisa(CHIAVE_ASPETTO_TASTI, null);
+  return [{ mobile: aspettoTastoDi(salvato, "mobile"), desktop: aspettoTastoDi(salvato, "desktop") }, salva];
+}
+
 // card grande della home (griglia 4 colonne): icona, titolo, una riga di
 // descrizione e una freccia in basso — passando Icona/descrizione. Senza
 // (gli hub interni tipo ERP che riusano lo stesso componente) resta la
@@ -2318,6 +2374,11 @@ function TileHome({
   const isMobile = useIsMobile();
   const ricca = !!Icona;
   const coloreTesto = attivo ? NAVY : MUTED;
+  // forma, colore e ombra arrivano da Impostazioni -> Aspetto dell'app,
+  // separate per telefono e scrivania
+  const [aspettoTasti] = useAspettoTasti();
+  const aspettoMobile = aspettoTasti.mobile;
+  const aspettoDesktop = aspettoTasti.desktop;
   if (isMobile && ricca) {
     return (
       <button
@@ -2329,7 +2390,7 @@ function TileHome({
         onDragOver={onDragOverTasto}
         onDrop={onDropTasto}
         style={{
-          ...fontBody, width: "82%", minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
+          ...fontBody, width: `${aspettoMobile.dimensione}%`, minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
           display: "flex", flexDirection: "column", alignItems: "center", cursor: attivo ? "pointer" : "default",
           opacity: attenuato ? 0.5 : 1,
         }}
@@ -2337,8 +2398,8 @@ function TileHome({
         <div style={{
           width: "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: attivo ? "#FFFFFF" : "#F1EAE0", borderRadius: "22%",
-          boxShadow: "0 1px 4px rgba(14,27,51,0.16)",
+          background: attivo ? aspettoMobile.colore : "#F1EAE0", borderRadius: `${aspettoMobile.raggio}%`,
+          boxShadow: ombraCssTasto(aspettoMobile.ombra),
           outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
         }}>
           {maniglia}
@@ -2382,10 +2443,11 @@ function TileHome({
         // 90% invece di 100%: il quadrato resta più piccolo della sua
         // cella della griglia, lasciando vedere lo sfondo dell'app anche
         // fra un tasto e l'altro, non solo nel gap
-        ...fontBody, textAlign: ricca ? "center" : "left", width: "90%", margin: "0 auto", boxSizing: "border-box",
+        ...fontBody, textAlign: ricca ? "center" : "left", width: isMobile ? "90%" : `${aspettoDesktop.dimensione}%`, margin: "0 auto", boxSizing: "border-box",
         aspectRatio: "1 / 1", position: "relative",
         display: "flex", flexDirection: "column", alignItems: ricca ? "center" : "stretch", justifyContent: ricca ? "center" : "flex-end", minWidth: 0,
-        background: attivo ? "#FFFFFF" : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : 18,
+        background: attivo ? (isMobile ? "#FFFFFF" : aspettoDesktop.colore) : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : `${aspettoDesktop.raggio}%`,
+        boxShadow: isMobile ? "none" : ombraCssTasto(aspettoDesktop.ombra),
         padding: ricca ? (isMobile ? "16px 10px 12px" : "28px 22px 22px") : (isMobile ? "8px 10px" : 22),
         cursor: attivo ? "pointer" : "default", overflow: "hidden",
         opacity: attenuato ? 0.5 : 1,
@@ -13970,6 +14032,132 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
 // dentro si cambiano permessi e password di tutti. Unire le schermate non
 // vuol dire unire le chiavi: chi entrava solo nelle preferenze continua a
 // entrare solo li'.
+// ---------- Impostazioni -> Aspetto dell'app ----------
+// L'anteprima di UNO dei due tasti. Il riquadro tratteggiato e' la cella
+// della griglia: la "dimensione" e' quanto il tasto la riempie, e senza
+// vedere la cella un 82% non vuol dire niente. Si clicca per dire "sto
+// modificando questo".
+function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezionato, onClick }) {
+  const lato = 150;
+  return (
+    <button
+      onClick={onClick}
+      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}
+    >
+      <div style={{
+        width: lato, height: lato, boxSizing: "border-box",
+        border: `1px dashed ${selezionato ? NAVY : CREAM_BORDER}`, borderRadius: 10,
+        background: selezionato ? "rgba(14,27,51,0.05)" : "transparent",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <div style={{
+          width: `${aspetto.dimensione}%`, aspectRatio: "1 / 1", boxSizing: "border-box",
+          background: aspetto.colore, borderRadius: `${aspetto.raggio}%`,
+          boxShadow: ombraCssTasto(aspetto.ombra),
+          border: forma === "desktop" ? `1px solid ${CREAM_BORDER}` : "none",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <IconaTilePos size={36} color={NAVY} />
+        </div>
+      </div>
+      <span style={{ ...fontBody, fontSize: 13.5, fontWeight: selezionato ? 700 : 600, color: selezionato ? NAVY : MUTED }}>{etichetta}</span>
+      <span style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: -4 }}>{sottotitolo}</span>
+    </button>
+  );
+}
+
+// I tasti quadrati della home hanno due disegni — lo squircle del
+// telefono e il quadrato della scrivania — e finora erano scritti nel
+// codice. Qui si regolano come si regola l'ombra dei loghi: si sceglie
+// quale dei due si sta toccando, e si cambia solo quello. Le misure
+// valgono per tutti, non per chi le ha scritte: e' l'aspetto dell'app.
+function PaginaAspettoApp() {
+  const isMobile = useIsMobile();
+  const [aspetto, salvaAspetto] = useAspettoTasti();
+  const [quale, setQuale] = useState("mobile");
+  const corrente = aspetto[quale];
+  const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi } });
+
+  const piuMeno = (etichetta, campo, min, max, aiutoMeno, aiutoPiu) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
+      <button onClick={() => cambia({ [campo]: Math.max(min, corrente[campo] - 1) })} title={aiutoMeno}
+        style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
+      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 42, textAlign: "center" }}>{corrente[campo]}%</span>
+      <button onClick={() => cambia({ [campo]: Math.min(max, corrente[campo] + 1) })} title={aiutoPiu}
+        style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
+    </div>
+  );
+
+  return (
+    <div style={{ paddingBottom: 60 }}>
+      <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Aspetto dei tasti</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18, maxWidth: 620 }}>
+        I tasti quadrati della home e delle pagine a tasti. Il telefono e il computer si regolano separati:
+        clicca quello che vuoi modificare e usa i comandi qui sotto. Vale per tutti, non solo per te.
+      </div>
+
+      <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: isMobile ? 18 : 34, flexWrap: "wrap", justifyContent: isMobile ? "center" : "flex-start" }}>
+          <AnteprimaTastoAspetto
+            etichetta="Pulsante mobile" sottotitolo="come lo vedi sul telefono"
+            aspetto={aspetto.mobile} forma="mobile"
+            selezionato={quale === "mobile"} onClick={() => setQuale("mobile")}
+          />
+          <AnteprimaTastoAspetto
+            etichetta="Pulsante desktop" sottotitolo="come lo vedi sul computer"
+            aspetto={aspetto.desktop} forma="desktop"
+            selezionato={quale === "desktop"} onClick={() => setQuale("desktop")}
+          />
+        </div>
+      </div>
+
+      <div style={{ ...cardStyle, padding: isMobile ? 16 : 22 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+            Stai modificando: {quale === "mobile" ? "pulsante mobile" : "pulsante desktop"}
+          </div>
+          <Button variant="ghost" onClick={() => { if (window.confirm("Rimettere questo pulsante com'era all'inizio?")) salvaAspetto({ ...aspetto, [quale]: ASPETTO_TASTI_DEFAULT[quale] }); }}>
+            Rimetti com'era
+          </Button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+          {piuMeno("Dimensione", "dimensione", 40, 100, "Tasto più piccolo dentro la sua cella", "Tasto più grande dentro la sua cella")}
+          {piuMeno("Raggio", "raggio", 0, 50, "Angoli più squadrati", "Angoli più tondi")}
+        </div>
+
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Colore del pulsante</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 5, maxWidth: 360, marginBottom: 6 }}>
+          {PALETTE_64_TASTI.map((c) => {
+            const scelto = String(corrente.colore).toUpperCase() === c.toUpperCase();
+            return (
+              <button
+                key={c} onClick={() => cambia({ colore: c })} title={c}
+                style={{
+                  aspectRatio: "1 / 1", width: "100%", borderRadius: 6, cursor: "pointer", background: c,
+                  border: scelto ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`,
+                  outline: scelto ? `2px solid #fff` : "none", outlineOffset: -4,
+                }}
+              />
+            );
+          })}
+        </div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 18 }}>Scelto: {String(corrente.colore).toUpperCase()}</div>
+
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Ombra del pulsante</div>
+        <ControlliOmbra
+          titolo={quale === "mobile" ? "Pulsante mobile" : "Pulsante desktop"}
+          ombra={corrente.ombra}
+          onCambia={(o) => cambia({ ombra: o })}
+        />
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
+          Intensità a zero vuol dire nessuna ombra.
+        </div>
+      </div>
+    </div>
+  );
+}
 function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti, propsSetting, propsUtenti, onBack }) {
   const isMobile = useIsMobile();
   const [area, setArea] = useState(areaIniziale);
@@ -13990,7 +14178,7 @@ function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti
       </div>
 
       <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, width: "fit-content", marginBottom: 22 }}>
-        {[{ v: "setting", l: "Setting" }, { v: "utenti", l: "Utenti" }].map((a) => (
+        {[{ v: "setting", l: "Setting" }, { v: "utenti", l: "Utenti" }, { v: "aspetto", l: "Aspetto dell'app" }].map((a) => (
           <button key={a.v} onClick={() => scegliArea(a.v)}
             style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, padding: "9px 22px", borderRadius: 16, border: "none", background: area === a.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
             {a.l}
@@ -13998,7 +14186,9 @@ function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti
         ))}
       </div>
 
-      {area === "setting" ? <Impostazioni {...propsSetting} senzaIntestazione /> : <PaginaPasswordMenu {...propsUtenti} senzaIntestazione />}
+      {area === "setting" ? <Impostazioni {...propsSetting} senzaIntestazione />
+        : area === "utenti" ? <PaginaPasswordMenu {...propsUtenti} senzaIntestazione />
+        : <PaginaAspettoApp />}
     </div>
   );
 }
@@ -37180,6 +37370,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
   // Serve perche' capita di sbagliare il tasto al momento della vendita, e
   // finora l'unico rimedio era cancellare tutto e rifare.
   const [cambiandoMetodo, setCambiandoMetodo] = useState(null);
+  // Quello che il database ha CONFERMATO dopo un cambio, tenuto qui
+  // finche' la lista non si ricarica. Senza, il valore nuovo resta sullo
+  // schermo un istante e poi lo ricopre quello vecchio che arriva col
+  // prop: si vede il cambio "tornare indietro da solo" anche quando sul
+  // database e' andato a buon fine.
+  const [metodoCorretto, setMetodoCorretto] = useState({});
   async function cambiaMetodoPagamento(v, nuovo) {
     if (cambiandoMetodo || !nuovo || nuovo === v.metodo_pagamento) return;
     const daContanti = v.metodo_pagamento === "contanti";
@@ -37192,13 +37388,40 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
       : `L'IVA viene scorporata: ${fmtEuroErp2(imponibile)} di imponibile e ${fmtEuroErp2(iva)} di imposta.`;
     if (!window.confirm(`Vuoi cambiare modalità di pagamento?\n\nDa ${daContanti ? "contanti" : "POS"} a ${nuovo === "contanti" ? "contanti" : "POS"}.\n${spiegazione}\n\nIl totale incassato resta ${fmtEuroErp2(totale)}.`)) return;
     setCambiandoMetodo(v.id);
-    const { error } = await supabase.from("vendite_shop")
+    const { data: righe, error } = await supabase.from("vendite_shop")
       .update({ metodo_pagamento: nuovo, totale_imponibile: imponibile, totale_iva: iva })
-      .eq("id", v.id);
+      .eq("id", v.id)
+      .select("id, metodo_pagamento, totale_imponibile, totale_iva");
     setCambiandoMetodo(null);
     if (error) { window.alert("Non cambiato: " + testoErrore(error)); return; }
+    // Un update che non torna NESSUNA riga non e' un errore per il
+    // database: e' il modo in cui le regole di accesso dicono di no, e lo
+    // dicono in silenzio. Finora quel silenzio si vedeva come "l'ho
+    // cambiato e si e' rimesso da solo": ora lo dice.
+    if (!righe || righe.length === 0) {
+      window.alert(`Il database non ha aggiornato nessuna riga: la modifica NON è passata.\n\nÈ il caso dei permessi di scrittura, o della riga non più esistente. L'incasso resta ${daContanti ? "contanti" : "POS"}.`);
+      ricarica(["vendite_shop"]);
+      return;
+    }
+    const confermata = righe[0];
+    setMetodoCorretto((prev) => ({ ...prev, [v.id]: { metodo_pagamento: confermata.metodo_pagamento, totale_imponibile: confermata.totale_imponibile, totale_iva: confermata.totale_iva } }));
     ricarica(["vendite_shop"]);
   }
+  // appena la lista ricaricata porta lo stesso valore, la correzione
+  // locale non serve piu' e si toglie: se qualcun altro cambia quella
+  // vendita da un altro dispositivo, non deve restare coperta dalla nostra
+  useEffect(() => {
+    setMetodoCorretto((prev) => {
+      const restano = {};
+      let ripulito = false;
+      for (const [id, patch] of Object.entries(prev)) {
+        const riga = (venditeShop || []).find((x) => x.id === id);
+        if (riga && riga.metodo_pagamento === patch.metodo_pagamento) { ripulito = true; continue; }
+        restano[id] = patch;
+      }
+      return ripulito ? restano : prev;
+    });
+  }, [venditeShop]);
 
   const { ordine: ordineOrdini, cambiaOrdine: cambiaOrdineOrdini, ordina: ordinaOrdini } = useOrdinamentoTabella();
   const { ordine: ordineProdotti, cambiaOrdine: cambiaOrdineProdotti, ordina: ordinaProdotti } = useOrdinamentoTabella();
@@ -37232,7 +37455,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
     ricarica(["vendite_shop"]);
   }
 
-  const venditeOrigine = (venditeShop || []).filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio");
+  const venditeOrigine = (venditeShop || [])
+    .filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio")
+    .map((v) => (metodoCorretto[v.id] ? { ...v, ...metodoCorretto[v.id] } : v));
 
   // "tutto" non esiste in rangePeriodoErp (pensato per l'ERP, senza
   // storico pluriennale): qui serve perché l'import storico può
@@ -56844,7 +57069,7 @@ export default function App() {
     // le vendite di prova (modalità simulazione, solo programmatore) non
     // entrano qui: escludendole alla fonte non c'è nessun totale, nessuna
     // statistica e nessun target che debba ricordarsi di saltarle
-    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, note, operatore_tipo, operatore_id, operatore_nome, tipo_movimento, vendita_collegata_id, corso_data_id, prelevato_dai_kit, consegnato_in_aula").eq("simulazione", false).order("data_ordine", { ascending: false })).data || []),
+    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, tipo_movimento, vendita_collegata_id, corso_data_id, prelevato_dai_kit, consegnato_in_aula").eq("simulazione", false).order("data_ordine", { ascending: false })).data || []),
     // le prove, a parte: servono solo a Logistica, per mostrarle e per
     // poterle buttare
     vendite_simulate: async () => setVenditeSimulate((await supabase.from("vendite_shop").select("*").eq("simulazione", true).order("data_ordine", { ascending: false })).data || []),
