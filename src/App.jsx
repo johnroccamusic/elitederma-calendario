@@ -36866,7 +36866,15 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
   const { ordine: ordineProdotti, cambiaOrdine: cambiaOrdineProdotti, ordina: ordinaProdotti } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("tutto");
+  // Un giorno preciso o un intervallo. Le quattro finestre fisse
+  // rispondono a "come va ultimamente"; queste due caselle rispondono a
+  // "cos'e' successo quel giorno" — che davanti a una busta di contanti o
+  // a un estratto conto e' la domanda vera. Scritta la sola data di
+  // inizio si guarda quel giorno solo; con tutte e due, l'intervallo.
+  const [dataDa, setDataDa] = useState("");
+  const [dataA, setDataA] = useState("");
   const [statoSel, setStatoSel] = useState("");
+  const [metodoSel, setMetodoSel] = useState("");
   const [recuperando, setRecuperando] = useState(false);
   const [msgRecupero, setMsgRecupero] = useState("");
 
@@ -36891,13 +36899,18 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
   // "tutto" non esiste in rangePeriodoErp (pensato per l'ERP, senza
   // storico pluriennale): qui serve perché l'import storico può
   // risalire ad anni fa, e di default si vuole vedere l'intera storia
-  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
+  // le date scritte a mano hanno la precedenza sulle pillole: se qualcuno
+  // si prende la briga di scrivere un giorno, e' quello che vuole vedere
+  const range = dataDa
+    ? { inizio: dataDa, fine: dataA || dataDa }
+    : periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
   const statiPresenti = [...new Set(venditeOrigine.map((v) => v.stato).filter(Boolean))].sort();
 
   const venditeFiltrate = venditeOrigine.filter((v) => {
     const data = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     if (data && (data < range.inizio || data > range.fine)) return false;
     if (statoSel && v.stato !== statoSel) return false;
+    if (metodoSel && (v.metodo_pagamento || "") !== metodoSel) return false;
     return true;
   });
 
@@ -36961,6 +36974,27 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
             <option value="">Tutti gli stati</option>
             {statiPresenti.map((s) => <option key={s} value={s}>{etichettaStatoVenditaShop(s)}</option>)}
           </select>
+          {origine === "pos" && (
+            <select style={{ ...inputStyle, width: "auto", minWidth: 150 }} value={metodoSel} onChange={(e) => setMetodoSel(e.target.value)}>
+              <option value="">POS e contanti</option>
+              <option value="pos">Solo POS</option>
+              <option value="contanti">Solo contanti</option>
+            </select>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "4px 8px" }}>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Dal</span>
+            <input type="date" value={dataDa} onChange={(e) => setDataDa(e.target.value)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, border: "none", background: "transparent", outline: "none", padding: "4px 0" }} />
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>al</span>
+            <input type="date" value={dataA} min={dataDa || undefined} onChange={(e) => setDataA(e.target.value)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, border: "none", background: "transparent", outline: "none", padding: "4px 0" }} />
+            {(dataDa || dataA) && (
+              <button type="button" onClick={() => { setDataDa(""); setDataA(""); }} title="Togli il filtro sulle date" style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>×</button>
+            )}
+          </div>
+          {dataDa && (
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+              {dataA && dataA !== dataDa ? `Dal ${fmtData(dataDa)} al ${fmtData(dataA)}` : `Solo il ${fmtData(dataDa)}`}
+            </span>
+          )}
         </div>
 
         {/* i quattro numeri: da telefono stavano uno sotto l'altro e
@@ -36993,7 +37027,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {[{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, { c: "cliente", l: "Cliente" }, { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "totale", l: "Totale" }].map((th) => (
+                  {[{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, { c: "cliente", l: "Cliente" }, ...(origine === "pos" ? [{ c: "metodo", l: "Incasso" }] : []), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "totale", l: "Totale" }].map((th) => (
                     <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
@@ -37006,6 +37040,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
                     tipo: (v) => v.tipo_movimento || "vendita",
                     data: (v) => v.data_ordine || "",
                     cliente: (v) => v.cliente_nome || v.cliente_email || "",
+                    metodo: (v) => v.metodo_pagamento || "",
                     stato: (v) => v.stato || "",
                     imponibile: (v) => (v.totale != null && v.totale_iva != null ? v.totale - v.totale_iva : null),
                     iva: (v) => v.totale_iva ?? null,
@@ -37032,6 +37067,20 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || (origine === "pos" ? "Vendita al banco" : "—")}</td>
+                        {/* POS o contanti: due incassi che finiscono in due
+                            posti diversi — uno sul conto, l'altro in cassa —
+                            e finora l'elenco non lo diceva */}
+                        {origine === "pos" && (
+                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                            {v.metodo_pagamento ? (
+                              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "3px 9px",
+                                color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
+                                background: v.metodo_pagamento === "contanti" ? "#F7EEDE" : "#ECEDFA" }}>
+                                {v.metodo_pagamento === "contanti" ? "Contanti" : "POS"}
+                              </span>
+                            ) : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
+                          </td>
+                        )}
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, position: "relative" }}>
                           {/* solo gli ordini del sito hanno uno stato da
                               cambiare: una vendita al banco non ha nulla da
