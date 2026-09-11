@@ -47411,6 +47411,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // e lo consegna come codice. Scrivere "20" in una casella non e' uno
   // sconto concesso, e' uno sconto deciso da chi vende.
   const [couponCodiceTesto, setCouponCodiceTesto] = useState("");
+  // "Applica sconto del corso": acceso quando si vende stando a un corso
+  // che ha un suo codice. Finche' e' acceso il campo del codice a mano
+  // resta chiuso — sono due sconti alternativi, non due sconti che si
+  // sommano — e per usarne uno diverso bisogna spegnerlo apposta, che e'
+  // un gesto consapevole invece di una casella riempita per sbaglio.
+  const [scontoCorsoAttivo, setScontoCorsoAttivo] = useState(true);
   // il coupon (riga intera, non solo la percentuale) collegato al corso
   // selezionato — serve per attribuire la vendita alla master su
   // vendite_shop.coupon_id/codice_coupon (raccolta punti master): resta
@@ -47524,6 +47530,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const c = trovaCouponPerCodice(testo);
     setCouponAttivo(c || null);
     setCouponValore(c ? String(c.valore) : "");
+  }
+  function commutaScontoCorso(acceso) {
+    setScontoCorsoAttivo(acceso);
+    if (acceso) {
+      applicaCouponDelCorso(corsoPosId);
+    } else {
+      // spegnendolo non resta lo sconto del corso applicato di nascosto:
+      // si riparte da zero e si scrive il codice che si ha
+      setCouponAttivo(null); setCouponValore(""); setCouponCodiceTesto("");
+    }
   }
   function couponDellEdizione(corsoDataId) {
     if (!corsoDataId) return null;
@@ -47853,6 +47869,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <select style={inputStyle} value={corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
               setCorsoPosId(nuovoId); setSpedIscrittoId("");
+              setScontoCorsoAttivo(true);
               applicaCouponDelCorso(nuovoId);
             }}>
               <option value="">— vendita non legata a un corso —</option>
@@ -47951,18 +47968,27 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <input style={{ ...inputStyle, opacity: scontoNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0} onChange={(e) => { setCouponValore(e.target.value); setCouponAttivo(null); }} placeholder="0" />
           </div>
         ) : (
-          // Qui non si scrive una percentuale, si scrive un codice. Se
-          // esiste ed e' valido lo sconto si applica da solo; se non
-          // esiste, non si applica niente — e si vede perche'.
-          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-            <div style={etichettaPos}>Codice sconto</div>
+          // Due sole strade, e si escludono: o lo sconto della classe —
+          // gia' acceso quando si vende stando a quel corso — oppure un
+          // codice dato dall'amministrazione, scritto a mano dopo aver
+          // spento il primo. Una percentuale da inventare non c'e' piu'.
+          <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+            {couponDellEdizione(corsoPosId) && (
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY, marginBottom: 8 }}>
+                <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                Applica sconto del corso
+                {scontoCorsoAttivo && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 8px" }}>−{couponDellEdizione(corsoPosId).valore}%</span>}
+              </label>
+            )}
+            <div style={etichettaPos}>Codice sconto extra</div>
             <input
-              style={{ ...inputStyle, textTransform: "uppercase" }}
+              style={{ ...inputStyle, textTransform: "uppercase", opacity: scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? 0.5 : 1 }}
               value={couponCodiceTesto}
+              disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId))}
               onChange={(e) => applicaCodiceCoupon(e.target.value)}
-              placeholder="Codice dell'amministrazione"
+              placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso per usarne un altro" : "Codice dato dall'amministrazione"}
             />
-            {couponCodiceTesto.trim() !== "" && (
+            {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
               couponAttivo ? (
                 <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 4 }}>Codice valido: −{couponAttivo.valore}%</div>
               ) : (
