@@ -37054,7 +37054,17 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
   );
 }
 
-function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+  // "Frangente": in quale occasione e' stata fatta la vendita. Il POS
+  // registra la classe quando chi vende ne sceglie una — e' il caso della
+  // master che vende in aula — e da li' si risale al nome del corso.
+  // Senza classe la vendita e' avvenuta al banco e basta.
+  const nomeCorsoDiEdizione = (corsoDataId) => {
+    if (!corsoDataId) return null;
+    const cd = (corsiDate || []).find((x) => x.id === corsoDataId);
+    if (!cd) return null;
+    return (corsi || []).find((c) => c.id === cd.corso_id)?.nome || null;
+  };
   const [ordineAperto, setOrdineAperto] = useState(null);
   const [statoInModifica, setStatoInModifica] = useState(null); // id della vendita con la tendina aperta
   const [cambiandoStato, setCambiandoStato] = useState(null);
@@ -37271,7 +37281,9 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {[{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, { c: "cliente", l: "Cliente" }, ...(origine === "pos" ? [{ c: "metodo", l: "Incasso" }] : []), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "totale", l: "Totale" }].map((th) => (
+                  {[{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, ...(origine === "pos"
+                    ? [{ c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }]
+                    : [{ c: "cliente", l: "Cliente" }]), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "totale", l: "Totale" }].map((th) => (
                     <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
@@ -37284,6 +37296,8 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
                     tipo: (v) => v.tipo_movimento || "vendita",
                     data: (v) => v.data_ordine || "",
                     cliente: (v) => v.cliente_nome || v.cliente_email || "",
+                    venditore: (v) => v.operatore_nome || "",
+                    frangente: (v) => nomeCorsoDiEdizione(v.corso_data_id) || "",
                     metodo: (v) => v.metodo_pagamento || "",
                     stato: (v) => v.stato || "",
                     imponibile: (v) => (v.totale != null && v.totale_iva != null ? v.totale - v.totale_iva : null),
@@ -37310,7 +37324,25 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
                           </span>
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || (origine === "pos" ? "Vendita al banco" : "—")}</td>
+                        {origine === "pos" ? (
+                          <>
+                            {/* Chi ha venduto. "Vendita al banco" ripetuto su
+                                ogni riga non diceva niente: era il nome della
+                                pagina scritto sedici volte. */}
+                            <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
+                              {v.operatore_nome ? toTitleCase(v.operatore_nome) : <span style={{ color: MUTED, fontWeight: 400 }}>—</span>}
+                            </td>
+                            <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                              {(() => {
+                                const corso = nomeCorsoDiEdizione(v.corso_data_id);
+                                if (corso) return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 8, padding: "3px 9px" }}>{corso.toUpperCase()}</span>;
+                                return <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Al banco</span>;
+                              })()}
+                            </td>
+                          </>
+                        ) : (
+                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || "—"}</td>
+                        )}
                         {/* POS o contanti: due incassi che finiscono in due
                             posti diversi — uno sul conto, l'altro in cassa —
                             e finora l'elenco non lo diceva */}
@@ -56766,7 +56798,9 @@ export default function App() {
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta"],
     venditeshop: ["vendite_shop"],
-    venditealbanco: ["vendite_shop"],
+    // "corsi" e "corsi_date" servono alla colonna "Frangente": la vendita
+    // registra l'edizione, il nome del corso sta altrove
+    venditealbanco: ["vendite_shop", "corsi", "corsi_date"],
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
@@ -58157,7 +58191,7 @@ export default function App() {
       )}
 
       {view === "venditealbanco" && (
-        <PaginaVenditeShop venditeShop={venditeShop} origine="pos" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
+        <PaginaVenditeShop venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} origine="pos" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
       )}
 
       {view === "omaggi" && (
