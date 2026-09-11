@@ -118,6 +118,10 @@ Deno.serve(async (req) => {
         codice,
         descrizione: `Referral automatico — ${m.nome}`,
         tipo_sconto: "percent",
+        // su cosa si legge la percentuale lo decide il template: sul
+        // prezzo (come WooCommerce sa fare da se') o sul margine del
+        // singolo prodotto, calcolato riga per riga al POS
+        base_sconto: regole.base_sconto === "margine" ? "margine" : "prezzo",
         valore: regole.percentuale_sconto,
         valido_da: validoDa,
         valido_fino_a: validoFinoA,

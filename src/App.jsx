@@ -2380,28 +2380,35 @@ function useAspettoTasti() {
 // quella variabile, e cambiano tutti all'istante senza che un solo
 // componente debba ridisegnarsi.
 //
-// PULSANTI — tutti quelli dell'app, con due esclusioni.
+// PULSANTI — non tutti: solo quelli che hanno DAVVERO UNA SUPERFICIE.
 //
-// La prima sono i quadrati della home, che hanno gia' la loro ombra e si
-// tolgono di mezzo da soli con `data-niente-ombra`.
+// Un'ombra e' il distacco di una superficie dal foglio. Dove la
+// superficie non c'e' resta una sbavatura grigia appoggiata al testo, e
+// nell'app i pulsanti senza sfondo sono la maggioranza: le righe del
+// menu Impostazioni, i cestini, le matite, le frecce, tutte le icone che
+// stanno appoggiate su una scheda. Sono quasi trecento.
 //
-// La seconda sono i pulsanti SENZA SFONDO. Un'ombra e' il distacco di
-// una superficie dal foglio, e se la superficie non c'e' resta solo una
-// sbavatura grigia appoggiata al testo — succedeva alle righe del menu
-// Impostazioni, che sono pulsanti larghi quanto la pagina e trasparenti:
-// l'ombra si vedeva come una fascia sotto ogni riga. Non e' un caso da
-// togliere a mano, e' una regola: niente sfondo, niente ombra.
+// La prima versione toglieva l'ombra a quelli trasparenti, elencando le
+// forme in cui "niente sfondo" si puo' scrivere. Era un elenco
+// destinato a restare indietro — e infatti i cestini l'hanno scavalcato,
+// perche' il browser riscrive `background: none` in modi che cambiano da
+// caso a caso. Il verso giusto e' l'altro: l'ombra la prende chi dichiara
+// un colore di fondo, e basta. Chi non lo dichiara non e' una superficie
+// e non proietta niente.
 //
-// Qui serve una regola vera e non una variabile, perche' i pulsanti non
-// passano da uno stile comune: sono scritti uno per uno. E siccome uno
-// stile scritto sull'elemento vince sempre su una regola come questa,
-// ogni pulsante che si e' scelto la sua ombra a mano se la tiene.
+// Restano fuori a mano solo i quadrati della home, che hanno gia' la
+// loro ombra (`data-niente-ombra`). E siccome uno stile scritto
+// sull'elemento vince sempre su una regola come questa, ogni pulsante
+// che si e' scelto la sua ombra se la tiene.
 function StiliGlobaliAspetto() {
   const [aspetto] = useAspettoTasti();
+  const ombra = ombraCssTasto(aspetto.pulsanti.ombra);
   return (
     <style>{`
 :root { --ombra-aree: ${ombraCssTasto(aspetto.aree.ombra)}; }
-button:not([data-niente-ombra]):not([style*="background: transparent"]):not([style*="background: none"]):not([style*="rgba(0, 0, 0, 0)"]) { box-shadow: ${ombraCssTasto(aspetto.pulsanti.ombra)}; }
+button[style*="background: rgb"]:not([data-niente-ombra]),
+button[style*="background-color: rgb"]:not([data-niente-ombra]),
+button[style*="background: #"]:not([data-niente-ombra]) { box-shadow: ${ombra}; }
 `}</style>
   );
 }
@@ -3075,6 +3082,67 @@ const ALIQUOTE_IVA_STANDARD = [0, 4, 5, 10, 22];
 // Sta qui, in una funzione sola, perche' il prezzo al pubblico si calcola
 // in piu' punti (elenchi, POS, scheda prodotto, sito) e devono dire tutti
 // lo stesso numero.
+// ---------- Sconto sul margine ----------
+// La percentuale del coupon non si legge sul prezzo ma sul MARGINE.
+// "15%" vuol dire quindici euro ogni cento di margine, non quindici ogni
+// cento di prezzo: su un articolo che rende 22,70 sono 3,41, su uno che
+// rende 1,20 sono diciotto centesimi. Sconta quello che si guadagna, non
+// quello che si incassa — cosi' un codice generoso non puo' mai mangiare
+// piu' di una fetta decisa del guadagno, qualunque cosa ci sia nel
+// carrello.
+//
+// Senza costo di acquisto il margine non esiste, e quella riga non si
+// sconta: meglio non scontare che regalare qualcosa di cui non si sa
+// quanto vale. Nel catalogo oggi sono venti prodotti su centosettantasei.
+//
+// Il margine e' un valore netto, mentre il prezzo che si sconta e'
+// quello al pubblico: lo sconto porta con se' la sua IVA, altrimenti
+// togliendo un importo netto da un prezzo lordo il margine cederebbe
+// meno del dovuto — su un'aliquota al 22 cederebbe il 12,3% invece del
+// 15%.
+function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
+  if (!prodotto || !(percentuale > 0) || !(quantita > 0)) return 0;
+  const costo = prodotto.costo_acquisto;
+  const netto = prodotto.prezzo_vendita;
+  if (costo == null || costo === "" || netto == null || !(Number(netto) > 0)) return 0;
+  const margineNetto = Number(netto) - Number(costo);
+  if (!(margineNetto > 0)) return 0;
+  const aliquota = prodotto.aliquota_iva_vendita ?? 22;
+  return round2(margineNetto * (percentuale / 100) * (1 + aliquota / 100) * quantita);
+}
+// lo sconto dell'intero carrello, riga per riga. Non si puo' scorciare
+// con una percentuale sul totale: due carrelli con lo stesso totale e
+// prodotti diversi valgono sconti diversi, ed e' esattamente il punto
+function scontoSulMargineCarrello(righe, prodottoPerId, percentuale) {
+  return round2((righe || []).reduce(
+    (s, r) => s + scontoSulMargineDiRiga(prodottoPerId[r.prodottoId], r.quantita, percentuale), 0
+  ));
+}
+// Lo sconto di un carrello, qualunque sia la base scelta sul coupon.
+//
+// "lordo" e "netto" restano percentuali sul prezzo e potrebbero
+// calcolarsi sul totale; passano di qui lo stesso perche' la base la
+// deve leggere un punto solo, o fra sei mesi saranno tre conti sparsi
+// che rispondono in modo diverso.
+//
+// Il prezzo del carrello e' sempre quello al pubblico: sul netto la
+// stessa percentuale vale circa un quinto in meno, ed e' esattamente
+// cio' che si e' scelto chiedendo "sul netto".
+function scontoCouponCarrello(righe, prodottoPerId, percentuale, base) {
+  if (!(percentuale > 0)) return 0;
+  const lordo = round2((righe || []).reduce((s, r) => s + r.prezzo * r.quantita, 0));
+  if (lordo <= 0) return 0;
+  if (base === "margine") return scontoSulMargineCarrello(righe, prodottoPerId, percentuale);
+  if (base === "netto") {
+    const netto = (righe || []).reduce((s, r) => {
+      const prodotto = prodottoPerId[r.prodottoId];
+      const aliquota = prodotto?.aliquota_iva_vendita ?? 22;
+      return s + (r.prezzo * r.quantita) / (1 + aliquota / 100);
+    }, 0);
+    return round2(netto * (percentuale / 100));
+  }
+  return round2(lordo * (percentuale / 100));
+}
 function prezzoAlPubblico(p) {
   if (p?.prezzo_lordo_forzato != null && p.prezzo_lordo_forzato !== "") return round2(Number(p.prezzo_lordo_forzato));
   if (p?.prezzo_vendita == null) return null;
@@ -31119,6 +31187,20 @@ function SezioneClassificaProdottiShop({ classifica, onApriClassificazioneVoci }
 
 // ---------- Genera Coupon ----------
 const ETICHETTA_TIPO_SCONTO = { percent: "Percentuale", fixed_cart: "Importo fisso sul carrello", fixed_product: "Importo fisso per prodotto" };
+// Su cosa si legge la percentuale. Vale solo per i coupon in
+// percentuale: un importo fisso e' gia' un numero di euro e non ha una
+// base da scegliere.
+const ETICHETTA_BASE_SCONTO = {
+  lordo: "Sul lordo (IVA inclusa)",
+  netto: "Sul netto (IVA esclusa)",
+  margine: "Sul margine",
+};
+const AIUTO_BASE_SCONTO = {
+  lordo: "Sul prezzo al pubblico, IVA inclusa. È come ha sempre funzionato ed è l'unica delle tre che WooCommerce sa fare da sé.",
+  netto: "Sul prezzo senza IVA: a parità di percentuale sconta circa un quinto in meno del lordo.",
+  margine: "Sul guadagno, prodotto per prodotto: il 15% su un articolo che rende 22,70 € è 3,41 €, su uno che rende 1,20 € diciotto centesimi. Un prodotto senza costo di acquisto non ha margine noto e non si sconta.",
+};
+const BASE_SCONTO_VALIDA = (v) => (ETICHETTA_BASE_SCONTO[v] ? v : "lordo");
 const ETICHETTA_STATO_COUPON = {
   bozza: { testo: "Bozza", colore: MUTED },
   programmato: { testo: "Programmato", colore: "#B8860B" },
@@ -31194,6 +31276,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   const [codice, setCodice] = useState("");
   const [descrizione, setDescrizione] = useState("");
   const [tipoSconto, setTipoSconto] = useState("percent");
+  const [baseSconto, setBaseSconto] = useState("lordo");
   const [valore, setValore] = useState("");
   const [validoDa, setValidoDa] = useState("");
   const [validoFinoA, setValidoFinoA] = useState("");
@@ -31224,7 +31307,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
 
   function svuotaForm() {
     setCouponInModifica(null);
-    setCodice(""); setDescrizione(""); setTipoSconto("percent"); setValore("");
+    setCodice(""); setDescrizione(""); setTipoSconto("percent"); setBaseSconto("lordo"); setValore("");
     setValidoDa(""); setValidoFinoA(""); setAmbito("tutto");
     setCategorieSelId(new Set()); setProdottiSelId(new Set());
     setEscludiCategorieSelId(new Set()); setEscludiProdottiSelId(new Set());
@@ -31241,6 +31324,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setCodice(c.codice.toUpperCase());
     setDescrizione(c.descrizione || "");
     setTipoSconto(c.tipo_sconto);
+    setBaseSconto(BASE_SCONTO_VALIDA(c.base_sconto));
     setValore(String(c.valore));
     setValidoDa(c.valido_da || "");
     setValidoFinoA(c.valido_fino_a || "");
@@ -31277,6 +31361,9 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       codice: codiceLower,
       descrizione: descrizione.trim() || null,
       tipo_sconto: tipoSconto,
+      // un importo fisso e' gia' un numero di euro: la base si sceglie
+      // solo dove c'e' una percentuale da leggere
+      base_sconto: tipoSconto === "percent" ? BASE_SCONTO_VALIDA(baseSconto) : "lordo",
       valore: valoreNum,
       valido_da: validoDa || null,
       valido_fino_a: validoFinoA || null,
@@ -31341,12 +31428,35 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   }, [coupon]);
   const [codiceProposto, setCodiceProposto] = useState({});
   const [masterCreandoId, setMasterCreandoId] = useState(null);
+  // Sconto per master: quanto e su cosa. Prima lo decideva per tutte il
+  // template automatico, e non c'era modo di dare a una master un
+  // accordo diverso — che e' invece la ragione per cui un referral code
+  // esiste. Chi non lo tocca continua a prendere quello del template.
+  const [scontoPerMaster, setScontoPerMaster] = useState({});
+  function scontoDiMaster(m) {
+    const scelto = scontoPerMaster[m.id];
+    const esistente = couponPerMasterId[m.id];
+    return {
+      percentuale: scelto?.percentuale ?? (esistente ? String(esistente.valore) : String(regoleReferralAutomatico?.percentuale_sconto ?? "")),
+      base: scelto?.base ?? BASE_SCONTO_VALIDA(esistente?.base_sconto || regoleReferralAutomatico?.base_sconto),
+    };
+  }
+  function cambiaScontoMaster(m, campi) {
+    const attuale = scontoDiMaster(m);
+    setScontoPerMaster((prev) => ({ ...prev, [m.id]: { ...attuale, ...campi } }));
+  }
   async function proponiCodiceReferral(m) {
     const codice = await generaCodiceReferralUnivoco(m.nome);
     setCodiceProposto((prev) => ({ ...prev, [m.id]: codice }));
   }
   async function confermaReferral(m) {
     if (!regoleReferralAutomatico) { setMsgTipo("errore"); setMsg('Configura prima le regole nella tab "Generazione automatica".'); return; }
+    // quanto e su cosa: quello scritto sulla riga di questa master,
+    // altrimenti quello del template automatico
+    const scelta = scontoDiMaster(m);
+    const percentualeScelta = parseNum(scelta.percentuale);
+    if (!(percentualeScelta > 0)) { setMsgTipo("errore"); setMsg("Scrivi una percentuale di sconto maggiore di zero per questa master."); return; }
+    const sceltaSconto = { percentuale: percentualeScelta, base: BASE_SCONTO_VALIDA(scelta.base) };
     setMasterCreandoId(m.id); setMsg("");
     const codiceScelto = (codiceProposto[m.id] || (await generaCodiceReferralUnivoco(m.nome))).toLowerCase();
     // nel registro PRIMA di creare il coupon vero: se qualcosa fallisce dopo,
@@ -31358,7 +31468,8 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       codice: codiceScelto,
       descrizione: `Referral — ${m.nome}`,
       tipo_sconto: "percent",
-      valore: r.percentuale_sconto,
+      base_sconto: sceltaSconto.base,
+      valore: sceltaSconto.percentuale,
       valido_da: null,
       valido_fino_a: null,
       ambito: "tutto",
@@ -31430,6 +31541,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setSalvandoRegole(true); setMsg("");
     const { error } = await supabase.from("regole_referral_automatico").update({
       percentuale_sconto: parseNum(regoleForm.percentuale_sconto) || 0,
+      base_sconto: BASE_SCONTO_VALIDA(regoleForm.base_sconto),
       giorni_validita_dopo_corso: Number(regoleForm.giorni_validita_dopo_corso) || 0,
       valido_durante_corso: !!regoleForm.valido_durante_corso,
       non_cumulabile: !!regoleForm.non_cumulabile,
@@ -31517,7 +31629,24 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               </Field>
             </div>
             <div style={{ flex: "1 1 150px" }}><Field label={tipoSconto === "percent" ? "Valore (%)" : "Valore (€)"}><input type="number" min="0" step="0.01" style={inputStyle} value={valore} onChange={(e) => setValore(e.target.value)} /></Field></div>
+            {tipoSconto === "percent" && (
+              <div style={{ flex: "1 1 220px" }}>
+                <Field label="La percentuale si legge">
+                  <select style={inputStyle} value={baseSconto} onChange={(e) => setBaseSconto(e.target.value)}>
+                    {Object.entries(ETICHETTA_BASE_SCONTO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                </Field>
+              </div>
+            )}
           </div>
+          {tipoSconto === "percent" && (
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: -6, marginBottom: 10, lineHeight: 1.4 }}>
+              {AIUTO_BASE_SCONTO[baseSconto]}
+              {baseSconto !== "lordo" && (
+                <> <b style={{ color: "#B7791F" }}>Sul sito WooCommerce applica comunque la percentuale sul lordo: questa base vale al POS.</b></>
+              )}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 180px" }}><Field label="Valido da"><input type="date" style={inputStyle} value={validoDa} onChange={(e) => setValidoDa(e.target.value)} /></Field></div>
             <div style={{ flex: "1 1 180px" }}><Field label="Valido fino a"><input type="date" style={inputStyle} value={validoFinoA} onChange={(e) => setValidoFinoA(e.target.value)} /></Field></div>
@@ -31605,7 +31734,33 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               const esistente = couponPerMasterId[m.id];
               return (
                 <div key={m.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{toTitleCase(m.nome)}</div>
+                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, minWidth: 150 }}>{toTitleCase(m.nome)}</div>
+                  {/* Lo sconto di QUESTA master: quanto e su cosa. Un
+                      referral code esiste per dare a una persona un
+                      accordo suo, e finora prendevano tutte quello del
+                      template. Su un coupon gia' creato i due campi
+                      dicono com'e' fatto e non si toccano: la percentuale
+                      e' gia' su WooCommerce, e cambiarla qui lo
+                      disallineerebbe in silenzio. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <input
+                      type="number" min="0" step="0.01" disabled={!!esistente}
+                      value={scontoDiMaster(m).percentuale}
+                      onChange={(e) => cambiaScontoMaster(m, { percentuale: e.target.value })}
+                      title={esistente ? "Sconto del codice già creato" : "Percentuale di sconto per questa master"}
+                      style={{ ...inputStyle, width: 78, padding: "7px 9px", textAlign: "right", background: esistente ? BG : "#fff", color: esistente ? MUTED : NAVY }}
+                    />
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED }}>%</span>
+                    <select
+                      disabled={!!esistente}
+                      value={scontoDiMaster(m).base}
+                      onChange={(e) => cambiaScontoMaster(m, { base: e.target.value })}
+                      title={esistente ? "Base del codice già creato" : "Su cosa si legge la percentuale"}
+                      style={{ ...inputStyle, width: 200, padding: "7px 9px", background: esistente ? BG : "#fff", color: esistente ? MUTED : NAVY }}
+                    >
+                      {Object.entries(ETICHETTA_BASE_SCONTO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                    </select>
+                  </div>
                   {esistente ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{esistente.codice}</span>
@@ -31637,6 +31792,13 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               <div style={{ ...cardStyle }}>
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ flex: "1 1 180px" }}><Field label="Percentuale sconto (%)"><input type="number" min="0" step="0.01" style={inputStyle} value={regoleForm.percentuale_sconto} onChange={(e) => setRegoleForm({ ...regoleForm, percentuale_sconto: e.target.value })} /></Field></div>
+                  <div style={{ flex: "1 1 220px" }}>
+                    <Field label="La percentuale si legge">
+                      <select style={inputStyle} value={BASE_SCONTO_VALIDA(regoleForm.base_sconto)} onChange={(e) => setRegoleForm({ ...regoleForm, base_sconto: e.target.value })}>
+                        {Object.entries(ETICHETTA_BASE_SCONTO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                    </Field>
+                  </div>
                   <div style={{ flex: "1 1 220px" }}><Field label="Validità dopo la fine del corso (giorni)"><input type="number" min="0" style={inputStyle} value={regoleForm.giorni_validita_dopo_corso} onChange={(e) => setRegoleForm({ ...regoleForm, giorni_validita_dopo_corso: e.target.value })} /></Field></div>
                 </div>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
@@ -48108,7 +48270,20 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
   const scontoNum = scontoValore === "" ? 0 : parseNum(scontoValore);
   const couponNum = couponValore === "" ? 0 : parseNum(couponValore);
-  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, couponNum > 0 ? subtotale * (couponNum / 100) : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
+  // Su cosa si legge la percentuale del coupon lo dice il coupon stesso:
+  // sul prezzo (come e' sempre stato) o sul margine. Lo sconto scritto a
+  // mano resta quello che e' sempre stato — e' un importo deciso caso
+  // per caso, non una regola.
+  const baseCoupon = BASE_SCONTO_VALIDA(couponAttivo?.base_sconto);
+  const couponSulMargine = baseCoupon === "margine";
+  const scontoCoupon = scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
+  // le righe che non hanno potuto contribuire: senza costo di acquisto
+  // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
+  // che il codice non abbia funzionato
+  const righeSenzaMargine = couponNum > 0 && couponSulMargine
+    ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
+    : [];
+  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, couponNum > 0 ? scontoCoupon : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
   const totaleNetto = round2(subtotale - scontoApplicato);
   // L'IVA si scorpora solo se quella vendita un documento fiscale ce
   // l'ha. Una vendita in contanti senza fattura non genera IVA: non c'e'
