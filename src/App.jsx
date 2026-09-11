@@ -26654,7 +26654,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                               guardare se e' stato chiamato e chiamarlo — e
                               stavano su due righe separate da un nome che
                               nel frattempo aveva gia' preso tutto lo spazio */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap", rowGap: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 8, marginTop: 8, flexWrap: "nowrap" }}>
                             <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, flexShrink: 0 }}>Ricontattato</span>
                             <InterruttoreSiNo acceso={!!i.ricontattato} onClick={() => toggleRicontattato(i)} titolo={i.ricontattato ? "Ricontattato — premi per togliere" : "Non ricontattato — premi per segnare"} />
                             {/* Sul telefono la casella e' quattro volte
@@ -26664,16 +26664,16 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                                 Su schermo grande resta stretta — li' la
                                 riga ha altre cose da tenere. */}
                             <input
-                              maxLength={isMobile ? 20 : 5}
+                              maxLength={isMobile ? 10 : 5}
                               defaultValue={(i.note_ricontatto || "").toUpperCase()}
                               onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
-                              style={{ ...inputStyle, width: isMobile ? "24ch" : "6ch", flex: "0 0 auto", fontSize: isMobile ? 14 : 12, padding: isMobile ? "7px 8px" : "4px 6px", textAlign: "center", textTransform: "uppercase" }}
+                              style={{ ...inputStyle, width: isMobile ? "8ch" : "6ch", flex: "0 1 auto", minWidth: 0, fontSize: 12, padding: isMobile ? "6px 6px" : "4px 6px", textAlign: "center", textTransform: "uppercase" }}
                             />
                             {i.telefono && (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
-                                <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 15, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: "auto" }}>
+                                <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: isMobile ? 13 : 15, color: MUTED, textDecoration: "underline", whiteSpace: "nowrap" }}>{i.telefono}</a>
                                 <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
-                                  <IconaWhatsapp size={30} />
+                                  <IconaWhatsapp size={isMobile ? 22 : 30} />
                                 </a>
                               </span>
                             )}
