@@ -49338,7 +49338,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               {immagineUrlPerProdotto[p.id] ? <img src={immagineUrlPerProdotto[p.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={17} color={MUTED} />}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</div>
+              {/* due punti in meno del resto dell'elenco: i nomi dei
+                  prodotti sono lunghi ("Ago 1RL LT - 0,25") e a 13 si
+                  troncavano quasi tutti prima del calibro, che e' proprio
+                  la parte che serve a chi vende */}
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</div>
               <div style={{ ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nomiCategorie || "—"}</div>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: esaurito ? "#C0392B" : "#2E7D32" }}>{esaurito ? "Esaurito" : `Disponibili ${disponibili} pz`}</div>
             </div>
