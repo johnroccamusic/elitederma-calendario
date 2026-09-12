@@ -49672,7 +49672,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   troncavano quasi tutti prima del calibro, che e' proprio
                   la parte che serve a chi vende */}
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</div>
-              <div style={{ ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nomiCategorie || "—"}</div>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: esaurito ? "#C0392B" : "#2E7D32" }}>{esaurito ? "Esaurito" : `Disponibili ${disponibili} pz`}</div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -49704,8 +49703,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={tileImg}>
               {immagineUrlPerProdotto[p.id] ? <img src={immagineUrlPerProdotto[p.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={30} color={MUTED} />}
             </div>
-            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, lineHeight: 1.25, marginBottom: 2 }}>{p.nome}</div>
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>{nomiCategorie || "—"}{p.sku ? ` · Cod. ${p.sku}` : ""}</div>
+            {/* solo il nome: categorie e codice sotto ogni tessera erano
+                una riga di rumore che chi vende al banco non legge mai */}
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, lineHeight: 1.25, marginBottom: 8 }}>{p.nome}</div>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginTop: "auto" }}>
               <div>
                 <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(prezzoAlPubblico(p))}</div>
