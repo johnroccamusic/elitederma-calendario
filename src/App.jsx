@@ -38355,7 +38355,7 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
 // punti maturati con la regola di Dettaglio prodotti (dieci per euro
 // cedibile, per ogni pezzo venduto attraverso l'app). Qui si governa il
 // sistema; cosa vede la master nella sua dashboard si decide dopo.
-function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Gestione punti" }) {
+function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, ricarica, onBack, titolo = "Gestione punti" }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "punti", direzione: "desc" });
   const [form, setForm] = useState(null);
@@ -38372,6 +38372,29 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     const n = Math.max(0, Math.min(100, Math.round(Number(valore) || 0)));
     salvaQuote({ ...quote, [canale]: n });
   };
+  // Le due tabelle di sconto vivono qui perche' decidono i punti: lo
+  // sconto che l'allievo usa e' cedibile che se ne va, e quello che resta
+  // e' della master. Sono le stesse regole che stanno in Genera coupon —
+  // i codici d'aula su regole_referral_automatico, il referral personale
+  // fra le impostazioni condivise — lette e scritte negli stessi posti.
+  const [fasceCorso, setFasceCorso] = useState(null);
+  useEffect(() => {
+    if (regoleReferralAutomatico && fasceCorso == null) setFasceCorso(fasceScontoValide(regoleReferralAutomatico.fasce_sconto));
+  }, [regoleReferralAutomatico, fasceCorso]);
+  const [salvandoFasceCorso, setSalvandoFasceCorso] = useState(false);
+  const [msgFasceCorso, setMsgFasceCorso] = useState("");
+  async function salvaFasceCorso() {
+    if (!regoleReferralAutomatico?.id) return;
+    setSalvandoFasceCorso(true); setMsgFasceCorso("");
+    const { error } = await supabase.from("regole_referral_automatico")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasceScontoValide(fasceCorso), aggiornato_ts: new Date().toISOString() })
+      .eq("id", regoleReferralAutomatico.id);
+    setSalvandoFasceCorso(false);
+    if (error) { setMsgFasceCorso("Errore: " + testoErrore(error)); return; }
+    setMsgFasceCorso("Fasce dei codici d'aula salvate: valgono dai prossimi codici generati.");
+    ricarica(["regole_referral_automatico"]);
+  }
+  const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   async function salvaFinestra() {
     if (!form?.data_inizio || !form?.data_fine) { setMsg("Indica sia la data di inizio sia quella di fine della raccolta."); return; }
     if (form.data_fine < form.data_inizio) { setMsg("La data di fine non può precedere quella di inizio."); return; }
@@ -38469,6 +38492,51 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Sconto ai corsi, con il codice d'aula</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine. Sono le stesse di Generazione automatica in Genera coupon: cambiarle qui o là è lo stesso.
+          </div>
+          {fasceCorso == null ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
+          ) : (
+            <>
+              <SceltaRegolaSconto soloFasce tipo="fasce" fasce={fasceCorso} onCambiaTipo={() => {}} onCambiaFasce={setFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
+                <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
+                {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Sconto con il referral personale</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Si salvano appena le cambi, come in Genera referral code.
+          </div>
+          <SceltaRegolaSconto
+            soloFasce tipo="fasce" fasce={fasceScontoValide(regolaReferralMaster?.fasce)}
+            onCambiaTipo={() => {}} onCambiaFasce={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: f })}
+            prodottiShop={prodottiShop} isMobile={isMobile}
+          />
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 22, background: "#FDF8EC", borderColor: "#EBD9AE" }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Come funzionano i punti</div>
+          <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
+            <p style={{ margin: "0 0 8px" }}>
+              Ogni prodotto ha una quota cedibile, che dipende da quanto rende: è la parte del prezzo che si può girare a chi lo vende. Quella quota vale <b>dieci punti per euro</b>.
+            </p>
+            <p style={{ margin: "0 0 8px" }}>
+              <b>Al corso</b> la master guadagna i punti sulla quota cedibile <b>al netto dello sconto</b> che i suoi allievi hanno usato: lo sconto del codice d'aula è cedibile che se ne va all'allievo, e quello che resta è della master. Su una vendita senza codice resta tutto a lei.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Fuori dal corso</b>, con il referral personale, vale la stessa regola con le fasce del referral. Sul totale così ottenuto si applicano poi le quote qui sopra, "Al corso" e "Fuori dal corso".
+            </p>
           </div>
         </div>
 
@@ -59297,7 +59365,7 @@ export default function App() {
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
-    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni"],
+    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
@@ -61211,6 +61279,7 @@ export default function App() {
       {view === "gestionepunti" && (
         <PaginaGestionePunti
           master={master} venditeShop={venditeShop} prodottiShop={prodottiShop} puntiMasterImpostazioni={puntiMasterImpostazioni}
+          regoleReferralAutomatico={regoleReferralAutomatico}
           ricarica={ricarica} onBack={() => setView("compensipremi")}
           titolo={etichettaTasto("compensipremi", "gestionepunti", "Gestione punti")}
         />
