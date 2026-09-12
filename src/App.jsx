@@ -38782,12 +38782,20 @@ function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, onApriGestionePunt
 // si possono mettere: sono un punto dentro un percorso, non una porta.
 // I tre posti si salvano per utente, cosi' li si ritrova su ogni
 // dispositivo.
-function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
+function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli, nelRullo }) {
   // il menu per cambiare o togliere: si apre col tasto destro, o tenendo
-  // premuto il dito. Un pallino rosso sempre in vista sporcava il dock
+  // premuto il dito. Un pallino rosso sempre in vista sporcava il dock.
+  // Nel rullo del telefono il menu a tendina non ha posto: si aprirebbe
+  // sotto il tasto, cioe' fuori dallo schermo e tagliato dal rullo. Li' la
+  // pressione lunga apre direttamente la finestra di scelta, che ha dentro
+  // anche il "togli"
   const [menuAperto, setMenuAperto] = useState(false);
   const pressione = React.useRef(null);
-  const iniziaPressione = () => { pressione.current = setTimeout(() => { pressione.current = null; setMenuAperto(true); }, 480); };
+  // il dito che si alza dopo una pressione lunga produce anche un click:
+  // va ignorato, o richiuderebbe quello che ha appena aperto
+  const pressioneLungaFatta = React.useRef(false);
+  const apriMenu = () => { if (nelRullo) onScegli(); else setMenuAperto(true); };
+  const iniziaPressione = () => { pressione.current = setTimeout(() => { pressione.current = null; pressioneLungaFatta.current = true; apriMenu(); }, 480); };
   const finePressione = () => { if (pressione.current) { clearTimeout(pressione.current); pressione.current = null; } };
   useEffect(() => {
     if (!menuAperto) return undefined;
@@ -38814,8 +38822,12 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
   return (
     <div style={{ position: "relative", width: lato, height: lato, flexShrink: 0 }}>
       <button
-        onClick={() => { if (menuAperto) { setMenuAperto(false); return; } if (pressione.current === null && !menuAperto) onApri(); }}
-        onContextMenu={(e) => { e.preventDefault(); setMenuAperto(true); }}
+        onClick={() => {
+          if (pressioneLungaFatta.current) { pressioneLungaFatta.current = false; return; }
+          if (menuAperto) { setMenuAperto(false); return; }
+          if (pressione.current === null) onApri();
+        }}
+        onContextMenu={(e) => { e.preventDefault(); apriMenu(); }}
         onPointerDown={(e) => { if (e.pointerType !== "mouse") iniziaPressione(); }}
         onPointerUp={finePressione}
         onPointerLeave={finePressione}
@@ -38825,6 +38837,9 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
           width: lato, height: lato, borderRadius: Math.round(lato * 0.29), cursor: "pointer", padding: "4px 5px",
           background: NAVY, border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
+          // senza questi, tenere premuto su iOS seleziona il testo del tasto
+          // o apre la lente del sistema invece del nostro menu
+          WebkitTouchCallout: "none", userSelect: "none", WebkitUserSelect: "none",
         }}
       >
         <span style={{ ...fontBody, fontSize: lato > 64 ? 10.5 : 9.5, fontWeight: 700, lineHeight: 1.15, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{voce.titolo}</span>
@@ -38846,7 +38861,7 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
 // dentro i suoi tasti. Si sceglie l'area stessa o uno dei tasti dentro.
 // Quello che l'utente non puo' aprire resta in grigio: una scorciatoia
 // verso una porta chiusa sarebbe una presa in giro.
-function ModaleScegliPreferito({ destinazioni, onScegli, onClose }) {
+function ModaleScegliPreferito({ destinazioni, onScegli, onTogli, onClose }) {
   const [aperte, setAperte] = useState(() => new Set());
   const toggle = (chiave) => setAperte((prev) => { const n = new Set(prev); n.has(chiave) ? n.delete(chiave) : n.add(chiave); return n; });
   const riga = (voce, profondita, figli) => {
@@ -38892,6 +38907,13 @@ function ModaleScegliPreferito({ destinazioni, onScegli, onClose }) {
       <div style={{ maxHeight: "60vh", overflowY: "auto", paddingRight: 4 }}>
         {(destinazioni || []).map((d) => riga(d, 0, d.figli))}
       </div>
+      {/* quando il posto e' gia' occupato: da telefono e' l'unico modo di
+          liberarlo, perche' il menu a tendina del tasto non c'e' */}
+      {onTogli && (
+        <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 12, paddingTop: 12, display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={onTogli} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: "#C0392B", background: "transparent", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 14px", cursor: "pointer" }}>Togli scorciatoia</button>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -60568,7 +60590,7 @@ export default function App() {
     <>
       {[0, 1, 2].map((i) => (
         <TastoPreferitoDock
-          key={i} voce={preferitiRisolti[i]} lato={70}
+          key={i} voce={preferitiRisolti[i]} lato={70} nelRullo
           onApri={() => apriPreferito(preferitiRisolti[i])}
           onScegli={() => setSlotPreferitoInScelta(i)}
           onTogli={() => togliPreferito(i)}
@@ -60594,7 +60616,10 @@ export default function App() {
           mano */}
       <StiliGlobaliAspetto />
       {preferitiDisponibili && slotPreferitoInScelta != null && (
-        <ModaleScegliPreferito destinazioni={destinazioniPreferiti} onScegli={scegliPreferito} onClose={() => setSlotPreferitoInScelta(null)} />
+        <ModaleScegliPreferito
+          destinazioni={destinazioniPreferiti} onScegli={scegliPreferito} onClose={() => setSlotPreferitoInScelta(null)}
+          onTogli={preferitiRisolti[slotPreferitoInScelta] ? () => { togliPreferito(slotPreferitoInScelta); setSlotPreferitoInScelta(null); } : null}
+        />
       )}
       {!isMobile && (
         // Il dock da scrivania. Prima era una barra in cima, sopra il
