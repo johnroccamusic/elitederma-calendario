@@ -9969,6 +9969,8 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, onApriInventarioSede, onApriChiusura, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
+  const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
+  const quotePunti = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiSalvate || {}) };
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -10022,7 +10024,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // "acquisto effettuato"); i punti invece riflettono anche i resi
   // (negativi), perché sono la sostanza vera della raccolta punti
   const provvigioniMaster = useMemo(() => {
-    const vuoto = { venditeTotale: 0, venditeCorso: 0, venditeReferral: 0, puntiAccumulati: 0, euroCorso: 0, euroReferral: 0, euroTotale: 0, pezzi: 0, premi: premiVolumeRaggiunti(0), gruppi: [] };
+    const vuoto = { venditeTotale: 0, venditeCorso: 0, venditeReferral: 0, puntiAccumulati: 0, puntiMaturati: 0, euroCorso: 0, euroReferral: 0, euroTotale: 0, pezzi: 0, premi: premiVolumeRaggiunti(0), gruppi: [] };
     if (!masterSelId || !puntiMasterImpostazioni) return vuoto;
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
     let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, euroCorso = 0, euroReferral = 0, pezzi = 0, puntiAccumulati = 0;
@@ -10033,6 +10035,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     // un prodotto vale i suoi punti anche se e' stato scontato. Un reso
     // ha pezzi negativi e li toglie da solo
     const prodottoPerIdPunti = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+    // i punti ACCUMULATI: gli stessi punti divisi per canale — al corso se
+    // la vendita e' legata a una classe, fuori altrimenti — e poi ridotti
+    // con le quote decise in Gestione punti. Quando arrivera' la
+    // detrazione per lo sconto usato dagli allievi, si togliera' qui
+    let puntiCorsoLordi = 0, puntiFuoriLordi = 0;
     // "Al corso" e' tutto quello che e' legato a una classe, con o senza
     // codice: anche se la master si e' scordata di associare il codice, la
     // vendita in aula resta una vendita al corso. "Con referral" e' solo
@@ -10047,7 +10054,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       if (conta && !v.corso_data_id && v.codice_coupon && codiciPersonali.has(String(v.codice_coupon).toLowerCase())) venditeReferral += 1;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
         const puntiPezzo = puntiProdotto(prodottoPerIdPunti[r.prodotto_id], sicurezzaPunti);
-        if (puntiPezzo != null) puntiAccumulati += puntiPezzo * (Number(r.quantita) || 0);
+        if (puntiPezzo == null) return;
+        const puntiRiga = puntiPezzo * (Number(r.quantita) || 0);
+        puntiAccumulati += puntiRiga;
+        if (v.corso_data_id) puntiCorsoLordi += puntiRiga; else puntiFuoriLordi += puntiRiga;
       });
       // l'importo non si ricalcola: e' quello congelato sulla vendita il
       // giorno in cui e' stata fatta. Un reso ha totale negativo e porta
@@ -10064,15 +10074,16 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     });
     const premi = premiVolumeRaggiunti(pezzi);
     const gruppi = Object.values(perGruppo).map((g) => ({ ...g, euro: round2(g.euro) })).sort((a, b) => b.euro - a.euro);
+    const puntiMaturati = Math.round((puntiCorsoLordi * quotePunti.corso) / 100 + (puntiFuoriLordi * quotePunti.fuoriCorso) / 100);
     return {
-      venditeTotale, venditeCorso, venditeReferral, puntiAccumulati,
+      venditeTotale, venditeCorso, venditeReferral, puntiAccumulati, puntiMaturati,
       euroCorso: round2(euroCorso), euroReferral: round2(euroReferral),
       // il premio a volume e' maturato quanto le provvigioni: sta nel
       // totale, non in una riga a parte che nessuno somma
       euroTotale: round2(euroCorso + euroReferral + premi.euro),
       pezzi, premi, gruppi,
     };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti]);
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
   // la contabilita' di una classe, aperta dal tasto sulla card: e' la
   // stessa pagina del link che si manda alla master, con lo stesso
@@ -10229,10 +10240,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               </div>
               <div style={cardPunti}>
                 <div style={lblPunti}>Punti accumulati</div>
-                {/* in attesa: i punti si governano da "Gestione punti" in Area
-                    compensi e premi, e li' si decide anche quando e come
-                    mostrarli alla master */}
-                <div style={{ ...numPunti, color: MUTED }}>—</div>
+                {/* i punti maturati davvero: quelli dei prodotti venduti,
+                    ridotti con le quote per canale di Gestione punti (e, in
+                    futuro, dello sconto usato dagli allievi) */}
+                <div style={{ ...numPunti, color: NAVY }}>{provvigioniMaster.puntiMaturati.toLocaleString("it-IT")}</div>
               </div>
               {/* Punti bonus: tutti i punti dei prodotti venduti, interi,
                   senza le detrazioni per lo sconto usato dagli allievi e
