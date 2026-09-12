@@ -58363,7 +58363,11 @@ export default function App() {
     // le vendite di prova (modalità simulazione, solo programmatore) non
     // entrano qui: escludendole alla fonte non c'è nessun totale, nessuna
     // statistica e nessun target che debba ricordarsi di saltarle
-    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, tipo_movimento, vendita_collegata_id, corso_data_id, prelevato_dai_kit, consegnato_in_aula").eq("simulazione", false).order("data_ordine", { ascending: false })).data || []),
+    // le colonne della provvigione e del coupon viaggiano con la vendita:
+    // la Dashboard master somma provvigione_master e raggruppa per
+    // codice_coupon, e senza queste colonne vedeva zero euro e "senza
+    // referral" su tutto — le vendite c'erano, i soldi no
+    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi").eq("simulazione", false).order("data_ordine", { ascending: false })).data || []),
     // le prove, a parte: servono solo a Logistica, per mostrarle e per
     // poterle buttare
     vendite_simulate: async () => setVenditeSimulate((await supabase.from("vendite_shop").select("*").eq("simulazione", true).order("data_ordine", { ascending: false })).data || []),
