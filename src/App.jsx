@@ -59338,7 +59338,14 @@ export default function App() {
   // impostazioni condivise cosi' seguono la persona da un dispositivo
   // all'altro. Chi non ha un'identita' (accesso col solo codice) li tiene
   // sotto il ruolo
-  const [preferitiAperti, setPreferitiAperti] = useState(false);
+  // aperto o chiuso lo decide chi lo usa, e resta cosi': usare una
+  // scorciatoia non lo richiude, e nemmeno il ricaricamento della pagina
+  const [preferitiAperti, setPreferitiApertiStato] = useState(() => { try { return localStorage.getItem("preferiti_dock_aperti") === "1"; } catch { return false; } });
+  const setPreferitiAperti = (v) => setPreferitiApertiStato((prev) => {
+    const nuovo = typeof v === "function" ? v(prev) : v;
+    try { localStorage.setItem("preferiti_dock_aperti", nuovo ? "1" : "0"); } catch { /* niente memoria: resta per la sessione */ }
+    return nuovo;
+  });
   const [slotPreferitoInScelta, setSlotPreferitoInScelta] = useState(null);
   // le scorciatoie sono per chi amministra: master e venditori hanno un
   // dock gia' stretto e poche porte da aprire
@@ -59945,7 +59952,6 @@ export default function App() {
   const preferitiRisolti = [0, 1, 2].map((i) => vocePreferito((preferitiDock || [])[i]));
   function apriPreferito(voce) {
     if (!voce) return;
-    setPreferitiAperti(false);
     scrollAppInCima();
     // un tasto di sottopagina apre prima la sua area: il tasto "Indietro"
     // trova cosi' il percorso giusto, come se ci si fosse arrivati a mano
