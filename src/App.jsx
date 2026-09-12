@@ -2388,15 +2388,16 @@ function BadgeFileCaricato({ stretto = false }) {
 // il quadrato col filo di bordo dall'altra, e quello che sta bene a uno
 // non sta bene all'altro.
 //
-// Le misure stanno in percentuale e non in pixel: la cella della griglia
-// cambia larghezza con lo schermo e con quante colonne si sono scelte, e
-// un raggio da 18 pixel su un tasto piccolo e' un altro raggio.
+// Le misure sono in pixel. Prima erano percentuali della cella della
+// griglia, e la cella cambia con lo schermo: lo stesso tasto usciva di
+// una misura su un iPhone e di un'altra su quello accanto. Un'icona non
+// deve cambiare misura con lo schermo, e sul telefono segue quella delle
+// icone di Apple: 60 punti di lato, angoli a 13.
 const CHIAVE_ASPETTO_TASTI = "aspetto_tasti";
-// "icona" e' in pixel e non in percentuale: e' un disegno, e un disegno
-// ha una misura sua. Le altre due seguono la cella, questa no.
+// "dock" e' il lato dei tasti del dock, telefono e scrivania ognuno il suo
 const ASPETTO_TASTI_DEFAULT = {
-  mobile: { dimensione: 82, raggio: 22, icona: 40, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
-  desktop: { dimensione: 90, raggio: 7, icona: 80, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+  mobile: { dimensione: 60, raggio: 13, icona: 34, dock: 70, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
+  desktop: { dimensione: 300, raggio: 20, icona: 80, dock: 62, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
   // Un'ombra sola per TUTTE le aree che reggono i dati — i pannelli
   // bianchi delle tabelle, le schede citta', gli elenchi — e una per
   // tutti gli altri pulsanti, quelli che non sono i quadrati della home
@@ -2431,10 +2432,15 @@ function aspettoTastoDi(salvato, quale) {
   const base = ASPETTO_TASTI_DEFAULT[quale];
   const v = (salvato && salvato[quale]) || {};
   const numero = (campo) => (v[campo] == null || v[campo] === "" || isNaN(Number(v[campo])) ? base[campo] : Number(v[campo]));
+  // dimensione e raggio salvati prima del passaggio ai pixel erano
+  // percentuali: si lasciano perdere e si riparte dalle misure di base,
+  // o un 82% diventerebbe un tasto da 82 pixel. Il resto si tiene
+  const inPixel = v.unita === "px";
   return {
-    dimensione: numero("dimensione"),
-    raggio: numero("raggio"),
+    dimensione: inPixel ? numero("dimensione") : base.dimensione,
+    raggio: inPixel ? numero("raggio") : base.raggio,
     icona: numero("icona"),
+    dock: numero("dock"),
     colore: v.colore || base.colore,
     ombra: { ...base.ombra, ...(v.ombra || {}) },
   };
@@ -2567,7 +2573,9 @@ function TileHome({
         onDragOver={onDragOverTasto}
         onDrop={onDropTasto}
         style={{
-          ...fontBody, width: `${aspettoMobile.dimensione}%`, minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
+          // pixel fissi, come le icone di Apple: la cella e' solo lo spazio
+          // in cui sta, e se e' piu' stretta del tasto vince la cella
+          ...fontBody, width: `min(100%, ${aspettoMobile.dimensione}px)`, minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
           display: "flex", flexDirection: "column", alignItems: "center", cursor: attivo ? "pointer" : "default",
           opacity: attenuato ? 0.5 : 1,
         }}
@@ -2575,7 +2583,7 @@ function TileHome({
         <div style={{
           width: "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: attivo ? aspettoMobile.colore : "#F1EAE0", borderRadius: `${aspettoMobile.raggio}%`,
+          background: attivo ? aspettoMobile.colore : "#F1EAE0", borderRadius: aspettoMobile.raggio,
           boxShadow: ombraCssTasto(aspettoMobile.ombra),
           outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
         }}>
@@ -2621,10 +2629,10 @@ function TileHome({
         // 90% invece di 100%: il quadrato resta più piccolo della sua
         // cella della griglia, lasciando vedere lo sfondo dell'app anche
         // fra un tasto e l'altro, non solo nel gap
-        ...fontBody, textAlign: ricca ? "center" : "left", width: isMobile ? "90%" : `${aspettoDesktop.dimensione}%`, margin: "0 auto", boxSizing: "border-box",
+        ...fontBody, textAlign: ricca ? "center" : "left", width: isMobile ? "90%" : `min(100%, ${aspettoDesktop.dimensione}px)`, margin: "0 auto", boxSizing: "border-box",
         aspectRatio: "1 / 1", position: "relative",
         display: "flex", flexDirection: "column", alignItems: ricca ? "center" : "stretch", justifyContent: ricca ? "center" : "flex-end", minWidth: 0,
-        background: attivo ? (isMobile ? "#FFFFFF" : aspettoDesktop.colore) : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : `${aspettoDesktop.raggio}%`,
+        background: attivo ? (isMobile ? "#FFFFFF" : aspettoDesktop.colore) : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : aspettoDesktop.raggio,
         boxShadow: isMobile ? "none" : ombraCssTasto(aspettoDesktop.ombra),
         padding: ricca ? (isMobile ? "16px 10px 12px" : "28px 22px 22px") : (isMobile ? "8px 10px" : 22),
         cursor: attivo ? "pointer" : "default", overflow: "hidden",
@@ -14569,12 +14577,12 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
 // vuol dire unire le chiavi: chi entrava solo nelle preferenze continua a
 // entrare solo li'.
 // ---------- Impostazioni -> Aspetto dell'app ----------
-// L'anteprima di UNO dei due tasti. Il riquadro tratteggiato e' la cella
-// della griglia: la "dimensione" e' quanto il tasto la riempie, e senza
-// vedere la cella un 82% non vuol dire niente. Si clicca per dire "sto
-// modificando questo".
+// L'anteprima di UNO dei due tasti, a grandezza vera. Il tasto della
+// scrivania e' piu' largo del riquadro: quello si mostra in scala, e lo
+// si dice. Si clicca per dire "sto modificando questo".
 function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezionato, onClick }) {
   const lato = 150;
+  const scala = Math.min(1, (lato - 20) / aspetto.dimensione);
   return (
     <button
       onClick={onClick}
@@ -14588,17 +14596,17 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <div style={{
-          width: `${aspetto.dimensione}%`, aspectRatio: "1 / 1", boxSizing: "border-box",
-          background: aspetto.colore, borderRadius: `${aspetto.raggio}%`,
+          width: Math.round(aspetto.dimensione * scala), aspectRatio: "1 / 1", boxSizing: "border-box",
+          background: aspetto.colore, borderRadius: Math.round(aspetto.raggio * scala),
           boxShadow: ombraCssTasto(aspetto.ombra),
           border: forma === "desktop" ? `1px solid ${CREAM_BORDER}` : "none",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <IconaTilePos size={aspetto.icona} color={NAVY} />
+          <IconaTilePos size={Math.round(aspetto.icona * scala)} color={NAVY} />
         </div>
       </div>
       <span style={{ ...fontBody, fontSize: 13.5, fontWeight: selezionato ? 700 : 600, color: selezionato ? NAVY : MUTED }}>{etichetta}</span>
-      <span style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: -4 }}>{sottotitolo}</span>
+      <span style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: -4 }}>{sottotitolo}{scala < 1 ? ` — in scala ${Math.round(scala * 100)}%` : ""}</span>
     </button>
   );
 }
@@ -14660,7 +14668,9 @@ function PaginaAspettoApp() {
   // nuvole e pulsanti hanno la sola ombra: i comandi di forma e colore
   // non avrebbero niente da toccare
   const soloOmbra = quale === "aree" || quale === "pulsanti";
-  const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi } });
+  // "unita: px" marca il salvataggio come fatto in pixel: quelli vecchi,
+  // in percentuale, senza questa marca vengono ignorati alla lettura
+  const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi, unita: "px" } });
 
   const piuMeno = (etichetta, campo, min, max, unita, aiutoMeno, aiutoPiu) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -14677,8 +14687,9 @@ function PaginaAspettoApp() {
     <div style={{ paddingBottom: 60 }}>
       <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Aspetto dei tasti</div>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18, maxWidth: 620 }}>
-        I tasti quadrati della home e delle pagine a tasti. Il telefono e il computer si regolano separati:
-        clicca quello che vuoi modificare e usa i comandi qui sotto. Vale per tutti, non solo per te.
+        I tasti quadrati della home e delle pagine a tasti, e i tasti del dock. Le misure sono in pixel e non cambiano
+        con lo schermo. Il telefono e il computer si regolano separati: clicca quello che vuoi modificare e usa i
+        comandi qui sotto. Vale per tutti, non solo per te.
       </div>
 
       <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18 }}>
@@ -14754,9 +14765,20 @@ function PaginaAspettoApp() {
         ) : (
         <>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-          {piuMeno("Dimensione", "dimensione", 40, 100, "%", "Tasto più piccolo dentro la sua cella", "Tasto più grande dentro la sua cella")}
-          {piuMeno("Raggio", "raggio", 0, 50, "%", "Angoli più squadrati", "Angoli più tondi")}
+          {piuMeno("Dimensione", "dimensione", quale === "mobile" ? 40 : 120, quale === "mobile" ? 120 : 420, " px", "Tasto più piccolo", "Tasto più grande")}
+          {piuMeno("Raggio", "raggio", 0, 80, " px", "Angoli più squadrati", "Angoli più tondi")}
           {piuMeno("Icona", "icona", 10, 140, " px", "Icona più piccola", "Icona più grande")}
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -2 }}>
+            {quale === "mobile" ? "Le icone di Apple sono 60 px di lato con angoli a 13 px." : "Il tasto non supera mai la sua colonna: con molte colonne si stringe da solo."}
+          </div>
+        </div>
+
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Tasti del dock</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+          {piuMeno("Lato", "dock", 40, 100, " px", "Tasti del dock più piccoli", "Tasti del dock più grandi")}
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -2 }}>
+            {quale === "mobile" ? "I quattro tasti in basso e le scorciatoie del rullo." : "I tasti della barra in cima e le scorciatoie di fianco."}
+          </div>
         </div>
 
         <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Colore del pulsante</div>
@@ -59829,6 +59851,9 @@ export default function App() {
   const [viewPrimaDiMagazzino, setViewPrimaDiMagazzino] = useState("magazzinoshop");
   const [dockCoricato, setDockCoricato] = useState(false);
   const [dockNascosto, setDockNascosto] = useState(false);
+  // il lato dei tasti del dock viene da Impostazioni -> Aspetto dell'app
+  const [aspettoTastiApp] = useAspettoTasti();
+  const latoDock = isMobile ? aspettoTastiApp.mobile.dock : aspettoTastiApp.desktop.dock;
   // i riferimenti del rullo del dock da telefono (vedi piu' giu', prima del
   // return): stanno qui perche' gli hook devono venire prima dell'uscita
   // anticipata del gate, o React ne conta un numero diverso a ogni render
@@ -60369,8 +60394,8 @@ export default function App() {
   // angoli molto arrotondati, spazio fra uno e l'altro circa un quarto del
   // tasto
   const stileTastoDock = {
-    background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 18,
-    width: 62, height: 62, flexShrink: 0, padding: 0,
+    background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.29),
+    width: latoDock, height: latoDock, flexShrink: 0, padding: 0,
     display: "flex", alignItems: "center", justifyContent: "center",
   };
   const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
@@ -60520,7 +60545,7 @@ export default function App() {
   // rimetterlo al centro senza che si veda niente. Mentre il dito trascina
   // si muove il DOM direttamente: uno stato React a ogni pixel farebbe
   // ridisegnare l'intera app
-  const passoRulloDock = 70 + 10;
+  const passoRulloDock = latoDock + 10;
   // coricato, il dock e' girato di 90 gradi: il suo "su" e' il destra dello
   // schermo
   const posizioneRulloDock = (e) => (dockCoricato ? -e.touches[0].clientX : e.touches[0].clientY);
@@ -60573,11 +60598,11 @@ export default function App() {
         aria-label="Impostazioni"
         title="Impostazioni"
         style={{
-          background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-          width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.31),
+          width: latoDock, height: latoDock, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width={Math.round(latoDock * 0.57)} height={Math.round(latoDock * 0.57)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3" />
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
@@ -60590,12 +60615,12 @@ export default function App() {
             aria-label="Indietro"
             title="Indietro"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-              width: 70, height: 70, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.31),
+              width: latoDock, height: latoDock, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width={Math.round(latoDock * 0.57)} height={Math.round(latoDock * 0.57)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
@@ -60605,12 +60630,12 @@ export default function App() {
             aria-label="Avanti"
             title="Avanti"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-              width: 70, height: 70, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.31),
+              width: latoDock, height: latoDock, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width={Math.round(latoDock * 0.57)} height={Math.round(latoDock * 0.57)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>
@@ -60622,7 +60647,7 @@ export default function App() {
     <>
       {[0, 1, 2].map((i) => (
         <TastoPreferitoDock
-          key={i} voce={preferitiRisolti[i]} lato={70} nelRullo
+          key={i} voce={preferitiRisolti[i]} lato={latoDock} nelRullo
           onApri={() => apriPreferito(preferitiRisolti[i])}
           onScegli={() => setSlotPreferitoInScelta(i)}
           onTogli={() => togliPreferito(i)}
@@ -60668,7 +60693,7 @@ export default function App() {
             {preferitiDisponibili && !dockNascosto && (
               <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", zIndex: 0 }}>
                 {linguettaPreferiti(false)}
-                {preferitiAperti && pannelloPreferiti(62)}
+                {preferitiAperti && pannelloPreferiti(latoDock)}
               </div>
             )}
             <div
@@ -60838,11 +60863,11 @@ export default function App() {
               onTouchCancel={fineRulloDock}
               onClickCapture={(e) => { if (rulloDockMosso.current) { e.stopPropagation(); e.preventDefault(); } }}
               // largo quanto tre dei quattro posti del dock: con quattro tasti
-              // da 70 distribuiti su W lo spazio fra uno e l'altro e' (W-280)/3,
-              // e tre tasti piu' due spazi fanno (2W+70)/3. Cosi' ogni tasto
+              // di lato L distribuiti su W lo spazio fra uno e l'altro e'
+              // (W-4L)/3, e tre tasti piu' due spazi fanno (2W+L)/3. Cosi' ogni tasto
               // del rullo cade esattamente dove cadeva prima, e il vuoto fra
               // il rullo e la casetta e' lo stesso spazio
-              style={{ flex: "0 0 calc(66.6667% + 23.3333px)", minWidth: 0, height: 70, overflow: "hidden", touchAction: "none" }}
+              style={{ flex: `0 0 calc(66.6667% + ${(latoDock / 3).toFixed(4)}px)`, minWidth: 0, height: latoDock, overflow: "hidden", touchAction: "none" }}
             >
               <div
                 ref={rulloDockEl}
@@ -60850,7 +60875,7 @@ export default function App() {
                 style={{ display: "flex", flexDirection: "column", gap: 10, transform: `translateY(${-passoRulloDock}px)` }}
               >
                 {[!preferitiAperti, preferitiAperti, !preferitiAperti].map((scorciatoie, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, height: 70 }}>
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, height: latoDock }}>
                     {scorciatoie ? tastiScorciatoieDock : tastiClassiciDock}
                   </div>
                 ))}
@@ -60862,11 +60887,11 @@ export default function App() {
             aria-label="Home"
             title="Home"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-              width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.31),
+              width: latoDock, height: latoDock, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width={Math.round(latoDock * 0.57)} height={Math.round(latoDock * 0.57)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
