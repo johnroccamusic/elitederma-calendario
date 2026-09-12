@@ -3185,6 +3185,29 @@ function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
 // compra roba a margine alto riceve un po' meno del dovuto, chi compra a
 // margine basso un po' di piu', e sul totale degli ordini torna. Il POS
 // invece resta esatto, riga per riga.
+// ---------- Quota cedibile ai venditori ----------
+// Quanto del prezzo si puo' girare al massimo a chi vende, a seconda di
+// quanto rende il prodotto. Non e' una proporzione: a margini bassi non
+// si cede quasi niente, e la quota cresce piu' in fretta del margine.
+// Ogni riga vale da quel margine fino al gradino dopo: 47% di margine
+// sta nella riga del 45. Sotto il 5 non si cede nulla, oltre il 95 si
+// cede il 50. Le due percentuali sono entrambe sul prezzo NETTO, come
+// il margine in tabella.
+const CEDIBILE_PER_MARGINE = [
+  [5, 0], [10, 1.5], [15, 3.5], [20, 6], [25, 8], [30, 10.5], [35, 13],
+  [40, 15.5], [45, 18.5], [50, 21], [55, 24], [60, 27], [65, 30], [70, 33],
+  [75, 36.5], [80, 40], [85, 43.5], [90, 46], [95, 49],
+];
+const CEDIBILE_OLTRE_ULTIMO_GRADINO = 50;
+function percentualeCedibileDi(marginePct) {
+  if (marginePct == null || !(marginePct >= CEDIBILE_PER_MARGINE[0][0])) return 0;
+  const ultimo = CEDIBILE_PER_MARGINE[CEDIBILE_PER_MARGINE.length - 1];
+  if (marginePct > ultimo[0]) return CEDIBILE_OLTRE_ULTIMO_GRADINO;
+  let cedibile = 0;
+  for (const [soglia, pct] of CEDIBILE_PER_MARGINE) { if (marginePct >= soglia) cedibile = pct; else break; }
+  return cedibile;
+}
+
 // ---------- Sconto a fasce ----------
 // Una percentuale diversa a seconda di quanto rende il prodotto. Lo
 // sconto "sul margine" fa una proporzione esatta; a fasce si decide a
@@ -39959,6 +39982,7 @@ const COLONNE_MAGAZZINO = [
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
   { label: "Margine €", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 70 },
+  { label: "Cedibile €", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 70 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
@@ -40455,6 +40479,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     ),
     "Margine €": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title="Prezzo netto di vendita meno costo di acquisto: quanto si guadagna su un pezzo">{p.margineEuro != null ? fmtEuroErp2(p.margineEuro) : "N/D"}</td>
+    ),
+    "Cedibile €": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Quanto si puo' girare al massimo a chi vende: il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
@@ -40961,6 +40988,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // percentuale da sola non risponde — il 69% di 3,50 e il 69% di 39,90
     // sono lo stesso margine e due affari diversi
     const margineEuro = costoEffettivo != null && p.prezzo_vendita != null ? round2(p.prezzo_vendita - costoEffettivo) : null;
+    // la quota massima per chi vende, in euro: la percentuale della
+    // tabella CEDIBILE_PER_MARGINE applicata al prezzo netto. Si parte
+    // dal margine gia' arrotondato, cosi' la riga scelta e' quella che si
+    // legge nella colonna accanto
+    const cedibilePct = margine != null ? percentualeCedibileDi(margine) : null;
+    const cedibileEuro = cedibilePct != null && p.prezzo_vendita != null ? round2((p.prezzo_vendita * cedibilePct) / 100) : null;
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
@@ -40974,6 +41007,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       fatturato: round2(venduto.fatturato),
       margine,
       margineEuro,
+      cedibilePct,
+      cedibileEuro,
       categorieIds,
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
       nomeFornitore: (p.fornitore_id && fornitoreNomePerId[p.fornitore_id]) || "",
