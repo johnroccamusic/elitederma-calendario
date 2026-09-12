@@ -40942,7 +40942,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Quanto si puo' girare al massimo a chi vende: il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
     "Punti": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile ${fmtEuroErp2(p.cedibileEuro)} meno il ${sicurezzaPunti}% di sicurezza, per ${PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti a euro, arrotondato all'intero` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? p.punti.toLocaleString("it-IT") : (p.cedibileEuro == null ? "N/D" : "—")}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per ${PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti a euro, arrotondato all'intero` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? p.punti.toLocaleString("it-IT") : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
