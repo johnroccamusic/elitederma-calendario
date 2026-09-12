@@ -30460,6 +30460,156 @@ function TestataNormativa({ blocco, isMobile }) {
 
 
 
+// Il PDF di una normativa, per mandarlo all'allievo. Stessa impaginazione
+// della pagina — testata, paragrafi, nota, tappe con il tondo blu — resa
+// con i caratteri standard del PDF (Helvetica), che non vanno scaricati e
+// pesano zero. Torna i byte del documento.
+async function generaPdfNormativa(blocchi, titoloDocumento) {
+  const { PDFDocument, StandardFonts, rgb } = await getPdfLib();
+  const doc = await PDFDocument.create();
+  doc.setTitle(titoloDocumento || "Normativa");
+  const normale = await doc.embedFont(StandardFonts.Helvetica);
+  const grassetto = await doc.embedFont(StandardFonts.HelveticaBold);
+  const NAVY_PDF = rgb(14 / 255, 27 / 255, 51 / 255);
+  const GOLD_PDF = rgb(201 / 255, 162 / 255, 109 / 255);
+  const GRIGIO_PDF = rgb(84 / 255, 88 / 255, 95 / 255);
+  const CREMA_PDF = rgb(245 / 255, 238 / 255, 221 / 255);
+  const BORDO_PDF = rgb(232 / 255, 227 / 255, 214 / 255);
+  const A4 = [595.28, 841.89];
+  const MARGINE = 46;
+  const LARGHEZZA = A4[0] - MARGINE * 2;
+  let pagina = doc.addPage(A4);
+  let y = A4[1] - MARGINE;
+
+  // Helvetica conosce l'alfabeto latino (accenti, €, °) ma non tutto:
+  // un carattere fuori tabella farebbe saltare l'intero documento, qui
+  // si sostituisce con uno vicino o si toglie
+  const pulisci = (t) => String(t ?? "").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/–|—/g, "-").replace(/…/g, "...").replace(/[^\x00-\xFF]/g, "");
+  function righeDi(testo, font, size, larghezza) {
+    const righe = [];
+    pulisci(testo).split("\n").forEach((paragrafo) => {
+      const parole = paragrafo.split(/\s+/).filter(Boolean);
+      if (!parole.length) { righe.push(""); return; }
+      let riga = "";
+      parole.forEach((parola) => {
+        const prova = riga ? `${riga} ${parola}` : parola;
+        if (font.widthOfTextAtSize(prova, size) <= larghezza) riga = prova;
+        else { if (riga) righe.push(riga); riga = parola; }
+      });
+      if (riga) righe.push(riga);
+    });
+    return righe;
+  }
+  function serve(altezza) {
+    if (y - altezza < MARGINE) { pagina = doc.addPage(A4); y = A4[1] - MARGINE; }
+  }
+  function scriviRighe(righe, { x = MARGINE, size = 10.5, font = normale, colore = NAVY_PDF, interlinea = 1.45 } = {}) {
+    righe.forEach((r) => {
+      serve(size * interlinea);
+      pagina.drawText(r, { x, y: y - size, size, font, color: colore });
+      y -= size * interlinea;
+    });
+  }
+
+  for (const b of blocchi || []) {
+    if (b.tipo === "testata") {
+      const grande = !!b.sottotitolo;
+      y -= 6;
+      scriviRighe(righeDi(String(b.titolo || "").toUpperCase(), grassetto, grande ? 26 : 19, LARGHEZZA), { size: grande ? 26 : 19, font: grassetto, interlinea: 1.15 });
+      if (b.sottotitolo) scriviRighe(righeDi(String(b.sottotitolo).toUpperCase(), normale, 15, LARGHEZZA), { size: 15, interlinea: 1.2 });
+      if (b.claim) { y -= 3; scriviRighe(righeDi(String(b.claim).toUpperCase(), grassetto, 9.5, LARGHEZZA), { size: 9.5, font: grassetto, colore: GOLD_PDF, interlinea: 1.4 }); }
+      if (b.lato) scriviRighe(righeDi(String(b.lato).toUpperCase(), normale, 8.5, LARGHEZZA), { size: 8.5, colore: GOLD_PDF, interlinea: 1.4 });
+      y -= 12;
+    } else if (b.tipo === "titolo" || b.tipo === "titolo2") {
+      y -= 8;
+      scriviRighe(righeDi(String(b.testo).toUpperCase(), grassetto, 18, LARGHEZZA), { size: 18, font: grassetto, interlinea: 1.2 });
+      y -= 8;
+    } else if (b.tipo === "sezione") {
+      y -= 8;
+      scriviRighe(righeDi(String(b.testo).toUpperCase(), grassetto, 10, LARGHEZZA), { size: 10, font: grassetto, colore: GOLD_PDF, interlinea: 1.4 });
+      y -= 2;
+    } else if (b.tipo === "nota") {
+      const righe = righeDi(b.testo, normale, 9.5, LARGHEZZA - 48);
+      const altezza = righe.length * 9.5 * 1.45 + 18;
+      serve(altezza + 10);
+      pagina.drawRectangle({ x: MARGINE, y: y - altezza, width: LARGHEZZA, height: altezza, color: CREMA_PDF, borderColor: BORDO_PDF, borderWidth: 0.8 });
+      pagina.drawCircle({ x: MARGINE + 16, y: y - altezza / 2, size: 7.5, color: GOLD_PDF });
+      pagina.drawText("i", { x: MARGINE + 14.3, y: y - altezza / 2 - 3.4, size: 9.5, font: grassetto, color: rgb(1, 1, 1) });
+      const yInizio = y;
+      y -= 9;
+      scriviRighe(righe, { x: MARGINE + 36, size: 9.5, colore: rgb(94 / 255, 80 / 255, 57 / 255) });
+      y = yInizio - altezza - 10;
+    } else if (b.tipo === "tappa") {
+      const colonnaSinistra = 118;
+      const xTesto = MARGINE + 66 + colonnaSinistra + 14;
+      const larghezzaTesto = A4[0] - MARGINE - xTesto - 12;
+      const righeTesto = righeDi(b.testo, normale, 9.5, larghezzaTesto);
+      const righeTitolo = b.numero ? [] : righeDi(String(b.titolo || "").toUpperCase(), grassetto, 10, larghezzaTesto);
+      const righeSinistra = b.numero
+        ? righeDi(String(b.titolo || "").toUpperCase(), grassetto, 9.5, colonnaSinistra - 26)
+        : righeDi(String(b.quando || "").toUpperCase(), grassetto, 10.5, colonnaSinistra);
+      const altezzaDestra = righeTitolo.length * 10 * 1.3 + righeTesto.length * 9.5 * 1.45;
+      const altezzaSinistra = righeSinistra.length * 10.5 * 1.25 + (b.sotto && !b.numero ? 12 : 0);
+      const altezza = Math.max(58, altezzaDestra, altezzaSinistra) + 22;
+      serve(altezza + 8);
+      const cima = y;
+      pagina.drawRectangle({ x: MARGINE, y: cima - altezza, width: LARGHEZZA, height: altezza, color: rgb(1, 1, 1), borderColor: BORDO_PDF, borderWidth: 0.8 });
+      // il tondo blu con un segno in oro: l'icona vera della pagina qui
+      // non c'e', il PDF usa i caratteri standard, e un punto d'oro dice
+      // comunque "qui c'e' una tappa"
+      pagina.drawCircle({ x: MARGINE + 33, y: cima - altezza / 2, size: 20, color: NAVY_PDF });
+      pagina.drawCircle({ x: MARGINE + 33, y: cima - altezza / 2, size: 6, borderColor: GOLD_PDF, borderWidth: 1.6 });
+      // colonna di sinistra
+      let ySx = cima - 16;
+      if (b.numero) {
+        pagina.drawText(pulisci(b.numero), { x: MARGINE + 66, y: ySx - 14, size: 18, font: normale, color: GOLD_PDF });
+        righeSinistra.forEach((r) => { pagina.drawText(r, { x: MARGINE + 66 + 26, y: ySx - 9.5, size: 9.5, font: grassetto, color: NAVY_PDF }); ySx -= 9.5 * 1.25; });
+      } else {
+        righeSinistra.forEach((r) => { pagina.drawText(r, { x: MARGINE + 66, y: ySx - 10.5, size: 10.5, font: grassetto, color: NAVY_PDF }); ySx -= 10.5 * 1.25; });
+        if (b.sotto) pagina.drawText(pulisci(b.sotto).toUpperCase(), { x: MARGINE + 66, y: ySx - 8, size: 7, font: grassetto, color: GOLD_PDF });
+      }
+      // filetto e colonna di destra
+      pagina.drawLine({ start: { x: xTesto - 8, y: cima - 12 }, end: { x: xTesto - 8, y: cima - altezza + 12 }, thickness: 0.6, color: BORDO_PDF });
+      let yDx = cima - 16;
+      righeTitolo.forEach((r) => { pagina.drawText(r, { x: xTesto, y: yDx - 10, size: 10, font: grassetto, color: NAVY_PDF }); yDx -= 10 * 1.3; });
+      if (righeTitolo.length) yDx -= 2;
+      righeTesto.forEach((r) => { pagina.drawText(r, { x: xTesto, y: yDx - 9.5, size: 9.5, font: normale, color: GRIGIO_PDF }); yDx -= 9.5 * 1.45; });
+      y = cima - altezza - 8;
+    } else {
+      scriviRighe(righeDi(b.testo, normale, 10.5, LARGHEZZA), { size: 10.5, colore: GRIGIO_PDF });
+      y -= 6;
+    }
+  }
+  return doc.save();
+}
+
+// Il PDF disegnato come immagine, pagina sotto pagina: e' l'unica forma
+// che un browser puo' mettere negli appunti (un PDF no), e incollata in
+// una chat si legge come la locandina.
+async function pdfComeImmaginePng(bytesPdf) {
+  const pdfjsLib = await getPdfjsLib();
+  const pdf = await pdfjsLib.getDocument({ data: bytesPdf.slice(0) }).promise;
+  const scala = 2;
+  const tele = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    const viewport = page.getViewport({ scale: scala });
+    const tela = document.createElement("canvas");
+    tela.width = Math.ceil(viewport.width); tela.height = Math.ceil(viewport.height);
+    const ctx = tela.getContext("2d");
+    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, tela.width, tela.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    tele.push(tela);
+  }
+  const unica = document.createElement("canvas");
+  unica.width = Math.max(...tele.map((t) => t.width));
+  unica.height = tele.reduce((h, t) => h + t.height, 0);
+  const ctx = unica.getContext("2d");
+  let yy = 0;
+  tele.forEach((t) => { ctx.drawImage(t, 0, yy); yy += t.height; });
+  return new Promise((risolvi, rifiuta) => unica.toBlob((blob) => (blob ? risolvi(blob) : rifiuta(new Error("immagine non generata"))), "image/png"));
+}
+
 // La pagina di una normativa: titolo, sezioni e paragrafi come sul sito.
 // In modalita' programmatore ogni blocco si apre cliccandoci sopra e si
 // riscrive li' dentro; quello che si salva lo vedono tutti, perche' sta
@@ -30472,6 +30622,57 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
   const [bozza, setBozza] = useState("");
   const [salvando, setSalvando] = useState(false);
   const seminato = React.useRef(false);
+  // "Copia per l'allievo": il documento pronto da mandare in chat.
+  // Da telefono si apre la condivisione con il PDF vero, e WhatsApp e'
+  // li'. Da computer un PDF negli appunti non ci puo' stare — nessun
+  // browser lo permette — quindi si copia il documento come immagine,
+  // che incollata in WhatsApp si legge come la locandina; il PDF si puo'
+  // comunque scaricare dal tasto accanto.
+  const [copiando, setCopiando] = useState(false);
+  const [msgCopia, setMsgCopia] = useState("");
+  const nomeFilePdf = `${String(titolo || "normativa").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "")}.pdf`;
+  async function copiaPerAllievo() {
+    setMsgCopia(""); setCopiando(true);
+    try {
+      if (isMobile && navigator.share && navigator.canShare) {
+        const bytes = await generaPdfNormativa(blocchi, titolo);
+        const file = new File([bytes], nomeFilePdf, { type: "application/pdf" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: titolo });
+          setMsgCopia("Scegli WhatsApp nella finestra che si è aperta: il PDF parte da lì.");
+          return;
+        }
+      }
+      if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+        const bytes = await generaPdfNormativa(blocchi, titolo);
+        scaricaBlob(new Blob([bytes], { type: "application/pdf" }), nomeFilePdf);
+        setMsgCopia("Il browser non permette di copiare: il PDF è scaricato, trascinalo nella chat.");
+        return;
+      }
+      // la Promise dentro ClipboardItem e la write chiamata subito: e'
+      // il solo modo in cui Safari accetta una copia che ha del lavoro
+      // da fare prima (vedi copiaNegliAppunti delle locandine)
+      const item = new ClipboardItem({ "image/png": (async () => pdfComeImmaginePng(await generaPdfNormativa(blocchi, titolo)))() });
+      await navigator.clipboard.write([item]);
+      setMsgCopia("Copiato. Ora puoi incollare il documento nella chat dell'allievo.");
+    } catch (e) {
+      if (e?.name !== "AbortError") setMsgCopia("Non sono riuscito a copiare: " + (e?.message || e));
+    } finally {
+      setCopiando(false);
+    }
+  }
+  async function scaricaPdf() {
+    setMsgCopia(""); setCopiando(true);
+    try {
+      const bytes = await generaPdfNormativa(blocchi, titolo);
+      scaricaBlob(new Blob([bytes], { type: "application/pdf" }), nomeFilePdf);
+      setMsgCopia("PDF scaricato.");
+    } catch (e) {
+      setMsgCopia("Non sono riuscito a creare il PDF: " + (e?.message || e));
+    } finally {
+      setCopiando(false);
+    }
+  }
 
   // prima apertura: il testo di partenza finisce sul database, cosi' da
   // quel momento e' modificabile come tutto il resto
@@ -30541,9 +30742,20 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
       <div style={{ maxWidth: 820, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 80px" }}>
-        <div style={{ marginBottom: isMobile ? 12 : 18 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo={titoloIndietro} onClick={onBack} />
+          {blocchi.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Button onClick={copiaPerAllievo} disabled={copiando}>{copiando ? "Preparo…" : "Copia per l'allievo"}</Button>
+              {!isMobile && <Button variant="ghost" onClick={scaricaPdf} disabled={copiando}>Scarica PDF</Button>}
+            </div>
+          )}
         </div>
+        {msgCopia && (
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCopia.startsWith("Non") || msgCopia.startsWith("Il browser") ? "#C0392B" : "#2E7D32", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", marginBottom: 16 }}>
+            {msgCopia}
+          </div>
+        )}
         {programmatore && (
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, background: BG, border: `1px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", marginBottom: 18 }}>
             Sei in modalità programmatore: clicca su un qualsiasi pezzo di testo per riscriverlo. Quello che salvi lo vedono tutti.
