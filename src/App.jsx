@@ -59775,6 +59775,13 @@ export default function App() {
   const [viewPrimaDiMagazzino, setViewPrimaDiMagazzino] = useState("magazzinoshop");
   const [dockCoricato, setDockCoricato] = useState(false);
   const [dockNascosto, setDockNascosto] = useState(false);
+  // i riferimenti del rullo del dock da telefono (vedi piu' giu', prima del
+  // return): stanno qui perche' gli hook devono venire prima dell'uscita
+  // anticipata del gate, o React ne conta un numero diverso a ogni render
+  const rulloDockEl = React.useRef(null);
+  const toccoRulloDock = React.useRef(null);
+  const corsaRulloDock = React.useRef(null);
+  const rulloDockMosso = React.useRef(false);
   // i preferiti del dock: tre posti per utente, salvati come le altre
   // impostazioni condivise cosi' seguono la persona da un dispositivo
   // all'altro. Chi non ha un'identita' (accesso col solo codice) li tiene
@@ -60460,10 +60467,6 @@ export default function App() {
   // si muove il DOM direttamente: uno stato React a ogni pixel farebbe
   // ridisegnare l'intera app
   const passoRulloDock = 70 + 10;
-  const rulloDockEl = React.useRef(null);
-  const toccoRulloDock = React.useRef(null);
-  const corsaRulloDock = React.useRef(null);
-  const rulloDockMosso = React.useRef(false);
   // coricato, il dock e' girato di 90 gradi: il suo "su" e' il destra dello
   // schermo
   const posizioneRulloDock = (e) => (dockCoricato ? -e.touches[0].clientX : e.touches[0].clientY);
