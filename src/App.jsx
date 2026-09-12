@@ -61280,7 +61280,7 @@ export default function App() {
         <PaginaGestionePunti
           master={master} venditeShop={venditeShop} prodottiShop={prodottiShop} puntiMasterImpostazioni={puntiMasterImpostazioni}
           regoleReferralAutomatico={regoleReferralAutomatico}
-          ricarica={ricarica} onBack={() => setView("compensipremi")}
+          ricarica={fetchDati} onBack={() => setView("compensipremi")}
           titolo={etichettaTasto("compensipremi", "gestionepunti", "Gestione punti")}
         />
       )}
