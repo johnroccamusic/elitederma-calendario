@@ -41394,14 +41394,14 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         ...(c.maiuscolo ? { textTransform: "uppercase", letterSpacing: 0.6 } : {}),
                       }}>{c.etichetta}</span>
                     </span>
-                    <span style={{ display: "block", marginTop: isMobile ? 4 : 10, textAlign: isMobile ? "center" : "left" }}>
+                    <span style={{ display: "block", marginTop: isMobile ? 4 : 10, textAlign: "center" }}>
                       <span style={{ ...fontDisplay, fontSize: isMobile ? 19 : 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{c.valore.toLocaleString("it-IT")}</span>
                       <span style={{ ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, display: "block", lineHeight: 1.2 }}>{c.unita}</span>
                     </span>
                     {/* la nota si appoggia in fondo: cosi' una tessera con
                         due righe di spiegazione resta alta come le altre */}
                     {c.nota && !isMobile && (
-                      <span style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.4, marginTop: "auto", paddingTop: 8 }}>{c.nota}</span>
+                      <span style={{ ...fontBody, fontSize: 10, color: NAVY, lineHeight: 1.3, marginTop: "auto", paddingTop: 6, paddingRight: 22, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.nota}</span>
                     )}
                   </>
                 );
@@ -41418,7 +41418,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                   // Se il contenuto non ci sta — telefono stretto — la tessera
                   // cresce un po' invece di tagliare, perche' il rapporto e'
                   // una preferenza e non un vincolo
-                  textAlign: "left", aspectRatio: "1 / 1", minHeight: 0, position: "relative",
+                  textAlign: "left", aspectRatio: "1 / 1", minHeight: 0, position: "relative", overflow: "hidden",
                 };
                 if (!c.filtro && !c.azione) return <div key={c.chiave} style={stile}>{corpo}</div>;
                 return (
