@@ -60495,15 +60495,22 @@ export default function App() {
     if (t.dy === 0) return;
     // oltre un terzo del passo si completa il giro, altrimenti si torna
     const verso = Math.abs(t.dy) > passoRulloDock / 3 ? Math.sign(t.dy) : 0;
-    corsaRulloDock.current = { verso };
+    // se il dito ha gia' portato il rullo a fine corsa non c'e' niente da
+    // animare, e "transitionend" non arriverebbe mai: si conclude subito.
+    // Per lo stesso motivo c'e' un timer di riserva, o un evento perso
+    // lascerebbe il rullo bloccato per sempre
+    if (verso * passoRulloDock === t.dy) { concludiRulloDock(verso); return; }
+    corsaRulloDock.current = { verso, riserva: setTimeout(() => concludiRulloDock(verso), 320) };
     spostaRulloDock(verso * passoRulloDock, true);
+  };
+  const concludiRulloDock = (verso) => {
+    if (corsaRulloDock.current) { clearTimeout(corsaRulloDock.current.riserva); corsaRulloDock.current = null; }
+    spostaRulloDock(0, false);
+    if (verso !== 0) setPreferitiAperti((v) => !v);
   };
   const arrivoRulloDock = (e) => {
     if (e.target !== e.currentTarget || !corsaRulloDock.current) return;
-    const { verso } = corsaRulloDock.current;
-    corsaRulloDock.current = null;
-    spostaRulloDock(0, false);
-    if (verso !== 0) setPreferitiAperti((v) => !v);
+    concludiRulloDock(corsaRulloDock.current.verso);
   };
   const tastiClassiciDock = (
     <>
@@ -60753,7 +60760,9 @@ export default function App() {
               <div
                 style={{
                   position: "relative", overflow: "hidden",
-                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                  // col rullo il vuoto fra i pezzi lo fa il suo calcolo di
+                  // larghezza: un gap in piu' lo sposterebbe
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: preferitiDisponibili ? 0 : 10,
                   background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
                   border: "1px solid rgba(255,255,255,0.22)", borderRadius: 30, padding: "10px 14px",
                   boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
@@ -60771,7 +60780,12 @@ export default function App() {
               onTouchEnd={fineRulloDock}
               onTouchCancel={fineRulloDock}
               onClickCapture={(e) => { if (rulloDockMosso.current) { e.stopPropagation(); e.preventDefault(); } }}
-              style={{ flex: 1, minWidth: 0, height: 70, overflow: "hidden", touchAction: "none" }}
+              // largo quanto tre dei quattro posti del dock: con quattro tasti
+              // da 70 distribuiti su W lo spazio fra uno e l'altro e' (W-280)/3,
+              // e tre tasti piu' due spazi fanno (2W+70)/3. Cosi' ogni tasto
+              // del rullo cade esattamente dove cadeva prima, e il vuoto fra
+              // il rullo e la casetta e' lo stesso spazio
+              style={{ flex: "0 0 calc(66.6667% + 23.3333px)", minWidth: 0, height: 70, overflow: "hidden", touchAction: "none" }}
             >
               <div
                 ref={rulloDockEl}
