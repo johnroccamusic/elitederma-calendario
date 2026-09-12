@@ -2420,10 +2420,16 @@ function StiliGlobaliAspetto() {
   // tiene. Il raggio invece si: quasi ogni pulsante scrive il suo negli
   // stili inline, e senza forzarlo questa regola non toccherebbe nessuno.
   // Finche' il raggio e' "come nel codice" la regola non si scrive affatto.
+  //
+  // Restano fuori i pulsanti che hanno una forma, non un raggio: i tondi
+  // (piu'/meno, frecce, "50%") e le pastiglie ("999px" e simili). Un
+  // tondo portato a 12 pixel non e' un tondo con gli angoli diversi, e'
+  // un quadrato smussato — e i due si mischiavano con tutto il resto.
+  const nonTondi = `:not([style*="border-radius: 50%"]):not([style*="border-radius: 99"])`;
   const regolaRaggio = raggio == null ? "" : `
-button[style*="background: rgb"]:not([data-niente-ombra]),
-button[style*="background-color: rgb"]:not([data-niente-ombra]),
-button[style*="background: #"]:not([data-niente-ombra]) { border-radius: ${raggio}px !important; }`;
+button[style*="background: rgb"]:not([data-niente-ombra])${nonTondi},
+button[style*="background-color: rgb"]:not([data-niente-ombra])${nonTondi},
+button[style*="background: #"]:not([data-niente-ombra])${nonTondi} { border-radius: ${raggio}px !important; }`;
   return (
     <style>{`
 :root { --ombra-aree: ${ombraCssTasto(aspetto.aree.ombra)}; }
@@ -14462,7 +14468,7 @@ function PaginaAspettoApp() {
                   <Button variant="ghost" onClick={() => cambia({ raggio: null })}>Come nel codice</Button>
                 )}
                 <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexBasis: "100%" }}>
-                  Vale per tutti i pulsanti con uno sfondo, pastiglie e tondi compresi. "Auto" lascia a ognuno i suoi angoli.
+                  Vale per i pulsanti squadrati con uno sfondo. I tondi e le pastiglie tengono la loro forma. "Auto" lascia a ognuno i suoi angoli.
                 </span>
               </div>
             )}
