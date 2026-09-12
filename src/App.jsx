@@ -9920,12 +9920,18 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // "acquisto effettuato"); i punti invece riflettono anche i resi
   // (negativi), perché sono la sostanza vera della raccolta punti
   const provvigioniMaster = useMemo(() => {
-    const vuoto = { venditeTotale: 0, euroCorso: 0, euroReferral: 0, euroTotale: 0, pezzi: 0, premi: premiVolumeRaggiunti(0), gruppi: [] };
+    const vuoto = { venditeTotale: 0, venditeCorso: 0, venditeReferral: 0, euroCorso: 0, euroReferral: 0, euroTotale: 0, pezzi: 0, premi: premiVolumeRaggiunti(0), gruppi: [] };
     if (!masterSelId || !puntiMasterImpostazioni) return vuoto;
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
-    let venditeTotale = 0, euroCorso = 0, euroReferral = 0, pezzi = 0;
+    let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, euroCorso = 0, euroReferral = 0, pezzi = 0;
     const perGruppo = {};
     righe.forEach((v) => {
+      // "al corso" e' una vendita legata a una classe, "con referral" una
+      // con un codice: la stessa vendita puo' essere tutte e due, e si
+      // conta in entrambe. Si guardano i campi della vendita e non il
+      // canale della provvigione, che sulle vendite piu' vecchie manca
+      if ((v.totale || 0) > 0 && v.corso_data_id) venditeCorso += 1;
+      if ((v.totale || 0) > 0 && v.codice_coupon) venditeReferral += 1;
       // l'importo non si ricalcola: e' quello congelato sulla vendita il
       // giorno in cui e' stata fatta. Un reso ha totale negativo e porta
       // con se' una provvigione negativa, quindi si sottrae da sola
@@ -9942,7 +9948,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     const premi = premiVolumeRaggiunti(pezzi);
     const gruppi = Object.values(perGruppo).map((g) => ({ ...g, euro: round2(g.euro) })).sort((a, b) => b.euro - a.euro);
     return {
-      venditeTotale,
+      venditeTotale, venditeCorso, venditeReferral,
       euroCorso: round2(euroCorso), euroReferral: round2(euroReferral),
       // il premio a volume e' maturato quanto le provvigioni: sta nel
       // totale, non in una riga a parte che nessuno somma
@@ -10068,7 +10074,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         {masterSel && puntiMasterImpostazioni && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Le tue provvigioni</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}. Un punto vale un euro.</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}.</div>
             {(() => {
               // le 4 card stanno su una riga sola a qualunque larghezza: sul
               // telefono con font e imbottitura ridotti, su desktop larghe
@@ -10091,38 +10097,24 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             // le etichette partono dalla stessa riga anche quando una va a capo
             // e le altre no
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+              {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
+                  qui contano le vendite, i punti arriveranno con una regola
+                  loro (da definire), e la quarta scheda resta vuota in
+                  attesa. Gli importi restano calcolati e nel dettaglio per
+                  codice, per chi amministra */}
               <div style={cardPunti}>
-                <div style={lblPunti}>Al corso</div>
-                <div style={numPunti}>{fmtEuroErp2(provvigioniMaster.euroCorso)}</div>
+                <div style={lblPunti}>Vendite al corso</div>
+                <div style={numPunti}>{provvigioniMaster.venditeCorso}</div>
               </div>
               <div style={cardPunti}>
-                <div style={lblPunti}>Con il tuo referral</div>
-                <div style={numPunti}>{fmtEuroErp2(provvigioniMaster.euroReferral)}</div>
-              </div>
-              {/* i pezzi che da soli non arrivavano a un euro: qui valgono,
-                  ed e' l'unico posto dove si vede quanti ne mancano al
-                  premio dopo — che e' la parte che fa venire voglia di
-                  venderne un altro */}
-              <div style={cardPunti}>
-                <div style={lblPunti}>Pezzi da premio</div>
-                <div style={numPunti}>{provvigioniMaster.pezzi}</div>
-                <div style={ptPunti}>
-                  {/* da telefono si scrive solo quello che serve a fare il
-                      pezzo dopo: "nessun premio ancora" occupa tre righe per
-                      dire quello che il numero grande sopra dice gia' */}
-                  {isMobile
-                    ? (provvigioniMaster.premi.prossimo ? `${provvigioniMaster.premi.pezziAlProssimo} al prossimo` : "tutti i premi presi")
-                    : <>
-                        {provvigioniMaster.premi.euro > 0 ? `${fmtEuroErp2(provvigioniMaster.premi.euro)} maturati` : "nessun premio ancora"}
-                        {provvigioniMaster.premi.prossimo && ` · ${provvigioniMaster.premi.pezziAlProssimo} al prossimo`}
-                      </>}
-                </div>
+                <div style={lblPunti}>Vendite con referral</div>
+                <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
               </div>
               <div style={cardPunti}>
-                <div style={lblPunti}>Totale maturato</div>
-                <div style={{ ...numPunti, color: GOLD }}>{fmtEuroErp2(provvigioniMaster.euroTotale)}</div>
-                <div style={ptPunti}>{provvigioniMaster.venditeTotale} vendit{provvigioniMaster.venditeTotale === 1 ? "a" : "e"}</div>
+                <div style={lblPunti}>Punti accumulati</div>
+                <div style={{ ...numPunti, color: MUTED }}>—</div>
               </div>
+              <div style={cardPunti} aria-hidden="true" />
             </div>
               );
             })()}
