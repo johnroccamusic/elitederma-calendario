@@ -138,7 +138,24 @@ const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v9";
 // sessione, ogni schermata che usa la stessa chiave si aggiorna insieme
 // alle altre, e il salvataggio parte in ritardo perché trascinando una
 // colonna arrivano cento cambiamenti al secondo.
-const LAYOUT_CACHE = {};
+// L'ultima copia di ogni impostazione resta anche sul dispositivo. Il
+// database risponde mezzo secondo dopo il primo disegno, e in quel mezzo
+// secondo i tasti si vedevano cambiare forma e prendere l'ombra a ogni
+// apertura: brutto da guardare. Partendo dalla copia locale la pagina
+// nasce gia' giusta; quando il database risponde, se qualcosa e' cambiato
+// da un altro dispositivo, si aggiorna e la copia si rinfresca.
+const CHIAVE_CACHE_LOCALE_LAYOUT = "impostazioni_condivise_cache_v1";
+function leggiCacheLocaleLayout() {
+  try { return JSON.parse(localStorage.getItem(CHIAVE_CACHE_LOCALE_LAYOUT) || "{}") || {}; } catch { return {}; }
+}
+function scriviCacheLocaleLayout(chiave, valore) {
+  try {
+    const tutto = leggiCacheLocaleLayout();
+    tutto[chiave] = valore;
+    localStorage.setItem(CHIAVE_CACHE_LOCALE_LAYOUT, JSON.stringify(tutto));
+  } catch { /* senza memoria locale si continua a leggere dal database */ }
+}
+const LAYOUT_CACHE = leggiCacheLocaleLayout();
 const LAYOUT_ASCOLTATORI = {};
 const LAYOUT_CARICATE = {};
 const LAYOUT_TIMER = {};
@@ -149,7 +166,14 @@ function caricaLayoutCondiviso(chiave) {
   if (LAYOUT_CARICATE[chiave]) return LAYOUT_CARICATE[chiave];
   LAYOUT_CARICATE[chiave] = supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle()
     .then(({ data }) => {
-      if (data?.valore && LAYOUT_CACHE[chiave] === undefined) { LAYOUT_CACHE[chiave] = data.valore; notificaLayout(chiave); }
+      // il database comanda: se la copia locale e' diversa si allinea.
+      // Un salvataggio fatto nel frattempo su questo dispositivo ha gia'
+      // aggiornato la cache e sta partendo verso il database, e vince.
+      if (data?.valore != null && !LAYOUT_TIMER[chiave] && JSON.stringify(data.valore) !== JSON.stringify(LAYOUT_CACHE[chiave])) {
+        LAYOUT_CACHE[chiave] = data.valore;
+        scriviCacheLocaleLayout(chiave, data.valore);
+        notificaLayout(chiave);
+      }
       return LAYOUT_CACHE[chiave];
     })
     .catch(() => LAYOUT_CACHE[chiave]);
@@ -164,8 +188,10 @@ function salvaLayoutCondiviso(chiave, valore) {
   LAYOUT_CACHE[chiave] = valore;
   notificaLayout(chiave);
   if (RUOLO_APP !== "programmatore") return;
+  scriviCacheLocaleLayout(chiave, valore);
   clearTimeout(LAYOUT_TIMER[chiave]);
   LAYOUT_TIMER[chiave] = setTimeout(() => {
+    LAYOUT_TIMER[chiave] = null;
     supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" })
       .then(({ error }) => { if (error) console.warn("Impaginazione non salvata:", error.message); });
   }, 600);
@@ -179,8 +205,10 @@ function salvaLayoutCondiviso(chiave, valore) {
 function salvaImpostazioneCondivisa(chiave, valore) {
   LAYOUT_CACHE[chiave] = valore;
   notificaLayout(chiave);
+  scriviCacheLocaleLayout(chiave, valore);
   clearTimeout(LAYOUT_TIMER[chiave]);
   LAYOUT_TIMER[chiave] = setTimeout(() => {
+    LAYOUT_TIMER[chiave] = null;
     supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" })
       .then(({ error }) => { if (error) console.warn("Impostazione non salvata:", error.message); });
   }, 600);
@@ -58623,7 +58651,15 @@ export default function App() {
   const [categorieGruppi, setCategorieGruppi] = useState(null); // riga singola: "Associa il gruppo a una categoria di spesa" per assistenti/master/hotel/location
   const [layoutAssegnazioneMaster, setLayoutAssegnazioneMaster] = useState(null); // riga singola: larghezze colonne "fissate su tutti i terminali" in Assegnazione Master
   const [layoutIscrizioni, setLayoutIscrizioni] = useState(null); // riga singola: spazi verticali della card "Gestione Iscrizioni", regolati da ruoloUtente "programmatore"
-  const [layoutTasti, setLayoutTasti] = useState({}); // ordine/cartelle dei tasti di Home e delle pagine a tasti, una riga per pagina — { [pagina]: { pagina, ordine } }
+  // ordine/cartelle dei tasti di Home e delle pagine a tasti, una riga per
+  // pagina — { [pagina]: { pagina, ordine } }. Parte dall'ultima copia sul
+  // dispositivo, per lo stesso motivo delle impostazioni condivise: senza,
+  // i tasti nascevano nell'ordine di fabbrica e si riordinavano da soli
+  // mezzo secondo dopo
+  const [layoutTasti, setLayoutTasti] = useState(() => { try { return JSON.parse(localStorage.getItem("layout_tasti_cache_v1") || "{}") || {}; } catch { return {}; } });
+  useEffect(() => {
+    try { localStorage.setItem("layout_tasti_cache_v1", JSON.stringify(layoutTasti)); } catch { /* senza memoria locale si legge dal database */ }
+  }, [layoutTasti]);
   const [loghiCategorie, setLoghiCategorie] = useState([]); // le 10 categorie fisse (corsi x Artist/Expert + Master Assistant + Master)
   // "Analisi costi di gestione": catalogo categorie/sotto-categorie (amministrabile), registro spese, ripartizioni multi-ambito, budget, soglie di allerta, ambiti evento/fornitore
   const [costiCategorie, setCostiCategorie] = useState([]);
