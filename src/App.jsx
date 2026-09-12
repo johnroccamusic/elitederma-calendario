@@ -30583,33 +30583,6 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
   return doc.save();
 }
 
-// Il PDF disegnato come immagine, pagina sotto pagina: e' l'unica forma
-// che un browser puo' mettere negli appunti (un PDF no), e incollata in
-// una chat si legge come la locandina.
-async function pdfComeImmaginePng(bytesPdf) {
-  const pdfjsLib = await getPdfjsLib();
-  const pdf = await pdfjsLib.getDocument({ data: bytesPdf.slice(0) }).promise;
-  const scala = 2;
-  const tele = [];
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const page = await pdf.getPage(n);
-    const viewport = page.getViewport({ scale: scala });
-    const tela = document.createElement("canvas");
-    tela.width = Math.ceil(viewport.width); tela.height = Math.ceil(viewport.height);
-    const ctx = tela.getContext("2d");
-    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, tela.width, tela.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    tele.push(tela);
-  }
-  const unica = document.createElement("canvas");
-  unica.width = Math.max(...tele.map((t) => t.width));
-  unica.height = tele.reduce((h, t) => h + t.height, 0);
-  const ctx = unica.getContext("2d");
-  let yy = 0;
-  tele.forEach((t) => { ctx.drawImage(t, 0, yy); yy += t.height; });
-  return new Promise((risolvi, rifiuta) => unica.toBlob((blob) => (blob ? risolvi(blob) : rifiuta(new Error("immagine non generata"))), "image/png"));
-}
-
 // La pagina di una normativa: titolo, sezioni e paragrafi come sul sito.
 // In modalita' programmatore ogni blocco si apre cliccandoci sopra e si
 // riscrive li' dentro; quello che si salva lo vedono tutti, perche' sta
@@ -30622,39 +30595,28 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
   const [bozza, setBozza] = useState("");
   const [salvando, setSalvando] = useState(false);
   const seminato = React.useRef(false);
-  // "Copia per l'allievo": il documento pronto da mandare in chat.
-  // Da telefono si apre la condivisione con il PDF vero, e WhatsApp e'
-  // li'. Da computer un PDF negli appunti non ci puo' stare — nessun
-  // browser lo permette — quindi si copia il documento come immagine,
-  // che incollata in WhatsApp si legge come la locandina; il PDF si puo'
-  // comunque scaricare dal tasto accanto.
+  // "Copia per l'allievo": il documento pronto da mandare in chat, in
+  // pagine A4. Dove il sistema sa condividere un file (telefoni, Mac) si
+  // apre la sua finestra con il PDF vero e WhatsApp e' li'; altrove il
+  // PDF si scarica e si trascina nella chat. Negli appunti un PDF non
+  // ci puo' stare — nessun browser lo permette — e la prima versione
+  // copiava le pagine come un'unica immagine: incollata era un
+  // lenzuolo, non un documento.
   const [copiando, setCopiando] = useState(false);
   const [msgCopia, setMsgCopia] = useState("");
   const nomeFilePdf = `${String(titolo || "normativa").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "")}.pdf`;
   async function copiaPerAllievo() {
     setMsgCopia(""); setCopiando(true);
     try {
-      if (isMobile && navigator.share && navigator.canShare) {
-        const bytes = await generaPdfNormativa(blocchi, titolo);
-        const file = new File([bytes], nomeFilePdf, { type: "application/pdf" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: titolo });
-          setMsgCopia("Scegli WhatsApp nella finestra che si è aperta: il PDF parte da lì.");
-          return;
-        }
-      }
-      if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-        const bytes = await generaPdfNormativa(blocchi, titolo);
-        scaricaBlob(new Blob([bytes], { type: "application/pdf" }), nomeFilePdf);
-        setMsgCopia("Il browser non permette di copiare: il PDF è scaricato, trascinalo nella chat.");
+      const bytes = await generaPdfNormativa(blocchi, titolo);
+      const file = new File([bytes], nomeFilePdf, { type: "application/pdf" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: titolo });
+        setMsgCopia("Scegli WhatsApp nella finestra che si è aperta: il PDF parte da lì, in pagine A4.");
         return;
       }
-      // la Promise dentro ClipboardItem e la write chiamata subito: e'
-      // il solo modo in cui Safari accetta una copia che ha del lavoro
-      // da fare prima (vedi copiaNegliAppunti delle locandine)
-      const item = new ClipboardItem({ "image/png": (async () => pdfComeImmaginePng(await generaPdfNormativa(blocchi, titolo)))() });
-      await navigator.clipboard.write([item]);
-      setMsgCopia("Copiato. Ora puoi incollare il documento nella chat dell'allievo.");
+      scaricaBlob(new Blob([bytes], { type: "application/pdf" }), nomeFilePdf);
+      setMsgCopia("PDF pronto in Download, in pagine A4: trascinalo nella chat dell'allievo.");
     } catch (e) {
       if (e?.name !== "AbortError") setMsgCopia("Non sono riuscito a copiare: " + (e?.message || e));
     } finally {
@@ -30752,7 +30714,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
           )}
         </div>
         {msgCopia && (
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCopia.startsWith("Non") || msgCopia.startsWith("Il browser") ? "#C0392B" : "#2E7D32", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", marginBottom: 16 }}>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCopia.startsWith("Non") ? "#C0392B" : "#2E7D32", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", marginBottom: 16 }}>
             {msgCopia}
           </div>
         )}
