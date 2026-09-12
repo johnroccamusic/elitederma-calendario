@@ -13134,6 +13134,18 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
   const [trascinaSopra, setTrascinaSopra] = useState(false);
   const [eliminandoNome, setEliminandoNome] = useState(null);
   const [sostituendoNome, setSostituendoNome] = useState(null);
+  // la locandina aperta a tutto schermo: nella griglia i prezzi non si
+  // leggono, ne' da telefono ne' da scrivania. Si apre con le due frecce
+  // che si allontanano, si chiude con quelle che si avvicinano, con Esc,
+  // o toccando il fondo scuro
+  const [ingranditaNome, setIngranditaNome] = useState(null);
+  const ingrandita = ingranditaNome ? locandine.find((l) => l.nome === ingranditaNome) || null : null;
+  useEffect(() => {
+    if (!ingranditaNome) return;
+    const suTasto = (e) => { if (e.key === "Escape") setIngranditaNome(null); };
+    window.addEventListener("keydown", suTasto);
+    return () => window.removeEventListener("keydown", suTasto);
+  }, [ingranditaNome]);
   const inputFileRef = React.useRef(null);
   const inputSostituzioneRef = React.useRef(null);
   const nomeSostituzioneRef = React.useRef(null);
@@ -13392,6 +13404,19 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                   <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}>
                     <button
+                      onClick={() => setIngranditaNome(l.nome)}
+                      title="Ingrandisci a tutto schermo"
+                      aria-label="Ingrandisci a tutto schermo"
+                      style={{
+                        width: 26, height: 26, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer",
+                        background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                      </svg>
+                    </button>
+                    <button
                       onClick={() => copiaNegliAppunti(l)}
                       title="Copia l'immagine (incollala dove ti serve, es. WhatsApp)"
                       style={{
@@ -13462,6 +13487,40 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {ingrandita && (
+          <div
+            onClick={() => setIngranditaNome(null)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 3000, background: "rgba(14,27,51,0.94)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "max(env(safe-area-inset-top, 0px), 12px) 12px max(env(safe-area-inset-bottom, 0px), 12px)",
+            }}
+          >
+            {/* la foto intera, mai tagliata: "contain" la fa stare tutta
+                nello schermo, in verticale come in orizzontale. Il clic
+                sulla foto non chiude, cosi' si puo' guardare con calma */}
+            <img
+              src={ingrandita.url} alt={ingrandita.titolo}
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block", borderRadius: 6, boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }}
+            />
+            <button
+              onClick={(e) => { e.stopPropagation(); setIngranditaNome(null); }}
+              title="Riduci"
+              aria-label="Riduci"
+              style={{
+                position: "absolute", top: "max(env(safe-area-inset-top, 0px), 14px)", right: 14,
+                width: 40, height: 40, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.3)", padding: 0, cursor: "pointer",
+                background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+              </svg>
+            </button>
           </div>
         )}
 
