@@ -40439,7 +40439,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                     <span style={{
                       display: "flex", alignItems: "center", gap: isMobile ? 4 : 8,
                       flexDirection: isMobile ? "column" : "row",
-                      minHeight: isMobile ? 56 : 34,
+                      minHeight: isMobile ? 0 : 34,
                     }}>
                       {/* l'icona in un tondo del suo colore appena accennato:
                           nuda, accanto a un'etichetta su piu' righe, si
@@ -40473,7 +40473,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                   display: "flex", flexDirection: "column", padding: isMobile ? "9px 6px" : "16px 18px", borderRadius: isMobile ? 13 : 16,
                   border: `1px solid ${c.bordo || (scelto ? GOLD : CREAM_BORDER)}`, background: c.sfondo || (scelto ? BG : "#fff"),
                   ...(accento ? { borderLeft: "3px solid #C0392B" } : {}),
-                  textAlign: "left", minHeight: isMobile ? 104 : 132, position: "relative",
+                  // quadrate, da telefono come da scrivania: la larghezza la
+                  // decide la griglia (un quarto della riga), l'altezza segue.
+                  // Se il contenuto non ci sta — telefono stretto — la tessera
+                  // cresce un po' invece di tagliare, perche' il rapporto e'
+                  // una preferenza e non un vincolo
+                  textAlign: "left", aspectRatio: "1 / 1", minHeight: 0, position: "relative",
                 };
                 if (!c.filtro && !c.azione) return <div key={c.chiave} style={stile}>{corpo}</div>;
                 return (
