@@ -49467,13 +49467,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         const esaurito = disponibili <= 0;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
-          <div key={p.id} onClick={() => !esaurito && aggiungiAlCarrello(p)} style={{ ...cardStyle, marginBottom: 0, padding: 14, cursor: esaurito ? "default" : "pointer", opacity: esaurito ? 0.55 : 1 }}>
+          {/* la tessera e' una colonna e il prezzo si appoggia in fondo:
+              un nome su due righe alzava o abbassava il prezzo della sua
+              tessera, e su una riga di cinque i "39,90" ballavano */}
+          <div key={p.id} onClick={() => !esaurito && aggiungiAlCarrello(p)} style={{ ...cardStyle, marginBottom: 0, padding: 14, cursor: esaurito ? "default" : "pointer", opacity: esaurito ? 0.55 : 1, display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
             <div style={tileImg}>
               {immagineUrlPerProdotto[p.id] ? <img src={immagineUrlPerProdotto[p.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={30} color={MUTED} />}
             </div>
             <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, lineHeight: 1.25, marginBottom: 2 }}>{p.nome}</div>
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>{nomiCategorie || "—"}{p.sku ? ` · Cod. ${p.sku}` : ""}</div>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginTop: "auto" }}>
               <div>
                 <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(prezzoAlPubblico(p))}</div>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>IVA incl.</div>
