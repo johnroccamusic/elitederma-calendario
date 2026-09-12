@@ -32313,7 +32313,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "referral", l: "Genera referral code" }, { v: "premi", l: "Provvigioni master" }].map((t) => (
+          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "referral", l: "Genera referral code" }].map((t) => (
             <button key={t.v} onClick={() => { setTab(t.v); setMsg(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 18, border: "none", background: tab === t.v ? NAVY : BG, color: tab === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
               {t.l}
             </button>
@@ -32568,61 +32568,6 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {tab === "premi" && (
-          <div>
-            <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
-              Le provvigioni maturano sulle vendite al banco e su quelle fatte con il referral code della master. Gli importi si congelano al momento della vendita: le fasce si regolano in Setting → Definizione provvigioni, e cambiarle non tocca quello che è già maturato.
-            </div>
-
-            <div style={{ ...cardStyle }}>
-              <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Finestra della raccolta</div>
-              {!impostazioniForm ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento…</div>
-              ) : (
-                <>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    <div style={{ flex: "1 1 180px" }}><Field label="Inizio raccolta"><input type="date" style={inputStyle} value={impostazioniForm.data_inizio} onChange={(e) => setImpostazioniForm({ ...impostazioniForm, data_inizio: e.target.value })} /></Field></div>
-                    <div style={{ flex: "1 1 180px" }}><Field label="Fine raccolta"><input type="date" style={inputStyle} value={impostazioniForm.data_fine} onChange={(e) => setImpostazioniForm({ ...impostazioniForm, data_fine: e.target.value })} /></Field></div>
-                  </div>
-                  <Button onClick={salvaImpostazioniPremi} disabled={salvandoImpostazioni}>{salvandoImpostazioni ? "Salvo…" : "Salva finestra"}</Button>
-                </>
-              )}
-            </div>
-
-            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, margin: "24px 0 10px" }}>Classifica master</div>
-            {classificaPunti.length === 0 ? (
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna vendita attribuita a una master nella finestra della raccolta.</div>
-            ) : (
-              <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 420 }}>
-                    <thead>
-                      <tr>
-                        {[{ c: "master", l: "Master" }, { c: "punti", l: "Provvigioni" }, { c: "euro", l: "Valore venduto" }].map((th) => (
-                          <ThOrdina key={th.c} campo={th.c} ordine={ordineClassifica} onOrdina={cambiaOrdineClassifica} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ordinaClassifica(classificaPunti, {
-                        master: (r) => r.master?.nome || "",
-                        punti: (r) => r.punti ?? null,
-                        euro: (r) => r.euro ?? null,
-                      }).map((r) => (
-                        <tr key={r.master.id}>
-                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{toTitleCase(r.master.nome)}</td>
-                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: r.punti < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(r.punti)}</td>
-                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(r.euro)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
