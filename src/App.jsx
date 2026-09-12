@@ -333,6 +333,40 @@ const CHIAVE_REGOLA_REFERRAL_MASTER = "referralMaster_regolaSconto";
 // agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
 const CHIAVE_DIVISIONE_MAGAZZINO = "gestioneMagazzino_divisioneColonne";
 const CHIAVE_LARGHEZZE_FRONTOFFICE = "shopOnline_larghezzeColonneFrontOffice";
+// Chi sta in una sottocategoria sta anche nella categoria madre.
+//
+// Un pigmento "Eyebrows" e' un pigmento: deve comparire in "TUTTI I
+// PIGMENTI" senza che qualcuno lo aggiunga a mano come seconda categoria
+// — e cosi' per ogni sottocategoria, presente e futura. La regola vale in
+// due punti: quando si LEGGE (POS, magazzino, albero delle categorie
+// risalgono ai padri da soli, quindi i prodotti gia' in archivio si
+// sistemano senza toccarli) e quando si SCRIVE (salvando una scheda il
+// padre finisce nel database e sul sito come categoria secondaria vera).
+function conCategoriePadre(ids, categorieProdotti) {
+  const padreDi = new Map((categorieProdotti || []).map((c) => [c.id, c.categoria_padre_id || null]));
+  const tutte = [];
+  (ids || []).forEach((id) => {
+    let corrente = id;
+    // il contatore ferma un albero scritto male (un padre che punta a un
+    // figlio): dieci livelli sono gia' piu' di quanti ne esistano
+    for (let giri = 0; corrente && !tutte.includes(corrente) && giri < 10; giri++) {
+      tutte.push(corrente);
+      corrente = padreDi.get(corrente) || null;
+    }
+  });
+  return tutte;
+}
+// le righe prodotto-categoria come se ogni padre fosse scritto: e' quello
+// che leggono POS e magazzino al posto della tabella nuda
+function collegamentiConPadri(prodottiCategorie, categorieProdotti) {
+  const perProdotto = {};
+  (prodottiCategorie || []).forEach((pc) => { (perProdotto[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+  const righe = [];
+  Object.entries(perProdotto).forEach(([prodottoId, ids]) => {
+    conCategoriePadre(ids, categorieProdotti).forEach((categoriaId) => righe.push({ prodotto_id: prodottoId, categoria_id: categoriaId }));
+  });
+  return righe;
+}
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Hotel pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
@@ -40134,7 +40168,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const fornitoreNomePerId = Object.fromEntries((fornitori || []).map((f) => [f.id, f.nome]));
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
-  (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+  collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
 
   // il collegamento vendita<->prodotto è per nome: vendite_shop non ha
   // un riferimento diretto al prodotto, solo la descrizione della riga.
@@ -48412,7 +48446,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const categorieIdEscluseVenditaDiretta = new Set((categorieProdotti || []).filter((c) => c.escludi_vendita_diretta).map((c) => c.id));
   const categorieOrdinate = [...(categorieProdotti || [])].filter((c) => !c.escludi_vendita_diretta).sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
-  (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+  collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
   const immagineUrlPerProdotto = {};
   [...(prodottiImmagini || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).forEach((im) => { if (!immagineUrlPerProdotto[im.prodotto_id]) immagineUrlPerProdotto[im.prodotto_id] = im.url; });
 
@@ -49735,7 +49769,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
   const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
-  (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+  collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
   const categorieIdPerNomeProdotto = {};
   (prodottiShop || []).forEach((p) => { categorieIdPerNomeProdotto[(p.nome || "").trim().toLowerCase()] = categorieIdPerProdottoId[p.id] || []; });
 
@@ -50502,13 +50536,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const figliDi = useMemo(() => costruisciAlberoCategorie(categorieTutte), [categorieTutte]);
   const radiciCategorie = figliDi["_root"] || [];
 
-  const contaProdottiDiretti = (categoriaId) => (prodottiCategorie || []).filter((pc) => pc.categoria_id === categoriaId).length;
+  // padri compresi: cosi' "TUTTI I PIGMENTI" conta e mostra anche chi
+  // sta solo in "Eyebrows", e la scheda del prodotto lo elenca fra le
+  // categorie secondarie
+  const prodottiCategorieConPadri = useMemo(() => collegamentiConPadri(prodottiCategorie, categorieProdotti), [prodottiCategorie, categorieProdotti]);
+  const contaProdottiDiretti = (categoriaId) => prodottiCategorieConPadri.filter((pc) => pc.categoria_id === categoriaId).length;
 
   const categorieIdPerProdotto = useMemo(() => {
     const mappa = {};
-    (prodottiCategorie || []).forEach((pc) => { (mappa[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+    prodottiCategorieConPadri.forEach((pc) => { (mappa[pc.prodotto_id] ||= []).push(pc.categoria_id); });
     return mappa;
-  }, [prodottiCategorie]);
+  }, [prodottiCategorieConPadri]);
 
   const immaginiPerProdotto = useMemo(() => {
     const mappa = {};
@@ -51149,6 +51187,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // della scheda nuova. Non tocca nessun messaggio a schermo: restituisce
   // com'è andata, e chi l'ha chiamato decide dove dirlo
   async function eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot) {
+    // i padri delle categorie scelte si scrivono insieme a loro: e' la
+    // regola "un pigmento Eyebrows sta anche in TUTTI I PIGMENTI", resa
+    // permanente nel database e mandata al sito come categoria secondaria
+    const categorieIdsDaSalvare = conCategoriePadre(f.categorieIds, categorieProdotti);
     const stock = String(f.qtaStock).trim() === "" ? 0 : parseInt(parseNum(f.qtaStock), 10);
 
     // le categorie che l'utente ha accettato di riaprire vanno riaperte
@@ -51173,7 +51215,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           descrizione: f.descrizione,
           prezzo: calcolo.prezzoLordo,
           stato: f.stato,
-          categorieIds: f.categorieIds,
+          categorieIds: categorieIdsDaSalvare,
           immagini: f.immagini.map((im) => ({ url: im.url, wooImageId: im.wooImageId })),
         },
       });
@@ -51233,8 +51275,8 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     }
     const { error: erroreRimuoviCat } = await supabase.from("prodotti_categorie").delete().eq("prodotto_id", idProdotto);
     if (erroreRimuoviCat) return { errore: "Prodotto salvato, ma le categorie no: " + erroreRimuoviCat.message };
-    if ((f.categorieIds || []).length) {
-      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert(f.categorieIds.map((id) => ({ prodotto_id: idProdotto, categoria_id: id })));
+    if (categorieIdsDaSalvare.length) {
+      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert(categorieIdsDaSalvare.map((id) => ({ prodotto_id: idProdotto, categoria_id: id })));
       if (erroreCat) return { errore: "Prodotto salvato, ma le categorie no: " + erroreCat.message };
     }
     // Le foto si salvano anche qui. Su questo ramo — prodotto senza
