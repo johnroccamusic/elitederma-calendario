@@ -59976,12 +59976,12 @@ export default function App() {
       title={preferitiAperti ? "Chiudi le scorciatoie" : "Le tue scorciatoie"}
       style={{
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        width: 24, height: dentroLaBarra ? 70 : 84, cursor: "pointer",
+        width: 18, height: dentroLaBarra ? 34 : 38, cursor: "pointer",
         background: "rgba(110,110,116,0.78)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-        border: "1px solid rgba(255,255,255,0.28)", borderRadius: 8, color: "#fff", padding: 0,
+        border: "1px solid rgba(255,255,255,0.28)", borderRadius: 7, color: "#fff", padding: 0,
       }}
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
         <polyline points={preferitiAperti ? "9 6 15 12 9 18" : "15 6 9 12 15 18"} />
       </svg>
     </button>
