@@ -38411,12 +38411,11 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     ricarica(["regole_referral_automatico"]);
   }
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
-  // lo schema: la percentuale accantonata e' un'impostazione condivisa; la
-  // casella del cedibile e' solo un esempio per vedere il conto
+  // la percentuale di sicurezza della formula di fattibilita': impostazione
+  // condivisa, vale per tutte le master
   const [schemaSalvato, salvaSchema] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const schema = { ...SCHEMA_PUNTI_MASTER_DEFAULT, ...(schemaSalvato || {}) };
-  const [cedibileEsempio, setCedibileEsempio] = useState("100");
-  const esempio = schemaPuntiDaCedibile(parseNum(cedibileEsempio), schema.accantonamentoPct);
+
   async function salvaFinestra() {
     if (!form?.data_inizio || !form?.data_fine) { setMsg("Indica sia la data di inizio sia quella di fine della raccolta."); return; }
     if (form.data_fine < form.data_inizio) { setMsg("La data di fine non può precedere quella di inizio."); return; }
@@ -38548,40 +38547,30 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Schema dei punti</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
-            Il cedibile di un prodotto è il 100%. Se ne accantona subito una parte; quel che resta è il massimo cedibile, e i punti sono il doppio del massimo cedibile: così il 50% dei punti vale esattamente il massimo cedibile in euro.
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Formula di fattibilità dei punti</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            È la regola interna con cui si verifica che i punti promessi alle master siano sostenibili. Non è un calcolatore: è il criterio.
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))", gap: 12, alignItems: "end" }}>
-            <Field label="Cedibile (100%)">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <input type="number" min="0" step="0.01" value={cedibileEsempio} onChange={(e) => setCedibileEsempio(e.target.value)} style={{ ...inputStyle, width: "100%", fontWeight: 700 }} />
-                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>€</span>
-              </div>
-            </Field>
-            <Field label="Da accantonare">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <input
-                  type="number" min="0" max="100" step="1" value={schema.accantonamentoPct}
-                  onChange={(e) => salvaSchema({ ...schema, accantonamentoPct: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
-                  style={{ ...inputStyle, width: "100%", fontWeight: 700 }}
-                />
-                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
-              </div>
-            </Field>
-            <div style={{ background: BG, borderRadius: 12, padding: "10px 12px" }}>
-              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Massimo cedibile</div>
-              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{fmtEuroErp2(esempio.massimoCedibile)}</div>
-              <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 3 }}>accantonati {fmtEuroErp2(esempio.accantonato)}</div>
-            </div>
-            <div style={{ background: NAVY, borderRadius: 12, padding: "10px 12px" }}>
-              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Punti (× {MOLTIPLICATORE_PUNTI_MASTER})</div>
-              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: GOLD, lineHeight: 1.1 }}>{esempio.punti.toLocaleString("it-IT")}</div>
-              <div style={{ ...fontBody, fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 3 }}>il 50% = {fmtEuroErp2(round2(esempio.punti / 2))} = massimo cedibile</div>
-            </div>
+          <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
+            <p style={{ margin: "0 0 8px" }}>
+              I punti si calcolano <b>detraendo dal cedibile la percentuale di sicurezza</b>, oggi il {schema.accantonamentoPct}%. Quello che resta è il <b>massimo cedibile alle master</b>.
+            </p>
+            <p style={{ margin: "0 0 8px" }}>
+              Il massimo cedibile si converte in punti <b>moltiplicandolo per due</b>: 10 euro di massimo cedibile sono 20 punti.
+            </p>
+            <p style={{ margin: 0 }}>
+              Si raddoppia perché, quando a una master vogliamo dare tutto il possibile, le diciamo che le stiamo riconoscendo <b>il 50% dei punti</b>: il 50% di 20 punti sono 10 euro, cioè esattamente il massimo cedibile. Senza il raddoppio il 50% non arriverebbe mai a quella cifra.
+            </p>
           </div>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 12, lineHeight: 1.5 }}>
-            La percentuale da accantonare si salva appena la cambi e vale per tutti. La casella del cedibile è solo un esempio per vedere il conto.
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Percentuale di sicurezza</span>
+            <input
+              type="number" min="0" max="100" step="1" value={schema.accantonamentoPct}
+              onChange={(e) => salvaSchema({ ...schema, accantonamentoPct: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
+              style={{ ...inputStyle, width: 80, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
+            />
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>si salva appena la cambi e vale per tutte le master</span>
           </div>
         </div>
 
