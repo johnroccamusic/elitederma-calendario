@@ -363,6 +363,22 @@ const CHIAVE_REGOLA_REFERRAL_MASTER = "referralMaster_regolaSconto";
 // casa). Due percentuali, decise in Gestione punti
 const CHIAVE_QUOTE_PUNTI_MASTER = "puntiMaster_quotePerCanale";
 const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
+// Lo schema dei punti: dal cedibile (il 100%) si accantona subito una
+// parte, quel che resta e' il massimo cedibile, e i punti sono il doppio
+// del massimo cedibile — cosi' il 50% dei punti vale esattamente il
+// massimo cedibile in euro. La percentuale accantonata si decide in
+// Gestione punti; il moltiplicatore e' fisso a due
+const CHIAVE_SCHEMA_PUNTI_MASTER = "puntiMaster_schema";
+const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
+const MOLTIPLICATORE_PUNTI_MASTER = 2;
+function schemaPuntiDaCedibile(cedibileEuro, accantonamentoPct) {
+  const cedibile = Math.max(0, Number(cedibileEuro) || 0);
+  const pct = Math.max(0, Math.min(100, Number(accantonamentoPct) || 0));
+  const accantonato = round2((cedibile * pct) / 100);
+  const massimoCedibile = round2(cedibile - accantonato);
+  const punti = Math.round(massimoCedibile * MOLTIPLICATORE_PUNTI_MASTER);
+  return { cedibile, pct, accantonato, massimoCedibile, punti };
+}
 // quanto spazio prende la colonna di sinistra ("Da gestire oggi") rispetto
 // agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
 const CHIAVE_DIVISIONE_MAGAZZINO = "gestioneMagazzino_divisioneColonne";
@@ -38395,6 +38411,12 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     ricarica(["regole_referral_automatico"]);
   }
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  // lo schema: la percentuale accantonata e' un'impostazione condivisa; la
+  // casella del cedibile e' solo un esempio per vedere il conto
+  const [schemaSalvato, salvaSchema] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
+  const schema = { ...SCHEMA_PUNTI_MASTER_DEFAULT, ...(schemaSalvato || {}) };
+  const [cedibileEsempio, setCedibileEsempio] = useState("100");
+  const esempio = schemaPuntiDaCedibile(parseNum(cedibileEsempio), schema.accantonamentoPct);
   async function salvaFinestra() {
     if (!form?.data_inizio || !form?.data_fine) { setMsg("Indica sia la data di inizio sia quella di fine della raccolta."); return; }
     if (form.data_fine < form.data_inizio) { setMsg("La data di fine non può precedere quella di inizio."); return; }
@@ -38523,6 +38545,44 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
             onCambiaTipo={() => {}} onCambiaFasce={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: f })}
             prodottiShop={prodottiShop} isMobile={isMobile}
           />
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Schema dei punti</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
+            Il cedibile di un prodotto è il 100%. Se ne accantona subito una parte; quel che resta è il massimo cedibile, e i punti sono il doppio del massimo cedibile: così il 50% dei punti vale esattamente il massimo cedibile in euro.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))", gap: 12, alignItems: "end" }}>
+            <Field label="Cedibile (100%)">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input type="number" min="0" step="0.01" value={cedibileEsempio} onChange={(e) => setCedibileEsempio(e.target.value)} style={{ ...inputStyle, width: "100%", fontWeight: 700 }} />
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>€</span>
+              </div>
+            </Field>
+            <Field label="Da accantonare">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  type="number" min="0" max="100" step="1" value={schema.accantonamentoPct}
+                  onChange={(e) => salvaSchema({ ...schema, accantonamentoPct: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
+                  style={{ ...inputStyle, width: "100%", fontWeight: 700 }}
+                />
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
+              </div>
+            </Field>
+            <div style={{ background: BG, borderRadius: 12, padding: "10px 12px" }}>
+              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Massimo cedibile</div>
+              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{fmtEuroErp2(esempio.massimoCedibile)}</div>
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 3 }}>accantonati {fmtEuroErp2(esempio.accantonato)}</div>
+            </div>
+            <div style={{ background: NAVY, borderRadius: 12, padding: "10px 12px" }}>
+              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Punti (× {MOLTIPLICATORE_PUNTI_MASTER})</div>
+              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: GOLD, lineHeight: 1.1 }}>{esempio.punti.toLocaleString("it-IT")}</div>
+              <div style={{ ...fontBody, fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 3 }}>il 50% = {fmtEuroErp2(round2(esempio.punti / 2))} = massimo cedibile</div>
+            </div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 12, lineHeight: 1.5 }}>
+            La percentuale da accantonare si salva appena la cambi e vale per tutti. La casella del cedibile è solo un esempio per vedere il conto.
+          </div>
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22, background: "#FDF8EC", borderColor: "#EBD9AE" }}>
