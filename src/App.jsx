@@ -49467,9 +49467,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         const esaurito = disponibili <= 0;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
-          {/* la tessera e' una colonna e il prezzo si appoggia in fondo:
-              un nome su due righe alzava o abbassava il prezzo della sua
-              tessera, e su una riga di cinque i "39,90" ballavano */}
+          // la tessera e' una colonna e il prezzo si appoggia in fondo: un
+          // nome su due righe alzava o abbassava il prezzo della sua
+          // tessera, e su una riga di cinque i "39,90" ballavano
           <div key={p.id} onClick={() => !esaurito && aggiungiAlCarrello(p)} style={{ ...cardStyle, marginBottom: 0, padding: 14, cursor: esaurito ? "default" : "pointer", opacity: esaurito ? 0.55 : 1, display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
             <div style={tileImg}>
               {immagineUrlPerProdotto[p.id] ? <img src={immagineUrlPerProdotto[p.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={30} color={MUTED} />}
