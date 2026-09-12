@@ -38359,6 +38359,109 @@ function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, ruoloUtente, ordin
   );
 }
 
+// ---------- Preferiti del dock ----------
+// Tre scorciatoie personali accanto al dock: si scelgono fra i tasti
+// quadrati della home e delle sue sottopagine, e portano dritti dove si
+// va piu' spesso. Le pagine interne (una scheda, un elenco filtrato) non
+// si possono mettere: sono un punto dentro un percorso, non una porta.
+// I tre posti si salvano per utente, cosi' li si ritrova su ogni
+// dispositivo.
+function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
+  if (!voce) {
+    return (
+      <button
+        onClick={onScegli}
+        title="Scegli una scorciatoia"
+        aria-label="Aggiungi una scorciatoia"
+        style={{
+          width: lato, height: lato, borderRadius: Math.round(lato * 0.29), flexShrink: 0, cursor: "pointer", padding: 0,
+          background: "transparent", border: "2px dashed rgba(255,255,255,0.7)", color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+      >
+        <svg width={Math.round(lato * 0.42)} height={Math.round(lato * 0.42)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+      </button>
+    );
+  }
+  return (
+    <div style={{ position: "relative", width: lato, height: lato, flexShrink: 0 }}>
+      <button
+        onClick={onApri}
+        title={voce.titolo}
+        style={{
+          width: lato, height: lato, borderRadius: Math.round(lato * 0.29), cursor: "pointer", padding: "4px 5px",
+          background: NAVY, border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
+        }}
+      >
+        <span style={{ ...fontBody, fontSize: lato > 64 ? 10.5 : 9.5, fontWeight: 700, lineHeight: 1.15, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{voce.titolo}</span>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onTogli(); }}
+        title="Togli questa scorciatoia"
+        aria-label="Togli questa scorciatoia"
+        style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.5)", background: "#C0392B", color: "#fff", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+    </div>
+  );
+}
+
+// L'elenco a cartelle delle destinazioni: ogni area della home con
+// dentro i suoi tasti. Si sceglie l'area stessa o uno dei tasti dentro.
+// Quello che l'utente non puo' aprire resta in grigio: una scorciatoia
+// verso una porta chiusa sarebbe una presa in giro.
+function ModaleScegliPreferito({ destinazioni, onScegli, onClose }) {
+  const [aperte, setAperte] = useState(() => new Set());
+  const toggle = (chiave) => setAperte((prev) => { const n = new Set(prev); n.has(chiave) ? n.delete(chiave) : n.add(chiave); return n; });
+  const riga = (voce, profondita, figli) => {
+    const haFigli = figli && figli.length > 0;
+    const aperta = aperte.has(voce.chiave);
+    return (
+      <React.Fragment key={voce.chiave}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0", paddingLeft: profondita * 22 }}>
+          <button
+            onClick={() => haFigli && toggle(voce.chiave)}
+            aria-label={haFigli ? (aperta ? "Chiudi" : "Apri") : undefined}
+            style={{ width: 24, height: 24, border: "none", background: "transparent", cursor: haFigli ? "pointer" : "default", color: MUTED, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, visibility: haFigli ? "visible" : "hidden" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: aperta ? "rotate(90deg)" : "none", transition: "transform 120ms" }}><polyline points="9 6 15 12 9 18" /></svg>
+          </button>
+          <button
+            onClick={() => voce.abilitata && onScegli(voce)}
+            disabled={!voce.abilitata}
+            style={{
+              flex: 1, textAlign: "left", ...fontBody, fontSize: 13.5, fontWeight: profondita === 0 ? 700 : 500,
+              color: voce.abilitata ? NAVY : "#B9B4A8", background: "transparent", border: `1px solid transparent`, borderRadius: 10,
+              padding: "8px 10px", cursor: voce.abilitata ? "pointer" : "default", display: "flex", alignItems: "center", gap: 8,
+            }}
+            onMouseEnter={(e) => { if (voce.abilitata) e.currentTarget.style.background = BG; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            {profondita === 0 && (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+            )}
+            <span style={{ minWidth: 0 }}>{voce.titolo}</span>
+            {!voce.abilitata && <span style={{ ...fontBody, fontSize: 10.5, color: "#B9B4A8", marginLeft: "auto" }}>senza permesso</span>}
+          </button>
+        </div>
+        {haFigli && aperta && figli.map((f) => riga(f, profondita + 1, null))}
+      </React.Fragment>
+    );
+  };
+  return (
+    <Modal title="Scegli la scorciatoia" onClose={onClose} maxWidth={520}>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
+        Un'area della home, oppure uno dei tasti che stanno dentro: apri la cartella con la freccia.
+      </div>
+      <div style={{ maxHeight: "60vh", overflowY: "auto", paddingRight: 4 }}>
+        {(destinazioni || []).map((d) => riga(d, 0, d.figli))}
+      </div>
+    </Modal>
+  );
+}
+
 // hub d'ingresso del CRM: gli allievi dei corsi da una parte, i clienti
 // dello shop dall'altra. Sono due anagrafiche diverse — chi compra un
 // corso e chi compra un prodotto — ma si guardano con la stessa domanda
@@ -59213,6 +59316,17 @@ export default function App() {
   const [viewPrimaDiMagazzino, setViewPrimaDiMagazzino] = useState("magazzinoshop");
   const [dockCoricato, setDockCoricato] = useState(false);
   const [dockNascosto, setDockNascosto] = useState(false);
+  // i preferiti del dock: tre posti per utente, salvati come le altre
+  // impostazioni condivise cosi' seguono la persona da un dispositivo
+  // all'altro. Chi non ha un'identita' (accesso col solo codice) li tiene
+  // sotto il ruolo
+  const [preferitiAperti, setPreferitiAperti] = useState(false);
+  const [slotPreferitoInScelta, setSlotPreferitoInScelta] = useState(null);
+  // le scorciatoie sono per chi amministra: master e venditori hanno un
+  // dock gia' stretto e poche porte da aprire
+  const preferitiDisponibili = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
+  const idUtentePreferiti = utenteLoggato?.id || utenteLoggato?.masterId || ruoloUtente || "anonimo";
+  const [preferitiDock, salvaPreferitiDock] = useImpostazioneCondivisa(`preferiti_dock_${idUtentePreferiti}`, [null, null, null]);
   const [pacchiDaSpedire, setPacchiDaSpedire] = useState(0);
   useEffect(() => {
     if (!ok || (view !== "home" && view !== "logisticaprodotti")) return undefined;
@@ -59740,6 +59854,122 @@ export default function App() {
     return venditeShop.map((v) => ({ ...v, payload_raw: mappaPayloadRaw.get(v.id) ?? null }));
   })();
 
+  // Le destinazioni possibili per una scorciatoia: i tasti quadrati della
+  // home, e dentro ognuno i tasti quadrati della sua pagina. Ogni voce
+  // sa aprirsi da sola con la stessa funzione del tasto vero, permessi
+  // compresi. I titoli seguono le etichette rinominate, come i tasti.
+  const areaAbilitata = (chiave) => ruoloUtente === "programmatore" || tastoAbilitato(chiave);
+  const destinazioniPreferiti = [
+    { chiave: "gestionedate", titolo: etichettaTasto("home", "gestionedate", "Gestione corsi"), apri: apriGestioneDate, figli: [] },
+    { chiave: "dashboardvenditori", titolo: etichettaTasto("home", "dashboardvenditori", "Dashboard venditori"), apri: apriLoginVenditore, figli: [] },
+    { chiave: "dashboardmaster", titolo: etichettaTasto("home", "dashboardmaster", "Dashboard master"), apri: apriDashboardMaster, figli: [] },
+    { chiave: "agenda", titolo: etichettaTasto("home", "agenda", "Agenda"), apri: apriAgenda, figli: [] },
+    { chiave: "erp", titolo: etichettaTasto("home", "erp", "Amministrazione"), apri: apriErp, figli: [
+      { chiave: "contabilita", titolo: etichettaTasto("amministrazione", "contabilita", "Contabilità"), apri: apriAmministrazione },
+      { chiave: "categoriespesa", titolo: etichettaTasto("amministrazione", "categoriespesa", "Categorie di spesa"), apri: apriCatalogoCategorieCosti },
+      { chiave: "operativocorsi", titolo: etichettaTasto("amministrazione", "operativocorsi", "Operativo corsi"), apri: () => setView("assegnazionemaster") },
+      { chiave: "anagrafiche", titolo: etichettaTasto("amministrazione", "anagrafiche", "Anagrafiche"), apri: () => apriViewProtetta("anagrafiche") },
+      { chiave: "gestioneiva", titolo: etichettaTasto("amministrazione", "gestioneiva", "Gestione IVA"), apri: apriGestioneIva },
+    ] },
+    { chiave: "magazzinoshop", titolo: etichettaTasto("home", "magazzinoshop", "Gestione magazzino e shop"), apri: apriMagazzinoShop, figli: [
+      { chiave: "gestionemagazzino", titolo: etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino"), apri: apriMagazzino },
+      { chiave: "magazziniesterni", titolo: etichettaTasto("magazzinoshop", "magazziniesterni", "Magazzini esterni"), apri: apriMagazziniEsterni },
+      { chiave: "venditeshop", titolo: etichettaTasto("magazzinoshop", "venditeshop", "Vendite Shop Online"), apri: () => apriVenditeShop("magazzinoshop") },
+      { chiave: "venditealbanco", titolo: etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco"), apri: () => apriVenditeAlBanco("magazzinoshop") },
+      { chiave: "prodottiusatikit", titolo: etichettaTasto("magazzinoshop", "prodottiusatikit", "Prodotti usati per i kit"), apri: apriProdottiUsatiKit },
+      { chiave: "omaggi", titolo: etichettaTasto("magazzinoshop", "omaggi", "Omaggi"), apri: apriOmaggi },
+      { chiave: "classificazionevoci", titolo: etichettaTasto("magazzinoshop", "classificazionevoci", "Classificazione voci di vendita"), apri: apriClassificazioneVoci },
+    ] },
+    { chiave: "pos", titolo: etichettaTasto("home", "pos", "POS Vendita diretta"), apri: apriPos, figli: [] },
+    { chiave: "logisticaprodotti", titolo: etichettaTasto("home", "logisticaprodotti", "Logistica prodotti"), apri: apriLogisticaProdotti, figli: [
+      { chiave: "spedizionicorsi", titolo: etichettaTasto("logisticaprodotti", "spedizionicorsi", "Spedizioni corsi"), apri: apriSpedizioniCorsi },
+      { chiave: "ordiniinarrivo", titolo: etichettaTasto("logisticaprodotti", "ordiniinarrivo", "Ordini in arrivo"), apri: apriOrdiniInArrivo },
+      { chiave: "avvisilogistica", titolo: etichettaTasto("logisticaprodotti", "avvisilogistica", "Advisor"), apri: apriAvvisiLogistica },
+    ] },
+    { chiave: "compensipremi", titolo: etichettaTasto("home", "compensipremi", "Area compensi e premi"), apri: apriCompensiPremi, figli: [
+      { chiave: "generacoupon", titolo: etichettaTasto("compensipremi", "generacoupon", "Genera Coupon"), apri: apriGeneraCoupon },
+    ] },
+    { chiave: "generazioneloghi", titolo: etichettaTasto("home", "generazioneloghi", "Assegna logo"), apri: apriGenerazioneLoghi, figli: [] },
+    { chiave: "gestionemodelle", titolo: etichettaTasto("home", "gestionemodelle", "Gestione modelle"), apri: apriGestioneModelle, figli: [] },
+    { chiave: "prezzicorsi", titolo: etichettaTasto("home", "prezzicorsi", "Prezzi corsi"), apri: apriPrezziCorsi, figli: [] },
+    { chiave: "statistiche", titolo: etichettaTasto("home", "statistiche", "Statistiche"), apri: apriStatistiche, figli: [
+      { chiave: "venditori", titolo: etichettaTasto("statistiche", "venditori", "Statistiche venditori"), apri: () => setView("statisticavenditori") },
+      { chiave: "master", titolo: etichettaTasto("statistiche", "master", "Statistiche Master"), apri: apriStatisticheMaster },
+      { chiave: "performance", titolo: etichettaTasto("statistiche", "performance", "Performance Aziendale"), apri: apriDashboardAnalisi },
+      { chiave: "venditeprodotti", titolo: etichettaTasto("statistiche", "venditeprodotti", "Statistiche Totali Vendite Prodotti"), apri: apriStatisticheVenditeProdotti },
+    ] },
+    { chiave: "crmallievi", titolo: etichettaTasto("home", "crmallievi", "CRM / Allievi"), apri: apriCrmAllievi, figli: [
+      { chiave: "crmallievielenco", titolo: etichettaTasto("crm", "crmallievielenco", "CRM Allievi"), apri: apriCrmAllieviElenco },
+      { chiave: "crmshop", titolo: etichettaTasto("crm", "crmshop", "CRM Shop Online"), apri: apriCrmShop },
+    ] },
+    { chiave: "storicoallievi", titolo: etichettaTasto("home", "storicoallievi", "Storico Allievi"), apri: apriStoricoAllievi, figli: [] },
+    { chiave: "normative", titolo: etichettaTasto("home", "normative", "Normative"), apri: apriNormative, figli: [
+      { chiave: "ritornoalcorso", titolo: etichettaTasto("normative", "ritornoalcorso", "Regole Ritorno al Corso"), apri: () => setView("ritornoalcorso") },
+      { chiave: "mappanormativepmu", titolo: etichettaTasto("normative", "mappanormativepmu", "Mappa normative regionali"), apri: () => setView("mappanormativepmu") },
+    ] },
+    { chiave: "progettiincorso", titolo: etichettaTasto("home", "progettiincorso", "Progetti in corso"), apri: apriProgetti, figli: [] },
+  ].map((area) => ({
+    ...area, abilitata: areaAbilitata(area.chiave),
+    figli: (area.figli || []).map((f) => ({ ...f, area: area.chiave, abilitata: areaAbilitata(area.chiave) })),
+  }));
+  // una scorciatoia salvata e' solo una chiave (piu' l'area): titolo e
+  // azione si rileggono qui ogni volta, cosi' un tasto rinominato cambia
+  // nome anche nel dock
+  const vocePreferito = (salvata) => {
+    if (!salvata?.chiave) return null;
+    for (const area of destinazioniPreferiti) {
+      if (area.chiave === salvata.chiave) return area;
+      const figlio = area.figli.find((f) => f.chiave === salvata.chiave && (!salvata.area || salvata.area === area.chiave));
+      if (figlio) return figlio;
+    }
+    return null;
+  };
+  const preferitiRisolti = [0, 1, 2].map((i) => vocePreferito((preferitiDock || [])[i]));
+  function apriPreferito(voce) {
+    if (!voce) return;
+    setPreferitiAperti(false);
+    scrollAppInCima();
+    // un tasto di sottopagina apre prima la sua area: il tasto "Indietro"
+    // trova cosi' il percorso giusto, come se ci si fosse arrivati a mano
+    voce.apri();
+  }
+  function scegliPreferito(voce) {
+    const nuovi = [0, 1, 2].map((i) => (i === slotPreferitoInScelta ? { chiave: voce.chiave, area: voce.area || null } : (preferitiDock || [])[i] || null));
+    salvaPreferitiDock(nuovi);
+    setSlotPreferitoInScelta(null);
+  }
+  function togliPreferito(indice) {
+    salvaPreferitiDock([0, 1, 2].map((i) => (i === indice ? null : (preferitiDock || [])[i] || null)));
+  }
+  const linguettaPreferiti = (versoAlto) => (
+    <button
+      onClick={() => setPreferitiAperti((v) => !v)}
+      aria-label={preferitiAperti ? "Chiudi le scorciatoie" : "Apri le scorciatoie"}
+      title={preferitiAperti ? "Chiudi le scorciatoie" : "Le tue scorciatoie"}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: 44, height: versoAlto ? 22 : 20, cursor: "pointer",
+        background: preferitiAperti ? "rgba(201,162,109,0.55)" : "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+        border: "1px solid rgba(255,255,255,0.22)", ...(versoAlto ? { borderBottom: "none", borderRadius: "12px 12px 0 0" } : { borderTop: "none", borderRadius: "0 0 12px 12px" }),
+        color: "#fff", padding: 0,
+      }}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill={preferitiAperti ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z" /></svg>
+    </button>
+  );
+  const pannelloPreferiti = (lato) => (
+    <div style={{ display: "flex", justifyContent: "center", gap: 14, padding: "12px 16px", background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.28)", width: "fit-content", margin: "0 auto" }}>
+      {[0, 1, 2].map((i) => (
+        <TastoPreferitoDock
+          key={i} voce={preferitiRisolti[i]} lato={lato}
+          onApri={() => apriPreferito(preferitiRisolti[i])}
+          onScegli={() => setSlotPreferitoInScelta(i)}
+          onTogli={() => togliPreferito(i)}
+        />
+      ))}
+    </div>
+  );
+
   return (
     // questo contenitore avvolge OGNI schermata dell'app: lo spazio in
     // cima vale quindi ovunque, non solo in home
@@ -59756,6 +59986,9 @@ export default function App() {
           regola sola, valida ovunque, invece di 321 pastiglie toccate a
           mano */}
       <StiliGlobaliAspetto />
+      {preferitiDisponibili && slotPreferitoInScelta != null && (
+        <ModaleScegliPreferito destinazioni={destinazioniPreferiti} onScegli={scegliPreferito} onClose={() => setSlotPreferitoInScelta(null)} />
+      )}
       {!isMobile && (
         // Il dock da scrivania. Prima era una barra in cima, sopra il
         // contenuto: la si guardava per forza anche quando non serviva, e
@@ -59827,24 +60060,31 @@ export default function App() {
                 </svg>
               </button>
             </div>
-            {/* la linguetta sta sotto la barra: tirandola, il dock risale
-                fuori dallo schermo e resta solo lei con la freccia in giu' */}
-            <button
-              onClick={() => setDockNascosto((v) => !v)}
-              aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
-              title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 74, height: 20, margin: "0 auto", cursor: "pointer",
-                background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-                border: "1px solid rgba(255,255,255,0.22)", borderTop: "none",
-                borderRadius: "0 0 12px 12px", color: "#fff", padding: 0,
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={dockNascosto ? "6 9 12 15 18 9" : "6 15 12 9 18 15"} />
-              </svg>
-            </button>
+            {/* due linguette sotto la barra: a sinistra la stella delle
+                scorciatoie, a destra quella che tira il dock fuori dallo
+                schermo e resta sola con la freccia in giu' */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+              {preferitiDisponibili && linguettaPreferiti(false)}
+              <button
+                onClick={() => setDockNascosto((v) => !v)}
+                aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+                title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 74, height: 20, cursor: "pointer",
+                  background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                  border: "1px solid rgba(255,255,255,0.22)", borderTop: "none",
+                  borderRadius: "0 0 12px 12px", color: "#fff", padding: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points={dockNascosto ? "6 9 12 15 18 9" : "6 15 12 9 18 15"} />
+                </svg>
+              </button>
+            </div>
+            {preferitiDisponibili && preferitiAperti && !dockNascosto && (
+              <div style={{ marginTop: 8 }}>{pannelloPreferiti(62)}</div>
+            )}
           </div>
         </div>
       )}
@@ -59885,22 +60125,28 @@ export default function App() {
                   : { left: 14, right: 14, transform: dockNascosto ? "translateY(calc(100% - 22px))" : "translateY(0)" }),
               }}
             >
-              <button
-                onClick={() => setDockNascosto((v) => !v)}
-                aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
-                title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 74, height: 22, margin: "0 auto", cursor: "pointer",
-                  background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-                  border: "1px solid rgba(255,255,255,0.22)", borderBottom: "none",
-                  borderRadius: "12px 12px 0 0", color: "#fff", padding: 0,
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points={dockNascosto ? "6 15 12 9 18 15" : "6 9 12 15 18 9"} />
-                </svg>
-              </button>
+              {preferitiDisponibili && preferitiAperti && !dockNascosto && (
+                <div style={{ marginBottom: 8 }}>{pannelloPreferiti(66)}</div>
+              )}
+              <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                {preferitiDisponibili && linguettaPreferiti(true)}
+                <button
+                  onClick={() => setDockNascosto((v) => !v)}
+                  aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+                  title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 74, height: 22, cursor: "pointer",
+                    background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                    border: "1px solid rgba(255,255,255,0.22)", borderBottom: "none",
+                    borderRadius: "12px 12px 0 0", color: "#fff", padding: 0,
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points={dockNascosto ? "6 15 12 9 18 15" : "6 9 12 15 18 9"} />
+                  </svg>
+                </button>
+              </div>
               <div
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
