@@ -59978,7 +59978,7 @@ export default function App() {
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         width: 18, height: dentroLaBarra ? 34 : 38, cursor: "pointer",
         background: "rgba(110,110,116,0.78)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-        border: "1px solid rgba(255,255,255,0.28)", borderRadius: 7, color: "#fff", padding: 0,
+        border: "1px solid rgba(255,255,255,0.28)", ...(dentroLaBarra ? { borderRadius: 7 } : { borderRight: "none", borderRadius: "7px 0 0 7px" }), color: "#fff", padding: 0,
       }}
     >
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
@@ -59991,7 +59991,7 @@ export default function App() {
   // le tre sagome e una x piccola per richiudere
   const pannelloPreferiti = (lato) => (
     <div style={{
-      display: "flex", alignItems: "center", gap: 14, padding: "12px 40px 12px 16px", marginRight: -28, marginLeft: 8,
+      display: "flex", alignItems: "center", gap: 14, padding: "12px 40px 12px 16px", marginRight: -28,
       background: "rgba(255,255,255,0.34)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
       border: "1px solid rgba(255,255,255,0.45)", borderRight: "none", borderRadius: "28px 0 0 28px",
       boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
@@ -60039,7 +60039,7 @@ export default function App() {
                 quando e' aperta, i tre tasti che escono verso sinistra. Stanno
                 fuori dal flusso, cosi' la barra resta centrata dov'e' */}
             {preferitiDisponibili && !dockNascosto && (
-              <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", zIndex: 0, paddingRight: preferitiAperti ? 0 : 6 }}>
+              <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", zIndex: 0 }}>
                 {linguettaPreferiti(false)}
                 {preferitiAperti && pannelloPreferiti(62)}
               </div>
