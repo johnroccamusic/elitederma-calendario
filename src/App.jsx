@@ -21642,6 +21642,7 @@ const TASTI_HOME = [
   { chiave: "magazzinoshop", etichetta: "Gestione magazzino e shop" },
   { chiave: "pos", etichetta: "POS Vendita diretta" },
   { chiave: "logisticaprodotti", etichetta: "Logistica prodotti" },
+  { chiave: "compensipremi", etichetta: "Area compensi e premi" },
   { chiave: "generazioneloghi", etichetta: "Assegna logo" },
   { chiave: "gestionemodelle", etichetta: "Gestione modelle" },
   { chiave: "statistiche", etichetta: "Statistiche" },
@@ -21681,7 +21682,7 @@ const AREA_MADRE_VISTA = {
   classificazionevocishop: ["magazzinoshop"],
   crmshop: ["crmallievi"],
   crmallievielenco: ["crmallievi"],
-  generacoupon: ["magazzinoshop"],
+  generacoupon: ["compensipremi"],
   venditeshop: ["magazzinoshop"],
   venditealbanco: ["magazzinoshop"],
   omaggi: ["magazzinoshop"],
@@ -30741,7 +30742,6 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
             { chiave: "prodottiusatikit", title: "Prodotti usati per i kit", descrizione: "Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiUsatiKit },
             { chiave: "omaggi", title: "Omaggi", descrizione: "Prodotti usciti dal POS senza essere venduti, regalati.", Icona: IconaTileOmaggio, attivo: true, onClick: onApriOmaggi },
             { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
-            { chiave: "generacoupon", title: "Genera Coupon", descrizione: "Crea e gestisci codici sconto per lo shop online.", Icona: IconaTileCoupon, attivo: true, onClick: onApriGeneraCoupon },
           ]}
         />
       </div>
@@ -31943,7 +31943,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
-          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
+          <TastoLivelloPrecedente titolo="Area compensi e premi" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
@@ -37993,6 +37993,32 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
       {apriConfezioneBoxId && (
         <ModaleApriConfezione boxId={apriConfezioneBoxId} prodottiShop={prodottiShop} onClose={() => setApriConfezioneBoxId(null)} ricarica={ricarica} />
       )}
+    </div>
+  );
+}
+
+// Area compensi e premi: tutto quello che riguarda quanto guadagnano le
+// master e i venditori — i codici sconto e referral, e in futuro le
+// provvigioni e i premi. Il primo tasto e' "Genera coupon", che stava in
+// Gestione magazzino e shop: un codice referral e' uno strumento di
+// compenso, non un pezzo del magazzino. Altri tasti arriveranno qui.
+function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Area compensi e premi" }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Codici sconto e referral, provvigioni e premi di master e venditori.</div>
+        <GrigliaTasti
+          pagina="compensipremi" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti}
+          definizioni={[
+            { chiave: "generacoupon", title: "Genera Coupon", descrizione: "Crea e gestisci codici sconto e referral per shop e POS.", Icona: IconaTileCoupon, attivo: true, onClick: onApriGeneraCoupon },
+          ]}
+        />
+      </div>
     </div>
   );
 }
@@ -58605,6 +58631,7 @@ export default function App() {
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
+    compensipremi: [],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
@@ -59173,6 +59200,7 @@ export default function App() {
   function apriNormative() { apriViewProtetta("normative"); }
   function apriPos() { apriViewProtetta("pos"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
+  function apriCompensiPremi() { apriViewProtetta("compensipremi"); }
   function apriSpedizioniCorsi() { apriViewProtetta("spedizionicorsi"); }
   function apriOrdiniInArrivo() { apriViewProtetta("ordiniinarrivo"); }
   function apriAvvisiLogistica() { apriViewProtetta("avvisilogistica"); }
@@ -59644,6 +59672,7 @@ export default function App() {
               { chiave: "magazzinoshop", title: "Gestione magazzino e shop", descrizione: "Prodotti, scorte, shop online e relative vendite", Icona: IconaTileGestioneMagazzino, attivo: tastoAbilitato("magazzinoshop"), onClick: apriMagazzinoShop },
               { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos },
               { chiave: "logisticaprodotti", title: "Logistica prodotti", descrizione: "Spedizioni, tracciamenti e documenti", Icona: IconaTileLogistica, attivo: tastoAbilitato("logisticaprodotti"), onClick: apriLogisticaProdotti, badge: pacchiDaSpedire },
+              { chiave: "compensipremi", title: "Area compensi e premi", descrizione: "Coupon, referral, provvigioni e premi", Icona: IconaTileOmaggio, attivo: tastoAbilitato("compensipremi"), onClick: apriCompensiPremi },
               { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaLoghiCard, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
               { chiave: "gestionemodelle", title: "Gestione modelle", descrizione: "Organizza modelle, disponibilità e assegnazioni", Icona: IconaTileModelle, attivo: tastoAbilitato("gestionemodelle"), onClick: apriGestioneModelle },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
@@ -59905,8 +59934,8 @@ export default function App() {
           regoleReferralAutomatico={regoleReferralAutomatico}
           venditeShop={venditeShop}
           puntiMasterImpostazioni={puntiMasterImpostazioni}
-          ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
-          titolo={etichettaTasto("magazzinoshop", "generacoupon", "Genera Coupon")}
+          ricarica={fetchDati} onBack={() => setView("compensipremi")}
+          titolo={etichettaTasto("compensipremi", "generacoupon", "Genera Coupon")}
         />
       )}
 
@@ -60309,6 +60338,17 @@ export default function App() {
           colonneTasti={layoutTasti.logisticaprodotti?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("logisticaprodotti", { colonne: n })}
           etichetteTasti={layoutTasti.logisticaprodotti?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("logisticaprodotti", chiave, testo)}
           titolo={etichettaTasto("home", "logisticaprodotti", "Logistica prodotti")}
+        />
+      )}
+
+      {view === "compensipremi" && (
+        <PaginaCompensiPremiHub
+          onBack={() => setView("home")}
+          onApriGeneraCoupon={apriGeneraCoupon}
+          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.compensipremi?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("compensipremi", { ordine: o })}
+          colonneTasti={layoutTasti.compensipremi?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("compensipremi", { colonne: n })}
+          etichetteTasti={layoutTasti.compensipremi?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("compensipremi", chiave, testo)}
+          titolo={etichettaTasto("home", "compensipremi", "Area compensi e premi")}
         />
       )}
 
