@@ -30710,7 +30710,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
           pagina="normative" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente}
           onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
-            { chiave: "ritornoalcorso", title: "Ritorno al Corso", descrizione: "Le regole per chi torna a frequentare un corso già fatto.", Icona: IconaTileNormative, attivo: true, onClick: onApriRitornoAlCorso || (() => {}) },
+            { chiave: "ritornoalcorso", title: "Regole Ritorno al Corso", descrizione: "Le regole per chi torna a frequentare un corso già fatto.", Icona: IconaTileNormative, attivo: true, onClick: onApriRitornoAlCorso || (() => {}) },
             { chiave: "mappanormativepmu", title: "Mappa normative regionali", descrizione: "Cosa serve per esercitare il trucco permanente, regione per regione.", Icona: IconaPin, attivo: true, onClick: onApriMappaNormative || (() => {}) },
           ]}
         />
@@ -60295,7 +60295,7 @@ export default function App() {
           testoIniziale={NORMATIVA_RITORNO_AL_CORSO}
           ricarica={fetchDati}
           onBack={() => setView("normative")}
-          titolo="Ritorno al Corso"
+          titolo="Regole Ritorno al Corso"
         />
       )}
 
