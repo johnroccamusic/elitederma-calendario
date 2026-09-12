@@ -10201,7 +10201,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               </div>
               <div style={cardPunti}>
                 <div style={lblPunti}>Punti accumulati</div>
-                <div style={{ ...numPunti, color: GOLD }}>{provvigioniMaster.puntiAccumulati.toLocaleString("it-IT")}</div>
+                {/* in attesa: i punti si governano da "Gestione punti" in Area
+                    compensi e premi, e li' si decide anche quando e come
+                    mostrarli alla master */}
+                <div style={{ ...numPunti, color: MUTED }}>—</div>
               </div>
               <div style={cardPunti} aria-hidden="true" />
             </div>
@@ -21767,6 +21770,7 @@ const AREA_MADRE_VISTA = {
   crmshop: ["crmallievi"],
   crmallievielenco: ["crmallievi"],
   generacoupon: ["compensipremi"],
+  gestionepunti: ["compensipremi"],
   venditeshop: ["magazzinoshop"],
   venditealbanco: ["magazzinoshop"],
   omaggi: ["magazzinoshop"],
@@ -38335,12 +38339,122 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
   );
 }
 
+// Gestione punti: la finestra della raccolta e, master per master, i
+// punti maturati con la regola di Dettaglio prodotti (dieci per euro
+// cedibile, per ogni pezzo venduto attraverso l'app). Qui si governa il
+// sistema; cosa vede la master nella sua dashboard si decide dopo.
+function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Gestione punti" }) {
+  const isMobile = useIsMobile();
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "punti", direzione: "desc" });
+  const [form, setForm] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    if (puntiMasterImpostazioni && !form) setForm({ data_inizio: puntiMasterImpostazioni.data_inizio, data_fine: puntiMasterImpostazioni.data_fine });
+  }, [puntiMasterImpostazioni, form]);
+  async function salvaFinestra() {
+    if (!form?.data_inizio || !form?.data_fine) { setMsg("Indica sia la data di inizio sia quella di fine della raccolta."); return; }
+    if (form.data_fine < form.data_inizio) { setMsg("La data di fine non può precedere quella di inizio."); return; }
+    setSalvando(true); setMsg("");
+    const { error } = await supabase.from("punti_master_impostazioni").update({ data_inizio: form.data_inizio, data_fine: form.data_fine }).eq("id", puntiMasterImpostazioni.id);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("Finestra della raccolta aggiornata.");
+    ricarica(["punti_master_impostazioni"]);
+  }
+  // la classifica: per ogni master, le vendite che le contano (stessa
+  // regola della dashboard), e per ogni riga i punti del prodotto per i
+  // pezzi. Un reso ha pezzi negativi e si toglie da solo
+  const classifica = useMemo(() => {
+    if (!puntiMasterImpostazioni) return [];
+    const prodottoPerId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+    return (master || []).map((m) => {
+      const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
+      let punti = 0, pezzi = 0, pezziSenzaPunti = 0, euro = 0, vendite = 0;
+      righe.forEach((v) => {
+        euro += Number(v.totale) || 0;
+        if ((v.totale || 0) > 0) vendite += 1;
+        (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+          const q = Number(r.quantita) || 0;
+          const pp = puntiProdotto(prodottoPerId[r.prodotto_id]);
+          pezzi += q;
+          if (pp == null) pezziSenzaPunti += q; else punti += pp * q;
+        });
+      });
+      return { master: m, vendite, pezzi, pezziSenzaPunti, punti, euro: round2(euro) };
+    }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni]);
+  const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
+  const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Area compensi e premi" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>
+          Dieci punti per ogni euro cedibile di un prodotto, per ogni pezzo venduto al POS o sul sito attraverso l'app. I punti si leggono dall'anagrafica di oggi, non si salvano.
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Finestra della raccolta</div>
+          {!form ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento…</div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 180px" }}><Field label="Inizio raccolta"><input type="date" style={inputStyle} value={form.data_inizio} onChange={(e) => setForm({ ...form, data_inizio: e.target.value })} /></Field></div>
+                <div style={{ flex: "1 1 180px" }}><Field label="Fine raccolta"><input type="date" style={inputStyle} value={form.data_fine} onChange={(e) => setForm({ ...form, data_fine: e.target.value })} /></Field></div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <Button onClick={salvaFinestra} disabled={salvando}>{salvando ? "Salvo…" : "Salva finestra"}</Button>
+                {msg && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msg.startsWith("Errore") || msg.startsWith("Indica") || msg.startsWith("La data") ? "#C0392B" : "#2E7D32" }}>{msg}</span>}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Punti per master</div>
+        {classifica.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna vendita attribuita a una master nella finestra della raccolta.</div>
+        ) : (
+          <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+                <thead>
+                  <tr>
+                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "punti", l: "Punti" }, { c: "euro", l: "Valore venduto" }].map((h) => (
+                      <ThOrdina key={h.c} campo={h.c} ordine={ordine} onOrdina={cambiaOrdine} style={th}>{h.l}</ThOrdina>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, punti: (r) => r.punti, euro: (r) => r.euro }).map((r) => (
+                    <tr key={r.master.id}>
+                      <td style={{ ...td, fontWeight: 700 }}>{toTitleCase(r.master.nome)}</td>
+                      <td style={td}>{r.vendite}</td>
+                      <td style={td}>{r.pezzi}{r.pezziSenzaPunti > 0 && <span style={{ ...fontBody, fontSize: 11, color: GOLD, marginLeft: 6 }} title="Pezzi di prodotti senza costo di acquisto o non in vendita dall'app: non generano punti">{r.pezziSenzaPunti} senza punti</span>}</td>
+                      <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }}>{r.punti.toLocaleString("it-IT")}</td>
+                      <td style={td}>{fmtEuroErp2(r.euro)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Area compensi e premi: tutto quello che riguarda quanto guadagnano le
 // master e i venditori — i codici sconto e referral, e in futuro le
 // provvigioni e i premi. Il primo tasto e' "Genera coupon", che stava in
 // Gestione magazzino e shop: un codice referral e' uno strumento di
 // compenso, non un pezzo del magazzino. Altri tasti arriveranno qui.
-function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Area compensi e premi" }) {
+function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, onApriGestionePunti, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Area compensi e premi" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -38354,6 +38468,7 @@ function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, ruoloUtente, ordin
           pagina="compensipremi" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti}
           definizioni={[
             { chiave: "generacoupon", title: "Genera Coupon", descrizione: "Crea e gestisci codici sconto e referral per shop e POS.", Icona: IconaTileCoupon, attivo: true, onClick: onApriGeneraCoupon },
+            { chiave: "gestionepunti", title: "Gestione punti", descrizione: "La finestra della raccolta e i punti maturati da ogni master.", Icona: IconaTileMaster, attivo: true, onClick: onApriGestionePunti },
           ]}
         />
       </div>
@@ -59123,6 +59238,7 @@ export default function App() {
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
+    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
@@ -59710,6 +59826,7 @@ export default function App() {
   function apriPos() { apriViewProtetta("pos"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriCompensiPremi() { apriViewProtetta("compensipremi"); }
+  function apriGestionePunti() { apriViewProtetta("gestionepunti"); }
   function apriSpedizioniCorsi() { apriViewProtetta("spedizionicorsi"); }
   function apriOrdiniInArrivo() { apriViewProtetta("ordiniinarrivo"); }
   function apriAvvisiLogistica() { apriViewProtetta("avvisilogistica"); }
@@ -59935,6 +60052,7 @@ export default function App() {
     ] },
     { chiave: "compensipremi", titolo: etichettaTasto("home", "compensipremi", "Area compensi e premi"), apri: apriCompensiPremi, figli: [
       { chiave: "generacoupon", titolo: etichettaTasto("compensipremi", "generacoupon", "Genera Coupon"), apri: apriGeneraCoupon },
+      { chiave: "gestionepunti", titolo: etichettaTasto("compensipremi", "gestionepunti", "Gestione punti"), apri: apriGestionePunti },
     ] },
     { chiave: "generazioneloghi", titolo: etichettaTasto("home", "generazioneloghi", "Assegna logo"), apri: apriGenerazioneLoghi, figli: [] },
     { chiave: "gestionemodelle", titolo: etichettaTasto("home", "gestionemodelle", "Gestione modelle"), apri: apriGestioneModelle, figli: [] },
@@ -61023,10 +61141,19 @@ export default function App() {
         <PaginaCompensiPremiHub
           onBack={() => setView("home")}
           onApriGeneraCoupon={apriGeneraCoupon}
+          onApriGestionePunti={apriGestionePunti}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.compensipremi?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("compensipremi", { ordine: o })}
           colonneTasti={layoutTasti.compensipremi?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("compensipremi", { colonne: n })}
           etichetteTasti={layoutTasti.compensipremi?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("compensipremi", chiave, testo)}
           titolo={etichettaTasto("home", "compensipremi", "Area compensi e premi")}
+        />
+      )}
+
+      {view === "gestionepunti" && (
+        <PaginaGestionePunti
+          master={master} venditeShop={venditeShop} prodottiShop={prodottiShop} puntiMasterImpostazioni={puntiMasterImpostazioni}
+          ricarica={ricarica} onBack={() => setView("compensipremi")}
+          titolo={etichettaTasto("compensipremi", "gestionepunti", "Gestione punti")}
         />
       )}
 
