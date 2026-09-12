@@ -38375,11 +38375,11 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
         aria-label="Aggiungi una scorciatoia"
         style={{
           width: lato, height: lato, borderRadius: Math.round(lato * 0.29), flexShrink: 0, cursor: "pointer", padding: 0,
-          background: "transparent", border: "2px dashed rgba(255,255,255,0.7)", color: "#fff",
+          background: "rgba(225,225,228,0.95)", border: "1.5px solid #fff", color: "#5E6270",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        <svg width={Math.round(lato * 0.42)} height={Math.round(lato * 0.42)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        <svg width={Math.round(lato * 0.4)} height={Math.round(lato * 0.4)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
       </button>
     );
   }
@@ -59960,8 +59960,16 @@ export default function App() {
       <svg width="14" height="14" viewBox="0 0 24 24" fill={preferitiAperti ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z" /></svg>
     </button>
   );
+  // il prolungamento chiaro della barra: parte dal suo fianco sinistro e
+  // si infila sotto di essa, cosi' i due pezzi sembrano uno solo. Dentro
+  // le tre sagome e una x piccola per richiudere
   const pannelloPreferiti = (lato) => (
-    <div style={{ display: "flex", justifyContent: "center", gap: 14, padding: "12px 16px", background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.28)", width: "fit-content", margin: "0 auto" }}>
+    <div style={{
+      display: "flex", alignItems: "center", gap: 14, padding: "12px 40px 12px 16px", marginRight: -28,
+      background: "rgba(255,255,255,0.34)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+      border: "1px solid rgba(255,255,255,0.45)", borderRight: "none", borderRadius: "28px 0 0 28px",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    }}>
       {[0, 1, 2].map((i) => (
         <TastoPreferitoDock
           key={i} voce={preferitiRisolti[i]} lato={lato}
@@ -59970,6 +59978,13 @@ export default function App() {
           onTogli={() => togliPreferito(i)}
         />
       ))}
+      <button
+        onClick={() => setPreferitiAperti(false)}
+        aria-label="Chiudi le scorciatoie" title="Chiudi"
+        style={{ width: 18, height: 18, borderRadius: "50%", border: "none", background: "transparent", color: "#3F4350", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", marginLeft: -6 }}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
     </div>
   );
 
@@ -60005,13 +60020,13 @@ export default function App() {
                 quando e' aperta, i tre tasti che escono verso sinistra. Stanno
                 fuori dal flusso, cosi' la barra resta centrata dov'e' */}
             {preferitiDisponibili && !dockNascosto && (
-              <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 0 }}>
-                {preferitiAperti && <div style={{ marginRight: 8 }}>{pannelloPreferiti(62)}</div>}
-                {linguettaPreferiti(false)}
+              <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", zIndex: 0 }}>
+                {preferitiAperti ? pannelloPreferiti(62) : linguettaPreferiti(false)}
               </div>
             )}
             <div
               style={{
+                position: "relative", zIndex: 1,
                 display: "flex", alignItems: "center", gap: 16,
                 background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
                 border: "1px solid rgba(255,255,255,0.22)", borderRadius: 28, padding: "12px 16px",
