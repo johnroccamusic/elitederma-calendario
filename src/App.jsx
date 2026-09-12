@@ -3229,6 +3229,14 @@ const CEDIBILE_PER_MARGINE = [
   [75, 33], [80, 35.5], [85, 38], [90, 40.5], [95, 43],
 ];
 const CEDIBILE_OLTRE_ULTIMO_GRADINO = 43;
+// I punti che un prodotto genera a chi lo vende: dieci per ogni euro
+// cedibile, arrotondati all'intero. 9,16 euro cedibili sono 92 punti.
+// Un prodotto senza costo di acquisto non ha margine, quindi ne' quota
+// cedibile ne' punti.
+function puntiDaCedibile(cedibileEuro) {
+  if (cedibileEuro == null || !Number.isFinite(Number(cedibileEuro))) return null;
+  return Math.round(Number(cedibileEuro) * 10);
+}
 function percentualeCedibileDi(marginePct) {
   if (marginePct == null || !(marginePct >= CEDIBILE_PER_MARGINE[0][0])) return 0;
   const ultimo = CEDIBILE_PER_MARGINE[CEDIBILE_PER_MARGINE.length - 1];
@@ -40081,6 +40089,7 @@ const COLONNE_MAGAZZINO = [
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
   { label: "Margine €", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 70 },
   { label: "Cedibile €", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 70 },
+  { label: "Punti", campo: "punti", direzioneIniziale: "desc", larghezza: 56 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
@@ -40580,6 +40589,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     ),
     "Cedibile €": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Quanto si puo' girare al massimo a chi vende: il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
+    ),
+    "Punti": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Dieci punti per ogni euro cedibile (${fmtEuroErp2(p.cedibileEuro)}), arrotondati all'intero` : "Senza quota cedibile non ci sono punti"}>{p.punti != null ? p.punti.toLocaleString("it-IT") : "N/D"}</td>
     ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
@@ -41092,6 +41104,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // legge nella colonna accanto
     const cedibilePct = margine != null ? percentualeCedibileDi(margine) : null;
     const cedibileEuro = cedibilePct != null && p.prezzo_vendita != null ? round2((p.prezzo_vendita * cedibilePct) / 100) : null;
+    const punti = puntiDaCedibile(cedibileEuro);
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
@@ -41107,6 +41120,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       margineEuro,
       cedibilePct,
       cedibileEuro,
+      punti,
       categorieIds,
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
       nomeFornitore: (p.fornitore_id && fornitoreNomePerId[p.fornitore_id]) || "",
