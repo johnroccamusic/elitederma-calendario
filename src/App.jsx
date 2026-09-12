@@ -59941,16 +59941,19 @@ export default function App() {
   function togliPreferito(indice) {
     salvaPreferitiDock([0, 1, 2].map((i) => (i === indice ? null : (preferitiDock || [])[i] || null)));
   }
-  const linguettaPreferiti = (versoAlto) => (
+  // la linguetta sta sul FIANCO sinistro del dock, in verticale: i tre
+  // tasti escono di lato, verso sinistra, non sotto
+  const linguettaPreferiti = (dentroLaBarra) => (
     <button
       onClick={() => setPreferitiAperti((v) => !v)}
       aria-label={preferitiAperti ? "Chiudi le scorciatoie" : "Apri le scorciatoie"}
       title={preferitiAperti ? "Chiudi le scorciatoie" : "Le tue scorciatoie"}
       style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 44, height: versoAlto ? 22 : 20, cursor: "pointer",
-        background: preferitiAperti ? "rgba(201,162,109,0.55)" : "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-        border: "1px solid rgba(255,255,255,0.22)", ...(versoAlto ? { borderBottom: "none", borderRadius: "12px 12px 0 0" } : { borderTop: "none", borderRadius: "0 0 12px 12px" }),
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        width: dentroLaBarra ? 26 : 22, height: dentroLaBarra ? 70 : 62, cursor: "pointer",
+        background: preferitiAperti ? "rgba(201,162,109,0.65)" : (dentroLaBarra ? "rgba(255,255,255,0.14)" : "rgba(14,27,51,0.28)"),
+        backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+        border: "1px solid rgba(255,255,255,0.22)", ...(dentroLaBarra ? { borderRadius: 14 } : { borderRight: "none", borderRadius: "12px 0 0 12px" }),
         color: "#fff", padding: 0,
       }}
     >
@@ -59997,6 +60000,16 @@ export default function App() {
         // dock del Mac — icona grande, spazi generosi.
         <div style={{ position: "fixed", left: "50%", top: 14, transform: "translateX(-50%)", zIndex: 2000 }}>
           <div style={{ transform: dockNascosto ? "translateY(calc(-100% + 20px))" : "translateY(0)", transition: "transform 260ms ease" }}>
+            <div style={{ position: "relative" }}>
+            {/* sul fianco sinistro della barra: la linguetta con la stella e,
+                quando e' aperta, i tre tasti che escono verso sinistra. Stanno
+                fuori dal flusso, cosi' la barra resta centrata dov'e' */}
+            {preferitiDisponibili && !dockNascosto && (
+              <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 0 }}>
+                {preferitiAperti && <div style={{ marginRight: 8 }}>{pannelloPreferiti(62)}</div>}
+                {linguettaPreferiti(false)}
+              </div>
+            )}
             <div
               style={{
                 display: "flex", alignItems: "center", gap: 16,
@@ -60060,11 +60073,10 @@ export default function App() {
                 </svg>
               </button>
             </div>
-            {/* due linguette sotto la barra: a sinistra la stella delle
-                scorciatoie, a destra quella che tira il dock fuori dallo
-                schermo e resta sola con la freccia in giu' */}
+            </div>
+            {/* la linguetta sotto la barra: tirandola, il dock risale fuori
+                dallo schermo e resta sola con la freccia in giu' */}
             <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
-              {preferitiDisponibili && linguettaPreferiti(false)}
               <button
                 onClick={() => setDockNascosto((v) => !v)}
                 aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
@@ -60082,9 +60094,6 @@ export default function App() {
                 </svg>
               </button>
             </div>
-            {preferitiDisponibili && preferitiAperti && !dockNascosto && (
-              <div style={{ marginTop: 8 }}>{pannelloPreferiti(62)}</div>
-            )}
           </div>
         </div>
       )}
@@ -60125,11 +60134,7 @@ export default function App() {
                   : { left: 14, right: 14, transform: dockNascosto ? "translateY(calc(100% - 22px))" : "translateY(0)" }),
               }}
             >
-              {preferitiDisponibili && preferitiAperti && !dockNascosto && (
-                <div style={{ marginBottom: 8 }}>{pannelloPreferiti(66)}</div>
-              )}
               <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
-                {preferitiDisponibili && linguettaPreferiti(true)}
                 <button
                   onClick={() => setDockNascosto((v) => !v)}
                   aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
@@ -60149,12 +60154,36 @@ export default function App() {
               </div>
               <div
                 style={{
+                  position: "relative", overflow: "hidden",
                   display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
                   background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
                   border: "1px solid rgba(255,255,255,0.22)", borderRadius: 30, padding: "10px 14px",
                   boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
                 }}
               >
+          {/* da telefono la barra prende tutta la larghezza e a sinistra non
+              c'e' spazio: la linguetta sta sul bordo sinistro DENTRO la barra,
+              e i tre tasti scorrono da sinistra sopra la barra stessa */}
+          {preferitiDisponibili && linguettaPreferiti(true)}
+          {preferitiDisponibili && (
+            <div style={{
+              position: "absolute", top: 0, bottom: 0, left: 0, right: 0, display: "flex", alignItems: "center", gap: 14, paddingLeft: 52,
+              background: "rgba(14,27,51,0.92)", transform: preferitiAperti ? "translateX(0)" : "translateX(-100%)", transition: "transform 240ms ease",
+              pointerEvents: preferitiAperti ? "auto" : "none",
+            }}>
+              <button onClick={() => setPreferitiAperti(false)} aria-label="Chiudi le scorciatoie" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.4)", background: "transparent", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              {[0, 1, 2].map((i) => (
+                <TastoPreferitoDock
+                  key={i} voce={preferitiRisolti[i]} lato={62}
+                  onApri={() => apriPreferito(preferitiRisolti[i])}
+                  onScegli={() => setSlotPreferitoInScelta(i)}
+                  onTogli={() => togliPreferito(i)}
+                />
+              ))}
+            </div>
+          )}
           <button
             onClick={apriImpostazioni}
             aria-label="Impostazioni"
