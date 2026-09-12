@@ -2394,10 +2394,11 @@ function BadgeFileCaricato({ stretto = false }) {
 // deve cambiare misura con lo schermo, e sul telefono segue quella delle
 // icone di Apple: 60 punti di lato, angoli a 13.
 const CHIAVE_ASPETTO_TASTI = "aspetto_tasti";
-// "dock" e' il lato dei tasti del dock, telefono e scrivania ognuno il suo
+// "dock" sono i tasti del dock — lato, raggio e icona in pixel — telefono
+// e scrivania ognuno i suoi
 const ASPETTO_TASTI_DEFAULT = {
-  mobile: { dimensione: 60, raggio: 13, icona: 34, dock: 70, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
-  desktop: { dimensione: 300, raggio: 20, icona: 80, dock: 62, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+  mobile: { dimensione: 60, raggio: 13, icona: 34, dock: { lato: 70, raggio: 22, icona: 40 }, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
+  desktop: { dimensione: 300, raggio: 20, icona: 80, dock: { lato: 62, raggio: 18, icona: 30 }, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
   // Un'ombra sola per TUTTE le aree che reggono i dati — i pannelli
   // bianchi delle tabelle, le schede citta', gli elenchi — e una per
   // tutti gli altri pulsanti, quelli che non sono i quadrati della home
@@ -2440,7 +2441,13 @@ function aspettoTastoDi(salvato, quale) {
     dimensione: inPixel ? numero("dimensione") : base.dimensione,
     raggio: inPixel ? numero("raggio") : base.raggio,
     icona: numero("icona"),
-    dock: numero("dock"),
+    // per un breve periodo "dock" e' stato il solo lato: un numero vale
+    // ancora come lato, con raggio e icona di base
+    dock: (() => {
+      const d = typeof v.dock === "number" ? { lato: v.dock } : (v.dock && typeof v.dock === "object" ? v.dock : {});
+      const n = (campo) => (d[campo] == null || d[campo] === "" || isNaN(Number(d[campo])) ? base.dock[campo] : Number(d[campo]));
+      return { lato: n("lato"), raggio: n("raggio"), icona: n("icona") };
+    })(),
     colore: v.colore || base.colore,
     ombra: { ...base.ombra, ...(v.ombra || {}) },
   };
@@ -14672,6 +14679,21 @@ function PaginaAspettoApp() {
   // in percentuale, senza questa marca vengono ignorati alla lettura
   const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi, unita: "px" } });
 
+  // stessi comandi, ma sui tre campi annidati del dock
+  const piuMenoDock = (etichetta, campo, min, max, aiutoMeno, aiutoPiu) => {
+    const dock = corrente.dock || ASPETTO_TASTI_DEFAULT[quale].dock;
+    const metti = (valore) => cambia({ dock: { ...dock, [campo]: Math.max(min, Math.min(max, valore)) } });
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
+        <button onClick={() => metti(dock[campo] - 1)} title={aiutoMeno}
+          style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
+        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{dock[campo]} px</span>
+        <button onClick={() => metti(dock[campo] + 1)} title={aiutoPiu}
+          style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
+      </div>
+    );
+  };
   const piuMeno = (etichetta, campo, min, max, unita, aiutoMeno, aiutoPiu) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
@@ -14774,10 +14796,24 @@ function PaginaAspettoApp() {
         </div>
 
         <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Tasti del dock</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-          {piuMeno("Lato", "dock", 40, 100, " px", "Tasti del dock più piccoli", "Tasti del dock più grandi")}
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -2 }}>
-            {quale === "mobile" ? "I quattro tasti in basso e le scorciatoie del rullo." : "I tasti della barra in cima e le scorciatoie di fianco."}
+        <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 20 }}>
+          {/* la casetta del dock a grandezza vera, su un pezzo di barra:
+              si vede quello che si sta regolando, non un numero */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 12, borderRadius: 24, background: "rgba(14,27,51,0.28)", border: "1px solid rgba(255,255,255,0.22)", flexShrink: 0 }}>
+            <div style={{ width: corrente.dock.lato, height: corrente.dock.lato, borderRadius: corrente.dock.raggio, background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>
+              <svg width={corrente.dock.icona} height={corrente.dock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {piuMenoDock("Lato", "lato", 40, 100, "Tasti del dock più piccoli", "Tasti del dock più grandi")}
+            {piuMenoDock("Raggio", "raggio", 0, 50, "Angoli più squadrati", "Angoli più tondi")}
+            {piuMenoDock("Icona", "icona", 12, 80, "Icona più piccola", "Icona più grande")}
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -2, maxWidth: 320 }}>
+              {quale === "mobile" ? "I quattro tasti in basso e le scorciatoie del rullo." : "I tasti della barra in cima e le scorciatoie di fianco."}
+            </div>
           </div>
         </div>
 
@@ -38804,7 +38840,9 @@ function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, onApriGestionePunt
 // si possono mettere: sono un punto dentro un percorso, non una porta.
 // I tre posti si salvano per utente, cosi' li si ritrova su ogni
 // dispositivo.
-function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli, nelRullo }) {
+function TastoPreferitoDock({ voce, lato, raggio, onApri, onScegli, onTogli, nelRullo }) {
+  // il raggio e' quello dei tasti del dock accanto, se lo si conosce
+  const raggioTasto = raggio ?? Math.round(lato * 0.29);
   // il menu per cambiare o togliere: si apre col tasto destro, o tenendo
   // premuto il dito. Un pallino rosso sempre in vista sporcava il dock.
   // Nel rullo del telefono il menu a tendina non ha posto: si aprirebbe
@@ -38832,7 +38870,7 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli, nelRullo })
         title="Scegli una scorciatoia"
         aria-label="Aggiungi una scorciatoia"
         style={{
-          width: lato, height: lato, borderRadius: Math.round(lato * 0.29), flexShrink: 0, cursor: "pointer", padding: 0,
+          width: lato, height: lato, borderRadius: raggioTasto, flexShrink: 0, cursor: "pointer", padding: 0,
           background: "rgba(225,225,228,0.95)", border: "1.5px solid #fff", color: "#5E6270",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}
@@ -38856,7 +38894,7 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli, nelRullo })
         onPointerCancel={finePressione}
         title={`${voce.titolo} — tasto destro o pressione lunga per cambiare o togliere`}
         style={{
-          width: lato, height: lato, borderRadius: Math.round(lato * 0.29), cursor: "pointer", padding: "4px 5px",
+          width: lato, height: lato, borderRadius: raggioTasto, cursor: "pointer", padding: "4px 5px",
           background: NAVY, border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
           // senza questi, tenere premuto su iOS seleziona il testo del tasto
@@ -59853,7 +59891,8 @@ export default function App() {
   const [dockNascosto, setDockNascosto] = useState(false);
   // il lato dei tasti del dock viene da Impostazioni -> Aspetto dell'app
   const [aspettoTastiApp] = useAspettoTasti();
-  const latoDock = isMobile ? aspettoTastiApp.mobile.dock : aspettoTastiApp.desktop.dock;
+  const tastoDock = isMobile ? aspettoTastiApp.mobile.dock : aspettoTastiApp.desktop.dock;
+  const latoDock = tastoDock.lato;
   // i riferimenti del rullo del dock da telefono (vedi piu' giu', prima del
   // return): stanno qui perche' gli hook devono venire prima dell'uscita
   // anticipata del gate, o React ne conta un numero diverso a ogni render
@@ -60394,7 +60433,7 @@ export default function App() {
   // angoli molto arrotondati, spazio fra uno e l'altro circa un quarto del
   // tasto
   const stileTastoDock = {
-    background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.29),
+    background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
     width: latoDock, height: latoDock, flexShrink: 0, padding: 0,
     display: "flex", alignItems: "center", justifyContent: "center",
   };
@@ -60527,7 +60566,7 @@ export default function App() {
     }}>
       {[0, 1, 2].map((i) => (
         <TastoPreferitoDock
-          key={i} voce={preferitiRisolti[i]} lato={lato}
+          key={i} voce={preferitiRisolti[i]} lato={lato} raggio={tastoDock.raggio}
           onApri={() => apriPreferito(preferitiRisolti[i])}
           onScegli={() => setSlotPreferitoInScelta(i)}
           onTogli={() => togliPreferito(i)}
@@ -60598,11 +60637,11 @@ export default function App() {
         aria-label="Impostazioni"
         title="Impostazioni"
         style={{
-          background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.31),
+          background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
           width: latoDock, height: latoDock, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        <svg width={Math.round(latoDock * 0.57)} height={Math.round(latoDock * 0.57)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width={tastoDock.icona} height={tastoDock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3" />
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
@@ -60615,12 +60654,12 @@ export default function App() {
             aria-label="Indietro"
             title="Indietro"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.31),
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
               width: latoDock, height: latoDock, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width={Math.round(latoDock * 0.57)} height={Math.round(latoDock * 0.57)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width={tastoDock.icona} height={tastoDock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
@@ -60630,12 +60669,12 @@ export default function App() {
             aria-label="Avanti"
             title="Avanti"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.31),
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
               width: latoDock, height: latoDock, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width={Math.round(latoDock * 0.57)} height={Math.round(latoDock * 0.57)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width={tastoDock.icona} height={tastoDock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>
@@ -60647,7 +60686,7 @@ export default function App() {
     <>
       {[0, 1, 2].map((i) => (
         <TastoPreferitoDock
-          key={i} voce={preferitiRisolti[i]} lato={latoDock} nelRullo
+          key={i} voce={preferitiRisolti[i]} lato={latoDock} raggio={tastoDock.raggio} nelRullo
           onApri={() => apriPreferito(preferitiRisolti[i])}
           onScegli={() => setSlotPreferitoInScelta(i)}
           onTogli={() => togliPreferito(i)}
@@ -60717,7 +60756,7 @@ export default function App() {
                 title="Home"
                 style={{ ...stileTastoDock, cursor: "pointer" }}
               >
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width={tastoDock.icona} height={tastoDock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                   <polyline points="9 22 9 12 15 12 15 22" />
                 </svg>
@@ -60731,7 +60770,7 @@ export default function App() {
                     title="Indietro"
                     style={{ ...stileTastoDock, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1 }}
                   >
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width={tastoDock.icona} height={tastoDock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 18 9 12 15 6" />
                     </svg>
                   </button>
@@ -60742,7 +60781,7 @@ export default function App() {
                     title="Avanti"
                     style={{ ...stileTastoDock, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1 }}
                   >
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width={tastoDock.icona} height={tastoDock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
                   </button>
@@ -60754,7 +60793,7 @@ export default function App() {
                 title="Impostazioni"
                 style={{ ...stileTastoDock, cursor: "pointer" }}
               >
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width={tastoDock.icona} height={tastoDock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="3" />
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
@@ -60887,11 +60926,11 @@ export default function App() {
             aria-label="Home"
             title="Home"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: Math.round(latoDock * 0.31),
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
               width: latoDock, height: latoDock, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width={Math.round(latoDock * 0.57)} height={Math.round(latoDock * 0.57)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width={tastoDock.icona} height={tastoDock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
