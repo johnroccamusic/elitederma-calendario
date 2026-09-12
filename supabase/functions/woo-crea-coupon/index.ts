@@ -108,6 +108,14 @@ Deno.serve(async (req) => {
   // che un carrello rotto.
   if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
     payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }];
+  } else if (riga.base_sconto === "margine") {
+    // Anche la percentuale unica "sul margine" va detta al sito per
+    // quello che e': il 15% di quei dieci euro di guadagno, non il 15%
+    // del prezzo. Senza, resterebbe la conversione sulla media — che e'
+    // giusta sul totale degli ordini e sbagliata su ogni singolo
+    // carrello. Il frammento legge questo e il margine in euro scritto
+    // sul prodotto, e fa il conto esatto riga per riga.
+    payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }];
   }
 
   try {

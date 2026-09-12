@@ -52,10 +52,20 @@ Deno.serve(async (req) => {
     const costo = p.costo_acquisto;
     // stringa vuota e non "0": zero vorrebbe dire "non ci guadagno
     // niente", vuoto vuol dire "non si sa", e sono due cose diverse
-    const margine = (netto > 0 && costo != null && costo !== "")
-      ? String(Math.round(((netto - Number(costo)) / netto) * 10000) / 100)
-      : "";
-    return { id: p.woo_product_id, meta_data: [{ key: "_ed_margine_pct", value: margine }] };
+    const noto = netto > 0 && costo != null && costo !== "";
+    const margine = noto ? String(Math.round(((netto - Number(costo)) / netto) * 10000) / 100) : "";
+    // anche in euro, netti, per pezzo: serve ai coupon "sul margine",
+    // dove lo sconto e' una percentuale di QUESTI euro e non del prezzo.
+    // Ricavarli dal prezzo in carrello vorrebbe dire sapere l'aliquota
+    // riga per riga; scritti qui, il sito non deve calcolare niente.
+    const margineEuro = noto ? String(Math.round((netto - Number(costo)) * 100) / 100) : "";
+    return {
+      id: p.woo_product_id,
+      meta_data: [
+        { key: "_ed_margine_pct", value: margine },
+        { key: "_ed_margine_eur", value: margineEuro },
+      ],
+    };
   });
 
   const auth = "Basic " + btoa(`${key}:${secret}`);
