@@ -38795,7 +38795,7 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli, nelRullo })
   // va ignorato, o richiuderebbe quello che ha appena aperto
   const pressioneLungaFatta = React.useRef(false);
   const apriMenu = () => { if (nelRullo) onScegli(); else setMenuAperto(true); };
-  const iniziaPressione = () => { pressione.current = setTimeout(() => { pressione.current = null; pressioneLungaFatta.current = true; apriMenu(); }, 480); };
+  const iniziaPressione = () => { pressione.current = setTimeout(() => { pressione.current = null; pressioneLungaFatta.current = true; apriMenu(); }, 1000); };
   const finePressione = () => { if (pressione.current) { clearTimeout(pressione.current); pressione.current = null; } };
   useEffect(() => {
     if (!menuAperto) return undefined;
