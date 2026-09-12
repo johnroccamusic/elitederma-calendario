@@ -48692,7 +48692,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [ricerca, setRicerca] = useState("");
   const [categoriaSel, setCategoriaSel] = useState("");
   const [pagina, setPagina] = useState(1);
-  const [righePerPagina, setRighePerPagina] = useState(12);
+  // quindici per pagina, e i passi successivi a multipli di quindici:
+  // con cinque tessere per riga sono tre righe piene, senza una riga
+  // monca in fondo come facevano dodici
+  const [righePerPagina, setRighePerPagina] = useState(15);
   const [carrello, setCarrello] = useState([]); // { prodottoId, nome, prezzo, quantita, sku, disponibili }
   const [scontoTipo, setScontoTipo] = useState("percentuale"); // percentuale | importo
   const [scontoValore, setScontoValore] = useState("");
@@ -49653,8 +49656,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // vende al banco guarda immagini, non nomi: quante gliene stanno
   // davanti cambia quanto e' veloce. Da telefono non si sceglie — li' e'
   // un elenco, non una griglia.
-  const [colonnePos, setColonnePos] = useImpostazioneCondivisa(CHIAVE_COLONNE_POS, 3);
-  const colonneProdottiPos = Math.min(6, Math.max(2, Number(colonnePos) || 3));
+  const [colonnePos, setColonnePos] = useImpostazioneCondivisa(CHIAVE_COLONNE_POS, 5);
+  const colonneProdottiPos = Math.min(6, Math.max(2, Number(colonnePos) || 5));
   const elencoProdotti = isMobile ? (
     <div>
       {prodottiPagina.map((p) => {
@@ -49730,7 +49733,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Mostra</span>
         <select style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }} value={righePerPagina} onChange={(e) => { setRighePerPagina(Number(e.target.value)); setPagina(1); }}>
-          {[12, 24, 48].map((n) => <option key={n} value={n}>{n}</option>)}
+          {[15, 30, 45, 60].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
         <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>prodotti per pagina</span>
       </div>
