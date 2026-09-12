@@ -30367,15 +30367,24 @@ const NORMATIVA_RITORNO_AL_CORSO = [
   { id: "t3", tipo: "tappa", icona: "calendario", quando: "Dal 16° al 23° mese", sotto: "Dalla fine del corso", titolo: "Torni con il 50% di sconto", testo: "Dopo i 16 mesi non sarà più possibile acquistare solo il supporto aggiuntivo, ma potrai tornare in aula per l'intero corso con uno sconto del 50% sul prezzo del corso. Saranno inclusi nuovamente 8 mesi di supporto e un nuovo kit prodotti, ad eccezione del dermografo, che potrà comunque essere acquistato con uno sconto pari al 50%." },
   { id: "t4", tipo: "tappa", icona: "cappello", quando: "Dal 24° mese entro il 4° anno", sotto: "Dalla fine del corso", titolo: "Torni con il 25% di sconto", testo: "Tra i 2 e i 4 anni dalla fine del corso non potrai più acquistare solo il supporto aggiuntivo, ma potrai tornare a frequentare l'intero corso, incluse le modelle, con uno sconto del 25% sul prezzo totale del corso.\n\nSaranno inclusi nuovamente 8 mesi di supporto e un nuovo kit colori ed accessori, ma nel caso del corso di PMU sarà escluso il dermografo, che potrà comunque essere acquistato con uno sconto del 25%." },
   { id: "t5", tipo: "tappa", icona: "ricomincia", quando: "Oltre 4 anni", sotto: "Dalla fine del corso", titolo: "Torni con il 15% di sconto", testo: "Se sono trascorsi 4 anni dalla fine del corso potrai tornare nuovamente al corso, incluso di supporto, con un'agevolazione pari al 15% sul prezzo totale del corso. Sarà incluso il kit e, nel caso del corso di PMU, anche il dermografo (oppure potrai scegliere il pacchetto senza dermografo)." },
+  // il perche', in sette motivi numerati
+  { id: "p0", tipo: "testata", titolo: "Perché applichiamo questa politica", sottotitolo: "", claim: "Formazione di qualità, sempre al passo con l'evoluzione", lato: "La tua crescita è la nostra missione" },
+  { id: "p1", tipo: "tappa", icona: "persone", numero: "01", titolo: "Il nostro impegno", testo: "Elitederma si impegna costantemente a supportare i propri allievi, anche dopo il completamento del percorso formativo." },
+  { id: "p2", tipo: "tappa", icona: "bersaglio", numero: "02", titolo: "Opportunità diversificate", testo: "Comprendiamo che, per diverse ragioni, alcuni studenti possono non aver avuto l'opportunità di esercitare quanto appreso." },
+  { id: "p3", tipo: "tappa", icona: "etichetta", numero: "03", titolo: "Una soluzione agevolata", testo: "Per questo motivo abbiamo ideato una formula di rientro con tariffe agevolate, che consente di frequentare nuovamente il corso e consolidare le competenze acquisite." },
+  { id: "p4", tipo: "tappa", icona: "grafico", numero: "04", titolo: "Una disciplina in evoluzione", testo: "È importante tuttavia considerare che la dermopigmentazione è una disciplina in continua evoluzione: manuali, strumenti, tecniche e protocolli didattici vengono regolarmente aggiornati per rispondere agli standard più attuali." },
+  { id: "p5", tipo: "tappa", icona: "lampadina", numero: "05", titolo: "Un corso sempre attuale", testo: "Di conseguenza, chi sceglie di rifrequentare il corso potrebbe trovarsi di fronte a un programma profondamente rinnovato, diverso in molti aspetti rispetto a quello originario." },
+  { id: "p6", tipo: "tappa", icona: "germoglio", numero: "06", titolo: "Un investimento nel tuo futuro", testo: "Il contributo richiesto per la nuova iscrizione deve quindi essere visto non solo come un investimento nella propria crescita professionale, ma anche come un sostegno all'attività continua di ricerca e aggiornamento dell'accademia." },
+  { id: "p7", tipo: "tappa", icona: "diamante", numero: "07", titolo: "Formazione d'eccellenza", testo: "Solo così possiamo garantire agli studenti una formazione sempre allineata alle innovazioni del settore e fornire loro strumenti e tecniche all'avanguardia." },
 ];
 
 // I campi che si riscrivono di un blocco a piu' voci. Gli altri tipi
 // hanno il solo "testo".
 const CAMPI_BLOCCO_NORMATIVA = {
   testata: [["titolo", "Titolo"], ["sottotitolo", "Sottotitolo"], ["claim", "Frase in oro"], ["lato", "Frase di lato"]],
-  tappa: [["quando", "Quando (es. Entro 16 mesi)"], ["sotto", "Sotto (es. Dalla fine del corso)"], ["titolo", "Titolo"], ["testo", "Testo"]],
+  tappa: [["numero", "Numero (es. 01, lascia vuoto per una tappa a tempo)"], ["quando", "Quando (es. Entro 16 mesi)"], ["sotto", "Sotto (es. Dalla fine del corso)"], ["titolo", "Titolo"], ["testo", "Testo"]],
 };
-const ICONE_TAPPA_NORMATIVA = ["infinito", "persone", "calendario", "cappello", "ricomincia"];
+const ICONE_TAPPA_NORMATIVA = ["infinito", "persone", "calendario", "cappello", "ricomincia", "bersaglio", "etichetta", "grafico", "lampadina", "germoglio", "diamante"];
 
 // le icone delle tappe: tratto oro dentro il tondo blu, come sulla locandina
 function IconaTappaNormativa({ nome, size = 30 }) {
@@ -30384,6 +30393,12 @@ function IconaTappaNormativa({ nome, size = 30 }) {
   if (nome === "calendario") return <svg {...comune}><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" /></svg>;
   if (nome === "cappello") return <svg {...comune}><path d="M2.5 9.5 12 5l9.5 4.5L12 14z" /><path d="M6.5 11.5V16c0 1.7 2.5 3 5.5 3s5.5-1.3 5.5-3v-4.5M21.5 9.5V15" /></svg>;
   if (nome === "ricomincia") return <svg {...comune}><path d="M20 12a8 8 0 1 1-2.3-5.7" /><path d="M20 4v5h-5" /></svg>;
+  if (nome === "bersaglio") return <svg {...comune}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.6" /><path d="M12 12l6.5-6.5M18.5 5.5l2.5-.5-.5 2.5" /></svg>;
+  if (nome === "etichetta") return <svg {...comune}><path d="M3.5 12.5 12.5 3.5h7v7l-9 9-7-7z" /><circle cx="16" cy="8" r="1.4" /></svg>;
+  if (nome === "grafico") return <svg {...comune}><path d="M4 20h16" /><rect x="5.5" y="12" width="3" height="6" /><rect x="10.5" y="9" width="3" height="9" /><rect x="15.5" y="6" width="3" height="12" /><path d="M5 8l4.5-3 4 2.5L19 3M16 3h3v3" /></svg>;
+  if (nome === "lampadina") return <svg {...comune}><path d="M9 18h6M10 21h4" /><path d="M8 13.5a5.5 5.5 0 1 1 8 0c-.8.8-1.2 1.6-1.3 2.5h-5.4c-.1-.9-.5-1.7-1.3-2.5z" /></svg>;
+  if (nome === "germoglio") return <svg {...comune}><path d="M3.5 17.5c2-1.5 4-1.8 6-1l3.5 1.2c1 .3 1.5 1.2 1.2 2H8" /><path d="M14 19.7l5.5-1.4c1.2-.3 2-1.3 1.5-2.2-.4-.8-1.4-1-2.5-.7L14 17" /><path d="M12 13V8" /><path d="M12 8c-3 0-4.5-2-4.5-4.5C10 3.5 12 5 12 8zM12 8c3 0 4.5-2 4.5-4.5C14 3.5 12 5 12 8z" /></svg>;
+  if (nome === "diamante") return <svg {...comune}><path d="M6.5 4h11l3.5 5-9 11-9-11z" /><path d="M3 9h18M9.5 4l2.5 5 2.5-5M12 9l-3 11M12 9l3 11" /></svg>;
   return <svg {...comune}><path d="M8 8.5c-2.2 0-3.8 1.6-3.8 3.5S5.8 15.5 8 15.5c3.5 0 4.5-7 8-7 2.2 0 3.8 1.6 3.8 3.5S18.2 15.5 16 15.5c-3.5 0-4.5-7-8-7z" /></svg>;
 }
 
@@ -30396,6 +30411,19 @@ function TappaNormativa({ blocco, isMobile }) {
       <div style={{ width: isMobile ? 54 : 70, height: isMobile ? 54 : 70, borderRadius: "50%", background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <IconaTappaNormativa nome={blocco.icona} size={isMobile ? 26 : 34} />
       </div>
+      {blocco.numero ? (
+        // la variante numerata dei "perche'": il numero in oro e il
+        // titolo stanno a sinistra, a destra solo il testo
+        <div style={{ display: "flex", gap: isMobile ? 6 : 22, flexDirection: isMobile ? "column" : "row", flex: 1, minWidth: 0 }}>
+          <div style={{ flex: "0 0 auto", width: isMobile ? "auto" : 250, display: "flex", alignItems: "center", gap: 14 }}>
+            <span style={{ ...fontDisplay, fontSize: isMobile ? 24 : 30, fontWeight: 400, color: GOLD, lineHeight: 1, flexShrink: 0 }}>{blocco.numero}</span>
+            <span style={{ ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.2 }}>{blocco.titolo}</span>
+          </div>
+          <div style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: isMobile ? 13 : 14, color: GRAFITE, lineHeight: 1.65, whiteSpace: "pre-line", ...(isMobile ? {} : { borderLeft: `1px solid ${CREAM_BORDER}`, paddingLeft: 22 }) }}>
+            {blocco.testo}
+          </div>
+        </div>
+      ) : (
       <div style={{ display: "flex", gap: isMobile ? 6 : 22, flexDirection: isMobile ? "column" : "row", flex: 1, minWidth: 0 }}>
         <div style={{ flex: "0 0 auto", width: isMobile ? "auto" : 150 }}>
           <div style={testoQuando}>{blocco.quando}</div>
@@ -30406,6 +30434,7 @@ function TappaNormativa({ blocco, isMobile }) {
           <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, color: GRAFITE, lineHeight: 1.65, whiteSpace: "pre-line" }}>{blocco.testo}</div>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -30414,10 +30443,10 @@ function TappaNormativa({ blocco, isMobile }) {
 // oro e la frase di lato oltre un filetto.
 function TestataNormativa({ blocco, isMobile }) {
   return (
-    <div style={{ display: "flex", gap: isMobile ? 14 : 28, alignItems: "stretch", marginBottom: 22, flexDirection: isMobile ? "column" : "row" }}>
+    <div style={{ display: "flex", gap: isMobile ? 14 : 28, alignItems: "stretch", marginBottom: 22, marginTop: blocco.sottotitolo ? 0 : 30, flexDirection: isMobile ? "column" : "row" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 34 : 50, fontWeight: 800, color: NAVY, lineHeight: 1, textTransform: "uppercase", letterSpacing: 0.5 }}>{blocco.titolo}</div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 30, fontWeight: 400, color: NAVY, lineHeight: 1.15, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6 }}>{blocco.sottotitolo}</div>
+        <div style={{ ...fontDisplay, fontSize: blocco.sottotitolo ? (isMobile ? 34 : 50) : (isMobile ? 24 : 36), fontWeight: 800, color: NAVY, lineHeight: 1.05, textTransform: "uppercase", letterSpacing: 0.5 }}>{blocco.titolo}</div>
+        {blocco.sottotitolo && <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 30, fontWeight: 400, color: NAVY, lineHeight: 1.15, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6 }}>{blocco.sottotitolo}</div>}
         {blocco.claim && <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 10 }}>{blocco.claim}</div>}
       </div>
       {blocco.lato && (
