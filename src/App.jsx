@@ -3274,6 +3274,30 @@ function puntiProdotto(p, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantoname
   if (margine == null) return null;
   return puntiDaCedibile(round2((Number(p.prezzo_vendita) * percentualeCedibileDi(margine)) / 100), sicurezzaPct);
 }
+// La riduzione per lo sconto usato dall'allievo. Non cambia come nascono
+// i punti: prima si calcolano i punti TEORICI del prodotto (cedibile ->
+// sicurezza -> x20 -> intero), poi si riducono di una percentuale pari a
+// (sconto % ottenuto dall'allievo) x (valore della fascia di margine del
+// prodotto nello schema). Esempio: 180 punti teorici, fascia 5, sconto
+// 10% -> riduzione 50% -> 90 punti alla master. I valori delle fasce non
+// sono fissi: si leggono dalla configurazione ogni volta.
+function puntiDopoScontoAllievo(puntiTeorici, scontoPct, valoreFascia) {
+  const riduzione = Math.min(100, Math.max(0, (Number(scontoPct) || 0) * (Number(valoreFascia) || 0)));
+  return Math.round((Number(puntiTeorici) || 0) * (1 - riduzione / 100));
+}
+// Lo sconto % che l'allievo ha ottenuto su una riga venduta. Dal 12/09/2026
+// il POS lo scrive sulla riga; prima c'era solo il totale scontato, e se
+// la vendita aveva un codice si prende la percentuale di fascia del
+// prodotto, che e' quella che il codice avrebbe applicato.
+function scontoPctRigaVenduta(riga, vendita, prodotto, fasceCanale) {
+  if (riga?.sconto_pct != null) return Number(riga.sconto_pct) || 0;
+  if (riga?.sconto_riga != null && Number(riga.prezzo_listino) > 0) {
+    const lordo = Number(riga.prezzo_listino) * (Number(riga.quantita) || 1);
+    return lordo > 0 ? (Number(riga.sconto_riga) / lordo) * 100 : 0;
+  }
+  if (vendita?.codice_coupon) return percentualeFasciaDi(prodotto, fasceCanale);
+  return 0;
+}
 function percentualeCedibileDi(marginePct) {
   if (marginePct == null || !(marginePct >= CEDIBILE_PER_MARGINE[0][0])) return 0;
   const ultimo = CEDIBILE_PER_MARGINE[CEDIBILE_PER_MARGINE.length - 1];
@@ -9966,11 +9990,16 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, onApriInventarioSede, onApriChiusura, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, onApriInventarioSede, onApriChiusura, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
   const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
   const quotePunti = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiSalvate || {}) };
+  // le fasce di sconto dei due canali: servono per la riduzione dei punti
+  // quando l'allievo ha usato un codice
+  const [regolaReferralMasterDash] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  const fasceCorsoDash = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
+  const fasceReferralDash = fasceScontoValide(regolaReferralMasterDash?.fasce);
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -10052,12 +10081,19 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       const conta = (v.totale || 0) > 0;
       if (conta && v.corso_data_id) venditeCorso += 1;
       if (conta && !v.corso_data_id && v.codice_coupon && codiciPersonali.has(String(v.codice_coupon).toLowerCase())) venditeReferral += 1;
+      const alCorso = !!v.corso_data_id;
+      const fasceCanale = alCorso ? fasceCorsoDash : fasceReferralDash;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
-        const puntiPezzo = puntiProdotto(prodottoPerIdPunti[r.prodotto_id], sicurezzaPunti);
+        const prodotto = prodottoPerIdPunti[r.prodotto_id];
+        const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti);
         if (puntiPezzo == null) return;
-        const puntiRiga = puntiPezzo * (Number(r.quantita) || 0);
-        puntiAccumulati += puntiRiga;
-        if (v.corso_data_id) puntiCorsoLordi += puntiRiga; else puntiFuoriLordi += puntiRiga;
+        // i punti teorici della riga, interi: sono i bonus
+        const teorici = puntiPezzo * (Number(r.quantita) || 0);
+        puntiAccumulati += teorici;
+        // poi la riduzione per lo sconto usato dall'allievo, con il valore
+        // di fascia del prodotto letto dallo schema del canale
+        const effettivi = puntiDopoScontoAllievo(teorici, scontoPctRigaVenduta(r, v, prodotto, fasceCanale), percentualeFasciaDi(prodotto, fasceCanale));
+        if (alCorso) puntiCorsoLordi += effettivi; else puntiFuoriLordi += effettivi;
       });
       // l'importo non si ricalcola: e' quello congelato sulla vendita il
       // giorno in cui e' stata fatta. Un reso ha totale negativo e porta
@@ -10083,7 +10119,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       euroTotale: round2(euroCorso + euroReferral + premi.euro),
       pezzi, premi, gruppi,
     };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso]);
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
   // la contabilita' di una classe, aperta dal tasto sulla card: e' la
   // stessa pagina del link che si manda alla master, con lo stesso
@@ -38480,26 +38516,31 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     return (master || []).map((m) => {
       const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
       let puntiCorso = 0, puntiFuori = 0, pezzi = 0, pezziSenzaPunti = 0, euro = 0, vendite = 0;
+      let puntiTeorici = 0;
       righe.forEach((v) => {
         euro += Number(v.totale) || 0;
         if ((v.totale || 0) > 0) vendite += 1;
         // al corso e' tutto quello che e' legato a una classe, con o senza
         // codice; il resto e' fuori dal corso (referral sul sito, vendita
-        // da casa)
+        // da casa). Le fasce del canale danno il valore per la riduzione
         const alCorso = !!v.corso_data_id;
+        const fasceCanale = alCorso ? fasceScontoValide(fasceCorso) : fasceScontoValide(regolaReferralMaster?.fasce);
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
           const q = Number(r.quantita) || 0;
-          const pp = puntiProdotto(prodottoPerId[r.prodotto_id], sicurezzaPunti);
+          const prodotto = prodottoPerId[r.prodotto_id];
+          const pp = puntiProdotto(prodotto, sicurezzaPunti);
           pezzi += q;
-          if (pp == null) pezziSenzaPunti += q;
-          else if (alCorso) puntiCorso += pp * q;
-          else puntiFuori += pp * q;
+          if (pp == null) { pezziSenzaPunti += q; return; }
+          const teorici = pp * q;
+          puntiTeorici += teorici;
+          const effettivi = puntiDopoScontoAllievo(teorici, scontoPctRigaVenduta(r, v, prodotto, fasceCanale), percentualeFasciaDi(prodotto, fasceCanale));
+          if (alCorso) puntiCorso += effettivi; else puntiFuori += effettivi;
         });
       });
       const puntiMaster = Math.round((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
-      return { master: m, vendite, pezzi, pezziSenzaPunti, puntiCorso, puntiFuori, punti: puntiCorso + puntiFuori, puntiMaster, euro: round2(euro) };
+      return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici, puntiCorso, puntiFuori, punti: puntiCorso + puntiFuori, puntiMaster, euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti]);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, regolaReferralMaster]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
@@ -38640,13 +38681,32 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Come funzionano i punti</div>
           <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
             <p style={{ margin: "0 0 8px" }}>
-              Ogni prodotto ha una quota cedibile, che dipende da quanto rende: è la parte del prezzo che si può girare a chi lo vende. Tolta la percentuale di sicurezza, quella quota vale <b>{PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti per euro</b>.
+              I punti teorici della master nascono <b>sempre</b> dalla formula generale: Cedibile € meno la percentuale di sicurezza, per {PUNTI_PER_EURO_MASSIMO_CEDIBILE}, arrotondato all'intero. Lo sconto dell'allievo non cambia questo metodo: interviene <b>solo dopo</b>, riducendo i punti teorici già calcolati.
             </p>
-            <p style={{ margin: "0 0 8px" }}>
-              <b>Al corso</b> la master guadagna i punti sulla quota cedibile <b>al netto dello sconto</b> che i suoi allievi hanno usato: lo sconto del codice d'aula è cedibile che se ne va all'allievo, e quello che resta è della master. Su una vendita senza codice resta tutto a lei.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Fuori dal corso</b>, con il referral personale, vale la stessa regola con le fasce del referral. Sul totale così ottenuto si applicano poi le quote qui sopra, "Al corso" e "Fuori dal corso".
+            <ol style={{ margin: "0 0 10px", paddingLeft: 22 }}>
+              <li>Si calcola il Cedibile € del prodotto.</li>
+              <li>Si sottrae la percentuale di sicurezza configurata, oggi il {schema.accantonamentoPct}%.</li>
+              <li>Si moltiplica il risultato per {PUNTI_PER_EURO_MASSIMO_CEDIBILE}.</li>
+              <li>Si arrotonda a numero intero: questi sono i <b>punti teorici</b> della master, i "Punti bonus" della sua dashboard.</li>
+              <li>Se l'allievo usa il coupon e riceve uno sconto, i punti si riducono in base alla <b>fascia di margine</b> del prodotto e al valore configurato nello schema: riduzione % = sconto % dell'allievo × valore della fascia.</li>
+              <li>I valori delle fasce non sono fissi: si leggono dalla configurazione qui sopra, e cambiarli cambia il conto.</li>
+            </ol>
+            {(() => {
+              const cedibile = 10, sconto = 10, fascia = 5;
+              const residuo = round2(cedibile * (1 - schema.accantonamentoPct / 100));
+              const teorici = Math.round(residuo * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
+              const effettivi = puntiDopoScontoAllievo(teorici, sconto, fascia);
+              return (
+                <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+                  <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Esempio completo</div>
+                  Cedibile {fmtEuroErp2(cedibile)}, sicurezza {schema.accantonamentoPct}%: {fmtEuroErp2(cedibile)} → {fmtEuroErp2(residuo)} → <b>{teorici} punti teorici</b>.<br />
+                  Il prodotto sta nella fascia con valore {fascia}; l'allievo usa uno sconto del {sconto}%: {sconto} × {fascia}% = {sconto * fascia}% di riduzione.<br />
+                  {teorici} − {sconto * fascia}% = <b>{effettivi} punti</b> accreditati alla master. Nei Punti bonus restano {teorici}.
+                </div>
+              );
+            })()}
+            <p style={{ margin: "10px 0 0" }}>
+              Vale allo stesso modo al corso, con il codice d'aula, e fuori dal corso, con il referral personale: cambia solo lo schema di fasce che si legge. Sul totale si applicano poi le quote "Al corso" e "Fuori dal corso".
             </p>
           </div>
         </div>
@@ -38657,20 +38717,21 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         ) : (
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
                 <thead>
                   <tr>
-                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiCorso", l: "Punti al corso" }, { c: "puntiFuori", l: "Punti fuori corso" }, { c: "puntiMaster", l: "Alla master" }, { c: "euro", l: "Valore venduto" }].map((h) => (
+                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiTeorici", l: "Punti teorici" }, { c: "puntiCorso", l: "Al corso, dopo sconto" }, { c: "puntiFuori", l: "Fuori corso, dopo sconto" }, { c: "puntiMaster", l: "Alla master" }, { c: "euro", l: "Valore venduto" }].map((h) => (
                       <ThOrdina key={h.c} campo={h.c} ordine={ordine} onOrdina={cambiaOrdine} style={th}>{h.l}</ThOrdina>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiCorso: (r) => r.puntiCorso, puntiFuori: (r) => r.puntiFuori, puntiMaster: (r) => r.puntiMaster, euro: (r) => r.euro }).map((r) => (
+                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiTeorici: (r) => r.puntiTeorici, puntiCorso: (r) => r.puntiCorso, puntiFuori: (r) => r.puntiFuori, puntiMaster: (r) => r.puntiMaster, euro: (r) => r.euro }).map((r) => (
                     <tr key={r.master.id}>
                       <td style={{ ...td, fontWeight: 700 }}>{toTitleCase(r.master.nome)}</td>
                       <td style={td}>{r.vendite}</td>
                       <td style={td}>{r.pezzi}{r.pezziSenzaPunti > 0 && <span style={{ ...fontBody, fontSize: 11, color: GOLD, marginLeft: 6 }} title="Pezzi di prodotti senza costo di acquisto o non in vendita dall'app: non generano punti">{r.pezziSenzaPunti} senza punti</span>}</td>
+                      <td style={td} title="I punti interi dei prodotti venduti, prima di ogni riduzione: sono i Punti bonus della dashboard">{r.puntiTeorici.toLocaleString("it-IT")}</td>
                       <td style={td} title={`${quote.corso}% alla master`}>{r.puntiCorso.toLocaleString("it-IT")}</td>
                       <td style={td} title={`${quote.fuoriCorso}% alla master`}>{r.puntiFuori.toLocaleString("it-IT")}</td>
                       <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }}>{r.puntiMaster.toLocaleString("it-IT")}</td>
@@ -59474,7 +59535,7 @@ export default function App() {
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
-    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni"],
+    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
@@ -61197,7 +61258,7 @@ export default function App() {
           master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti}
           masterLoggataId={utenteLoggato?.masterId || null}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
-          puntiMasterImpostazioni={puntiMasterImpostazioni}
+          puntiMasterImpostazioni={puntiMasterImpostazioni} regoleReferralAutomatico={regoleReferralAutomatico}
           onApriInventarioSede={apriInventarioSede}
           onApriChiusura={apriChiusuraCorso}
           onApriClasse={apriClasseMaster}
