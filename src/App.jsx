@@ -3306,6 +3306,22 @@ function scontoCouponCarrello(righe, prodottoPerId, percentuale, base) {
   }
   return round2(lordo * (percentuale / 100));
 }
+// Quanto valeva una vendita a listino, prima degli sconti. Le righe dal
+// 12/09/2026 portano il listino del giorno; quelle appena precedenti
+// almeno lo sconto; le piu' vecchie solo il totale scontato, e per loro
+// il listino coincide con il pagato: non si inventa un prezzo pieno che
+// nessuno ha scritto.
+function totaleListinoVendita(v) {
+  const righe = Array.isArray(v?.prodotti) ? v.prodotti : [];
+  const pagato = Number(v?.totale) || 0;
+  if (righe.some((r) => r.prezzo_listino != null)) {
+    return round2(righe.reduce((s, r) => s + (r.prezzo_listino != null ? Number(r.prezzo_listino) * (Number(r.quantita) || 1) : Number(r.totale_riga) || 0), 0));
+  }
+  if (righe.some((r) => r.sconto_riga != null)) {
+    return round2(pagato + righe.reduce((s, r) => s + (Number(r.sconto_riga) || 0), 0));
+  }
+  return pagato;
+}
 function prezzoAlPubblico(p) {
   if (p?.prezzo_lordo_forzato != null && p.prezzo_lordo_forzato !== "") return round2(Number(p.prezzo_lordo_forzato));
   if (p?.prezzo_vendita == null) return null;
@@ -38334,7 +38350,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                 <tr>
                   {[{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, ...(origine === "pos"
                     ? [{ c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }]
-                    : [{ c: "cliente", l: "Cliente" }]), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "totale", l: "Totale" }].map((th) => (
+                    : [{ c: "cliente", l: "Cliente" }]), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Prezzo pagato" }].map((th) => (
                     <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
@@ -38353,6 +38369,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                     stato: (v) => v.stato || "",
                     imponibile: (v) => (v.totale != null && v.totale_iva != null ? v.totale - v.totale_iva : null),
                     iva: (v) => v.totale_iva ?? null,
+                    listino: (v) => totaleListinoVendita(v),
                     totale: (v) => v.totale ?? null,
                   })
                   .map((v) => {
@@ -38475,6 +38492,16 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp2(v.totale_imponibile) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
+                        {/* "Totale" e' il listino, "Prezzo pagato" quello che e'
+                            entrato in cassa dopo gli sconti; senza sconti i due
+                            numeri coincidono, ed e' giusto che si veda */}
+                        {(() => {
+                          const listino = totaleListinoVendita(v);
+                          const scontata = round2(listino - (Number(v.totale) || 0)) > 0;
+                          return (
+                            <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: scontata ? MUTED : NAVY, whiteSpace: "nowrap", textDecoration: scontata ? "line-through" : "none" }}>{fmtEuroErp2(listino)}</td>
+                          );
+                        })()}
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                       </tr>
                     );
@@ -40823,7 +40850,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 due, e il secondo paio finiva sotto la piega. Con un quarto
                 di schermo a testa il contenuto si incolonna — icona,
                 etichetta, numero — invece di stare in riga */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: isMobile ? 5 : 10, alignItems: "stretch" }}>
+            {/* da scrivania la griglia occupa meta' pagina, al centro: quattro
+                quadrati larghi un quarto dello schermo erano enormi, e i
+                testi dentro restano della loro misura */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: isMobile ? 5 : 10, alignItems: "stretch", width: isMobile ? "100%" : "50%", margin: "0 auto" }}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
                 { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", valore: fermi.length, unita: "prodotti", filtro: true },
