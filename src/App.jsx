@@ -3190,15 +3190,17 @@ function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
 // quanto rende il prodotto. Non e' una proporzione: a margini bassi non
 // si cede quasi niente, e la quota cresce piu' in fretta del margine.
 // Ogni riga vale da quel margine fino al gradino dopo: 47% di margine
-// sta nella riga del 45. Sotto il 5 non si cede nulla, oltre il 95 si
-// cede il 50. Le due percentuali sono entrambe sul prezzo NETTO, come
-// il margine in tabella.
+// sta nella riga del 45. Sotto il 5 non si cede nulla, dal 95 in su si
+// cede il 43, che e' il tetto. Le due percentuali sono entrambe sul
+// prezzo NETTO, come il margine in tabella.
+// Tabella rivista il 12/09/2026: fino al 20 di margine si cede il 30%
+// del margine, poi mezzo punto ogni punto di margine in piu'.
 const CEDIBILE_PER_MARGINE = [
-  [5, 0], [10, 1.5], [15, 3.5], [20, 6], [25, 8], [30, 10.5], [35, 13],
-  [40, 15.5], [45, 18.5], [50, 21], [55, 24], [60, 27], [65, 30], [70, 33],
-  [75, 36.5], [80, 40], [85, 43.5], [90, 46], [95, 49],
+  [5, 1.5], [10, 3], [15, 4.5], [20, 6], [25, 8], [30, 10.5], [35, 13],
+  [40, 15.5], [45, 18], [50, 20.5], [55, 23], [60, 25.5], [65, 28], [70, 30.5],
+  [75, 33], [80, 35.5], [85, 38], [90, 40.5], [95, 43],
 ];
-const CEDIBILE_OLTRE_ULTIMO_GRADINO = 50;
+const CEDIBILE_OLTRE_ULTIMO_GRADINO = 43;
 function percentualeCedibileDi(marginePct) {
   if (marginePct == null || !(marginePct >= CEDIBILE_PER_MARGINE[0][0])) return 0;
   const ultimo = CEDIBILE_PER_MARGINE[CEDIBILE_PER_MARGINE.length - 1];
