@@ -10027,10 +10027,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
     let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, euroCorso = 0, euroReferral = 0, pezzi = 0, puntiAccumulati = 0;
     const perGruppo = {};
-    // i punti: per ogni riga venduta, i punti del prodotto per i pezzi.
-    // Si leggono dall'anagrafica di oggi, non dal prezzo pagato: un
-    // prodotto vale i suoi punti anche se e' stato scontato. Un reso ha
-    // pezzi negativi e li toglie da solo
+    // i punti BONUS: per ogni riga venduta, i punti interi del prodotto
+    // per i pezzi, senza detrazioni per lo sconto usato ne' quote per
+    // canale. Si leggono dall'anagrafica di oggi, non dal prezzo pagato:
+    // un prodotto vale i suoi punti anche se e' stato scontato. Un reso
+    // ha pezzi negativi e li toglie da solo
     const prodottoPerIdPunti = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
     // "Al corso" e' tutto quello che e' legato a una classe, con o senza
     // codice: anche se la master si e' scordata di associare il codice, la
@@ -10233,7 +10234,14 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                     mostrarli alla master */}
                 <div style={{ ...numPunti, color: MUTED }}>—</div>
               </div>
-              <div style={cardPunti} aria-hidden="true" />
+              {/* Punti bonus: tutti i punti dei prodotti venduti, interi,
+                  senza le detrazioni per lo sconto usato dagli allievi e
+                  senza le quote per canale. Se un prodotto vale 100 punti
+                  e alla master ne restano 80, qui contano 100 */}
+              <div style={cardPunti}>
+                <div style={lblPunti}>Punti bonus</div>
+                <div style={{ ...numPunti, color: GOLD }}>{provvigioniMaster.puntiAccumulati.toLocaleString("it-IT")}</div>
+              </div>
             </div>
               );
             })()}
