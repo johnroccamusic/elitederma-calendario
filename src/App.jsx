@@ -30356,36 +30356,79 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 // appena la pagina si apre viene scritto sul database, e da li' in poi
 // comanda quello che c'e' scritto sul database, non questo.
 const NORMATIVA_RITORNO_AL_CORSO = [
-  { id: "b1", tipo: "titolo", testo: "Cosa puoi fare se hai già fatto un corso e vuoi tornare a studiare" },
-  { id: "b2", tipo: "sezione", testo: "Regolamento Elitederma post corso" },
-  { id: "b3", tipo: "paragrafo", testo: "Elitederma continua a supportare i propri allievi anche dopo il percorso formativo, offrendo la possibilità di rifrequentare i corsi gratuitamente o a tariffe agevolate per consolidare le competenze acquisite." },
+  // la testata: titolone, sottotitolo, il claim in oro e la frase di lato
+  { id: "b1", tipo: "testata", titolo: "Cosa puoi fare", sottotitolo: "Se hai già fatto un corso e vuoi tornare a studiare", claim: "Il tuo percorso non finisce mai", lato: "La tua crescita sempre con noi" },
+  { id: "b3", tipo: "paragrafo", testo: "Elitederma continua a supportare i propri allievi anche dopo il percorso formativo, offrendo la possibilità di rifrequentare i corsi gratuitamente o a tariffe agevolate, per consolidare le competenze acquisite." },
   { id: "b4", tipo: "paragrafo", testo: "Poiché la dermopigmentazione si evolve costantemente, chi torna in aula potrebbe affrontare un programma aggiornato rispetto a quello originario, con prodotti, pigmenti e strumenti differenti." },
-  { id: "b5", tipo: "paragrafo", testo: "Il contributo richiesto rappresenta quindi un investimento nella propria crescita professionale e un sostegno all'impegno dell'accademia nell'innovazione e nell'aggiornamento continuo." },
-  { id: "b6", tipo: "nota", testo: "NB: le presenti regole sono valide unicamente per i corsi base e sono esclusi i corsi avanzati, per i quali sarà dovuto nuovamente l'intero importo scontato del 10%." },
-  { id: "b7", tipo: "sezione", testo: "Cosa puoi fare se sei ancora durante il periodo di supporto post corso" },
-  { id: "b8", tipo: "paragrafo", testo: "Entro il termine degli otto mesi di supporto potrai tornare in aula gratuitamente e usufruire della parte teorica senza alcun costo." },
-  { id: "b9", tipo: "paragrafo", testo: "Le esercitazioni su modella saranno da considerarsi a parte e avranno un costo di euro 200 per ogni modella o, per il corso base di PMU, euro 500 nel caso di acquisto di tutte e 3 le modelle da fare al corso." },
-  { id: "b10", tipo: "paragrafo", testo: "Non sarà incluso un nuovo kit." },
-  { id: "b11", tipo: "sezione", testo: "Cosa puoi fare entro 16 mesi dalla fine del corso" },
-  { id: "b12", tipo: "paragrafo", testo: "Se non sono trascorsi 16 mesi dalla data della fine del corso, potrai acquistare dei mesi di supporto aggiuntivo al costo di 150 euro al mese." },
-  { id: "b13", tipo: "paragrafo", testo: "Con l'acquisto di almeno 3 mesi di supporto avrai anche la possibilità di tornare al corso gratuitamente." },
-  { id: "b14", tipo: "paragrafo", testo: "Le esercitazioni su modella saranno da considerarsi a parte e avranno un costo di euro 200 per ogni modella o, per il corso base di PMU, euro 500 nel caso di acquisto di tutte e 3 le modelle da fare al corso." },
-  { id: "b15", tipo: "paragrafo", testo: "Non sarà incluso un nuovo kit." },
-  { id: "b16", tipo: "sezione", testo: "Cosa puoi fare dal 16° mese fino al 23° mese dalla fine del corso" },
-  { id: "b17", tipo: "paragrafo", testo: "Dopo i 16 mesi dal corso non ti sarà possibile acquistare solo il supporto aggiuntivo, ma potrai tornare in aula per l'intero corso con l'agevolazione di uno sconto pari al 50% sul prezzo del corso. Saranno inclusi nuovamente 8 mesi di supporto e un nuovo kit prodotti, ad eccezione del dermografo, che potrà comunque essere acquistato avvalendosi di uno sconto pari al 50%." },
-  { id: "b18", tipo: "sezione", testo: "Cosa puoi fare dal 24° mese (2 anni) ed entro il 4° anno dalla fine del corso" },
-  { id: "b19", tipo: "paragrafo", testo: "Tra i 2 e i 4 anni dal corso non potrai più acquistare solo il supporto aggiuntivo, ma potrai tornare a frequentare l'intero corso, incluse le modelle, con uno sconto pari al 25% sul prezzo totale del corso." },
-  { id: "b20", tipo: "paragrafo", testo: "Saranno inclusi nuovamente 8 mesi di supporto e un nuovo kit colori ed accessori, ma nel caso del corso di PMU sarà escluso il dermografo, che potrà comunque essere acquistato nuovamente avvalendosi di uno sconto del 25%." },
-  { id: "b21", tipo: "sezione", testo: "Cosa puoi fare se sono trascorsi oltre 4 anni dalla fine del corso" },
-  { id: "b22", tipo: "paragrafo", testo: "Se sono trascorsi 4 anni dalla fine del corso potrai tornare nuovamente al corso, incluso di supporto, con un'agevolazione pari al 15% sul prezzo totale del corso. Sarà incluso il kit e, nel caso del corso di PMU, anche il dermografo (oppure potrai scegliere il pacchetto senza dermografo)." },
-  { id: "b23", tipo: "titolo2", testo: "Perché applichiamo questa politica" },
-  { id: "b24", tipo: "paragrafo", testo: "Elitederma si impegna costantemente a supportare i propri allievi, anche dopo il completamento del percorso formativo. Comprendiamo che, per diverse ragioni, alcuni studenti possano non aver avuto l'opportunità di esercitare quanto appreso." },
-  { id: "b25", tipo: "paragrafo", testo: "Per questo motivo abbiamo ideato una formula di rientro con tariffe agevolate, che consente di frequentare nuovamente il corso e consolidare le competenze acquisite." },
-  { id: "b26", tipo: "paragrafo", testo: "È importante tuttavia considerare che la dermopigmentazione è una disciplina in continua evoluzione: manuali, strumenti, tecniche e protocolli didattici vengono regolarmente aggiornati per rispondere agli standard più attuali." },
-  { id: "b27", tipo: "paragrafo", testo: "Di conseguenza, chi sceglie di rifrequentare il corso potrebbe trovarsi di fronte a un programma profondamente rinnovato, diverso in molti aspetti rispetto a quello originario." },
-  { id: "b28", tipo: "paragrafo", testo: "Il contributo richiesto per la nuova iscrizione deve quindi essere visto non solo come un investimento nella propria crescita professionale, ma anche come un sostegno all'attività continua di ricerca e aggiornamento dell'accademia." },
-  { id: "b29", tipo: "paragrafo", testo: "Solo così possiamo garantire agli studenti una formazione sempre allineata alle innovazioni del settore e fornire loro strumenti e tecniche all'avanguardia." },
+  { id: "b6", tipo: "nota", testo: "Le presenti regole sono valide solo per i corsi base e sono esclusi i corsi avanzati, per i quali sarà dovuto nuovamente l'intero importo scontato del 10%." },
+  // le cinque tappe: quando, cosa, a che condizioni
+  { id: "t1", tipo: "tappa", icona: "infinito", quando: "Durante il supporto", sotto: "Entro 8 mesi", titolo: "Torni in aula gratuitamente", testo: "Entro 8 mesi dalla fine del corso puoi tornare in aula senza costi aggiuntivi e usufruire della parte teorica." },
+  { id: "t2", tipo: "tappa", icona: "persone", quando: "Entro 16 mesi", sotto: "Dalla fine del corso", titolo: "Supporto aggiuntivo a 150 €/mese", testo: "Se non sono trascorsi 16 mesi, puoi acquistare dei mesi di supporto aggiuntivo al costo di 150 euro al mese." },
+  { id: "t3", tipo: "tappa", icona: "calendario", quando: "Dal 16° al 23° mese", sotto: "Dalla fine del corso", titolo: "Torni con il 50% di sconto", testo: "Dopo i 16 mesi non sarà più possibile acquistare solo il supporto aggiuntivo, ma potrai tornare in aula per l'intero corso con uno sconto del 50% sul prezzo del corso. Saranno inclusi nuovamente 8 mesi di supporto e un nuovo kit prodotti, ad eccezione del dermografo, che potrà comunque essere acquistato con uno sconto pari al 50%." },
+  { id: "t4", tipo: "tappa", icona: "cappello", quando: "Dal 24° mese entro il 4° anno", sotto: "Dalla fine del corso", titolo: "Torni con il 25% di sconto", testo: "Tra i 2 e i 4 anni dalla fine del corso non potrai più acquistare solo il supporto aggiuntivo, ma potrai tornare a frequentare l'intero corso, incluse le modelle, con uno sconto del 25% sul prezzo totale del corso.\n\nSaranno inclusi nuovamente 8 mesi di supporto e un nuovo kit colori ed accessori, ma nel caso del corso di PMU sarà escluso il dermografo, che potrà comunque essere acquistato con uno sconto del 25%." },
+  { id: "t5", tipo: "tappa", icona: "ricomincia", quando: "Oltre 4 anni", sotto: "Dalla fine del corso", titolo: "Torni con il 15% di sconto", testo: "Se sono trascorsi 4 anni dalla fine del corso potrai tornare nuovamente al corso, incluso di supporto, con un'agevolazione pari al 15% sul prezzo totale del corso. Sarà incluso il kit e, nel caso del corso di PMU, anche il dermografo (oppure potrai scegliere il pacchetto senza dermografo)." },
 ];
+
+// I campi che si riscrivono di un blocco a piu' voci. Gli altri tipi
+// hanno il solo "testo".
+const CAMPI_BLOCCO_NORMATIVA = {
+  testata: [["titolo", "Titolo"], ["sottotitolo", "Sottotitolo"], ["claim", "Frase in oro"], ["lato", "Frase di lato"]],
+  tappa: [["quando", "Quando (es. Entro 16 mesi)"], ["sotto", "Sotto (es. Dalla fine del corso)"], ["titolo", "Titolo"], ["testo", "Testo"]],
+};
+const ICONE_TAPPA_NORMATIVA = ["infinito", "persone", "calendario", "cappello", "ricomincia"];
+
+// le icone delle tappe: tratto oro dentro il tondo blu, come sulla locandina
+function IconaTappaNormativa({ nome, size = 30 }) {
+  const comune = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: GOLD, strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" };
+  if (nome === "persone") return <svg {...comune}><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.4" /><path d="M3 19c0-3 2.7-5 6-5s6 2 6 5M15.5 15c2.6 0 5 1.6 5 4" /></svg>;
+  if (nome === "calendario") return <svg {...comune}><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" /></svg>;
+  if (nome === "cappello") return <svg {...comune}><path d="M2.5 9.5 12 5l9.5 4.5L12 14z" /><path d="M6.5 11.5V16c0 1.7 2.5 3 5.5 3s5.5-1.3 5.5-3v-4.5M21.5 9.5V15" /></svg>;
+  if (nome === "ricomincia") return <svg {...comune}><path d="M20 12a8 8 0 1 1-2.3-5.7" /><path d="M20 4v5h-5" /></svg>;
+  return <svg {...comune}><path d="M8 8.5c-2.2 0-3.8 1.6-3.8 3.5S5.8 15.5 8 15.5c3.5 0 4.5-7 8-7 2.2 0 3.8 1.6 3.8 3.5S18.2 15.5 16 15.5c-3.5 0-4.5-7-8-7z" /></svg>;
+}
+
+// Una tappa della locandina: tondo blu con l'icona, a sinistra il quando,
+// a destra cosa succede. Da telefono la colonna del quando passa sopra.
+function TappaNormativa({ blocco, isMobile }) {
+  const testoQuando = { ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.15, textTransform: "uppercase" };
+  return (
+    <div style={{ display: "flex", gap: isMobile ? 12 : 18, alignItems: "flex-start", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? "14px 14px" : "18px 22px", boxShadow: "var(--ombra-aree, none)" }}>
+      <div style={{ width: isMobile ? 54 : 70, height: isMobile ? 54 : 70, borderRadius: "50%", background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <IconaTappaNormativa nome={blocco.icona} size={isMobile ? 26 : 34} />
+      </div>
+      <div style={{ display: "flex", gap: isMobile ? 6 : 22, flexDirection: isMobile ? "column" : "row", flex: 1, minWidth: 0 }}>
+        <div style={{ flex: "0 0 auto", width: isMobile ? "auto" : 150 }}>
+          <div style={testoQuando}>{blocco.quando}</div>
+          {blocco.sotto && <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 4 }}>{blocco.sotto}</div>}
+        </div>
+        <div style={{ flex: 1, minWidth: 0, ...(isMobile ? {} : { borderLeft: `1px solid ${CREAM_BORDER}`, paddingLeft: 22 }) }}>
+          <div style={{ ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 6 }}>{blocco.titolo}</div>
+          <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, color: GRAFITE, lineHeight: 1.65, whiteSpace: "pre-line" }}>{blocco.testo}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// La testata della locandina: il titolone, il sottotitolo, il claim in
+// oro e la frase di lato oltre un filetto.
+function TestataNormativa({ blocco, isMobile }) {
+  return (
+    <div style={{ display: "flex", gap: isMobile ? 14 : 28, alignItems: "stretch", marginBottom: 22, flexDirection: isMobile ? "column" : "row" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 34 : 50, fontWeight: 800, color: NAVY, lineHeight: 1, textTransform: "uppercase", letterSpacing: 0.5 }}>{blocco.titolo}</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 30, fontWeight: 400, color: NAVY, lineHeight: 1.15, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6 }}>{blocco.sottotitolo}</div>
+        {blocco.claim && <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 10 }}>{blocco.claim}</div>}
+      </div>
+      {blocco.lato && (
+        <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 600, color: GOLD, textTransform: "uppercase", letterSpacing: 2.5, lineHeight: 1.55, ...(isMobile ? { borderTop: `1px solid ${GOLD}`, paddingTop: 10 } : { borderLeft: `1px solid ${GOLD}`, paddingLeft: 22, width: 180, flexShrink: 0, display: "flex", alignItems: "center" }) }}>
+          {blocco.lato}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 
 // La pagina di una normativa: titolo, sezioni e paragrafi come sul sito.
@@ -30413,6 +30456,11 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
   }, [riga, chiave, titolo, testoIniziale, ricarica]);
 
   const blocchi = Array.isArray(riga?.blocchi) && riga.blocchi.length ? riga.blocchi : testoIniziale;
+  // Il testo di partenza puo' cambiare impaginato (dal 12/09/2026 ha la
+  // testata e le tappe): quello salvato sul database comanda comunque, ma
+  // al programmatore si offre di sostituirlo con un clic, invece di
+  // lasciarlo a ricopiare a mano trenta blocchi
+  const nuovoImpaginatoDisponibile = programmatore && !!riga && testoIniziale.some((b) => b.tipo === "testata") && !blocchi.some((b) => b.tipo === "testata");
 
   async function salvaBlocchi(nuovi) {
     setSalvando(true);
@@ -30424,17 +30472,29 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
     return true;
   }
 
+  // un blocco a piu' voci (testata, tappa) si apre con tutte le sue voci;
+  // gli altri con il solo testo
+  function apriModifica(b) {
+    const campi = CAMPI_BLOCCO_NORMATIVA[b.tipo];
+    setInModifica(b.id);
+    setBozza(campi ? Object.fromEntries(campi.map(([c]) => [c, b[c] || ""])) : b.testo);
+  }
   async function confermaModifica(id) {
-    const nuovi = blocchi.map((b) => (b.id === id ? { ...b, testo: bozza } : b));
+    const nuovi = blocchi.map((b) => (b.id === id ? (typeof bozza === "object" ? { ...b, ...bozza } : { ...b, testo: bozza }) : b));
     if (await salvaBlocchi(nuovi)) { setInModifica(null); setBozza(""); }
+  }
+  async function cambiaIconaTappa(id, icona) {
+    await salvaBlocchi(blocchi.map((b) => (b.id === id ? { ...b, icona } : b)));
   }
   async function eliminaBlocco(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo pezzo di testo?")) return;
     await salvaBlocchi(blocchi.filter((b) => b.id !== id));
   }
   async function aggiungiBlocco(tipo) {
-    const nuovo = { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
-    if (await salvaBlocchi([...blocchi, nuovo])) { setInModifica(nuovo.id); setBozza(nuovo.testo); }
+    const nuovo = tipo === "tappa"
+      ? { id: `b${Date.now()}`, tipo, icona: "infinito", quando: "Quando", sotto: "Dalla fine del corso", titolo: "Cosa succede", testo: "Scrivi qui le condizioni…" }
+      : { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
+    if (await salvaBlocchi([...blocchi, nuovo])) apriModifica(nuovo);
   }
 
   // ogni tipo di blocco ha il suo stile, gli stessi pesi della pagina sul
@@ -30443,7 +30503,9 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
     if (tipo === "titolo") return { ...fontDisplay, fontSize: isMobile ? 24 : 34, fontWeight: 700, color: NAVY, lineHeight: 1.2, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 18 };
     if (tipo === "titolo2") return { ...fontDisplay, fontSize: isMobile ? 20 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.25, textTransform: "uppercase", letterSpacing: 0.3, margin: "30px 0 14px" };
     if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
-    if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "12px 14px", lineHeight: 1.6, margin: "14px 0" };
+    if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#5E5039", background: "#F5EEDD", border: "1px solid #E6D9B8", borderRadius: 12, padding: "12px 14px 12px 46px", lineHeight: 1.6, margin: "14px 0 22px", position: "relative" };
+    if (tipo === "tappa") return { marginBottom: 12 };
+    if (tipo === "testata") return {};
     return { ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, marginBottom: 12 };
   }
 
@@ -30458,19 +30520,53 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             Sei in modalità programmatore: clicca su un qualsiasi pezzo di testo per riscriverlo. Quello che salvi lo vedono tutti.
           </div>
         )}
+        {nuovoImpaginatoDisponibile && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 12px", marginBottom: 18 }}>
+            <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", flex: 1, minWidth: 200 }}>
+              C'è un nuovo impaginato per questa pagina, con testata e tappe. Applicandolo il testo salvato viene sostituito da quello di partenza.
+            </span>
+            <Button onClick={async () => { if (window.confirm("Sostituire il testo attuale con il nuovo impaginato?")) await salvaBlocchi(testoIniziale); }} disabled={salvando}>Applica il nuovo impaginato</Button>
+          </div>
+        )}
 
         {blocchi.map((b) => {
           const aperto = inModifica === b.id;
+          const campi = CAMPI_BLOCCO_NORMATIVA[b.tipo];
           if (aperto) {
             return (
-              <div key={b.id} style={{ marginBottom: 14 }}>
-                <textarea
-                  autoFocus
-                  value={bozza}
-                  onChange={(e) => setBozza(e.target.value)}
-                  rows={Math.max(2, Math.ceil(bozza.length / 70))}
-                  style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.6, fontSize: isMobile ? 13.5 : 14.5 }}
-                />
+              <div key={b.id} style={{ marginBottom: 14, background: "#fff", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: 12 }}>
+                {campi ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {b.tipo === "tappa" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Icona</span>
+                        {ICONE_TAPPA_NORMATIVA.map((nome) => (
+                          <button key={nome} onClick={() => cambiaIconaTappa(b.id, nome)} title={nome} style={{ width: 40, height: 40, borderRadius: "50%", background: NAVY, border: b.icona === nome ? `3px solid ${GOLD}` : "3px solid transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                            <IconaTappaNormativa nome={nome} size={20} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {campi.map(([campo, etichetta]) => (
+                      <label key={campo} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{etichetta}</span>
+                        {campo === "testo" ? (
+                          <textarea value={bozza[campo] || ""} onChange={(e) => setBozza({ ...bozza, [campo]: e.target.value })} rows={Math.max(3, Math.ceil((bozza[campo] || "").length / 70))} style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.6, fontSize: isMobile ? 13.5 : 14.5 }} />
+                        ) : (
+                          <input value={bozza[campo] || ""} onChange={(e) => setBozza({ ...bozza, [campo]: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <textarea
+                    autoFocus
+                    value={bozza}
+                    onChange={(e) => setBozza(e.target.value)}
+                    rows={Math.max(2, Math.ceil(bozza.length / 70))}
+                    style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.6, fontSize: isMobile ? 13.5 : 14.5 }}
+                  />
+                )}
                 <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                   <Button onClick={() => confermaModifica(b.id)} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
                   <Button variant="ghost" onClick={() => { setInModifica(null); setBozza(""); }}>Annulla</Button>
@@ -30487,13 +30583,22 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
           return (
             <div
               key={b.id}
-              onClick={programmatore ? () => { setInModifica(b.id); setBozza(b.testo); } : undefined}
+              onClick={programmatore ? () => apriModifica(b) : undefined}
               title={programmatore ? "Clicca per riscrivere" : undefined}
               style={{ ...stileDi(b.tipo), cursor: programmatore ? "text" : "default", borderRadius: 8, ...(programmatore ? { outline: "1px dashed transparent", transition: "outline-color 120ms" } : {}) }}
               onMouseEnter={programmatore ? (e) => { e.currentTarget.style.outlineColor = CREAM_BORDER; } : undefined}
               onMouseLeave={programmatore ? (e) => { e.currentTarget.style.outlineColor = "transparent"; } : undefined}
             >
-              {b.testo}
+              {b.tipo === "testata" ? <TestataNormativa blocco={b} isMobile={isMobile} />
+                : b.tipo === "tappa" ? <TappaNormativa blocco={b} isMobile={isMobile} />
+                : b.tipo === "nota" ? (
+                  <>
+                    {/* la "i" nel tondo, come sulla locandina */}
+                    <span style={{ position: "absolute", left: 12, top: 11, width: 24, height: 24, borderRadius: "50%", background: GOLD, color: "#fff", ...fontDisplay, fontSize: 14, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>i</span>
+                    {b.testo}
+                  </>
+                )
+                : b.testo}
             </div>
           );
         })}
@@ -30503,6 +30608,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             <Button variant="ghost" onClick={() => aggiungiBlocco("sezione")}>+ Titolo di sezione</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("paragrafo")}>+ Paragrafo</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("nota")}>+ Nota</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("tappa")}>+ Tappa</Button>
           </div>
         )}
 
