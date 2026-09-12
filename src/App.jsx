@@ -3430,14 +3430,16 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
           sotto, su una riga loro: dicono come leggere il numero, non ne
           fanno parte */}
       <div style={{ display: "flex", alignItems: "center", gap: stretto ? 6 : 8, marginBottom: stretto ? 6 : 8 }}>
-        <div style={{ position: "relative", flex: "1 1 0", minWidth: 0 }}>
+        {/* sei decimi alla cifra, quattro all'aliquota: lasciato a se', il
+            menu' si allargava quanto voleva e la cifra spariva */}
+        <div style={{ position: "relative", flex: "6 1 0", minWidth: 0 }}>
           <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
           <span style={{ position: "absolute", right: stretto ? 8 : 9, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: stretto ? 12 : 12, color: MUTED, pointerEvents: "none" }}>€</span>
         </div>
         <select
           title="Aliquota IVA"
           aria-label="Aliquota IVA"
-          style={{ ...campo, width: "auto", flexShrink: 0, fontWeight: 600, background: "#F1EDE4", paddingRight: stretto ? 26 : 30 }}
+          style={{ ...campo, flex: "4 1 0", minWidth: 0, width: "auto", fontWeight: 600, background: "#F1EDE4", paddingRight: stretto ? 26 : 30 }}
           value={aliquotaEStandard ? String(Number(aliquota)) : "altra"}
           onChange={(e) => onCambiaAliquota(e.target.value === "altra" ? aliquota : Number(e.target.value))}
         >
