@@ -357,6 +357,12 @@ const CHIAVE_ORDINE_MAGAZZINO = "gestioneMagazzino_ordineColonne";
 const CHIAVE_PER_PAGINA_MAGAZZINO = "gestioneMagazzino_perPagina";
 const CHIAVE_COLONNE_POS = "pos_colonneProdotti";
 const CHIAVE_REGOLA_REFERRAL_MASTER = "referralMaster_regolaSconto";
+// Quanta parte dei punti maturati va alla master, a seconda di dove li
+// ha fatti: al corso (la classe usa il codice d'aula, o compra senza) e
+// fuori dal corso (il suo referral personale sul sito, o una vendita da
+// casa). Due percentuali, decise in Gestione punti
+const CHIAVE_QUOTE_PUNTI_MASTER = "puntiMaster_quotePerCanale";
+const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
 // quanto spazio prende la colonna di sinistra ("Da gestire oggi") rispetto
 // agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
 const CHIAVE_DIVISIONE_MAGAZZINO = "gestioneMagazzino_divisioneColonne";
@@ -38352,6 +38358,14 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   useEffect(() => {
     if (puntiMasterImpostazioni && !form) setForm({ data_inizio: puntiMasterImpostazioni.data_inizio, data_fine: puntiMasterImpostazioni.data_fine });
   }, [puntiMasterImpostazioni, form]);
+  // le due quote: si salvano come impostazione condivisa, valgono per
+  // tutte le master, e la dashboard le leggera' da qui
+  const [quoteSalvate, salvaQuote] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
+  const quote = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quoteSalvate || {}) };
+  const cambiaQuota = (canale, valore) => {
+    const n = Math.max(0, Math.min(100, Math.round(Number(valore) || 0)));
+    salvaQuote({ ...quote, [canale]: n });
+  };
   async function salvaFinestra() {
     if (!form?.data_inizio || !form?.data_fine) { setMsg("Indica sia la data di inizio sia quella di fine della raccolta."); return; }
     if (form.data_fine < form.data_inizio) { setMsg("La data di fine non può precedere quella di inizio."); return; }
@@ -38370,20 +38384,27 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     const prodottoPerId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
     return (master || []).map((m) => {
       const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
-      let punti = 0, pezzi = 0, pezziSenzaPunti = 0, euro = 0, vendite = 0;
+      let puntiCorso = 0, puntiFuori = 0, pezzi = 0, pezziSenzaPunti = 0, euro = 0, vendite = 0;
       righe.forEach((v) => {
         euro += Number(v.totale) || 0;
         if ((v.totale || 0) > 0) vendite += 1;
+        // al corso e' tutto quello che e' legato a una classe, con o senza
+        // codice; il resto e' fuori dal corso (referral sul sito, vendita
+        // da casa)
+        const alCorso = !!v.corso_data_id;
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
           const q = Number(r.quantita) || 0;
           const pp = puntiProdotto(prodottoPerId[r.prodotto_id]);
           pezzi += q;
-          if (pp == null) pezziSenzaPunti += q; else punti += pp * q;
+          if (pp == null) pezziSenzaPunti += q;
+          else if (alCorso) puntiCorso += pp * q;
+          else puntiFuori += pp * q;
         });
       });
-      return { master: m, vendite, pezzi, pezziSenzaPunti, punti, euro: round2(euro) };
+      const puntiMaster = Math.round((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
+      return { master: m, vendite, pezzi, pezziSenzaPunti, puntiCorso, puntiFuori, punti: puntiCorso + puntiFuori, puntiMaster, euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni]);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
@@ -38415,27 +38436,59 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           )}
         </div>
 
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Quota dei punti alla master</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            Di tutti i punti che una vendita genera, quanti vanno alla master. Dipende da dove li ha fatti.
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {[
+              { canale: "corso", etichetta: "Al corso", spiega: "La master è collegata a una classe: gli allievi usano il codice d'aula per lo sconto, oppure comprano senza codice." },
+              { canale: "fuoriCorso", etichetta: "Fuori dal corso", spiega: "A casa: i clienti usano il suo referral personale su WooCommerce, o lei vende senza una classe collegata." },
+            ].map((q) => (
+              <div key={q.canale} style={{ flex: "1 1 260px", background: BG, borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{q.etichetta}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45, marginBottom: 10 }}>{q.spiega}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => cambiaQuota(q.canale, quote[q.canale] - 5)} title="Cinque punti in meno"
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
+                  <input
+                    type="number" min="0" max="100" value={quote[q.canale]}
+                    onChange={(e) => cambiaQuota(q.canale, e.target.value)}
+                    style={{ ...inputStyle, width: 70, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
+                  />
+                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
+                  <button onClick={() => cambiaQuota(q.canale, quote[q.canale] + 5)} title="Cinque punti in più"
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Punti per master</div>
         {classifica.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna vendita attribuita a una master nella finestra della raccolta.</div>
         ) : (
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
                 <thead>
                   <tr>
-                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "punti", l: "Punti" }, { c: "euro", l: "Valore venduto" }].map((h) => (
+                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiCorso", l: "Punti al corso" }, { c: "puntiFuori", l: "Punti fuori corso" }, { c: "puntiMaster", l: "Alla master" }, { c: "euro", l: "Valore venduto" }].map((h) => (
                       <ThOrdina key={h.c} campo={h.c} ordine={ordine} onOrdina={cambiaOrdine} style={th}>{h.l}</ThOrdina>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, punti: (r) => r.punti, euro: (r) => r.euro }).map((r) => (
+                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiCorso: (r) => r.puntiCorso, puntiFuori: (r) => r.puntiFuori, puntiMaster: (r) => r.puntiMaster, euro: (r) => r.euro }).map((r) => (
                     <tr key={r.master.id}>
                       <td style={{ ...td, fontWeight: 700 }}>{toTitleCase(r.master.nome)}</td>
                       <td style={td}>{r.vendite}</td>
                       <td style={td}>{r.pezzi}{r.pezziSenzaPunti > 0 && <span style={{ ...fontBody, fontSize: 11, color: GOLD, marginLeft: 6 }} title="Pezzi di prodotti senza costo di acquisto o non in vendita dall'app: non generano punti">{r.pezziSenzaPunti} senza punti</span>}</td>
-                      <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }}>{r.punti.toLocaleString("it-IT")}</td>
+                      <td style={td} title={`${quote.corso}% alla master`}>{r.puntiCorso.toLocaleString("it-IT")}</td>
+                      <td style={td} title={`${quote.fuoriCorso}% alla master`}>{r.puntiFuori.toLocaleString("it-IT")}</td>
+                      <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }}>{r.puntiMaster.toLocaleString("it-IT")}</td>
                       <td style={td}>{fmtEuroErp2(r.euro)}</td>
                     </tr>
                   ))}
