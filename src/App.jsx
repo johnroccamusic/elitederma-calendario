@@ -364,18 +364,18 @@ const CHIAVE_REGOLA_REFERRAL_MASTER = "referralMaster_regolaSconto";
 const CHIAVE_QUOTE_PUNTI_MASTER = "puntiMaster_quotePerCanale";
 const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
 // Lo schema dei punti: dal cedibile (il 100%) si accantona subito una
-// parte, quel che resta e' il massimo cedibile, e i punti sono il doppio
-// del massimo cedibile — cosi' il 50% dei punti vale esattamente il
-// massimo cedibile in euro. La percentuale accantonata si decide in
-// Gestione punti; il moltiplicatore e' fisso a due
+// parte di sicurezza, quel che resta e' il massimo cedibile, e i punti
+// sono dieci per ogni euro di massimo cedibile — cosi' la conversione e'
+// immediata: 10 punti, 1 euro. La percentuale accantonata si decide in
+// Gestione punti
 const CHIAVE_SCHEMA_PUNTI_MASTER = "puntiMaster_schema";
 const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
 // Regola dei punti, riscritta il 12/09/2026 e valida in tutta l'app:
-//   punti = (cedibile - percentuale di sicurezza) x 20, arrotondato all'intero.
-// Il "x 20" e' il doppio dei dieci punti per euro di prima: si raddoppia
-// perche' alla master si riconosce "il 50% dei punti", e quel 50% deve
-// valere il massimo cedibile.
-const PUNTI_PER_EURO_MASSIMO_CEDIBILE = 20;
+//   punti = (cedibile - percentuale di sicurezza) x 10, arrotondato all'intero.
+// Dieci punti per euro: il conto a mente e' immediato (2.661 punti sono
+// 266,10 euro). Era stato provato il venti, per dire alla master "il 50%
+// dei punti", ma la conversione diventava un rompicapo.
+const PUNTI_PER_EURO_MASSIMO_CEDIBILE = 10;
 function sicurezzaPuntiDi(schemaSalvato) {
   const pct = Number(schemaSalvato?.accantonamentoPct);
   return Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct;
@@ -3253,9 +3253,9 @@ const CEDIBILE_PER_MARGINE = [
 ];
 const CEDIBILE_OLTRE_ULTIMO_GRADINO = 43;
 // I punti che un prodotto genera a chi lo vende: dal cedibile si toglie la
-// percentuale di sicurezza, il resto (il massimo cedibile) vale venti
+// percentuale di sicurezza, il resto (il massimo cedibile) vale dieci
 // punti per euro, arrotondato all'intero. 9,16 euro cedibili, col 10% di
-// sicurezza, sono 8,24 di massimo cedibile e 165 punti. Un prodotto senza
+// sicurezza, sono 8,24 di massimo cedibile e 82 punti. Un prodotto senza
 // costo di acquisto non ha margine, quindi ne' quota cedibile ne' punti.
 function puntiDaCedibile(cedibileEuro, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct) {
   if (cedibileEuro == null || !Number.isFinite(Number(cedibileEuro))) return null;
@@ -3276,7 +3276,7 @@ function puntiProdotto(p, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantoname
 }
 // La riduzione per lo sconto usato dall'allievo. Non cambia come nascono
 // i punti: prima si calcolano i punti TEORICI del prodotto (cedibile ->
-// sicurezza -> x20 -> intero), poi si riducono di una percentuale pari a
+// sicurezza -> x10 -> intero), poi si riducono di una percentuale pari a
 // (sconto % ottenuto dall'allievo) x (valore della fascia di margine del
 // prodotto nello schema). Esempio: 180 punti teorici, fascia 5, sconto
 // 10% -> riduzione 50% -> 90 punti alla master. I valori delle fasce non
@@ -38551,7 +38551,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>
-          Per ogni pezzo venduto al POS o sul sito attraverso l'app: il cedibile del prodotto meno la percentuale di sicurezza, per venti punti a euro, arrotondato all'intero. I punti si leggono dall'anagrafica di oggi, non si salvano.
+          Per ogni pezzo venduto al POS o sul sito attraverso l'app: il cedibile del prodotto meno la percentuale di sicurezza, per dieci punti a euro, arrotondato all'intero. I punti si leggono dall'anagrafica di oggi, non si salvano.
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
