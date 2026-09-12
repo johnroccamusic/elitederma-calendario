@@ -38554,20 +38554,32 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Formula di fattibilità dei punti</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            È la regola interna con cui si verifica che i punti promessi alle master siano sostenibili. Non è un calcolatore: è il criterio.
-          </div>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Formula di fattibilità dei punti</div>
           <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
             <p style={{ margin: "0 0 8px" }}>
-              I punti si calcolano <b>detraendo dal cedibile la percentuale di sicurezza</b>, oggi il {schema.accantonamentoPct}%. Quello che resta è il <b>massimo cedibile alle master</b>.
+              I punti si calcolano partendo dall'importo <b>Cedibile €</b> del prodotto. Dal Cedibile viene detratta la <b>percentuale di sicurezza</b>, attualmente impostata al {schema.accantonamentoPct}%.
             </p>
             <p style={{ margin: "0 0 8px" }}>
-              Il massimo cedibile si converte in punti <b>moltiplicandolo per {PUNTI_PER_EURO_MASSIMO_CEDIBILE}</b>, arrotondando all'intero: 10 euro di massimo cedibile sono {10 * PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti.
+              L'importo residuo rappresenta il <b>massimo valore economico distribuibile</b>.
             </p>
-            <p style={{ margin: 0 }}>
-              È il doppio dei dieci punti per euro di partenza. Si raddoppia perché, quando a una master vogliamo dare tutto il possibile, le diciamo che le stiamo riconoscendo <b>il 50% dei punti</b>: il 50% di {10 * PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti, a dieci punti per euro, sono 10 euro, cioè esattamente il massimo cedibile. Senza il raddoppio il 50% non arriverebbe mai a quella cifra.
+            <p style={{ margin: "0 0 12px" }}>
+              Questo valore viene convertito in punti moltiplicandolo per {PUNTI_PER_EURO_MASSIMO_CEDIBILE} e il risultato viene arrotondato a un numero intero, senza decimali.
             </p>
+            <div style={{ background: BG, borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Formula</div>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Punti disponibili = (Cedibile € × (1 − % sicurezza)) × {PUNTI_PER_EURO_MASSIMO_CEDIBILE}</div>
+            </div>
+            {(() => {
+              const cedibile = 10;
+              const residuo = round2(cedibile * (1 - schema.accantonamentoPct / 100));
+              const punti = Math.round(residuo * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
+              return (
+                <p style={{ margin: 0 }}>
+                  Esempio con Cedibile {fmtEuroErp2(cedibile)} e sicurezza {schema.accantonamentoPct}%:<br />
+                  <b>{fmtEuroErp2(cedibile)} → {fmtEuroErp2(residuo)} → {punti} punti</b>
+                </p>
+              );
+            })()}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
             <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Percentuale di sicurezza</span>
