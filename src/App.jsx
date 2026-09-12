@@ -202,16 +202,74 @@ function salvaLayoutCondiviso(chiave, valore) {
 // la fissa chi lavora, e deve ritrovarsela domani e dall'altro
 // dispositivo. Non e' un filtro da rifare ogni volta che si apre la
 // pagina: e' come si e' deciso di guardare i conti.
-function salvaImpostazioneCondivisa(chiave, valore) {
+// Le sezioni toccate dall'ultimo invio: quando si salva solo un pezzo di
+// un oggetto (le misure del telefono, non quelle della scrivania) si
+// segna quale, e all'invio si rilegge il database e si sostituisce solo
+// quel pezzo. Prima ogni dispositivo mandava l'intero oggetto dalla sua
+// copia: il Mac con la copia di ieri cancellava quello che l'iPhone aveva
+// appena deciso
+const LAYOUT_SEZIONI_TOCCATE = {};
+const LAYOUT_INVII = {};
+function inviaImpostazioneCondivisa(chiave) {
+  clearTimeout(LAYOUT_TIMER[chiave]);
+  LAYOUT_TIMER[chiave] = null;
+  const sezioni = LAYOUT_SEZIONI_TOCCATE[chiave];
+  LAYOUT_SEZIONI_TOCCATE[chiave] = null;
+  const invio = (async () => {
+    let valore = LAYOUT_CACHE[chiave];
+    if (sezioni && sezioni.size && valore && typeof valore === "object" && !Array.isArray(valore)) {
+      try {
+        const { data } = await supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle();
+        if (data?.valore && typeof data.valore === "object") {
+          const unito = { ...data.valore };
+          sezioni.forEach((sezione) => { unito[sezione] = LAYOUT_CACHE[chiave]?.[sezione]; });
+          valore = unito;
+          // la copia locale prende anche le sezioni degli altri
+          LAYOUT_CACHE[chiave] = unito;
+          scriviCacheLocaleLayout(chiave, unito);
+          notificaLayout(chiave);
+        }
+      } catch { /* senza risposta si manda la copia intera, come prima */ }
+    }
+    const { error } = await supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
+    if (error) console.warn("Impostazione non salvata:", error.message);
+  })();
+  LAYOUT_INVII[chiave] = invio.finally(() => { if (LAYOUT_INVII[chiave] === invio) LAYOUT_INVII[chiave] = null; });
+}
+function salvaImpostazioneCondivisa(chiave, valore, sezione = null) {
   LAYOUT_CACHE[chiave] = valore;
   notificaLayout(chiave);
   scriviCacheLocaleLayout(chiave, valore);
+  if (sezione) {
+    if (!LAYOUT_SEZIONI_TOCCATE[chiave]) LAYOUT_SEZIONI_TOCCATE[chiave] = new Set();
+    LAYOUT_SEZIONI_TOCCATE[chiave].add(sezione);
+  } else {
+    // un salvataggio intero rende inutile ricordare i pezzi
+    LAYOUT_SEZIONI_TOCCATE[chiave] = null;
+  }
   clearTimeout(LAYOUT_TIMER[chiave]);
-  LAYOUT_TIMER[chiave] = setTimeout(() => {
-    LAYOUT_TIMER[chiave] = null;
-    supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" })
-      .then(({ error }) => { if (error) console.warn("Impostazione non salvata:", error.message); });
-  }, 600);
+  LAYOUT_TIMER[chiave] = setTimeout(() => inviaImpostazioneCondivisa(chiave), 600);
+}
+// Quando la pagina sparisce — l'app va in background, si chiude la scheda
+// — quello che aspetta i 600 ms parte subito, o l'iPhone che sospende
+// l'app se lo porta via. Quando torna in vista, si rilegge dal database
+// tutto cio' che qualcuno sta guardando: un'altra persona o un altro
+// dispositivo puo' aver cambiato qualcosa nel frattempo
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      Object.keys(LAYOUT_TIMER).forEach((chiave) => { if (LAYOUT_TIMER[chiave]) inviaImpostazioneCondivisa(chiave); });
+    } else {
+      Object.keys(LAYOUT_ASCOLTATORI).forEach((chiave) => {
+        if (!LAYOUT_ASCOLTATORI[chiave].size || LAYOUT_TIMER[chiave] || LAYOUT_INVII[chiave]) return;
+        LAYOUT_CARICATE[chiave] = null;
+        caricaLayoutCondiviso(chiave);
+      });
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    Object.keys(LAYOUT_TIMER).forEach((chiave) => { if (LAYOUT_TIMER[chiave]) inviaImpostazioneCondivisa(chiave); });
+  });
 }
 function useImpostazioneCondivisa(chiave, predefinito) {
   const [valore, setValore] = useState(() => LAYOUT_CACHE[chiave] ?? predefinito);
@@ -221,7 +279,7 @@ function useImpostazioneCondivisa(chiave, predefinito) {
     caricaLayoutCondiviso(chiave);
     return () => { LAYOUT_ASCOLTATORI[chiave].delete(setValore); };
   }, [chiave]);
-  return [valore ?? predefinito, (nuovo) => salvaImpostazioneCondivisa(chiave, nuovo)];
+  return [valore ?? predefinito, (nuovo, sezione = null) => salvaImpostazioneCondivisa(chiave, nuovo, sezione)];
 }
 
 // L'interruttore delle maniglie di impaginazione: quando e' spento, in
@@ -14677,7 +14735,9 @@ function PaginaAspettoApp() {
   const soloOmbra = quale === "aree" || quale === "pulsanti";
   // "unita: px" marca il salvataggio come fatto in pixel: quelli vecchi,
   // in percentuale, senza questa marca vengono ignorati alla lettura
-  const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi, unita: "px" } });
+  // "quale" e' la sezione toccata: all'invio si sostituisce solo quella
+  // nel database, il resto lo si lascia com'e' li'
+  const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi, unita: "px" } }, quale);
 
   // stessi comandi, ma sui tre campi annidati del dock
   const piuMenoDock = (etichetta, campo, min, max, aiutoMeno, aiutoPiu) => {
@@ -14753,7 +14813,7 @@ function PaginaAspettoApp() {
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
             Stai modificando: {NOME_ELEMENTO_ASPETTO[quale]}
           </div>
-          <Button variant="ghost" onClick={() => salvaAspetto({ ...aspetto, [quale]: ASPETTO_TASTI_DEFAULT[quale] })}>
+          <Button variant="ghost" onClick={() => salvaAspetto({ ...aspetto, [quale]: ASPETTO_TASTI_DEFAULT[quale] }, quale)}>
             Rimetti com'era
           </Button>
         </div>
