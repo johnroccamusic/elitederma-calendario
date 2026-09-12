@@ -28921,7 +28921,7 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
   const [ricercaTesto, setRicercaTesto] = useState("");
   const [filtroIncaricato, setFiltroIncaricato] = useState("");
   const [filtroPriorita, setFiltroPriorita] = useState("");
-  const [ordine, setOrdine] = useState("scadenza"); // scadenza | priorita | nome
+  const [ordine, setOrdine] = useState("scadenza"); // scadenza | priorita | nome | recenti
   const [filtroRapido, setFiltroRapido] = useState(null); // inscadenza | scaduti | alta | todo
   const [msg, setMsg] = useState("");
   const [mostraNuovo, setMostraNuovo] = useState(false);
@@ -29002,6 +29002,9 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
       .sort((a, b) => {
         if (ordine === "priorita") return (pesoPriorita[a.priorita] ?? 9) - (pesoPriorita[b.priorita] ?? 9);
         if (ordine === "nome") return String(a.nome).localeCompare(String(b.nome));
+        // ultimi inseriti: il piu' recente in cima, per riprendere subito
+        // quello che si e' appena aperto
+        if (ordine === "recenti") return String(b.creato_il || "").localeCompare(String(a.creato_il || ""));
         // per scadenza: prima chi ha una data, e prima la piu' vicina. Chi
         // non ne ha una va in fondo — non e' in ritardo su niente
         if (!a.scadenza && !b.scadenza) return 0;
@@ -29118,6 +29121,7 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
             <option value="scadenza">Ordina per scadenza</option>
             <option value="priorita">Ordina per priorità</option>
             <option value="nome">Ordina per nome</option>
+            <option value="recenti">Ordina per ultimi inseriti</option>
           </select>
         </div>
 
