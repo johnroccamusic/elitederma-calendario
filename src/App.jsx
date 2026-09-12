@@ -32291,7 +32291,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     const { error } = await supabase.from("regole_referral_automatico").update({
       percentuale_sconto: parseNum(regoleForm.percentuale_sconto) || 0,
       base_sconto: BASE_SCONTO_VALIDA(regoleForm.base_sconto),
-      tipo_regola_sconto: regoleForm.tipo_regola_sconto === "fasce" ? "fasce" : "semplice",
+      // la regola automatica e' sempre a fasce: la percentuale unica non
+      // e' piu' un'opzione, e salvando si scrive "fasce" qualunque cosa ci
+      // fosse prima
+      tipo_regola_sconto: "fasce",
       fasce_sconto: fasceScontoValide(regoleForm.fasce_sconto),
       giorni_validita_dopo_corso: Number(regoleForm.giorni_validita_dopo_corso) || 0,
       valido_durante_corso: !!regoleForm.valido_durante_corso,
@@ -32541,14 +32544,17 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
             ) : (
               <div style={{ ...cardStyle }}>
+                {/* solo a fasce, come per il referral personale: la
+                    percentuale unica sul corso non si sceglie piu' */}
                 <SceltaRegolaSconto
-                  tipo={regoleForm.tipo_regola_sconto} fasce={regoleForm.fasce_sconto}
-                  onCambiaTipo={(v) => setRegoleForm({ ...regoleForm, tipo_regola_sconto: v })}
+                  soloFasce
+                  tipo="fasce" fasce={regoleForm.fasce_sconto}
+                  onCambiaTipo={() => {}}
                   onCambiaFasce={(f) => setRegoleForm({ ...regoleForm, fasce_sconto: f })}
                   prodottiShop={prodottiShop} isMobile={isMobile}
                 />
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  {regoleForm.tipo_regola_sconto !== "fasce" && (
+                  {false && (
                     <>
                       <div style={{ flex: "1 1 180px" }}><Field label="Percentuale sconto (%)"><input type="number" min="0" step="0.01" style={inputStyle} value={regoleForm.percentuale_sconto} onChange={(e) => setRegoleForm({ ...regoleForm, percentuale_sconto: e.target.value })} /></Field></div>
                       <div style={{ flex: "1 1 220px" }}>
