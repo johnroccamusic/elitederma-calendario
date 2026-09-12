@@ -2319,7 +2319,10 @@ const ASPETTO_TASTI_DEFAULT = {
   // telefono e computer: e' una scelta di tono, e il tono non cambia con
   // lo schermo.
   aree: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
-  pulsanti: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+  // il raggio degli altri pulsanti: `null` vuol dire "come l'ha scritto
+  // il codice", cioe' ogni pulsante tiene i suoi angoli. Un numero li
+  // porta tutti a quella misura, in pixel, pastiglie e tondi compresi
+  pulsanti: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 }, raggio: null },
 };
 // i 64 colori: otto file da otto. La prima e' la scala dei grigi, la
 // seconda i crema e i taupe di casa, le altre sei le famiglie che
@@ -2364,13 +2367,20 @@ function ombraCssTasto(o) {
 function ombraAspettoDi(salvato, quale) {
   return { ombra: { ...ASPETTO_TASTI_DEFAULT[quale].ombra, ...((salvato && salvato[quale] && salvato[quale].ombra) || {}) } };
 }
+// il raggio salvato per gli altri pulsanti, o null se non e' mai stato
+// deciso: in quel caso non si scrive nessuna regola e ogni pulsante
+// resta con i suoi angoli
+function raggioPulsantiDi(salvato) {
+  const v = salvato && salvato.pulsanti && salvato.pulsanti.raggio;
+  return v == null || v === "" || isNaN(Number(v)) ? null : Number(v);
+}
 function useAspettoTasti() {
   const [salvato, salva] = useImpostazioneCondivisa(CHIAVE_ASPETTO_TASTI, null);
   return [{
     mobile: aspettoTastoDi(salvato, "mobile"),
     desktop: aspettoTastoDi(salvato, "desktop"),
     aree: ombraAspettoDi(salvato, "aree"),
-    pulsanti: ombraAspettoDi(salvato, "pulsanti"),
+    pulsanti: { ...ombraAspettoDi(salvato, "pulsanti"), raggio: raggioPulsantiDi(salvato) },
   }, salva];
 }
 
@@ -2405,12 +2415,21 @@ function useAspettoTasti() {
 function StiliGlobaliAspetto() {
   const [aspetto] = useAspettoTasti();
   const ombra = ombraCssTasto(aspetto.pulsanti.ombra);
+  const raggio = aspetto.pulsanti.raggio;
+  // L'ombra NON porta !important: chi si e' scelto la sua a mano se la
+  // tiene. Il raggio invece si: quasi ogni pulsante scrive il suo negli
+  // stili inline, e senza forzarlo questa regola non toccherebbe nessuno.
+  // Finche' il raggio e' "come nel codice" la regola non si scrive affatto.
+  const regolaRaggio = raggio == null ? "" : `
+button[style*="background: rgb"]:not([data-niente-ombra]),
+button[style*="background-color: rgb"]:not([data-niente-ombra]),
+button[style*="background: #"]:not([data-niente-ombra]) { border-radius: ${raggio}px !important; }`;
   return (
     <style>{`
 :root { --ombra-aree: ${ombraCssTasto(aspetto.aree.ombra)}; }
 button[style*="background: rgb"]:not([data-niente-ombra]),
 button[style*="background-color: rgb"]:not([data-niente-ombra]),
-button[style*="background: #"]:not([data-niente-ombra]) { box-shadow: ${ombra}; }
+button[style*="background: #"]:not([data-niente-ombra]) { box-shadow: ${ombra}; }${regolaRaggio}
 `}</style>
   );
 }
@@ -14311,7 +14330,7 @@ const NOME_ELEMENTO_ASPETTO = {
 // Le due ombre generali si giudicano su un esempio vero: una pastiglia
 // colorata come quelle sparse nell'app, e un pulsante come quelli delle
 // barre. Un quadrato grigio non direbbe niente.
-function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, selezionato, onClick }) {
+function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, raggio = null, selezionato, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -14336,8 +14355,8 @@ function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, seleziona
           </div>
         ) : (
           <>
-            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", boxShadow: ombraCssTasto(ombra) }}>Dettagli corso</span>
-            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 16, padding: "8px 14px", boxShadow: ombraCssTasto(ombra) }}>Conferma</span>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: raggio ?? 16, padding: "8px 14px", boxShadow: ombraCssTasto(ombra) }}>Dettagli corso</span>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: raggio ?? 16, padding: "8px 14px", boxShadow: ombraCssTasto(ombra) }}>Conferma</span>
           </>
         )}
       </div>
@@ -14410,7 +14429,7 @@ function PaginaAspettoApp() {
           />
           <AnteprimaOmbraGenerale
             etichetta="Altri pulsanti" sottotitolo="compresi i sotto-tasti" tipo="pulsante"
-            ombra={aspetto.pulsanti.ombra} selezionato={quale === "pulsanti"} onClick={() => setQuale("pulsanti")}
+            ombra={aspetto.pulsanti.ombra} raggio={aspetto.pulsanti.raggio} selezionato={quale === "pulsanti"} onClick={() => setQuale("pulsanti")}
           />
         </div>
       </div>
@@ -14427,6 +14446,26 @@ function PaginaAspettoApp() {
 
         {soloOmbra ? (
           <>
+            {quale === "pulsanti" && (
+              // il raggio degli altri pulsanti. Parte da "come nel codice":
+              // il primo "+" lo porta a una misura di partenza, e da li' si
+              // regola. "Come nel codice" lo rimette a null, che e' l'unico
+              // modo di ridare a ogni pulsante i suoi angoli
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>Raggio</span>
+                <button onClick={() => cambia({ raggio: corrente.raggio == null ? null : Math.max(0, corrente.raggio - 1) })} title="Angoli più squadrati" disabled={corrente.raggio == null}
+                  style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: corrente.raggio == null ? "default" : "pointer", opacity: corrente.raggio == null ? 0.4 : 1, fontSize: 17, lineHeight: 1 }}>−</button>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{corrente.raggio == null ? "auto" : `${corrente.raggio} px`}</span>
+                <button onClick={() => cambia({ raggio: corrente.raggio == null ? 12 : Math.min(40, corrente.raggio + 1) })} title="Angoli più tondi"
+                  style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
+                {corrente.raggio != null && (
+                  <Button variant="ghost" onClick={() => cambia({ raggio: null })}>Come nel codice</Button>
+                )}
+                <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexBasis: "100%" }}>
+                  Vale per tutti i pulsanti con uno sfondo, pastiglie e tondi compresi. "Auto" lascia a ognuno i suoi angoli.
+                </span>
+              </div>
+            )}
             <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Ombra</div>
             <ControlliOmbra titolo={NOME_ELEMENTO_ASPETTO[quale]} ombra={corrente.ombra} onCambia={(o) => cambia({ ombra: o })} />
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>Intensità a zero vuol dire nessuna ombra.</div>
