@@ -38367,6 +38367,18 @@ function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, ruoloUtente, ordin
 // I tre posti si salvano per utente, cosi' li si ritrova su ogni
 // dispositivo.
 function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
+  // il menu per cambiare o togliere: si apre col tasto destro, o tenendo
+  // premuto il dito. Un pallino rosso sempre in vista sporcava il dock
+  const [menuAperto, setMenuAperto] = useState(false);
+  const pressione = React.useRef(null);
+  const iniziaPressione = () => { pressione.current = setTimeout(() => { pressione.current = null; setMenuAperto(true); }, 480); };
+  const finePressione = () => { if (pressione.current) { clearTimeout(pressione.current); pressione.current = null; } };
+  useEffect(() => {
+    if (!menuAperto) return undefined;
+    const chiudi = () => setMenuAperto(false);
+    window.addEventListener("pointerdown", chiudi);
+    return () => window.removeEventListener("pointerdown", chiudi);
+  }, [menuAperto]);
   if (!voce) {
     return (
       <button
@@ -38386,8 +38398,13 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
   return (
     <div style={{ position: "relative", width: lato, height: lato, flexShrink: 0 }}>
       <button
-        onClick={onApri}
-        title={voce.titolo}
+        onClick={() => { if (menuAperto) { setMenuAperto(false); return; } if (pressione.current === null && !menuAperto) onApri(); }}
+        onContextMenu={(e) => { e.preventDefault(); setMenuAperto(true); }}
+        onPointerDown={(e) => { if (e.pointerType !== "mouse") iniziaPressione(); }}
+        onPointerUp={finePressione}
+        onPointerLeave={finePressione}
+        onPointerCancel={finePressione}
+        title={`${voce.titolo} — tasto destro o pressione lunga per cambiare o togliere`}
         style={{
           width: lato, height: lato, borderRadius: Math.round(lato * 0.29), cursor: "pointer", padding: "4px 5px",
           background: NAVY, border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
@@ -38396,14 +38413,15 @@ function TastoPreferitoDock({ voce, lato, onApri, onScegli, onTogli }) {
       >
         <span style={{ ...fontBody, fontSize: lato > 64 ? 10.5 : 9.5, fontWeight: 700, lineHeight: 1.15, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{voce.titolo}</span>
       </button>
-      <button
-        onClick={(e) => { e.stopPropagation(); onTogli(); }}
-        title="Togli questa scorciatoia"
-        aria-label="Togli questa scorciatoia"
-        style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.5)", background: "#C0392B", color: "#fff", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
-      >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-      </button>
+      {menuAperto && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ position: "absolute", left: "50%", top: "100%", transform: "translateX(-50%)", marginTop: 6, zIndex: 5, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 8px 24px rgba(14,27,51,0.25)", padding: 4, minWidth: 130, display: "flex", flexDirection: "column" }}
+        >
+          <button onClick={() => { setMenuAperto(false); onScegli(); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "transparent", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", textAlign: "left" }}>Cambia destinazione</button>
+          <button onClick={() => { setMenuAperto(false); onTogli(); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#C0392B", background: "transparent", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", textAlign: "left" }}>Togli scorciatoia</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -59941,8 +59959,10 @@ export default function App() {
   function togliPreferito(indice) {
     salvaPreferitiDock([0, 1, 2].map((i) => (i === indice ? null : (preferitiDock || [])[i] || null)));
   }
-  // la linguetta sta sul FIANCO sinistro del dock, in verticale: i tre
-  // tasti escono di lato, verso sinistra, non sotto
+  // la maniglietta: la stessa del dock in basso, piu' piccola e in
+  // verticale, grigia. Sta sempre di lato — a sinistra del dock quando
+  // le scorciatoie sono chiuse, a sinistra del pannello quando sono
+  // aperte — e la freccia dice da che parte si muove
   const linguettaPreferiti = (dentroLaBarra) => (
     <button
       onClick={() => setPreferitiAperti((v) => !v)}
@@ -59950,14 +59970,14 @@ export default function App() {
       title={preferitiAperti ? "Chiudi le scorciatoie" : "Le tue scorciatoie"}
       style={{
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        width: dentroLaBarra ? 26 : 22, height: dentroLaBarra ? 70 : 62, cursor: "pointer",
-        background: preferitiAperti ? "rgba(201,162,109,0.65)" : (dentroLaBarra ? "rgba(255,255,255,0.14)" : "rgba(14,27,51,0.28)"),
-        backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-        border: "1px solid rgba(255,255,255,0.22)", ...(dentroLaBarra ? { borderRadius: 14 } : { borderRight: "none", borderRadius: "12px 0 0 12px" }),
-        color: "#fff", padding: 0,
+        width: 24, height: dentroLaBarra ? 70 : 84, cursor: "pointer",
+        background: "rgba(110,110,116,0.78)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+        border: "1px solid rgba(255,255,255,0.28)", borderRadius: 8, color: "#fff", padding: 0,
       }}
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill={preferitiAperti ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z" /></svg>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points={preferitiAperti ? "9 6 15 12 9 18" : "15 6 9 12 15 18"} />
+      </svg>
     </button>
   );
   // il prolungamento chiaro della barra: parte dal suo fianco sinistro e
@@ -59965,7 +59985,7 @@ export default function App() {
   // le tre sagome e una x piccola per richiudere
   const pannelloPreferiti = (lato) => (
     <div style={{
-      display: "flex", alignItems: "center", gap: 14, padding: "12px 40px 12px 16px", marginRight: -28,
+      display: "flex", alignItems: "center", gap: 14, padding: "12px 40px 12px 16px", marginRight: -28, marginLeft: 8,
       background: "rgba(255,255,255,0.34)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
       border: "1px solid rgba(255,255,255,0.45)", borderRight: "none", borderRadius: "28px 0 0 28px",
       boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
@@ -59978,13 +59998,6 @@ export default function App() {
           onTogli={() => togliPreferito(i)}
         />
       ))}
-      <button
-        onClick={() => setPreferitiAperti(false)}
-        aria-label="Chiudi le scorciatoie" title="Chiudi"
-        style={{ width: 18, height: 18, borderRadius: "50%", border: "none", background: "transparent", color: "#3F4350", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", marginLeft: -6 }}
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-      </button>
     </div>
   );
 
@@ -60020,8 +60033,9 @@ export default function App() {
                 quando e' aperta, i tre tasti che escono verso sinistra. Stanno
                 fuori dal flusso, cosi' la barra resta centrata dov'e' */}
             {preferitiDisponibili && !dockNascosto && (
-              <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", zIndex: 0 }}>
-                {preferitiAperti ? pannelloPreferiti(62) : linguettaPreferiti(false)}
+              <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", zIndex: 0, paddingRight: preferitiAperti ? 0 : 6 }}>
+                {linguettaPreferiti(false)}
+                {preferitiAperti && pannelloPreferiti(62)}
               </div>
             )}
             <div
@@ -60186,9 +60200,7 @@ export default function App() {
               background: "rgba(14,27,51,0.92)", transform: preferitiAperti ? "translateX(0)" : "translateX(-100%)", transition: "transform 240ms ease",
               pointerEvents: preferitiAperti ? "auto" : "none",
             }}>
-              <button onClick={() => setPreferitiAperti(false)} aria-label="Chiudi le scorciatoie" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.4)", background: "transparent", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-              </button>
+              <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }}>{linguettaPreferiti(true)}</div>
               {[0, 1, 2].map((i) => (
                 <TastoPreferitoDock
                   key={i} voce={preferitiRisolti[i]} lato={62}
