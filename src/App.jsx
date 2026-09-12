@@ -3405,7 +3405,6 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
   // caratteri e spaziature ridotte, e con il selettore Netto/Lordo su una
   // riga sua invece che accanto al campo
   const stretto = useIsMobile();
-  const etichetta = { ...fontBody, fontSize: stretto ? 9 : 10.5, color: MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, lineHeight: 1.2 };
   const campo = { ...inputStyle, padding: stretto ? "8px 22px 8px 9px" : "11px 22px 11px 10px", fontSize: stretto ? 14 : 15, fontWeight: 700, borderRadius: 10 };
   // il titolo dice anche cosa sta chiedendo la casella: "prezzo lordo" o
   // "prezzo netto" cambia sotto il nome invece di ripetersi come etichetta
@@ -3426,21 +3425,36 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: stretto ? 6 : 8, marginBottom: stretto ? 8 : 12 }}>
+      {/* la cifra e la sua aliquota sulla stessa riga: sono le due cose
+          che si leggono insieme ("39,90 al 22%"). Netto e Lordo stanno
+          sotto, su una riga loro: dicono come leggere il numero, non ne
+          fanno parte */}
+      <div style={{ display: "flex", alignItems: "center", gap: stretto ? 6 : 8, marginBottom: stretto ? 6 : 8 }}>
         <div style={{ position: "relative", flex: "1 1 0", minWidth: 0 }}>
           <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
           <span style={{ position: "absolute", right: stretto ? 8 : 9, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: stretto ? 12 : 12, color: MUTED, pointerEvents: "none" }}>€</span>
         </div>
-        {/* Netto e Lordo attaccati al campo: sono due modi di leggere quel
-            numero, non due impostazioni che stanno altrove */}
-        <div style={{ display: "flex", flexShrink: 0, borderRadius: 10, overflow: "hidden", border: `1px solid ${CREAM_BORDER}` }}>
+        <select
+          title="Aliquota IVA"
+          aria-label="Aliquota IVA"
+          style={{ ...campo, width: "auto", flexShrink: 0, fontWeight: 600, background: "#F1EDE4", paddingRight: stretto ? 26 : 30 }}
+          value={aliquotaEStandard ? String(Number(aliquota)) : "altra"}
+          onChange={(e) => onCambiaAliquota(e.target.value === "altra" ? aliquota : Number(e.target.value))}
+        >
+          {ALIQUOTE_IVA_STANDARD.map((a) => <option key={a} value={a}>{a}%</option>)}
+          <option value="altra">Altra…</option>
+        </select>
+      </div>
+
+      <div style={{ display: "flex", gap: stretto ? 6 : 8, alignItems: "center", marginBottom: stretto ? 8 : 12 }}>
+        <div style={{ display: "flex", flex: "1 1 0", minWidth: 0, borderRadius: 10, overflow: "hidden", border: `1px solid ${CREAM_BORDER}` }}>
           {["netto", "lordo"].map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => cambiaModo(m)}
               style={{
-                ...fontBody, fontSize: stretto ? 10.5 : 10.5, fontWeight: 700, padding: stretto ? "9px 8px" : "12px 7px",
+                ...fontBody, flex: 1, fontSize: stretto ? 10.5 : 10.5, fontWeight: 700, padding: stretto ? "9px 8px" : "11px 7px",
                 border: "none", cursor: "pointer", whiteSpace: "nowrap",
                 background: modo === m ? NAVY : "#fff", color: modo === m ? "#fff" : NAVY,
               }}
@@ -3449,24 +3463,10 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
             </button>
           ))}
         </div>
-      </div>
-
-      <div style={{ display: "flex", gap: stretto ? 6 : 10, alignItems: "flex-end", marginBottom: stretto ? 8 : 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={etichetta}>Aliquota IVA</div>
-          <select
-            style={{ ...campo, fontWeight: 600, background: "#F1EDE4" }}
-            value={aliquotaEStandard ? String(Number(aliquota)) : "altra"}
-            onChange={(e) => onCambiaAliquota(e.target.value === "altra" ? aliquota : Number(e.target.value))}
-          >
-            {ALIQUOTE_IVA_STANDARD.map((a) => <option key={a} value={a}>{a}%</option>)}
-            <option value="altra">Altra…</option>
-          </select>
-        </div>
         {!aliquotaEStandard && (
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={etichetta}>{stretto ? "Personalizzata %" : "Aliquota personalizzata (%)"}</div>
-            <input style={campo} inputMode="decimal" value={aliquota ?? ""} onChange={(e) => onCambiaAliquota(parseNum(e.target.value))} placeholder="es. 15" />
+          <div style={{ position: "relative", flex: "1 1 0", minWidth: 0 }}>
+            <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={aliquota ?? ""} onChange={(e) => onCambiaAliquota(parseNum(e.target.value))} placeholder="IVA es. 15" title="Aliquota personalizzata" />
+            <span style={{ position: "absolute", right: stretto ? 8 : 9, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12, color: MUTED, pointerEvents: "none" }}>%</span>
           </div>
         )}
       </div>
