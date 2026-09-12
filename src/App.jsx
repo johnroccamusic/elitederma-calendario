@@ -370,14 +370,15 @@ const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
 // Gestione punti; il moltiplicatore e' fisso a due
 const CHIAVE_SCHEMA_PUNTI_MASTER = "puntiMaster_schema";
 const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
-const MOLTIPLICATORE_PUNTI_MASTER = 2;
-function schemaPuntiDaCedibile(cedibileEuro, accantonamentoPct) {
-  const cedibile = Math.max(0, Number(cedibileEuro) || 0);
-  const pct = Math.max(0, Math.min(100, Number(accantonamentoPct) || 0));
-  const accantonato = round2((cedibile * pct) / 100);
-  const massimoCedibile = round2(cedibile - accantonato);
-  const punti = Math.round(massimoCedibile * MOLTIPLICATORE_PUNTI_MASTER);
-  return { cedibile, pct, accantonato, massimoCedibile, punti };
+// Regola dei punti, riscritta il 12/09/2026 e valida in tutta l'app:
+//   punti = (cedibile - percentuale di sicurezza) x 20, arrotondato all'intero.
+// Il "x 20" e' il doppio dei dieci punti per euro di prima: si raddoppia
+// perche' alla master si riconosce "il 50% dei punti", e quel 50% deve
+// valere il massimo cedibile.
+const PUNTI_PER_EURO_MASSIMO_CEDIBILE = 20;
+function sicurezzaPuntiDi(schemaSalvato) {
+  const pct = Number(schemaSalvato?.accantonamentoPct);
+  return Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct;
 }
 // quanto spazio prende la colonna di sinistra ("Da gestire oggi") rispetto
 // agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
@@ -3251,25 +3252,27 @@ const CEDIBILE_PER_MARGINE = [
   [75, 33], [80, 35.5], [85, 38], [90, 40.5], [95, 43],
 ];
 const CEDIBILE_OLTRE_ULTIMO_GRADINO = 43;
-// I punti che un prodotto genera a chi lo vende: dieci per ogni euro
-// cedibile, arrotondati all'intero. 9,16 euro cedibili sono 92 punti.
-// Un prodotto senza costo di acquisto non ha margine, quindi ne' quota
-// cedibile ne' punti.
-function puntiDaCedibile(cedibileEuro) {
+// I punti che un prodotto genera a chi lo vende: dal cedibile si toglie la
+// percentuale di sicurezza, il resto (il massimo cedibile) vale venti
+// punti per euro, arrotondato all'intero. 9,16 euro cedibili, col 10% di
+// sicurezza, sono 8,24 di massimo cedibile e 165 punti. Un prodotto senza
+// costo di acquisto non ha margine, quindi ne' quota cedibile ne' punti.
+function puntiDaCedibile(cedibileEuro, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct) {
   if (cedibileEuro == null || !Number.isFinite(Number(cedibileEuro))) return null;
-  return Math.round(Number(cedibileEuro) * 10);
+  const massimoCedibile = Number(cedibileEuro) * (1 - sicurezzaPct / 100);
+  return Math.round(massimoCedibile * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
 }
 // I punti di UN pezzo di un prodotto, letti dalla sua anagrafica di oggi:
 // margine -> quota cedibile -> dieci punti per euro. E' la stessa regola
 // della colonna "Punti" di Dettaglio prodotti, e vale solo per quello che
 // si vende dall'app (POS o sito pubblicato). Null se non si sa il margine.
-function puntiProdotto(p) {
+function puntiProdotto(p, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct) {
   if (!p) return null;
   const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
   if (!inVenditaViaApp) return null;
   const margine = marginePercentualeDi(p);
   if (margine == null) return null;
-  return puntiDaCedibile(round2((Number(p.prezzo_vendita) * percentualeCedibileDi(margine)) / 100));
+  return puntiDaCedibile(round2((Number(p.prezzo_vendita) * percentualeCedibileDi(margine)) / 100), sicurezzaPct);
 }
 function percentualeCedibileDi(marginePct) {
   if (marginePct == null || !(marginePct >= CEDIBILE_PER_MARGINE[0][0])) return 0;
@@ -9964,6 +9967,8 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
 function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, onApriInventarioSede, onApriChiusura, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+  const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
+  const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -10040,7 +10045,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       if (conta && v.corso_data_id) venditeCorso += 1;
       if (conta && !v.corso_data_id && v.codice_coupon && codiciPersonali.has(String(v.codice_coupon).toLowerCase())) venditeReferral += 1;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
-        const puntiPezzo = puntiProdotto(prodottoPerIdPunti[r.prodotto_id]);
+        const puntiPezzo = puntiProdotto(prodottoPerIdPunti[r.prodotto_id], sicurezzaPunti);
         if (puntiPezzo != null) puntiAccumulati += puntiPezzo * (Number(r.quantita) || 0);
       });
       // l'importo non si ricalcola: e' quello congelato sulla vendita il
@@ -10066,7 +10071,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       euroTotale: round2(euroCorso + euroReferral + premi.euro),
       pezzi, premi, gruppi,
     };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop]);
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
   // la contabilita' di una classe, aperta dal tasto sulla card: e' la
   // stessa pagina del link che si manda alla master, con lo stesso
@@ -38380,6 +38385,11 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   useEffect(() => {
     if (puntiMasterImpostazioni && !form) setForm({ data_inizio: puntiMasterImpostazioni.data_inizio, data_fine: puntiMasterImpostazioni.data_fine });
   }, [puntiMasterImpostazioni, form]);
+  // la percentuale di sicurezza della regola dei punti: impostazione
+  // condivisa, vale per tutte le master e per la colonna del magazzino
+  const [schemaSalvato, salvaSchema] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
+  const schema = { ...SCHEMA_PUNTI_MASTER_DEFAULT, ...(schemaSalvato || {}) };
+  const sicurezzaPunti = sicurezzaPuntiDi(schemaSalvato);
   // le due quote: si salvano come impostazione condivisa, valgono per
   // tutte le master, e la dashboard le leggera' da qui
   const [quoteSalvate, salvaQuote] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
@@ -38411,10 +38421,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     ricarica(["regole_referral_automatico"]);
   }
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
-  // la percentuale di sicurezza della formula di fattibilita': impostazione
-  // condivisa, vale per tutte le master
-  const [schemaSalvato, salvaSchema] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
-  const schema = { ...SCHEMA_PUNTI_MASTER_DEFAULT, ...(schemaSalvato || {}) };
+
 
   async function salvaFinestra() {
     if (!form?.data_inizio || !form?.data_fine) { setMsg("Indica sia la data di inizio sia quella di fine della raccolta."); return; }
@@ -38444,7 +38451,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         const alCorso = !!v.corso_data_id;
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
           const q = Number(r.quantita) || 0;
-          const pp = puntiProdotto(prodottoPerId[r.prodotto_id]);
+          const pp = puntiProdotto(prodottoPerId[r.prodotto_id], sicurezzaPunti);
           pezzi += q;
           if (pp == null) pezziSenzaPunti += q;
           else if (alCorso) puntiCorso += pp * q;
@@ -38454,7 +38461,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
       const puntiMaster = Math.round((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
       return { master: m, vendite, pezzi, pezziSenzaPunti, puntiCorso, puntiFuori, punti: puntiCorso + puntiFuori, puntiMaster, euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso]);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
@@ -38465,7 +38472,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>
-          Dieci punti per ogni euro cedibile di un prodotto, per ogni pezzo venduto al POS o sul sito attraverso l'app. I punti si leggono dall'anagrafica di oggi, non si salvano.
+          Per ogni pezzo venduto al POS o sul sito attraverso l'app: il cedibile del prodotto meno la percentuale di sicurezza, per venti punti a euro, arrotondato all'intero. I punti si leggono dall'anagrafica di oggi, non si salvano.
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
@@ -38556,10 +38563,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               I punti si calcolano <b>detraendo dal cedibile la percentuale di sicurezza</b>, oggi il {schema.accantonamentoPct}%. Quello che resta è il <b>massimo cedibile alle master</b>.
             </p>
             <p style={{ margin: "0 0 8px" }}>
-              Il massimo cedibile si converte in punti <b>moltiplicandolo per due</b>: 10 euro di massimo cedibile sono 20 punti.
+              Il massimo cedibile si converte in punti <b>moltiplicandolo per {PUNTI_PER_EURO_MASSIMO_CEDIBILE}</b>, arrotondando all'intero: 10 euro di massimo cedibile sono {10 * PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti.
             </p>
             <p style={{ margin: 0 }}>
-              Si raddoppia perché, quando a una master vogliamo dare tutto il possibile, le diciamo che le stiamo riconoscendo <b>il 50% dei punti</b>: il 50% di 20 punti sono 10 euro, cioè esattamente il massimo cedibile. Senza il raddoppio il 50% non arriverebbe mai a quella cifra.
+              È il doppio dei dieci punti per euro di partenza. Si raddoppia perché, quando a una master vogliamo dare tutto il possibile, le diciamo che le stiamo riconoscendo <b>il 50% dei punti</b>: il 50% di {10 * PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti, a dieci punti per euro, sono 10 euro, cioè esattamente il massimo cedibile. Senza il raddoppio il 50% non arriverebbe mai a quella cifra.
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -38578,7 +38585,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Come funzionano i punti</div>
           <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
             <p style={{ margin: "0 0 8px" }}>
-              Ogni prodotto ha una quota cedibile, che dipende da quanto rende: è la parte del prezzo che si può girare a chi lo vende. Quella quota vale <b>dieci punti per euro</b>.
+              Ogni prodotto ha una quota cedibile, che dipende da quanto rende: è la parte del prezzo che si può girare a chi lo vende. Tolta la percentuale di sicurezza, quella quota vale <b>{PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti per euro</b>.
             </p>
             <p style={{ margin: "0 0 8px" }}>
               <b>Al corso</b> la master guadagna i punti sulla quota cedibile <b>al netto dello sconto</b> che i suoi allievi hanno usato: lo sconto del codice d'aula è cedibile che se ne va all'allievo, e quello che resta è della master. Su una vendita senza codice resta tutto a lei.
@@ -40903,7 +40910,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Quanto si puo' girare al massimo a chi vende: il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
     "Punti": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Dieci punti per ogni euro cedibile (${fmtEuroErp2(p.cedibileEuro)}), arrotondati all'intero` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? p.punti.toLocaleString("it-IT") : (p.cedibileEuro == null ? "N/D" : "—")}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile ${fmtEuroErp2(p.cedibileEuro)} meno il ${sicurezzaPunti}% di sicurezza, per ${PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti a euro, arrotondato all'intero` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? p.punti.toLocaleString("it-IT") : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
@@ -41067,6 +41074,10 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
 function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
+  // la percentuale di sicurezza della regola dei punti, decisa in
+  // Gestione punti: la colonna "Punti" la segue
+  const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
+  const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
   useEffect(() => {
     assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -41422,7 +41433,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // registrati e' un'altra cosa e non viene toccato: qui si legge, non
     // si scrive nulla sul sito
     const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
-    const punti = inVenditaViaApp ? puntiDaCedibile(cedibileEuro) : null;
+    const punti = inVenditaViaApp ? puntiDaCedibile(cedibileEuro, sicurezzaPunti) : null;
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
