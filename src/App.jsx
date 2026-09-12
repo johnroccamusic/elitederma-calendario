@@ -9925,13 +9925,18 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
     let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, euroCorso = 0, euroReferral = 0, pezzi = 0;
     const perGruppo = {};
+    // "Al corso" e' tutto quello che e' legato a una classe, con o senza
+    // codice: anche se la master si e' scordata di associare il codice, la
+    // vendita in aula resta una vendita al corso. "Con referral" e' solo
+    // quello che i clienti comprano FUORI dal corso con il suo codice
+    // personale (quello senza edizione, tipo AP47U9): di solito dal sito,
+    // che il webhook attribuisce a lei come operatore. I codici delle
+    // singole edizioni non contano qui: sono sconti d'aula, non referral.
+    const codiciPersonali = new Set((coupon || []).filter((c) => c.master_id === masterSelId && !c.corsi_date_id && c.codice).map((c) => String(c.codice).toLowerCase()));
     righe.forEach((v) => {
-      // "al corso" e' una vendita legata a una classe, "con referral" una
-      // con un codice: la stessa vendita puo' essere tutte e due, e si
-      // conta in entrambe. Si guardano i campi della vendita e non il
-      // canale della provvigione, che sulle vendite piu' vecchie manca
-      if ((v.totale || 0) > 0 && v.corso_data_id) venditeCorso += 1;
-      if ((v.totale || 0) > 0 && v.codice_coupon) venditeReferral += 1;
+      const conta = (v.totale || 0) > 0;
+      if (conta && v.corso_data_id) venditeCorso += 1;
+      if (conta && !v.corso_data_id && v.codice_coupon && codiciPersonali.has(String(v.codice_coupon).toLowerCase())) venditeReferral += 1;
       // l'importo non si ricalcola: e' quello congelato sulla vendita il
       // giorno in cui e' stata fatta. Un reso ha totale negativo e porta
       // con se' una provvigione negativa, quindi si sottrae da sola
@@ -9955,7 +9960,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       euroTotale: round2(euroCorso + euroReferral + premi.euro),
       pezzi, premi, gruppi,
     };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni]);
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
   // la contabilita' di una classe, aperta dal tasto sulla card: e' la
   // stessa pagina del link che si manda alla master, con lo stesso
