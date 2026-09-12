@@ -60450,6 +60450,123 @@ export default function App() {
     </div>
   );
 
+  // Il rullo del dock da telefono. Al posto della linguetta di lato, i tre
+  // tasti a sinistra della casetta si tirano su col dito come un rullo:
+  // salgono via e da sotto arrivano le tre scorciatoie; un altro colpo e
+  // tornano i tasti di sempre. Il rullo ha tre righe — l'altra, la
+  // corrente, di nuovo l'altra — e sta fermo sulla mezzana: cosi' si puo'
+  // tirare in entrambi i versi, e a fine corsa basta scambiare le righe e
+  // rimetterlo al centro senza che si veda niente. Mentre il dito trascina
+  // si muove il DOM direttamente: uno stato React a ogni pixel farebbe
+  // ridisegnare l'intera app
+  const passoRulloDock = 70 + 10;
+  const rulloDockEl = React.useRef(null);
+  const toccoRulloDock = React.useRef(null);
+  const corsaRulloDock = React.useRef(null);
+  const rulloDockMosso = React.useRef(false);
+  // coricato, il dock e' girato di 90 gradi: il suo "su" e' il destra dello
+  // schermo
+  const posizioneRulloDock = (e) => (dockCoricato ? -e.touches[0].clientX : e.touches[0].clientY);
+  const spostaRulloDock = (dy, animando) => {
+    const el = rulloDockEl.current; if (!el) return;
+    el.style.transition = animando ? "transform 240ms ease" : "none";
+    el.style.transform = `translateY(${-passoRulloDock + dy}px)`;
+  };
+  const inizioRulloDock = (e) => {
+    if (corsaRulloDock.current) return;
+    toccoRulloDock.current = { da: posizioneRulloDock(e), dy: 0, mosso: false };
+  };
+  const muoviRulloDock = (e) => {
+    const t = toccoRulloDock.current; if (!t) return;
+    t.dy = Math.max(-passoRulloDock, Math.min(passoRulloDock, posizioneRulloDock(e) - t.da));
+    if (Math.abs(t.dy) > 6) t.mosso = true;
+    spostaRulloDock(t.dy, false);
+  };
+  const fineRulloDock = () => {
+    const t = toccoRulloDock.current; if (!t) return;
+    toccoRulloDock.current = null;
+    // un dito che ha trascinato non deve anche premere il tasto su cui si
+    // e' fermato
+    rulloDockMosso.current = t.mosso;
+    if (t.mosso) setTimeout(() => { rulloDockMosso.current = false; }, 350);
+    if (t.dy === 0) return;
+    // oltre un terzo del passo si completa il giro, altrimenti si torna
+    const verso = Math.abs(t.dy) > passoRulloDock / 3 ? Math.sign(t.dy) : 0;
+    corsaRulloDock.current = { verso };
+    spostaRulloDock(verso * passoRulloDock, true);
+  };
+  const arrivoRulloDock = (e) => {
+    if (e.target !== e.currentTarget || !corsaRulloDock.current) return;
+    const { verso } = corsaRulloDock.current;
+    corsaRulloDock.current = null;
+    spostaRulloDock(0, false);
+    if (verso !== 0) setPreferitiAperti((v) => !v);
+  };
+  const tastiClassiciDock = (
+    <>
+      <button
+        onClick={apriImpostazioni}
+        aria-label="Impostazioni"
+        title="Impostazioni"
+        style={{
+          background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
+          width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+      >
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </button>
+      {!utenteLoggato?.soloCalendarioLettura && (
+        <>
+          <button
+            onClick={vaiIndietro}
+            disabled={pilaIndietro.length === 0}
+            aria-label="Indietro"
+            title="Indietro"
+            style={{
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
+              width: 70, height: 70, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <button
+            onClick={vaiAvanti}
+            disabled={pilaAvanti.length === 0}
+            aria-label="Avanti"
+            title="Avanti"
+            style={{
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
+              width: 70, height: 70, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+      </>
+    )}
+    </>
+  );
+  const tastiScorciatoieDock = (
+    <>
+      {[0, 1, 2].map((i) => (
+        <TastoPreferitoDock
+          key={i} voce={preferitiRisolti[i]} lato={70}
+          onApri={() => apriPreferito(preferitiRisolti[i])}
+          onScegli={() => setSlotPreferitoInScelta(i)}
+          onTogli={() => togliPreferito(i)}
+        />
+      ))}
+    </>
+  );
+
   return (
     // questo contenitore avvolge OGNI schermata dell'app: lo spazio in
     // cima vale quindi ovunque, non solo in home
@@ -60639,75 +60756,33 @@ export default function App() {
                   boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
                 }}
               >
-          {/* da telefono la barra prende tutta la larghezza e a sinistra non
-              c'e' spazio: la linguetta sta sul bordo sinistro DENTRO la barra,
-              e i tre tasti scorrono da sinistra sopra la barra stessa */}
-          {preferitiDisponibili && linguettaPreferiti(true)}
-          {preferitiDisponibili && (
-            <div style={{
-              position: "absolute", top: 0, bottom: 0, left: 0, right: 0, display: "flex", alignItems: "center", gap: 14, paddingLeft: 52,
-              background: "rgba(14,27,51,0.92)", transform: preferitiAperti ? "translateX(0)" : "translateX(-100%)", transition: "transform 240ms ease",
-              pointerEvents: preferitiAperti ? "auto" : "none",
-            }}>
-              <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }}>{linguettaPreferiti(true)}</div>
-              {[0, 1, 2].map((i) => (
-                <TastoPreferitoDock
-                  key={i} voce={preferitiRisolti[i]} lato={62}
-                  onApri={() => apriPreferito(preferitiRisolti[i])}
-                  onScegli={() => setSlotPreferitoInScelta(i)}
-                  onTogli={() => togliPreferito(i)}
-                />
-              ))}
+          {/* da telefono le scorciatoie non stanno piu' di lato: a sinistra
+              della casetta c'e' un rullo. Si tira su col dito e i tre tasti
+              di sempre salgono via, al loro posto arrivano le tre
+              scorciatoie; si tira ancora e tornano. La barra resta la
+              stessa, si muovono solo i tasti — la casetta non si tocca */}
+          {preferitiDisponibili ? (
+            <div
+              onTouchStart={inizioRulloDock}
+              onTouchMove={muoviRulloDock}
+              onTouchEnd={fineRulloDock}
+              onTouchCancel={fineRulloDock}
+              onClickCapture={(e) => { if (rulloDockMosso.current) { e.stopPropagation(); e.preventDefault(); } }}
+              style={{ flex: 1, minWidth: 0, height: 70, overflow: "hidden", touchAction: "none" }}
+            >
+              <div
+                ref={rulloDockEl}
+                onTransitionEnd={arrivoRulloDock}
+                style={{ display: "flex", flexDirection: "column", gap: 10, transform: `translateY(${-passoRulloDock}px)` }}
+              >
+                {[!preferitiAperti, preferitiAperti, !preferitiAperti].map((scorciatoie, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, height: 70 }}>
+                    {scorciatoie ? tastiScorciatoieDock : tastiClassiciDock}
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
-          <button
-            onClick={apriImpostazioni}
-            aria-label="Impostazioni"
-            title="Impostazioni"
-            style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-              width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
-          {!utenteLoggato?.soloCalendarioLettura && (
-            <>
-              <button
-                onClick={vaiIndietro}
-                disabled={pilaIndietro.length === 0}
-                aria-label="Indietro"
-                title="Indietro"
-                style={{
-                  background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-                  width: 70, height: 70, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-              </button>
-              <button
-                onClick={vaiAvanti}
-                disabled={pilaAvanti.length === 0}
-                aria-label="Avanti"
-                title="Avanti"
-                style={{
-                  background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-                  width: 70, height: 70, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-            </>
-          )}
+          ) : tastiClassiciDock}
           <button
             onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
             aria-label="Home"
