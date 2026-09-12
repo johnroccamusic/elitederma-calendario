@@ -49753,6 +49753,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [mostraStorico, setMostraStorico] = useState(false);
   const [mostraResiCambio, setMostraResiCambio] = useState(false);
   const [carrelloEspanso, setCarrelloEspanso] = useState(false); // solo mobile: carrello come foglio a comparsa dal basso
+  // solo mobile: le categorie stanno ripiegate sotto la barra di ricerca e
+  // scendono a tendina da una linguetta. Trenta caselle occupavano meta'
+  // schermo prima ancora del primo prodotto
+  const [categorieATendina, setCategorieATendina] = useState(false);
   const [mostraMenu, setMostraMenu] = useState(false); // solo mobile: menu "⋮" con le azioni che su desktop sono tasti a testo
 
   const categorieNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
@@ -50864,15 +50868,43 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-          <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1 }} />
+        <div style={{ marginBottom: 14 }}>
+          <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" />
+          {/* la tendina: una griglia con una riga sola che passa da 0fr a
+              1fr, cosi' l'altezza si anima qualunque sia il numero di
+              categorie, senza misurare niente */}
+          <div style={{ display: "grid", gridTemplateRows: categorieATendina ? "1fr" : "0fr", transition: "grid-template-rows 260ms ease" }}>
+            <div style={{ minHeight: 0, overflow: "hidden" }}>
+              {/* il margine negativo mangia quello che la striscia si porta
+                  sotto, cosi' la linguetta le resta appesa */}
+              <div style={{ paddingTop: 8, marginBottom: -10 }}>
+                <StrisciaCategoriePos
+                  categorie={categorieOrdinate}
+                  selezionata={categoriaSel}
+                  onSeleziona={(id) => cambiaFiltro(() => setCategoriaSel(id))}
+                  compatta
+                />
+              </div>
+            </div>
+          </div>
+          {/* la linguetta, come quella del dock ma appesa sotto: la parola
+              e basta, grande quanto serve a contenerla. Quando c'e' un
+              filtro attivo e la tendina e' chiusa si scurisce, cosi' si sa
+              che l'elenco non e' tutto */}
+          <div style={{ display: "flex", justifyContent: "center", marginTop: -1 }}>
+            <button
+              onClick={() => setCategorieATendina((v) => !v)}
+              aria-label={categorieATendina ? "Nascondi le categorie" : "Mostra le categorie"}
+              aria-expanded={categorieATendina}
+              style={{
+                ...fontBody, fontSize: 9.5, fontWeight: 600, letterSpacing: 0.3, lineHeight: 1, textTransform: "lowercase",
+                padding: "3px 8px 4px", cursor: "pointer",
+                background: !categorieATendina && categoriaSel ? NAVY : "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                border: "1px solid rgba(255,255,255,0.22)", borderTop: "none", borderRadius: "0 0 9px 9px", color: "#fff",
+              }}
+            >categorie</button>
+          </div>
         </div>
-        <StrisciaCategoriePos
-          categorie={categorieOrdinate}
-          selezionata={categoriaSel}
-          onSeleziona={(id) => cambiaFiltro(() => setCategoriaSel(id))}
-          compatta
-        />
 
         <div style={{ ...cardStyle, marginBottom: 0, padding: "6px 14px" }}>{elencoProdotti}</div>
         {paginazione}
