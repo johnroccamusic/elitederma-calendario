@@ -38390,6 +38390,21 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   const [schemaSalvato, salvaSchema] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const schema = { ...SCHEMA_PUNTI_MASTER_DEFAULT, ...(schemaSalvato || {}) };
   const sicurezzaPunti = sicurezzaPuntiDi(schemaSalvato);
+  // la percentuale si scrive in una bozza e diventa vera solo col tasto
+  // "Salva e ricalcola": i punti non sono salvati da nessuna parte, si
+  // leggono ogni volta dall'anagrafica, quindi cambiare la percentuale
+  // li ricalcola tutti — il tasto rende esplicito quel momento
+  const [bozzaSicurezza, setBozzaSicurezza] = useState(null);
+  const [msgRicalcolo, setMsgRicalcolo] = useState("");
+  const sicurezzaInBozza = bozzaSicurezza == null ? String(sicurezzaPunti) : bozzaSicurezza;
+  function salvaERicalcola() {
+    const n = Math.max(0, Math.min(100, Math.round(Number(String(sicurezzaInBozza).replace(",", ".")) || 0)));
+    salvaSchema({ ...schema, accantonamentoPct: n });
+    setBozzaSicurezza(null);
+    const tutti = (prodottiShop || []).filter((p) => p.attivo !== false);
+    const conPunti = tutti.filter((p) => puntiProdotto(p, n) != null).length;
+    setMsgRicalcolo(`Percentuale di sicurezza al ${n}%: ricalcolati i punti di ${tutti.length} prodotti, ${conPunti} ne generano.`);
+  }
   // le due quote: si salvano come impostazione condivisa, valgono per
   // tutte le master, e la dashboard le leggera' da qui
   const [quoteSalvate, salvaQuote] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
@@ -38581,15 +38596,20 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               );
             })()}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Percentuale di sicurezza</span>
-            <input
-              type="number" min="0" max="100" step="1" value={schema.accantonamentoPct}
-              onChange={(e) => salvaSchema({ ...schema, accantonamentoPct: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
-              style={{ ...inputStyle, width: 80, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
-            />
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
-            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>si salva appena la cambi e vale per tutte le master</span>
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Percentuale di sicurezza</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <input
+                type="number" min="0" max="100" step="1" value={sicurezzaInBozza}
+                onChange={(e) => { setBozzaSicurezza(e.target.value); setMsgRicalcolo(""); }}
+                style={{ ...inputStyle, width: 90, textAlign: "center", padding: "8px 10px", fontWeight: 700, fontSize: 15 }}
+              />
+              <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>%</span>
+              <Button onClick={salvaERicalcola} disabled={bozzaSicurezza == null || String(bozzaSicurezza) === String(sicurezzaPunti)}>Salva e ricalcola i punti di tutti i prodotti</Button>
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: msgRicalcolo ? "#2E7D32" : MUTED, fontWeight: msgRicalcolo ? 700 : 400, marginTop: 8, lineHeight: 1.5 }}>
+              {msgRicalcolo || "Vale per tutte le master e per la colonna Punti di Dettaglio prodotti. Il ricalcolo aggiorna anche la classifica qui sotto."}
+            </div>
           </div>
         </div>
 
