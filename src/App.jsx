@@ -37010,6 +37010,39 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
   }, [vendita?.id]);
 
   const righe = Array.isArray(vendita?.prodotti) ? vendita.prodotti : [];
+  // Lo sconto di ogni riga. Le vendite dal 12/09/2026 lo portano scritto
+  // (sconto_riga, prezzo_listino); quelle prima hanno solo il totale
+  // scontato, e per loro si stima la differenza con il listino DI OGGI —
+  // detto chiaramente, perche' se il prezzo e' cambiato la stima non e'
+  // la storia. Si stima solo se c'era un codice: senza coupon una riga
+  // vecchia sotto listino e' uno sconto a mano, e non si sa quanto.
+  const scontoScritto = righe.some((r) => r.sconto_riga != null);
+  const [listinoAttuale, setListinoAttuale] = useState({});
+  useEffect(() => {
+    if (scontoScritto || vendita?.origine !== "pos" || !vendita?.codice_coupon) return;
+    const ids = righe.map((r) => r.prodotto_id).filter(Boolean);
+    if (!ids.length) return;
+    let annullato = false;
+    supabase.from("prodotti_shop").select("id, prezzo_vendita, aliquota_iva_vendita, prezzo_lordo_forzato").in("id", ids)
+      .then(({ data }) => { if (!annullato) setListinoAttuale(Object.fromEntries((data || []).map((p) => [p.id, prezzoAlPubblico(p)]))); });
+    return () => { annullato = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendita?.id, scontoScritto]);
+  function scontoDiRiga(r) {
+    const q = Number(r.quantita) || 1;
+    if (r.sconto_riga != null) {
+      const listino = r.prezzo_listino != null ? Number(r.prezzo_listino) : (Number(r.totale_riga) + Number(r.sconto_riga)) / q;
+      return { sconto: Number(r.sconto_riga), pct: r.sconto_pct, listino, stimato: false };
+    }
+    const unitario = listinoAttuale[r.prodotto_id];
+    if (unitario == null || r.totale_riga == null) return null;
+    const sconto = round2(unitario * q - Number(r.totale_riga));
+    if (sconto <= 0) return null;
+    return { sconto, pct: Math.round((sconto / (unitario * q)) * 1000) / 10, listino: unitario, stimato: true };
+  }
+  const scontiRighe = righe.map(scontoDiRiga);
+  const scontoRigheTotale = round2(scontiRighe.reduce((acc, x) => acc + (x?.sconto || 0), 0));
+  const qualcheStima = scontiRighe.some((x) => x?.stimato);
   const grezzo = payload?.payload_raw || null;
   const fatturazione = grezzo?.billing || null;
   const spedizione = grezzo?.shipping || null;
@@ -37081,25 +37114,42 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
       <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 14 }}>
         {righe.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 12 }}>Nessuna riga di prodotto su questo ordine.</div>
-        ) : righe.map((r, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0 }}>{r.nome || "—"}</span>
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>×{r.quantita ?? 1}</span>
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>
-              {r.prezzo_unitario != null ? fmtEuroErp2(r.prezzo_unitario) : "—"}
-            </span>
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>
-              {r.totale_riga != null ? fmtEuroErp2(r.totale_riga) : "—"}
-            </span>
+        ) : righe.map((r, i) => {
+          const sc = scontiRighe[i];
+          const unitario = sc?.listino ?? r.prezzo_unitario ?? r.prezzo_listino ?? null;
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0 }}>{r.nome || "—"}</span>
+              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>×{r.quantita ?? 1}</span>
+              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>
+                {unitario != null ? fmtEuroErp2(unitario) : "—"}
+              </span>
+              {/* lo sconto di questa riga, in euro e in percentuale: e' la
+                  colonna che dice quanto ha pesato il codice su QUESTO
+                  prodotto, non sul carrello */}
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: sc && sc.sconto > 0 ? "#C0392B" : MUTED, whiteSpace: "nowrap", minWidth: 110, textAlign: "right" }} title={sc?.stimato ? "Stimato sul listino di oggi" : undefined}>
+                {sc && sc.sconto > 0 ? `− ${fmtEuroErp2(sc.sconto)}${sc.pct != null ? ` (${String(sc.pct).replace(".", ",")}%)` : ""}${sc.stimato ? " ≈" : ""}` : "—"}
+              </span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>
+                {r.totale_riga != null ? fmtEuroErp2(r.totale_riga) : "—"}
+              </span>
+            </div>
+          );
+        })}
+        {righe.length > 0 && (scontoRigheTotale > 0 || codiceCoupon) && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, padding: "6px 12px", borderTop: `1px solid ${CREAM_BORDER}`, background: BG }}>
+            {codiceCoupon ? <>Codice <b style={{ color: NAVY }}>{String(codiceCoupon).toUpperCase()}</b></> : "Sconto a mano"}
+            {scontoRigheTotale > 0 ? <> · sconto sui prodotti {fmtEuroErp2(scontoRigheTotale)}</> : null}
+            {qualcheStima ? " · ≈ stimato sul listino di oggi: questa vendita non aveva lo sconto scritto riga per riga" : null}
           </div>
-        ))}
+        )}
       </div>
 
       <div style={{ background: BG, borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
         {rigaInfo("Imponibile", vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : null)}
         {rigaInfo("IVA", vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : null)}
         {rigaInfo("Spedizione", speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : null)}
-        {rigaInfo("Sconto", sconto != null && sconto > 0 ? `− ${fmtEuroErp2(sconto)}${codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}` : (codiceCoupon ? `coupon ${codiceCoupon}` : null))}
+        {rigaInfo("Sconto", (sconto ?? scontoRigheTotale) > 0 ? `− ${fmtEuroErp2(sconto ?? scontoRigheTotale)}${codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}${sconto == null && qualcheStima ? " ≈" : ""}` : (codiceCoupon ? `coupon ${codiceCoupon}` : null))}
         <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, paddingTop: 6, marginTop: 4, borderTop: `1px solid ${CREAM_BORDER}` }}>
           <span style={{ minWidth: 130, flexShrink: 0 }}>Totale</span>
           <span>{vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
@@ -48954,15 +49004,53 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const pianiVendita = senzaScaricoMagazzino ? [] : preparaScarichi(righeVendita);
     if (!pianiVendita) { setMsg("Vendita non registrata: disponibilità insufficiente."); return; }
 
-    // il totale netto (dopo sconto) si distribuisce proporzionalmente sulle
-    // righe, così il fatturato per prodotto in Magazzino/Analisi resta
-    // coerente col totale davvero incassato — negli omaggi ogni riga vale
-    // zero, non solo il totale, altrimenti risulterebbe un ricavo fantasma
-    // per prodotto in report che sommano "prodotti.totale_riga"
-    const fattoreSconto = subtotale > 0 ? totaleNetto / subtotale : 1;
+    // Lo sconto si scrive riga per riga, com'e' stato calcolato davvero:
+    // a fasce ogni prodotto ha la sua percentuale, sul margine ogni
+    // prodotto il suo importo, e spalmare il totale in proporzione al
+    // prezzo — come si faceva prima — raccontava una storia falsa nella
+    // scheda dell'ordine ("sconto 8%" su un prodotto che ne aveva preso
+    // 15 e su uno che non ne aveva preso affatto). La somma delle righe
+    // torna sempre con lo sconto applicato al totale: i centesimi di
+    // arrotondamento, e l'eventuale tetto al subtotale, si sistemano
+    // riproporzionando e mettendo la differenza sull'ultima riga.
+    // Negli omaggi ogni riga vale zero, non solo il totale, altrimenti
+    // risulterebbe un ricavo fantasma per prodotto nei report che sommano
+    // "prodotti.totale_riga".
+    const lordiRiga = carrello.map((r) => round2(r.prezzo * r.quantita));
+    let scontiRiga = carrello.map((r, i) => {
+      const lordoRiga = lordiRiga[i];
+      if (omaggioAttivo || lordoRiga <= 0) return 0;
+      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], couponAttivo.fasce_sconto)) / 100);
+      if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
+      if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
+      return 0;
+    });
+    if (!omaggioAttivo) {
+      const somma = round2(scontiRiga.reduce((acc, x) => acc + x, 0));
+      if (somma !== scontoApplicato) {
+        const fattore = somma > 0 ? scontoApplicato / somma : 0;
+        scontiRiga = scontiRiga.map((x, i) => Math.min(lordiRiga[i], round2(x * fattore)));
+        const resto = round2(scontoApplicato - scontiRiga.reduce((acc, x) => acc + x, 0));
+        if (resto !== 0 && scontiRiga.length) {
+          const ultima = scontiRiga.length - 1;
+          scontiRiga[ultima] = Math.max(0, Math.min(lordiRiga[ultima], round2(scontiRiga[ultima] + resto)));
+        }
+      }
+    }
     // il prodotto_id serve alla chiusura del corso per sapere QUALE pezzo è
-    // uscito: il solo nome costringeva a indovinare per stringa
-    const prodottiRiga = carrello.map((r) => ({ prodotto_id: r.prodottoId, nome: r.nome, quantita: r.quantita, totale_riga: omaggioAttivo ? 0 : round2(r.prezzo * r.quantita * fattoreSconto) }));
+    // uscito: il solo nome costringeva a indovinare per stringa.
+    // prezzo_listino e' il prezzo al pubblico di quel giorno: il listino
+    // cambia, la vendita no
+    const prodottiRiga = carrello.map((r, i) => {
+      const sconto = omaggioAttivo ? lordiRiga[i] : scontiRiga[i];
+      return {
+        prodotto_id: r.prodottoId, nome: r.nome, quantita: r.quantita,
+        prezzo_listino: r.prezzo,
+        sconto_riga: sconto,
+        sconto_pct: lordiRiga[i] > 0 ? Math.round((sconto / lordiRiga[i]) * 1000) / 10 : 0,
+        totale_riga: omaggioAttivo ? 0 : round2(lordiRiga[i] - sconto),
+      };
+    });
 
     // Al banco c'è gente che aspetta: la schermata si svuota subito e le
     // scritture (scarico magazzino, vendita, eventuale spedizione) vanno
