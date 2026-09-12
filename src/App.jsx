@@ -39181,16 +39181,87 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
 // corsi come contenuto dei kit (mai venduto, mai un omaggio del POS —
 // semplicemente materiale didattico/consumo distribuito) — somma
 // quantitaInviataPerProdotto su tutte le edizioni del periodo scelto
-function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, onBack, titolo = "Prodotti usati per i kit" }) {
+// "Prodotti usati per i kit" ha due sotto-pagine, perche' rispondono a
+// due domande diverse:
+//   - CONSUMO PRODOTTI: in un periodo, quanti pezzi sono partiti nei kit
+//     e quanto sono costati all'acquisto. E' la pagina di prima, con in
+//     piu' la spesa e un intervallo di date scelto a mano.
+//   - COSTO DEI KIT: corso per corso, ogni kit con il suo costo netto e
+//     lordo, ricavato dai prodotti che lo compongono. Non dipende dal
+//     tempo: e' il listino interno di quanto vale una scatola.
+//
+// Netto e lordo vengono dal costo di acquisto del prodotto e dalla sua
+// aliquota IVA in acquisto; dove l'aliquota manca si usa quella
+// predefinita delle impostazioni. Un prodotto senza costo di acquisto non
+// entra nei totali, e la pagina lo dice: sommare zeri farebbe sembrare
+// un kit piu' economico di quel che e'.
+function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, impostazioniIva, onBack, titolo = "Prodotti usati per i kit" }) {
+  const isMobile = useIsMobile();
+  const [sottoPagina, setSottoPagina] = useState("consumo");
+  const aliquotaDefault = impostazioniIva?.aliquota_default ?? 22;
+  const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
+
+  // costo unitario di un prodotto, netto e lordo; null quando il costo di
+  // acquisto non e' mai stato scritto
+  function costoUnitario(prodottoId) {
+    const p = prodottiPerId[prodottoId];
+    if (!p || p.costo_acquisto == null || p.costo_acquisto === "") return null;
+    const netto = Number(p.costo_acquisto);
+    if (!Number.isFinite(netto)) return null;
+    const aliquota = p.aliquota_iva_acquisto == null ? aliquotaDefault : Number(p.aliquota_iva_acquisto);
+    return { netto, lordo: netto * (1 + aliquota / 100), aliquota };
+  }
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 16 }}>Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit (materiale didattico/consumo).</div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+          <TabPillola attivo={sottoPagina === "consumo"} onClick={() => setSottoPagina("consumo")}>Consumo prodotti</TabPillola>
+          <TabPillola attivo={sottoPagina === "costokit"} onClick={() => setSottoPagina("costokit")}>Costo dei kit</TabPillola>
+        </div>
+
+        {sottoPagina === "consumo" ? (
+          <SezioneConsumoProdottiKit
+            corsi={corsi} corsiDate={corsiDate} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
+            logisticaKitEdizioni={logisticaKitEdizioni} iscritti={iscritti} prodottiPerId={prodottiPerId} costoUnitario={costoUnitario}
+          />
+        ) : (
+          <SezioneCostoKit corsi={corsi} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiPerId={prodottiPerId} costoUnitario={costoUnitario} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+const stileThKit = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
+const stileTdKit = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY };
+
+// La sotto-pagina del consumo: pezzi e spesa in un periodo. I tre periodi
+// rapidi restano; il quarto, "Da... a...", apre due date scelte a mano,
+// perche' "quanto ho speso per i kit di ottobre" non e' ne' un trimestre
+// ne' un anno scolastico.
+function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiPerId, costoUnitario }) {
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("annoscolastico");
   const oggi = new Date();
   const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // le date scelte a mano partono dall'anno scolastico in corso: sono il
+  // punto di partenza piu' probabile, e due caselle vuote non dicono niente
+  const [da, setDa] = useState(`${stagioneCorrente()}-09-01`);
+  const [a, setA] = useState(fmt(oggi));
   const range = periodo === "tutto"
     ? { inizio: "0000-01-01", fine: "9999-12-31" }
     : periodo === "annoscolastico"
     ? { inizio: `${stagioneCorrente()}-09-01`, fine: fmt(oggi) }
+    : periodo === "personalizzato"
+    ? { inizio: da || "0000-01-01", fine: a || "9999-12-31" }
     : { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth() - 3, oggi.getDate() + 1)), fine: fmt(oggi) };
 
   const edizioniPeriodo = (corsiDate || []).filter((cd) => (cd.data_fine || cd.data_inizio) >= range.inizio && (cd.data_inizio || cd.data_fine) <= range.fine);
@@ -39205,56 +39276,215 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
     });
   });
   const righe = Object.entries(perProdottoId)
-    .map(([prodottoId, quantita]) => ({ nome: (prodottiShop || []).find((p) => p.id === prodottoId)?.nome || "—", quantita }))
+    .map(([prodottoId, quantita]) => {
+      const costo = costoUnitario(prodottoId);
+      return {
+        prodottoId, quantita,
+        nome: prodottiPerId[prodottoId]?.nome || "—",
+        costoNetto: costo ? costo.netto : null,
+        spesaNetta: costo ? round2(costo.netto * quantita) : null,
+        spesaLorda: costo ? round2(costo.lordo * quantita) : null,
+      };
+    })
     .filter((r) => r.quantita > 0)
     .sort((a, b) => b.quantita - a.quantita);
   const pezziTotali = righe.reduce((s, r) => s + r.quantita, 0);
+  const spesaNettaTotale = round2(righe.reduce((s, r) => s + (r.spesaNetta || 0), 0));
+  const spesaLordaTotale = round2(righe.reduce((s, r) => s + (r.spesaLorda || 0), 0));
+  const senzaCosto = righe.filter((r) => r.costoNetto == null).length;
+
+  const pillola = (v, l) => (
+    <button key={v} onClick={() => setPeriodo(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === v ? "#fff" : "transparent", color: NAVY, cursor: "pointer", boxShadow: periodo === v ? "0 1px 3px rgba(14,27,51,0.15)" : "none" }}>{l}</button>
+  );
+  const scheda = (etichetta, valore) => (
+    <div style={{ ...cardStyle, marginBottom: 0, flex: "1 1 160px", minWidth: 0 }}>
+      <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{etichetta}</div>
+      <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{valore}</div>
+    </div>
+  );
 
   return (
-    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 800, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
-          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, width: "fit-content", flexWrap: "wrap" }}>
+          {pillola("trimestre", "Ultimo trimestre")}
+          {pillola("annoscolastico", "Anno scolastico")}
+          {pillola("tutto", "Tutto")}
+          {pillola("personalizzato", "Da… a…")}
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit (materiale didattico/consumo).</div>
+        {periodo === "personalizzato" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>dal</span>
+            <input type="date" value={da} max={a || undefined} onChange={(e) => setDa(e.target.value)} style={{ ...inputStyle, ...fontBody, fontSize: 13, width: "auto", padding: "6px 8px" }} />
+            <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>al</span>
+            <input type="date" value={a} min={da || undefined} onChange={(e) => setA(e.target.value)} style={{ ...inputStyle, ...fontBody, fontSize: 13, width: "auto", padding: "6px 8px" }} />
+          </div>
+        )}
+      </div>
 
-        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
-          {[{ v: "trimestre", l: "Ultimo trimestre" }, { v: "annoscolastico", l: "Anno scolastico" }, { v: "tutto", l: "Tutto" }].map((p) => (
-            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
-          ))}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+        {scheda("Pezzi usati nei kit", pezziTotali)}
+        {scheda("Spesa di acquisto netta", fmtEuroErp2(spesaNettaTotale))}
+        {scheda("Spesa di acquisto lorda", fmtEuroErp2(spesaLordaTotale))}
+      </div>
+      {senzaCosto > 0 && (
+        <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 14 }}>
+          {senzaCosto === 1 ? "Un prodotto non ha" : `${senzaCosto} prodotti non hanno`} il costo di acquisto: la {senzaCosto === 1 ? "sua" : "loro"} spesa non è conteggiata nei totali.
         </div>
+      )}
+      <div style={{ marginBottom: 14 }} />
 
-        <div style={{ ...cardStyle, marginBottom: 22, maxWidth: 260 }}>
-          <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi usati nei kit</div>
-          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{pezziTotali}</div>
+      <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
+            <thead>
+              <tr>
+                {[{ c: "prodotto", l: "Prodotto" }, { c: "pezzi", l: "Pezzi" }, { c: "costo", l: "Costo unit. netto" }, { c: "netta", l: "Spesa netta" }, { c: "lorda", l: "Spesa lorda" }].map((th) => (
+                  <ThOrdina key={th.c} campo={th.c} ordine={ordine} onOrdina={cambiaOrdine} style={stileThKit}>{th.l}</ThOrdina>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ordina(righe, { prodotto: (r) => r.nome || "", pezzi: (r) => r.quantita, costo: (r) => r.costoNetto, netta: (r) => r.spesaNetta, lorda: (r) => r.spesaLorda }).map((r) => (
+                <tr key={r.prodottoId}>
+                  <td style={{ ...stileTdKit, fontWeight: 700 }}>{r.nome}</td>
+                  <td style={{ ...stileTdKit, whiteSpace: "nowrap" }}>{r.quantita}</td>
+                  <td style={{ ...stileTdKit, whiteSpace: "nowrap", color: r.costoNetto == null ? MUTED : NAVY }}>{r.costoNetto == null ? "—" : fmtEuroErp2(r.costoNetto)}</td>
+                  <td style={{ ...stileTdKit, whiteSpace: "nowrap", color: r.spesaNetta == null ? MUTED : NAVY }}>{r.spesaNetta == null ? "—" : fmtEuroErp2(r.spesaNetta)}</td>
+                  <td style={{ ...stileTdKit, whiteSpace: "nowrap", fontWeight: 700, color: r.spesaLorda == null ? MUTED : NAVY }}>{r.spesaLorda == null ? "—" : fmtEuroErp2(r.spesaLorda)}</td>
+                </tr>
+              ))}
+              {righe.length === 0 && (
+                <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun corso nel periodo selezionato.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
+      </div>
+    </>
+  );
+}
 
-        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+// La sotto-pagina del costo dei kit: un blocco per corso, dentro una riga
+// per kit con netto e lordo. I kit di un corso sono alternative — un
+// allievo ne sceglie uno — quindi non si sommano fra loro: il totale del
+// corso non avrebbe senso e non c'e'. Toccando un kit si apre la distinta:
+// ogni prodotto con quantita', costo unitario e quanto pesa sul kit.
+// Conta solo il contenuto fisso del kit (tipo "kit"): gli accessori si
+// decidono edizione per edizione e stanno nel consumo, non qui.
+function SezioneCostoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiPerId, costoUnitario }) {
+  const isMobile = useIsMobile();
+  const [aperti, setAperti] = useState(() => new Set());
+  function toggleKit(id) {
+    setAperti((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  const blocchi = (corsi || [])
+    .map((corso) => {
+      const kits = (kitDefinizioni || [])
+        .filter((k) => k.corso_id === corso.id && (k.tipo || "kit") === "kit")
+        .sort((a, b) => (a.ordine || 0) - (b.ordine || 0))
+        .map((k) => {
+          const righe = (corsiKitProdotti || [])
+            .filter((r) => r.kit_id === k.id && r.tipo === "kit")
+            .map((r) => {
+              const costo = costoUnitario(r.prodotto_id);
+              return {
+                prodottoId: r.prodotto_id, nome: prodottiPerId[r.prodotto_id]?.nome || "—", quantita: r.quantita || 0,
+                costoNetto: costo ? costo.netto : null,
+                netto: costo ? round2(costo.netto * (r.quantita || 0)) : null,
+                lordo: costo ? round2(costo.lordo * (r.quantita || 0)) : null,
+              };
+            })
+            .sort((a, b) => (b.netto || 0) - (a.netto || 0));
+          return {
+            id: k.id, nome: k.nome, righe,
+            netto: round2(righe.reduce((s, r) => s + (r.netto || 0), 0)),
+            lordo: round2(righe.reduce((s, r) => s + (r.lordo || 0), 0)),
+            senzaCosto: righe.filter((r) => r.costoNetto == null).length,
+          };
+        });
+      return { corso, kits };
+    })
+    .filter((b) => b.kits.length > 0)
+    .sort((a, b) => (a.corso.nome || "").localeCompare(b.corso.nome || ""));
+
+  if (blocchi.length === 0) {
+    return <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "20px 0" }}>Nessun kit definito. Si definiscono nella scheda di ogni corso.</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {blocchi.map(({ corso, kits }) => (
+        <div key={corso.id} style={{ ...cardStyle, padding: 0, overflow: "hidden", marginBottom: 0 }}>
+          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{corso.nome}</div>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{kits.length === 1 ? "1 kit" : `${kits.length} kit`}</div>
+          </div>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 400 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: isMobile ? 520 : 0 }}>
               <thead>
                 <tr>
-                  {[{ c: "prodotto", l: "Prodotto" }, { c: "pezzi", l: "Pezzi usati nei kit" }].map((th) => (
-                    <ThOrdina key={th.c} campo={th.c} ordine={ordine} onOrdina={cambiaOrdine} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
-                  ))}
+                  <th style={stileThKit}>Kit</th>
+                  <th style={{ ...stileThKit, textAlign: "right" }}>Prodotti</th>
+                  <th style={{ ...stileThKit, textAlign: "right" }}>Costo netto</th>
+                  <th style={{ ...stileThKit, textAlign: "right" }}>Costo lordo</th>
                 </tr>
               </thead>
               <tbody>
-                {ordina(righe, { prodotto: (r) => r.nome || "", pezzi: (r) => r.quantita ?? r.pezzi ?? null }).map((r) => (
-                  <tr key={r.nome}>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{r.nome}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.quantita}</td>
-                  </tr>
-                ))}
-                {righe.length === 0 && (
-                  <tr><td colSpan={2} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun corso nel periodo selezionato.</td></tr>
-                )}
+                {kits.map((k) => {
+                  const aperto = aperti.has(k.id);
+                  return (
+                    <React.Fragment key={k.id}>
+                      <tr onClick={() => toggleKit(k.id)} style={{ cursor: "pointer", background: aperto ? "rgba(14,27,51,0.03)" : "transparent" }}>
+                        <td style={{ ...stileTdKit, fontWeight: 700 }}>
+                          <span style={{ display: "inline-block", width: 14, color: MUTED, fontSize: 11 }}>{aperto ? "▼" : "▶"}</span>
+                          {k.nome}
+                          {k.senzaCosto > 0 && <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: GOLD, marginLeft: 8 }}>{k.senzaCosto} senza costo</span>}
+                        </td>
+                        <td style={{ ...stileTdKit, textAlign: "right", whiteSpace: "nowrap" }}>{k.righe.length}</td>
+                        <td style={{ ...stileTdKit, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(k.netto)}</td>
+                        <td style={{ ...stileTdKit, textAlign: "right", whiteSpace: "nowrap", fontWeight: 700 }}>{fmtEuroErp2(k.lordo)}</td>
+                      </tr>
+                      {aperto && (
+                        <tr>
+                          <td colSpan={4} style={{ padding: 0, borderTop: `1px solid ${CREAM_BORDER}`, background: BG }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                              <thead>
+                                <tr>
+                                  <th style={{ ...stileThKit, background: "transparent", paddingLeft: 36 }}>Prodotto</th>
+                                  <th style={{ ...stileThKit, background: "transparent", textAlign: "right" }}>Q.tà</th>
+                                  <th style={{ ...stileThKit, background: "transparent", textAlign: "right" }}>Costo unit. netto</th>
+                                  <th style={{ ...stileThKit, background: "transparent", textAlign: "right" }}>Netto</th>
+                                  <th style={{ ...stileThKit, background: "transparent", textAlign: "right" }}>Lordo</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {k.righe.map((r) => (
+                                  <tr key={r.prodottoId}>
+                                    <td style={{ ...stileTdKit, padding: "8px 14px 8px 36px", fontSize: 12.5 }}>{r.nome}</td>
+                                    <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right" }}>{r.quantita}</td>
+                                    <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right", color: r.costoNetto == null ? MUTED : NAVY }}>{r.costoNetto == null ? "—" : fmtEuroErp2(r.costoNetto)}</td>
+                                    <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right", color: r.netto == null ? MUTED : NAVY }}>{r.netto == null ? "—" : fmtEuroErp2(r.netto)}</td>
+                                    <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right", color: r.lordo == null ? MUTED : NAVY }}>{r.lordo == null ? "—" : fmtEuroErp2(r.lordo)}</td>
+                                  </tr>
+                                ))}
+                                {k.righe.length === 0 && (
+                                  <tr><td colSpan={5} style={{ ...stileTdKit, padding: "10px 36px", color: MUTED, fontSize: 12.5 }}>Kit senza prodotti.</td></tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
-      </div>
+      ))}
     </div>
   );
 }
@@ -58230,7 +58460,7 @@ export default function App() {
     // registra l'edizione, il nome del corso sta altrove
     venditealbanco: ["vendite_shop", "corsi", "corsi_date"],
     omaggi: ["vendite_shop"],
-    prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
+    prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop", "impostazioni_iva"],
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
     // senza, entrando da qui le immagini risultavano sparite pur essendoci
@@ -59633,7 +59863,7 @@ export default function App() {
       {view === "prodottiusatikit" && (
         <PaginaProdottiUsatiKit
           corsi={corsi} corsiDate={corsiDate} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
-          logisticaKitEdizioni={logisticaKitEdizioni} iscritti={iscritti} prodottiShop={prodottiShop}
+          logisticaKitEdizioni={logisticaKitEdizioni} iscritti={iscritti} prodottiShop={prodottiShop} impostazioniIva={impostazioniIva}
           onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "prodottiusatikit", "Prodotti usati per i kit")}
         />
