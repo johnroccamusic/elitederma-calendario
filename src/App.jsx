@@ -9881,11 +9881,14 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
   );
 }
 
-// L'elenco dei trattamenti della CLASSE, in ordine di giorno: e' la
-// griglia di colonne su cui si incolonnano tutti gli allievi. Chi ha solo
-// l'eyeliner lo trova nella colonna dell'eyeliner, non spalmato su tutta
-// la riga — cosi' scorrendo l'elenco si legge una tabella, non una fila di
-// blocchi di larghezza diversa.
+// L'elenco dei trattamenti della CLASSE: e' la griglia di colonne su cui
+// si incolonnano tutti gli allievi. Chi ha solo l'eyeliner lo trova nella
+// colonna dell'eyeliner, non spalmato su tutta la riga — cosi' scorrendo
+// l'elenco si legge una tabella, non una fila di blocchi di larghezza
+// diversa. L'ordine e' quello fisso di sempre — sopracciglia, labbra,
+// eyeliner, poi gli altri — e non il giorno in cui si fa il trattamento:
+// a Verona l'eyeliner veniva prima delle sopracciglia perche' cadeva in
+// un giorno precedente, e l'elenco sembrava sbagliato.
 function colonneModelleClasse(iscritti) {
   const perTipo = new Map();
   (iscritti || []).forEach((i) => {
@@ -9897,7 +9900,11 @@ function colonneModelleClasse(iscritti) {
       if (!gia || giorno < gia.giorno) perTipo.set(tipo.toUpperCase(), { tipo, giorno });
     });
   });
-  return [...perTipo.values()].sort((a, b) => (a.giorno === b.giorno ? a.tipo.localeCompare(b.tipo, "it") : a.giorno - b.giorno)).map((x) => x.tipo);
+  return [...perTipo.values()].sort((a, b) => {
+    const pa = prioritaTipoModella(a.tipo), pb = prioritaTipoModella(b.tipo);
+    if (pa !== pb) return pa - pb;
+    return a.giorno === b.giorno ? a.tipo.localeCompare(b.tipo, "it") : a.giorno - b.giorno;
+  }).map((x) => x.tipo);
 }
 
 // `onCambia(indicePosto, campo, valore)`: se c'e', le caselle MAT e POM
@@ -9911,6 +9918,10 @@ function RiepilogoModelleAllievo({ iscritto, colonne, onCambia }) {
   const posti = (Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [])
     .map((m, indice) => ({ ...m, indice }))
     .sort((a, b) => {
+      // stesso ordine fisso delle colonne della classe, cosi' anche senza
+      // colonne note l'allievo legge sopracciglia, labbra, eyeliner
+      const pa = prioritaTipoModella(a.tipo), pb = prioritaTipoModella(b.tipo);
+      if (pa !== pb) return pa - pb;
       const ga = a.giorno == null ? 99 : Number(a.giorno);
       const gb = b.giorno == null ? 99 : Number(b.giorno);
       return ga === gb ? a.indice - b.indice : ga - gb;
