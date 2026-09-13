@@ -8816,6 +8816,94 @@ function PaginaDashboardVenditori({
 // firma solo chi e' dentro la finestra.
 const BUCKET_SLIDE = "slide-corsi";
 const GIORNI_ANTICIPO_SLIDE = 7;
+// Oltre al PDF, un corso puo' avere un LINK (una presentazione online, un
+// video, una pagina): sta fra le impostazioni condivise, una mappa
+// corso -> indirizzo, cosi' non serve una colonna nuova. Si apre dentro
+// l'app a tutto schermo.
+const CHIAVE_LINK_SLIDE_CORSI = "slide_link_corsi";
+function normalizzaLinkSlide(testo) {
+  const t = String(testo || "").trim();
+  if (!t) return null;
+  const conSchema = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  try { return new URL(conSchema).href; } catch { return null; }
+}
+
+// Il visore del link: copre tutto lo schermo dell'app e chiede al browser
+// lo schermo intero vero. Con Esc il browser esce dallo schermo intero
+// ma il visore resta; in basso a destra un'icona lo rimette a tutto
+// schermo. La x in alto a destra chiude tutto.
+function VisoreLinkSchermoIntero({ url, titolo, onChiudi }) {
+  const [pieno, setPieno] = useState(() => typeof document !== "undefined" && !!document.fullscreenElement);
+  useEffect(() => {
+    const aggiorna = () => setPieno(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", aggiorna);
+    document.addEventListener("webkitfullscreenchange", aggiorna);
+    return () => { document.removeEventListener("fullscreenchange", aggiorna); document.removeEventListener("webkitfullscreenchange", aggiorna); };
+  }, []);
+  const puoSchermoIntero = typeof document !== "undefined" && !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  function vaiSchermoIntero() {
+    const el = document.documentElement;
+    const richiesta = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (richiesta) { try { const r = richiesta.call(el); if (r && r.catch) r.catch(() => {}); } catch { /* il browser non lo permette qui */ } }
+  }
+  function chiudi() {
+    if (document.fullscreenElement) { try { document.exitFullscreen?.(); } catch { /* niente */ } }
+    onChiudi();
+  }
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 6000, background: "#000" }}>
+      <iframe src={url} title={titolo || "Link del corso"} allow="fullscreen; autoplay" allowFullScreen style={{ width: "100%", height: "100%", border: "none", display: "block", background: "#fff" }} />
+      <button
+        onClick={chiudi} title="Chiudi" aria-label="Chiudi"
+        style={{ position: "absolute", top: "max(env(safe-area-inset-top, 0px), 12px)", right: 12, width: 40, height: 40, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.4)", background: "rgba(14,27,51,0.75)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+      <a href={url} target="_blank" rel="noopener noreferrer" title="Se qui non si vede, aprilo in una scheda del browser"
+        style={{ position: "absolute", top: "max(env(safe-area-inset-top, 0px), 12px)", left: 12, ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: "rgba(14,27,51,0.6)", borderRadius: 12, padding: "8px 10px", textDecoration: "none" }}>
+        Apri nel browser
+      </a>
+      {puoSchermoIntero && !pieno && (
+        <button
+          onClick={vaiSchermoIntero} title="Torna a tutto schermo" aria-label="Torna a tutto schermo"
+          style={{ position: "absolute", right: 16, bottom: "max(env(safe-area-inset-bottom, 0px), 16px)", width: 52, height: 52, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.4)", background: "rgba(14,27,51,0.85)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 6px 20px rgba(0,0,0,0.4)" }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Il tasto "Apri link" sulla scheda del corso della master: c'e' sempre,
+// se il corso ha un link. Lo schermo intero si chiede nel clic stesso,
+// perche' il browser lo concede solo dentro un gesto dell'utente
+function TastoApriLinkSlide({ corso }) {
+  const isMobile = useIsMobile();
+  const [linkSlide] = useImpostazioneCondivisa(CHIAVE_LINK_SLIDE_CORSI, {});
+  const [aperto, setAperto] = useState(false);
+  const url = corso ? (linkSlide || {})[corso.id] : null;
+  if (!url) return null;
+  function apri(e) {
+    e.stopPropagation();
+    const el = document.documentElement;
+    const richiesta = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (richiesta) { try { const r = richiesta.call(el); if (r && r.catch) r.catch(() => {}); } catch { /* si resta nella finestra */ } }
+    setAperto(true);
+  }
+  return (
+    <div onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={apri}
+        style={{ ...fontBody, fontSize: isMobile ? 11 : 13, fontWeight: 700, color: "#fff", background: NAVY, border: `1px solid ${NAVY}`, borderRadius: 14, padding: isMobile ? "7px 10px" : "9px 14px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14 21 3M15 3h6v6M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
+        Apri link
+      </button>
+      {aperto && <VisoreLinkSchermoIntero url={url} titolo={corso.nome} onChiudi={() => setAperto(false)} />}
+    </div>
+  );
+}
 
 // La finestra in cui le slide si possono scaricare: da una settimana
 // prima dell'inizio all'ultimo giorno del corso, estremi compresi.
@@ -8860,6 +8948,23 @@ function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
   const isMobile = useIsMobile();
   const [caricando, setCaricando] = useState(false);
   const haSlide = !!corso.slide_pdf_path;
+  // il link del corso, accanto al PDF: si incolla, si cambia, si toglie
+  const [linkSlide, salvaLinkSlide] = useImpostazioneCondivisa(CHIAVE_LINK_SLIDE_CORSI, {});
+  const link = (linkSlide || {})[corso.id] || null;
+  const [modificaLink, setModificaLink] = useState(false);
+  const [bozzaLink, setBozzaLink] = useState("");
+  function confermaLink() {
+    const url = normalizzaLinkSlide(bozzaLink);
+    if (!url) { onMessaggio?.("Il link non è un indirizzo valido: deve cominciare con http:// o https://."); return; }
+    salvaLinkSlide({ ...(linkSlide || {}), [corso.id]: url });
+    setModificaLink(false); setBozzaLink("");
+    onMessaggio?.(`Link salvato per ${corso.nome}: la master lo apre dalla sua dashboard con "Apri link".`);
+  }
+  function rimuoviLink() {
+    if (!window.confirm(`Sei sicuro di voler togliere il link di "${corso.nome}"?`)) return;
+    const nuovo = { ...(linkSlide || {}) }; delete nuovo[corso.id];
+    salvaLinkSlide(nuovo);
+  }
   // "Apri" mostra il PDF in una scheda nuova, "Scarica" lo salva col suo
   // nome: entrambi con un collegamento firmato che vale cinque minuti,
   // come per la master. Il file non ha un indirizzo pubblico.
@@ -8923,8 +9028,40 @@ function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
             ? `${corso.slide_pdf_nome || "slide.pdf"}${corso.slide_caricato_il ? ` · caricate il ${fmtData(String(corso.slide_caricato_il).slice(0, 10))}` : ""}`
             : "Nessuna slide caricata"}
         </div>
+        {link && !modificaLink && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: "#2E7D32", marginTop: 2, overflowWrap: "anywhere" }}>Link: {link}</div>
+        )}
+        {modificaLink && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+            <input
+              autoFocus value={bozzaLink} onChange={(e) => setBozzaLink(e.target.value)} placeholder="https://…"
+              onKeyDown={(e) => { if (e.key === "Enter") confermaLink(); if (e.key === "Escape") { setModificaLink(false); setBozzaLink(""); } }}
+              style={{ ...inputStyle, flex: "1 1 260px", minWidth: 0, fontSize: 12.5 }}
+            />
+            <Button onClick={confermaLink}>Salva link</Button>
+            <Button variant="ghost" onClick={() => { setModificaLink(false); setBozzaLink(""); }}>Annulla</Button>
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+        {link && !modificaLink && (
+          <button onClick={() => window.open(link, "_blank", "noopener")} title="Apri il link in una scheda nuova"
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "1px solid #2E7D32", borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+            Apri link
+          </button>
+        )}
+        {!modificaLink && (
+          <button onClick={() => { setBozzaLink(link || ""); setModificaLink(true); }} title={link ? "Cambia il link" : "Incolla un link: presentazione online, video, pagina"}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+            {link ? "Modifica link" : "Carica link"}
+          </button>
+        )}
+        {link && !modificaLink && (
+          <button onClick={rimuoviLink} title="Togli il link"
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C9C2`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+            Rimuovi link
+          </button>
+        )}
         {haSlide && (
           <>
             <button onClick={() => apriOScarica("apri")} disabled={!!preparando} title="Guarda il PDF in una scheda nuova"
@@ -8954,7 +9091,8 @@ function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
 function PaginaSlideCorsi({ corsi, ricarica, onBack, titolo = "Associa slide del corso" }) {
   const [msg, setMsg] = useState("");
   const elenco = [...(corsi || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
-  const conSlide = elenco.filter((c) => c.slide_pdf_path).length;
+  const [linkSlide] = useImpostazioneCondivisa(CHIAVE_LINK_SLIDE_CORSI, {});
+  const conSlide = elenco.filter((c) => c.slide_pdf_path || (linkSlide || {})[c.id]).length;
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px" }}>
@@ -8962,8 +9100,9 @@ function PaginaSlideCorsi({ corsi, ricarica, onBack, titolo = "Associa slide del
 
       <div style={{ ...cardStyle }}>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.55, marginBottom: 16 }}>
-          Un PDF per corso: sono le slide che la master proietta in aula. Le trova da sola nella sua dashboard, sulla scheda del corso,
-          <b> da una settimana prima dell'inizio fino all'ultimo giorno</b>. Prima non compare, dopo il tasto sparisce e il file non si scarica più.
+          Un PDF per corso, oppure un link: sono le slide che la master proietta in aula. Il PDF lo trova nella sua dashboard, sulla scheda del corso,
+          <b> da una settimana prima dell'inizio fino all'ultimo giorno</b>; prima non compare, dopo il tasto sparisce e il file non si scarica più.
+          Il link invece c'è sempre, con il tasto "Apri link", e si apre dentro l'app a tutto schermo.
         </div>
         <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>
           {conSlide} corsi su {elenco.length} hanno le slide
@@ -9204,6 +9343,8 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           {corso?.slide_pdf_path && slideDisponibiliPer(corsoData, oggiStr) && (
             <TastoScaricaSlide corso={corso} />
           )}
+          {/* il link del corso non ha finestra: se c'e', c'e' sempre */}
+          <TastoApriLinkSlide corso={corso} />
           {contabilitaVisibile && (
             <button
               onClick={(e) => { e.stopPropagation(); onApriContabilita(corsoData); }}
