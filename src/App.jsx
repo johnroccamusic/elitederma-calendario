@@ -10098,10 +10098,21 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // sede, non solo mentre il corso è in corso. L'ordine per data_inizio
   // crescente porta già naturalmente in cima i corsi appena finiti
   // (data nel passato), senza bisogno di un ordinamento a parte
+  // Prossimi e storico: un corso resta fra i prossimi finche' non e'
+  // finito (fino all'ultimo giorno compreso), poi passa nello storico. I
+  // corsi appena chiusi si ritrovano li', in cima. Prima restavano fra i
+  // prossimi per cinque giorni, e la master vedeva "in programma" un corso
+  // gia' fatto
+  const [vistaCorsiMaster, setVistaCorsiMaster] = useState("prossimi");
   const prossimeDate = useMemo(
-    () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr <= addGiorni(cd.data_fine, 5)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
+    () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr <= (cd.data_fine || cd.data_inizio)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
     [corsiDate, masterSelId, oggiStr]
   );
+  const storicoDate = useMemo(
+    () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr > (cd.data_fine || cd.data_inizio)).sort((a, b) => b.data_inizio.localeCompare(a.data_inizio)),
+    [corsiDate, masterSelId, oggiStr]
+  );
+  const dateInVista = vistaCorsiMaster === "storico" ? storicoDate : prossimeDate;
   // Inventario Post Corso: eleggibile un corso in corso o finito da al
   // massimo ~1 settimana, per lasciare il tempo di farlo anche a
   // posteriori se non fatto subito tornando dalla sede
@@ -10395,11 +10406,24 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli una master per vedere i suoi prossimi corsi.</div>
         ) : (
           <>
-            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prossimi corsi</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16 }}>Data, località e biglietti di viaggio già caricati.</div>
-            {prossimeDate.length === 0 ? (
-              <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessun corso in programma al momento.</div>
-            ) : prossimeDate.map((cd) => (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{vistaCorsiMaster === "storico" ? "Storico corsi" : "Prossimi corsi"}</div>
+              <PillolaSegmentata
+                compatto={isMobile}
+                valore={vistaCorsiMaster}
+                onCambia={setVistaCorsiMaster}
+                voci={[
+                  { chiave: "prossimi", testo: "Prossimi corsi", Icona: IconaCalendarioCard },
+                  { chiave: "storico", testo: "Storico", Icona: IconaElencoRighe },
+                ]}
+              />
+            </div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16 }}>
+              {vistaCorsiMaster === "storico" ? "I corsi già fatti, dal più recente." : "Data, località e biglietti di viaggio già caricati."}
+            </div>
+            {dateInVista.length === 0 ? (
+              <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>{vistaCorsiMaster === "storico" ? "Nessun corso concluso finora." : "Nessun corso in programma al momento."}</div>
+            ) : dateInVista.map((cd) => (
               /* Il coupon e' quello DELL'EDIZIONE, e soltanto quello. Il
                  codice della master qui non entra: e' un altro oggetto —
                  vale sempre e per chiunque — e usarlo come ripiego, come
