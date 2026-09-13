@@ -10274,7 +10274,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, onApriInventarioSede, onApriChiusura, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, onApriInventarioSede, onApriChiusura, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
   const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
@@ -10599,7 +10599,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           </div>
         )}
 
-        {!masterLoggataId && (
+        {/* una master normale vede solo la propria dashboard; chi dirige
+            l'accademia (ha il permesso Setting) parte dalla sua ma puo'
+            passare a quella di ogni altra master */}
+        {(!masterLoggataId || sceltaLibera) && (
           <select
             style={{ ...inputStyle, width: "auto", minWidth: 220, marginBottom: 20 }}
             value={masterSelId} onChange={(e) => setMasterSelId(e.target.value)}
@@ -61978,6 +61981,7 @@ export default function App() {
         <PaginaDashboardMaster
           master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti}
           masterLoggataId={utenteLoggato?.masterId || null}
+          sceltaLibera={!!utenteLoggato?.masterId && (utenteLoggato.permessi || []).includes("impostazioni")}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           puntiMasterImpostazioni={puntiMasterImpostazioni} regoleReferralAutomatico={regoleReferralAutomatico}
           onApriInventarioSede={apriInventarioSede}
