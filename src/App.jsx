@@ -428,12 +428,16 @@ const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
 // Gestione punti
 const CHIAVE_SCHEMA_PUNTI_MASTER = "puntiMaster_schema";
 const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
-// Regola dei punti, riscritta il 12/09/2026 e valida in tutta l'app:
-//   punti = (cedibile - percentuale di sicurezza) x 10, arrotondato all'intero.
-// Dieci punti per euro: il conto a mente e' immediato (2.661 punti sono
-// 266,10 euro). Era stato provato il venti, per dire alla master "il 50%
-// dei punti", ma la conversione diventava un rompicapo.
-const PUNTI_PER_EURO_MASSIMO_CEDIBILE = 10;
+// Regola dei punti, riscritta il 13/09/2026 e valida in tutta l'app:
+//   punti = cedibile - percentuale di sicurezza, con due decimali.
+// Un punto e' un euro di massimo cedibile: nessun moltiplicatore, la
+// conversione non serve piu'. Erano stati provati il venti e il dieci per
+// euro, e ogni volta il conto a mente diventava un rompicapo.
+const PUNTI_PER_EURO_MASSIMO_CEDIBILE = 1;
+// i punti si scrivono sempre con due decimali, come gli euro che sono
+function fmtPunti(n) {
+  return (Number(n) || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function sicurezzaPuntiDi(schemaSalvato) {
   const pct = Number(schemaSalvato?.accantonamentoPct);
   return Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct;
@@ -3326,14 +3330,14 @@ const CEDIBILE_PER_MARGINE = [
 ];
 const CEDIBILE_OLTRE_ULTIMO_GRADINO = 43;
 // I punti che un prodotto genera a chi lo vende: dal cedibile si toglie la
-// percentuale di sicurezza, il resto (il massimo cedibile) vale dieci
-// punti per euro, arrotondato all'intero. 9,16 euro cedibili, col 10% di
-// sicurezza, sono 8,24 di massimo cedibile e 82 punti. Un prodotto senza
-// costo di acquisto non ha margine, quindi ne' quota cedibile ne' punti.
+// percentuale di sicurezza, e il resto (il massimo cedibile) sono i punti,
+// con due decimali. 9,16 euro cedibili, col 10% di sicurezza, sono 8,24
+// punti. Un prodotto senza costo di acquisto non ha margine, quindi ne'
+// quota cedibile ne' punti.
 function puntiDaCedibile(cedibileEuro, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct) {
   if (cedibileEuro == null || !Number.isFinite(Number(cedibileEuro))) return null;
   const massimoCedibile = Number(cedibileEuro) * (1 - sicurezzaPct / 100);
-  return Math.round(massimoCedibile * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
+  return round2(massimoCedibile * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
 }
 // I punti di UN pezzo di un prodotto, letti dalla sua anagrafica di oggi:
 // margine -> quota cedibile -> dieci punti per euro. E' la stessa regola
@@ -3349,14 +3353,14 @@ function puntiProdotto(p, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantoname
 }
 // La riduzione per lo sconto usato dall'allievo. Non cambia come nascono
 // i punti: prima si calcolano i punti TEORICI del prodotto (cedibile ->
-// sicurezza -> x10 -> intero), poi si riducono di una percentuale pari a
+// sicurezza -> due decimali), poi si riducono di una percentuale pari a
 // (sconto % ottenuto dall'allievo) x (valore della fascia di margine del
 // prodotto nello schema). Esempio: 180 punti teorici, fascia 5, sconto
-// 10% -> riduzione 50% -> 90 punti alla master. I valori delle fasce non
+// 10% -> riduzione 50% -> 4,50 punti alla master. I valori delle fasce non
 // sono fissi: si leggono dalla configurazione ogni volta.
 function puntiDopoScontoAllievo(puntiTeorici, scontoPct, valoreFascia) {
   const riduzione = Math.min(100, Math.max(0, (Number(scontoPct) || 0) * (Number(valoreFascia) || 0)));
-  return Math.round((Number(puntiTeorici) || 0) * (1 - riduzione / 100));
+  return round2((Number(puntiTeorici) || 0) * (1 - riduzione / 100));
 }
 // Lo sconto % che l'allievo ha ottenuto su una riga venduta. Dal 12/09/2026
 // il POS lo scrive sulla riga; prima c'era solo il totale scontato, e se
@@ -10131,7 +10135,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
     let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, euroCorso = 0, euroReferral = 0, pezzi = 0, puntiAccumulati = 0;
     const perGruppo = {};
-    // i punti BONUS: per ogni riga venduta, i punti interi del prodotto
+    // i punti BONUS: per ogni riga venduta, i punti pieni del prodotto
     // per i pezzi, senza detrazioni per lo sconto usato ne' quote per
     // canale. Si leggono dall'anagrafica di oggi, non dal prezzo pagato:
     // un prodotto vale i suoi punti anche se e' stato scontato. Un reso
@@ -10183,7 +10187,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     });
     const premi = premiVolumeRaggiunti(pezzi);
     const gruppi = Object.values(perGruppo).map((g) => ({ ...g, euro: round2(g.euro) })).sort((a, b) => b.euro - a.euro);
-    const puntiMaturati = Math.round((puntiCorsoLordi * quotePunti.corso) / 100 + (puntiFuoriLordi * quotePunti.fuoriCorso) / 100);
+    const puntiMaturati = round2((puntiCorsoLordi * quotePunti.corso) / 100 + (puntiFuoriLordi * quotePunti.fuoriCorso) / 100);
     return {
       venditeTotale, venditeCorso, venditeReferral, puntiAccumulati, puntiMaturati,
       euroCorso: round2(euroCorso), euroReferral: round2(euroReferral),
@@ -10352,7 +10356,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 {/* i punti maturati davvero: quelli dei prodotti venduti,
                     ridotti con le quote per canale di Gestione punti (e, in
                     futuro, dello sconto usato dagli allievi) */}
-                <div style={{ ...numPunti, color: NAVY }}>{provvigioniMaster.puntiMaturati.toLocaleString("it-IT")}</div>
+                <div style={{ ...numPunti, color: NAVY }}>{fmtPunti(provvigioniMaster.puntiMaturati)}</div>
               </div>
               {/* Punti bonus: tutti i punti dei prodotti venduti, interi,
                   senza le detrazioni per lo sconto usato dagli allievi e
@@ -10360,7 +10364,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                   e alla master ne restano 80, qui contano 100 */}
               <div style={cardPunti}>
                 <div style={lblPunti}>Punti bonus</div>
-                <div style={{ ...numPunti, color: GOLD }}>{provvigioniMaster.puntiAccumulati.toLocaleString("it-IT")}</div>
+                <div style={{ ...numPunti, color: GOLD }}>{fmtPunti(provvigioniMaster.puntiAccumulati)}</div>
               </div>
             </div>
               );
@@ -38735,8 +38739,8 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           if (alCorso) puntiCorso += effettivi; else puntiFuori += effettivi;
         });
       });
-      const puntiMaster = Math.round((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
-      return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici, puntiCorso, puntiFuori, punti: puntiCorso + puntiFuori, puntiMaster, euro: round2(euro) };
+      const puntiMaster = round2((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
+      return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici: round2(puntiTeorici), puntiCorso: round2(puntiCorso), puntiFuori: round2(puntiFuori), punti: round2(puntiCorso + puntiFuori), puntiMaster, euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
   }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, regolaReferralMaster]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
@@ -38749,7 +38753,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>
-          Per ogni pezzo venduto al POS o sul sito attraverso l'app: il cedibile del prodotto meno la percentuale di sicurezza, per dieci punti a euro, arrotondato all'intero. I punti si leggono dall'anagrafica di oggi, non si salvano.
+          Per ogni pezzo venduto al POS o sul sito attraverso l'app: il cedibile del prodotto meno la percentuale di sicurezza, con due decimali. Un punto è un euro. I punti si leggono dall'anagrafica di oggi, non si salvano.
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
@@ -38840,20 +38844,20 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               L'importo residuo rappresenta il <b>massimo valore economico distribuibile</b>.
             </p>
             <p style={{ margin: "0 0 12px" }}>
-              Questo valore viene convertito in punti moltiplicandolo per {PUNTI_PER_EURO_MASSIMO_CEDIBILE} e il risultato viene arrotondato a un numero intero, senza decimali.
+              Questo valore sono i punti, scritti con due cifre decimali: un punto è un euro di massimo cedibile.
             </p>
             <div style={{ background: BG, borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
               <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Formula</div>
-              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Punti disponibili = (Cedibile € × (1 − % sicurezza)) × {PUNTI_PER_EURO_MASSIMO_CEDIBILE}</div>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Punti disponibili = Cedibile € × (1 − % sicurezza)</div>
             </div>
             {(() => {
               const cedibile = 10;
               const residuo = round2(cedibile * (1 - schema.accantonamentoPct / 100));
-              const punti = Math.round(residuo * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
+              const punti = round2(residuo * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
               return (
                 <p style={{ margin: 0 }}>
                   Esempio con Cedibile {fmtEuroErp2(cedibile)} e sicurezza {schema.accantonamentoPct}%:<br />
-                  <b>{fmtEuroErp2(cedibile)} → {fmtEuroErp2(residuo)} → {punti} punti</b>
+                  <b>{fmtEuroErp2(cedibile)} → {fmtEuroErp2(residuo)} → {fmtPunti(punti)} punti</b>
                 </p>
               );
             })()}
@@ -38879,27 +38883,26 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Come funzionano i punti</div>
           <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
             <p style={{ margin: "0 0 8px" }}>
-              I punti teorici della master nascono <b>sempre</b> dalla formula generale: Cedibile € meno la percentuale di sicurezza, per {PUNTI_PER_EURO_MASSIMO_CEDIBILE}, arrotondato all'intero. Lo sconto dell'allievo non cambia questo metodo: interviene <b>solo dopo</b>, riducendo i punti teorici già calcolati.
+              I punti teorici della master nascono <b>sempre</b> dalla formula generale: Cedibile € meno la percentuale di sicurezza, con due decimali. Lo sconto dell'allievo non cambia questo metodo: interviene <b>solo dopo</b>, riducendo i punti teorici già calcolati.
             </p>
             <ol style={{ margin: "0 0 10px", paddingLeft: 22 }}>
               <li>Si calcola il Cedibile € del prodotto.</li>
               <li>Si sottrae la percentuale di sicurezza configurata, oggi il {schema.accantonamentoPct}%.</li>
-              <li>Si moltiplica il risultato per {PUNTI_PER_EURO_MASSIMO_CEDIBILE}.</li>
-              <li>Si arrotonda a numero intero: questi sono i <b>punti teorici</b> della master, i "Punti bonus" della sua dashboard.</li>
+              <li>Il risultato, con due decimali, sono i <b>punti teorici</b> della master, i "Punti bonus" della sua dashboard: un punto è un euro.</li>
               <li>Se l'allievo usa il coupon e riceve uno sconto, i punti si riducono in base alla <b>fascia di margine</b> del prodotto e al valore configurato nello schema: riduzione % = sconto % dell'allievo × valore della fascia.</li>
               <li>I valori delle fasce non sono fissi: si leggono dalla configurazione qui sopra, e cambiarli cambia il conto.</li>
             </ol>
             {(() => {
               const cedibile = 10, sconto = 10, fascia = 5;
               const residuo = round2(cedibile * (1 - schema.accantonamentoPct / 100));
-              const teorici = Math.round(residuo * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
+              const teorici = round2(residuo * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
               const effettivi = puntiDopoScontoAllievo(teorici, sconto, fascia);
               return (
                 <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
                   <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Esempio completo</div>
-                  Cedibile {fmtEuroErp2(cedibile)}, sicurezza {schema.accantonamentoPct}%: {fmtEuroErp2(cedibile)} → {fmtEuroErp2(residuo)} → <b>{teorici} punti teorici</b>.<br />
+                  Cedibile {fmtEuroErp2(cedibile)}, sicurezza {schema.accantonamentoPct}%: {fmtEuroErp2(cedibile)} → {fmtEuroErp2(residuo)} → <b>{fmtPunti(teorici)} punti teorici</b>.<br />
                   Il prodotto sta nella fascia con valore {fascia}; l'allievo usa uno sconto del {sconto}%: {sconto} × {fascia}% = {sconto * fascia}% di riduzione.<br />
-                  {teorici} − {sconto * fascia}% = <b>{effettivi} punti</b> accreditati alla master. Nei Punti bonus restano {teorici}.
+                  {fmtPunti(teorici)} − {sconto * fascia}% = <b>{fmtPunti(effettivi)} punti</b> accreditati alla master. Nei Punti bonus restano {fmtPunti(teorici)}.
                 </div>
               );
             })()}
@@ -38929,10 +38932,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                       <td style={{ ...td, fontWeight: 700 }}>{toTitleCase(r.master.nome)}</td>
                       <td style={td}>{r.vendite}</td>
                       <td style={td}>{r.pezzi}{r.pezziSenzaPunti > 0 && <span style={{ ...fontBody, fontSize: 11, color: GOLD, marginLeft: 6 }} title="Pezzi di prodotti senza costo di acquisto o non in vendita dall'app: non generano punti">{r.pezziSenzaPunti} senza punti</span>}</td>
-                      <td style={td} title="I punti interi dei prodotti venduti, prima di ogni riduzione: sono i Punti bonus della dashboard">{r.puntiTeorici.toLocaleString("it-IT")}</td>
-                      <td style={td} title={`${quote.corso}% alla master`}>{r.puntiCorso.toLocaleString("it-IT")}</td>
-                      <td style={td} title={`${quote.fuoriCorso}% alla master`}>{r.puntiFuori.toLocaleString("it-IT")}</td>
-                      <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }}>{r.puntiMaster.toLocaleString("it-IT")}</td>
+                      <td style={td} title="I punti pieni dei prodotti venduti, prima di ogni riduzione: sono i Punti bonus della dashboard">{fmtPunti(r.puntiTeorici)}</td>
+                      <td style={td} title={`${quote.corso}% alla master`}>{fmtPunti(r.puntiCorso)}</td>
+                      <td style={td} title={`${quote.fuoriCorso}% alla master`}>{fmtPunti(r.puntiFuori)}</td>
+                      <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }}>{fmtPunti(r.puntiMaster)}</td>
                       <td style={td}>{fmtEuroErp2(r.euro)}</td>
                     </tr>
                   ))}
@@ -41248,7 +41251,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Quanto si puo' girare al massimo a chi vende: il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
     "Punti": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per ${PUNTI_PER_EURO_MASSIMO_CEDIBILE} punti a euro, arrotondato all'intero` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? p.punti.toLocaleString("it-IT") : (p.cedibileEuro == null ? "N/D" : "—")}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
