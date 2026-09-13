@@ -428,6 +428,17 @@ const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
 // Gestione punti
 const CHIAVE_SCHEMA_PUNTI_MASTER = "puntiMaster_schema";
 const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
+// Le fasce dello sconto d'aula per chi paga in CONTANTI al POS dell'app
+// (dal 13/09/2026). Con la carta e dal sito valgono le fasce del coupon,
+// scritte su regole_referral_automatico e copiate su ogni codice; in
+// contanti l'IVA resta in cassa e si puo' scontare diversamente, quindi
+// c'e' una seconda serie, fra le impostazioni condivise. Vuota = uguale
+// a carta e shop.
+const CHIAVE_FASCE_CORSI_CONTANTI = "fasceSconto_corsi_contanti";
+function fasceCorsiPerPagamento(fasceCarta, fasceContantiSalvate, contanti) {
+  if (contanti && Array.isArray(fasceContantiSalvate) && fasceContantiSalvate.length) return fasceScontoValide(fasceContantiSalvate);
+  return fasceScontoValide(fasceCarta);
+}
 // Regola dei punti, riscritta il 13/09/2026 e valida in tutta l'app:
 //   punti = cedibile - percentuale di sicurezza, con due decimali.
 // Un punto e' un euro di massimo cedibile: nessun moltiplicatore, la
@@ -10350,6 +10361,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const [regolaReferralMasterDash] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   const fasceCorsoDash = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
   const fasceReferralDash = fasceScontoValide(regolaReferralMasterDash?.fasce);
+  const [fasceContantiDash] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -10443,7 +10455,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       if (conta && v.corso_data_id) venditeCorso += 1;
       if (conta && !v.corso_data_id && v.codice_coupon && codiciPersonali.has(String(v.codice_coupon).toLowerCase())) venditeReferral += 1;
       const alCorso = !!v.corso_data_id;
-      const fasceCanale = alCorso ? fasceCorsoDash : fasceReferralDash;
+      const fasceCanale = alCorso ? fasceCorsiPerPagamento(fasceCorsoDash, fasceContantiDash, v.metodo_pagamento === "contanti") : fasceReferralDash;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
         const prodotto = prodottoPerIdPunti[r.prodotto_id];
         // pagata in contanti -> la riga dei contanti; carta o sito -> l'altra
@@ -10481,7 +10493,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       euroTotale: round2(euroCorso + euroReferral + premi.euro),
       pezzi, premi, gruppi,
     };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash]);
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash, fasceContantiDash]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
   // la contabilita' di una classe, aperta dal tasto sulla card: e' la
   // stessa pagina del link che si manda alla master, con lo stesso
@@ -32548,7 +32560,7 @@ async function generaCodiceReferralUnivoco(nome) {
 // generano coupon. Una percentuale unica, oppure sei percentuali —
 // una per fascia di margine — che si applicano sempre sul lordo, cosi'
 // il numero e' lo stesso al POS e sul sito.
-function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile, soloFasce = false }) {
+function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile, soloFasce = false, senzaWoo = false }) {
   const elenco = fasceScontoValide(fasce);
   const aFasce = soloFasce || tipo === "fasce";
   const equivalenteWoo = aFasce ? percentualeWooDaFasce(prodottiShop, elenco) : null;
@@ -32584,9 +32596,15 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
       {aFasce && (
         <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? 12 : 16, background: "#fff" }}>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45, maxWidth: 640 }}>
-            Quanto rende un prodotto decide quanto si sconta. Le percentuali si applicano <b style={{ color: NAVY }}>sul lordo</b>,
-            quindi sono lo stesso numero al POS e sul sito. Un prodotto senza costo di acquisto non ha margine noto,
-            non cade in nessuna fascia e non si sconta.
+            {senzaWoo ? (
+              <>Valgono solo al POS dell'app quando si sceglie <b style={{ color: NAVY }}>Contanti</b>: il sito non le vede.
+              Le percentuali si applicano sul lordo. Un prodotto senza costo di acquisto non ha margine noto,
+              non cade in nessuna fascia e non si sconta.</>
+            ) : (
+              <>Quanto rende un prodotto decide quanto si sconta. Le percentuali si applicano <b style={{ color: NAVY }}>sul lordo</b>,
+              quindi sono lo stesso numero al POS e sul sito. Un prodotto senza costo di acquisto non ha margine noto,
+              non cade in nessuna fascia e non si sconta.</>
+            )}
           </div>
           <div style={{ display: "flex", gap: isMobile ? 8 : 14, flexWrap: "wrap" }}>
             {elenco.map((f, i) => (
@@ -32606,7 +32624,9 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
           </div>
           {/* Il sito sconta a fasce davvero, non a media, ma solo se sa
               quanto rende ogni prodotto: questo tasto glielo scrive. Da
-              rifare quando cambiano costi o prezzi. */}
+              rifare quando cambiano costi o prezzi. Le fasce dei contanti
+              non arrivano al sito, quindi il blocco non compare */}
+          {!senzaWoo && (
           <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 14, paddingTop: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <Button variant="ghost" onClick={allineaMarginiSuWoo} disabled={allineando}>
@@ -32627,6 +32647,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
               tutto: nessun carrello si rompe, ma le fasce non valgono più.
             </div>
           </div>
+          )}
         </div>
       )}
     </div>
@@ -39018,6 +39039,11 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   useEffect(() => {
     if (regoleReferralAutomatico && fasceCorso == null) setFasceCorso(fasceScontoValide(regoleReferralAutomatico.fasce_sconto));
   }, [regoleReferralAutomatico, fasceCorso]);
+  // la seconda serie, per chi paga in contanti al POS dell'app: si salva
+  // appena la si tocca, come il referral personale. Vuota = come la carta
+  const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const fasceContantiCorso = fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, true);
+  const contantiUgualiACarta = !(Array.isArray(fasceContantiSalvate) && fasceContantiSalvate.length);
   const [salvandoFasceCorso, setSalvandoFasceCorso] = useState(false);
   const [msgFasceCorso, setMsgFasceCorso] = useState("");
   async function salvaFasceCorso() {
@@ -39061,7 +39087,9 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         // codice; il resto e' fuori dal corso (referral sul sito, vendita
         // da casa). Le fasce del canale danno il valore per la riduzione
         const alCorso = !!v.corso_data_id;
-        const fasceCanale = alCorso ? fasceScontoValide(fasceCorso) : fasceScontoValide(regolaReferralMaster?.fasce);
+        // al corso: la serie della carta o quella dei contanti, a seconda
+        // di come l'allievo ha pagato
+        const fasceCanale = alCorso ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, v.metodo_pagamento === "contanti") : fasceScontoValide(regolaReferralMaster?.fasce);
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
           const q = Number(r.quantita) || 0;
           const prodotto = prodottoPerId[r.prodotto_id];
@@ -39077,7 +39105,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
       const puntiMaster = round2((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
       return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici: round2(puntiTeorici), puntiCorso: round2(puntiCorso), puntiFuori: round2(puntiFuori), punti: round2(puntiCorso + puntiFuori), puntiMaster, euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, regolaReferralMaster]);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
@@ -39142,16 +39170,25 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto ai corsi, con il codice d'aula</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine. Sono le stesse di Generazione automatica in Genera coupon: cambiarle qui o là è lo stesso.
+            Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti al POS dell'app. La prima è la stessa di Generazione automatica in Genera coupon: cambiarla qui o là è lo stesso.
           </div>
           {fasceCorso == null ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
           ) : (
             <>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop online</div>
               <SceltaRegolaSconto soloFasce tipo="fasce" fasce={fasceCorso} onCambiaTipo={() => {}} onCambiaFasce={setFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
                 <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
                 {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
+              </div>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti al POS dell'app</div>
+              <SceltaRegolaSconto soloFasce senzaWoo tipo="fasce" fasce={fasceContantiCorso} onCambiaTipo={() => {}} onCambiaFasce={(f) => salvaFasceContanti(fasceScontoValide(f))} prodottiShop={prodottiShop} isMobile={isMobile} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: contantiUgualiACarta ? MUTED : "#2E7D32" }}>
+                  {contantiUgualiACarta ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo." : "Serie dei contanti salvata: il POS la applica quando il pagamento è in contanti."}
+                </span>
+                {!contantiUgualiACarta && <Button variant="ghost" onClick={() => salvaFasceContanti([])}>Rimetti uguali a carta e shop</Button>}
               </div>
             </>
           )}
@@ -39167,6 +39204,32 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
             onCambiaTipo={() => {}} onCambiaFasce={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: f })}
             prodottiShop={prodottiShop} isMobile={isMobile}
           />
+        </div>
+
+        {/* La tabella con cui si e' deciso quanto cedere, pubblicata per
+            poterla rileggere nel tempo: e' CEDIBILE_PER_MARGINE, la stessa
+            che usa Dettaglio prodotti per tutte e due le righe di conto */}
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Quota cedibile per fascia di margine</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            Il criterio applicato a tutti i prodotti per calcolare il cedibile, deciso il 12/09/2026. Ogni riga vale da quel margine fino al gradino dopo: un margine del 47% sta nella riga del 45. Sotto il 5% non si cede nulla; dal 95% in su si cede il {CEDIBILE_OLTRE_ULTIMO_GRADINO}%, che è il tetto. Fino al 20% di margine si cede il 30% del margine, poi mezzo punto in più ogni punto di margine. La percentuale si applica al prezzo netto con carta e shop online, al prezzo al pubblico in contanti; il margine si misura sulla stessa base.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: isMobile ? 6 : 10 }}>
+            {CEDIBILE_PER_MARGINE.map(([soglia, pct], i) => {
+              const prossima = CEDIBILE_PER_MARGINE[i + 1]?.[0];
+              return (
+                <div key={soglia} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 10px", background: "#fff", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>
+                    Margine {prossima != null ? `${numeroFascia(soglia)}–${numeroFascia(prossima)}` : `${numeroFascia(soglia)}+`}%
+                  </span>
+                  <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{numeroFascia(pct)}%</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10, lineHeight: 1.4 }}>
+            Dal cedibile si toglie poi la percentuale di sicurezza, qui sotto, e quel che resta sono i punti. La tabella oggi si cambia solo dal codice: se vuoi rivederla, chiedila.
+          </div>
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
@@ -50451,6 +50514,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // altrimenti diventerebbe uno sconto manuale spacciato per referral
   const [couponAttivo, setCouponAttivo] = useState(null);
   const [metodoPagamento, setMetodoPagamento] = useState("pos");
+  // la seconda serie di fasce dei codici d'aula, per chi paga in contanti
+  const [fasceContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const [note, setNote] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
@@ -50642,14 +50707,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const baseCoupon = BASE_SCONTO_VALIDA(couponAttivo?.base_sconto);
   const couponAFasce = couponAttivo?.tipo_regola_sconto === "fasce";
   const couponSulMargine = !couponAFasce && baseCoupon === "margine";
+  // le fasce da applicare: quelle scritte sul coupon, salvo che sia il
+  // codice di una classe pagato in contanti, dove vale la serie dei
+  // contanti di Gestione punti. Cambiando il metodo di pagamento lo
+  // sconto si rifa' da solo
+  const fasceCouponAttive = couponAFasce
+    ? fasceCorsiPerPagamento(couponAttivo.fasce_sconto, fasceContantiCorsiPos, !!couponAttivo.corsi_date_id && metodoPagamento === "contanti")
+    : null;
   const scontoCoupon = couponAFasce
-    ? scontoAFasceCarrello(carrello, prodottiPerId, couponAttivo.fasce_sconto)
+    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive)
     : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
   const righeSenzaMargine = couponAFasce
-    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], couponAttivo.fasce_sconto) <= 0)
+    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive) <= 0)
     : couponNum > 0 && couponSulMargine
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
@@ -50708,7 +50780,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     let scontiRiga = carrello.map((r, i) => {
       const lordoRiga = lordiRiga[i];
       if (omaggioAttivo || lordoRiga <= 0) return 0;
-      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], couponAttivo.fasce_sconto)) / 100);
+      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive)) / 100);
       if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
       if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
       return 0;
@@ -51038,6 +51110,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
               Sconto del corso applicato: −{couponAttivo.valore}%
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
+              {couponAFasce && metodoPagamento === "contanti" && Array.isArray(fasceContantiCorsiPos) && fasceContantiCorsiPos.length > 0 && (
+                <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>fasce contanti</span>
+              )}
             </div>
           )}
           {corsoPosSel && !couponDellEdizione(corsoPosSel.id) && (
