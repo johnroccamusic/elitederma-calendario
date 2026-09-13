@@ -14763,6 +14763,23 @@ function PaginaAspettoApp() {
   const isMobile = useIsMobile();
   const [aspetto, salvaAspetto] = useAspettoTasti();
   const [quale, setQuale] = useState("mobile");
+  // diagnostica: cosa sta DAVVERO disegnando il dock in questo momento,
+  // letto dal DOM e non dallo stato. Sull'iPhone l'anteprima cambiava e il
+  // dock no: questa riga dice se il valore non arriva al dock o se arriva
+  // e Safari non lo ridisegna
+  const [dockDisegnato, setDockDisegnato] = useState(null);
+  useEffect(() => {
+    const leggi = () => {
+      const b = document.querySelector('button[aria-label="Home"]');
+      if (!b) { setDockDisegnato(null); return; }
+      const st = getComputedStyle(b);
+      const svg = b.querySelector("svg");
+      setDockDisegnato(`${Math.round(parseFloat(st.width))} / ${Math.round(parseFloat(st.borderRadius))} / ${svg ? Math.round(svg.getBoundingClientRect().width) : "-"}`);
+    };
+    leggi();
+    const t = setInterval(leggi, 700);
+    return () => clearInterval(t);
+  }, []);
   const corrente = aspetto[quale];
   // nuvole e pulsanti hanno la sola ombra: i comandi di forma e colore
   // non avrebbero niente da toccare
@@ -14910,6 +14927,11 @@ function PaginaAspettoApp() {
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -2, maxWidth: 320 }}>
               {quale === "mobile" ? "I quattro tasti in basso e le scorciatoie del rullo." : "I tasti della barra in cima e le scorciatoie di fianco."}
             </div>
+            {dockDisegnato && (
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, fontFamily: "ui-monospace, Menlo, monospace" }}>
+                Il dock adesso disegna lato / raggio / icona: {dockDisegnato} px
+              </div>
+            )}
           </div>
         </div>
 
