@@ -6458,6 +6458,7 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
     if (ordinamento.colonna === "citta") cmp = a.citta.localeCompare(b.citta);
     else if (ordinamento.colonna === "corso") cmp = a.corsoNome.localeCompare(b.corsoNome);
     else if (ordinamento.colonna === "data") cmp = a.dataIso.localeCompare(b.dataIso);
+    else if (ordinamento.colonna === "iscrizione") cmp = String(a.iscritto.ts || "").localeCompare(String(b.iscritto.ts || ""));
     else if (ordinamento.colonna === "allievo") cmp = a.allievo.localeCompare(b.allievo);
     return ordinamento.direzione === "asc" ? cmp : -cmp;
   });
@@ -6488,6 +6489,9 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr>
+                {/* quando e' stata fatta l'iscrizione: e' la prima cosa che
+                    il venditore guarda, per ritrovare quelle degli ultimi giorni */}
+                <th onClick={() => cambiaOrdinamento("iscrizione")} style={stileTh("iscrizione")}>Data iscrizione{frecciaOrdinamento("iscrizione")}</th>
                 <th onClick={() => cambiaOrdinamento("citta")} style={stileTh("citta")}>Città{frecciaOrdinamento("citta")}</th>
                 <th onClick={() => cambiaOrdinamento("corso")} style={stileTh("corso")}>Corso{frecciaOrdinamento("corso")}</th>
                 <th onClick={() => cambiaOrdinamento("data")} style={stileTh("data")}>Data del corso{frecciaOrdinamento("data")}</th>
@@ -6498,6 +6502,7 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
             <tbody>
               {ordinate.map((r) => (
                 <tr key={r.iscritto.id} onClick={onApriIscritto ? () => onApriIscritto(r.iscritto) : undefined} style={{ cursor: onApriIscritto ? "pointer" : undefined }}>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.iscritto.ts ? fmtData(String(r.iscritto.ts).slice(0, 10)) : "—"}</td>
                   <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.citta}</td>
                   <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.corsoNome}</td>
                   <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.dataLabel}</td>
