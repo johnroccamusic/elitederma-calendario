@@ -8828,6 +8828,36 @@ function normalizzaLinkSlide(testo) {
   try { return new URL(conSchema).href; } catch { return null; }
 }
 
+// L'indirizzo da mettere nella cornice. Canva, Google Presentazioni e
+// YouTube rifiutano la pagina normale dentro un altro sito, ma hanno
+// tutti un indirizzo "da incorporare" che invece lo permette: si
+// costruisce da qui. Per un sito che non si conosce si torna null, e il
+// link si apre in una finestra nuova invece che nella cornice.
+function urlIncorniciabile(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "canva.com") {
+      const m = u.pathname.match(/\/design\/([^/]+)/);
+      if (m) return `https://www.canva.com/design/${m[1]}/view?embed`;
+      return null;
+    }
+    if (host === "docs.google.com") {
+      const m = u.pathname.match(/\/presentation\/d\/([^/]+)/);
+      if (m) return `https://docs.google.com/presentation/d/${m[1]}/embed?start=false&loop=false`;
+      return u.pathname.includes("/embed") ? url : null;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      const id = u.searchParams.get("v") || (u.pathname.startsWith("/embed/") ? u.pathname.split("/")[2] : null);
+      return id ? `https://www.youtube-nocookie.com/embed/${id}?rel=0` : null;
+    }
+    if (host === "youtu.be") return `https://www.youtube-nocookie.com/embed/${u.pathname.slice(1)}?rel=0`;
+    if (host === "youtube-nocookie.com" || host === "player.vimeo.com" || host === "drive.google.com") return url;
+    if (host === "vimeo.com") { const id = u.pathname.split("/").filter(Boolean)[0]; return /^\d+$/.test(id || "") ? `https://player.vimeo.com/video/${id}` : null; }
+    return null;
+  } catch { return null; }
+}
+
 // Il visore del link: copre tutto lo schermo dell'app e chiede al browser
 // lo schermo intero vero. Con Esc il browser esce dallo schermo intero
 // ma il visore resta; in basso a destra un'icona lo rimette a tutto
@@ -8852,7 +8882,7 @@ function VisoreLinkSchermoIntero({ url, titolo, onChiudi }) {
   }
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 6000, background: "#000" }}>
-      <iframe src={url} title={titolo || "Link del corso"} allow="fullscreen; autoplay" allowFullScreen style={{ width: "100%", height: "100%", border: "none", display: "block", background: "#fff" }} />
+      <iframe src={urlIncorniciabile(url) || url} title={titolo || "Link del corso"} allow="fullscreen; autoplay" allowFullScreen style={{ width: "100%", height: "100%", border: "none", display: "block", background: "#fff" }} />
       <button
         onClick={chiudi} title="Chiudi" aria-label="Chiudi"
         style={{ position: "absolute", top: "max(env(safe-area-inset-top, 0px), 12px)", right: 12, width: 40, height: 40, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.4)", background: "rgba(14,27,51,0.75)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
@@ -8886,6 +8916,10 @@ function TastoApriLinkSlide({ corso }) {
   if (!url) return null;
   function apri(e) {
     e.stopPropagation();
+    // un sito che non si puo' incorniciare (Firefox lo dice a chiare
+    // lettere) si apre in una finestra nuova, e lo schermo intero lo fa
+    // il sito stesso, come la modalita' "Presenta" di Canva
+    if (!urlIncorniciabile(url)) { window.open(url, "_blank", "noopener"); return; }
     const el = document.documentElement;
     const richiesta = el.requestFullscreen || el.webkitRequestFullscreen;
     if (richiesta) { try { const r = richiesta.call(el); if (r && r.catch) r.catch(() => {}); } catch { /* si resta nella finestra */ } }
