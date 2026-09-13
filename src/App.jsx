@@ -2472,6 +2472,10 @@ const ASPETTO_TASTI_DEFAULT = {
   // il codice", cioe' ogni pulsante tiene i suoi angoli. Un numero li
   // porta tutti a quella misura, in pixel, pastiglie e tondi compresi
   pulsanti: { ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 }, raggio: null },
+  // la pastiglia di sfondo dei selettori a due o tre voci (Elenco /
+  // Calendario, Prossimi corsi / Storico...): colore e ombra, la voce
+  // accesa dentro resta bianca
+  pillole: { colore: "#F1ECE2", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
 };
 // i 64 colori: otto file da otto. La prima e' la scala dei grigi, la
 // seconda i crema e i taupe di casa, le altre sei le famiglie che
@@ -2541,6 +2545,7 @@ function useAspettoTasti() {
     desktop: aspettoTastoDi(salvato, "desktop"),
     aree: ombraAspettoDi(salvato, "aree"),
     pulsanti: { ...ombraAspettoDi(salvato, "pulsanti"), raggio: raggioPulsantiDi(salvato) },
+    pillole: { ...ombraAspettoDi(salvato, "pillole"), colore: (salvato && salvato.pillole && salvato.pillole.colore) || ASPETTO_TASTI_DEFAULT.pillole.colore },
   }, salva];
 }
 
@@ -7461,10 +7466,13 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
 // quello scelto si riempiva di blu — si leggeva come un'azione da premere
 // piu' che come la scheda in cui ci si trova.
 function PillolaSegmentata({ voci, valore, onCambia, compatto }) {
+  // colore e ombra della pastiglia vengono da Impostazioni -> Aspetto
+  const [aspettoPillole] = useAspettoTasti();
   return (
     <div style={{
       display: "inline-flex", alignItems: "stretch", flexShrink: 0,
-      background: "#F1ECE2", borderRadius: 14, padding: 5, gap: 2,
+      background: aspettoPillole.pillole.colore, borderRadius: 14, padding: 5, gap: 2,
+      boxShadow: ombraCssTasto(aspettoPillole.pillole.ombra),
     }}>
       {voci.map((v) => {
         const attivo = valore === v.chiave;
@@ -14743,13 +14751,13 @@ function TastoPasso({ segno, onPasso, title, disabled = false }) {
 
 const NOME_ELEMENTO_ASPETTO = {
   mobile: "Pulsante mobile", desktop: "Pulsante desktop",
-  aree: "Aree dati", pulsanti: "Altri pulsanti",
+  aree: "Aree dati", pulsanti: "Altri pulsanti", pillole: "Selettori a pillola",
 };
 
 // Le due ombre generali si giudicano su un esempio vero: una pastiglia
 // colorata come quelle sparse nell'app, e un pulsante come quelli delle
 // barre. Un quadrato grigio non direbbe niente.
-function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, raggio = null, selezionato, onClick }) {
+function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, raggio = null, colore = null, selezionato, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -14762,7 +14770,12 @@ function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, raggio = 
         background: selezionato ? "rgba(14,27,51,0.05)" : "transparent",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10,
       }}>
-        {tipo === "area" ? (
+        {tipo === "pillola" ? (
+          <div style={{ display: "inline-flex", background: colore || "#F1ECE2", borderRadius: 14, padding: 5, gap: 2, boxShadow: ombraCssTasto(ombra) }}>
+            <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, background: "#fff", borderRadius: 10, padding: "8px 10px", boxShadow: "0 1px 3px rgba(14,27,51,0.12)" }}>Elenco</span>
+            <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, padding: "8px 10px" }}>Calendario</span>
+          </div>
+        ) : tipo === "area" ? (
           <div style={{ width: 118, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 10, boxShadow: ombraCssTasto(ombra) }}>
             <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Corsi</div>
             {["Pmu Base", "Micro Base"].map((n, i) => (
@@ -14814,7 +14827,7 @@ function PaginaAspettoApp() {
   const corrente = aspetto[quale];
   // nuvole e pulsanti hanno la sola ombra: i comandi di forma e colore
   // non avrebbero niente da toccare
-  const soloOmbra = quale === "aree" || quale === "pulsanti";
+  const soloOmbra = quale === "aree" || quale === "pulsanti" || quale === "pillole";
   // "unita: px" marca il salvataggio come fatto in pixel: quelli vecchi,
   // in percentuale, senza questa marca vengono ignorati alla lettura
   // "quale" e' la sezione toccata: all'invio si sostituisce solo quella
@@ -14889,6 +14902,10 @@ function PaginaAspettoApp() {
             etichetta="Altri pulsanti" sottotitolo="compresi i sotto-tasti" tipo="pulsante"
             ombra={aspetto.pulsanti.ombra} raggio={aspetto.pulsanti.raggio} selezionato={quale === "pulsanti"} onClick={() => setQuale("pulsanti")}
           />
+          <AnteprimaOmbraGenerale
+            etichetta="Selettori a pillola" sottotitolo="Elenco / Calendario e simili" tipo="pillola"
+            ombra={aspetto.pillole.ombra} colore={aspetto.pillole.colore} selezionato={quale === "pillole"} onClick={() => setQuale("pillole")}
+          />
         </div>
       </div>
 
@@ -14904,6 +14921,29 @@ function PaginaAspettoApp() {
 
         {soloOmbra ? (
           <>
+            {quale === "pillole" && (
+              // il colore della pastiglia: la voce accesa resta bianca, e'
+              // lo sfondo dietro che cambia
+              <>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Colore della pastiglia</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 5, maxWidth: 360, marginBottom: 6 }}>
+                  {PALETTE_64_TASTI.map((c) => {
+                    const scelto = String(corrente.colore).toUpperCase() === c.toUpperCase();
+                    return (
+                      <button
+                        key={c} onClick={() => cambia({ colore: c })} title={c} data-niente-ombra="1"
+                        style={{
+                          aspectRatio: "1 / 1", width: "100%", borderRadius: 6, cursor: "pointer", background: c,
+                          border: scelto ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`,
+                          outline: scelto ? `2px solid #fff` : "none", outlineOffset: -4,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 18 }}>Scelto: {String(corrente.colore).toUpperCase()}</div>
+              </>
+            )}
             {quale === "pulsanti" && (
               // il raggio degli altri pulsanti. Parte da "come nel codice":
               // il primo "+" lo porta a una misura di partenza, e da li' si
