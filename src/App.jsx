@@ -8891,14 +8891,33 @@ function TastoApriLinkSlide({ corso }) {
     if (richiesta) { try { const r = richiesta.call(el); if (r && r.catch) r.catch(() => {}); } catch { /* si resta nella finestra */ } }
     setAperto(true);
   }
+  // "Copia link": se il visore resta bianco perche' il sito rifiuta di
+  // stare dentro un'altra pagina, la master lo incolla in un browser a parte
+  const [copiato, setCopiato] = useState(false);
+  async function copia(e) {
+    e.stopPropagation();
+    try { await navigator.clipboard.writeText(url); setCopiato(true); setTimeout(() => setCopiato(false), 1800); }
+    catch { window.prompt("Copia il link:", url); }
+  }
+  const stileTasto = (pieno) => ({
+    ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: pieno ? "#fff" : NAVY, background: pieno ? NAVY : "#fff",
+    border: `1px solid ${pieno ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? "6px 9px" : "7px 12px", cursor: "pointer",
+    display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+  });
   return (
-    <div onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={apri}
-        style={{ ...fontBody, fontSize: isMobile ? 11 : 13, fontWeight: 700, color: "#fff", background: NAVY, border: `1px solid ${NAVY}`, borderRadius: 14, padding: isMobile ? "7px 10px" : "9px 14px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14 21 3M15 3h6v6M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
+    <div onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: 14, padding: isMobile ? "5px 8px" : "6px 10px" }}>
+      <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6 }}>Slide corso</span>
+      <button onClick={apri} style={stileTasto(true)}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14 21 3M15 3h6v6M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
         Apri link
+      </button>
+      <button onClick={copia} style={stileTasto(false)} title="Copia l'indirizzo, per incollarlo in un browser a parte">
+        {copiato ? (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></svg>
+        )}
+        {copiato ? "Copiato" : "Copia link"}
       </button>
       {aperto && <VisoreLinkSchermoIntero url={url} titolo={corso.nome} onChiudi={() => setAperto(false)} />}
     </div>
