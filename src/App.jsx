@@ -60813,7 +60813,7 @@ export default function App() {
         // rubava la prima riga di ogni pagina. Qui sta in basso al centro,
         // con gli stessi tasti quadrati del telefono e le proporzioni del
         // dock del Mac — icona grande, spazi generosi.
-        <div style={{ position: "fixed", left: "50%", top: 14, transform: "translateX(-50%)", zIndex: 2000 }}>
+        <div key={`dock-${latoDock}-${tastoDock.raggio}-${tastoDock.icona}`} style={{ position: "fixed", left: "50%", top: 14, transform: "translateX(-50%)", zIndex: 2000 }}>
           <div style={{ transform: dockNascosto ? "translateY(calc(-100% + 20px))" : "translateY(0)", transition: "transform 260ms ease" }}>
             <div style={{ position: "relative" }}>
             {/* sul fianco sinistro della barra: la linguetta con la stella e,
@@ -60930,7 +60930,11 @@ export default function App() {
         // La linguetta in cima lo fa scendere fuori dallo schermo: quando è
         // giù resta solo lei, con la freccia che punta in su per riaprirlo —
         // su una tabella larga il dock copriva proprio le ultime righe.
-        <div style={{ position: "fixed", inset: 0, zIndex: 2000, pointerEvents: "none", transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}>
+        // la chiave cambia con le misure: Safari su iPhone tiene questo
+        // strato fisso e sfocato in una cache e, cambiando lato o raggio
+        // da Impostazioni, i tasti restavano disegnati come prima finche'
+        // non si cambiava pagina. Rimontarlo lo costringe a ridisegnare
+        <div key={`dock-${latoDock}-${tastoDock.raggio}-${tastoDock.icona}`} style={{ position: "fixed", inset: 0, zIndex: 2000, pointerEvents: "none", transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}>
           <div style={dockCoricato
             ? { position: "absolute", top: 0, left: 0, width: "100dvh", height: "100dvw", transform: "translateX(100dvw) rotate(90deg)", transformOrigin: "top left" }
             : { position: "absolute", inset: 0 }}
