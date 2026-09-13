@@ -21319,18 +21319,28 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
       </>
     );
     if (isMobile) {
+      // la citta' viene dalla location collegata all'edizione; senza
+      // location, o con una location senza nome, non si scrive niente
+      const nomeLoc = (locById[cd.location_id]?.nome || "").trim();
+      const cittaRiga = nomeLoc ? toTitleCase(nomeLoc) : "";
       // tutto su una sola riga (titolo, data, capienza, azioni allineati
       // in orizzontale): niente più impilamento verticale — il nome del
       // corso si tronca con l'ellissi se necessario, data/capienza/azioni
       // hanno una larghezza fissa così non si schiacciano
       return (
         <div key={cd.id}>
-          <div onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}`, padding: "7px 2px", display: "flex", alignItems: "center", gap: 7 }}>
+          {/* la citta' sotto al nome, piccola e tenue: la riga si stringe di
+              qualche pixel di padding per non crescere quasi niente. Solo
+              da telefono: da scrivania la citta' ha la sua colonna */}
+          <div onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}`, padding: cittaRiga ? "4px 2px" : "7px 2px", display: "flex", alignItems: "center", gap: 7 }}>
             <span style={{ width: 3, height: 18, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
             <div style={{ flex: "1 1 auto", minWidth: 0 }}>
               <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {toTitleCase(corso?.nome || "?")}
               </div>
+              {cittaRiga && (
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cittaRiga}</div>
+              )}
               {nomiTrovati(11.5)}
             </div>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", flexShrink: 0 }}>
