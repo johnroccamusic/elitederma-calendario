@@ -14776,22 +14776,28 @@ function PaginaAspettoApp() {
   // stessi comandi, ma sui tre campi annidati del dock
   const piuMenoDock = (etichetta, campo, min, max, aiutoMeno, aiutoPiu) => {
     const dock = corrente.dock || ASPETTO_TASTI_DEFAULT[quale].dock;
-    const metti = (valore) => cambia({ dock: { ...dock, [campo]: Math.max(min, Math.min(max, valore)) } });
+    // il raggio non ha senso oltre meta' del lato: a quel punto il tasto e'
+    // un cerchio e ogni pixel in piu' non cambia niente. Il tetto segue il
+    // lato, e a fine corsa il tasto si spegne invece di far finta
+    const tetto = campo === "raggio" ? Math.min(max, Math.floor(dock.lato / 2)) : max;
+    const valore = Math.min(dock[campo], tetto);
+    const metti = (nuovo) => cambia({ dock: { ...dock, [campo]: Math.max(min, Math.min(tetto, nuovo)) } });
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
-        <TastoPasso segno="−" title={aiutoMeno} onPasso={() => metti(dock[campo] - 1)} />
-        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{dock[campo]} px</span>
-        <TastoPasso segno="+" title={aiutoPiu} onPasso={() => metti(dock[campo] + 1)} />
+        <TastoPasso segno="−" title={aiutoMeno} disabled={valore <= min} onPasso={() => metti(valore - 1)} />
+        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{valore} px</span>
+        <TastoPasso segno="+" title={valore >= tetto && campo === "raggio" ? "È già un cerchio: oltre non cambia" : aiutoPiu} disabled={valore >= tetto} onPasso={() => metti(valore + 1)} />
+        {campo === "raggio" && valore >= tetto && <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>cerchio</span>}
       </div>
     );
   };
   const piuMeno = (etichetta, campo, min, max, unita, aiutoMeno, aiutoPiu) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
-      <TastoPasso segno="−" title={aiutoMeno} onPasso={() => cambia({ [campo]: Math.max(min, corrente[campo] - 1) })} />
+      <TastoPasso segno="−" title={aiutoMeno} disabled={corrente[campo] <= min} onPasso={() => cambia({ [campo]: Math.max(min, corrente[campo] - 1) })} />
       <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{corrente[campo]}{unita}</span>
-      <TastoPasso segno="+" title={aiutoPiu} onPasso={() => cambia({ [campo]: Math.min(max, corrente[campo] + 1) })} />
+      <TastoPasso segno="+" title={aiutoPiu} disabled={corrente[campo] >= max} onPasso={() => cambia({ [campo]: Math.min(max, corrente[campo] + 1) })} />
     </div>
   );
 
