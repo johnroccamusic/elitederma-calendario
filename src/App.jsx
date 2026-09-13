@@ -50349,6 +50349,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // scendono a tendina da una linguetta. Trenta caselle occupavano meta'
   // schermo prima ancora del primo prodotto
   const [categorieATendina, setCategorieATendina] = useState(false);
+  // da scrivania la striscia parte aperta e si ritrae con la stessa
+  // linguetta del telefono: lo stato e' separato perche' i due schermi
+  // hanno abitudini diverse
+  const [categorieAperteDesktop, setCategorieAperteDesktop] = useState(true);
   const [mostraMenu, setMostraMenu] = useState(false); // solo mobile: menu "⋮" con le azioni che su desktop sono tasti a testo
 
   const categorieNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
@@ -51655,11 +51659,35 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 >+</button>
               </div>
             </div>
-            <StrisciaCategoriePos
-              categorie={categorieOrdinate}
-              selezionata={categoriaSel}
-              onSeleziona={(id) => cambiaFiltro(() => setCategoriaSel(id))}
-            />
+            {/* le categorie a tendina anche da scrivania: la stessa griglia
+                che passa da 1fr a 0fr e la stessa linguetta appesa sotto */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "grid", gridTemplateRows: categorieAperteDesktop ? "1fr" : "0fr", transition: "grid-template-rows 260ms ease" }}>
+                <div style={{ minHeight: 0, overflow: "hidden" }}>
+                  <div style={{ marginBottom: -16 }}>
+                    <StrisciaCategoriePos
+                      categorie={categorieOrdinate}
+                      selezionata={categoriaSel}
+                      onSeleziona={(id) => cambiaFiltro(() => setCategoriaSel(id))}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", marginTop: -1 }}>
+                <button
+                  onClick={() => setCategorieAperteDesktop((v) => !v)}
+                  aria-label={categorieAperteDesktop ? "Nascondi le categorie" : "Mostra le categorie"}
+                  aria-expanded={categorieAperteDesktop}
+                  title={categorieAperteDesktop ? "Ritrai le categorie" : "Mostra le categorie"}
+                  style={{
+                    ...fontBody, fontSize: 10, fontWeight: 600, letterSpacing: 0.3, lineHeight: 1, textTransform: "lowercase",
+                    padding: "3px 10px 4px", cursor: "pointer",
+                    background: !categorieAperteDesktop && categoriaSel ? NAVY : "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                    border: "1px solid rgba(255,255,255,0.22)", borderTop: "none", borderRadius: "0 0 9px 9px", color: "#fff",
+                  }}
+                >categorie</button>
+              </div>
+            </div>
 
             {elencoProdotti}
             {paginazione}
