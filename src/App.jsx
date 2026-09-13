@@ -3347,14 +3347,35 @@ function puntiDaCedibile(cedibileEuro, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAUL
   const massimoCedibile = Number(cedibileEuro) * (1 - sicurezzaPct / 100);
   return round2(massimoCedibile * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
 }
+// Il cedibile quando si paga in CONTANTI. Con la carta o sul sito l'IVA
+// si versa, quindi margine e quota si calcolano sul prezzo netto. In
+// contanti si tiene tutto il prezzo al pubblico: il margine e' lordo meno
+// costo, la percentuale e' quella della stessa tabella cercata su quel
+// margine, e si applica al lordo incassato. Le tasse sul margine non si
+// tolgono qui: stanno dentro la percentuale di sicurezza, come per la
+// carta. Il costo si puo' passare a parte (i bundle lo ricavano dai
+// componenti), altrimenti e' quello dell'anagrafica.
+function cedibileContantiDi(p, costoAcquisto = p?.costo_acquisto) {
+  const lordo = prezzoAlPubblico(p);
+  if (lordo == null || !(lordo > 0) || costoAcquisto == null || costoAcquisto === "") return { pct: null, euro: null, margine: null };
+  const margine = round1Erp(((lordo - Number(costoAcquisto)) / lordo) * 100);
+  const pct = percentualeCedibileDi(margine);
+  return { pct, euro: round2((lordo * pct) / 100), margine };
+}
 // I punti di UN pezzo di un prodotto, letti dalla sua anagrafica di oggi:
-// margine -> quota cedibile -> dieci punti per euro. E' la stessa regola
-// della colonna "Punti" di Dettaglio prodotti, e vale solo per quello che
-// si vende dall'app (POS o sito pubblicato). Null se non si sa il margine.
-function puntiProdotto(p, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct) {
+// margine -> quota cedibile -> meno la sicurezza. E' la stessa regola
+// delle colonne "Punti carta/shop" e "Punti contanti" di Dettaglio
+// prodotti, e vale solo per quello che si vende dall'app (POS o sito
+// pubblicato). Null se non si sa il margine. `contanti` sceglie la
+// seconda riga: e' vero quando la vendita e' stata pagata in contanti.
+function puntiProdotto(p, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, contanti = false) {
   if (!p) return null;
   const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
   if (!inVenditaViaApp) return null;
+  if (contanti) {
+    const { euro } = cedibileContantiDi(p);
+    return euro == null ? null : puntiDaCedibile(euro, sicurezzaPct);
+  }
   const margine = marginePercentualeDi(p);
   if (margine == null) return null;
   return puntiDaCedibile(round2((Number(p.prezzo_vendita) * percentualeCedibileDi(margine)) / 100), sicurezzaPct);
@@ -10425,7 +10446,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       const fasceCanale = alCorso ? fasceCorsoDash : fasceReferralDash;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
         const prodotto = prodottoPerIdPunti[r.prodotto_id];
-        const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti);
+        // pagata in contanti -> la riga dei contanti; carta o sito -> l'altra
+        const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti, v.metodo_pagamento === "contanti");
         if (puntiPezzo == null) return;
         // i punti teorici della riga, interi: sono i bonus
         const teorici = puntiPezzo * (Number(r.quantita) || 0);
@@ -39043,7 +39065,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
           const q = Number(r.quantita) || 0;
           const prodotto = prodottoPerId[r.prodotto_id];
-          const pp = puntiProdotto(prodotto, sicurezzaPunti);
+          const pp = puntiProdotto(prodotto, sicurezzaPunti, v.metodo_pagamento === "contanti");
           pezzi += q;
           if (pp == null) { pezziSenzaPunti += q; return; }
           const teorici = pp * q;
@@ -39066,7 +39088,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>
-          Per ogni pezzo venduto al POS o sul sito attraverso l'app: il cedibile del prodotto meno la percentuale di sicurezza, con due decimali. Un punto è un euro. I punti si leggono dall'anagrafica di oggi, non si salvano.
+          Per ogni pezzo venduto al POS o sul sito attraverso l'app: il cedibile del prodotto meno la percentuale di sicurezza, con due decimali. Un punto è un euro. Con carta o dal sito il cedibile si calcola sul prezzo netto; in contanti sul prezzo al pubblico, perché l'IVA resta in cassa. I punti si leggono dall'anagrafica di oggi, non si salvano.
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
@@ -41166,8 +41188,12 @@ const COLONNE_MAGAZZINO = [
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
   { label: "Margine €", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 70 },
-  { label: "Cedibile €", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 70 },
-  { label: "Punti", campo: "punti", direzioneIniziale: "desc", larghezza: 56 },
+  // due righe di conto: carta e shop online versano l'IVA e stanno sul
+  // netto; il contante tiene il lordo. Vedi cedibileContantiDi
+  { label: "Cedibile carta/shop", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 74 },
+  { label: "Punti carta/shop", campo: "punti", direzioneIniziale: "desc", larghezza: 66 },
+  { label: "Cedibile contanti", campo: "cedibileContantiEuro", direzioneIniziale: "desc", larghezza: 74 },
+  { label: "Punti contanti", campo: "puntiContanti", direzioneIniziale: "desc", larghezza: 66 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
@@ -41183,7 +41209,7 @@ const COLONNE_MAGAZZINO = [
 // significherebbe perdere quello che l'utente ci ha gia' sistemato sopra
 // — la colonna finirebbe in fondo alla tabella, larga come al primo
 // giorno. Qui il vecchio nome continua a valere per quel che e' salvato
-const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop" };
+const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop", "Cedibile €": "Cedibile carta/shop", "Punti": "Punti carta/shop" };
 const COLONNE_MAGAZZINO_NOME_VECCHIO = Object.fromEntries(
   Object.entries(COLONNE_MAGAZZINO_RINOMINATE).map(([vecchio, nuovo]) => [nuovo, vecchio])
 );
@@ -41665,11 +41691,17 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Margine €": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title="Prezzo netto di vendita meno costo di acquisto: quanto si guadagna su un pezzo">{p.margineEuro != null ? fmtEuroErp2(p.margineEuro) : "N/D"}</td>
     ),
-    "Cedibile €": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Quanto si puo' girare al massimo a chi vende: il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
+    "Cedibile carta/shop": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Pagamento con carta o dal sito: si versa l'IVA, quindi il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
-    "Punti": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
+    "Punti carta/shop": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
+    ),
+    "Cedibile contanti": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileContantiEuro != null ? `Pagamento in contanti: si tiene tutto il prezzo al pubblico, quindi il ${numeroFascia(p.cedibileContantiPct)}% del lordo ${fmtEuroErp2(prezzoAlPubblico(p))}, per un margine sul lordo del ${fmtPctErp(p.margineContanti)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>
+    ),
+    "Punti contanti": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti: un punto e' un euro, con due decimali` : (p.cedibileContantiEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>
     ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
@@ -42193,6 +42225,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // si scrive nulla sul sito
     const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
     const punti = inVenditaViaApp ? puntiDaCedibile(cedibileEuro, sicurezzaPunti) : null;
+    // la seconda riga di conto, per chi paga in contanti: stesso costo
+    // (per i bundle quello ricavato dai componenti), ma sul prezzo lordo
+    const contanti = cedibileContantiDi(p, costoEffettivo);
+    const puntiContanti = inVenditaViaApp && contanti.euro != null ? puntiDaCedibile(contanti.euro, sicurezzaPunti) : null;
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
@@ -42209,6 +42245,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       cedibilePct,
       cedibileEuro,
       punti,
+      margineContanti: contanti.margine,
+      cedibileContantiPct: contanti.pct,
+      cedibileContantiEuro: contanti.euro,
+      puntiContanti,
       categorieIds,
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
       nomeFornitore: (p.fornitore_id && fornitoreNomePerId[p.fornitore_id]) || "",
