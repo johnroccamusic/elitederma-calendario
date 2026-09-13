@@ -39049,7 +39049,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Finestra della raccolta</div>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 12 }}>Finestra della raccolta</div>
           {!form ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento…</div>
           ) : (
@@ -39067,7 +39067,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Quota dei punti alla master</div>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Quota dei punti alla master</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
             Di tutti i punti che una vendita genera, quanti vanno alla master. Dipende da dove li ha fatti.
           </div>
@@ -39097,7 +39097,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Sconto ai corsi, con il codice d'aula</div>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto ai corsi, con il codice d'aula</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
             Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine. Sono le stesse di Generazione automatica in Genera coupon: cambiarle qui o là è lo stesso.
           </div>
@@ -39115,7 +39115,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Sconto con il referral personale</div>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto con il referral personale</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
             Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Si salvano appena le cambi, come in Genera referral code.
           </div>
@@ -39127,7 +39127,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Formula di fattibilità dei punti</div>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Formula di fattibilità dei punti</div>
           <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
             <p style={{ margin: "0 0 8px" }}>
               I punti si calcolano partendo dall'importo <b>Cedibile €</b> del prodotto. Dal Cedibile viene detratta la <b>percentuale di sicurezza</b>, attualmente impostata al {schema.accantonamentoPct}%.
@@ -39172,7 +39172,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22, background: "#FDF8EC", borderColor: "#EBD9AE" }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Come funzionano i punti</div>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Come funzionano i punti</div>
           <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
             <p style={{ margin: "0 0 8px" }}>
               I punti teorici della master nascono <b>sempre</b> dalla formula generale: Cedibile € meno la percentuale di sicurezza, con due decimali. Lo sconto dell'allievo non cambia questo metodo: interviene <b>solo dopo</b>, riducendo i punti teorici già calcolati.
@@ -39204,7 +39204,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           </div>
         </div>
 
-        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Punti per master</div>
+        <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Punti per master</div>
         {classifica.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna vendita attribuita a una master nella finestra della raccolta.</div>
         ) : (
