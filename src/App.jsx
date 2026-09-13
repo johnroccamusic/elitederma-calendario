@@ -14744,6 +14744,17 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
             <svg width={Math.round(aspetto.icona * scala)} height={Math.round(aspetto.icona * scala)} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
             </svg>
+          ) : forma === "desktop" ? (
+            // la stessa impaginazione del tasto vero della home (TileHome
+            // "ricca"): icona, titolo, descrizione su piu' righe, freccia,
+            // con gli stessi spazi ridotti in scala. Cosi' l'icona sta
+            // dove sta davvero e si vede quanto e' grande rispetto al resto
+            <div style={{ width: "100%", height: "100%", boxSizing: "border-box", padding: `${Math.round(28 * scala)}px ${Math.round(22 * scala)}px ${Math.round(22 * scala)}px`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", overflow: "hidden" }}>
+              <div style={{ color: NAVY, marginBottom: Math.round(12 * scala) }}><IconaTilePos size={Math.round(aspetto.icona * scala)} color={NAVY} /></div>
+              <div style={{ ...fontDisplay, fontSize: Math.max(6, 17 * scala), fontWeight: 700, color: NAVY, lineHeight: 1.2, marginBottom: Math.round(7 * scala), whiteSpace: "nowrap" }}>POS Vendita diretta</div>
+              <div style={{ ...fontBody, fontSize: Math.max(5, 12 * scala), color: MUTED, lineHeight: 1.35 }}>Vendita al pubblico e scarico dal magazzino</div>
+              <div style={{ fontSize: Math.max(6, 16 * scala), color: NAVY, paddingTop: Math.round(12 * scala) }}>&rarr;</div>
+            </div>
           ) : (
             <IconaTilePos size={Math.round(aspetto.icona * scala)} color={NAVY} />
           )}
