@@ -29538,7 +29538,9 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
   const [ricercaTesto, setRicercaTesto] = useState("");
   const [filtroIncaricato, setFiltroIncaricato] = useState("");
   const [filtroPriorita, setFiltroPriorita] = useState("");
-  const [ordine, setOrdine] = useState("scadenza"); // scadenza | priorita | nome | recenti
+  // all'apertura gli ultimi inseriti in cima: e' quello che si cerca
+  // entrando, non la scadenza piu' vicina
+  const [ordine, setOrdine] = useState("recenti"); // scadenza | priorita | nome | recenti
   const [filtroRapido, setFiltroRapido] = useState(null); // inscadenza | scaduti | alta | todo
   const [msg, setMsg] = useState("");
   const [mostraNuovo, setMostraNuovo] = useState(false);
