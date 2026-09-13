@@ -40419,7 +40419,9 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
 // un kit piu' economico di quel che e'.
 function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, impostazioniIva, onBack, titolo = "Prodotti usati per i kit" }) {
   const isMobile = useIsMobile();
-  const [sottoPagina, setSottoPagina] = useState("consumo");
+  // si apre sul costo dei kit: e' il listino interno, la cosa che si
+  // guarda piu' spesso; il consumo nel periodo e' la seconda domanda
+  const [sottoPagina, setSottoPagina] = useState("costokit");
   const aliquotaDefault = impostazioniIva?.aliquota_default ?? 22;
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
 
@@ -40443,9 +40445,16 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 16 }}>Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit (materiale didattico/consumo).</div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-          <TabPillola attivo={sottoPagina === "consumo"} onClick={() => setSottoPagina("consumo")}>Consumo prodotti</TabPillola>
-          <TabPillola attivo={sottoPagina === "costokit"} onClick={() => setSottoPagina("costokit")}>Costo dei kit</TabPillola>
+        <div style={{ display: "flex", marginBottom: 20 }}>
+          <PillolaSegmentata
+            compatto={isMobile}
+            valore={sottoPagina}
+            onCambia={setSottoPagina}
+            voci={[
+              { chiave: "costokit", testo: "Costo dei kit", Icona: IconaPacchettoRiga },
+              { chiave: "consumo", testo: "Consumo prodotti", Icona: IconaElencoRighe },
+            ]}
+          />
         </div>
 
         {sottoPagina === "consumo" ? (
