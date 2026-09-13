@@ -39811,7 +39811,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                           <button
                             onClick={() => setOrdineAperto(v)}
                             title="Apri il dettaglio dell'ordine"
-                            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
+                            // al banco il numero e' lungo (#POS-1789211716984) e a 13 punti
+                            // mangiava la colonna: tre punti in meno, l'online resta com'e'
+                            style={{ ...fontBody, fontSize: origine === "pos" ? 10 : 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
                           >
                             #{v.numero_ordine || v.woo_order_id}
                           </button>
