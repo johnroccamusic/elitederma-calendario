@@ -2538,26 +2538,51 @@ function aspettoTastoDi(salvato, quale) {
 // scelto, in leggera ombra dentro il quadrato bianco, con l'icona bianca.
 // `lato` e' il lato del quadrato gia' in scala; l'icona non supera mai il
 // disco, qualunque misura le si dia dai comandi
+// Tre strati, come il tasto di riferimento: il pozzetto, un cerchio
+// largo scavato nel bianco con l'ombra che scende dall'alto e il bordo
+// basso che riprende luce; dentro, il disco colorato, leggermente in
+// rilievo, con una luce in alto e la sua ombra sul fondo del pozzetto;
+// sopra, l'icona bianca con un filo d'ombra, come fosse incisa. Tutto in
+// proporzione al lato, cosi' in anteprima e sul telefono e' lo stesso
+// disegno
 function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true }) {
-  const diametro = Math.round(lato * 0.64);
-  const misuraIcona = Math.min(Math.round(icona), Math.round(diametro * 0.7));
+  const pozzetto = Math.round(lato * 0.80);
+  const diametro = Math.round(lato * 0.62);
+  const misuraIcona = Math.min(Math.round(icona), Math.round(diametro * 0.66));
+  const u = Math.max(1, lato / 60); // unita' di ombra: cresce col tasto
+  const tinta = attivo ? colore : "#C9C4B8";
   return (
     <div style={{
-      width: diametro, height: diametro, borderRadius: "50%", flexShrink: 0,
-      background: attivo ? colore : "#D8D3C6",
-      boxShadow: "inset 0 3px 6px rgba(14,27,51,0.28), inset 0 -1px 2px rgba(255,255,255,0.25), 0 1px 0 rgba(255,255,255,0.9)",
+      width: pozzetto, height: pozzetto, borderRadius: "50%", flexShrink: 0,
+      background: "linear-gradient(180deg, #DCDCDA 0%, #ECECEA 45%, #FBFBFA 100%)",
+      boxShadow: `inset 0 ${3 * u}px ${5 * u}px rgba(20,20,30,0.22), inset 0 ${1 * u}px ${2 * u}px rgba(20,20,30,0.12), inset 0 -${1.5 * u}px ${2 * u}px rgba(255,255,255,0.95), 0 ${1 * u}px 0 rgba(255,255,255,1)`,
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <Icona size={misuraIcona} color="#fff" />
+      <div style={{
+        width: diametro, height: diametro, borderRadius: "50%", flexShrink: 0,
+        background: `radial-gradient(circle at 50% 28%, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 45%, rgba(0,0,0,0.10) 100%), ${tinta}`,
+        boxShadow: `0 ${1.5 * u}px ${3 * u}px rgba(20,20,30,0.30), 0 ${0.5 * u}px ${1 * u}px rgba(20,20,30,0.20), inset 0 ${1 * u}px ${1.5 * u}px rgba(255,255,255,0.28), inset 0 -${1.5 * u}px ${2.5 * u}px rgba(0,0,0,0.20)`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <span style={{ display: "flex", filter: `drop-shadow(0 ${1 * u}px ${1 * u}px rgba(0,0,0,0.35))` }}>
+          <Icona size={misuraIcona} color="#fff" />
+        </span>
+      </div>
     </div>
   );
 }
-// l'ombra del quadrato bianco in rilievo: quella scelta dai comandi piu'
-// i due riflessi interni che lo fanno sembrare pieno
+// Il cuscino bianco: un velo di grigio verso il basso e i riflessi
+// interni lo fanno sembrare pieno e morbido
+function sfondoMedaglione() {
+  return "linear-gradient(180deg, #FFFFFF 0%, #FBFBFA 60%, #F1F1EF 100%)";
+}
+// l'ombra del cuscino: una base fissa che lo stacca dal fondo, come nel
+// riferimento, piu' quella scelta dai comandi e i riflessi interni
 function ombraMedaglione(ombra) {
   const esterna = ombraCssTasto(ombra);
-  const interne = "inset 0 1px 0 rgba(255,255,255,1), inset 0 -3px 5px rgba(14,27,51,0.10), inset 0 0 0 1px rgba(14,27,51,0.04)";
-  return esterna === "none" ? interne : `${esterna}, ${interne}`;
+  const base = "0 6px 12px rgba(14,27,51,0.16), 0 1px 2px rgba(14,27,51,0.10)";
+  const interne = "inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -4px 6px rgba(14,27,51,0.09), inset 0 0 0 1px rgba(14,27,51,0.05)";
+  return esterna === "none" ? `${base}, ${interne}` : `${esterna}, ${base}, ${interne}`;
 }
 // L'ombra come la vuole il CSS. Intensita' zero vuol dire "nessuna
 // ombra": e' cosi' che si toglie, senza aggiungere un interruttore che
@@ -2701,7 +2726,7 @@ function TileHome({
         <div style={{
           width: "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: aspettoMobile.stile === "medaglione" ? "#FFFFFF" : (attivo ? aspettoMobile.colore : "#F1EAE0"), borderRadius: aspettoMobile.raggio,
+          background: aspettoMobile.stile === "medaglione" ? sfondoMedaglione() : (attivo ? aspettoMobile.colore : "#F1EAE0"), borderRadius: aspettoMobile.raggio,
           boxShadow: aspettoMobile.stile === "medaglione" ? ombraMedaglione(aspettoMobile.ombra) : ombraCssTasto(aspettoMobile.ombra),
           outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
         }}>
@@ -15037,7 +15062,7 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
       }}>
         <div style={{
           width: Math.round(aspetto.dimensione * scala), aspectRatio: "1 / 1", boxSizing: "border-box",
-          background: forma === "mobile" && aspetto.stile === "medaglione" ? "#FFFFFF" : aspetto.colore, borderRadius: Math.round(aspetto.raggio * scala),
+          background: forma === "mobile" && aspetto.stile === "medaglione" ? sfondoMedaglione() : aspetto.colore, borderRadius: Math.round(aspetto.raggio * scala),
           boxShadow: forma === "mobile" && aspetto.stile === "medaglione" ? ombraMedaglione(aspetto.ombra) : ombraCssTasto(aspetto.ombra),
           border: forma === "desktop" ? `1px solid ${CREAM_BORDER}` : forma === "dock" ? "1px solid rgba(255,255,255,0.22)" : "none",
           display: "flex", alignItems: "center", justifyContent: "center",
