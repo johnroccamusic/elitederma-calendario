@@ -40417,7 +40417,7 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
 // predefinita delle impostazioni. Un prodotto senza costo di acquisto non
 // entra nei totali, e la pagina lo dice: sommare zeri farebbe sembrare
 // un kit piu' economico di quel che e'.
-function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, impostazioniIva, onBack, titolo = "Prodotti usati per i kit" }) {
+function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, impostazioniIva, ricarica, onBack, titolo = "Prodotti usati per i kit" }) {
   const isMobile = useIsMobile();
   // si apre sul costo dei kit: e' il listino interno, la cosa che si
   // guarda piu' spesso; il consumo nel periodo e' la seconda domanda
@@ -40463,7 +40463,7 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
             logisticaKitEdizioni={logisticaKitEdizioni} iscritti={iscritti} prodottiPerId={prodottiPerId} costoUnitario={costoUnitario}
           />
         ) : (
-          <SezioneCostoKit corsi={corsi} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiPerId={prodottiPerId} costoUnitario={costoUnitario} />
+          <SezioneCostoKit corsi={corsi} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiPerId={prodottiPerId} prodottiShop={prodottiShop} costoUnitario={costoUnitario} ricarica={ricarica} />
         )}
       </div>
     </div>
@@ -40603,12 +40603,52 @@ function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, corsiKitP
 // ogni prodotto con quantita', costo unitario e quanto pesa sul kit.
 // Conta solo il contenuto fisso del kit (tipo "kit"): gli accessori si
 // decidono edizione per edizione e stanno nel consumo, non qui.
-function SezioneCostoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiPerId, costoUnitario }) {
+function SezioneCostoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiPerId, prodottiShop, costoUnitario, ricarica }) {
   const isMobile = useIsMobile();
   const [aperti, setAperti] = useState(() => new Set());
   function toggleKit(id) {
     setAperti((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
+  // Il contenuto di un kit si modifica anche da qui, non solo da
+  // Impostazioni -> Contenuto dei kit: le righe sono le stesse
+  // (corsi_kit_prodotti), quindi ogni cambio si vede subito ovunque —
+  // qui, in Impostazioni, in Logistica. "Modifica" apre il kit e accende
+  // i cestini e la riga per aggiungere; ogni cancellazione chiede prima.
+  const [kitInModifica, setKitInModifica] = useState(null);
+  const [prodottoDaAggiungere, setProdottoDaAggiungere] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  function iniziaModifica(kitId) {
+    setKitInModifica(kitId); setProdottoDaAggiungere("");
+    setAperti((prev) => new Set(prev).add(kitId));
+  }
+  async function rimuoviRiga(kit, riga) {
+    if (!window.confirm(`Sei sicuro di voler cancellare "${riga.nome}" dal kit "${kit.nome}"?\n\nSparirà anche da Impostazioni e da Logistica.`)) return;
+    setSalvando(true);
+    const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", riga.id);
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    await ricarica?.(["corsi_kit_prodotti"]);
+  }
+  async function cambiaQuantitaRiga(riga, valore) {
+    const q = Math.max(1, parseInt(valore, 10) || 1);
+    if (q === riga.quantita) return;
+    const { error } = await supabase.from("corsi_kit_prodotti").update({ quantita: q }).eq("id", riga.id);
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    await ricarica?.(["corsi_kit_prodotti"]);
+  }
+  async function aggiungiProdotto(kit) {
+    if (!prodottoDaAggiungere) return;
+    setSalvando(true);
+    const { error } = await supabase.from("corsi_kit_prodotti").insert({ kit_id: kit.id, prodotto_id: prodottoDaAggiungere, tipo: "kit", quantita: 1 });
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    setProdottoDaAggiungere("");
+    await ricarica?.(["corsi_kit_prodotti"]);
+  }
+  const prodottiScelta = useMemo(
+    () => (prodottiShop || []).filter((p) => p.attivo !== false).slice().sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")),
+    [prodottiShop]
+  );
 
   const blocchi = (corsi || [])
     .map((corso) => {
@@ -40621,7 +40661,7 @@ function SezioneCostoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiPerI
             .map((r) => {
               const costo = costoUnitario(r.prodotto_id);
               return {
-                prodottoId: r.prodotto_id, nome: prodottiPerId[r.prodotto_id]?.nome || "—", quantita: r.quantita || 0,
+                id: r.id, prodottoId: r.prodotto_id, nome: prodottiPerId[r.prodotto_id]?.nome || "—", quantita: r.quantita || 0,
                 costoNetto: costo ? costo.netto : null,
                 netto: costo ? round2(costo.netto * (r.quantita || 0)) : null,
                 lordo: costo ? round2(costo.lordo * (r.quantita || 0)) : null,
@@ -40672,6 +40712,13 @@ function SezioneCostoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiPerI
                           <span style={{ display: "inline-block", width: 14, color: MUTED, fontSize: 11 }}>{aperto ? "▼" : "▶"}</span>
                           {k.nome}
                           {k.senzaCosto > 0 && <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: GOLD, marginLeft: 8 }}>{k.senzaCosto} senza costo</span>}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); if (kitInModifica === k.id) setKitInModifica(null); else iniziaModifica(k.id); }}
+                            title={kitInModifica === k.id ? "Chiudi la modifica" : "Aggiungi o togli prodotti da questo kit"}
+                            style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: kitInModifica === k.id ? "#fff" : NAVY, background: kitInModifica === k.id ? NAVY : "#fff", border: `1px solid ${kitInModifica === k.id ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: "3px 10px", marginLeft: 10, cursor: "pointer" }}
+                          >
+                            {kitInModifica === k.id ? "Fine modifica" : "Modifica"}
+                          </button>
                         </td>
                         <td style={{ ...stileTdKit, textAlign: "right", whiteSpace: "nowrap" }}>{k.righe.length}</td>
                         <td style={{ ...stileTdKit, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(k.netto)}</td>
@@ -40692,9 +40739,28 @@ function SezioneCostoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiPerI
                               </thead>
                               <tbody>
                                 {k.righe.map((r) => (
-                                  <tr key={r.prodottoId}>
-                                    <td style={{ ...stileTdKit, padding: "8px 14px 8px 36px", fontSize: 12.5 }}>{r.nome}</td>
-                                    <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right" }}>{r.quantita}</td>
+                                  <tr key={r.id || r.prodottoId}>
+                                    <td style={{ ...stileTdKit, padding: "8px 14px 8px 36px", fontSize: 12.5 }}>
+                                      {kitInModifica === k.id && (
+                                        <button
+                                          onClick={() => rimuoviRiga(k, r)} disabled={salvando} title="Cancella questo prodotto dal kit"
+                                          style={{ width: 24, height: 24, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: "rgba(192,57,43,0.12)", color: "#C0392B", display: "inline-flex", alignItems: "center", justifyContent: "center", marginRight: 8, verticalAlign: "middle" }}
+                                        >
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" /></svg>
+                                        </button>
+                                      )}
+                                      {r.nome}
+                                    </td>
+                                    <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right" }}>
+                                      {kitInModifica === k.id ? (
+                                        <input
+                                          type="number" min="1" defaultValue={r.quantita} key={`${r.id}-${r.quantita}`}
+                                          onBlur={(e) => cambiaQuantitaRiga(r, e.target.value)}
+                                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                                          style={{ ...inputStyle, width: 64, padding: "4px 6px", textAlign: "right", fontSize: 12.5 }}
+                                        />
+                                      ) : r.quantita}
+                                    </td>
                                     <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right", color: r.costoNetto == null ? MUTED : NAVY }}>{r.costoNetto == null ? "—" : fmtEuroErp2(r.costoNetto)}</td>
                                     <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right", color: r.netto == null ? MUTED : NAVY }}>{r.netto == null ? "—" : fmtEuroErp2(r.netto)}</td>
                                     <td style={{ ...stileTdKit, padding: "8px 14px", fontSize: 12.5, textAlign: "right", color: r.lordo == null ? MUTED : NAVY }}>{r.lordo == null ? "—" : fmtEuroErp2(r.lordo)}</td>
@@ -40702,6 +40768,22 @@ function SezioneCostoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiPerI
                                 ))}
                                 {k.righe.length === 0 && (
                                   <tr><td colSpan={5} style={{ ...stileTdKit, padding: "10px 36px", color: MUTED, fontSize: 12.5 }}>Kit senza prodotti.</td></tr>
+                                )}
+                                {kitInModifica === k.id && (
+                                  <tr>
+                                    <td colSpan={5} style={{ ...stileTdKit, padding: "10px 14px 12px 36px" }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                        <select value={prodottoDaAggiungere} onChange={(e) => setProdottoDaAggiungere(e.target.value)} style={{ ...inputStyle, flex: "1 1 260px", minWidth: 0, fontSize: 12.5 }}>
+                                          <option value="">Aggiungi un prodotto dal magazzino…</option>
+                                          {prodottiScelta.filter((p) => !k.righe.some((r) => r.prodottoId === p.id)).map((p) => (
+                                            <option key={p.id} value={p.id}>{p.nome}</option>
+                                          ))}
+                                        </select>
+                                        <Button onClick={() => aggiungiProdotto(k)} disabled={!prodottoDaAggiungere || salvando}>{salvando ? "Salvo…" : "Aggiungi prodotto"}</Button>
+                                        <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>Entra con quantità 1: si cambia nella colonna Q.tà.</span>
+                                      </div>
+                                    </td>
+                                  </tr>
                                 )}
                               </tbody>
                             </table>
@@ -61507,7 +61589,7 @@ export default function App() {
         <PaginaProdottiUsatiKit
           corsi={corsi} corsiDate={corsiDate} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
           logisticaKitEdizioni={logisticaKitEdizioni} iscritti={iscritti} prodottiShop={prodottiShop} impostazioniIva={impostazioniIva}
-          onBack={() => setView("magazzinoshop")}
+          ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "prodottiusatikit", "Prodotti usati per i kit")}
         />
       )}
