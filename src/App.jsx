@@ -41189,11 +41189,11 @@ const COLONNE_MAGAZZINO = [
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
   { label: "Margine €", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 70 },
   // due righe di conto: carta e shop online versano l'IVA e stanno sul
-  // netto; il contante tiene il lordo. Vedi cedibileContantiDi
+  // netto, e sono queste colonne; il contante tiene il lordo e sta nella
+  // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
+  // la tabella. Vedi cedibileContantiDi
   { label: "Cedibile carta/shop", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 74 },
   { label: "Punti carta/shop", campo: "punti", direzioneIniziale: "desc", larghezza: 66 },
-  { label: "Cedibile contanti", campo: "cedibileContantiEuro", direzioneIniziale: "desc", larghezza: 74 },
-  { label: "Punti contanti", campo: "puntiContanti", direzioneIniziale: "desc", larghezza: 66 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
@@ -41467,7 +41467,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
   );
 }
 
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false }) {
   // prezzo di vendita e costo di acquisto non sono più modificabili da
   // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
   // anche cosa mandare a WooCommerce (il lordo, mai il netto)
@@ -41697,12 +41697,6 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Punti carta/shop": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
-    "Cedibile contanti": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileContantiEuro != null ? `Pagamento in contanti: si tiene tutto il prezzo al pubblico, quindi il ${numeroFascia(p.cedibileContantiPct)}% del lordo ${fmtEuroErp2(prezzoAlPubblico(p))}, per un margine sul lordo del ${fmtPctErp(p.margineContanti)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>
-    ),
-    "Punti contanti": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti: un punto e' un euro, con due decimali` : (p.cedibileContantiEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>
-    ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
     ),
@@ -41769,12 +41763,42 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         </td>
     ),
   };
+  // La seconda riga, per chi paga in contanti: sotto il prodotto, le
+  // stesse quattro cifre di margine, cedibile e punti ricalcolate sul
+  // prezzo al pubblico (vedi cedibileContantiDi). Le altre celle restano
+  // vuote, cosi' ogni numero sta sotto la colonna che gli da' il nome.
+  // Si accende per tutti i prodotti insieme col tasto sopra la tabella.
+  const tdContanti = { padding: "3px 6px 7px", borderTop: "none", textAlign: "center", background: "#FBF7EE", ...fontBody, fontSize: 10.5, color: "#8A6A1B", whiteSpace: "nowrap" };
+  const lordo = prezzoAlPubblico(p);
+  const margineContantiEuro = lordo != null && p.costo_acquisto != null ? round2(lordo - p.costo_acquisto) : null;
+  const celleContanti = {
+    "Prodotto": (
+        <td style={{ ...tdContanti, textAlign: "left" }}>
+          <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", background: "#F3E7CB", borderRadius: 6, padding: "2px 6px" }}>Contanti</span>
+        </td>
+    ),
+    "Prezzo netto vendita": <td style={tdContanti} title="In contanti si tiene tutto il prezzo al pubblico: e' questa la base del conto">{lordo != null ? fmtEuroErp2(lordo) : "—"}</td>,
+    "Margine %": <td style={tdContanti} title="Quanto resta del prezzo al pubblico, tolto il costo di acquisto">{p.margineContanti != null ? fmtPctErp(p.margineContanti) : "N/D"}</td>,
+    "Margine €": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
+    "Cedibile carta/shop": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Cedibile in contanti: il ${numeroFascia(p.cedibileContantiPct)}% del prezzo al pubblico, per un margine sul lordo del ${fmtPctErp(p.margineContanti)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
+    "Punti carta/shop": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
+  };
+  const elencoColonne = colonne || COLONNE_MAGAZZINO;
   return (
-    <tr>
-      {(colonne || COLONNE_MAGAZZINO).map((col) => (
-        <React.Fragment key={col.label}>{celle[col.label]}</React.Fragment>
-      ))}
-    </tr>
+    <>
+      <tr>
+        {elencoColonne.map((col) => (
+          <React.Fragment key={col.label}>{celle[col.label]}</React.Fragment>
+        ))}
+      </tr>
+      {mostraContanti && (
+        <tr>
+          {elencoColonne.map((col) => (
+            <React.Fragment key={col.label}>{celleContanti[col.label] || <td style={tdContanti} />}</React.Fragment>
+          ))}
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -41866,9 +41890,15 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
 function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   // la percentuale di sicurezza della regola dei punti, decisa in
-  // Gestione punti: la colonna "Punti" la segue
+  // Gestione punti: le colonne dei punti la seguono
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
+  // la seconda riga dei contanti sotto ogni prodotto: si accende e si
+  // spegne per tutti insieme, e il dispositivo si ricorda la scelta
+  const [mostraRigaContanti, setMostraRigaContanti] = useState(() => { try { return localStorage.getItem("magazzino_riga_contanti") === "1"; } catch { return false; } });
+  function cambiaRigaContanti() {
+    setMostraRigaContanti((v) => { try { localStorage.setItem("magazzino_riga_contanti", v ? "0" : "1"); } catch {} return !v; });
+  }
   useEffect(() => {
     assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42724,6 +42754,19 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 Azzera filtri
               </button>
             )}
+            {/* la seconda riga di conto: cedibile e punti di chi paga in
+                contanti, sotto ogni prodotto. Un tasto solo per tutti */}
+            {vistaProdotti === "elenco" && (
+              <button
+                onClick={cambiaRigaContanti}
+                aria-pressed={mostraRigaContanti}
+                title={mostraRigaContanti ? "Nascondi la riga dei contanti sotto ogni prodotto" : "Mostra sotto ogni prodotto margine, cedibile e punti per chi paga in contanti"}
+                style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: mostraRigaContanti ? "#fff" : "#8A6A1B", background: mostraRigaContanti ? "#8A6A1B" : "#FBF7EE", border: `1px solid ${mostraRigaContanti ? "#8A6A1B" : "#E8D4B0"}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <IconaBanconota size={14} />
+                {mostraRigaContanti ? "Contanti: attivi" : "Contanti"}
+              </button>
+            )}
           </div>
           {/* da telefono la barra e' larga quanto l'elenco che filtra e i
               cinque si dividono lo spazio: sporgeva oltre la tabella, e una
@@ -42825,7 +42868,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
