@@ -29121,6 +29121,11 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
   const isMobile = useIsMobile();
   const [progetti, setProgetti] = useState(null);
   const [storico, setStorico] = useState(false);
+  // il progetto per cui si sta chiedendo "sei sicuro?": la conferma e'
+  // una finestra dell'app, non window.confirm, che nell'app aggiunta alla
+  // home dell'iPhone spesso non compare e passa come un si'. Una scheda
+  // se n'e' andata cosi', senza che nessuno l'avesse voluto
+  const [progettoDaEliminare, setProgettoDaEliminare] = useState(null);
   const [ricercaTesto, setRicercaTesto] = useState("");
   const [filtroIncaricato, setFiltroIncaricato] = useState("");
   const [filtroPriorita, setFiltroPriorita] = useState("");
@@ -29168,8 +29173,11 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
     if (error) { setMsg("Non salvato: " + error.message); carica(); return; }
     setMsg("");
   }
-  async function elimina(p) {
-    if (!window.confirm(`Eliminare definitivamente "${p.nome}"? Non si recupera.`)) return;
+  function elimina(p) { setProgettoDaEliminare(p); }
+  async function eliminaConfermato() {
+    const p = progettoDaEliminare;
+    setProgettoDaEliminare(null);
+    if (!p) return;
     const { error } = await supabase.from("progetti").delete().eq("id", p.id);
     if (error) { setMsg("Non eliminato: " + error.message); return; }
     carica();
@@ -29236,6 +29244,20 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      {progettoDaEliminare && (
+        <Modal title="Eliminare il progetto?" onClose={() => setProgettoDaEliminare(null)} maxWidth={440}>
+          <div style={{ ...fontBody, fontSize: 14, color: NAVY, lineHeight: 1.45, marginBottom: 6 }}>
+            Sei sicuro di voler cancellare <strong>"{progettoDaEliminare.nome}"</strong>?
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>
+            Si cancella per sempre, con tutti i suoi aggiornamenti. Se vuoi solo toglierlo di mezzo, usa "Archivia": finisce nello storico e si recupera.
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+            <Button variant="ghost" onClick={() => setProgettoDaEliminare(null)}>Annulla</Button>
+            <Button variant="danger" onClick={eliminaConfermato}>Sì, cancella</Button>
+          </div>
+        </Modal>
+      )}
       <div style={{ maxWidth: isMobile ? 900 : 1180, margin: "0 auto" }}>
         {/* il tondo di uscita non occupa una riga sua: sta a sinistra
             del titolo, e la pagina comincia piu' in alto */}
