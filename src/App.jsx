@@ -7209,7 +7209,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
       <div style={{ position: "relative", height: 0, zIndex: 2 }}>
         <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} /></div>
       </div>
-      <div style={{ paddingLeft: 80, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
+      <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
         <div>
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Corsi chiusi da ciascun venditore nel periodo selezionato</div>
@@ -7222,6 +7222,8 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
           Esporta
         </button>
       </div>
+      {/* il contenuto comincia in linea col titolo, non sotto il tondo di uscita */}
+      <div style={{ paddingLeft: isMobile ? 0 : 80 }}>
       <SelettoreCategoriaGruppo campo="venditori_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
 
       <div style={{ display: "flex", gap: 14, alignItems: "flex-end", marginTop: 20, marginBottom: 16, flexWrap: "wrap" }}>
@@ -7456,6 +7458,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
         </div>
         </>
       )}
+      </div>
     </div>
   );
 }
@@ -13325,7 +13328,7 @@ function PaginaGestioneModelle({
         <div style={{ position: "relative", height: 0, zIndex: 2 }}>
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         </div>
-        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
           <div>
             <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 4 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Fabbisogno, scadenze e assegnazioni</div>
@@ -29368,7 +29371,7 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
         <div style={{ position: "relative", height: 0, zIndex: 2 }}>
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         </div>
-        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{storico ? "Storico progetti" : titolo}</div>
           <button
             onClick={() => setStorico((v) => !v)}
@@ -48427,7 +48430,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
         <div style={{ position: "relative", height: 0, zIndex: 2 }}>
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} /></div>
         </div>
-        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", gap: 16, marginBottom: 22 }}>
+        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, gap: 16, marginBottom: 22 }}>
           <div style={{ width: 56, height: 56, borderRadius: 14, background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <IconaPin size={26} color={NAVY} />
           </div>
@@ -49174,7 +49177,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
         <div style={{ position: "relative", height: 0, zIndex: 2 }}>
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         </div>
-        <div style={{ paddingLeft: 80, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
             <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>Tutti gli allievi che hanno acquistato almeno un corso.</div>
@@ -49658,7 +49661,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
         <div style={{ position: "relative", height: 0, zIndex: 2 }}>
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         </div>
-        <div style={{ paddingLeft: 80, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
             <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>
@@ -54295,7 +54298,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
           </div>
         )}
-        <div style={{ paddingLeft: incorporata ? 0 : 80, display: "flex", alignItems: "center", justifyContent: incorporata ? "flex-end" : "space-between", gap: 10, flexWrap: "wrap", marginBottom: incorporata ? 12 : 18 }}>
+        <div style={{ paddingLeft: incorporata ? 0 : 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: incorporata ? "flex-end" : "space-between", gap: 10, flexWrap: "wrap", marginBottom: incorporata ? 12 : 18 }}>
           {!incorporata && (
           <div>
             <div style={{ ...stileTitoloPagina, color: NAVY }}>{vista === "backoffice" ? "Back Office prodotti" : "Shop Online"}</div>
