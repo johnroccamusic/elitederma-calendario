@@ -29248,7 +29248,9 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   const [inModifica, setInModifica] = useState(false);
   // gli aggiornamenti si aprono da soli se ce ne sono gia': un diario
   // scritto che non si vede e' un diario che nessuno rilegge
-  const [aggiornamentiAperti, setAggiornamentiAperti] = useState(!!progetto.note_sviluppo);
+  // la casella per scrivere parte chiusa anche quando un aggiornamento
+  // c'e': la riga qui sotto lo mostra gia', e aperta lo ripeteva due volte
+  const [aggiornamentiAperti, setAggiornamentiAperti] = useState(false);
   const [noteSviluppo, setNoteSviluppo] = useState(progetto.note_sviluppo || "");
   const [noteIniziali, setNoteIniziali] = useState(progetto.note_iniziali || "");
   const [nome, setNome] = useState(progetto.nome || "");
@@ -29473,9 +29475,11 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
               testo sempre aperta, e per leggere una frase servivano
               cinque centimetri di scheda. Il diario intero e la casella
               per scriverci si aprono con la freccetta. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-            <span style={{ color: righeAggiornamenti.length ? NAVY : MUTED, display: "flex", flexShrink: 0 }}><IconaFumetto size={isMobile ? 14 : 16} /></span>
-            <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 14, color: righeAggiornamenti.length ? NAVY : MUTED, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 9, minWidth: 0 }}>
+            <span style={{ color: righeAggiornamenti.length ? NAVY : MUTED, display: "flex", flexShrink: 0, marginTop: 1 }}><IconaFumetto size={isMobile ? 14 : 16} /></span>
+            {/* piccolo e su due righe al massimo: e' un promemoria da
+                leggere con la coda dell'occhio, non il diario */}
+            <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, lineHeight: 1.35, color: righeAggiornamenti.length ? NAVY : MUTED, flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflowWrap: "anywhere" }}>
               {righeAggiornamenti.length ? righeAggiornamenti[righeAggiornamenti.length - 1] : "Nessun aggiornamento"}
             </span>
             <button
