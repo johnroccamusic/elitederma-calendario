@@ -3348,6 +3348,30 @@ const CEDIBILE_PER_MARGINE = [
   [75, 33], [80, 35.5], [85, 38], [90, 40.5], [95, 43],
 ];
 const CEDIBILE_OLTRE_ULTIMO_GRADINO = 43;
+// Dal 13/09/2026 la tabella si puo' rivedere da Gestione punti: si danno
+// la prima e l'ultima percentuale e le intermedie si ricalcolano in linea
+// retta sui gradini di sempre. La tabella rivista vive fra le impostazioni
+// condivise e vale subito in tutta l'app, perche' tutti i conti passano da
+// percentualeCedibileDi, che legge la tabella attiva ogni volta. Quella
+// qui sopra resta il punto di partenza e quello a cui si torna.
+const CHIAVE_TABELLA_CEDIBILE = "cedibile_tabellaPerMargine";
+function tabellaCedibileValida(t) {
+  if (!Array.isArray(t) || t.length !== CEDIBILE_PER_MARGINE.length) return null;
+  const ok = t.every((riga, i) => Array.isArray(riga) && Number(riga[0]) === CEDIBILE_PER_MARGINE[i][0] && Number.isFinite(Number(riga[1])) && Number(riga[1]) >= 0);
+  return ok ? t.map(([soglia, pct]) => [Number(soglia), Number(pct)]) : null;
+}
+function tabellaCedibileAttiva() {
+  return tabellaCedibileValida(LAYOUT_CACHE[CHIAVE_TABELLA_CEDIBILE]) || CEDIBILE_PER_MARGINE;
+}
+function tabellaCedibileDagliEstremi(primo, ultimo) {
+  const a = Number(primo), b = Number(ultimo);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a < 0 || b < 0) return null;
+  const n = CEDIBILE_PER_MARGINE.length - 1;
+  return CEDIBILE_PER_MARGINE.map(([soglia], i) => [soglia, Math.round((a + ((b - a) * i) / n) * 10) / 10]);
+}
+function tabellaCedibileEOriginale(t) {
+  return JSON.stringify(t) === JSON.stringify(CEDIBILE_PER_MARGINE);
+}
 // I punti che un prodotto genera a chi lo vende: dal cedibile si toglie la
 // percentuale di sicurezza, e il resto (il massimo cedibile) sono i punti,
 // con due decimali. 9,16 euro cedibili, col 10% di sicurezza, sono 8,24
@@ -3416,11 +3440,12 @@ function scontoPctRigaVenduta(riga, vendita, prodotto, fasceCanale) {
   return 0;
 }
 function percentualeCedibileDi(marginePct) {
-  if (marginePct == null || !(marginePct >= CEDIBILE_PER_MARGINE[0][0])) return 0;
-  const ultimo = CEDIBILE_PER_MARGINE[CEDIBILE_PER_MARGINE.length - 1];
-  if (marginePct > ultimo[0]) return CEDIBILE_OLTRE_ULTIMO_GRADINO;
+  const tabella = tabellaCedibileAttiva();
+  if (marginePct == null || !(marginePct >= tabella[0][0])) return 0;
+  const ultimo = tabella[tabella.length - 1];
+  if (marginePct > ultimo[0]) return ultimo[1];
   let cedibile = 0;
-  for (const [soglia, pct] of CEDIBILE_PER_MARGINE) { if (marginePct >= soglia) cedibile = pct; else break; }
+  for (const [soglia, pct] of tabella) { if (marginePct >= soglia) cedibile = pct; else break; }
   return cedibile;
 }
 
@@ -10362,6 +10387,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const fasceCorsoDash = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
   const fasceReferralDash = fasceScontoValide(regolaReferralMasterDash?.fasce);
   const [fasceContantiDash] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const [tabellaCedibileDash] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -10493,7 +10519,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       euroTotale: round2(euroCorso + euroReferral + premi.euro),
       pezzi, premi, gruppi,
     };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash, fasceContantiDash]);
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash, fasceContantiDash, tabellaCedibileDash]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
   // la contabilita' di una classe, aperta dal tasto sulla card: e' la
   // stessa pagina del link che si manda alla master, con lo stesso
@@ -39013,6 +39039,28 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // li ricalcola tutti — il tasto rende esplicito quel momento
   const [bozzaSicurezza, setBozzaSicurezza] = useState(null);
   const [msgRicalcolo, setMsgRicalcolo] = useState("");
+  // la tabella del cedibile: si ridisegna dagli estremi, e la classifica
+  // qui sotto la segue perche' sta fra le dipendenze
+  const [tabellaCedibileSalvata, salvaTabellaCedibile] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
+  const tabellaCedibile = tabellaCedibileAttiva();
+  const [estremoPrimo, setEstremoPrimo] = useState(null);
+  const [estremoUltimo, setEstremoUltimo] = useState(null);
+  const [msgTabella, setMsgTabella] = useState("");
+  const primoInBozza = estremoPrimo == null ? numeroFascia(tabellaCedibile[0][1]) : estremoPrimo;
+  const ultimoInBozza = estremoUltimo == null ? numeroFascia(tabellaCedibile[tabellaCedibile.length - 1][1]) : estremoUltimo;
+  function ricalcolaTabellaCedibile() {
+    const nuova = tabellaCedibileDagliEstremi(String(primoInBozza).replace(",", "."), String(ultimoInBozza).replace(",", "."));
+    if (!nuova) { setMsgTabella("Errore: scrivi due percentuali valide."); return; }
+    salvaTabellaCedibile(nuova);
+    setEstremoPrimo(null); setEstremoUltimo(null);
+    const tutti = (prodottiShop || []).filter((p) => p.attivo !== false);
+    setMsgTabella(`Tabella ricalcolata da ${numeroFascia(nuova[0][1])}% a ${numeroFascia(nuova[nuova.length - 1][1])}%: cedibile e punti di ${tutti.length} prodotti aggiornati, in tutta l'app.`);
+  }
+  function rimettiTabellaOriginale() {
+    salvaTabellaCedibile(null);
+    setEstremoPrimo(null); setEstremoUltimo(null);
+    setMsgTabella("Rimessa la tabella del 12/09/2026.");
+  }
   const sicurezzaInBozza = bozzaSicurezza == null ? String(sicurezzaPunti) : bozzaSicurezza;
   function salvaERicalcola() {
     const n = Math.max(0, Math.min(100, Math.round(Number(String(sicurezzaInBozza).replace(",", ".")) || 0)));
@@ -39105,7 +39153,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
       const puntiMaster = round2((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
       return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici: round2(puntiTeorici), puntiCorso: round2(puntiCorso), puntiFuori: round2(puntiFuori), punti: round2(puntiCorso + puntiFuori), puntiMaster, euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster]);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster, tabellaCedibileSalvata]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
@@ -39212,11 +39260,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Quota cedibile per fascia di margine</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Il criterio applicato a tutti i prodotti per calcolare il cedibile, deciso il 12/09/2026. Ogni riga vale da quel margine fino al gradino dopo: un margine del 47% sta nella riga del 45. Sotto il 5% non si cede nulla; dal 95% in su si cede il {CEDIBILE_OLTRE_ULTIMO_GRADINO}%, che è il tetto. Fino al 20% di margine si cede il 30% del margine, poi mezzo punto in più ogni punto di margine. La percentuale si applica al prezzo netto con carta e shop online, al prezzo al pubblico in contanti; il margine si misura sulla stessa base.
+            Il criterio applicato a tutti i prodotti per calcolare il cedibile. Ogni riga vale da quel margine fino al gradino dopo: un margine del 47% sta nella riga del 45. Sotto il 5% non si cede nulla; dal 95% in su si cede il {numeroFascia(tabellaCedibile[tabellaCedibile.length - 1][1])}%, che è il tetto.
+            {tabellaCedibileEOriginale(tabellaCedibile) ? " È la tabella decisa il 12/09/2026: fino al 20% di margine si cede il 30% del margine, poi mezzo punto in più ogni punto di margine." : " È una tabella ricalcolata dagli estremi, in linea retta fra la prima e l'ultima fascia."}
+            {" "}La percentuale si applica al prezzo netto con carta e shop online, al prezzo al pubblico in contanti; il margine si misura sulla stessa base.
           </div>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: isMobile ? 6 : 10 }}>
-            {CEDIBILE_PER_MARGINE.map(([soglia, pct], i) => {
-              const prossima = CEDIBILE_PER_MARGINE[i + 1]?.[0];
+            {tabellaCedibile.map(([soglia, pct], i) => {
+              const prossima = tabellaCedibile[i + 1]?.[0];
               return (
                 <div key={soglia} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 10px", background: "#fff", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
                   <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>
@@ -39228,7 +39278,31 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
             })}
           </div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10, lineHeight: 1.4 }}>
-            Dal cedibile si toglie poi la percentuale di sicurezza, qui sotto, e quel che resta sono i punti. La tabella oggi si cambia solo dal codice: se vuoi rivederla, chiedila.
+            Dal cedibile si toglie poi la percentuale di sicurezza, qui sotto, e quel che resta sono i punti.
+          </div>
+          {/* Ridisegnare la tabella: prima e ultima fascia a mano, le altre
+              in linea retta. Vale subito per tutti i prodotti, perche' il
+              cedibile non e' salvato da nessuna parte: si ricalcola sempre */}
+          <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 14, paddingTop: 14 }}>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Ricalcola la tabella dagli estremi</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+              Scrivi quanto si cede alla prima fascia e quanto all'ultima: le fasce in mezzo si ridistribuiscono in linea retta, un decimale, e il cedibile e i punti di tutti i prodotti si ricalcolano di conseguenza in Dettaglio prodotti, in classifica e nelle dashboard.
+            </div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ flex: "0 1 200px" }}>
+                <Field label={`Prima fascia, margine ${numeroFascia(tabellaCedibile[0][0])}–${numeroFascia(tabellaCedibile[1][0])}% (%)`}>
+                  <input type="number" min="0" max="100" step="0.1" style={inputStyle} value={primoInBozza} onChange={(e) => setEstremoPrimo(e.target.value)} />
+                </Field>
+              </div>
+              <div style={{ flex: "0 1 200px" }}>
+                <Field label={`Ultima fascia, margine ${numeroFascia(tabellaCedibile[tabellaCedibile.length - 1][0])}+% (%)`}>
+                  <input type="number" min="0" max="100" step="0.1" style={inputStyle} value={ultimoInBozza} onChange={(e) => setEstremoUltimo(e.target.value)} />
+                </Field>
+              </div>
+              <Button onClick={ricalcolaTabellaCedibile}>Ricalcola e applica a tutti i prodotti</Button>
+              {!tabellaCedibileEOriginale(tabellaCedibile) && <Button variant="ghost" onClick={rimettiTabellaOriginale}>Rimetti la tabella del 12/09/2026</Button>}
+            </div>
+            {msgTabella && <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, marginTop: 10, color: msgTabella.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgTabella}</div>}
           </div>
         </div>
 
@@ -41956,6 +42030,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // Gestione punti: le colonne dei punti la seguono
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
+  // la tabella del cedibile puo' essere ridisegnata da Gestione punti:
+  // basta ascoltarla, le righe qui sotto si ricalcolano a ogni disegno
+  useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
   // la seconda riga dei contanti sotto ogni prodotto: si accende e si
   // spegne per tutti insieme, e il dispositivo si ricorda la scelta
   const [mostraRigaContanti, setMostraRigaContanti] = useState(() => { try { return localStorage.getItem("magazzino_riga_contanti") === "1"; } catch { return false; } });
