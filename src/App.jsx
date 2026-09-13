@@ -6591,7 +6591,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "5px 6px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
-  const thStyle = { ...celStyle, ...fontBody, fontSize: 8.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.1, textAlign: "left", background: BG };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.1, textAlign: "left", background: BG };
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "40px 20px" }}>
@@ -6624,7 +6624,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
         // stessa tabella con un rowSpan invece di essere una tabella
         // separata a fianco
         const chiaviData = Array.from(new Set(righe.map((a) => (a.ts || "").slice(0, 10)).filter(Boolean))).sort((a, b) => b.localeCompare(a));
-        const gruppoStyle = { ...fontDisplay, fontSize: 10, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.2 };
+        const gruppoStyle = { ...fontDisplay, fontSize: 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.2 };
 
         // la stessa persona può risultare iscritta a più date ("Associa altri
         // corsi"): ogni corso associato si ritrova per nome+cognome
@@ -6836,7 +6836,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                 <tbody>
                   {gruppi.map((g) => ordina(g.righe, valoriAcconti).map((a, idx) => {
                   const coinvolti = calcolaCoinvolti(a);
-                  const celStackStyle = { ...celStyle, ...fontBody, fontSize: 10, color: NAVY };
+                  const celStackStyle = { ...celStyle, ...fontBody, fontSize: 12, color: NAVY };
                   return (
                     <tr key={a.id}>
                       {idx === 0 && <td rowSpan={g.righe.length} style={{ ...celStyle, ...gruppoStyle }}>{TITOLO_GRUPPO_ORIGINE[g.origine]}</td>}
@@ -6863,18 +6863,18 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                       </td>
                       <td style={{ ...celStackStyle, fontWeight: 600, padding: 0 }}>
                         {coinvolti.map((co, i) => (
-                          <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ padding: "5px 7px", borderTop: i === 0 ? "none" : bordoV, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: co.iscritto ? "pointer" : undefined }}>
+                          <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ padding: "5px 7px", borderTop: i === 0 ? "none" : bordoV, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: co.iscritto ? "pointer" : undefined, textDecoration: co.iscritto ? "underline" : "none", textUnderlineOffset: 2 }}>
                             {co.iscritto ? `${co.iscritto.nome} ${co.iscritto.cognome}` : "—"}
                           </div>
                         ))}
                       </td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{a.nota || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{a.nota || "—"}</td>
                       <td style={{ ...celStyle, whiteSpace: "nowrap" }}>
-                        {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>—</span>}
+                        {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" style={{ fontSize: 14 }} /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
                       </td>
                       <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
                         {tab === "attesa" && (
