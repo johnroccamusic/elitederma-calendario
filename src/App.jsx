@@ -39641,8 +39641,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
   // risalire ad anni fa, e di default si vuole vedere l'intera storia
   // le date scritte a mano hanno la precedenza sulle pillole: se qualcuno
   // si prende la briga di scrivere un giorno, e' quello che vuole vedere
-  const range = dataDa
-    ? { inizio: dataDa, fine: dataA || dataDa }
+  // Con il solo "Dal" compilato si vede da quel giorno in avanti, con il
+  // solo "Al" tutto fino a quel giorno: prima il "Dal" da solo mostrava
+  // quel giorno soltanto, e chi scriveva "dal primo agosto" trovava zero
+  // ordini
+  const range = (dataDa || dataA)
+    ? { inizio: dataDa || "0000-01-01", fine: dataA || "9999-12-31" }
     : periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
   const statiPresenti = [...new Set(venditeOrigine.map((v) => v.stato).filter(Boolean))].sort();
 
@@ -39734,9 +39738,11 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
               <button type="button" onClick={() => { setDataDa(""); setDataA(""); }} title="Togli il filtro sulle date" style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>×</button>
             )}
           </div>
-          {dataDa && (
+          {(dataDa || dataA) && (
             <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
-              {dataA && dataA !== dataDa ? `Dal ${fmtData(dataDa)} al ${fmtData(dataA)}` : `Solo il ${fmtData(dataDa)}`}
+              {dataDa && dataA
+                ? (dataA === dataDa ? `Solo il ${fmtData(dataDa)}` : `Dal ${fmtData(dataDa)} al ${fmtData(dataA)}`)
+                : dataDa ? `Dal ${fmtData(dataDa)} in avanti` : `Fino al ${fmtData(dataA)}`}
             </span>
           )}
         </div>
