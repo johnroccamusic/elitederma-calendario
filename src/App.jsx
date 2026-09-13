@@ -9069,7 +9069,7 @@ function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
             Apri link
           </button>
         )}
-        {!modificaLink && (
+        {!modificaLink && !haSlide && (
           <button onClick={() => { setBozzaLink(link || ""); setModificaLink(true); }} title={link ? "Cambia il link" : "Incolla un link: presentazione online, video, pagina"}
             style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
             {link ? "Modifica link" : "Carica link"}
@@ -9093,10 +9093,12 @@ function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
             </button>
           </>
         )}
-        <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: haSlide ? NAVY : "#fff", background: haSlide ? "#fff" : NAVY, border: `1px solid ${haSlide ? CREAM_BORDER : NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: caricando ? "default" : "pointer", whiteSpace: "nowrap" }}>
+        {/* un corso ha o il PDF o il link, mai tutti e due: con un link
+            salvato "Carica PDF" non compare, e viceversa */}
+        {!link && !modificaLink && <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: haSlide ? NAVY : "#fff", background: haSlide ? "#fff" : NAVY, border: `1px solid ${haSlide ? CREAM_BORDER : NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: caricando ? "default" : "pointer", whiteSpace: "nowrap" }}>
           {caricando ? "Carico…" : haSlide ? "Sostituisci" : "Carica PDF"}
           <input type="file" accept="application/pdf" onChange={carica} disabled={caricando} style={{ display: "none" }} />
-        </label>
+        </label>}
         {haSlide && (
           <button onClick={rimuovi} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C9C2`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
             Rimuovi
