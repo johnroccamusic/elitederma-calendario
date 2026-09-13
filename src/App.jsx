@@ -2459,8 +2459,8 @@ const CHIAVE_ASPETTO_TASTI = "aspetto_tasti";
 // "dock" sono i tasti del dock — lato, raggio e icona in pixel — telefono
 // e scrivania ognuno i suoi
 const ASPETTO_TASTI_DEFAULT = {
-  mobile: { dimensione: 60, raggio: 13, icona: 34, dock: { lato: 70, raggio: 22, icona: 40 }, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
-  desktop: { dimensione: 300, raggio: 20, icona: 80, dock: { lato: 62, raggio: 18, icona: 30 }, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
+  mobile: { dimensione: 60, raggio: 13, icona: 34, dock: { lato: 70, raggio: 22, icona: 40, colore: "#0E1B33", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } }, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
+  desktop: { dimensione: 300, raggio: 20, icona: 80, dock: { lato: 62, raggio: 18, icona: 30, colore: "#0E1B33", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } }, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
   // Un'ombra sola per TUTTE le aree che reggono i dati — i pannelli
   // bianchi delle tabelle, le schede citta', gli elenchi — e una per
   // tutti gli altri pulsanti, quelli che non sono i quadrati della home
@@ -2512,7 +2512,7 @@ function aspettoTastoDi(salvato, quale) {
     dock: (() => {
       const d = typeof v.dock === "number" ? { lato: v.dock } : (v.dock && typeof v.dock === "object" ? v.dock : {});
       const n = (campo) => (d[campo] == null || d[campo] === "" || isNaN(Number(d[campo])) ? base.dock[campo] : Number(d[campo]));
-      return { lato: n("lato"), raggio: n("raggio"), icona: n("icona") };
+      return { lato: n("lato"), raggio: n("raggio"), icona: n("icona"), colore: d.colore || base.dock.colore, ombra: { ...base.dock.ombra, ...(d.ombra || {}) } };
     })(),
     colore: v.colore || base.colore,
     ombra: { ...base.ombra, ...(v.ombra || {}) },
@@ -14711,10 +14711,16 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
           width: Math.round(aspetto.dimensione * scala), aspectRatio: "1 / 1", boxSizing: "border-box",
           background: aspetto.colore, borderRadius: Math.round(aspetto.raggio * scala),
           boxShadow: ombraCssTasto(aspetto.ombra),
-          border: forma === "desktop" ? `1px solid ${CREAM_BORDER}` : "none",
+          border: forma === "desktop" ? `1px solid ${CREAM_BORDER}` : forma === "dock" ? "1px solid rgba(255,255,255,0.22)" : "none",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <IconaTilePos size={Math.round(aspetto.icona * scala)} color={NAVY} />
+          {forma === "dock" ? (
+            <svg width={Math.round(aspetto.icona * scala)} height={Math.round(aspetto.icona * scala)} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+          ) : (
+            <IconaTilePos size={Math.round(aspetto.icona * scala)} color={NAVY} />
+          )}
         </div>
       </div>
       <span style={{ ...fontBody, fontSize: 13.5, fontWeight: selezionato ? 700 : 600, color: selezionato ? NAVY : MUTED }}>{etichetta}</span>
@@ -14760,6 +14766,7 @@ function TastoPasso({ segno, onPasso, title, disabled = false }) {
 const NOME_ELEMENTO_ASPETTO = {
   mobile: "Pulsante mobile", desktop: "Pulsante desktop",
   aree: "Aree dati", pulsanti: "Altri pulsanti", pillole: "Selettori a pillola",
+  dockmobile: "Tasto del dock, telefono", dockdesktop: "Tasto del dock, computer",
 };
 
 // Le due ombre generali si giudicano su un esempio vero: una pastiglia
@@ -14814,25 +14821,21 @@ function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, raggio = 
 function PaginaAspettoApp() {
   const isMobile = useIsMobile();
   const [aspetto, salvaAspetto] = useAspettoTasti();
-  const [quale, setQuale] = useState("mobile");
+  // l'elemento selezionato si ricorda sul dispositivo: si esce, si torna,
+  // e si riprende da dove si era
+  const [quale, setQualeStato] = useState(() => { try { return localStorage.getItem("aspetto_app_quale") || "mobile"; } catch { return "mobile"; } });
+  const setQuale = (q) => { setQualeStato(q); try { localStorage.setItem("aspetto_app_quale", q); } catch { /* niente memoria locale */ } };
   // diagnostica: cosa sta DAVVERO disegnando il dock in questo momento,
-  // letto dal DOM e non dallo stato. Sull'iPhone l'anteprima cambiava e il
-  // dock no: questa riga dice se il valore non arriva al dock o se arriva
-  // e Safari non lo ridisegna
-  const [dockDisegnato, setDockDisegnato] = useState(null);
-  useEffect(() => {
-    const leggi = () => {
-      const b = document.querySelector('button[aria-label="Home"]');
-      if (!b) { setDockDisegnato(null); return; }
-      const st = getComputedStyle(b);
-      const svg = b.querySelector("svg");
-      setDockDisegnato(`${Math.round(parseFloat(st.width))} / ${Math.round(parseFloat(st.borderRadius))} / ${svg ? Math.round(svg.getBoundingClientRect().width) : "-"}`);
-    };
-    leggi();
-    const t = setInterval(leggi, 700);
-    return () => clearInterval(t);
-  }, []);
-  const corrente = aspetto[quale];
+  // Il tasto del dock e' un elemento come gli altri: si seleziona in cima
+  // e si regola con i comandi generali. Vive dentro "mobile"/"desktop"
+  // (campo dock), e qui lo si traduce in dimensione/raggio/icona/colore/
+  // ombra come tutti gli altri
+  const eDock = quale === "dockmobile" || quale === "dockdesktop";
+  const sezioneDock = quale === "dockmobile" ? "mobile" : "desktop";
+  const dockCorrente = aspetto[sezioneDock].dock;
+  const corrente = eDock
+    ? { dimensione: dockCorrente.lato, raggio: dockCorrente.raggio, icona: dockCorrente.icona, colore: dockCorrente.colore, ombra: dockCorrente.ombra }
+    : aspetto[quale];
   // nuvole e pulsanti hanno la sola ombra: i comandi di forma e colore
   // non avrebbero niente da toccare
   const soloOmbra = quale === "aree" || quale === "pulsanti" || quale === "pillole";
@@ -14840,27 +14843,20 @@ function PaginaAspettoApp() {
   // in percentuale, senza questa marca vengono ignorati alla lettura
   // "quale" e' la sezione toccata: all'invio si sostituisce solo quella
   // nel database, il resto lo si lascia com'e' li'
-  const cambia = (campi) => salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi, unita: "px" } }, quale);
-
-  // stessi comandi, ma sui tre campi annidati del dock
-  const piuMenoDock = (etichetta, campo, min, max, aiutoMeno, aiutoPiu) => {
-    const dock = corrente.dock || ASPETTO_TASTI_DEFAULT[quale].dock;
-    // il raggio non ha senso oltre meta' del lato: a quel punto il tasto e'
-    // un cerchio e ogni pixel in piu' non cambia niente. Il tetto segue il
-    // lato, e a fine corsa il tasto si spegne invece di far finta
-    const tetto = campo === "raggio" ? Math.min(max, Math.floor(dock.lato / 2)) : max;
-    const valore = Math.min(dock[campo], tetto);
-    const metti = (nuovo) => cambia({ dock: { ...dock, [campo]: Math.max(min, Math.min(tetto, nuovo)) } });
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
-        <TastoPasso segno="−" title={aiutoMeno} disabled={valore <= min} onPasso={() => metti(valore - 1)} />
-        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{valore} px</span>
-        <TastoPasso segno="+" title={valore >= tetto && campo === "raggio" ? "È già un cerchio: oltre non cambia" : aiutoPiu} disabled={valore >= tetto} onPasso={() => metti(valore + 1)} />
-        {campo === "raggio" && valore >= tetto && <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>cerchio</span>}
-      </div>
-    );
+  const cambia = (campi) => {
+    if (eDock) {
+      const { dimensione, ...resto } = campi;
+      const nuovoDock = { ...dockCorrente, ...resto, ...(dimensione != null ? { lato: dimensione } : {}) };
+      salvaAspetto({ ...aspetto, [sezioneDock]: { ...aspetto[sezioneDock], dock: nuovoDock, unita: "px" } }, sezioneDock);
+      return;
+    }
+    salvaAspetto({ ...aspetto, [quale]: { ...corrente, ...campi, unita: "px" } }, quale);
   };
+  const rimettiComEra = () => {
+    if (eDock) { salvaAspetto({ ...aspetto, [sezioneDock]: { ...aspetto[sezioneDock], dock: ASPETTO_TASTI_DEFAULT[sezioneDock].dock, unita: "px" } }, sezioneDock); return; }
+    salvaAspetto({ ...aspetto, [quale]: ASPETTO_TASTI_DEFAULT[quale] }, quale);
+  };
+
   const piuMeno = (etichetta, campo, min, max, unita, aiutoMeno, aiutoPiu) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
@@ -14892,6 +14888,16 @@ function PaginaAspettoApp() {
             aspetto={aspetto.desktop} forma="desktop"
             selezionato={quale === "desktop"} onClick={() => setQuale("desktop")}
           />
+          <AnteprimaTastoAspetto
+            etichetta="Tasto del dock, telefono" sottotitolo="i quattro in basso e il rullo"
+            aspetto={{ dimensione: aspetto.mobile.dock.lato, raggio: aspetto.mobile.dock.raggio, icona: aspetto.mobile.dock.icona, colore: aspetto.mobile.dock.colore, ombra: aspetto.mobile.dock.ombra }} forma="dock"
+            selezionato={quale === "dockmobile"} onClick={() => setQuale("dockmobile")}
+          />
+          <AnteprimaTastoAspetto
+            etichetta="Tasto del dock, computer" sottotitolo="la barra in cima e le scorciatoie"
+            aspetto={{ dimensione: aspetto.desktop.dock.lato, raggio: aspetto.desktop.dock.raggio, icona: aspetto.desktop.dock.icona, colore: aspetto.desktop.dock.colore, ombra: aspetto.desktop.dock.ombra }} forma="dock"
+            selezionato={quale === "dockdesktop"} onClick={() => setQuale("dockdesktop")}
+          />
         </div>
 
         <div style={{ height: 1, background: CREAM_BORDER, margin: "20px 0 16px" }} />
@@ -14918,13 +14924,15 @@ function PaginaAspettoApp() {
       </div>
 
       <div style={{ ...cardStyle, padding: isMobile ? 16 : 22 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+        {/* il titolo al centro, in maiuscolo: e' la prima cosa da leggere
+            prima di toccare un comando. "Rimetti com'era" resta a destra */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44, marginBottom: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", padding: isMobile ? "0 0 40px" : "0 150px" }}>
             Stai modificando: {NOME_ELEMENTO_ASPETTO[quale]}
           </div>
-          <Button variant="ghost" onClick={() => salvaAspetto({ ...aspetto, [quale]: ASPETTO_TASTI_DEFAULT[quale] }, quale)}>
-            Rimetti com'era
-          </Button>
+          <div style={{ position: "absolute", right: 0, ...(isMobile ? { bottom: 0 } : { top: "50%", transform: "translateY(-50%)" }) }}>
+            <Button variant="ghost" onClick={rimettiComEra}>Rimetti com'era</Button>
+          </div>
         </div>
 
         {soloOmbra ? (
@@ -14979,38 +14987,11 @@ function PaginaAspettoApp() {
         ) : (
         <>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-          {piuMeno("Dimensione", "dimensione", quale === "mobile" ? 40 : 120, quale === "mobile" ? 120 : 420, " px", "Tasto più piccolo", "Tasto più grande")}
-          {piuMeno("Raggio", "raggio", 0, 80, " px", "Angoli più squadrati", "Angoli più tondi")}
-          {piuMeno("Icona", "icona", 10, 140, " px", "Icona più piccola", "Icona più grande")}
+          {piuMeno("Dimensione", "dimensione", eDock ? 40 : quale === "mobile" ? 40 : 120, eDock ? 120 : quale === "mobile" ? 120 : 420, " px", "Tasto più piccolo", "Tasto più grande")}
+          {piuMeno("Raggio", "raggio", 0, eDock ? Math.floor(corrente.dimensione / 2) : 80, " px", "Angoli più squadrati", "Angoli più tondi")}
+          {piuMeno("Icona", "icona", 10, eDock ? 80 : 140, " px", "Icona più piccola", "Icona più grande")}
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -2 }}>
-            {quale === "mobile" ? "Le icone di Apple sono 60 px di lato con angoli a 13 px." : "Il tasto non supera mai la sua colonna: con molte colonne si stringe da solo."}
-          </div>
-        </div>
-
-        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Tasti del dock</div>
-        <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap", marginBottom: 20 }}>
-          {/* la casetta del dock a grandezza vera, su un pezzo di barra:
-              si vede quello che si sta regolando, non un numero */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 12, borderRadius: 24, background: "rgba(14,27,51,0.28)", border: "1px solid rgba(255,255,255,0.22)", flexShrink: 0 }}>
-            <div style={{ width: corrente.dock.lato, height: corrente.dock.lato, borderRadius: corrente.dock.raggio, background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}>
-              <svg width={corrente.dock.icona} height={corrente.dock.icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {piuMenoDock("Lato", "lato", 40, 100, "Tasti del dock più piccoli", "Tasti del dock più grandi")}
-            {piuMenoDock("Raggio", "raggio", 0, 50, "Angoli più squadrati", "Angoli più tondi")}
-            {piuMenoDock("Icona", "icona", 12, 80, "Icona più piccola", "Icona più grande")}
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -2, maxWidth: 320 }}>
-              {quale === "mobile" ? "I quattro tasti in basso e le scorciatoie del rullo." : "I tasti della barra in cima e le scorciatoie di fianco."}
-            </div>
-            {dockDisegnato && (
-              <div style={{ ...fontBody, fontSize: 11, color: MUTED, fontFamily: "ui-monospace, Menlo, monospace" }}>
-                Il dock adesso disegna lato / raggio / icona: {dockDisegnato} px
-              </div>
-            )}
+            {eDock ? "Vale per i quattro tasti del dock e per le scorciatoie di fianco." : quale === "mobile" ? "Le icone di Apple sono 60 px di lato con angoli a 13 px." : "Il tasto non supera mai la sua colonna: con molte colonne si stringe da solo."}
           </div>
         </div>
 
@@ -39059,6 +39040,10 @@ function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, onApriGestionePunt
 // I tre posti si salvano per utente, cosi' li si ritrova su ogni
 // dispositivo.
 function TastoPreferitoDock({ voce, lato, raggio, onApri, onScegli, onTogli, nelRullo }) {
+  // colore e ombra sono quelli dei tasti del dock, decisi in Aspetto
+  const [aspettoScorciatoie] = useAspettoTasti();
+  const suTelefono = useIsMobile();
+  const dockScorciatoie = suTelefono ? aspettoScorciatoie.mobile.dock : aspettoScorciatoie.desktop.dock;
   // il raggio e' quello dei tasti del dock accanto, se lo si conosce
   const raggioTasto = raggio ?? Math.round(lato * 0.29);
   // il menu per cambiare o togliere: si apre col tasto destro, o tenendo
@@ -39115,7 +39100,7 @@ function TastoPreferitoDock({ voce, lato, raggio, onApri, onScegli, onTogli, nel
         data-aspetto-dock="1"
         style={{
           width: lato, height: lato, borderRadius: raggioTasto, cursor: "pointer", padding: "4px 5px",
-          background: NAVY, border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
+          background: dockScorciatoie.colore || NAVY, boxShadow: ombraCssTasto(dockScorciatoie.ombra), border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
           // senza questi, tenere premuto su iOS seleziona il testo del tasto
           // o apre la lente del sistema invece del nostro menu
@@ -60744,7 +60729,7 @@ export default function App() {
   // angoli molto arrotondati, spazio fra uno e l'altro circa un quarto del
   // tasto
   const stileTastoDock = {
-    background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
+    background: tastoDock.colore || NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio, boxShadow: ombraCssTasto(tastoDock.ombra),
     width: latoDock, height: latoDock, flexShrink: 0, padding: 0,
     display: "flex", alignItems: "center", justifyContent: "center",
   };
@@ -60950,7 +60935,7 @@ export default function App() {
         data-aspetto-dock="1"
         title="Impostazioni"
         style={{
-          background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
+          background: tastoDock.colore || NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio, boxShadow: ombraCssTasto(tastoDock.ombra),
           width: latoDock, height: latoDock, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
@@ -60968,7 +60953,7 @@ export default function App() {
             data-aspetto-dock="1"
             title="Indietro"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
+              background: tastoDock.colore || NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio, boxShadow: ombraCssTasto(tastoDock.ombra),
               width: latoDock, height: latoDock, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
@@ -60984,7 +60969,7 @@ export default function App() {
             data-aspetto-dock="1"
             title="Avanti"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
+              background: tastoDock.colore || NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio, boxShadow: ombraCssTasto(tastoDock.ombra),
               width: latoDock, height: latoDock, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
@@ -61250,7 +61235,7 @@ export default function App() {
             data-aspetto-dock="1"
             title="Home"
             style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
+              background: tastoDock.colore || NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio, boxShadow: ombraCssTasto(tastoDock.ombra),
               width: latoDock, height: latoDock, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
