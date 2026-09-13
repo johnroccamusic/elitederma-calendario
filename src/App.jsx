@@ -2585,7 +2585,10 @@ function StiliGlobaliAspetto() {
   // (piu'/meno, frecce, "50%") e le pastiglie ("999px" e simili). Un
   // tondo portato a 12 pixel non e' un tondo con gli angoli diversi, e'
   // un quadrato smussato — e i due si mischiavano con tutto il resto.
-  const nonTondi = `:not([style*="border-radius: 50%"]):not([style*="border-radius: 99"])`;
+  // e lascia stare i tasti del dock, che hanno la loro sezione in Aspetto
+  // dell'app: qui il 12 degli "altri pulsanti" scavalcava il 18 del dock
+  // e i comandi del dock sembravano non fare niente
+  const nonTondi = `:not([style*="border-radius: 50%"]):not([style*="border-radius: 99"]):not([data-aspetto-dock])`;
   const regolaRaggio = raggio == null ? "" : `
 button[style*="background: rgb"]:not([data-niente-ombra])${nonTondi},
 button[style*="background-color: rgb"]:not([data-niente-ombra])${nonTondi},
@@ -39036,6 +39039,7 @@ function TastoPreferitoDock({ voce, lato, raggio, onApri, onScegli, onTogli, nel
         onClick={onScegli}
         title="Scegli una scorciatoia"
         aria-label="Aggiungi una scorciatoia"
+        data-aspetto-dock="1"
         style={{
           width: lato, height: lato, borderRadius: raggioTasto, flexShrink: 0, cursor: "pointer", padding: 0,
           background: "rgba(225,225,228,0.95)", border: "1.5px solid #fff", color: "#5E6270",
@@ -39060,6 +39064,7 @@ function TastoPreferitoDock({ voce, lato, raggio, onApri, onScegli, onTogli, nel
         onPointerLeave={finePressione}
         onPointerCancel={finePressione}
         title={`${voce.titolo} — tasto destro o pressione lunga per cambiare o togliere`}
+        data-aspetto-dock="1"
         style={{
           width: lato, height: lato, borderRadius: raggioTasto, cursor: "pointer", padding: "4px 5px",
           background: NAVY, border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
@@ -60799,6 +60804,7 @@ export default function App() {
     <button
       onClick={() => setPreferitiAperti((v) => !v)}
       aria-label={preferitiAperti ? "Chiudi le scorciatoie" : "Apri le scorciatoie"}
+      data-aspetto-dock="1"
       title={preferitiAperti ? "Chiudi le scorciatoie" : "Le tue scorciatoie"}
       style={{
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -60893,6 +60899,7 @@ export default function App() {
       <button
         onClick={apriImpostazioni}
         aria-label="Impostazioni"
+        data-aspetto-dock="1"
         title="Impostazioni"
         style={{
           background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
@@ -60910,6 +60917,7 @@ export default function App() {
             onClick={vaiIndietro}
             disabled={pilaIndietro.length === 0}
             aria-label="Indietro"
+            data-aspetto-dock="1"
             title="Indietro"
             style={{
               background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
@@ -60925,6 +60933,7 @@ export default function App() {
             onClick={vaiAvanti}
             disabled={pilaAvanti.length === 0}
             aria-label="Avanti"
+            data-aspetto-dock="1"
             title="Avanti"
             style={{
               background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
@@ -61011,6 +61020,7 @@ export default function App() {
               <button
                 onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
                 aria-label="Home"
+                data-aspetto-dock="1"
                 title="Home"
                 style={{ ...stileTastoDock, cursor: "pointer" }}
               >
@@ -61025,6 +61035,7 @@ export default function App() {
                     onClick={vaiIndietro}
                     disabled={pilaIndietro.length === 0}
                     aria-label="Indietro"
+                    data-aspetto-dock="1"
                     title="Indietro"
                     style={{ ...stileTastoDock, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1 }}
                   >
@@ -61036,6 +61047,7 @@ export default function App() {
                     onClick={vaiAvanti}
                     disabled={pilaAvanti.length === 0}
                     aria-label="Avanti"
+                    data-aspetto-dock="1"
                     title="Avanti"
                     style={{ ...stileTastoDock, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1 }}
                   >
@@ -61048,6 +61060,7 @@ export default function App() {
               <button
                 onClick={apriImpostazioni}
                 aria-label="Impostazioni"
+                data-aspetto-dock="1"
                 title="Impostazioni"
                 style={{ ...stileTastoDock, cursor: "pointer" }}
               >
@@ -61063,7 +61076,7 @@ export default function App() {
             <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
               <button
                 onClick={() => setDockNascosto((v) => !v)}
-                aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+                aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"} data-aspetto-dock="1"
                 title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -61125,7 +61138,7 @@ export default function App() {
               <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
                 <button
                   onClick={() => setDockNascosto((v) => !v)}
-                  aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+                  aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"} data-aspetto-dock="1"
                   title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
@@ -61186,6 +61199,7 @@ export default function App() {
           <button
             onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
             aria-label="Home"
+            data-aspetto-dock="1"
             title="Home"
             style={{
               background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: tastoDock.raggio,
