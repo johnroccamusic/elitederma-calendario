@@ -8860,6 +8860,20 @@ function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
   const isMobile = useIsMobile();
   const [caricando, setCaricando] = useState(false);
   const haSlide = !!corso.slide_pdf_path;
+  // "Apri" mostra il PDF in una scheda nuova, "Scarica" lo salva col suo
+  // nome: entrambi con un collegamento firmato che vale cinque minuti,
+  // come per la master. Il file non ha un indirizzo pubblico.
+  const [preparando, setPreparando] = useState(null); // "apri" | "scarica" | null
+  async function apriOScarica(modo) {
+    if (preparando) return;
+    setPreparando(modo);
+    const opzioni = modo === "scarica" ? { download: corso.slide_pdf_nome || "slide.pdf" } : undefined;
+    const { data, error } = await supabase.storage.from(BUCKET_SLIDE).createSignedUrl(corso.slide_pdf_path, 300, opzioni);
+    setPreparando(null);
+    if (error || !data?.signedUrl) { onMessaggio?.("Non riesco ad aprire il file: " + (error?.message || "collegamento non disponibile")); return; }
+    if (modo === "scarica") { const a = document.createElement("a"); a.href = data.signedUrl; a.download = corso.slide_pdf_nome || "slide.pdf"; document.body.appendChild(a); a.click(); a.remove(); }
+    else window.open(data.signedUrl, "_blank", "noopener");
+  }
 
   async function carica(e) {
     const file = e.target.files?.[0];
@@ -8911,6 +8925,18 @@ function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+        {haSlide && (
+          <>
+            <button onClick={() => apriOScarica("apri")} disabled={!!preparando} title="Guarda il PDF in una scheda nuova"
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: `1px solid ${NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              {preparando === "apri" ? "Apro…" : "Apri"}
+            </button>
+            <button onClick={() => apriOScarica("scarica")} disabled={!!preparando} title="Salva il PDF sul dispositivo"
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              {preparando === "scarica" ? "Preparo…" : "Scarica"}
+            </button>
+          </>
+        )}
         <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: haSlide ? NAVY : "#fff", background: haSlide ? "#fff" : NAVY, border: `1px solid ${haSlide ? CREAM_BORDER : NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: caricando ? "default" : "pointer", whiteSpace: "nowrap" }}>
           {caricando ? "Carico…" : haSlide ? "Sostituisci" : "Carica PDF"}
           <input type="file" accept="application/pdf" onChange={carica} disabled={caricando} style={{ display: "none" }} />
