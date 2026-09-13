@@ -14676,6 +14676,40 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
   );
 }
 
+// Il tasto tondo del piu' o del meno. A un tocco fa un passo; tenuto
+// premuto continua da solo, prima piano poi svelto: a passi di un pixel,
+// dieci tocchi per vedere una differenza erano troppi, e un pixel solo
+// sembrava che non fosse cambiato niente
+function TastoPasso({ segno, onPasso, title, disabled = false }) {
+  const passo = React.useRef(onPasso);
+  passo.current = onPasso;
+  const timer = React.useRef(null);
+  const ferma = () => { if (timer.current) { clearTimeout(timer.current); clearInterval(timer.current); timer.current = null; } };
+  useEffect(() => ferma, []);
+  const inizia = (e) => {
+    if (disabled) return;
+    passo.current();
+    timer.current = setTimeout(() => {
+      let colpi = 0;
+      timer.current = setInterval(() => { colpi += 1; passo.current(); if (colpi === 12) { clearInterval(timer.current); timer.current = setInterval(() => passo.current(), 45); } }, 110);
+    }, 420);
+  };
+  const pieno = segno === "+";
+  return (
+    <button
+      onPointerDown={inizia} onPointerUp={ferma} onPointerLeave={ferma} onPointerCancel={ferma}
+      onContextMenu={(e) => e.preventDefault()}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); passo.current(); } }}
+      disabled={disabled} title={title} aria-label={title}
+      style={{
+        width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: pieno ? NAVY : "#fff", color: pieno ? "#fff" : NAVY,
+        cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1, fontSize: 17, lineHeight: 1, padding: 0,
+        touchAction: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
+      }}
+    >{segno}</button>
+  );
+}
+
 const NOME_ELEMENTO_ASPETTO = {
   mobile: "Pulsante mobile", desktop: "Pulsante desktop",
   aree: "Aree dati", pulsanti: "Altri pulsanti",
@@ -14746,22 +14780,18 @@ function PaginaAspettoApp() {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
-        <button onClick={() => metti(dock[campo] - 1)} title={aiutoMeno}
-          style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
+        <TastoPasso segno="−" title={aiutoMeno} onPasso={() => metti(dock[campo] - 1)} />
         <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{dock[campo]} px</span>
-        <button onClick={() => metti(dock[campo] + 1)} title={aiutoPiu}
-          style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
+        <TastoPasso segno="+" title={aiutoPiu} onPasso={() => metti(dock[campo] + 1)} />
       </div>
     );
   };
   const piuMeno = (etichetta, campo, min, max, unita, aiutoMeno, aiutoPiu) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 78 }}>{etichetta}</span>
-      <button onClick={() => cambia({ [campo]: Math.max(min, corrente[campo] - 1) })} title={aiutoMeno}
-        style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
+      <TastoPasso segno="−" title={aiutoMeno} onPasso={() => cambia({ [campo]: Math.max(min, corrente[campo] - 1) })} />
       <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 48, textAlign: "center" }}>{corrente[campo]}{unita}</span>
-      <button onClick={() => cambia({ [campo]: Math.min(max, corrente[campo] + 1) })} title={aiutoPiu}
-        style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
+      <TastoPasso segno="+" title={aiutoPiu} onPasso={() => cambia({ [campo]: Math.min(max, corrente[campo] + 1) })} />
     </div>
   );
 
