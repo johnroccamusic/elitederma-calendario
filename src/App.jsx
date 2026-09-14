@@ -37125,10 +37125,10 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   });
 
   // le quote in contanti rinviate dalle classi: vere righe di impegno
-  // sotto il nome si legge di quale corso erano e di che data: "Contanti
-  // rinviati dal corso · IKE · Milano · 11 set 2026"
+  // sotto il nome la stessa riga delle voci a bonifico: corso, sede e
+  // data ("IKE · Milano · 11 set"), niente altro
   const cashRinviati = vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi })
-    .map((x) => ({ ...x, oggetto: x.corsoData ? `Contanti rinviati dal corso · ${etichettaCorso(x.corsoData)}` : x.oggetto }));
+    .map((x) => ({ ...x, oggetto: x.corsoData ? null : x.oggetto }));
   const daPagare = [...daPagareVirtuali, ...righeReali, ...occorrenzeAbbonamenti, ...cashRinviati].sort((a, b) => {
     const da = a.corsoData?.data_fine || a.dataDebito || "";
     const db = b.corsoData?.data_fine || b.dataDebito || "";
