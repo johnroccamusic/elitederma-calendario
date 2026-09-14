@@ -23939,8 +23939,34 @@ function PannelloRiepilogoAmministrativo({
   // impegno, da saldare piu' avanti per bonifico o dalla cassa centrale.
   // In tutti e due i casi smette di pesare sulla busta di questo corso.
   const impegniPerChiave = new Map((impegni || []).filter((x) => x.chiave_origine).map((x) => [x.chiave_origine, x]));
+  // La quota venditori si decide venditore per venditore: ognuno ha la
+  // sua chiave negli impegni ("cash_venditore_<classe>_<VENDITORE>", che
+  // non si confonde con quella della riga totale) e il suo flag. La riga
+  // "Quota venditore" non ha un flag suo: il suo cash e' quello che resta
+  // dopo aver tolto chi e' stato mandato nello scadenziario, ed e' quello
+  // che "Pagamenti effettuati" registra dalla busta.
+  const righeVenditoriCash = quoteVenditoreDettaglio.map((v) => {
+    const modalita = modalitaVenditore(quoteVenditoriSplit, corsoData.id, v.chiave);
+    const suoBonifico = modalita === "B" ? v.totale : modalita === "1/2" ? round2(v.totale / 2) : 0;
+    const suoCash = round2(v.totale - suoBonifico);
+    const rigaId = `${corsoData.id}_${v.chiave}`;
+    const impegnoCash = impegniPerChiave.get(`cash_venditore_${rigaId}`) || null;
+    return { ...v, tipo: "venditore", rigaId, modalita, suoBonifico, suoCash, cash: suoCash, impegnoCash, cashRinviato: !!impegnoCash };
+  });
+  const cashVenditoriNelloScadenziario = round2(righeVenditoriCash.filter((v) => v.cashRinviato).reduce((somma, v) => somma + v.suoCash, 0));
   const righeSpeseTutte = righeSpeseGrezze.map((r) => {
     const chiave = chiaveCashRiga(r);
+    if (r.tipo === "venditore") {
+      return {
+        ...r,
+        cash: round2(Math.max(0, (r.cash || 0) - cashVenditoriNelloScadenziario)),
+        cashPagato: chiaviSpeseEsistenti.has(chiave),
+        cashRinviato: false,
+        impegnoCash: null,
+        cashGiaRegistrato: chiaviSpeseEsistenti.has(chiave),
+        flagPerVenditore: true,
+      };
+    }
     const impegnoCash = impegniPerChiave.get(chiave) || null;
     return {
       ...r,
@@ -24391,7 +24417,12 @@ function PannelloRiepilogoAmministrativo({
                               decide se pagarla dalla cassa contanti o con
                               bonifico. Stesse caselle di B/C/½ qui accanto. */}
                           <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {(r.cash || 0) > 0 && !r.cashPagato && (
+                            {r.flagPerVenditore && !r.cashPagato && cashVenditoriNelloScadenziario > 0 && (
+                              <span title="Somma delle quote venditore mandate nello scadenziario: si decide riga per riga qui sotto" style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.15 }}>
+                                {fmtEuroErp2(cashVenditoriNelloScadenziario)}<br />in scad.
+                              </span>
+                            )}
+                            {!r.flagPerVenditore && (r.cash || 0) > 0 && !r.cashPagato && (
                               <div style={{ display: "flex", gap: isMobile ? 4 : 6, justifyContent: "center" }}>
                                 {[{ k: "busta", l: "Busta", t: "La quota in contanti esce dalla busta di questo corso e va in prima nota con Pagamenti effettuati" }, { k: "scad", l: "Scad.", t: "La quota in contanti va nello scadenziario passivo (Quadro impegni): si decide poi se pagarla dalla cassa contanti o con bonifico" }].map((o) => {
                                   const attiva = o.k === "scad" ? r.cashRinviato : !r.cashRinviato;
@@ -24515,7 +24546,34 @@ function PannelloRiepilogoAmministrativo({
                                     <>
                                     <span style={cellaDedotta}>€ {suoBonifico}</span>
                                     <span style={cellaDedotta}>€ {suoCash}</span>
-                                    <div />
+                                    {/* il flag di questo venditore: un tasto
+                                        solo che dice dove sta la sua parte in
+                                        contanti e la sposta a ogni tocco.
+                                        Sparisce quando la quota della classe
+                                        e' gia' stata registrata come pagata */}
+                                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                      {suoCash > 0 && !r.cashPagato && (() => {
+                                        const rv = righeVenditoriCash.find((x) => x.chiave === v.chiave);
+                                        const nelloScad = !!rv?.cashRinviato;
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={() => (nelloScad ? riportaCashSulCorso({ ...rv, nome: v.nome }) : rinviaCashAgliImpegni({ ...rv, nome: `${v.nome} (quota venditore)` }))}
+                                            title={nelloScad
+                                              ? "Nello scadenziario passivo (Quadro impegni): premi per rimetterla a carico della busta di questo corso"
+                                              : "A carico della busta di questo corso: premi per mandarla nello scadenziario passivo, dove si decide se pagarla dalla cassa contanti o con bonifico"}
+                                            style={{
+                                              ...fontBody, fontSize: 9, fontWeight: 700, lineHeight: 1,
+                                              border: `1px solid ${nelloScad ? "#A8C4E8" : CREAM_BORDER}`, borderRadius: 6,
+                                              background: nelloScad ? "#EDF3FB" : "#fff", color: nelloScad ? "#1F4E8C" : NAVY,
+                                              padding: "3px 6px", cursor: "pointer", whiteSpace: "nowrap",
+                                            }}
+                                          >
+                                            {nelloScad ? "Scad." : "Busta"}
+                                          </button>
+                                        );
+                                      })()}
+                                    </div>
                                     {/* Qui la lettera sta ACCANTO alla casella,
                                         non sopra: impilate facevano un
                                         blocco alto due righe in una riga di
