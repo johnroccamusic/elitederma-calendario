@@ -45359,11 +45359,14 @@ function preparaScarichi(righe, { suggerimento, sogliaInvalicabile = false, tito
 // shop passa da WooCommerce (fonte di verità della giacenza online) e il
 // magazzino viaggia nella stessa chiamata quando la riga è divisa fra le
 // due fonti — un giro di rete in meno
-async function applicaScarichi(piani, contesto = {}) {
-  for (const { prodotto, piano } of piani || []) {
-    if (!piano.daScaricare) continue;
+async function applicaScarichi(piani, contesto = {}, onAvanzamento = null) {
+  const daFare = (piani || []).filter(({ piano }) => piano.daScaricare);
+  let fatti = 0;
+  for (const { prodotto, piano } of daFare) {
     const errore = await muoviStock(prodotto, -piano.daScaricare, { origine: "scarico", ...contesto });
     if (errore) return errore;
+    fatti += 1;
+    onAvanzamento?.(fatti, daFare.length);
   }
   return null;
 }
@@ -56133,7 +56136,7 @@ function TastoFaseSede({ fatto, spento, etichettaDaFare, etichettaFatto, onClick
     </button>
   );
 }
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, avanzamento = null, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const inSede = !!loc?.sede_centrale;
   const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
@@ -56239,7 +56242,16 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           </div>
         ) : (
         <div style={{ display: "flex", gap: 6, flex: "1 1 320px", minWidth: 280, alignItems: "stretch" }}>
-          {FASI_LOGISTICA.map((f) => (
+          {/* mentre il magazzino si muove le pillole lasciano il posto al
+              conto dei prodotti: si vede che sta lavorando e non si
+              preme due volte */}
+          {inLavorazione ? (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "9px 10px", borderRadius: 10, background: "#FBEAE4", border: "1px solid #C0392B", ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>
+              <span style={{ width: 14, height: 14, border: "2px solid #C0392B", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "giraLogistica 0.9s linear infinite" }} />
+              <style>{`@keyframes giraLogistica { to { transform: rotate(360deg); } }`}</style>
+              Magazzino in movimento{avanzamento?.totale ? `: ${avanzamento.fatti} di ${avanzamento.totale} prodotti` : "…"} — non premere di nuovo
+            </div>
+          ) : FASI_LOGISTICA.map((f) => (
             <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }} />
           ))}
           {/* indietro si torna fino al ritiro, non oltre. Finche' il
@@ -57060,6 +57072,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 
   const edizioniInLavorazioneRef = React.useRef(new Set());
   const [edizioneInLavorazione, setEdizioneInLavorazione] = useState(null);
+  // quanti prodotti sono gia' passati: ogni prodotto fa un giro anche su
+  // WooCommerce e un corso intero puo' durare due minuti. Senza questo
+  // numero sembrava che il tasto non avesse fatto niente
+  const [avanzamentoScarico, setAvanzamentoScarico] = useState(null);
   function iniziaLavorazione(corsoDataId) {
     if (edizioniInLavorazioneRef.current.has(corsoDataId)) return false;
     edizioniInLavorazioneRef.current.add(corsoDataId);
@@ -57069,6 +57085,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   function fineLavorazione(corsoDataId) {
     edizioniInLavorazioneRef.current.delete(corsoDataId);
     setEdizioneInLavorazione((c) => (c === corsoDataId ? null : c));
+    setAvanzamentoScarico(null);
   }
   async function sincronizzaMagazzino(corsoData) {
     if (!iniziaLavorazione(corsoData.id)) {
@@ -57227,11 +57244,16 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       return prodotto && (delta > 0 || prodotto.conta_magazzino === false);
     });
+    const totaleMovimenti = rientri.length + (pianiKit || []).filter(({ piano }) => piano.daScaricare).length;
+    let fattiMovimenti = 0;
+    setAvanzamentoScarico({ fatti: 0, totale: totaleMovimenti });
     for (const [prodottoId, delta] of rientri) {
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       await muoviStock(prodotto, delta, { origine: "kit_corso", nota: "Rientro/rettifica preparazione kit", riferimento: corsoData.id });
+      fattiMovimenti += 1;
+      setAvanzamentoScarico({ fatti: fattiMovimenti, totale: totaleMovimenti });
     }
-    const erroreScaricoKit = await applicaScarichi(pianiKit, { origine: "kit_corso", nota: "Scarico kit per il corso", riferimento: corsoData.id });
+    const erroreScaricoKit = await applicaScarichi(pianiKit, { origine: "kit_corso", nota: "Scarico kit per il corso", riferimento: corsoData.id }, (fatti) => setAvanzamentoScarico({ fatti: fattiMovimenti + fatti, totale: totaleMovimenti }));
     if (erroreScaricoKit) {
       mostraAvviso("Scarico kit interrotto a metà — " + erroreScaricoKit + "\n\nControlla le giacenze in Gestione magazzino prima di riprovare.");
       return false;
@@ -57267,9 +57289,14 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       if (prodottoId && giaScaricato) deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) + giaScaricato;
     });
     if (Object.keys(deltaPerProdotto).length > 0) {
-      for (const [prodottoId, delta] of Object.entries(deltaPerProdotto)) {
+      const voci = Object.entries(deltaPerProdotto);
+      setAvanzamentoScarico({ fatti: 0, totale: voci.length });
+      let fatti = 0;
+      for (const [prodottoId, delta] of voci) {
         const prodotto = prodottiShop.find((p) => p.id === prodottoId);
         if (prodotto) await muoviStock(prodotto, delta, { origine: "kit_corso", nota: "Prodotti rientrati dal corso", riferimento: corsoData.id });
+        fatti += 1;
+        setAvanzamentoScarico({ fatti, totale: voci.length });
       }
     }
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {} });
@@ -57542,6 +57569,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 preparatoTs={statoDi(cd.id).materiale_preparato_ts}
                 inventarioTs={statoDi(cd.id).inventario_sede_ts}
                 inLavorazione={edizioneInLavorazione === cd.id}
+                avanzamento={edizioneInLavorazione === cd.id ? avanzamentoScarico : null}
                 onAllestisci={(allestire) => { setEdizioneSelId(cd.id); allestisciCorso(cd, allestire); }}
                 onPrepara={(preparare) => { setEdizioneSelId(cd.id); preparaMateriale(cd, preparare); }}
                 onApriInventarioSede={() => { setEdizioneSelId(cd.id); setInventarioSedeCorsoId(cd.id); }}
