@@ -24573,6 +24573,7 @@ function PannelloRiepilogoAmministrativo({
     totaleCosti: totaleCostiClasse, risultato: risultatoClasse,
     totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse, cashMancante: cashMancanteClasse,
     cashPresoDallaBusta: cashPresoDallaBustaClasse, cashRinviati: cashRinviatiClasse, cashDaDisporre: cashDaDisporreClasse, cashRegistrato: cashRegistratoBustaClasse,
+    daIncassareAncora: daIncassareAncoraClasse,
   } = contiClasse;
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
@@ -25219,7 +25220,7 @@ function PannelloRiepilogoAmministrativo({
                         quanto resta in busta. L'ultima si muove solo quando
                         i pagamenti sono stati disposti davvero. */}
                     {[
-                      { etichetta: "Cash incassato al corso", valore: contantiClasse },
+                      { etichetta: "Cash incassato al corso", valore: contantiClasse, nota: daIncassareAncoraClasse > 0 ? `€ ${daIncassareAncoraClasse} ancora da incassare` : null },
                       { etichetta: "Totale cash da pagare", valore: totaleCashDaPagareClasse, nota: "dalla busta o rinviato" },
                       // preso dalla busta = uscito davvero, cioe' disposto e
                       // registrato; quello solo deciso sta nella nota
@@ -29906,7 +29907,12 @@ function contiRiepilogoClasse({
   // Incassi lordo/netto: la somma dei VERI campi "totale" (con IVA) e
   // "imponibile" (senza IVA) di ogni fase, piu' modelle e incassi extra.
   // L'IVA e' la differenza, non uno scorporo inventato.
-  const tutteLeQuote = listaIscritti.flatMap(quotePagateDiIscritto);
+  // Il saldo al corso (e le modelle) contano solo se l'allievo ha pagato
+  // davvero, cioe' se sulla sua scheda e' stato premuto "Incassa": chi non
+  // viene o non paga non e' un incasso, e quei soldi in cassa non ci sono.
+  // Acconto e pre corso arrivano prima e restano come sono.
+  const tutteLeQuote = listaIscritti.flatMap((i) => quotePagateDiIscritto(i).filter((q) => q.fase !== "saldo" || i.incassato));
+  const daIncassareAncora = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : (i.saldo_totale || 0) + modelleTotaleDi(i)), 0));
   const venditeContanti = round2(venditeAlCorso.filter((v) => v.metodo_pagamento === "contanti").reduce((s, v) => s + (v.totale || 0), 0));
   const venditePos = round2(venditeAlCorso.filter((v) => v.metodo_pagamento !== "contanti").reduce((s, v) => s + (v.totale || 0), 0));
   // I prodotti venduti al corso entrano nei conti come tutto il resto:
@@ -29919,7 +29925,7 @@ function contiRiepilogoClasse({
   const venditeImponibile = round2(venditeAlCorso.reduce((s, v) => s + (v.totale_imponibile != null ? v.totale_imponibile : (v.totale || 0)), 0));
   const incassoLordo = round2(
     tutteLeQuote.reduce((s, q) => s + q.totale, 0)
-    + listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0)
+    + listaIscritti.reduce((s, i) => s + (i.incassato ? modelleTotaleDi(i) : 0), 0)
     + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
     + venditeLordo
   );
@@ -29929,8 +29935,8 @@ function contiRiepilogoClasse({
   // "Da avere al corso": gli unici importi incassati fisicamente il giorno
   // del corso — acconto e pre corso arrivano prima e non passano dalle
   // mani del master in aula
-  const contanti = round2(listaIscritti.reduce((s, i) => s + ((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti + venditeContanti);
-  const pos = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos + venditePos);
+  const contanti = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? (((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i)) : 0), 0) + incassiExtraContanti + venditeContanti);
+  const pos = round2(listaIscritti.reduce((s, i) => s + (i.incassato && i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos + venditePos);
   const totaleCosti = round2(
     totaleSpeseAutomaticheClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0)
     + costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
@@ -29954,7 +29960,7 @@ function contiRiepilogoClasse({
     cashPrimaDelCorso: round2(tutteLeQuote.filter((q) => q.fase !== "saldo" && METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)),
     contoCorrente: round2(tutteLeQuote.filter((q) => !METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0) + incassiExtraPos + venditePos),
     incassiExtraContanti, incassiExtraPos,
-    contanti, pos, daIncassare,
+    contanti, pos, daIncassare, daIncassareAncora,
     venditeContanti, venditePos, venditeTotale: round2(venditeContanti + venditePos),
     totaleCosti, risultato: round2(daIncassare - totaleCosti),
     totaleCashDaPagare, cashRegistrato, cashDaDisporre, cashRinviati,
