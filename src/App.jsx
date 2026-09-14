@@ -37125,7 +37125,10 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   });
 
   // le quote in contanti rinviate dalle classi: vere righe di impegno
-  const cashRinviati = vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi });
+  // sotto il nome si legge di quale corso erano e di che data: "Contanti
+  // rinviati dal corso · IKE · Milano · 11 set 2026"
+  const cashRinviati = vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi })
+    .map((x) => ({ ...x, oggetto: x.corsoData ? `Contanti rinviati dal corso · ${etichettaCorso(x.corsoData)}` : x.oggetto }));
   const daPagare = [...daPagareVirtuali, ...righeReali, ...occorrenzeAbbonamenti, ...cashRinviati].sort((a, b) => {
     const da = a.corsoData?.data_fine || a.dataDebito || "";
     const db = b.corsoData?.data_fine || b.dataDebito || "";
