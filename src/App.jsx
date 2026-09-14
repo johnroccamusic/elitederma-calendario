@@ -1228,25 +1228,25 @@ function IconaPacchettoRiga({ size = 18, color = "currentColor" }) {
 // compare un dettaglio arancione
 function IconaTileCorsi({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M8 3v4M16 3v4M3 10h18" />
-      <circle cx="8.5" cy="14.5" r="1" fill={color} stroke="none" />
-      <circle cx="12" cy="14.5" r="1" fill={color} stroke="none" />
-      <circle cx="15.5" cy="14.5" r="1" fill={color} stroke="none" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.6" y="3.91" width="20.8" height="18.49" rx="2.31" />
+      <path d="M7.38 1.6v4.62M16.62 1.6v4.62M1.6 9.69h20.8" />
+      <circle cx="7.96" cy="14.89" r="1.16" fill={color} stroke="none" />
+      <circle cx="12" cy="14.89" r="1.16" fill={color} stroke="none" />
+      <circle cx="16.04" cy="14.89" r="1.16" fill={color} stroke="none" />
     </svg>
   );
 }
 function IconaTileVenditori({ size = 44, color = NAVY }) {
   // tre persone in fila, quella in mezzo davanti e piu' grande: la squadra
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="9" r="3.5" />
-      <path d="M6 19.4c0-3.5 2.7-6 6-6s6 2.5 6 6" />
-      <circle cx="5" cy="10.3" r="2.5" />
-      <path d="M1.4 17.7c0-2.7 1.7-4.5 4.2-4.5.8 0 1.5.2 2.1.5" />
-      <circle cx="19" cy="10.3" r="2.5" />
-      <path d="M22.6 17.7c0-2.7-1.7-4.5-4.2-4.5-.8 0-1.5.2-2.1.5" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8.62" r="3.43" />
+      <path d="M6.11 18.82c0 -3.43 2.65 -5.89 5.89 -5.89s5.89 2.45 5.89 5.89" />
+      <circle cx="5.13" cy="9.89" r="2.45" />
+      <path d="M1.6 17.15c0 -2.65 1.67 -4.42 4.12 -4.42 0.78 0 1.47 0.2 2.06 0.49" />
+      <circle cx="18.87" cy="9.89" r="2.45" />
+      <path d="M22.4 17.15c0 -2.65 -1.67 -4.42 -4.12 -4.42 -0.78 0 -1.47 0.2 -2.06 0.49" />
     </svg>
   );
 }
@@ -1254,31 +1254,31 @@ function IconaTileMaster({ size = 44, color = NAVY }) {
   // il tocco da laurea come nel riferimento: falda larga a rombo, calotta
   // dritta con il fondo tondo, nappa a destra con il nodo a meta'
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.6 9.4L12 5.6l9.4 3.8L12 13.2z" />
-      <path d="M6.6 11.2v4.6c0 1.6 2.4 2.9 5.4 2.9s5.4-1.3 5.4-2.9v-4.6" />
-      <path d="M21.4 9.4v8" />
-      <circle cx="21.4" cy="13.8" r="1.1" fill={color} stroke="none" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.6 9.01L11.84 4.87l10.24 4.14L11.84 13.14z" />
+      <path d="M5.96 10.97v5.01c0 1.74 2.61 3.16 5.88 3.16s5.88 -1.42 5.88 -3.16v-5.01" />
+      <path d="M22.07 9.01v8.71" />
+      <circle cx="22.07" cy="13.8" r="1.2" fill={color} stroke="none" />
     </svg>
   );
 }
 function IconaTileLogistica({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 7h10v9H3z" />
-      <path d="M13 10h4l3 3v3h-7z" />
-      <circle cx="7" cy="18.3" r="1.5" />
-      <circle cx="17" cy="18.3" r="1.5" />
-      <path d="M6 9.3h4" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.6 4.17h12.24v11.01H1.6z" />
+      <path d="M13.84 7.84h4.89l3.67 3.67v3.67h-8.56z" />
+      <circle cx="6.49" cy="18" r="1.84" />
+      <circle cx="18.73" cy="18" r="1.84" />
+      <path d="M5.27 6.98h4.89" />
     </svg>
   );
 }
 function IconaStoricoPos({ size = 18, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12a9 9 0 1 0 3-6.7" />
-      <path d="M3 4v4.5h4.5" />
-      <path d="M12 8v4.5l3 2" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.6 11.99a10.4 10.4 0 1 0 3.47 -7.74" />
+      <path d="M1.6 2.75v5.2h5.2" />
+      <path d="M12 7.37v5.2l3.47 2.31" />
     </svg>
   );
 }
@@ -1658,20 +1658,20 @@ function IconaTilePos({ size = 44, color = NAVY }) {
   // tutto a tratto, un colore solo: il corpo, il display, i sei tasti, la
   // carta infilata nel fianco e lo scontrino che esce da sotto
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4.4" y="1.8" width="10.9" height="15.6" rx="1.7" />
-      <rect x="6.8" y="4.2" width="6.1" height="3.3" rx="0.4" />
-      <path d="M7.4 10.2h1.4M11 10.2h1.4M7.4 12.6h1.4M11 12.6h1.4M7.4 15h1.4M11 15h1.4" />
-      <rect x="15.3" y="6" width="4.2" height="8.4" rx="0.9" />
-      <path d="M7.8 17.4v4.4h4.1v-4.4" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4.15" y="1.6" width="11.34" height="16.22" rx="1.77" />
+      <rect x="6.64" y="4.1" width="6.34" height="3.43" rx="0.42" />
+      <path d="M7.27 10.34h1.46M11.01 10.34h1.46M7.27 12.83h1.46M11.01 12.83h1.46M7.27 15.33h1.46M11.01 15.33h1.46" />
+      <rect x="15.48" y="5.97" width="4.37" height="8.74" rx="0.94" />
+      <path d="M7.68 17.82v4.58h4.26v-4.58" />
     </svg>
   );
 }
 function IconaTileModelle({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="7.8" r="3.8" />
-      <path d="M4.5 20.2c0-4 3.4-6.6 7.5-6.6s7.5 2.6 7.5 6.6" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="6.48" r="4.88" />
+      <path d="M2.37 22.4c0 -5.14 4.37 -8.47 9.63 -8.47s9.63 3.34 9.63 8.47" />
     </svg>
   );
 }
@@ -1696,12 +1696,12 @@ function IconaTileStatistiche({ size = 44, color = NAVY }) {
   // tre barre che salgono, senza base, e la freccia che parte sopra la
   // prima e punta in alto a destra
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3.4" y="14.6" width="4.2" height="6.6" rx="0.8" />
-      <rect x="9.9" y="12.2" width="4.2" height="9" rx="0.8" />
-      <rect x="16.4" y="9.6" width="4.2" height="11.6" rx="0.8" />
-      <path d="M4.4 12.4c5.2-1 9.9-3.2 14.2-7" />
-      <path d="M15.4 4.8l3.7-.6-.6 3.7" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.6" y="14.3" width="5.08" height="7.98" rx="0.97" />
+      <rect x="9.46" y="11.4" width="5.08" height="10.88" rx="0.97" />
+      <rect x="17.32" y="8.25" width="5.08" height="14.03" rx="0.97" />
+      <path d="M2.81 11.64c6.29 -1.21 11.97 -3.87 17.17 -8.47" />
+      <path d="M16.11 2.45l4.47 -0.73 -0.73 4.47" />
     </svg>
   );
 }
@@ -1709,36 +1709,36 @@ function IconaTileStatistiche({ size = 44, color = NAVY }) {
 // tratto a 1,8 e colore passato, come tutte le altre della home
 function IconaTileAgenda({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M8 3v4M16 3v4M3 10h18" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.6" y="3.91" width="20.8" height="18.49" rx="2.31" />
+      <path d="M7.38 1.6v4.62M16.62 1.6v4.62M1.6 9.69h20.8" />
     </svg>
   );
 }
 function IconaTileLoghi({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="3" />
-      <circle cx="9" cy="9" r="2.2" />
-      <path d="M21 15l-5.5-5.5a2 2 0 0 0-2.8 0L4 18" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.6" y="1.6" width="20.8" height="20.8" rx="3.47" />
+      <circle cx="8.53" cy="8.53" r="2.54" />
+      <path d="M22.4 15.47l-6.36 -6.36a2.31 2.31 0 0 0 -3.24 0L2.76 18.93" />
     </svg>
   );
 }
 function IconaTileCrm({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="9" cy="8" r="3.2" />
-      <path d="M2.7 20c0-3.8 2.8-6 6.3-6s6.3 2.2 6.3 6" />
-      <circle cx="17" cy="8.5" r="2.4" />
-      <path d="M15.2 14.3c2.9.3 5.8 2 5.8 5.7" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8.76" cy="7" r="3.64" />
+      <path d="M1.6 20.64c0 -4.32 3.18 -6.82 7.16 -6.82s7.16 2.5 7.16 6.82" />
+      <circle cx="17.85" cy="7.57" r="2.73" />
+      <path d="M15.81 14.16c3.3 0.34 6.59 2.27 6.59 6.48" />
     </svg>
   );
 }
 function IconaTileLampadina({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18.3h6M10 21h4" />
-      <path d="M12 3a6 6 0 0 0-3.2 11.1c.6.4 1.2 1.3 1.2 2.1v.3h4v-.3c0-.8.6-1.7 1.2-2.1A6 6 0 0 0 12 3Z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8.53 19.28h6.93M9.69 22.4h4.62" />
+      <path d="M12 1.6a6.93 6.93 0 0 0 -3.7 12.83c0.69 0.46 1.39 1.5 1.39 2.43v0.35h4.62v-0.35c0 -0.92 0.69 -1.96 1.39 -2.43A6.93 6.93 0 0 0 12 1.6Z" />
     </svg>
   );
 }
@@ -1746,18 +1746,18 @@ function IconaTileLampadina({ size = 44, color = NAVY }) {
 function IconaTileCostiRicavi({ size = 44, color = NAVY }) {
   // il simbolo dell'euro e basta: l'arco aperto a destra e le due barre
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17.6 6.9A7.8 7.8 0 1 0 17.6 17.1" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.93 5.2A10.4 10.4 0 1 0 21.93 18.8" />
       {/* le due barre sporgono un poco a sinistra dell'arco, come nel riferimento */}
-      <path d="M2.7 10.4h12M2.7 13.6h12" />
+      <path d="M2.07 9.87h16M2.07 14.13h16" />
     </svg>
   );
 }
 function IconaTilePrezzi({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12.6 2.5h6.9a1 1 0 0 1 1 1v6.9a1 1 0 0 1-.3.7l-9 9a1 1 0 0 1-1.4 0l-7.2-7.2a1 1 0 0 1 0-1.4l9-9a1 1 0 0 1 .7-.3Z" />
-      <circle cx="16.8" cy="7.2" r="1.4" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13.36 1.94h7.89a1.14 1.14 0 0 1 1.14 1.14v7.89a1.14 1.14 0 0 1 -0.34 0.8l-10.29 10.29a1.14 1.14 0 0 1 -1.6 0l-8.23 -8.23a1.14 1.14 0 0 1 0 -1.6l10.29 -10.29a1.14 1.14 0 0 1 0.8 -0.34Z" />
+      <circle cx="18.17" cy="7.32" r="1.6" />
     </svg>
   );
 }
@@ -1790,19 +1790,16 @@ function IconaTileAnagrafiche({ size = 44, color = NAVY }) {
 // dimensione di tasto è quel contrasto a farla riconoscere al volo, molto
 // più del disegno del capannone in sé.
 function IconaTileGestioneMagazzino({ size = 44, color = NAVY }) {
-  // cinque punti più grande di quanto la griglia dei tasti chiede: la
-  // figura è larga e bassa, alla stessa misura delle altre sembrava minore
-  const lato = size + 5;
-  return (
-    <svg width={lato} height={lato} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       {/* i due muri e il tetto, un tratto solo aperto in basso */}
-      <path d="M3.1 20.6V8.5L12 2.9l8.9 5.6v12.1" />
+      <path d="M1.6 22.34V8.2L12 1.66l10.4 6.54v14.14" />
       {/* la trave sotto il colmo */}
-      <path d="M7.3 9.9h9.4" />
+      <path d="M6.51 9.84h10.98" />
       {/* le casse: una sopra, due sotto, a tratto */}
-      <rect x="9.7" y="12.4" width="4.6" height="3.5" rx="0.45" />
-      <rect x="6.6" y="16.5" width="4.6" height="3.5" rx="0.45" />
-      <rect x="12.8" y="16.5" width="4.6" height="3.5" rx="0.45" />
+      <rect x="9.31" y="12.76" width="5.38" height="4.09" rx="0.53" />
+      <rect x="5.69" y="17.55" width="5.38" height="4.09" rx="0.53" />
+      <rect x="12.93" y="17.55" width="5.38" height="4.09" rx="0.53" />
     </svg>
   );
 }
@@ -1830,12 +1827,12 @@ function IconaTileVenditeShop({ size = 44, color = NAVY }) {
 }
 function IconaTileOmaggio({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="9" width="18" height="4" rx="1" />
-      <rect x="4.5" y="13" width="15" height="8" rx="1" />
-      <path d="M12 9v12" />
-      <path d="M12 9c-1.2-3.2-3.4-4.5-4.8-3.6C5.8 6.3 6.5 9 12 9Z" />
-      <path d="M12 9c1.2-3.2 3.4-4.5 4.8-3.6 1.4.9.7 3.6-4.8 3.6Z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.6" y="7.31" width="20.8" height="4.62" rx="1.16" />
+      <rect x="3.33" y="11.93" width="17.33" height="9.24" rx="1.16" />
+      <path d="M12 7.31v13.87" />
+      <path d="M12 7.31c-1.39 -3.7 -3.93 -5.2 -5.55 -4.16C4.84 4.19 5.64 7.31 12 7.31Z" />
+      <path d="M12 7.31c1.39 -3.7 3.93 -5.2 5.55 -4.16 1.62 1.04 0.81 4.16 -5.55 4.16Z" />
     </svg>
   );
 }
@@ -1940,10 +1937,10 @@ const PERCORSO_INGRANAGGIO = percorsoIngranaggio(12, 12, 7.1, 1.25, 8);
 function IconaTileNormative({ size = 44, color = NAVY }) {
   // solo il foglio con le righe: niente bollino con la spunta
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 3h8l4 4v13a1.5 1.5 0 0 1-1.5 1.5h-10.5A1.5 1.5 0 0 1 4.5 20V4.5A1.5 1.5 0 0 1 6 3z" />
-      <path d="M14 3v4h4" />
-      <path d="M7.5 11.5h7M7.5 15h5" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.1 1.6h8.99l4.5 4.5v14.62a1.69 1.69 0 0 1 -1.69 1.69h-11.81A1.69 1.69 0 0 1 4.41 20.71V3.29A1.69 1.69 0 0 1 6.1 1.6z" />
+      <path d="M15.09 1.6v4.5h4.5" />
+      <path d="M7.78 11.16h7.87M7.78 15.09h5.62" />
     </svg>
   );
 }
