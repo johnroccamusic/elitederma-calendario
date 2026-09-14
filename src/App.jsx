@@ -52419,8 +52419,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               {!corsoPosId && couponReferralPersonale && (
                 <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 8 }}>
                   <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                  <span style={{ ...fontBody, fontSize: 15.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>{couponReferralPersonale.codice}</span>
-                  <span style={{ minWidth: 0 }}>Applica il mio referral</span>
+                  <span style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.2 }}>
+                    <span style={{ ...fontBody, fontSize: 15.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
+                    <span>Applica il mio referral</span>
+                  </span>
                   {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
                     <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
                   )}
