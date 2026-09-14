@@ -39335,7 +39335,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
         <RiquadroDatoCliente Icona={IconaPersonaSemplice} etichetta="Cliente" valore={vendita?.cliente_nome} />
         <RiquadroDatoCliente Icona={IconaBustaErp} etichetta="Email" valore={vendita?.cliente_email || fatturazione?.email} />
         <RiquadroDatoCliente Icona={IconaTileLogistica} etichetta="Spedizione" valore={metodoSpedizione} />
-        <RiquadroDatoCliente Icona={IconaCartaPos} etichetta="Pagamento" valore={vendita?.metodo_pagamento || grezzo?.payment_method_title} />
+        <RiquadroDatoCliente Icona={IconaCartaPos} etichetta="Pagamento" valore={vendita?.origine === "pos" && vendita?.metodo_pagamento ? etichettaMetodoVendita(vendita.metodo_pagamento) : (vendita?.metodo_pagamento || grezzo?.payment_method_title)} />
       </div>
       {notaCliente && (
         <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 10, padding: "7px 10px", marginBottom: 14 }}>
@@ -40662,8 +40662,8 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
     const iva = round2(totale - imponibile);
     setConfermaMetodo({
       id: v.id, nuovo, imponibile, iva, totale,
-      da: v.metodo_pagamento === "contanti" ? "Contanti" : "POS",
-      a: nuovo === "contanti" ? "Contanti" : "POS",
+      da: etichettaMetodoVendita(v.metodo_pagamento),
+      a: etichettaMetodoVendita(nuovo),
       spiegazione: senzaIva
         ? `Via l'IVA di ${fmtEuroErp2(v.totale_iva || 0)}: in contanti senza fattura non si genera imposta. Imponibile ${fmtEuroErp2(imponibile)}.`
         : `IVA scorporata: ${fmtEuroErp2(imponibile)} di imponibile e ${fmtEuroErp2(iva)} di imposta.`,
@@ -40836,6 +40836,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
               <option value="">POS e contanti</option>
               <option value="pos">Solo POS</option>
               <option value="contanti">Solo contanti</option>
+              <option value="buono_amazon">Solo Buono Amazon</option>
             </select>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "4px 8px" }}>
@@ -41002,6 +41003,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                               >
                                 <option value="pos">POS</option>
                                 <option value="contanti">Contanti</option>
+                                <option value="buono_amazon">Buono Amazon</option>
                               </select>
                             )}
                           </td>
@@ -51239,6 +51241,14 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
 // logica di aggregazione già esistente
 // spese di spedizione per una vendita al banco da spedire
 const COSTO_SPEDIZIONE_POS = 6.90;
+// Come si legge il metodo di una vendita al banco. Tre modi: POS/carta,
+// contanti, buono Amazon. Nei conti il buono sta con la carta: e' un
+// incasso non in contanti, con l'IVA scorporata come per la carta
+function etichettaMetodoVendita(metodo) {
+  if (metodo === "contanti") return "Contanti";
+  if (metodo === "buono_amazon") return "Buono Amazon";
+  return "POS";
+}
 function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, titolo = "POS Vendita diretta" }) {
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
@@ -52485,7 +52495,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <>
           <div style={etichettaPos}>Modalità di pagamento</div>
           <div style={{ display: "flex", gap: 10, marginBottom: isMobile ? 10 : 16 }}>
-            {[{ v: "pos", l: "POS / Carta", Icona: IconaCartaPos }, { v: "contanti", l: "Contanti", Icona: IconaBanconota }].map((m) => {
+            {[{ v: "pos", l: "POS / Carta", Icona: IconaCartaPos }, { v: "contanti", l: "Contanti", Icona: IconaBanconota }, { v: "buono_amazon", l: "Buono Amazon", Icona: IconaTileOmaggio }].map((m) => {
               const scelto = metodoPagamento === m.v;
               return (
                 <button
