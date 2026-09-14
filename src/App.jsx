@@ -19529,6 +19529,7 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
             larghezzePerCategoria={larghezzePerCategoria}
           />
         ))}
+        <CardStudentWork />
 
     </div>
   );
@@ -19628,43 +19629,120 @@ function prefissoCalibrazioneLogo(categoria) {
 // percorsi dei due PNG nello spazio "loghi-immagini" (cartella master/).
 // Vive fra le impostazioni condivise: nessuna tabella nuova.
 const CHIAVE_LOGHI_MASTER_PUBBLICATI = "loghi_masterPubblicati";
+// Il logo "Student work": uno solo, uguale per tutte, senza nome ne'
+// numero. Si carica in Setting loghi e ogni master lo trova nella sua
+// dashboard, in fila dopo il logo nero e quello bianco
+const CHIAVE_LOGO_STUDENT_WORK = "loghi_studentWork";
+function CardStudentWork() {
+  const [studentWork, salvaStudentWork] = useImpostazioneCondivisa(CHIAVE_LOGO_STUDENT_WORK, {});
+  const [caricando, setCaricando] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [anteprime, setAnteprime] = useState({});
+  const varianti = [{ k: "nero", l: "Student work nero" }, { k: "bianco", l: "Student work bianco" }];
+  useEffect(() => {
+    let vivo = true;
+    varianti.forEach((v) => {
+      const percorso = studentWork?.[v.k]?.percorso;
+      if (!percorso) { setAnteprime((prev) => ({ ...prev, [v.k]: null })); return; }
+      supabase.storage.from("loghi-immagini").createSignedUrl(percorso, 600).then(({ data }) => { if (vivo) setAnteprime((prev) => ({ ...prev, [v.k]: data?.signedUrl || null })); });
+    });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentWork?.nero?.percorso, studentWork?.bianco?.percorso]);
+  async function carica(variante, file) {
+    if (!file) return;
+    setCaricando(variante); setMsg("");
+    const { baseSicura, estensione } = nomeFileSicuro(file.name);
+    const percorso = `student-work/${variante}-${baseSicura}-${Date.now()}${estensione}`;
+    const { error } = await supabase.storage.from("loghi-immagini").upload(percorso, file, { contentType: file.type || "image/png" });
+    if (error) { setCaricando(null); setMsg("Errore nel caricare il logo: " + error.message); return; }
+    const vecchio = studentWork?.[variante]?.percorso;
+    if (vecchio) await supabase.storage.from("loghi-immagini").remove([vecchio]);
+    salvaStudentWork({ ...(studentWork || {}), [variante]: { percorso, nome: file.name, ts: new Date().toISOString() } });
+    setCaricando(null);
+    setMsg(`Student work ${variante} caricato: le master lo trovano nella loro dashboard.`);
+  }
+  async function rimuovi(variante) {
+    const vecchio = studentWork?.[variante]?.percorso;
+    if (!vecchio) return;
+    if (!window.confirm(`Togliere lo Student work ${variante}? Sparisce dalle dashboard delle master.`)) return;
+    await supabase.storage.from("loghi-immagini").remove([vecchio]);
+    const resto = { ...(studentWork || {}) }; delete resto[variante];
+    salvaStudentWork(resto);
+    setMsg(`Student work ${variante} tolto.`);
+  }
+  return (
+    <div style={{ ...cardStyle, marginTop: 16 }}>
+      <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Student work</div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+        Due file, nero e bianco, uguali per tutte e senza nome né numero: niente da calibrare. Ogni master li trova nella sua dashboard, in fila dopo il logo nero e quello bianco.
+      </div>
+      {varianti.map((v) => {
+        const voce = studentWork?.[v.k];
+        return (
+          <div key={v.k} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 150 }}>{v.l}</div>
+            {anteprime[v.k] && (
+              <div style={{ width: 140, padding: 8, background: v.k === "bianco" ? "#2B2B2B" : "#F1EDE4", borderRadius: 10, border: `1px solid ${CREAM_BORDER}` }}>
+                <img src={anteprime[v.k]} alt={v.l} style={{ width: "100%", height: "auto", display: "block" }} />
+              </div>
+            )}
+            <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 16, padding: "9px 16px", cursor: caricando ? "default" : "pointer", opacity: caricando ? 0.6 : 1, whiteSpace: "nowrap" }}>
+              {caricando === v.k ? "Carico…" : voce?.percorso ? "Sostituisci" : "Carica"}
+              <input type="file" accept="image/*" disabled={!!caricando} onChange={(e) => { carica(v.k, e.target.files?.[0]); e.target.value = ""; }} style={{ display: "none" }} />
+            </label>
+            {voce?.percorso && (
+              <button type="button" onClick={() => rimuovi(v.k)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Togli</button>
+            )}
+            {voce?.percorso && <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{voce.nome}{voce.ts ? ` · ${fmtData(String(voce.ts).slice(0, 10))}` : ""}</span>}
+          </div>
+        );
+      })}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 10 }}>{msg}</div>}
+    </div>
+  );
+}
 function LoghiMasterPubblicati({ masterId }) {
   const [pubblicati] = useImpostazioneCondivisa(CHIAVE_LOGHI_MASTER_PUBBLICATI, {});
+  const [studentWork] = useImpostazioneCondivisa(CHIAVE_LOGO_STUDENT_WORK, {});
   const [scaricando, setScaricando] = useState(null);
   const [msg, setMsg] = useState("");
   const miei = (pubblicati && pubblicati[masterId]) || [];
-  if (!masterId || miei.length === 0) return null;
-  async function scarica(logo, variante) {
-    const percorso = logo[variante];
+  // lo Student work, nero e bianco, e' di tutte: sta in fila dopo i loghi
+  // della master e, se lei non ne ha ancora, sta da solo sulla riga
+  const sw = { nero: studentWork?.nero?.percorso || null, bianco: studentWork?.bianco?.percorso || null };
+  const haStudentWork = !!(sw.nero || sw.bianco);
+  if (!masterId || (miei.length === 0 && !haStudentWork)) return null;
+  const righe = miei.length ? miei : [{ chiave: "__solo_student_work", etichetta: "", nome: "", nero: null, bianco: null }];
+  async function scarica(percorso, nomeFile, chiaveStato) {
     if (!percorso) return;
-    setScaricando(`${logo.chiave}-${variante}`); setMsg("");
+    setScaricando(chiaveStato); setMsg("");
     try {
       const { data, error } = await supabase.storage.from("loghi-immagini").download(percorso);
       if (error) throw error;
-      scaricaBlob(data, `${logo.chiave}-${variante}-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`);
+      scaricaBlob(data, nomeFile);
     } catch (e) { setMsg("Non riesco a scaricare il logo: " + (e?.message || e)); }
     setScaricando(null);
   }
-  // Una riga sola, discreta: "Scarica i tuoi loghi" a sinistra e a destra
-  // i link, uno per file. Con piu' loghi pubblicati (Master e Master
-  // Assistant, per esempio) una riga per ciascuno
-  const link = (logo, variante, etichetta) => (
+  const link = (chiaveStato, percorso, nomeFile, etichetta) => (
     <button
-      type="button" onClick={() => scarica(logo, variante)} disabled={!logo[variante] || scaricando === `${logo.chiave}-${variante}`}
-      style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, opacity: !logo[variante] ? 0.4 : 1, whiteSpace: "nowrap" }}
+      type="button" onClick={() => scarica(percorso, nomeFile, chiaveStato)} disabled={!percorso || scaricando === chiaveStato}
+      style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, whiteSpace: "nowrap" }}
     >
-      {scaricando === `${logo.chiave}-${variante}` ? "scarico…" : etichetta}
+      {scaricando === chiaveStato ? "scarico…" : etichetta}
     </button>
   );
   return (
     <div style={{ marginBottom: 14 }}>
-      {miei.map((logo) => (
+      {righe.map((logo, i) => (
         <div key={logo.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 10, flexWrap: "wrap", padding: "4px 0" }}>
           <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
             Scarica i tuoi loghi{miei.length > 1 ? ` (${logo.etichetta})` : ""}
           </span>
-          {link(logo, "nero", "logo nero")}
-          {link(logo, "bianco", "logo bianco")}
+          {logo.nero && link(`${logo.chiave}-nero`, logo.nero, `${logo.chiave}-nero-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`, "logo nero")}
+          {logo.bianco && link(`${logo.chiave}-bianco`, logo.bianco, `${logo.chiave}-bianco-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`, "logo bianco")}
+          {i === 0 && sw.nero && link("sw-nero", sw.nero, studentWork?.nero?.nome || "student-work-nero.png", "student work nero")}
+          {i === 0 && sw.bianco && link("sw-bianco", sw.bianco, studentWork?.bianco?.nome || "student-work-bianco.png", "student work bianco")}
         </div>
       ))}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 4 }}>{msg}</div>}
