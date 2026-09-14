@@ -19645,30 +19645,31 @@ function LoghiMasterPubblicati({ masterId }) {
     } catch (e) { setMsg("Non riesco a scaricare il logo: " + (e?.message || e)); }
     setScaricando(null);
   }
-  const tasto = (logo, variante, etichetta) => (
+  // Una riga sola, discreta: "Scarica i tuoi loghi" a sinistra e a destra
+  // i link, uno per file. Con piu' loghi pubblicati (Master e Master
+  // Assistant, per esempio) una riga per ciascuno
+  const link = (logo, variante, etichetta) => (
     <button
       type="button" onClick={() => scarica(logo, variante)} disabled={!logo[variante] || scaricando === `${logo.chiave}-${variante}`}
-      style={{ ...fontBody, fontSize: 12, fontWeight: 700, borderRadius: 16, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${NAVY}`, background: variante === "nero" ? NAVY : "#fff", color: variante === "nero" ? "#fff" : NAVY, opacity: !logo[variante] ? 0.4 : 1 }}
+      style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, opacity: !logo[variante] ? 0.4 : 1, whiteSpace: "nowrap" }}
     >
-      {scaricando === `${logo.chiave}-${variante}` ? "Scarico…" : etichetta}
+      {scaricando === `${logo.chiave}-${variante}` ? "scarico…" : etichetta}
     </button>
   );
   return (
-    <div style={{ ...cardStyle, marginBottom: 14 }}>
-      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>I tuoi loghi</div>
+    <div style={{ marginBottom: 14 }}>
       {miei.map((logo) => (
-        <div key={logo.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{logo.etichetta}</div>
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{[logo.nome ? toTitleCase(logo.nome) : null, logo.codice || null, logo.ts ? fmtData(String(logo.ts).slice(0, 10)) : null].filter(Boolean).join(" · ")}</div>
-          </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {tasto(logo, "nero", "Scarica nero")}
-            {tasto(logo, "bianco", "Scarica bianco")}
-          </div>
+        <div key={logo.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "4px 0" }}>
+          <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+            Scarica i tuoi loghi{miei.length > 1 ? ` · ${logo.etichetta}` : ""}
+          </span>
+          <span style={{ display: "flex", gap: 14 }}>
+            {link(logo, "nero", "logo nero")}
+            {link(logo, "bianco", "logo bianco")}
+          </span>
         </div>
       ))}
-      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 8 }}>{msg}</div>}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 4 }}>{msg}</div>}
     </div>
   );
 }
