@@ -19659,14 +19659,12 @@ function LoghiMasterPubblicati({ masterId }) {
   return (
     <div style={{ marginBottom: 14 }}>
       {miei.map((logo) => (
-        <div key={logo.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "4px 0" }}>
+        <div key={logo.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 10, flexWrap: "wrap", padding: "4px 0" }}>
           <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
-            Scarica i tuoi loghi{miei.length > 1 ? ` · ${logo.etichetta}` : ""}
+            Scarica i tuoi loghi{miei.length > 1 ? ` (${logo.etichetta})` : ""}
           </span>
-          <span style={{ display: "flex", gap: 14 }}>
-            {link(logo, "nero", "logo nero")}
-            {link(logo, "bianco", "logo bianco")}
-          </span>
+          {link(logo, "nero", "logo nero")}
+          {link(logo, "bianco", "logo bianco")}
         </div>
       ))}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 4 }}>{msg}</div>}
