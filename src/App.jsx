@@ -439,6 +439,15 @@ function fasceCorsiPerPagamento(fasceCarta, fasceContantiSalvate, contanti) {
   if (contanti && Array.isArray(fasceContantiSalvate) && fasceContantiSalvate.length) return fasceScontoValide(fasceContantiSalvate);
   return fasceScontoValide(fasceCarta);
 }
+// La stessa cosa per il referral personale delle master (dal 14/09/2026):
+// una serie per chi paga con carta o dal sito, una per chi paga in
+// contanti o con buono Amazon al POS dell'app. Qui il buono Amazon sta
+// con i contanti, come per i punti. Vuota = uguale a carta e sito.
+const CHIAVE_FASCE_REFERRAL_CONTANTI = "fasceSconto_referral_contanti";
+function fasceReferralPerPagamento(fasceCarta, fasceContantiSalvate, contantiOBuono) {
+  if (contantiOBuono && Array.isArray(fasceContantiSalvate) && fasceContantiSalvate.length) return fasceScontoValide(fasceContantiSalvate);
+  return fasceScontoValide(fasceCarta);
+}
 // Regola dei punti, riscritta il 13/09/2026 e valida in tutta l'app:
 //   punti = cedibile - percentuale di sicurezza, con due decimali.
 // Un punto e' un euro di massimo cedibile: nessun moltiplicatore, la
@@ -10492,6 +10501,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const fasceCorsoDash = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
   const fasceReferralDash = fasceScontoValide(regolaReferralMasterDash?.fasce);
   const [fasceContantiDash] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const [fasceReferralContantiDash] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const [tabellaCedibileDash] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
@@ -10586,7 +10596,9 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       if (conta && v.corso_data_id) venditeCorso += 1;
       if (conta && !v.corso_data_id && v.codice_coupon && codiciPersonali.has(String(v.codice_coupon).toLowerCase())) venditeReferral += 1;
       const alCorso = !!v.corso_data_id;
-      const fasceCanale = alCorso ? fasceCorsiPerPagamento(fasceCorsoDash, fasceContantiDash, v.metodo_pagamento === "contanti") : fasceReferralDash;
+      const fasceCanale = alCorso
+        ? fasceCorsiPerPagamento(fasceCorsoDash, fasceContantiDash, v.metodo_pagamento === "contanti")
+        : fasceReferralPerPagamento(fasceReferralDash, fasceReferralContantiDash, pagamentoContaComeContanti(v.metodo_pagamento));
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
         if (r.spedizione) return;
         const prodotto = prodottoPerIdPunti[r.prodotto_id];
@@ -40031,6 +40043,9 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const fasceContantiCorso = fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, true);
   const contantiUgualiACarta = !(Array.isArray(fasceContantiSalvate) && fasceContantiSalvate.length);
+  // e la seconda serie del referral personale, per contanti e buono Amazon
+  const [fasceReferralContantiSalvate, salvaFasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
+  const referralContantiUgualiACarta = !(Array.isArray(fasceReferralContantiSalvate) && fasceReferralContantiSalvate.length);
   const [salvandoFasceCorso, setSalvandoFasceCorso] = useState(false);
   const [msgFasceCorso, setMsgFasceCorso] = useState("");
   async function salvaFasceCorso() {
@@ -40103,7 +40118,9 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         const alCorso = !!v.corso_data_id;
         // al corso: la serie della carta o quella dei contanti, a seconda
         // di come l'allievo ha pagato
-        const fasceCanale = alCorso ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, v.metodo_pagamento === "contanti") : fasceScontoValide(regolaReferralMaster?.fasce);
+        const fasceCanale = alCorso
+          ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, v.metodo_pagamento === "contanti")
+          : fasceReferralPerPagamento(regolaReferralMaster?.fasce, fasceReferralContantiSalvate, pagamentoContaComeContanti(v.metodo_pagamento));
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
           if (r.spedizione) return;
         if (r.spedizione) return;
@@ -40213,13 +40230,26 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto con il referral personale</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Si salvano appena le cambi, come in Genera referral code.
+            Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Due serie: una per chi paga con carta o compra dal sito, una per chi paga in contanti o con buono Amazon al POS dell'app. Si salvano appena le cambi, come in Genera referral code.
           </div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e sito</div>
           <SceltaRegolaSconto
             soloFasce tipo="fasce" fasce={fasceScontoValide(regolaReferralMaster?.fasce)}
             onCambiaTipo={() => {}} onCambiaFasce={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: f })}
             prodottiShop={prodottiShop} isMobile={isMobile}
           />
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8, marginTop: 18 }}>Contanti e buono Amazon al POS dell'app</div>
+          <SceltaRegolaSconto
+            soloFasce senzaWoo tipo="fasce" fasce={fasceReferralPerPagamento(regolaReferralMaster?.fasce, fasceReferralContantiSalvate, true)}
+            onCambiaTipo={() => {}} onCambiaFasce={(f) => salvaFasceReferralContanti(fasceScontoValide(f))}
+            prodottiShop={prodottiShop} isMobile={isMobile}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: referralContantiUgualiACarta ? MUTED : "#2E7D32" }}>
+              {referralContantiUgualiACarta ? "Per ora uguali a carta e sito: cambia un numero e si salva da solo." : "Serie salvata: il POS la applica quando il pagamento è in contanti o con buono Amazon. Il sito non la vede."}
+            </span>
+            {!referralContantiUgualiACarta && <Button variant="ghost" onClick={() => salvaFasceReferralContanti([])}>Rimetti uguali a carta e sito</Button>}
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
             <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Applico…" : "Applica ai codici personali esistenti"}</Button>
             <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
@@ -51606,6 +51636,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [metodoPagamento, setMetodoPagamento] = useState("pos");
   // la seconda serie di fasce dei codici d'aula, per chi paga in contanti
   const [fasceContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  // e quella del referral personale, per contanti e buono Amazon
+  const [fasceContantiReferralPos] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const [note, setNote] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
@@ -51829,9 +51861,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // codice di una classe pagato in contanti, dove vale la serie dei
   // contanti di Gestione punti. Cambiando il metodo di pagamento lo
   // sconto si rifa' da solo
+  // un codice personale (della master, senza classe) pagato in contanti o
+  // con buono Amazon prende invece la seconda serie del referral
+  const couponPersonaleAttivo = !!couponAttivo?.master_id && !couponAttivo?.corsi_date_id;
   const fasceCouponAttive = couponAFasce
-    ? fasceCorsiPerPagamento(couponAttivo.fasce_sconto, fasceContantiCorsiPos, !!couponAttivo.corsi_date_id && metodoPagamento === "contanti")
+    ? (couponPersonaleAttivo
+      ? fasceReferralPerPagamento(couponAttivo.fasce_sconto, fasceContantiReferralPos, pagamentoContaComeContanti(metodoPagamento))
+      : fasceCorsiPerPagamento(couponAttivo.fasce_sconto, fasceContantiCorsiPos, !!couponAttivo.corsi_date_id && metodoPagamento === "contanti"))
     : null;
+  const fasceContantiInUso = couponAFasce && (couponPersonaleAttivo
+    ? (pagamentoContaComeContanti(metodoPagamento) && Array.isArray(fasceContantiReferralPos) && fasceContantiReferralPos.length > 0)
+    : (metodoPagamento === "contanti" && Array.isArray(fasceContantiCorsiPos) && fasceContantiCorsiPos.length > 0));
   const scontoCoupon = couponAFasce
     ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive)
     : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
@@ -52236,8 +52276,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
               Sconto del corso applicato: −{couponAttivo.valore}%
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
-              {couponAFasce && metodoPagamento === "contanti" && Array.isArray(fasceContantiCorsiPos) && fasceContantiCorsiPos.length > 0 && (
-                <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>fasce contanti</span>
+              {fasceContantiInUso && (
+                <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{couponPersonaleAttivo && metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
               )}
             </div>
           )}
@@ -52332,6 +52372,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
                 Applica il mio referral code
                 <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
+                {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
+                )}
                 <span style={{ flexBasis: "100%", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}>
                   {referralPersonaleAttivo ? "L'allieva ha lo sconto del tuo codice. La vendita e i punti restano tuoi, ridotti dello sconto dato." : "Senza codice paga prezzo pieno: la vendita e i punti restano comunque tuoi."}
                 </span>
