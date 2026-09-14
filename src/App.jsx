@@ -24057,7 +24057,7 @@ function PannelloRiepilogoAmministrativo({
     venditeContanti: venditeAlCorsoContanti, venditePos: venditeAlCorsoPos, venditeTotale: venditeAlCorsoTotale,
     totaleCosti: totaleCostiClasse, risultato: risultatoClasse,
     totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse, cashMancante: cashMancanteClasse,
-    cashPresoDallaBusta: cashPresoDallaBustaClasse, cashRinviati: cashRinviatiClasse, cashDaDisporre: cashDaDisporreClasse,
+    cashPresoDallaBusta: cashPresoDallaBustaClasse, cashRinviati: cashRinviatiClasse, cashDaDisporre: cashDaDisporreClasse, cashRegistrato: cashRegistratoBustaClasse,
   } = contiClasse;
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
@@ -24706,7 +24706,9 @@ function PannelloRiepilogoAmministrativo({
                     {[
                       { etichetta: "Cash incassato al corso", valore: contantiClasse },
                       { etichetta: "Totale cash da pagare", valore: totaleCashDaPagareClasse, nota: "dalla busta o rinviato" },
-                      { etichetta: "Pagamenti cash presi dalla busta", valore: cashPresoDallaBustaClasse, nota: cashDaDisporreClasse > 0 ? `€ ${cashDaDisporreClasse} ancora da disporre` : null },
+                      // preso dalla busta = uscito davvero, cioe' disposto e
+                      // registrato; quello solo deciso sta nella nota
+                      { etichetta: "Pagamenti cash presi dalla busta", valore: cashRegistratoBustaClasse, nota: cashDaDisporreClasse > 0 ? `€ ${cashDaDisporreClasse} da disporre` : null },
                       { etichetta: "Pagamenti cash rinviati", valore: cashRinviatiClasse, nota: cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null },
                     ].map((c) => (
                       <div key={c.etichetta} style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "flex-start", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
