@@ -51275,18 +51275,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // venditore, mai automaticamente sempre l'uno o l'altro — un selettore
   // nell'header lascia scegliere con quale cappello sta vendendo ORA,
   // così ogni vendita finisce nel silo/target giusto
-  const haEntrambiIRuoli = !!(utenteLoggato?.masterId && utenteLoggato?.venditoreId);
-  const [ruoloOperativoPOS, setRuoloOperativoPOS] = useState(utenteLoggato?.masterId ? "master" : "venditore");
+  // Chi e' master vende sempre da master, anche se e' anche venditore: i
+  // punti master si accumulano solo cosi', e il selettore fra i due ruoli
+  // era una scelta che nessuna master doveva fare (tolto il 14/09/2026)
   // ogni vendita nasce attribuita a chi è loggato in questo momento (mai
   // "anonima"): identità doppia → segue il selettore qui sopra, altrimenti
   // master, poi venditore, poi utente operativo nominale (Amministratore/
   // Stefano/Elena…) — sulle vendite prodotti si definiscono i target con
   // premio produzione, quindi va sempre saputo con certezza chi ha venduto
-  const operatore = haEntrambiIRuoli
-    ? (ruoloOperativoPOS === "master"
-        ? { tipo: "master", id: utenteLoggato.masterId, nome: utenteLoggato.nome }
-        : { tipo: "venditore", id: utenteLoggato.venditoreId, nome: utenteLoggato.venditoreNome || utenteLoggato.nome })
-    : utenteLoggato?.masterId
+  const operatore = utenteLoggato?.masterId
     ? { tipo: "master", id: utenteLoggato.masterId, nome: utenteLoggato.nome }
     : (venditoreLoggato || utenteLoggato?.venditoreId)
     ? { tipo: "venditore", id: venditoreLoggato?.id || utenteLoggato.venditoreId, nome: venditoreLoggato?.nome || utenteLoggato.venditoreNome || utenteLoggato.nome }
@@ -52445,8 +52442,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <Field label="Cellulare"><input style={inputStyle} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field>
           </div>
 
-
-
           {campiClienteMancanti.length > 0 && (
             <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 6 }}>
               Completare i dati cliente: {campiClienteMancanti.join(", ")}.
@@ -52743,12 +52738,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         </div>
 
-        {haEntrambiIRuoli && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-            <button onClick={() => setRuoloOperativoPOS("master")} style={{ flex: 1, padding: "9px 10px", borderRadius: 10, border: ruoloOperativoPOS === "master" ? "none" : `1px solid ${CREAM_BORDER}`, background: ruoloOperativoPOS === "master" ? NAVY : "#fff", color: ruoloOperativoPOS === "master" ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700 }}>Master {toTitleCase(utenteLoggato.nome)}</button>
-            <button onClick={() => setRuoloOperativoPOS("venditore")} style={{ flex: 1, padding: "9px 10px", borderRadius: 10, border: ruoloOperativoPOS === "venditore" ? "none" : `1px solid ${CREAM_BORDER}`, background: ruoloOperativoPOS === "venditore" ? NAVY : "#fff", color: ruoloOperativoPOS === "venditore" ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700 }}>Venditore {toTitleCase(utenteLoggato.venditoreNome || utenteLoggato.nome)}</button>
-          </div>
-        )}
 
         {targetAttivi.length > 0 && (
           <div style={{ marginBottom: 14 }}>
@@ -52912,12 +52901,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         </div>
 
-        {haEntrambiIRuoli && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 20, width: "fit-content", background: BG, borderRadius: 12, padding: 4 }}>
-            <button onClick={() => setRuoloOperativoPOS("master")} style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: ruoloOperativoPOS === "master" ? NAVY : "transparent", color: ruoloOperativoPOS === "master" ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700 }}>Master {toTitleCase(utenteLoggato.nome)}</button>
-            <button onClick={() => setRuoloOperativoPOS("venditore")} style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: ruoloOperativoPOS === "venditore" ? NAVY : "transparent", color: ruoloOperativoPOS === "venditore" ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700 }}>Venditore {toTitleCase(utenteLoggato.venditoreNome || utenteLoggato.nome)}</button>
-          </div>
-        )}
 
         {targetAttivi.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(3, targetAttivi.length)}, minmax(0,1fr))`, gap: 14, marginBottom: 20 }}>
