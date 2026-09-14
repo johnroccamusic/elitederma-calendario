@@ -10590,8 +10590,9 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
         if (r.spedizione) return;
         const prodotto = prodottoPerIdPunti[r.prodotto_id];
-        // pagata in contanti -> la riga dei contanti; carta o sito -> l'altra
-        const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti, v.metodo_pagamento === "contanti");
+        // pagata in contanti o con buono Amazon -> la riga dei contanti;
+        // carta o sito -> l'altra
+        const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento));
         if (puntiPezzo == null) return;
         // i punti teorici della riga, interi: sono i bonus
         const teorici = puntiPezzo * (Number(r.quantita) || 0);
@@ -40108,7 +40109,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         if (r.spedizione) return;
           const q = Number(r.quantita) || 0;
           const prodotto = prodottoPerId[r.prodotto_id];
-          const pp = puntiProdotto(prodotto, sicurezzaPunti, v.metodo_pagamento === "contanti");
+          const pp = puntiProdotto(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento));
           pezzi += q;
           if (pp == null) { pezziSenzaPunti += q; return; }
           const teorici = pp * q;
@@ -51278,6 +51279,12 @@ const COSTO_SPEDIZIONE_POS = 6.90;
 // Come si legge il metodo di una vendita al banco. Tre modi: POS/carta,
 // contanti, buono Amazon. Nei conti il buono sta con la carta: e' un
 // incasso non in contanti, con l'IVA scorporata come per la carta
+// I punti: il buono Amazon vale come i contanti, la riga di conto piu'
+// alta per la master (cedibile sul prezzo al pubblico). L'IVA invece
+// resta scorporata come per la carta: qui si decide solo dei punti
+function pagamentoContaComeContanti(metodo) {
+  return metodo === "contanti" || metodo === "buono_amazon";
+}
 function etichettaMetodoVendita(metodo) {
   if (metodo === "contanti") return "Contanti";
   if (metodo === "buono_amazon") return "Buono Amazon";
