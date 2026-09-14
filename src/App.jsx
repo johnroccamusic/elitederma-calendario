@@ -2501,7 +2501,7 @@ const ASPETTO_TASTI_DEFAULT = {
   // stile "pieno": il quadrato ha il colore scelto e l'icona blu sopra.
   // Stile "medaglione": quadrato bianco in rilievo con un disco incassato
   // al centro, del colore `disco`, e l'icona bianca sopra
-  mobile: { dimensione: 60, raggio: 13, icona: 34, stile: "pieno", disco: "#0E1B33", dock: { lato: 70, raggio: 22, icona: 40, colore: "#0E1B33", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } }, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
+  mobile: { dimensione: 60, raggio: 13, icona: 34, stile: "pieno", disco: "#0E1B33", pozzetto: "#E6E6E4", dock: { lato: 70, raggio: 22, icona: 40, colore: "#0E1B33", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } }, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
   desktop: { dimensione: 300, raggio: 20, icona: 80, dock: { lato: 62, raggio: 18, icona: 30, colore: "#0E1B33", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } }, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
   // Un'ombra sola per TUTTE le aree che reggono i dati — i pannelli
   // bianchi delle tabelle, le schede citta', gli elenchi — e una per
@@ -2560,7 +2560,16 @@ function aspettoTastoDi(salvato, quale) {
     ombra: { ...base.ombra, ...(v.ombra || {}) },
     stile: v.stile === "medaglione" ? "medaglione" : (base.stile || "pieno"),
     disco: v.disco || base.disco || "#0E1B33",
+    // l'interno del medaglione, il pozzetto in cui sta il disco
+    pozzetto: v.pozzetto || base.pozzetto || "#E6E6E4",
   };
+}
+// Mescola due colori esadecimali: t=0 il primo, t=1 il secondo. Serve al
+// pozzetto per ricavare dal colore scelto la sua ombra e il suo riflesso
+function mescolaColore(a, b, t) {
+  const n = (h) => { const x = String(h || "#000000").replace("#", ""); const y = x.length === 3 ? x.split("").map((c) => c + c).join("") : x.padEnd(6, "0"); return [0, 2, 4].map((i) => parseInt(y.slice(i, i + 2), 16) || 0); };
+  const ca = n(a), cb = n(b);
+  return "#" + ca.map((v, i) => Math.round(v + (cb[i] - v) * t).toString(16).padStart(2, "0")).join("");
 }
 // Il disco incassato dello stile "medaglione": un cerchio del colore
 // scelto, in leggera ombra dentro il quadrato bianco, con l'icona bianca.
@@ -2573,8 +2582,12 @@ function aspettoTastoDi(salvato, quale) {
 // sopra, l'icona bianca con un filo d'ombra, come fosse incisa. Tutto in
 // proporzione al lato, cosi' in anteprima e sul telefono e' lo stesso
 // disegno
-function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true }) {
+function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true, pozzettoColore = "#E6E6E4" }) {
   const pozzetto = Math.round(lato * 0.80);
+  // il pozzetto sfuma dal colore scelto scurito in alto (l'ombra che
+  // scende dal bordo) fino quasi al bianco in basso (il bordo che riprende luce)
+  const pz = pozzettoColore || "#E6E6E4";
+  const sfondoPozzetto = `linear-gradient(180deg, ${mescolaColore(pz, "#000000", 0.08)} 0%, ${pz} 45%, ${mescolaColore(pz, "#ffffff", 0.75)} 100%)`;
   const diametro = Math.round(lato * 0.62);
   const misuraIcona = Math.min(Math.round(icona), Math.round(diametro * 0.66));
   const u = Math.max(1, lato / 60); // unita' di ombra: cresce col tasto
@@ -2582,7 +2595,7 @@ function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true }) {
   return (
     <div style={{
       width: pozzetto, height: pozzetto, borderRadius: "50%", flexShrink: 0,
-      background: "linear-gradient(180deg, #DCDCDA 0%, #ECECEA 45%, #FBFBFA 100%)",
+      background: sfondoPozzetto,
       boxShadow: `inset 0 ${3 * u}px ${5 * u}px rgba(20,20,30,0.22), inset 0 ${1 * u}px ${2 * u}px rgba(20,20,30,0.12), inset 0 -${1.5 * u}px ${2 * u}px rgba(255,255,255,0.95), 0 ${1 * u}px 0 rgba(255,255,255,1)`,
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
@@ -2762,7 +2775,7 @@ function TileHome({
         }}>
           {maniglia}
           {aspettoMobile.stile === "medaglione"
-            ? <DiscoMedaglione lato={aspettoMobile.dimensione} icona={aspettoMobile.icona} colore={aspettoMobile.disco} Icona={Icona} attivo={attivo} />
+            ? <DiscoMedaglione lato={aspettoMobile.dimensione} icona={aspettoMobile.icona} colore={aspettoMobile.disco} pozzettoColore={aspettoMobile.pozzetto} Icona={Icona} attivo={attivo} />
             : <Icona size={aspettoMobile.icona} color={coloreIcona} />}
           {!attivo && (
             <span style={{ position: "absolute", top: 4, right: 4, ...fontBody, fontSize: 6.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "1.5px 5px" }}>Non attivo</span>
@@ -15113,7 +15126,7 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
               <div style={{ fontSize: Math.max(6, 16 * scala), color: NAVY, paddingTop: Math.round(12 * scala) }}>&rarr;</div>
             </div>
           ) : forma === "mobile" && aspetto.stile === "medaglione" ? (
-            <DiscoMedaglione lato={Math.round(aspetto.dimensione * scala)} icona={aspetto.icona * scala} colore={aspetto.disco} Icona={IconaTilePos} />
+            <DiscoMedaglione lato={Math.round(aspetto.dimensione * scala)} icona={aspetto.icona * scala} colore={aspetto.disco} pozzettoColore={aspetto.pozzetto} Icona={IconaTilePos} />
           ) : (
             <IconaTilePos size={Math.round(aspetto.icona * scala)} color={NAVY} />
           )}
@@ -15426,6 +15439,30 @@ function PaginaAspettoApp() {
           })}
         </div>
         <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 18 }}>Scelto: {String(quale === "mobile" && corrente.stile === "medaglione" ? corrente.disco : corrente.colore).toUpperCase()}</div>
+
+        {/* nel medaglione si colora anche l'interno: il pozzetto in cui
+            sta il disco. Il grigio chiaro e' quello del riferimento */}
+        {quale === "mobile" && corrente.stile === "medaglione" && (
+          <>
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Colore dell'interno, intorno al disco</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 5, maxWidth: 360, marginBottom: 6 }}>
+              {["#E6E6E4", ...PALETTE_64_TASTI].map((c) => {
+                const scelto = String(corrente.pozzetto).toUpperCase() === c.toUpperCase();
+                return (
+                  <button
+                    key={c} onClick={() => cambia({ pozzetto: c })} title={c === "#E6E6E4" ? "Grigio chiaro, come il riferimento" : c} data-niente-ombra="1"
+                    style={{
+                      aspectRatio: "1 / 1", width: "100%", borderRadius: 6, cursor: "pointer", background: c,
+                      border: scelto ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`,
+                      outline: scelto ? `2px solid #fff` : "none", outlineOffset: -4,
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 18 }}>Scelto: {String(corrente.pozzetto).toUpperCase()}</div>
+          </>
+        )}
 
         <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Ombra del pulsante</div>
         <ControlliOmbra
