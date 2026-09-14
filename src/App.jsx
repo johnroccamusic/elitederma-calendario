@@ -1748,7 +1748,8 @@ function IconaTileCostiRicavi({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17.6 6.9A7.8 7.8 0 1 0 17.6 17.1" />
-      <path d="M4.2 10.4h10.6M4.2 13.6h10.6" />
+      {/* le due barre sporgono un poco a sinistra dell'arco, come nel riferimento */}
+      <path d="M2.7 10.4h12M2.7 13.6h12" />
     </svg>
   );
 }
