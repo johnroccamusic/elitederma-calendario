@@ -45359,16 +45359,36 @@ function preparaScarichi(righe, { suggerimento, sogliaInvalicabile = false, tito
 // shop passa da WooCommerce (fonte di verità della giacenza online) e il
 // magazzino viaggia nella stessa chiamata quando la riga è divisa fra le
 // due fonti — un giro di rete in meno
+// Esegue `lavoro` su ogni elemento, al massimo `concorrenza` per volta.
+// Ogni movimento di magazzino aspetta anche WooCommerce, tre-cinque
+// secondi l'uno: in fila, un corso da 25 prodotti durava due minuti.
+// Cinque per volta e' un quinto del tempo, e ogni prodotto e' una riga a
+// se': non si pestano. Un errore ferma l'avvio dei successivi e viene
+// restituito; quelli gia' partiti finiscono il loro giro
+async function inParallelo(elementi, concorrenza, lavoro) {
+  const coda = [...elementi];
+  let primoErrore = null;
+  async function operaio() {
+    while (coda.length && !primoErrore) {
+      const elemento = coda.shift();
+      const errore = await lavoro(elemento);
+      if (errore && !primoErrore) primoErrore = errore;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concorrenza, elementi.length) }, operaio));
+  return primoErrore;
+}
+const CONCORRENZA_MAGAZZINO = 5;
 async function applicaScarichi(piani, contesto = {}, onAvanzamento = null) {
   const daFare = (piani || []).filter(({ piano }) => piano.daScaricare);
   let fatti = 0;
-  for (const { prodotto, piano } of daFare) {
+  return inParallelo(daFare, CONCORRENZA_MAGAZZINO, async ({ prodotto, piano }) => {
     const errore = await muoviStock(prodotto, -piano.daScaricare, { origine: "scarico", ...contesto });
     if (errore) return errore;
     fatti += 1;
     onAvanzamento?.(fatti, daFare.length);
-  }
-  return null;
+    return null;
+  });
 }
 
 // ===========================================================
@@ -57247,12 +57267,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     const totaleMovimenti = rientri.length + (pianiKit || []).filter(({ piano }) => piano.daScaricare).length;
     let fattiMovimenti = 0;
     setAvanzamentoScarico({ fatti: 0, totale: totaleMovimenti });
-    for (const [prodottoId, delta] of rientri) {
+    await inParallelo(rientri, CONCORRENZA_MAGAZZINO, async ([prodottoId, delta]) => {
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       await muoviStock(prodotto, delta, { origine: "kit_corso", nota: "Rientro/rettifica preparazione kit", riferimento: corsoData.id });
       fattiMovimenti += 1;
       setAvanzamentoScarico({ fatti: fattiMovimenti, totale: totaleMovimenti });
-    }
+      return null;
+    });
     const erroreScaricoKit = await applicaScarichi(pianiKit, { origine: "kit_corso", nota: "Scarico kit per il corso", riferimento: corsoData.id }, (fatti) => setAvanzamentoScarico({ fatti: fattiMovimenti + fatti, totale: totaleMovimenti }));
     if (erroreScaricoKit) {
       mostraAvviso("Scarico kit interrotto a metà — " + erroreScaricoKit + "\n\nControlla le giacenze in Gestione magazzino prima di riprovare.");
@@ -57292,12 +57313,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const voci = Object.entries(deltaPerProdotto);
       setAvanzamentoScarico({ fatti: 0, totale: voci.length });
       let fatti = 0;
-      for (const [prodottoId, delta] of voci) {
+      await inParallelo(voci, CONCORRENZA_MAGAZZINO, async ([prodottoId, delta]) => {
         const prodotto = prodottiShop.find((p) => p.id === prodottoId);
         if (prodotto) await muoviStock(prodotto, delta, { origine: "kit_corso", nota: "Prodotti rientrati dal corso", riferimento: corsoData.id });
         fatti += 1;
         setAvanzamentoScarico({ fatti, totale: voci.length });
-      }
+        return null;
+      });
     }
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {} });
   }
