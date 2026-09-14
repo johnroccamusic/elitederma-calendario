@@ -9492,11 +9492,13 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   // per sempre, e quella pagina dice quanto ha pagato ogni allievo. Ora
   // serve che qualcuno lo abbia deciso per QUESTA classe — e il permesso
   // vale solo fino alla fine del corso, dopo si chiude da se'.
+  // compare alle 6 del mattino del primo giorno di corso e resta fino
+  // all'ultimo giorno compreso: e' il momento in cui la master incassa
   const contabilitaVisibile = !!onApriContabilita
     && !!corsoData.token_master
     && !!corsoData.acm_attivo
     && oggiStr <= corsoData.data_fine
-    && oggiStr >= addGiorni(corsoData.data_inizio, -1);
+    && new Date() >= new Date(`${corsoData.data_inizio}T06:00:00`);
 
   const kit = conteggioKitEdizione(iscrittiEdizione);
   const divisoreVerticale = <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />;
@@ -10631,15 +10633,12 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const [contabilitaClasse, setContabilitaClasse] = useState(null);
 
   if (contabilitaClasse) {
+    // Il file della contabilita' copre tutto, dock compreso: da qui la
+    // master segna incassato o non incassato e basta. L'unica uscita e'
+    // il tasto Esci in fondo alla lista.
     return (
-      <div>
-        <div style={{ maxWidth: 720, margin: "0 auto", padding: "4px 20px 0" }}>
-          <button onClick={() => { window.scrollTo(0, 0); setContabilitaClasse(null); }} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4 }}>
-            <IconaFrecciaSinistra size={20} />
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla dashboard</span>
-          </button>
-        </div>
-        <VistaMaster param={contabilitaClasse.token} />
+      <div style={{ position: "fixed", inset: 0, zIndex: 6000, overflowY: "auto", background: BG, WebkitOverflowScrolling: "touch", paddingTop: "env(safe-area-inset-top, 0px)" }}>
+        <VistaMaster param={contabilitaClasse.token} onEsci={() => { setContabilitaClasse(null); window.scrollTo(0, 0); }} />
       </div>
     );
   }
@@ -29240,7 +29239,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
 // ---------- App principale ----------
 // ---------- Vista master: pagina pubblica di sola lettura per richiedere i pagamenti ----------
-function VistaMaster({ param }) {
+function VistaMaster({ param, onEsci = null }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
   const isMobile = useIsMobile();
@@ -29407,6 +29406,13 @@ function VistaMaster({ param }) {
           Pagina di sola lettura — Elitederma Academy
         </div>
       </div>
+      {/* aperta da dentro l'app, dalla dashboard della master: l'unica
+          uscita e' questo tasto in fondo, dopo l'ultimo allievo */}
+      {onEsci && (
+        <div style={{ display: "flex", justifyContent: "center", padding: "24px 0 40px" }}>
+          <button onClick={onEsci} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "14px 40px", cursor: "pointer" }}>Esci</button>
+        </div>
+      )}
     </div>
   );
 }
