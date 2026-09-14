@@ -51683,6 +51683,29 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setCouponAttivo(c || null);
     setCouponValore(c ? String(c.valore) : "");
   }
+  // Il referral personale della master, al banco senza corso: lei decide
+  // se applicarlo a chi ha davanti. Con il codice l'allieva ha lo sconto
+  // delle fasce referral; senza paga prezzo pieno. La vendita e i punti
+  // sono suoi in tutti e due i casi, perche' e' lei l'operatore; col
+  // codice i punti si riducono come per ogni sconto dato
+  const couponReferralPersonale = (() => {
+    if (operatore?.tipo !== "master") return null;
+    const oggi = dataOggiStr();
+    return (coupon || []).find((c) => c.master_id === operatore.id && !c.corsi_date_id && c.codice
+      && !(c.valido_da && oggi < c.valido_da) && !(c.valido_fino_a && oggi > c.valido_fino_a)) || null;
+  })();
+  const [referralPersonaleAttivo, setReferralPersonaleAttivo] = useState(false);
+  function commutaReferralPersonale(acceso) {
+    setReferralPersonaleAttivo(acceso);
+    if (acceso && couponReferralPersonale) {
+      setCouponAttivo(couponReferralPersonale);
+      setCouponValore(String(couponReferralPersonale.valore ?? ""));
+      setCouponCodiceTesto(String(couponReferralPersonale.codice || "").toUpperCase());
+    } else if (!acceso && couponAttivo && couponReferralPersonale && couponAttivo.id === couponReferralPersonale.id) {
+      setCouponAttivo(null); setCouponValore(""); setCouponCodiceTesto("");
+    }
+  }
+  const referralPersonaleInUso = !corsoPosId && referralPersonaleAttivo && !!couponReferralPersonale;
   function commutaScontoCorso(acceso) {
     setScontoCorsoAttivo(acceso);
     if (acceso) {
@@ -51720,6 +51743,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     //   finestra.
     if (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) {
       applicaCouponDelCorso(corsoPosId);
+    } else if (!corsoPosId && referralPersonaleAttivo && couponReferralPersonale) {
+      // il referral personale resta acceso fra una vendita e l'altra,
+      // come lo sconto del corso: e' una scelta della master, non del
+      // carrello
+      commutaReferralPersonale(true);
     } else {
       const ancoraValido = couponAttivo && couponAttivo.utilizzi_max !== 1 && trovaCouponPerCodice(couponAttivo.codice);
       if (ancoraValido) {
@@ -52261,6 +52289,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           // codice dato dall'amministrazione, scritto a mano dopo aver
           // spento il primo. Una percentuale da inventare non c'e' piu'.
           <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+            {!corsoPosId && couponReferralPersonale && (
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 8, flexWrap: "wrap" }}>
+                <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                Applica il mio referral code
+                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
+                <span style={{ flexBasis: "100%", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}>
+                  {referralPersonaleAttivo ? "L'allieva ha lo sconto del tuo codice. La vendita e i punti restano tuoi, ridotti dello sconto dato." : "Senza codice paga prezzo pieno: la vendita e i punti restano comunque tuoi."}
+                </span>
+              </label>
+            )}
             {couponDellEdizione(corsoPosId) && (
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY, marginBottom: 8 }}>
                 <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
@@ -52270,11 +52308,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             )}
             <div style={etichettaPos}>Codice sconto extra</div>
             <input
-              style={{ ...inputStyle, textTransform: "uppercase", opacity: scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? 0.5 : 1 }}
+              style={{ ...inputStyle, textTransform: "uppercase", opacity: (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
               value={couponCodiceTesto}
-              disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId))}
+              disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
               onChange={(e) => applicaCodiceCoupon(e.target.value)}
-              placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso per usarne un altro" : "Codice dato dall'amministrazione"}
+              placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso per usarne un altro" : referralPersonaleInUso ? "Spegni il tuo referral per usare un altro codice" : "Codice dato dall'amministrazione"}
             />
             {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
               couponAttivo ? (
