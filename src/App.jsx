@@ -1741,13 +1741,11 @@ function IconaTileLampadina({ size = 44, color = NAVY }) {
 }
 // icone dei tasti dell'hub "ERP / Magazzino"
 function IconaTileCostiRicavi({ size = 44, color = NAVY }) {
-  // l'euro aperto a destra e la freccia che sale: i conti che crescono
+  // il simbolo dell'euro e basta: l'arco aperto a destra e le due barre
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16.6 6.6A7.4 7.4 0 1 0 15.8 17.2" />
-      <path d="M3.6 10.3h9.4M3.6 13.7h8.4" />
-      <path d="M9.2 17.6c4.6-.7 8.6-3 11.9-6.9" />
-      <path d="M17.4 10l3.7-.6-.5 3.8" />
+      <path d="M17.6 6.9A7.8 7.8 0 1 0 17.6 17.1" />
+      <path d="M4.2 10.4h10.6M4.2 13.6h10.6" />
     </svg>
   );
 }
