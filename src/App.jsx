@@ -10597,7 +10597,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       if (conta && !v.corso_data_id && v.codice_coupon && codiciPersonali.has(String(v.codice_coupon).toLowerCase())) venditeReferral += 1;
       const alCorso = !!v.corso_data_id;
       const fasceCanale = alCorso
-        ? fasceCorsiPerPagamento(fasceCorsoDash, fasceContantiDash, v.metodo_pagamento === "contanti")
+        ? fasceCorsiPerPagamento(fasceCorsoDash, fasceContantiDash, pagamentoContaComeContanti(v.metodo_pagamento))
         : fasceReferralPerPagamento(fasceReferralDash, fasceReferralContantiDash, pagamentoContaComeContanti(v.metodo_pagamento));
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
         if (r.spedizione) return;
@@ -33471,7 +33471,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
         <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? 12 : 16, background: "#fff" }}>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45, maxWidth: 640 }}>
             {senzaWoo ? (
-              <>Valgono solo al POS dell'app quando si sceglie <b style={{ color: NAVY }}>Contanti</b>: il sito non le vede.
+              <>Valgono solo al POS dell'app quando si sceglie <b style={{ color: NAVY }}>Contanti</b> o <b style={{ color: NAVY }}>Buono Amazon</b>: il sito non le vede.
               Le percentuali si applicano sul lordo. Un prodotto senza costo di acquisto non ha margine noto,
               non cade in nessuna fascia e non si sconta.</>
             ) : (
@@ -40119,7 +40119,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         // al corso: la serie della carta o quella dei contanti, a seconda
         // di come l'allievo ha pagato
         const fasceCanale = alCorso
-          ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, v.metodo_pagamento === "contanti")
+          ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, pagamentoContaComeContanti(v.metodo_pagamento))
           : fasceReferralPerPagamento(regolaReferralMaster?.fasce, fasceReferralContantiSalvate, pagamentoContaComeContanti(v.metodo_pagamento));
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
           if (r.spedizione) return;
@@ -40203,7 +40203,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto ai corsi, con il codice d'aula</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti al POS dell'app. La prima è la stessa di Generazione automatica in Genera coupon: cambiarla qui o là è lo stesso.
+            Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app. La prima è la stessa di Generazione automatica in Genera coupon: cambiarla qui o là è lo stesso.
           </div>
           {fasceCorso == null ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
@@ -40215,11 +40215,11 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                 <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
                 {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
               </div>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti al POS dell'app</div>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
               <SceltaRegolaSconto soloFasce senzaWoo tipo="fasce" fasce={fasceContantiCorso} onCambiaTipo={() => {}} onCambiaFasce={(f) => salvaFasceContanti(fasceScontoValide(f))} prodottiShop={prodottiShop} isMobile={isMobile} />
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: contantiUgualiACarta ? MUTED : "#2E7D32" }}>
-                  {contantiUgualiACarta ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo." : "Serie dei contanti salvata: il POS la applica quando il pagamento è in contanti."}
+                  {contantiUgualiACarta ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo." : "Serie salvata: il POS la applica quando il pagamento è in contanti o con buono Amazon."}
                 </span>
                 {!contantiUgualiACarta && <Button variant="ghost" onClick={() => salvaFasceContanti([])}>Rimetti uguali a carta e shop</Button>}
               </div>
@@ -51867,7 +51867,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const fasceCouponAttive = couponAFasce
     ? (couponPersonaleAttivo
       ? fasceReferralPerPagamento(couponAttivo.fasce_sconto, fasceContantiReferralPos, pagamentoContaComeContanti(metodoPagamento))
-      : fasceCorsiPerPagamento(couponAttivo.fasce_sconto, fasceContantiCorsiPos, !!couponAttivo.corsi_date_id && metodoPagamento === "contanti"))
+      : fasceCorsiPerPagamento(couponAttivo.fasce_sconto, fasceContantiCorsiPos, !!couponAttivo.corsi_date_id && pagamentoContaComeContanti(metodoPagamento)))
     : null;
   const fasceContantiInUso = couponAFasce && (couponPersonaleAttivo
     ? (pagamentoContaComeContanti(metodoPagamento) && Array.isArray(fasceContantiReferralPos) && fasceContantiReferralPos.length > 0)
