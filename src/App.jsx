@@ -52411,54 +52411,62 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           // gia' acceso quando si vende stando a quel corso — oppure un
           // codice dato dall'amministrazione, scritto a mano dopo aver
           // spento il primo. Una percentuale da inventare non c'e' piu'.
-          <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-            {!corsoPosId && couponReferralPersonale && (
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 8, flexWrap: "wrap" }}>
-                <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                Applica il mio referral code
-                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
-                {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
-                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
-                )}
-                <span style={{ flexBasis: "100%", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}>
-                  {referralPersonaleAttivo ? "L'allieva ha lo sconto del tuo codice. La vendita e i punti restano tuoi, ridotti dello sconto dato." : "Senza codice paga prezzo pieno: la vendita e i punti restano comunque tuoi."}
-                </span>
-              </label>
-            )}
-            {couponDellEdizione(corsoPosId) && (
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY, marginBottom: 8 }}>
-                <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                Applica sconto del corso
-                {scontoCorsoAttivo && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 8px" }}>−{couponDellEdizione(corsoPosId).valore}%</span>}
-              </label>
-            )}
-            <div style={etichettaPos}>Codice sconto extra</div>
-            <input
-              style={{ ...inputStyle, textTransform: "uppercase", opacity: (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
-              value={couponCodiceTesto}
-              disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
-              onChange={(e) => applicaCodiceCoupon(e.target.value)}
-              placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso per usarne un altro" : referralPersonaleInUso ? "Spegni il tuo referral per usare un altro codice" : "Codice dato dall'amministrazione"}
-            />
-            {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
-              couponAttivo ? (
-                <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 4 }}>
-                  Codice valido: −{couponAttivo.valore}%
-                  {/* quanto durera': un codice a uso singolo sparisce dopo
-                      questo carrello, e saperlo prima evita di cercarlo
-                      alla vendita dopo credendo che sia sparito per errore */}
-                  <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, marginTop: 2 }}>
-                    {couponAttivo.utilizzi_max === 1
-                      ? "Uso singolo: dopo questa vendita si toglie da solo."
-                      : couponAttivo.valido_fino_a
-                      ? `Resta fino al ${fmtData(couponAttivo.valido_fino_a)}, o finché non lo cancelli.`
-                      : "Resta finché non lo cancelli."}
+          <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", gap: 12, alignItems: "flex-start" }}>
+            {/* due colonne: a sinistra le spunte (referral personale o
+                sconto del corso), a destra il codice extra; una riga sola */}
+            {((!corsoPosId && couponReferralPersonale) || couponDellEdizione(corsoPosId)) && (
+              <div style={{ flex: 1, minWidth: 0 }}>
+              {!corsoPosId && couponReferralPersonale && (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 8, flexWrap: "wrap" }}>
+                  <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                  Applica il mio referral code
+                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
+                  {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
+                    <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
+                  )}
+                  <span style={{ flexBasis: "100%", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}>
+                    {referralPersonaleAttivo ? "L'allieva ha lo sconto del tuo codice. La vendita e i punti restano tuoi, ridotti dello sconto dato." : "Senza codice paga prezzo pieno: la vendita e i punti restano comunque tuoi."}
                   </span>
-                </div>
-              ) : (
-                <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 4 }}>Codice non valido o scaduto: nessuno sconto.</div>
-              )
+                </label>
+              )}
+              {couponDellEdizione(corsoPosId) && (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY, marginBottom: 8 }}>
+                  <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                  Applica sconto del corso
+                  {scontoCorsoAttivo && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 8px" }}>−{couponDellEdizione(corsoPosId).valore}%</span>}
+                </label>
+              )}
+              </div>
             )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={etichettaPos}>Codice sconto extra</div>
+              <input
+                style={{ ...inputStyle, textTransform: "uppercase", opacity: (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
+                value={couponCodiceTesto}
+                disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
+                onChange={(e) => applicaCodiceCoupon(e.target.value)}
+                placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso per usarne un altro" : referralPersonaleInUso ? "Spegni il tuo referral per usare un altro codice" : "Codice dato dall'amministrazione"}
+              />
+              {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
+                couponAttivo ? (
+                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 4 }}>
+                    Codice valido: −{couponAttivo.valore}%
+                    {/* quanto durera': un codice a uso singolo sparisce dopo
+                        questo carrello, e saperlo prima evita di cercarlo
+                        alla vendita dopo credendo che sia sparito per errore */}
+                    <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, marginTop: 2 }}>
+                      {couponAttivo.utilizzi_max === 1
+                        ? "Uso singolo: dopo questa vendita si toglie da solo."
+                        : couponAttivo.valido_fino_a
+                        ? `Resta fino al ${fmtData(couponAttivo.valido_fino_a)}, o finché non lo cancelli.`
+                        : "Resta finché non lo cancelli."}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 4 }}>Codice non valido o scaduto: nessuno sconto.</div>
+                )
+              )}
+            </div>
           </div>
         )}
         {(couponNum > 0 || scontoNum > 0) && (
