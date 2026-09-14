@@ -1667,16 +1667,16 @@ function IconaTilePos({ size = 44, color = NAVY }) {
   );
 }
 function IconaTileModelle({ size = 44, color = NAVY }) {
-  // la modella con i capelli lunghi: la chioma che scende fin sulle
-  // spalle, il viso con la riga dei capelli, le spalle
+  // la modella: chignon, viso con la riga dei capelli a punta, collo e
+  // spalle. Come il riferimento, senza altro
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5.32 19.23c-2.45 -1.78 -0.45 -3.78 0.22 -6.23C6.66 8.1 5.77 1.65 12 1.65s5.34 6.45 6.45 11.35c0.67 2.45 2.67 4.45 0.22 6.23" />
-      <path d="M8.1 10.33c0 4.12 1.67 7.46 3.9 7.46s3.9 -3.34 3.9 -7.46" />
-      <path d="M13.89 2.1c-0.56 2.89 -2.23 5.12 -5.79 7.35 0.45 0.67 0.22 1 0 0.89" />
-      <path d="M13.89 2.1c0.22 3.12 1.34 5.12 2 6.23 0.33 0.56 0.11 1.34 0 2" />
-      <path d="M8.1 12.33c0 3.56 -0.22 5.34 -2.78 6.9M15.9 12.33c0 3.56 0.22 5.34 2.78 6.9" />
-      <path d="M1.76 22.35c0 -2 1.34 -2.89 3.56 -3.12M22.24 22.35c0 -2 -1.34 -2.89 -3.56 -3.12" />
+      <ellipse cx="12" cy="3.64" rx="2.59" ry="1.99" />
+      <path d="M7.12 10.61a4.88 4.88 0 0 1 9.75 0" />
+      <path d="M7.12 10.61c0 3.68 2.09 6.67 4.88 6.67s4.88 -2.99 4.88 -6.67" />
+      <path d="M7.42 11.1c2.19 -0.5 3.68 -1.49 4.58 -2.99 0.9 1.49 2.39 2.49 4.58 2.99" />
+      <path d="M10.31 16.98v1.99M13.69 16.98v1.99" />
+      <path d="M3.84 22.35c0 -2.39 1.59 -3.09 3.98 -3.48l2.49 -0.6M20.16 22.35c0 -2.39 -1.59 -3.09 -3.98 -3.48l-2.49 -0.6" />
     </svg>
   );
 }
