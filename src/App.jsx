@@ -19260,7 +19260,7 @@ function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack, onRiscarica =
   const prossimoNumero = loghiImpostazioni?.prossimo_numero ?? 1;
 
   async function caricaStorico() {
-    const { data } = await supabase.from("loghi_generati").select("*").order("numero", { ascending: false }).limit(50);
+    const { data } = await supabase.from("loghi_generati").select("*").order("creato_il", { ascending: false }).limit(50);
     setStorico(data || []);
   }
   useEffect(() => { caricaStorico(); }, []);
@@ -19277,6 +19277,15 @@ function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack, onRiscarica =
     setMsg(`Logo ${riga.codice} eliminato: il prossimo riparte da ${riga.numero}.`);
     caricaStorico();
     ricarica(["loghi_impostazioni"]);
+  }
+  // un titolo senza numero si toglie dall'elenco e basta: il contatore
+  // non c'entra
+  async function eliminaSenzaNumero(riga) {
+    if (!window.confirm(`Togliere ${toTitleCase(riga.allieva_nome || "")} (${riga.categoria_etichetta}) dall'elenco?`)) return;
+    const { error } = await supabase.from("loghi_generati").delete().eq("id", riga.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("Tolto dall'elenco.");
+    caricaStorico();
   }
 
   return (
@@ -19303,11 +19312,11 @@ function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack, onRiscarica =
             <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
-                  {r.codice}
-                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
+                  {r.numero > 0 ? r.codice : toTitleCase(r.allieva_nome || "")}
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}>{r.numero > 0 ? ` · n. ${r.numero}` : " · senza numero"}</span>
                 </div>
                 <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
-                  {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
+                  {[r.categoria_etichetta, r.numero > 0 && r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
                     .filter(Boolean).join(" · ")}
                   {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
                 </div>
@@ -19322,7 +19331,15 @@ function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack, onRiscarica =
                   {riscaricandoId === r.id ? "Riscarico…" : "Riscarica"}
                 </button>
               )}
-              {i === 0 ? (
+              {r.numero === 0 ? (
+                <button
+                  onClick={() => eliminaSenzaNumero(r)}
+                  title="Toglie questo titolo dall'elenco: nessun numero da recuperare"
+                  style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+                >
+                  <IconaCestino size={14} /> Elimina
+                </button>
+              ) : r.id === (storico.find((x) => x.numero > 0) || {}).id ? (
                 <button
                   onClick={() => eliminaUltimoLogo(r)}
                   title="Elimina l’ultimo logo generato e restituisci il numero"
@@ -19970,7 +19987,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     setRiscaricandoId(null);
   }
   async function caricaUltimi() {
-    const { data } = await supabase.from("loghi_generati").select("*").order("numero", { ascending: false }).limit(10);
+    const { data } = await supabase.from("loghi_generati").select("*").order("creato_il", { ascending: false }).limit(10);
     setUltimi(data || []);
   }
   useEffect(() => { caricaUltimi(); }, []);
@@ -20105,10 +20122,20 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     setScaricando(true);
     anteprime.forEach((a) => scaricaBlob(a.blob, a.nomeFile));
     if (senzaNumero) {
+      // anche i titoli finiscono nell'elenco dei loghi fatti, sotto la
+      // loro categoria: numero zero e nessun codice, il contatore non si
+      // tocca. Cosi' si ritrovano e si riscaricano come gli altri
+      const { error: erroreStorico } = await supabase.from("loghi_generati").insert({
+        numero: 0, codice: String(categoria.etichetta || categoria.chiave).toUpperCase(),
+        categoria_chiave: categoria.chiave, categoria_etichetta: categoria.etichetta,
+        master_nome: null, allieva_nome: nomeAllieva.trim(),
+      });
       setScaricando(false);
+      if (erroreStorico) window.alert("Loghi scaricati, ma non sono riuscito a registrarli nello storico: " + testoErrore(erroreStorico));
       anteprime.forEach((a) => URL.revokeObjectURL(a.url));
       setAnteprime([]);
       setMsg(`Loghi ${categoria?.etichetta || ""} scaricati: nessun numero consumato.`);
+      caricaUltimi();
       return;
     }
 
@@ -20224,9 +20251,13 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
             <Button onClick={scarica} disabled={scaricando || pubblicando} style={{ flex: "1 1 220px" }}>
               {scaricando ? "Scarico…" : senzaNumero ? `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`}` : `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`} e usa il numero ${prossimoNumero}`}
             </Button>
-            <Button variant="ghost" onClick={pubblicaSullaDashboard} disabled={scaricando || pubblicando} style={{ flex: "1 1 220px" }} title={senzaNumero ? "La master si riconosce dal nome scritto sopra" : "La master scelta sopra"}>
-              {pubblicando ? "Pubblico…" : "Pubblica sulla dashboard della master"}
-            </Button>
+            {/* la Master Assistant non ha una dashboard: i suoi loghi si
+                scaricano e basta, e restano nell'elenco dei loghi fatti */}
+            {modo !== "master_assistant" && (
+              <Button variant="ghost" onClick={pubblicaSullaDashboard} disabled={scaricando || pubblicando} style={{ flex: "1 1 220px" }} title={senzaNumero ? "La master si riconosce dal nome scritto sopra" : "La master scelta sopra"}>
+                {pubblicando ? "Pubblico…" : "Pubblica sulla dashboard della master"}
+              </Button>
+            )}
           </div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
             {senzaNumero ? `Il logo ${categoria?.etichetta || ""} non porta il numero progressivo: si scarica e basta.` : `Finché non scarichi, il numero ${prossimoNumero} resta libero: puoi cambiare nome o categoria e rigenerare quante volte vuoi.`}
@@ -20250,11 +20281,11 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
             <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
               <div style={{ minWidth: 0, flex: "1 1 240px" }}>
                 <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
-                  {r.codice}
-                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
+                  {r.numero > 0 ? r.codice : toTitleCase(r.allieva_nome || "")}
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}>{r.numero > 0 ? ` · n. ${r.numero}` : " · senza numero"}</span>
                 </div>
                 <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
-                  {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
+                  {[r.categoria_etichetta, r.numero > 0 && r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
                     .filter(Boolean).join(" · ")}
                   {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
                 </div>
