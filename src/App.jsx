@@ -18564,7 +18564,7 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
 // per poterlo vedere durante il trascinamento, dato che in stampa il
 // testo è sempre coerente col colore del logo (nero su logo nero, bianco
 // su logo bianco)
-function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggiorna, testoProvaNome, testoProvaNumero, famigliaNome, famigliaNumero }) {
+function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggiorna, testoProvaNome, testoProvaNumero, famigliaNome, famigliaNumero, senzaNumero = false }) {
   const [naturaleWidth, setNaturaleWidth] = useState(null);
   const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
   const contenitoreRef = React.useRef(null);
@@ -18713,6 +18713,7 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
           </div>
         </div>
 
+        {!senzaNumero && (
         <div
           onPointerDown={(e) => iniziaDrag(e, "numero")}
           onPointerMove={muoviDrag}
@@ -18743,10 +18744,11 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
             ))}
           </span>
         </div>
+        )}
 
         {/* i due margini del codice, arancioni come il suo riquadro: si
             trascinano come quelli verdi del nome */}
-        {["numLimiteSx", "numLimiteDx"].map((chiave) => (
+        {!senzaNumero && ["numLimiteSx", "numLimiteDx"].map((chiave) => (
           <div
             key={chiave}
             onPointerDown={(e) => iniziaDrag(e, chiave)}
@@ -18773,8 +18775,9 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
         </div>
         <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>
           Il nome viene sempre centrato tra le 2 righe verdi: se è più corto la spaziatura tra le lettere si allarga per riempirle, se è più lungo il font si rimpicciolisce automaticamente finché non ci entra.
-          Il codice progressivo funziona allo stesso modo tra le 2 righe arancioni, ma senza allargare la spaziatura: resta scritto normale e al massimo rimpicciolisce.
+          {!senzaNumero && " Il codice progressivo funziona allo stesso modo tra le 2 righe arancioni, ma senza allargare la spaziatura: resta scritto normale e al massimo rimpicciolisce."}
         </div>
+        {!senzaNumero && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
           <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#EA580C", flexShrink: 0 }} />
           <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, minWidth: 140 }}>Codice progressivo</span>
@@ -18794,6 +18797,7 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
             <button onClick={() => aggiorna({ [kSpazNumero]: Math.min(200, spaziaturaNumero + 1) })} style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>+</button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
@@ -18809,6 +18813,9 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
   const [larghezzaBianco, setLarghezzaBianco] = useState(null);
   const [msg, setMsg] = useState("");
   const modificatoLocalmenteRef = React.useRef(false);
+  // il logo Master fa storia a se': solo il nome da calibrare, e mai
+  // dentro la calibrazione comune, in nessuna direzione
+  const eMaster = categoria.chiave === "master";
 
   // Ogni volta che la riga arriva di nuovo dal database, la scheda la
   // prende. Prima la ignorava se qui si era toccato qualcosa: cosi' una
@@ -18885,7 +18892,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
   const [applicandoATutti, setApplicandoATutti] = useState(false);
   async function applicaATutti() {
     const prefisso = prefissoCalibrazioneLogo(config);
-    const altre = (tutteLeCategorie || []).filter((c) => c.chiave !== categoria.chiave && !c.calibrazione_propria);
+    const altre = (tutteLeCategorie || []).filter((c) => c.chiave !== categoria.chiave && c.chiave !== "master" && !c.calibrazione_propria);
     if (altre.length === 0) { setMsg("Nessun altro logo da allineare: gli altri hanno tutti la calibrazione propria."); return; }
     if (!window.confirm(`Applicare questa calibrazione ad altri ${altre.length} loghi? Quelli con "Regola solo questo logo" restano come sono.`)) return;
     setApplicandoATutti(true);
@@ -18922,12 +18929,12 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
     const { error } = await supabase.from("loghi_categorie").update(tutti).eq("chiave", categoria.chiave);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
 
-    if (!config.calibrazione_propria && soloCalibrazione(campi)) {
+    if (!config.calibrazione_propria && !eMaster && soloCalibrazione(campi)) {
       // le altre categorie che seguono la calibrazione comune. Le
       // dimensioni in pixel si riportano in proporzione alla larghezza del
       // loro file, come si fa fra nero e bianco: gli impianti sono uguali,
       // le risoluzioni no.
-      const altre = (tutteLeCategorie || []).filter((c) => c.chiave !== categoria.chiave && !c.calibrazione_propria);
+      const altre = (tutteLeCategorie || []).filter((c) => c.chiave !== categoria.chiave && c.chiave !== "master" && !c.calibrazione_propria);
       for (const altra of altre) {
         const suoi = {};
         Object.entries(tutti).forEach(([chiave, valore]) => {
@@ -19008,6 +19015,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
           testo bianco su fondo chiaro si vede meglio; se il nero non c'e'
           si usa il bianco. */}
       <BloccoCalibrazioneLogo
+        senzaNumero={eMaster}
         titolo={srcNero
           ? "Posizionamento (vale per tutti e due i loghi — in stampa il testo prende il colore del logo, qui è mostrato al contrario solo per poterlo vedere)"
           : "Posizionamento sul logo bianco (vale per tutti e due i loghi)"}
@@ -19021,7 +19029,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
         famigliaNome={famigliaNome}
         famigliaNumero={famigliaNumero}
       />
-      {!config.calibrazione_propria && (
+      {!config.calibrazione_propria && !eMaster && (
         <button
           onClick={applicaATutti}
           disabled={applicandoATutti}
@@ -19030,6 +19038,11 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
           {applicandoATutti ? "Applico…" : "Applica questa calibrazione a tutti i loghi"}
         </button>
       )}
+      {eMaster ? (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 10 }}>
+          Il logo Master si regola da solo: ha solo il nome, niente numero, e resta fuori dalla calibrazione comune degli altri loghi.
+        </div>
+      ) : (
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
         <input
           type="checkbox"
@@ -19042,6 +19055,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
           <span style={{ color: MUTED }}> — dissocia dalla calibrazione comune: quello che si regola qui non va sugli altri, e gli altri non toccano questo.</span>
         </span>
       </label>
+      )}
 
       {/* le due immagini raramente hanno la stessa risoluzione: la
           dimensione del font si converte in proporzione, e qui si dice
