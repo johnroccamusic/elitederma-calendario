@@ -24417,11 +24417,6 @@ function PannelloRiepilogoAmministrativo({
                               decide se pagarla dalla cassa contanti o con
                               bonifico. Stesse caselle di B/C/½ qui accanto. */}
                           <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {r.flagPerVenditore && !r.cashPagato && cashVenditoriNelloScadenziario > 0 && (
-                              <span title="Somma delle quote venditore mandate nello scadenziario: si decide riga per riga qui sotto" style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.15 }}>
-                                {fmtEuroErp2(cashVenditoriNelloScadenziario)}<br />in scad.
-                              </span>
-                            )}
                             {!r.flagPerVenditore && r.pagatoDalloScadenziario && (
                               <span title="Saldata dallo scadenziario passivo, non dalla busta" style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap" }}>pagata da scad.</span>
                             )}
