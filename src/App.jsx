@@ -52421,7 +52421,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
                   <span style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.2 }}>
                     <span style={{ ...fontBody, fontSize: 15.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
-                    <span>Applica il mio referral</span>
+                    <span>Applica il<br />mio referral</span>
                   </span>
                   {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
                     <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
