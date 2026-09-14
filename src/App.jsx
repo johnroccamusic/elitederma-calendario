@@ -1668,10 +1668,17 @@ function IconaTilePos({ size = 44, color = NAVY }) {
   );
 }
 function IconaTileModelle({ size = 44, color = NAVY }) {
+  // la modella: chignon, viso con la riga dei capelli, collo e spalle, e
+  // la stellina a quattro punte di fianco
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="6.48" r="4.88" />
-      <path d="M2.37 22.4c0 -5.14 4.37 -8.47 9.63 -8.47s9.63 3.34 9.63 8.47" />
+      <ellipse cx="10.71" cy="3.64" rx="2.59" ry="1.99" />
+      <path d="M5.83 10.61a4.88 4.88 0 0 1 9.75 0" />
+      <path d="M5.83 10.61c0 3.68 2.09 6.67 4.88 6.67s4.88 -2.99 4.88 -6.67" />
+      <path d="M6.13 11.1c2.19 -0.5 3.68 -1.49 4.58 -2.99 0.9 1.49 2.39 2.49 4.58 2.99" />
+      <path d="M9.01 16.98v1.99M12.4 16.98v1.99" />
+      <path d="M2.55 22.35c0 -2.39 1.59 -3.09 3.98 -3.48l2.49 -0.6M18.87 22.35c0 -2.39 -1.59 -3.09 -3.98 -3.48l-2.49 -0.6" />
+      <path d="M18.87 10.61c0.3 1.59 1 2.29 2.59 2.59 -1.59 0.3 -2.29 1 -2.59 2.59 -0.3 -1.59 -1 -2.29 -2.59 -2.59 1.59 -0.3 2.29 -1 2.59 -2.59z" />
     </svg>
   );
 }
