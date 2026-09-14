@@ -51306,6 +51306,9 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
 // logica di aggregazione già esistente
 // spese di spedizione per una vendita al banco da spedire
 const COSTO_SPEDIZIONE_POS = 6.90;
+// il link del buono Amazon da mandare al cliente: compare al POS quando si
+// sceglie quel metodo, con il tasto per copiarlo
+const LINK_BUONO_AMAZON = "https://amzn.eu/d/01EgWtdB";
 // Come si legge il metodo di una vendita al banco. Tre modi: POS/carta,
 // contanti, buono Amazon. Nei conti il buono sta con la carta: e' un
 // incasso non in contanti, con l'IVA scorporata come per la carta
@@ -51635,6 +51638,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // altrimenti diventerebbe uno sconto manuale spacciato per referral
   const [couponAttivo, setCouponAttivo] = useState(null);
   const [metodoPagamento, setMetodoPagamento] = useState("pos");
+  const [linkAmazonCopiato, setLinkAmazonCopiato] = useState(false);
+  async function copiaLinkAmazon() {
+    try { await navigator.clipboard.writeText(LINK_BUONO_AMAZON); setLinkAmazonCopiato(true); setTimeout(() => setLinkAmazonCopiato(false), 1800); }
+    catch { window.prompt("Copia il link:", LINK_BUONO_AMAZON); }
+  }
   // la seconda serie di fasce dei codici d'aula, per chi paga in contanti
   const [fasceContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   // per i punti che questo carrello fa maturare alla master
@@ -52669,6 +52677,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               );
             })}
           </div>
+          {/* con il buono Amazon la master manda al cliente il link del
+              buono: sta qui sotto, pronto da copiare */}
+          {metodoPagamento === "buono_amazon" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: -6, marginBottom: isMobile ? 10 : 16, padding: "10px 12px", borderRadius: 12, background: "#FBF7EE", border: `1px solid #E8D4B0` }}>
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.4 }}>Link del buono</span>
+              <a href={LINK_BUONO_AMAZON} target="_blank" rel="noopener noreferrer" style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, wordBreak: "break-all", flex: "1 1 200px" }}>{LINK_BUONO_AMAZON}</a>
+              <button type="button" onClick={copiaLinkAmazon} title="Copia il link negli appunti" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: linkAmazonCopiato ? "#2E7D32" : NAVY, background: "#fff", border: `1px solid ${linkAmazonCopiato ? "#2E7D32" : NAVY}`, borderRadius: 14, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                {linkAmazonCopiato ? "Copiato" : "Copia"}
+              </button>
+            </div>
+          )}
         </>
       )}
       {!isMobile && (
