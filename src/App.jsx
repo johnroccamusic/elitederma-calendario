@@ -34991,7 +34991,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
 // che apre numero/data fattura + scadenza (pre-compilata se già nota da
 // Assegnazione Master → Gestisci) + copia fattura opzionale — al salvataggio
 // nasce la spesa vera (stato "Fatturata") e la riga sparisce da qui
-function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura, onPagaDaCassa }) {
+function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura, onPagaDaCassa, onPagaBonificoAttesa }) {
   const [aperto, setAperto] = useState(false);
   // Un impegno ha due sbocchi, non uno: o arriva la fattura e si va in
   // scadenziario, oppure lo si paga in contanti e finisce dritto in prima
@@ -35060,6 +35060,22 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
                   {pagandoCassa ? "Registro…" : "Pagato da cassa"}
                 </button>
               </>
+            )}
+            {onPagaBonificoAttesa && (
+              <button
+                onClick={async () => {
+                  const quando = scadenza || dataOggiStr();
+                  if (!window.confirm(`Pagare "${nome}" con bonifico senza aspettare la fattura?\n\nVa nello Scadenziario Passivo come spesa da pagare di ${fmtEuroErp(totale)} con scadenza ${fmtData(quando)}: quando carichi il bonifico e la segni pagata, passa in prima nota.`)) return;
+                  setPagandoCassa(true);
+                  await onPagaBonificoAttesa({ scadenza: quando });
+                  setPagandoCassa(false);
+                }}
+                disabled={pagandoCassa}
+                title="Sposta l'impegno nello Scadenziario Passivo da pagare con bonifico, senza aspettare la fattura"
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "9px 14px", cursor: pagandoCassa ? "default" : "pointer", opacity: pagandoCassa ? 0.6 : 1 }}
+              >
+                Paga con bonifico in attesa di fattura
+              </button>
             )}
             <button onClick={() => setAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer" }}>
               Registra fattura
@@ -37337,6 +37353,28 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // una riga di prima nota. Senza IVA, come tutto quello che si paga in
   // contanti senza documento: se la fattura arrivasse poi, si corregge
   // dalla riga della spesa.
+  // "Paga con bonifico in attesa di fattura": l'impegno smette di
+  // aspettare la fattura e diventa subito una spesa da pagare con
+  // bonifico, stato "impegnata", con la sua scadenza. Da qui in poi vive
+  // nello Scadenziario Passivo: quando si carica il bonifico e la si
+  // segna pagata, passa in prima nota. La fattura, se arriva, si aggiunge
+  // dalla riga della spesa.
+  async function pagaBonificoInAttesaFattura(item, { scadenza }) {
+    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
+    const { error } = await supabase.from("spese").insert({
+      descrizione: item.nome,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: item.sottocategoriaId,
+      tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
+      imponibile: round2(item.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100)), iva_percentuale: ALIQUOTA_IVA_RIEPILOGO_CLASSE, totale: round2(item.totale),
+      data_documento: item.corsoData?.data_fine || dataOggiStr(), scadenza_pagamento: scadenza || item.scadenzaSuggerita || dataOggiStr(),
+      stato: "impegnata", metodo_pagamento: "Bonifico",
+      origine: "automatico", origine_scadenziario_chiave: item.chiave,
+    });
+    if (error) { setMsgImpegni("Errore: " + testoErrore(error)); return; }
+    setMsgImpegni(`"${item.nome}" e' nello Scadenziario Passivo, da pagare con bonifico: quando lo segni pagato passa in prima nota.`);
+    ricarica(["spese"]);
+  }
   async function pagaImpegnoDaCassa(item, { dataPagamento }) {
     const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
     const { error } = await supabase.from("spese").insert({
@@ -37577,6 +37615,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                       .map((x) => ({ ...x, corsoLabel: etichettaCorso(x.corsoData) }))}
                     onRegistraFattura={(dati, altriSelezionati) => registraFattura(item, dati, altriSelezionati)}
                     onPagaDaCassa={item.sottocategoriaId ? (dati) => pagaImpegnoDaCassa(item, dati) : null}
+                    onPagaBonificoAttesa={item.sottocategoriaId ? (dati) => pagaBonificoInAttesaFattura(item, dati) : null}
                   />
                 ))}
               </div>
