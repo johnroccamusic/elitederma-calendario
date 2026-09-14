@@ -52491,12 +52491,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           mezzo schermo e il totale finiva sotto la piega */}
       <div style={{
         background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 14, borderLeft: `4px solid ${GOLD}`,
-        padding: isMobile ? "12px 14px" : "16px 18px", marginBottom: isMobile ? 12 : 16,
+        padding: isMobile ? "7px 14px" : "11px 18px", marginBottom: isMobile ? 12 : 16,
         display: isMobile ? "flex" : "block", alignItems: "stretch", gap: 14,
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {[["Subtotale (IVA incl.)", subtotale], ["Imponibile", imponibile], ["IVA 22%", iva]].map(([etichetta, valore], i) => (
-            <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, ...fontBody, fontSize: isMobile ? 12 : 13, color: NAVY, marginBottom: isMobile && i === 2 ? 0 : 8 }}>
+            <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, ...fontBody, fontSize: isMobile ? 12 : 13, lineHeight: 1.15, color: NAVY, marginBottom: isMobile && i === 2 ? 0 : (isMobile ? 4 : 5) }}>
               <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: MUTED, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700 }}>{etichetta}</span>
               <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{fmtEuroErp2(valore)}</span>
             </div>
