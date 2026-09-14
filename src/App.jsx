@@ -23932,7 +23932,11 @@ function PannelloRiepilogoAmministrativo({
   // scadenziario: quella li' e' della quota bonifico della stessa riga, e
   // le due meta' si pagano in momenti diversi e per strade diverse.
   const chiaveCashRiga = (r) => `cash_${r.tipo}_${r.rigaId}`;
-  const chiaviSpeseEsistenti = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave).map((x) => x.origine_scadenziario_chiave));
+  // due insiemi: le quote uscite dalla busta (scritte da Disponi pagamenti)
+  // e quelle saldate dallo scadenziario passivo (dalla cassa contanti o con
+  // bonifico). Le seconde restano "rinviate": non hanno toccato la busta
+  const chiaviSpeseEsistenti = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave && x.origine !== "scadenziario_cash").map((x) => x.origine_scadenziario_chiave));
+  const chiaviPagateDalloScadenziario = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave && x.origine === "scadenziario_cash").map((x) => x.origine_scadenziario_chiave));
   // Una quota in contante puo' uscire dalla busta per due strade: o e'
   // stata pagata davvero (spesa registrata), oppure e' stata rinviata
   // perche' il contante del corso non bastava — e allora diventa un
@@ -23951,13 +23955,14 @@ function PannelloRiepilogoAmministrativo({
     const suoCash = round2(v.totale - suoBonifico);
     const rigaId = `${corsoData.id}_${v.chiave}`;
     const impegnoCash = impegniPerChiave.get(`cash_venditore_${rigaId}`) || null;
-    return { ...v, tipo: "venditore", rigaId, modalita, suoBonifico, suoCash, cash: suoCash, impegnoCash, cashRinviato: !!impegnoCash };
+    const pagatoDalloScadenziario = chiaviPagateDalloScadenziario.has(`cash_venditore_${rigaId}`);
+    return { ...v, tipo: "venditore", rigaId, modalita, suoBonifico, suoCash, cash: suoCash, impegnoCash, cashRinviato: !!impegnoCash || pagatoDalloScadenziario, pagatoDalloScadenziario };
   });
   // Quanto la busta puo' coprire: il contante incassato al corso meno
   // quello che da qui e' gia' uscito come spesa pagata. Il contante
   // incassato non dipende dalle righe di costo, quindi lo si legge prima
   // di decidere qualunque cosa
-  const cashRegistratoClasse = round2(speseClasse.reduce((somma, x) => somma + (x.importo_pagato_cash || 0), 0));
+  const cashRegistratoClasse = round2(speseClasse.filter((x) => x.origine !== "scadenziario_cash").reduce((somma, x) => somma + (x.importo_pagato_cash || 0), 0));
   const contantiIncassatiClasse = contiRiepilogoClasse({ incassiExtra, listaIscritti, venditeAlCorso, speseClasse, costiExtra, righeSpeseTutte: [], totaleSpeseAutomaticheClasse }).contanti;
   // La passeggiata: riga per riga nell'ordine della tabella, i venditori
   // uno per uno al posto della loro riga totale. Ogni quota in contanti
@@ -23989,9 +23994,10 @@ function PannelloRiepilogoAmministrativo({
       };
     }
     const impegnoCash = impegniPerChiave.get(chiave) || null;
-    let cashRinviato = !!impegnoCash, rinvioAutomatico = false;
+    const pagatoDalloScadenziario = chiaviPagateDalloScadenziario.has(chiave);
+    let cashRinviato = !!impegnoCash || pagatoDalloScadenziario, rinvioAutomatico = false;
     if (!cashPagato && !cashRinviato && (r.cash || 0) > 0 && !prendiDallaBusta(r.cash)) { cashRinviato = true; rinvioAutomatico = true; }
-    return { ...r, cashPagato, cashRinviato, rinvioAutomatico, impegnoCash, cashGiaRegistrato: cashPagato || cashRinviato };
+    return { ...r, cashPagato, cashRinviato, rinvioAutomatico, impegnoCash, pagatoDalloScadenziario, cashGiaRegistrato: cashPagato || cashRinviato };
   });
   const disponibileDopoLeScelte = disponibileBusta;
   const cashVenditoriNelloScadenziario = round2(venditoriDecisi.filter((v) => v.cashRinviato).reduce((somma, v) => somma + v.suoCash, 0));
@@ -24009,7 +24015,7 @@ function PannelloRiepilogoAmministrativo({
   const speseDisposte = speseClasseReali.filter((x) => x.origine === "automatico" && String(x.origine_scadenziario_chiave || "").startsWith("cash_"));
   // sono impegni "corso" di questa classe con la chiave "cash_…": quelli di
   // alloggio e location, che hanno altre chiavi, non si toccano
-  const impegniDisposti = (impegni || []).filter((x) => x.origine_id === corsoData.id && String(x.chiave_origine || "").startsWith("cash_"));
+  const impegniDisposti = (impegni || []).filter((x) => x.origine_id === corsoData.id && String(x.chiave_origine || "").startsWith("cash_") && (x.stato === "aperto" || x.stato === "parzialmente_coperto"));
 
   // "Non dal cash del corso": la quota esce dalla busta e diventa un
   // impegno. Serve quando in aula il contante non basta a coprire quello
@@ -24490,7 +24496,10 @@ function PannelloRiepilogoAmministrativo({
                                 {fmtEuroErp2(cashVenditoriNelloScadenziario)}<br />in scad.
                               </span>
                             )}
-                            {!r.flagPerVenditore && (r.cash || 0) > 0 && !r.cashPagato && (
+                            {!r.flagPerVenditore && r.pagatoDalloScadenziario && (
+                              <span title="Saldata dallo scadenziario passivo, non dalla busta" style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap" }}>pagata da scad.</span>
+                            )}
+                            {!r.flagPerVenditore && (r.cash || 0) > 0 && !r.cashPagato && !r.pagatoDalloScadenziario && (
                               <div style={{ display: "flex", gap: 0, justifyContent: "center" }}>
                                 {[{ k: "busta", l: "Busta", t: "La quota in contanti esce dalla busta di questo corso e va in prima nota con Pagamenti effettuati" }, { k: "scad", l: "Scad.", t: "La quota in contanti va nello scadenziario passivo (Quadro impegni): si decide poi se pagarla dalla cassa contanti o con bonifico" }].map((o) => {
                                   const attiva = o.k === "scad" ? r.cashRinviato : !r.cashRinviato;
@@ -24630,6 +24639,7 @@ function PannelloRiepilogoAmministrativo({
                                     <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
                                       {suoCash > 0 && !r.cashPagato && (() => {
                                         const rv = venditoriDecisi.find((x) => x.chiave === v.chiave);
+                                        if (rv?.pagatoDalloScadenziario) return <span title="Saldata dallo scadenziario passivo, non dalla busta" style={{ ...fontBody, fontSize: 8.5, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap" }}>pagata da scad.</span>;
                                         const nelloScad = !!rv?.cashRinviato;
                                         // le stesse due caselle delle righe fisse, con
                                         // la scritta di fianco perche' la riga e' bassa
@@ -29490,7 +29500,9 @@ function contiRiepilogoClasse({
   // passivo, a mano o perche' la busta non bastava. Il totale da pagare
   // e' la somma di tutti e tre: quanto costa in contanti questa classe,
   // comunque lo si paghi
-  const cashRegistrato = round2(speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0));
+  // le quote saldate dallo scadenziario ("scadenziario_cash") non sono
+  // uscite dalla busta: contano fra i costi, non qui
+  const cashRegistrato = round2(speseClasse.filter((x) => x.origine !== "scadenziario_cash").reduce((s, x) => s + (x.importo_pagato_cash || 0), 0));
   const cashDaDisporre = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashGiaRegistrato ? 0 : (r.cash || 0)), 0));
   const cashRinviati = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashRinviato ? (r.cash || 0) : 0) + (r.cashRinviatoImporto || 0), 0));
   const totaleCashDaPagare = round2(cashDaDisporre + cashRinviati + cashRegistrato);
@@ -34135,6 +34147,33 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
   return { impegni, daPagareVirtuali: daPagare };
 }
 
+// Le quote in contanti che il Riepilogo di una classe ha mandato nello
+// scadenziario passivo (flag Scad. o rinvio automatico di "Disponi
+// pagamenti"). Sono righe vere della tabella impegno, con la chiave
+// "cash_<tipo>_…": qui diventano voci "da pagare" come le altre, e si
+// saldano dalla cassa contanti o con bonifico. La categoria e' quella del
+// gruppo del tipo di riga (master, venditore, assistente…), cosi' la
+// spesa che nasce e' gia' classificata
+function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi }) {
+  const cdById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  return (impegnoTabella || [])
+    .filter((x) => String(x.chiave_origine || "").startsWith("cash_") && (x.stato === "aperto" || x.stato === "parzialmente_coperto"))
+    .map((x) => {
+      const tipoRiga = String(x.chiave_origine).split("_")[1] || "manuale";
+      const cd = cdById[x.origine_id] || null;
+      return {
+        key: x.chiave_origine, chiave: x.chiave_origine, tipo: "cash_rinviato", tipoRiga, impegno: x, corsoData: cd,
+        nome: String(x.descrizione || "").replace(/ — contanti non coperti$/, ""),
+        totale: Number(x.importo_previsto) || 0,
+        sottocategoriaId: categoriaGruppoPer(tipoRiga, categorieGruppi) || null,
+        fornitore: null, iban: null,
+        oggetto: "Quota in contanti rinviata dal corso",
+        dataDebito: x.data_prevista || cd?.data_fine || null,
+        scadenza: x.data_prevista || null,
+      };
+    });
+}
+
 function prossimaScadenzaAbbonamento(dataStr, periodicita) {
   if (periodicita === "giornaliera") return addGiorni(dataStr, 1);
   if (periodicita === "settimanale") return addGiorni(dataStr, 7);
@@ -36937,7 +36976,7 @@ function PannelloCassaConsulenze() {
   );
 }
 
-function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
+function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -37144,7 +37183,9 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
     };
   });
 
-  const daPagare = [...daPagareVirtuali, ...righeReali, ...occorrenzeAbbonamenti].sort((a, b) => {
+  // le quote in contanti rinviate dalle classi: vere righe di impegno
+  const cashRinviati = vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi });
+  const daPagare = [...daPagareVirtuali, ...righeReali, ...occorrenzeAbbonamenti, ...cashRinviati].sort((a, b) => {
     const da = a.corsoData?.data_fine || a.dataDebito || "";
     const db = b.corsoData?.data_fine || b.dataDebito || "";
     return da.localeCompare(db);
@@ -37383,9 +37424,41 @@ function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscrit
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
+  // Una quota in contanti rinviata si salda da qui, dalla cassa contanti
+  // o con bonifico. La spesa che nasce porta l'origine "scadenziario_cash":
+  // il Riepilogo della classe la riconosce e NON la toglie dal cash pulito
+  // in busta, perche' quei soldi non sono usciti dalla busta. L'impegno si
+  // chiude e sparisce da qui.
+  async function segnaPagataCashRinviato(item, { file, dataPagamento, metodo }) {
+    setMsg("");
+    let allegatoPath = null;
+    if (file) {
+      const { errore, url } = await caricaRicevutaSpesa(file);
+      if (errore) { setMsg("Errore allegato: " + errore); return; }
+      allegatoPath = url;
+    }
+    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
+    const dallaCassa = METODI_SPESA_DALLA_CASSA.has(metodo || "");
+    const { error } = await supabase.from("spese").insert({
+      descrizione: item.nome,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: item.sottocategoriaId,
+      tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
+      imponibile: round2(item.totale), iva_percentuale: 0, totale: round2(item.totale),
+      importo_pagato_cash: dallaCassa ? round2(item.totale) : 0,
+      data_documento: item.dataDebito || dataPagamento || null,
+      stato: "pagata", data_pagamento: dataPagamento || null, metodo_pagamento: dallaCassa ? "Cassa contanti" : (metodo || "Bonifico"),
+      allegato_path: allegatoPath, origine: "scadenziario_cash",
+      origine_scadenziario_chiave: item.chiave,
+    });
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    await supabase.from("impegno").update({ stato: "chiuso", importo_effettivo: round2(item.totale), updated_at: new Date().toISOString() }).eq("id", item.impegno.id);
+    ricarica(["spese", "impegno"]);
+  }
   function confermaPagato(item, dati) {
     if (item.tipo === "reale") return segnaPagataReale(item, dati);
     if (item.tipo === "abbonamento") return segnaPagataAbbonamento(item, dati);
+    if (item.tipo === "cash_rinviato") return segnaPagataCashRinviato(item, dati);
     return segnaPagataVirtuale(item, dati);
   }
 
@@ -37972,7 +38045,7 @@ function ChipSpesa({ children }) {
 }
 const SPESE_PAGINA_INIZIALE = 10;
 function PaginaInserimentoCostiRicavi({
-  ruoloUtente, quoteVenditoriSplit,
+  ruoloUtente, quoteVenditoriSplit, impegnoTabella = [],
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
   abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic,
@@ -38134,7 +38207,7 @@ function PaginaInserimentoCostiRicavi({
           onApriScheda={onApriAmministrazioneTab}
           impegniCount={impegniPerConteggio.length}
           documentiCount={documentiFornitorePerConteggio}
-          passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio}
+          passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio + vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi }).length}
           attivoCount={scadenziarioAttivoPerConteggio}
           abbonamentiCount={(abbonamentiContratti || []).length}
           ruoloUtente={ruoloUtente}
@@ -60786,7 +60859,7 @@ export default function App() {
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare", "impegno"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
-    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
+    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno"],
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
@@ -60796,7 +60869,7 @@ export default function App() {
     statvenditeshop: ["vendite_shop", "woo_coupon"],
     statvenditealbanco: ["vendite_shop"],
     statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
-    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
+    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta"],
     venditeshop: ["vendite_shop"],
     // "corsi" e "corsi_date" servono alla colonna "Frangente": la vendita
@@ -62316,7 +62389,7 @@ export default function App() {
 
       {view === "amministrazione" && (
         <PaginaAmministrazione
-          quoteVenditoriSplit={quoteVenditoriSplit}
+          quoteVenditoriSplit={quoteVenditoriSplit} impegnoTabella={impegnoTabella}
           ruoloUtente={ruoloUtente}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
@@ -62470,7 +62543,7 @@ export default function App() {
 
       {view === "inserimentocostiricavi" && (
         <PaginaInserimentoCostiRicavi
-          quoteVenditoriSplit={quoteVenditoriSplit}
+          quoteVenditoriSplit={quoteVenditoriSplit} impegnoTabella={impegnoTabella}
           ruoloUtente={ruoloUtente}
           spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
