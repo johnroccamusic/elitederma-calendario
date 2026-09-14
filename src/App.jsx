@@ -52983,7 +52983,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 )}
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>Carrello vendita</div>
+                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrello vendita</div>
                 <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
                   {carrello.length === 0
                     ? "vuoto — tocca un prodotto per aggiungerlo"
@@ -53033,7 +53033,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     <IconaBorsaShop size={17} color="#fff" />
                   </span>
                   <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
-                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Carrello vendita</span>
+                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrello vendita</span>
                     <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span>
                   </div>
                   {carrello.length > 0 && (
@@ -53149,7 +53149,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 <IconaBorsaShop size={22} color="#fff" />
               </span>
               <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Carrello vendita</span>
+                <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrello vendita</span>
                 <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span>
               </div>
               {carrello.length > 0 && (
