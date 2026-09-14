@@ -1228,44 +1228,47 @@ function IconaPacchettoRiga({ size = 18, color = "currentColor" }) {
 // compare un dettaglio arancione
 function IconaTileCorsi({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="5" width="18" height="16" rx="2" />
       <path d="M8 3v4M16 3v4M3 10h18" />
-      <circle cx="8.5" cy="14.5" r="1" fill={GOLD} stroke="none" />
-      <circle cx="12" cy="14.5" r="1" fill={GOLD} stroke="none" />
-      <circle cx="15.5" cy="14.5" r="1" />
+      <circle cx="8.5" cy="14.5" r="1" fill={color} stroke="none" />
+      <circle cx="12" cy="14.5" r="1" fill={color} stroke="none" />
+      <circle cx="15.5" cy="14.5" r="1" fill={color} stroke="none" />
     </svg>
   );
 }
 function IconaTileVenditori({ size = 44, color = NAVY }) {
+  // tre persone e, sopra, la moneta con l'euro: la squadra che vende
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 20v-6.5" />
-      <circle cx="6" cy="12" r="1.5" fill={color} stroke="none" />
-      <path d="M12 20v-10.5" />
-      <circle cx="12" cy="8" r="1.5" fill={color} stroke="none" />
-      <path d="M18 20V5.5" />
-      <circle cx="18" cy="4" r="1.5" fill={color} stroke="none" />
+      <circle cx="12" cy="5.6" r="3.9" />
+      <path d="M13.4 4.3c-.3-.4-.8-.6-1.4-.6-.9 0-1.5.5-1.5 1.1 0 .7.6 1 1.5 1.2s1.5.5 1.5 1.2c0 .6-.6 1.1-1.5 1.1-.6 0-1.1-.2-1.4-.6M12 2.9v.8M12 7.5v.8" />
+      <circle cx="12" cy="14.2" r="2.7" />
+      <path d="M7.4 21.5c0-2.7 2-4.6 4.6-4.6s4.6 1.9 4.6 4.6" />
+      <circle cx="5" cy="12.6" r="2.3" />
+      <path d="M1.4 19.4c0-2.3 1.6-3.9 3.8-3.9.7 0 1.3.1 1.8.4" />
+      <circle cx="19" cy="12.6" r="2.3" />
+      <path d="M22.6 19.4c0-2.3-1.6-3.9-3.8-3.9-.7 0-1.3.1-1.8.4" />
     </svg>
   );
 }
 function IconaTileMaster({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="8.5" r="5.5" />
       <path d="M9 13.7L7.2 21l4.8-2.6 4.8 2.6-1.8-7.3" />
-      <path d="M12 5.3l1 2 2.2.3-1.6 1.6.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.6 2.2-.3z" fill={GOLD} stroke={GOLD} strokeWidth="0.6" />
+      <path d="M12 5.3l1 2 2.2.3-1.6 1.6.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.6 2.2-.3z" />
     </svg>
   );
 }
 function IconaTileLogistica({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 7h10v9H3z" />
       <path d="M13 10h4l3 3v3h-7z" />
       <circle cx="7" cy="18.3" r="1.5" />
       <circle cx="17" cy="18.3" r="1.5" />
-      <path d="M6 9.3h4" stroke={GOLD} />
+      <path d="M6 9.3h4" />
     </svg>
   );
 }
@@ -1651,32 +1654,21 @@ function inizialiNome(nome) {
 // grigio): quando il colore arriva da fuori l'icona diventa tutta di
 // quel colore, perché due toni su un segnaposto grigio stonerebbero.
 function IconaTilePos({ size = 44, color = NAVY }) {
-  const oro = color === NAVY ? GOLD : color;
+  // tutto a tratto, un colore solo: il corpo, il display, i sei tasti, la
+  // carta infilata nel fianco e lo scontrino che esce da sotto
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* la carta di credito, infilata nel fianco destro */}
-      <rect x="15.2" y="5.9" width="4.2" height="8.6" rx="0.9" stroke={color} strokeWidth="1.4" />
-      <rect x="16.2" y="6.6" width="1.5" height="7.2" fill={oro} />
-      {/* lo scontrino che esce da sotto, e i due piedini */}
-      <rect x="7.6" y="17.2" width="4.1" height="5.2" rx="0.4" fill={oro} />
-      <path d="M6 17.4v1.5M13.6 17.4v1.5" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
-      {/* il corpo, il display e i sei tasti */}
-      <rect x="4.4" y="1.6" width="10.9" height="15.8" rx="1.7" stroke={color} strokeWidth="1.6" />
-      <rect x="6.7" y="4" width="6.3" height="3.5" rx="0.3" fill={oro} />
-      <g fill={color}>
-        <rect x="6.9" y="8.9" width="2.2" height="1.5" rx="0.45" />
-        <rect x="10.5" y="8.9" width="2.2" height="1.5" rx="0.45" />
-        <rect x="6.9" y="11.2" width="2.2" height="1.5" rx="0.45" />
-        <rect x="10.5" y="11.2" width="2.2" height="1.5" rx="0.45" />
-        <rect x="6.9" y="13.5" width="2.2" height="1.5" rx="0.45" />
-        <rect x="10.5" y="13.5" width="2.2" height="1.5" rx="0.45" />
-      </g>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4.4" y="1.8" width="10.9" height="15.6" rx="1.7" />
+      <rect x="6.8" y="4.2" width="6.1" height="3.3" rx="0.4" />
+      <path d="M7.4 10.2h1.4M11 10.2h1.4M7.4 12.6h1.4M11 12.6h1.4M7.4 15h1.4M11 15h1.4" />
+      <rect x="15.3" y="6" width="4.2" height="8.4" rx="0.9" />
+      <path d="M7.8 17.4v4.4h4.1v-4.4" />
     </svg>
   );
 }
 function IconaTileModelle({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="7.8" r="3.8" />
       <path d="M4.5 20.2c0-4 3.4-6.6 7.5-6.6s7.5 2.6 7.5 6.6" />
     </svg>
@@ -1700,16 +1692,51 @@ function spicchioTorta(cx, cy, r, gradoIniziale, gradoFinale, punti = 40) {
 const PERCORSO_TORTA_CORPO = spicchioTorta(10, 13, 6.5, -25, 270);
 const PERCORSO_TORTA_FETTA = spicchioTorta(14.5, 7.8, 3.2, -90, -25);
 function IconaTileStatistiche({ size = 44, color = NAVY }) {
+  // quattro barre che salgono e la freccia sopra
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d={PERCORSO_TORTA_CORPO} />
-      <path d={PERCORSO_TORTA_FETTA} />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 21h20" />
+      <rect x="3.2" y="14.5" width="3.4" height="6.5" rx="0.5" />
+      <rect x="8.2" y="12.2" width="3.4" height="8.8" rx="0.5" />
+      <rect x="13.2" y="10" width="3.4" height="11" rx="0.5" />
+      <rect x="18.2" y="7.5" width="3.4" height="13.5" rx="0.5" />
+      <path d="M3.6 11.6c5.6-1 11-3.4 15.4-7.6" />
+      <path d="M15.6 3.8l3.8-.6-.5 3.8" />
+    </svg>
+  );
+}
+// Le versioni "da tasto" di tre icone condivise: stesso disegno, ma
+// tratto a 1,8 e colore passato, come tutte le altre della home
+function IconaTileAgenda({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M8 3v4M16 3v4M3 10h18" />
+    </svg>
+  );
+}
+function IconaTileLoghi({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <circle cx="9" cy="9" r="2.2" />
+      <path d="M21 15l-5.5-5.5a2 2 0 0 0-2.8 0L4 18" />
+    </svg>
+  );
+}
+function IconaTileCrm({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.7 20c0-3.8 2.8-6 6.3-6s6.3 2.2 6.3 6" />
+      <circle cx="17" cy="8.5" r="2.4" />
+      <path d="M15.2 14.3c2.9.3 5.8 2 5.8 5.7" />
     </svg>
   );
 }
 function IconaTileLampadina({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 18.3h6M10 21h4" />
       <path d="M12 3a6 6 0 0 0-3.2 11.1c.6.4 1.2 1.3 1.2 2.1v.3h4v-.3c0-.8.6-1.7 1.2-2.1A6 6 0 0 0 12 3Z" />
     </svg>
@@ -1717,20 +1744,21 @@ function IconaTileLampadina({ size = 44, color = NAVY }) {
 }
 // icone dei tasti dell'hub "ERP / Magazzino"
 function IconaTileCostiRicavi({ size = 44, color = NAVY }) {
+  // l'euro aperto a destra e la freccia che sale: i conti che crescono
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 2.5h9l3 3V21a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z" />
-      <path d="M7.8 8h6.4M7.8 11.3h4" />
-      <circle cx="16.3" cy="16.8" r="3.5" fill="#fff" stroke={GOLD} />
-      <path d="M18 15.3a2 2 0 1 0 0 3M15.5 16.3h2.3M15.5 17.5h2.3" stroke={GOLD} strokeWidth="1.2" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16.6 6.6A7.4 7.4 0 1 0 15.8 17.2" />
+      <path d="M3.6 10.3h9.4M3.6 13.7h8.4" />
+      <path d="M9.2 17.6c4.6-.7 8.6-3 11.9-6.9" />
+      <path d="M17.4 10l3.7-.6-.5 3.8" />
     </svg>
   );
 }
 function IconaTilePrezzi({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12.6 2.5h6.9a1 1 0 0 1 1 1v6.9a1 1 0 0 1-.3.7l-9 9a1 1 0 0 1-1.4 0l-7.2-7.2a1 1 0 0 1 0-1.4l9-9a1 1 0 0 1 .7-.3Z" />
-      <circle cx="16.8" cy="7.2" r="1.4" fill={GOLD} stroke={GOLD} />
+      <circle cx="16.8" cy="7.2" r="1.4" />
     </svg>
   );
 }
@@ -1762,20 +1790,20 @@ function IconaTileAnagrafiche({ size = 44, color = NAVY }) {
 // Il tratto disegna la struttura (blu), il pieno le casse (oro): a
 // dimensione di tasto è quel contrasto a farla riconoscere al volo, molto
 // più del disegno del capannone in sé.
-function IconaTileGestioneMagazzino({ size = 44 }) {
+function IconaTileGestioneMagazzino({ size = 44, color = NAVY }) {
   // cinque punti più grande di quanto la griglia dei tasti chiede: la
   // figura è larga e bassa, alla stessa misura delle altre sembrava minore
   const lato = size + 5;
   return (
-    <svg width={lato} height={lato} viewBox="0 0 24 24" fill="none">
+    <svg width={lato} height={lato} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       {/* i due muri e il tetto, un tratto solo aperto in basso */}
-      <path d="M3.1 20.6V8.5L12 2.9l8.9 5.6v12.1" stroke={NAVY} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.1 20.6V8.5L12 2.9l8.9 5.6v12.1" />
       {/* la trave sotto il colmo */}
-      <path d="M7.3 9.9h9.4" stroke={NAVY} strokeWidth="1.7" strokeLinecap="butt" />
-      {/* le casse: una sopra, due sotto */}
-      <rect x="9.7" y="12.4" width="4.6" height="3.5" rx="0.45" fill={GOLD} />
-      <rect x="6.6" y="16.5" width="4.6" height="3.5" rx="0.45" fill={GOLD} />
-      <rect x="12.8" y="16.5" width="4.6" height="3.5" rx="0.45" fill={GOLD} />
+      <path d="M7.3 9.9h9.4" />
+      {/* le casse: una sopra, due sotto, a tratto */}
+      <rect x="9.7" y="12.4" width="4.6" height="3.5" rx="0.45" />
+      <rect x="6.6" y="16.5" width="4.6" height="3.5" rx="0.45" />
+      <rect x="12.8" y="16.5" width="4.6" height="3.5" rx="0.45" />
     </svg>
   );
 }
@@ -1803,12 +1831,12 @@ function IconaTileVenditeShop({ size = 44, color = NAVY }) {
 }
 function IconaTileOmaggio({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="9" width="18" height="4" rx="1" />
       <rect x="4.5" y="13" width="15" height="8" rx="1" />
       <path d="M12 9v12" />
-      <path d="M12 9c-1.2-3.2-3.4-4.5-4.8-3.6C5.8 6.3 6.5 9 12 9Z" stroke={GOLD} />
-      <path d="M12 9c1.2-3.2 3.4-4.5 4.8-3.6 1.4.9.7 3.6-4.8 3.6Z" stroke={GOLD} />
+      <path d="M12 9c-1.2-3.2-3.4-4.5-4.8-3.6C5.8 6.3 6.5 9 12 9Z" />
+      <path d="M12 9c1.2-3.2 3.4-4.5 4.8-3.6 1.4.9.7 3.6-4.8 3.6Z" />
     </svg>
   );
 }
@@ -1911,13 +1939,12 @@ const PERCORSO_INGRANAGGIO = percorsoIngranaggio(12, 12, 7.1, 1.25, 8);
 // Normative: un foglio con il sigillo. E' l'area dei documenti che
 // l'accademia deve rispettare e mostrare — non un archivio qualunque
 function IconaTileNormative({ size = 44, color = NAVY }) {
+  // solo il foglio con le righe: niente bollino con la spunta
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 6h16l8 8v20a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z" />
-      <path d="M28 6v8h8" />
-      <path d="M15 21h12M15 27h8" />
-      <circle cx="32" cy="33" r="6" stroke={GOLD} />
-      <path d="M29.5 33l2 2 3.5-3.5" stroke={GOLD} />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3h8l4 4v13a1.5 1.5 0 0 1-1.5 1.5h-10.5A1.5 1.5 0 0 1 4.5 20V4.5A1.5 1.5 0 0 1 6 3z" />
+      <path d="M14 3v4h4" />
+      <path d="M7.5 11.5h7M7.5 15h5" />
     </svg>
   );
 }
@@ -2699,6 +2726,8 @@ function TileHome({
   const isMobile = useIsMobile();
   const ricca = !!Icona;
   const coloreTesto = attivo ? NAVY : MUTED;
+  // le icone dei tasti sono nere pure, il testo sotto resta blu
+  const coloreIcona = attivo ? "#000000" : MUTED;
   // forma, colore e ombra arrivano da Impostazioni -> Aspetto dell'app,
   // separate per telefono e scrivania
   const [aspettoTasti] = useAspettoTasti();
@@ -2733,7 +2762,7 @@ function TileHome({
           {maniglia}
           {aspettoMobile.stile === "medaglione"
             ? <DiscoMedaglione lato={aspettoMobile.dimensione} icona={aspettoMobile.icona} colore={aspettoMobile.disco} Icona={Icona} attivo={attivo} />
-            : <Icona size={aspettoMobile.icona} color={coloreTesto} />}
+            : <Icona size={aspettoMobile.icona} color={coloreIcona} />}
           {!attivo && (
             <span style={{ position: "absolute", top: 4, right: 4, ...fontBody, fontSize: 6.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "1.5px 5px" }}>Non attivo</span>
           )}
@@ -2799,7 +2828,7 @@ function TileHome({
       )}
       {ricca ? (
         <>
-          <div style={{ color: coloreTesto, marginBottom: isMobile ? 6 : 12 }}><Icona size={isMobile ? 26 : aspettoDesktop.icona} color={coloreTesto} /></div>
+          <div style={{ color: coloreIcona, marginBottom: isMobile ? 6 : 12 }}><Icona size={isMobile ? 26 : aspettoDesktop.icona} color={coloreIcona} /></div>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 17, fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : 7, lineHeight: 1.2 }}>{title}</div>
           {descrizione && (
             <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12, color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
@@ -61899,17 +61928,17 @@ export default function App() {
               { chiave: "gestionedate", title: "Gestione corsi", descrizione: "Crea, modifica e organizza tutti i corsi e le sedi", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionedate"), onClick: apriGestioneDate },
               { chiave: "dashboardvenditori", title: "Dashboard venditori", descrizione: "Monitora vendite, performance e obiettivi del team", Icona: IconaTileVenditori, attivo: tastoAbilitato("dashboardvenditori"), onClick: apriLoginVenditore },
               { chiave: "dashboardmaster", title: "Dashboard master", descrizione: "Gestisci master, specializzazioni e valutazioni", Icona: IconaTileMaster, attivo: tastoAbilitato("dashboardmaster"), onClick: apriDashboardMaster },
-              { chiave: "agenda", title: "Agenda", descrizione: "Visualizza calendario, impegni e promemoria", Icona: IconaCalendarioCard, attivo: haAccessoAgenda(), onClick: apriAgenda },
+              { chiave: "agenda", title: "Agenda", descrizione: "Visualizza calendario, impegni e promemoria", Icona: IconaTileAgenda, attivo: haAccessoAgenda(), onClick: apriAgenda },
               { chiave: "erp", title: "Amministrazione", descrizione: "Finanziaria e organizzativa", Icona: IconaTileCostiRicavi, attivo: tastoAbilitato("erp"), onClick: apriErp },
               { chiave: "magazzinoshop", title: "Gestione magazzino e shop", descrizione: "Prodotti, scorte, shop online e relative vendite", Icona: IconaTileGestioneMagazzino, attivo: tastoAbilitato("magazzinoshop"), onClick: apriMagazzinoShop },
               { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos },
               { chiave: "logisticaprodotti", title: "Logistica prodotti", descrizione: "Spedizioni, tracciamenti e documenti", Icona: IconaTileLogistica, attivo: tastoAbilitato("logisticaprodotti"), onClick: apriLogisticaProdotti, badge: pacchiDaSpedire },
               { chiave: "compensipremi", title: "Area compensi e premi", descrizione: "Coupon, referral, provvigioni e premi", Icona: IconaTileOmaggio, attivo: tastoAbilitato("compensipremi"), onClick: apriCompensiPremi },
-              { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaLoghiCard, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
+              { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaTileLoghi, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
               { chiave: "gestionemodelle", title: "Gestione modelle", descrizione: "Organizza modelle, disponibilità e assegnazioni", Icona: IconaTileModelle, attivo: tastoAbilitato("gestionemodelle"), onClick: apriGestioneModelle },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
-              { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaGruppoTeam, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
+              { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
               { chiave: "storicoallievi", title: "Storico Allievi", descrizione: "Corsi svolti prima del gestionale, recuperati dagli archivi", Icona: IconaStoricoPos, attivo: tastoAbilitato("storicoallievi"), onClick: apriStoricoAllievi },
               { chiave: "normative", title: "Normative", descrizione: "Le regole da rispettare e i documenti che le accompagnano", Icona: IconaTileNormative, attivo: tastoAbilitato("normative"), onClick: apriNormative },
               { chiave: "progettiincorso", title: "Progetti in corso", descrizione: "Cosa c'è da fare, chi ci sta lavorando e per quando", Icona: IconaTileLampadina, attivo: tastoAbilitato("progettiincorso"), onClick: apriProgetti, badge: progettiScaduti },
