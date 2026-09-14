@@ -3170,10 +3170,10 @@ function Button({ children, onClick, variant = "primary", style = {}, disabled }
 // della riga riservano la stessa altezza e i campi tornano allineati
 // "compatto": etichetta e margini ridotti, per le file di filtri che da
 // mobile devono stare tutte su una riga
-function Field({ label, children, minLabelHeight, compatto = false }) {
+function Field({ label, children, minLabelHeight, compatto = false, etichettaFontSize = null }) {
   return (
     <div style={{ marginBottom: compatto ? 8 : 14 }}>
-      <div style={{ ...fontBody, fontSize: compatto ? 8.5 : 12, color: MUTED, marginBottom: compatto ? 3 : 5, textTransform: "uppercase", letterSpacing: compatto ? 0.2 : 0.5, lineHeight: 1.15, minHeight: minLabelHeight, display: minLabelHeight ? "flex" : undefined, alignItems: minLabelHeight ? "flex-end" : undefined }}>{label}</div>
+      <div style={{ ...fontBody, fontSize: etichettaFontSize ?? (compatto ? 8.5 : 12), color: MUTED, marginBottom: compatto ? 3 : 5, textTransform: "uppercase", letterSpacing: compatto ? 0.2 : 0.5, lineHeight: 1.15, minHeight: minLabelHeight, display: minLabelHeight ? "flex" : undefined, alignItems: minLabelHeight ? "flex-end" : undefined }}>{label}</div>
       {children}
     </div>
   );
@@ -51474,6 +51474,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // fisicamente con l'operatore al corso, la vendita resta comunque
   // registrata ma genera un ordine per la sede (spedizioni_pos)
   const [spedizioneAttiva, setSpedizioneAttiva] = useState(false);
+  const campoSped = { ...inputStyle, padding: "5px 8px", fontSize: 12, borderRadius: 7 };
   const [spedIscrittoId, setSpedIscrittoId] = useState("");
   const [spedNome, setSpedNome] = useState("");
   const [spedCognome, setSpedCognome] = useState("");
@@ -52553,28 +52554,30 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </Field>
             </div>
           )}
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}><Field label="Nome"><input style={inputStyle} value={spedNome} onChange={(e) => setSpedNome(e.target.value)} /></Field></div>
-            <div style={{ flex: 1 }}><Field label="Cognome"><input style={inputStyle} value={spedCognome} onChange={(e) => setSpedCognome(e.target.value)} /></Field></div>
+          {/* campi a meta' altezza e spazi dimezzati, etichette due punti
+              piu' piccole: sul telefono il modulo stava in due schermate */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Nome"><input style={campoSped} value={spedNome} onChange={(e) => setSpedNome(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Cognome"><input style={campoSped} value={spedCognome} onChange={(e) => setSpedCognome(e.target.value)} /></Field></div>
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}><Field label="Indirizzo"><input style={inputStyle} value={spedIndirizzo} onChange={(e) => setSpedIndirizzo(e.target.value)} /></Field></div>
-            <div style={{ width: 90 }}><Field label="Civico"><input style={inputStyle} value={spedCivico} onChange={(e) => setSpedCivico(e.target.value)} /></Field></div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Indirizzo"><input style={campoSped} value={spedIndirizzo} onChange={(e) => setSpedIndirizzo(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="Civico"><input style={campoSped} value={spedCivico} onChange={(e) => setSpedCivico(e.target.value)} /></Field></div>
           </div>
           {/* quello che serve al corriere per consegnare davvero: sul
               citofono c'è spesso un cognome diverso, e senza un numero da
               chiamare il pacco torna indietro */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}><Field label="Citofono"><input style={inputStyle} value={spedCitofono} onChange={(e) => setSpedCitofono(e.target.value)} /></Field></div>
-            <div style={{ width: 90 }}><Field label="Interno"><input style={inputStyle} value={spedInterno} onChange={(e) => setSpedInterno(e.target.value)} /></Field></div>
-            <div style={{ width: 90 }}><Field label="CAP"><input style={inputStyle} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Citofono"><input style={campoSped} value={spedCitofono} onChange={(e) => setSpedCitofono(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="Interno"><input style={campoSped} value={spedInterno} onChange={(e) => setSpedInterno(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="CAP"><input style={campoSped} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
-            <div style={{ width: 74 }}><Field label="Prov."><input style={{ ...inputStyle, textTransform: "uppercase" }} maxLength={2} value={spedProvincia} onChange={(e) => setSpedProvincia(e.target.value.toUpperCase())} /></Field></div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Città"><input style={campoSped} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
+            <div style={{ width: 74 }}><Field compatto etichettaFontSize={10} label="Prov."><input style={{ ...campoSped, textTransform: "uppercase" }} maxLength={2} value={spedProvincia} onChange={(e) => setSpedProvincia(e.target.value.toUpperCase())} /></Field></div>
           </div>
-          <div style={{ marginBottom: 8 }}>
-            <Field label="Cellulare"><input style={inputStyle} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field>
+          <div style={{ marginBottom: 0 }}>
+            <Field compatto etichettaFontSize={10} label="Cellulare"><input style={campoSped} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field>
           </div>
 
           {campiClienteMancanti.length > 0 && (
