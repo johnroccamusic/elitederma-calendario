@@ -51482,6 +51482,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // ricevono da soli
   const [aspettoTastiPos] = useAspettoTasti();
   const ombraDischiPos = ombraCssTasto(aspettoTastiPos.pulsanti.ombra);
+  // sconto vendita, % e coupon dell'amministrazione: tre campi su una riga
+  // sola, alti due terzi degli altri e col font tre punti piu' piccolo
+  const campoSconto = { ...inputStyle, padding: "5px 8px", fontSize: 11, borderRadius: 7 };
   const [spedIscrittoId, setSpedIscrittoId] = useState("");
   const [spedNome, setSpedNome] = useState("");
   const [spedCognome, setSpedCognome] = useState("");
@@ -52234,6 +52237,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const numeroPezziCarrello = carrello.reduce((s, r) => s + r.quantita, 0);
   // le etichettine in maiuscoletto sopra i campi del carrello
   const etichettaPos = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 };
+  const etichettaSconto = { ...etichettaPos, fontSize: 9, marginBottom: 3 };
 
   // corpo del carrello (righe, sconto, totali, pagamento, note, conferma):
   // identico sia nel pannello laterale desktop sia nel foglio mobile, solo
@@ -52391,27 +52395,27 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {/* sconto e coupon in una tessera sola: sono due modi di fare la
           stessa cosa e si escludono a vicenda, tenerli vicini lo dice
           senza doverlo scrivere */}
-      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: isMobile ? 10 : 14, display: "flex", gap: isMobile ? 10 : 14, alignItems: "flex-end", flexWrap: "wrap" }}>
+      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: isMobile ? 10 : 14, display: "flex", gap: puoScontare ? 8 : (isMobile ? 10 : 14), alignItems: "flex-end", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
         {puoScontare && (
           <>
-            <div style={{ flex: "1 1 150px", minWidth: 0 }}>
-              <div style={etichettaPos}>Sconto vendita</div>
-              <select style={{ ...inputStyle, background: BG, opacity: couponNum > 0 ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0} onChange={(e) => setScontoTipo(e.target.value)}>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <div style={etichettaSconto}>Sconto vendita</div>
+              <select style={{ ...campoSconto, background: BG, opacity: couponNum > 0 ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0} onChange={(e) => setScontoTipo(e.target.value)}>
                 <option value="percentuale">Percentuale</option>
                 <option value="importo">Importo fisso</option>
               </select>
             </div>
-            <div style={{ flex: "0 1 110px", minWidth: 0 }}>
-              <div style={etichettaPos}>{scontoTipo === "percentuale" ? "%" : "€"}</div>
-              <input style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
+            <div style={{ flex: "0 0 58px", minWidth: 0 }}>
+              <div style={etichettaSconto}>{scontoTipo === "percentuale" ? "%" : "€"}</div>
+              <input style={{ ...campoSconto, opacity: couponNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
             </div>
             <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
           </>
         )}
         {puoScontare ? (
-          <div style={{ flex: "1 1 130px", minWidth: 0 }}>
-            <div style={etichettaPos}>Coupon (%)</div>
-            <input style={{ ...inputStyle, opacity: scontoNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0} onChange={(e) => { setCouponValore(e.target.value); setCouponAttivo(null); }} placeholder="0" />
+          <div style={{ flex: "1 1 0", minWidth: 0 }}>
+            <div style={etichettaSconto}>Coupon (%)</div>
+            <input style={{ ...campoSconto, opacity: scontoNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0} onChange={(e) => { setCouponValore(e.target.value); setCouponAttivo(null); }} placeholder="0" />
           </div>
         ) : (
           // Due sole strade, e si escludono: o lo sconto della classe —
