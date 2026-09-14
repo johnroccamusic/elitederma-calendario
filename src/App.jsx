@@ -1238,15 +1238,14 @@ function IconaTileCorsi({ size = 44, color = NAVY }) {
   );
 }
 function IconaTileVenditori({ size = 44, color = NAVY }) {
-  // tre persone in fila, quella in mezzo davanti e piu' grande: la squadra
+  // la stretta di mano: chi vende chiude l'accordo
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8.62" r="3.43" />
-      <path d="M6.11 18.82c0 -3.43 2.65 -5.89 5.89 -5.89s5.89 2.45 5.89 5.89" />
-      <circle cx="5.13" cy="9.89" r="2.45" />
-      <path d="M1.6 17.15c0 -2.65 1.67 -4.42 4.12 -4.42 0.78 0 1.47 0.2 2.06 0.49" />
-      <circle cx="18.87" cy="9.89" r="2.45" />
-      <path d="M22.4 17.15c0 -2.65 -1.67 -4.42 -4.12 -4.42 -0.78 0 -1.47 0.2 -2.06 0.49" />
+      <path d="M10.96 17.11l2.07 2.07a1.03 1.03 0 1 0 3.1 -3.1" />
+      <path d="M14.07 14.01l2.59 2.59a1.03 1.03 0 1 0 3.1 -3.1l-4.02 -4.02a3.1 3.1 0 0 0 -4.39 0l-0.91 0.91a1.03 1.03 0 1 1 -3.1 -3.1l2.91 -2.91a5.99 5.99 0 0 1 7.31 -0.9l0.49 0.29a2.07 2.07 0 0 0 1.47 0.26L21.31 3.66" />
+      <path d="M21.31 2.62l1.03 11.38h-2.07" />
+      <path d="M2.68 2.62L1.65 14.01l6.73 6.73a1.03 1.03 0 1 0 3.1 -3.1" />
+      <path d="M2.68 3.66h8.28" />
     </svg>
   );
 }
