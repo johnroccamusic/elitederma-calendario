@@ -52606,48 +52606,48 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               chi ha gia' chiesto una fattura resta in anagrafica e la
               seconda volta si sceglie da qui. */}
           {clientiFattura.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <Field label="Cliente già in anagrafica">
-                <select style={inputStyle} value={fattClienteId} onChange={(e) => (e.target.value ? scegliCliente(e.target.value) : setFattClienteId(""))}>
+            <div style={{ marginBottom: 4 }}>
+              <Field compatto etichettaFontSize={10} label="Cliente già in anagrafica">
+                <select style={campoSped} value={fattClienteId} onChange={(e) => (e.target.value ? scegliCliente(e.target.value) : setFattClienteId(""))}>
                   <option value="">— nuovo cliente, compila sotto —</option>
                   {clientiFattura.map((c) => <option key={c.id} value={c.id}>{etichettaCliente(c)}</option>)}
                 </select>
               </Field>
             </div>
           )}
-          <div style={{ marginBottom: 8 }}>
-            <Field label="Ditta (vuoto se è un privato)"><input style={inputStyle} value={fattDitta} onChange={(e) => setFattDitta(e.target.value)} /></Field>
+          <div style={{ marginBottom: 4 }}>
+            <Field compatto etichettaFontSize={10} label="Ditta (vuoto se è un privato)"><input style={campoSped} value={fattDitta} onChange={(e) => setFattDitta(e.target.value)} /></Field>
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}><Field label="P. IVA"><input style={inputStyle} value={fattPiva} onChange={(e) => setFattPiva(e.target.value)} /></Field></div>
-            <div style={{ flex: 1 }}><Field label="Codice fiscale"><input style={{ ...inputStyle, textTransform: "uppercase" }} value={fattCf} onChange={(e) => setFattCf(e.target.value.toUpperCase())} /></Field></div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="P. IVA"><input style={campoSped} value={fattPiva} onChange={(e) => setFattPiva(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Codice fiscale"><input style={{ ...campoSped, textTransform: "uppercase" }} value={fattCf} onChange={(e) => setFattCf(e.target.value.toUpperCase())} /></Field></div>
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}><Field label="Cod. Dest."><input style={{ ...inputStyle, textTransform: "uppercase" }} value={fattCodDest} onChange={(e) => setFattCodDest(e.target.value.toUpperCase())} /></Field></div>
-            <div style={{ flex: 1 }}><Field label="PEC"><input style={inputStyle} inputMode="email" value={fattPec} onChange={(e) => setFattPec(e.target.value)} /></Field></div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Cod. Dest."><input style={{ ...campoSped, textTransform: "uppercase" }} value={fattCodDest} onChange={(e) => setFattCodDest(e.target.value.toUpperCase())} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="PEC"><input style={campoSped} inputMode="email" value={fattPec} onChange={(e) => setFattPec(e.target.value)} /></Field></div>
           </div>
           {/* con la spedizione attiva l'indirizzo di fatturazione e' quasi
               sempre lo stesso della consegna: si copia invece di riscriverlo */}
           {spedizioneAttiva && (
-            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, cursor: "pointer" }}>
               <input type="checkbox" checked={fattComeSpedizione} onChange={(e) => setFattComeSpedizione(e.target.checked)} style={{ width: 15, height: 15 }} />
-              <span style={{ ...fontBody, fontSize: 12, color: NAVY }}>Stessi dati della spedizione</span>
+              <span style={{ ...fontBody, fontSize: 11, color: NAVY }}>Stessi dati della spedizione</span>
             </label>
           )}
           {!copiaDaSpedizione && (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <div style={{ flex: 1 }}><Field label="Nome"><input style={inputStyle} value={fattNome} onChange={(e) => setFattNome(e.target.value)} /></Field></div>
-                <div style={{ flex: 1 }}><Field label="Cognome"><input style={inputStyle} value={fattCognome} onChange={(e) => setFattCognome(e.target.value)} /></Field></div>
+              <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Nome"><input style={campoSped} value={fattNome} onChange={(e) => setFattNome(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Cognome"><input style={campoSped} value={fattCognome} onChange={(e) => setFattCognome(e.target.value)} /></Field></div>
               </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <div style={{ flex: 1 }}><Field label="Indirizzo"><input style={inputStyle} value={fattIndirizzo} onChange={(e) => setFattIndirizzo(e.target.value)} /></Field></div>
-                <div style={{ width: 90 }}><Field label="Civico"><input style={inputStyle} value={fattCivico} onChange={(e) => setFattCivico(e.target.value)} /></Field></div>
+              <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Indirizzo"><input style={campoSped} value={fattIndirizzo} onChange={(e) => setFattIndirizzo(e.target.value)} /></Field></div>
+                <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="Civico"><input style={campoSped} value={fattCivico} onChange={(e) => setFattCivico(e.target.value)} /></Field></div>
               </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <div style={{ width: 90 }}><Field label="CAP"><input style={inputStyle} value={fattCap} onChange={(e) => setFattCap(e.target.value)} /></Field></div>
-                <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={fattCitta} onChange={(e) => setFattCitta(e.target.value)} /></Field></div>
-                <div style={{ width: 74 }}><Field label="Prov."><input style={{ ...inputStyle, textTransform: "uppercase" }} maxLength={2} value={fattProv} onChange={(e) => setFattProv(e.target.value.toUpperCase())} /></Field></div>
+              <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="CAP"><input style={campoSped} value={fattCap} onChange={(e) => setFattCap(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Città"><input style={campoSped} value={fattCitta} onChange={(e) => setFattCitta(e.target.value)} /></Field></div>
+                <div style={{ width: 74 }}><Field compatto etichettaFontSize={10} label="Prov."><input style={{ ...campoSped, textTransform: "uppercase" }} maxLength={2} value={fattProv} onChange={(e) => setFattProv(e.target.value.toUpperCase())} /></Field></div>
               </div>
             </>
           )}
