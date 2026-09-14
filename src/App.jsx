@@ -23953,31 +23953,61 @@ function PannelloRiepilogoAmministrativo({
     const impegnoCash = impegniPerChiave.get(`cash_venditore_${rigaId}`) || null;
     return { ...v, tipo: "venditore", rigaId, modalita, suoBonifico, suoCash, cash: suoCash, impegnoCash, cashRinviato: !!impegnoCash };
   });
-  const cashVenditoriNelloScadenziario = round2(righeVenditoriCash.filter((v) => v.cashRinviato).reduce((somma, v) => somma + v.suoCash, 0));
+  // Quanto la busta puo' coprire: il contante incassato al corso meno
+  // quello che da qui e' gia' uscito come spesa pagata. Il contante
+  // incassato non dipende dalle righe di costo, quindi lo si legge prima
+  // di decidere qualunque cosa
+  const cashRegistratoClasse = round2(speseClasse.reduce((somma, x) => somma + (x.importo_pagato_cash || 0), 0));
+  const contantiIncassatiClasse = contiRiepilogoClasse({ incassiExtra, listaIscritti, venditeAlCorso, speseClasse, costiExtra, righeSpeseTutte: [], totaleSpeseAutomaticheClasse }).contanti;
+  // La passeggiata: riga per riga nell'ordine della tabella, i venditori
+  // uno per uno al posto della loro riga totale. Ogni quota in contanti
+  // non ancora pagata e non rinviata a mano prende dalla busta se ci sta;
+  // se non ci sta va da sola nello scadenziario — "impossibile pagare con
+  // il corso, rinvia la scadenza" — e la casella Scad. si accende da sola
+  let disponibileBusta = round2(contantiIncassatiClasse - cashRegistratoClasse);
+  const prendiDallaBusta = (importo) => {
+    if (importo <= disponibileBusta + 0.004) { disponibileBusta = round2(disponibileBusta - importo); return true; }
+    return false;
+  };
+  const venditoriDecisi = [];
   const righeSpeseTutte = righeSpeseGrezze.map((r) => {
     const chiave = chiaveCashRiga(r);
+    const cashPagato = chiaviSpeseEsistenti.has(chiave);
     if (r.tipo === "venditore") {
+      let rinviatoImporto = 0;
+      righeVenditoriCash.forEach((v) => {
+        let rinviato = v.cashRinviato, rinvioAutomatico = false;
+        if (!cashPagato && !rinviato && v.suoCash > 0 && !prendiDallaBusta(v.suoCash)) { rinviato = true; rinvioAutomatico = true; }
+        if (rinviato) rinviatoImporto = round2(rinviatoImporto + v.suoCash);
+        venditoriDecisi.push({ ...v, cashRinviato: rinviato, rinvioAutomatico });
+      });
       return {
         ...r,
-        cash: round2(Math.max(0, (r.cash || 0) - cashVenditoriNelloScadenziario)),
-        cashPagato: chiaviSpeseEsistenti.has(chiave),
-        cashRinviato: false,
-        impegnoCash: null,
-        cashGiaRegistrato: chiaviSpeseEsistenti.has(chiave),
-        flagPerVenditore: true,
+        cash: round2(Math.max(0, (r.cash || 0) - rinviatoImporto)),
+        cashRinviatoImporto: rinviatoImporto,
+        cashPagato, cashRinviato: false, impegnoCash: null, cashGiaRegistrato: cashPagato, flagPerVenditore: true,
       };
     }
     const impegnoCash = impegniPerChiave.get(chiave) || null;
-    return {
-      ...r,
-      cashPagato: chiaviSpeseEsistenti.has(chiave),
-      cashRinviato: !!impegnoCash,
-      impegnoCash,
-      cashGiaRegistrato: chiaviSpeseEsistenti.has(chiave) || !!impegnoCash,
-    };
+    let cashRinviato = !!impegnoCash, rinvioAutomatico = false;
+    if (!cashPagato && !cashRinviato && (r.cash || 0) > 0 && !prendiDallaBusta(r.cash)) { cashRinviato = true; rinvioAutomatico = true; }
+    return { ...r, cashPagato, cashRinviato, rinvioAutomatico, impegnoCash, cashGiaRegistrato: cashPagato || cashRinviato };
   });
-  // quello che il tasto "Pagamenti effettuati" registrerebbe adesso
+  const disponibileDopoLeScelte = disponibileBusta;
+  const cashVenditoriNelloScadenziario = round2(venditoriDecisi.filter((v) => v.cashRinviato).reduce((somma, v) => somma + v.suoCash, 0));
+  // quello che "Disponi pagamenti" scrive: le quote da pagare subito come
+  // spese in prima nota, i rinvii automatici come impegni nello
+  // scadenziario (quelli scelti a mano ci sono gia')
   const cashDaRegistrare = righeSpeseTutte.filter((r) => (r.cash || 0) > 0 && !r.cashGiaRegistrato);
+  const rinviiAutomaticiDaScrivere = [
+    ...righeSpeseTutte.filter((r) => r.rinvioAutomatico).map((r) => ({ nome: r.nome, cash: r.cash, chiave: chiaveCashRiga(r) })),
+    ...venditoriDecisi.filter((v) => v.rinvioAutomatico).map((v) => ({ nome: `${v.nome} (quota venditore)`, cash: v.suoCash, chiave: `cash_venditore_${v.rigaId}` })),
+  ];
+  const totaleRinviiAutomatici = round2(rinviiAutomaticiDaScrivere.reduce((somma, x) => somma + x.cash, 0));
+  // quello che "Ripristina pagamenti" cancella: le spese scritte da qui e
+  // gli impegni di questa classe, cosi' tutto torna da pagare
+  const speseDisposte = speseClasseReali.filter((x) => x.origine === "automatico" && String(x.origine_scadenziario_chiave || "").startsWith("cash_"));
+  const impegniDisposti = (impegni || []).filter((x) => x.origine_tipo === "classe_cash" && x.origine_id === corsoData.id);
 
   // "Non dal cash del corso": la quota esce dalla busta e diventa un
   // impegno. Serve quando in aula il contante non basta a coprire quello
@@ -24019,6 +24049,7 @@ function PannelloRiepilogoAmministrativo({
     venditeContanti: venditeAlCorsoContanti, venditePos: venditeAlCorsoPos, venditeTotale: venditeAlCorsoTotale,
     totaleCosti: totaleCostiClasse, risultato: risultatoClasse,
     totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse, cashMancante: cashMancanteClasse,
+    cashPresoDallaBusta: cashPresoDallaBustaClasse, cashRinviati: cashRinviatiClasse, cashDaDisporre: cashDaDisporreClasse,
   } = contiClasse;
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
@@ -24071,29 +24102,61 @@ function PannelloRiepilogoAmministrativo({
   const [registrandoCash, setRegistrandoCash] = useState(false);
   const [dataPagamentiCash, setDataPagamentiCash] = useState(corsoData.data_fine || dataOggiStr());
   async function registraPagamentiCash() {
-    if (cashDaRegistrare.length === 0) return;
-    const elenco = cashDaRegistrare.map((r) => `· ${r.nome}: ${fmtEuroErp2(r.cash)}`).join("\n");
+    if (cashDaRegistrare.length === 0 && rinviiAutomaticiDaScrivere.length === 0) return;
+    const elenco = [
+      ...cashDaRegistrare.map((r) => `· ${r.nome}: ${fmtEuroErp2(r.cash)} dalla busta`),
+      ...rinviiAutomaticiDaScrivere.map((x) => `· ${x.nome}: ${fmtEuroErp2(x.cash)} allo scadenziario`),
+    ].join("\n");
     if (!window.confirm(
-      `Registrare ${cashDaRegistrare.length} pagament${cashDaRegistrare.length === 1 ? "o" : "i"} in contanti del ${fmtData(dataPagamentiCash)}?\n\n${elenco}\n\nTotale ${fmtEuroErp2(totaleCashDaRegistrare)}.\n\nDiventano spese pagate e compaiono in prima nota come uscite di cassa di quella data.`
+      `Disporre i pagamenti in contanti del ${fmtData(dataPagamentiCash)}?\n\n${elenco}\n\nDalla busta ${fmtEuroErp2(totaleCashDaRegistrare)}, allo scadenziario ${fmtEuroErp2(totaleRinviiAutomatici)}. Le spese pagate vanno in prima nota, i rinvii nel Quadro impegni.`
     )) return;
     setRegistrandoCash(true);
-    const righe = cashDaRegistrare.map((r) => ({
-      descrizione: r.nome,
-      tipo_ambito: "classe", classe_id: corsoData.id, sede_id: corsoData.location_id, corso_id: corsoData.corso_id,
-      // pagati in contanti senza fattura: nessuna IVA da scorporare, come
-      // per le vendite al banco. Se poi la fattura arriva, la spesa si
-      // corregge dalla sua riga.
-      imponibile: round2(r.cash), iva_percentuale: 0, totale: round2(r.cash),
-      importo_pagato_cash: round2(r.cash),
-      data_documento: corsoData.data_fine || dataPagamentiCash,
-      stato: "pagata", data_pagamento: dataPagamentiCash, metodo_pagamento: "Contanti",
-      origine: "automatico", origine_scadenziario_chiave: chiaveCashRiga(r),
-    }));
-    const { error } = await supabase.from("spese").insert(righe);
+    if (cashDaRegistrare.length > 0) {
+      const righe = cashDaRegistrare.map((r) => ({
+        descrizione: r.nome,
+        tipo_ambito: "classe", classe_id: corsoData.id, sede_id: corsoData.location_id, corso_id: corsoData.corso_id,
+        // pagati in contanti senza fattura: nessuna IVA da scorporare, come
+        // per le vendite al banco. Se poi la fattura arriva, la spesa si
+        // corregge dalla sua riga.
+        imponibile: round2(r.cash), iva_percentuale: 0, totale: round2(r.cash),
+        importo_pagato_cash: round2(r.cash),
+        data_documento: corsoData.data_fine || dataPagamentiCash,
+        stato: "pagata", data_pagamento: dataPagamentiCash, metodo_pagamento: "Contanti",
+        origine: "automatico", origine_scadenziario_chiave: chiaveCashRiga(r),
+      }));
+      const { error } = await supabase.from("spese").insert(righe);
+      if (error) { setRegistrandoCash(false); setMsg("Errore: " + testoErrore(error)); return; }
+    }
+    if (rinviiAutomaticiDaScrivere.length > 0) {
+      const righe = rinviiAutomaticiDaScrivere.map((x) => ({
+        descrizione: `${x.nome} — contanti non coperti`,
+        origine_tipo: "classe_cash", origine_id: corsoData.id, chiave_origine: x.chiave,
+        importo_previsto: round2(x.cash), data_prevista: corsoData.data_fine || dataOggiStr(), stato: "aperto",
+      }));
+      const { error } = await supabase.from("impegno").insert(righe);
+      if (error) { setRegistrandoCash(false); setMsg("Errore: " + testoErrore(error)); return; }
+    }
     setRegistrandoCash(false);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    setMsg(`${righe.length} pagament${righe.length === 1 ? "o" : "i"} in contanti registrat${righe.length === 1 ? "o" : "i"}: ora sono in prima nota.`);
-    ricarica(["spese"]);
+    setMsg(`Pagamenti disposti: ${fmtEuroErp2(totaleCashDaRegistrare)} dalla busta in prima nota, ${fmtEuroErp2(totaleRinviiAutomatici)} nello scadenziario passivo.`);
+    ricarica(["spese", "impegno"]);
+  }
+  // Il contrario: le spese scritte da qui spariscono dalla prima nota, gli
+  // impegni di questa classe dallo scadenziario, e tutto torna da pagare
+  async function ripristinaPagamentiCash() {
+    if (speseDisposte.length === 0 && impegniDisposti.length === 0) return;
+    if (!window.confirm(`Ripristinare i pagamenti di questa classe?\n\n${speseDisposte.length} spes${speseDisposte.length === 1 ? "a" : "e"} in prima nota e ${impegniDisposti.length} impegn${impegniDisposti.length === 1 ? "o" : "i"} nello scadenziario verranno cancellati: tutto torna da pagare, come prima di Disponi pagamenti.`)) return;
+    setRegistrandoCash(true);
+    if (speseDisposte.length > 0) {
+      const { error } = await supabase.from("spese").delete().in("id", speseDisposte.map((x) => x.id));
+      if (error) { setRegistrandoCash(false); setMsg("Errore: " + testoErrore(error)); return; }
+    }
+    if (impegniDisposti.length > 0) {
+      const { error } = await supabase.from("impegno").delete().in("id", impegniDisposti.map((x) => x.id));
+      if (error) { setRegistrandoCash(false); setMsg("Errore: " + testoErrore(error)); return; }
+    }
+    setRegistrandoCash(false);
+    setMsg("Pagamenti ripristinati: le quote in contanti sono di nuovo tutte da pagare.");
+    ricarica(["spese", "impegno"]);
   }
 
   async function segnaBustaRientrata(rientrata) {
@@ -24432,13 +24495,22 @@ function PannelloRiepilogoAmministrativo({
                                       <input
                                         type="checkbox"
                                         checked={attiva}
-                                        onChange={() => { if (attiva) return; if (o.k === "scad") rinviaCashAgliImpegni(r); else riportaCashSulCorso(r); }}
+                                        onChange={() => {
+                                          if (attiva) return;
+                                          if (o.k === "scad") { if (!r.rinvioAutomatico) rinviaCashAgliImpegni(r); return; }
+                                          // Busta: solo se il contante che resta la copre
+                                          if (r.rinvioAutomatico || r.cash > disponibileDopoLeScelte + 0.004) { setMsg(`Impossibile pagare "${r.nome}" con il cash del corso: rinvia la scadenza.`); return; }
+                                          riportaCashSulCorso(r);
+                                        }}
                                         style={{ width: 13, height: 13, cursor: "pointer", margin: 0 }}
                                       />
                                     </label>
                                   );
                                 })}
                               </div>
+                            )}
+                            {!r.flagPerVenditore && r.rinvioAutomatico && (
+                              <span title="Il contante del corso non basta per questa quota: va nello scadenziario" style={{ ...fontBody, fontSize: 8, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap", marginLeft: 4 }}>cash insuff.</span>
                             )}
                             {r.cashPagato && (
                               <span title="Contante già registrato come spesa pagata" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>pagato</span>
@@ -24551,26 +24623,34 @@ function PannelloRiepilogoAmministrativo({
                                         contanti e la sposta a ogni tocco.
                                         Sparisce quando la quota della classe
                                         e' gia' stata registrata come pagata */}
-                                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
                                       {suoCash > 0 && !r.cashPagato && (() => {
-                                        const rv = righeVenditoriCash.find((x) => x.chiave === v.chiave);
+                                        const rv = venditoriDecisi.find((x) => x.chiave === v.chiave);
                                         const nelloScad = !!rv?.cashRinviato;
+                                        // le stesse due caselle delle righe fisse, con
+                                        // la scritta di fianco perche' la riga e' bassa
                                         return (
-                                          <button
-                                            type="button"
-                                            onClick={() => (nelloScad ? riportaCashSulCorso({ ...rv, nome: v.nome }) : rinviaCashAgliImpegni({ ...rv, nome: `${v.nome} (quota venditore)` }))}
-                                            title={nelloScad
-                                              ? "Nello scadenziario passivo (Quadro impegni): premi per rimetterla a carico della busta di questo corso"
-                                              : "A carico della busta di questo corso: premi per mandarla nello scadenziario passivo, dove si decide se pagarla dalla cassa contanti o con bonifico"}
-                                            style={{
-                                              ...fontBody, fontSize: 9, fontWeight: 700, lineHeight: 1,
-                                              border: `1px solid ${nelloScad ? "#A8C4E8" : CREAM_BORDER}`, borderRadius: 6,
-                                              background: nelloScad ? "#EDF3FB" : "#fff", color: nelloScad ? "#1F4E8C" : NAVY,
-                                              padding: "3px 6px", cursor: "pointer", whiteSpace: "nowrap",
-                                            }}
-                                          >
-                                            {nelloScad ? "Scad." : "Busta"}
-                                          </button>
+                                          <>
+                                            {[{ k: "busta", l: "Busta" }, { k: "scad", l: "Scad." }].map((o) => {
+                                              const attiva = o.k === "scad" ? nelloScad : !nelloScad;
+                                              return (
+                                                <label key={o.k} title={o.k === "busta" ? "La quota in contanti di questo venditore esce dalla busta del corso" : "La quota in contanti di questo venditore va nello scadenziario passivo"} style={{ display: "flex", alignItems: "center", gap: 1.5, cursor: "pointer", lineHeight: 1 }}>
+                                                  <span style={{ ...fontBody, fontSize: 8.5, fontWeight: 700, color: attiva ? (o.k === "scad" ? "#1F4E8C" : NAVY) : MUTED }}>{o.l}</span>
+                                                  <input
+                                                    type="checkbox" checked={attiva}
+                                                    onChange={() => {
+                                                      if (attiva) return;
+                                                      if (o.k === "scad") { if (!rv.rinvioAutomatico) rinviaCashAgliImpegni({ ...rv, nome: `${v.nome} (quota venditore)` }); return; }
+                                                      if (rv.rinvioAutomatico || rv.suoCash > disponibileDopoLeScelte + 0.004) { setMsg(`Impossibile pagare ${v.nome} con il cash del corso: rinvia la scadenza.`); return; }
+                                                      riportaCashSulCorso({ ...rv, nome: v.nome });
+                                                    }}
+                                                    style={{ width: 12, height: 12, cursor: "pointer", margin: 0 }}
+                                                  />
+                                                </label>
+                                              );
+                                            })}
+                                            {rv?.rinvioAutomatico && <span title="Il contante del corso non basta per questa quota" style={{ ...fontBody, fontSize: 7.5, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap" }}>insuff.</span>}
+                                          </>
                                         );
                                       })()}
                                     </div>
@@ -24683,19 +24763,32 @@ function PannelloRiepilogoAmministrativo({
                 <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
                   <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 16 }}>Riepilogo Cash</div>
                   <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", gap: isMobile ? 6 : 14 }}>
-                    <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 0" : "0 0 auto", minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Cash incassato al corso</div>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 13 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {contantiClasse}</div>
-                    </div>
-                    <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 0" : "0 0 auto", minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Totale Cash da pagare</div>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 13 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {totaleCashDaPagareClasse}</div>
-                    </div>
-                    <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 0" : "0 0 auto", minWidth: 0 }}>
+                    {/* Le cinque caselle del cash, da sinistra a destra come
+                        vanno le cose: quanto e' entrato, quanto costa in
+                        contanti la classe, quanto di quel costo esce dalla
+                        busta, quanto e' stato rinviato allo scadenziario, e
+                        quanto resta in busta. L'ultima si muove solo quando
+                        i pagamenti sono stati disposti davvero. */}
+                    {[
+                      { etichetta: "Cash incassato al corso", valore: contantiClasse },
+                      { etichetta: "Totale cash da pagare", valore: totaleCashDaPagareClasse, nota: "dalla busta o rinviato" },
+                      { etichetta: "Pagamenti cash presi dalla busta", valore: cashPresoDallaBustaClasse, nota: cashDaDisporreClasse > 0 ? `€ ${cashDaDisporreClasse} ancora da disporre` : null },
+                      { etichetta: "Pagamenti cash rinviati", valore: cashRinviatiClasse, nota: cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null },
+                    ].map((c) => (
+                      <div key={c.etichetta} style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 40%" : "0 0 auto", minWidth: 0 }}>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>{c.etichetta}</div>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 13 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {c.valore}</div>
+                        {c.nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, color: MUTED, marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>{c.nota}</div>}
+                      </div>
+                    ))}
+                    <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 40%" : "0 0 auto", minWidth: 0 }}>
                       <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Cash pulito in busta</div>
                       <div style={{ ...fontBody, fontSize: isMobile ? 14 : 22, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
                       {venditeAlCorsoContanti > 0 && cassaContantiClasse > 0 && (
                         <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, color: MUTED, marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>di cui € {venditeAlCorsoContanti} di vendite</div>
+                      )}
+                      {cashDaDisporreClasse > 0 && (
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, color: MUTED, marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>scende a € {Math.max(0, round2(cassaContantiClasse - cashDaDisporreClasse))} dopo Disponi pagamenti</div>
                       )}
                       {/* il contante mancante non sparisce: solo, non si
                           scrive piu' come una busta negativa — e' quello
@@ -24718,15 +24811,19 @@ function PannelloRiepilogoAmministrativo({
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>
-                        {cashDaRegistrare.length > 0 ? "Pagamenti in contanti da registrare" : "Pagamenti in contanti registrati"}
+                        {(cashDaRegistrare.length > 0 || rinviiAutomaticiDaScrivere.length > 0)
+                          ? "Pagamenti in contanti da disporre"
+                          : (speseDisposte.length > 0 || impegniDisposti.length > 0) ? "Pagamenti in contanti disposti" : "Pagamenti in contanti"}
                       </div>
                       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                        {cashDaRegistrare.length > 0
-                          ? `${cashDaRegistrare.length} voc${cashDaRegistrare.length === 1 ? "e" : "i"} per ${euroRiepilogo(totaleCashDaRegistrare)} — finché non le registri non sono in prima nota.`
-                          : "Le quote in contanti di questa classe sono già spese pagate in prima nota."}
+                        {(cashDaRegistrare.length > 0 || rinviiAutomaticiDaScrivere.length > 0)
+                          ? `${cashDaRegistrare.length} da pagare subito per ${euroRiepilogo(totaleCashDaRegistrare)} dalla busta${rinviiAutomaticiDaScrivere.length > 0 ? `, ${rinviiAutomaticiDaScrivere.length} rinviat${rinviiAutomaticiDaScrivere.length === 1 ? "o" : "i"} per ${euroRiepilogo(totaleRinviiAutomatici)} allo scadenziario` : ""} — finché non li disponi non sono in prima nota.`
+                          : (speseDisposte.length > 0 || impegniDisposti.length > 0)
+                            ? `${speseDisposte.length} spes${speseDisposte.length === 1 ? "a" : "e"} in prima nota, ${impegniDisposti.length} impegn${impegniDisposti.length === 1 ? "o" : "i"} nello scadenziario passivo.`
+                            : "Nessuna quota in contanti da disporre per questa classe."}
                       </div>
                     </div>
-                    {cashDaRegistrare.length > 0 && (
+                    {(cashDaRegistrare.length > 0 || rinviiAutomaticiDaScrivere.length > 0) ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                         <input
                           type="date"
@@ -24736,9 +24833,13 @@ function PannelloRiepilogoAmministrativo({
                           style={{ ...inputStyle, width: "auto", padding: "7px 9px", fontSize: 12.5 }}
                         />
                         <Button onClick={registraPagamentiCash} disabled={registrandoCash}>
-                          {registrandoCash ? "Registro…" : "Pagamenti effettuati"}
+                          {registrandoCash ? "Dispongo…" : "Disponi pagamenti"}
                         </Button>
                       </div>
+                    ) : (speseDisposte.length > 0 || impegniDisposti.length > 0) && (
+                      <Button variant="ghost" onClick={ripristinaPagamentiCash} disabled={registrandoCash} title="Cancella le spese scritte in prima nota e gli impegni nello scadenziario: tutto torna da pagare">
+                        {registrandoCash ? "Ripristino…" : "Ripristina pagamenti"}
+                      </Button>
                     )}
                   </div>
 
@@ -29379,12 +29480,17 @@ function contiRiepilogoClasse({
     totaleSpeseAutomaticheClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0)
     + costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
-  const totaleCashDaPagare = round2(
-    // una riga il cui contante e' gia' stato registrato come spesa non si
-    // conta qui: la si ritrova nella somma delle spese vere, sotto
-    righeSpeseTutte.reduce((s, r) => s + (r.cashGiaRegistrato ? 0 : (r.cash || 0)), 0)
-    + speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
-  );
+  // Le quote in contanti si leggono in tre modi. `cashRegistrato` e' gia'
+  // uscito: spese pagate in contanti, in prima nota. `cashDaDisporre` e'
+  // quello che le righe dicono di pagare dalla busta ma non e' ancora
+  // stato disposto. `cashRinviati` e' quello mandato nello scadenziario
+  // passivo, a mano o perche' la busta non bastava. Il totale da pagare
+  // e' la somma di tutti e tre: quanto costa in contanti questa classe,
+  // comunque lo si paghi
+  const cashRegistrato = round2(speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0));
+  const cashDaDisporre = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashGiaRegistrato ? 0 : (r.cash || 0)), 0));
+  const cashRinviati = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashRinviato ? (r.cash || 0) : 0) + (r.cashRinviatoImporto || 0), 0));
+  const totaleCashDaPagare = round2(cashDaDisporre + cashRinviati + cashRegistrato);
   const daIncassare = round2(contanti + pos);
   return {
     incassoLordo, incassoNetto, iva: round2(incassoLordo - incassoNetto),
@@ -29394,9 +29500,12 @@ function contiRiepilogoClasse({
     contanti, pos, daIncassare,
     venditeContanti, venditePos, venditeTotale: round2(venditeContanti + venditePos),
     totaleCosti, risultato: round2(daIncassare - totaleCosti),
-    totaleCashDaPagare,
+    totaleCashDaPagare, cashRegistrato, cashDaDisporre, cashRinviati,
+    cashPresoDallaBusta: round2(cashDaDisporre + cashRegistrato),
     // "Cash pulito in busta": il cash incassato FISICAMENTE al corso meno
-    // tutto il cash da pagare.
+    // il cash uscito davvero, cioe' le spese gia' disposte e registrate.
+    // Quello che si e' deciso di pagare ma non si e' ancora disposto non
+    // si toglie: si sa quanto si deve, non si e' ancora pagato.
     //
     // Non puo' andare sotto zero, e non e' una finezza contabile: in busta
     // ci sono banconote. Se le spese in contanti superano quello che si e'
@@ -29408,8 +29517,8 @@ function contiRiepilogoClasse({
     //
     // Il contante delle vendite non si somma piu' qui: adesso e' gia'
     // dentro "contanti", e aggiungerlo di nuovo lo conterebbe due volte
-    cassaContanti: Math.max(0, round2(contanti - totaleCashDaPagare)),
-    cashMancante: Math.max(0, round2(totaleCashDaPagare - contanti)),
+    cassaContanti: Math.max(0, round2(contanti - cashRegistrato)),
+    cashMancante: Math.max(0, round2(cashRegistrato - contanti)),
     allievi: listaIscritti.length,
   };
 }
