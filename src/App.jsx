@@ -2501,7 +2501,7 @@ const ASPETTO_TASTI_DEFAULT = {
   // stile "pieno": il quadrato ha il colore scelto e l'icona blu sopra.
   // Stile "medaglione": quadrato bianco in rilievo con un disco incassato
   // al centro, del colore `disco`, e l'icona bianca sopra
-  mobile: { dimensione: 60, raggio: 13, icona: 34, stile: "pieno", disco: "#0E1B33", pozzetto: "#E6E6E4", dock: { lato: 70, raggio: 22, icona: 40, colore: "#0E1B33", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } }, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
+  mobile: { dimensione: 60, raggio: 13, icona: 34, stile: "pieno", disco: "#0E1B33", pozzetto: "#E6E6E4", cuscino: "#FFFFFF", dock: { lato: 70, raggio: 22, icona: 40, colore: "#0E1B33", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } }, colore: "#FFFFFF", ombra: { x: 0, y: 1, sfocatura: 4, intensita: 16 } },
   desktop: { dimensione: 300, raggio: 20, icona: 80, dock: { lato: 62, raggio: 18, icona: 30, colore: "#0E1B33", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } }, colore: "#FFFFFF", ombra: { x: 0, y: 0, sfocatura: 0, intensita: 0 } },
   // Un'ombra sola per TUTTE le aree che reggono i dati — i pannelli
   // bianchi delle tabelle, le schede citta', gli elenchi — e una per
@@ -2562,6 +2562,8 @@ function aspettoTastoDi(salvato, quale) {
     disco: v.disco || base.disco || "#0E1B33",
     // l'interno del medaglione, il pozzetto in cui sta il disco
     pozzetto: v.pozzetto || base.pozzetto || "#E6E6E4",
+    // il cuscino esterno del medaglione, bianco nel riferimento
+    cuscino: v.cuscino || base.cuscino || "#FFFFFF",
   };
 }
 // Mescola due colori esadecimali: t=0 il primo, t=1 il secondo. Serve al
@@ -2614,8 +2616,9 @@ function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true, pozzettoCo
 }
 // Il cuscino bianco: un velo di grigio verso il basso e i riflessi
 // interni lo fanno sembrare pieno e morbido
-function sfondoMedaglione() {
-  return "linear-gradient(180deg, #FFFFFF 0%, #FBFBFA 60%, #F1F1EF 100%)";
+function sfondoMedaglione(colore = "#FFFFFF") {
+  const c = colore || "#FFFFFF";
+  return `linear-gradient(180deg, ${mescolaColore(c, "#ffffff", 0.15)} 0%, ${c} 60%, ${mescolaColore(c, "#000000", 0.06)} 100%)`;
 }
 // l'ombra del cuscino: una base fissa che lo stacca dal fondo, come nel
 // riferimento, piu' quella scelta dai comandi e i riflessi interni
@@ -2769,7 +2772,7 @@ function TileHome({
         <div style={{
           width: "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: aspettoMobile.stile === "medaglione" ? sfondoMedaglione() : (attivo ? aspettoMobile.colore : "#F1EAE0"), borderRadius: aspettoMobile.raggio,
+          background: aspettoMobile.stile === "medaglione" ? sfondoMedaglione(aspettoMobile.cuscino) : (attivo ? aspettoMobile.colore : "#F1EAE0"), borderRadius: aspettoMobile.raggio,
           boxShadow: aspettoMobile.stile === "medaglione" ? ombraMedaglione(aspettoMobile.ombra) : ombraCssTasto(aspettoMobile.ombra),
           outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
         }}>
@@ -15105,7 +15108,7 @@ function AnteprimaTastoAspetto({ etichetta, sottotitolo, aspetto, forma, selezio
       }}>
         <div style={{
           width: Math.round(aspetto.dimensione * scala), aspectRatio: "1 / 1", boxSizing: "border-box",
-          background: forma === "mobile" && aspetto.stile === "medaglione" ? sfondoMedaglione() : aspetto.colore, borderRadius: Math.round(aspetto.raggio * scala),
+          background: forma === "mobile" && aspetto.stile === "medaglione" ? sfondoMedaglione(aspetto.cuscino) : aspetto.colore, borderRadius: Math.round(aspetto.raggio * scala),
           boxShadow: forma === "mobile" && aspetto.stile === "medaglione" ? ombraMedaglione(aspetto.ombra) : ombraCssTasto(aspetto.ombra),
           border: forma === "desktop" ? `1px solid ${CREAM_BORDER}` : forma === "dock" ? "1px solid rgba(255,255,255,0.22)" : "none",
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -15461,6 +15464,23 @@ function PaginaAspettoApp() {
               })}
             </div>
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 18 }}>Scelto: {String(corrente.pozzetto).toUpperCase()}</div>
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Colore del cuscino esterno</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 5, maxWidth: 360, marginBottom: 6 }}>
+              {PALETTE_64_TASTI.map((c) => {
+                const scelto = String(corrente.cuscino).toUpperCase() === c.toUpperCase();
+                return (
+                  <button
+                    key={c} onClick={() => cambia({ cuscino: c })} title={c} data-niente-ombra="1"
+                    style={{
+                      aspectRatio: "1 / 1", width: "100%", borderRadius: 6, cursor: "pointer", background: c,
+                      border: scelto ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`,
+                      outline: scelto ? `2px solid #fff` : "none", outlineOffset: -4,
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 18 }}>Scelto: {String(corrente.cuscino).toUpperCase()}</div>
           </>
         )}
 
