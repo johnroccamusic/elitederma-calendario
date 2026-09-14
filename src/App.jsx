@@ -52535,13 +52535,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </label>
       )}
 
-      <label htmlFor="pos-spedizione" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: "pointer", marginBottom: spedizioneAttiva ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
-        <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
-        <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <IconaCamionConsegna size={17} color={GOLD} />
-        </span>
-        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese di spedizione — non ho il prodotto con me</span>
-      </label>
+      {/* Spedizione e fattura sono due cose indipendenti — si spedisce
+          senza fatturare e si fattura senza spedire — e stanno sulla stessa
+          riga, una a sinistra e una a destra; i moduli si aprono sotto */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
+        <label htmlFor="pos-spedizione" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "10px 0", cursor: "pointer" }}>
+          <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
+          <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <IconaCamionConsegna size={17} color={GOLD} />
+          </span>
+          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese di spedizione — non ho il prodotto con me</span>
+        </label>
+        <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "10px 0", cursor: "pointer" }}>
+          <input id="pos-richiede-fattura" type="checkbox" checked={fattAttiva} onChange={(e) => setFattAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
+          <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <IconaCatDocumento size={17} color={GOLD} />
+          </span>
+          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Richiede fattura</span>
+        </label>
+      </div>
       {spedizioneAttiva && (
         <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
           {iscrittiCorsoPos.length > 0 && (
@@ -52589,17 +52601,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
-      {/* La fattura sta accanto alla spedizione, non dentro: sono due cose
-          indipendenti — si spedisce senza fatturare e si fattura senza
-          spedire. Prima l'unico modo per chiederla era aprire il modulo del
-          corriere, quindi chi comprava di persona non aveva dove dirlo. */}
-      <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: "pointer", marginBottom: fattAttiva ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
-        <input id="pos-richiede-fattura" type="checkbox" checked={fattAttiva} onChange={(e) => setFattAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
-        <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <IconaCatDocumento size={17} color={GOLD} />
-        </span>
-        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Richiede fattura</span>
-      </label>
       {fattAttiva && (
         <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
           {/* Il modo per non riscrivere cento volte le stesse undici cifre:
