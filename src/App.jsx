@@ -51637,6 +51637,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [metodoPagamento, setMetodoPagamento] = useState("pos");
   // la seconda serie di fasce dei codici d'aula, per chi paga in contanti
   const [fasceContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  // per i punti che questo carrello fa maturare alla master
+  const [schemaPuntiPos] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
+  const [quotePuntiPos] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
   // e quella del referral personale, per contanti e buono Amazon
   const [fasceContantiReferralPos] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const [note, setNote] = useState("");
@@ -51910,6 +51913,37 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const totaleDaIncassare = omaggioAttivo ? 0 : totaleConSpedizione;
   const imponibileDaRegistrare = omaggioAttivo ? 0 : imponibile;
   const ivaDaRegistrare = omaggioAttivo ? 0 : iva;
+  // I punti che la master matura con questo carrello, con la stessa
+  // regola della dashboard: per ogni prodotto il cedibile (sul netto con
+  // carta, sul lordo con contanti o buono Amazon) meno la sicurezza, per
+  // la quantita'; poi la riduzione per lo sconto dato all'allieva (sconto
+  // % x valore di fascia) e la quota del canale, al corso o fuori. La
+  // spedizione non fa punti
+  const puntiCarrello = (() => {
+    if (operatore?.tipo !== "master" || omaggioAttivo || carrello.length === 0) return null;
+    const sicurezza = sicurezzaPuntiDi(schemaPuntiPos);
+    const quote = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiPos || {}) };
+    const contantiPerPunti = pagamentoContaComeContanti(metodoPagamento);
+    const fasceRiduzione = couponAFasce
+      ? fasceCouponAttive
+      : ((corsoPosId ? couponDellEdizione(corsoPosId)?.fasce_sconto : couponReferralPersonale?.fasce_sconto) || []);
+    let teorici = 0, effettivi = 0;
+    carrello.forEach((r) => {
+      const prodotto = prodottiPerId[r.prodottoId];
+      const pp = puntiProdotto(prodotto, sicurezza, contantiPerPunti);
+      if (pp == null) return;
+      const t = pp * (Number(r.quantita) || 0);
+      teorici += t;
+      const scontoPct = couponAFasce
+        ? percentualeFasciaDi(prodotto, fasceCouponAttive)
+        : couponNum > 0 ? couponNum
+        : scontoNum > 0 ? (scontoTipo === "percentuale" ? scontoNum : (subtotale > 0 ? (scontoNum / subtotale) * 100 : 0))
+        : 0;
+      effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione));
+    });
+    const quota = corsoPosSel ? quote.corso : quote.fuoriCorso;
+    return { teorici: round2(teorici), maturati: round2((effettivi * quota) / 100), quota };
+  })();
 
   async function confermaVendita() {
     if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return; }
@@ -52456,6 +52490,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.25 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
               <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, marginTop: 4 }}>{fmtEuroErp2(totaleDaIncassare)}</span>
               {speseSpedizione > 0 && <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>di cui spedizione {fmtEuroErp2(speseSpedizione)}</span>}
+              {puntiCarrello && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginTop: 3 }}>Punti maturati {fmtPunti(puntiCarrello.maturati)}</span>}
             </div>
           </>
         ) : (
@@ -52471,6 +52506,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
               <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
             </div>
+            {puntiCarrello && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 6 }} title={`Punti teorici ${fmtPunti(puntiCarrello.teorici)}, quota del canale ${puntiCarrello.quota}%: cedibile meno sicurezza, ridotti dello sconto dato all'allieva`}>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Punti maturati con questo carrello</span>
+                <span style={{ ...fontBody, fontSize: 15, fontWeight: 800, color: GOLD }}>{fmtPunti(puntiCarrello.maturati)}</span>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -52909,7 +52950,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
               <div style={{ textAlign: "right" }}>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>Totale da incassare</div>
-                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleNetto)}</div>
+                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</div>
+                {puntiCarrello && <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD }}>Punti maturati {fmtPunti(puntiCarrello.maturati)}</div>}
               </div>
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>›</div>
             </div>
