@@ -24709,15 +24709,15 @@ function PannelloRiepilogoAmministrativo({
                       { etichetta: "Pagamenti cash presi dalla busta", valore: cashPresoDallaBustaClasse, nota: cashDaDisporreClasse > 0 ? `€ ${cashDaDisporreClasse} ancora da disporre` : null },
                       { etichetta: "Pagamenti cash rinviati", valore: cashRinviatiClasse, nota: cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null },
                     ].map((c) => (
-                      <div key={c.etichetta} style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>{c.etichetta}</div>
+                      <div key={c.etichetta} style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "flex-start", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.2, marginBottom: isMobile ? 5 : 8, minHeight: isMobile ? "2.4em" : "3.6em", display: "flex", alignItems: "flex-end" }}>{c.etichetta}</div>
                         <div style={{ ...fontBody, fontSize: isMobile ? 13 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {c.valore}</div>
                         {c.nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, marginTop: 4, lineHeight: 1.2 }}>{c.nota}</div>}
                       </div>
                     ))}
-                    <div style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Cash pulito in busta</div>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
+                    <div style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "flex-start", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.2, marginBottom: isMobile ? 5 : 8, minHeight: isMobile ? "2.4em" : "3.6em", display: "flex", alignItems: "flex-end" }}>Cash pulito in busta</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
                       {venditeAlCorsoContanti > 0 && cassaContantiClasse > 0 && (
                         <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, marginTop: 4, lineHeight: 1.2 }}>di cui € {venditeAlCorsoContanti} di vendite</div>
                       )}
