@@ -52554,7 +52554,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <IconaCamionConsegna size={34} color={GOLD} />
           </span>
           <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
-          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese di spedizione — non ho il prodotto con me</span>
+          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese spedizione</span>
         </label>
         <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "10px 0", cursor: "pointer" }}>
           <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
