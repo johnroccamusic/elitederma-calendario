@@ -1251,12 +1251,14 @@ function IconaTileVenditori({ size = 44, color = NAVY }) {
   );
 }
 function IconaTileMaster({ size = 44, color = NAVY }) {
-  // il tocco da laurea: chi insegna. Un tratto solo, senza stella
+  // il tocco da laurea come nel riferimento: falda larga a rombo, calotta
+  // dritta con il fondo tondo, nappa a destra con il nodo a meta'
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.5 9.6L12 5.4l9.5 4.2L12 13.8z" />
-      <path d="M6.2 11.3v4.2c0 1.7 2.6 3.1 5.8 3.1s5.8-1.4 5.8-3.1v-4.2" />
-      <path d="M21.5 9.6v5.2" />
+      <path d="M2.6 9.4L12 5.6l9.4 3.8L12 13.2z" />
+      <path d="M6.6 11.2v4.6c0 1.6 2.4 2.9 5.4 2.9s5.4-1.3 5.4-2.9v-4.6" />
+      <path d="M21.4 9.4v8" />
+      <circle cx="21.4" cy="13.8" r="1.1" fill={color} stroke="none" />
     </svg>
   );
 }
