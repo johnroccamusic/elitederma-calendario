@@ -52417,16 +52417,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             {((!corsoPosId && couponReferralPersonale) || couponDellEdizione(corsoPosId)) && (
               <div style={{ flex: 1, minWidth: 0 }}>
               {!corsoPosId && couponReferralPersonale && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 8, flexWrap: "wrap" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 8 }}>
                   <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                  Applica il mio referral code
-                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
+                  <span style={{ ...fontBody, fontSize: 15.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>{couponReferralPersonale.codice}</span>
+                  <span style={{ minWidth: 0 }}>Applica il mio referral</span>
                   {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
                     <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
                   )}
-                  <span style={{ flexBasis: "100%", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}>
-                    {referralPersonaleAttivo ? "L'allieva ha lo sconto del tuo codice. La vendita e i punti restano tuoi, ridotti dello sconto dato." : "Senza codice paga prezzo pieno: la vendita e i punti restano comunque tuoi."}
-                  </span>
                 </label>
               )}
               {couponDellEdizione(corsoPosId) && (
