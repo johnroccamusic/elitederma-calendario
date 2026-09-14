@@ -19245,9 +19245,17 @@ function RegolaOmbraLogo({ config, aggiorna, famigliaNome, famigliaNumero, loghi
 // Lo storico dei loghi emessi: una pagina sua, aperta sia da Setting
 // loghi sia da Assegna logo. E' una lista che cresce, e in fondo alla
 // calibrazione la si trovava solo scorrendo dieci schede di loghi.
-function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack }) {
+function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack, onRiscarica = null }) {
   const [storico, setStorico] = useState(null);
   const [msg, setMsg] = useState("");
+  const [riscaricandoId, setRiscaricandoId] = useState(null);
+  async function riscarica(riga) {
+    if (!onRiscarica) return;
+    setRiscaricandoId(riga.id); setMsg("");
+    try { await onRiscarica(riga); setMsg(`Logo ${riga.codice} riscaricato: nessun numero consumato.`); }
+    catch (e) { setMsg("Non riesco a riscaricare il logo: " + (e?.message || e)); }
+    setRiscaricandoId(null);
+  }
   const prossimoNumero = loghiImpostazioni?.prossimo_numero ?? 1;
 
   async function caricaStorico() {
@@ -19303,6 +19311,16 @@ function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack }) {
                   {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
                 </div>
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+              {onRiscarica && (
+                <button
+                  type="button" onClick={() => riscarica(r)} disabled={riscaricandoId === r.id}
+                  title="Rifa' e scarica questo logo, con lo stesso codice: nessun numero nuovo"
+                  style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "6px 12px", cursor: riscaricandoId === r.id ? "default" : "pointer", opacity: riscaricandoId === r.id ? 0.6 : 1 }}
+                >
+                  {riscaricandoId === r.id ? "Riscarico…" : "Riscarica"}
+                </button>
+              )}
               {i === 0 ? (
                 <button
                   onClick={() => eliminaUltimoLogo(r)}
@@ -19314,6 +19332,7 @@ function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack }) {
               ) : (
                 <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>si elimina solo l’ultimo</span>
               )}
+              </div>
             </div>
           ))
         )}
@@ -19603,6 +19622,26 @@ function prefissoCalibrazioneLogo(categoria) {
   return categoria?.logo_nero_path ? "nero" : "bianco";
 }
 
+// Rifa' e scarica un logo gia' assegnato, tale e quale: stessa categoria,
+// stesso nome, stesso codice. Non consuma nessun numero e non scrive
+// nello storico: e' una ristampa. Il file si perde, il codice no.
+async function riscaricaLogoGenerato(riga, loghiCategorie, loghiImpostazioni) {
+  const categoria = (loghiCategorie || []).find((c) => c.chiave === riga.categoria_chiave);
+  if (!categoria) throw new Error(`La categoria "${riga.categoria_etichetta || riga.categoria_chiave}" non esiste più in Setting loghi.`);
+  if (!categoria.logo_nero_path) throw new Error("Manca il logo nero di questa categoria in Setting loghi.");
+  const senzaNumero = categoria.chiave === "master" || categoria.chiave === "master_assistant";
+  const codice = senzaNumero ? "" : (riga.codice || "");
+  const nome = String(riga.allieva_nome || "").trim().toUpperCase();
+  const suffisso = codice ? `-${codice}` : `-${nomeFileSicuro(nome).baseSicura}`;
+  const comuni = { nomeTesto: nome, codiceTesto: codice, categoria, famigliaNome: "loghiFontNomeGen", famigliaNumero: "loghiFontNumeroGen", ombraNome: ombraLogoDi(loghiImpostazioni, "nome"), ombraNumero: ombraLogoDi(loghiImpostazioni, "numero") };
+  const nero = await componiLogoPng({ ...comuni, percorsoLogo: categoria.logo_nero_path, variante: "nero" });
+  scaricaBlob(nero.blob, `${categoria.chiave}-nero${suffisso}.png`);
+  if (categoria.richiede_bianco && categoria.logo_bianco_path) {
+    const bianco = await componiLogoPng({ ...comuni, percorsoLogo: categoria.logo_bianco_path, variante: "bianco", larghezzaRiferimento: nero.larghezza });
+    scaricaBlob(bianco.blob, `${categoria.chiave}-bianco${suffisso}.png`);
+  }
+}
+
 async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, categoria, famigliaNome, famigliaNumero, larghezzaRiferimento, ombraNome, ombraNumero }) {
   const bytes = await scaricaBytesStorage("loghi-immagini", percorsoLogo);
   const blobSorgente = new Blob([bytes]);
@@ -19730,6 +19769,14 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   // storico.
   const [ultimi, setUltimi] = useState(null);
   const [mostraStorico, setMostraStorico] = useState(false);
+  // "Riscarica": ristampa un logo gia' assegnato, senza toccare il contatore
+  const [riscaricandoId, setRiscaricandoId] = useState(null);
+  async function riscarica(riga) {
+    setRiscaricandoId(riga.id); setMsg("");
+    try { await riscaricaLogoGenerato(riga, loghiCategorie, loghiImpostazioni); setMsg(`Logo ${riga.codice} riscaricato: nessun numero consumato.`); }
+    catch (e) { setMsg("Non riesco a riscaricare il logo: " + (e?.message || e)); }
+    setRiscaricandoId(null);
+  }
   async function caricaUltimi() {
     const { data } = await supabase.from("loghi_generati").select("*").order("numero", { ascending: false }).limit(10);
     setUltimi(data || []);
@@ -19875,7 +19922,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   }
 
   if (mostraStorico) {
-    return <PaginaStoricoLoghi loghiImpostazioni={loghiImpostazioni} ricarica={ricarica} onBack={() => { setMostraStorico(false); caricaUltimi(); }} />;
+    return <PaginaStoricoLoghi loghiImpostazioni={loghiImpostazioni} ricarica={ricarica} onRiscarica={(riga) => riscaricaLogoGenerato(riga, loghiCategorie, loghiImpostazioni)} onBack={() => { setMostraStorico(false); caricaUltimi(); }} />;
   }
 
   return (
@@ -19985,16 +20032,25 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
           </div>
         ) : (
           ultimi.map((r, i) => (
-            <div key={r.id} style={{ padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
-                {r.codice}
-                <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
+            <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                  {r.codice}
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED }}> · n. {r.numero}</span>
+                </div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
+                  {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
+                    .filter(Boolean).join(" · ")}
+                  {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
+                </div>
               </div>
-              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, overflowWrap: "anywhere" }}>
-                {[r.categoria_etichetta, r.allieva_nome ? toTitleCase(r.allieva_nome) : null, r.master_nome ? `master ${toTitleCase(r.master_nome)}` : null]
-                  .filter(Boolean).join(" · ")}
-                {r.creato_il ? ` — ${fmtData(String(r.creato_il).slice(0, 10))}` : ""}
-              </div>
+              <button
+                type="button" onClick={() => riscarica(r)} disabled={riscaricandoId === r.id}
+                title="Rifa' e scarica questo logo, con lo stesso codice: nessun numero nuovo"
+                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "6px 12px", cursor: riscaricandoId === r.id ? "default" : "pointer", opacity: riscaricandoId === r.id ? 0.6 : 1, flexShrink: 0 }}
+              >
+                {riscaricandoId === r.id ? "Riscarico…" : "Riscarica"}
+              </button>
             </div>
           ))
         )}
