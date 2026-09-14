@@ -19828,6 +19828,9 @@ function CardStudentWork() {
   );
 }
 function LoghiMasterPubblicati({ masterId }) {
+  // tutto su una riga come da desktop: da telefono i tasti si stringono e
+  // le etichette diventano "Nero"/"Bianco" (il titolo del riquadro dice gia' quale logo e')
+  const isMobile = useIsMobile();
   const [pubblicati] = useImpostazioneCondivisa(CHIAVE_LOGHI_MASTER_PUBBLICATI, {});
   const [studentWork] = useImpostazioneCondivisa(CHIAVE_LOGO_STUDENT_WORK, {});
   const [scaricando, setScaricando] = useState(null);
@@ -19860,17 +19863,17 @@ function LoghiMasterPubblicati({ masterId }) {
     <button
       key={chiaveStato}
       type="button" onClick={() => scarica(percorso, nomeFile, chiaveStato)} disabled={!percorso || scaricando === chiaveStato}
-      style={{ display: "flex", alignItems: "center", gap: 10, ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", flex: "1 1 150px", minWidth: 0, opacity: scaricando === chiaveStato ? 0.6 : 1, boxShadow: "0 1px 3px rgba(14,27,51,0.08)" }}
+      style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, ...fontBody, fontSize: isMobile ? 12 : 14, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? "8px 8px" : "10px 14px", cursor: "pointer", flex: "1 1 0", minWidth: 0, opacity: scaricando === chiaveStato ? 0.6 : 1, boxShadow: "0 1px 3px rgba(14,27,51,0.08)" }}
     >
       <IconaScaricoLogo />
       <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
-      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{scaricando === chiaveStato ? "Scarico…" : etichetta}</span>
+      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{scaricando === chiaveStato ? "Scarico…" : (isMobile ? etichetta.replace(/^(Logo|Student work) /, "").replace(/^\w/, (c) => c.toUpperCase()) : etichetta)}</span>
     </button>
   );
   const riquadro = (titolo, tasti) => (
-    <div key={titolo} style={{ flex: "1 1 280px", minWidth: 0, background: "rgba(241,236,226,0.7)", borderRadius: 14, padding: "12px 12px 14px" }}>
+    <div key={titolo} style={{ flex: "1 1 0", minWidth: 0, background: "rgba(241,236,226,0.7)", borderRadius: 14, padding: isMobile ? "10px 8px 10px" : "12px 12px 14px" }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>{titolo}</div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{tasti}</div>
+      <div style={{ display: "flex", gap: isMobile ? 6 : 10, flexWrap: "nowrap" }}>{tasti}</div>
     </div>
   );
   const riquadriMiei = miei.map((logo) => riquadro(
@@ -19889,7 +19892,7 @@ function LoghiMasterPubblicati({ masterId }) {
   return (
     <div style={{ marginBottom: 18, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
       <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Scarica i tuoi loghi</div>
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "stretch" }}>
+      <div style={{ display: "flex", gap: isMobile ? 8 : 14, flexWrap: "nowrap", alignItems: "stretch" }}>
         {riquadriMiei}
         {riquadroStudentWork}
       </div>
