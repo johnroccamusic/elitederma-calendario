@@ -39957,7 +39957,7 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
 // punti maturati con la regola di Dettaglio prodotti (dieci per euro
 // cedibile, per ogni pezzo venduto attraverso l'app). Qui si governa il
 // sistema; cosa vede la master nella sua dashboard si decide dopo.
-function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, ricarica, onBack, titolo = "Gestione punti" }) {
+function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, coupon = [], ricarica, onBack, titolo = "Gestione punti" }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "punti", direzione: "desc" });
   const [form, setForm] = useState(null);
@@ -40044,6 +40044,33 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     ricarica(["regole_referral_automatico"]);
   }
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  // Le fasce del referral personale si salvano fra le impostazioni, ma i
+  // codici gia' emessi portano la LORO regola, copiata quando sono nati:
+  // i 17 codici delle master erano rimasti al 15% fisso mentre qui si
+  // regolavano le fasce. Questo tasto riscrive la regola su tutti i
+  // codici personali, nel database e sul sito
+  const [applicandoAiCodici, setApplicandoAiCodici] = useState(false);
+  const [msgCodiciPersonali, setMsgCodiciPersonali] = useState("");
+  async function applicaFasceAiCodiciPersonali() {
+    const fasce = fasceScontoValide(regolaReferralMaster?.fasce);
+    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id);
+    if (personali.length === 0) { setMsgCodiciPersonali("Nessun codice personale da aggiornare."); return; }
+    if (!window.confirm(`Riscrivere le fasce su ${personali.length} codici personali, nell'app e sul sito?`)) return;
+    setApplicandoAiCodici(true); setMsgCodiciPersonali("");
+    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
+    const { error } = await supabase.from("coupon")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
+      .in("id", personali.map((c) => c.id));
+    if (error) { setApplicandoAiCodici(false); setMsgCodiciPersonali("Errore: " + testoErrore(error)); return; }
+    let sito = 0; const falliti = [];
+    for (const c of personali.filter((x) => x.woo_coupon_id)) {
+      const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: c.id, aggiornaRegola: true } });
+      if (erroreSito || data?.errore) falliti.push(c.codice); else sito += 1;
+    }
+    setApplicandoAiCodici(false);
+    setMsgCodiciPersonali(`Fasce applicate a ${personali.length} codici personali nell'app e a ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
+    ricarica(["coupon"]);
+  }
 
 
   async function salvaFinestra() {
@@ -40192,6 +40219,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
             onCambiaTipo={() => {}} onCambiaFasce={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: f })}
             prodottiShop={prodottiShop} isMobile={isMobile}
           />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
+            <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Applico…" : "Applica ai codici personali esistenti"}</Button>
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
+              I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce su tutti i codici personali delle master, nell'app e sul sito.
+            </span>
+            {msgCodiciPersonali && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciPersonali.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciPersonali}</span>}
+          </div>
         </div>
 
         {/* La tabella con cui si e' deciso quanto cedere, pubblicata per
@@ -61523,7 +61557,7 @@ export default function App() {
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
-    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico"],
+    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
@@ -63556,7 +63590,7 @@ export default function App() {
       {view === "gestionepunti" && (
         <PaginaGestionePunti
           master={master} venditeShop={venditeShop} prodottiShop={prodottiShop} puntiMasterImpostazioni={puntiMasterImpostazioni}
-          regoleReferralAutomatico={regoleReferralAutomatico}
+          regoleReferralAutomatico={regoleReferralAutomatico} coupon={coupon}
           ricarica={fetchDati} onBack={() => setView("compensipremi")}
           titolo={etichettaTasto("compensipremi", "gestionepunti", "Gestione punti")}
         />

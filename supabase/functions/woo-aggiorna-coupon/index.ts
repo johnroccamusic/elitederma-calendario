@@ -49,15 +49,25 @@ Deno.serve(async (req) => {
   }
 
   const { couponId } = corpo || {};
+  // Due usi: la scadenza (validoFinoA, anche null per toglierla) e, con
+  // aggiornaRegola, la regola di sconto — percentuale e fasce — riletta
+  // dalla riga del coupon e riscritta sul sito. Serve quando le fasce
+  // cambiano dopo che il coupon e' gia' stato creato su WooCommerce: i
+  // 17 codici personali delle master erano rimasti al 15% fisso
+  const aggiornaRegola = !!corpo?.aggiornaRegola;
+  const haValidoFinoA = corpo && Object.prototype.hasOwnProperty.call(corpo, "validoFinoA");
   const validoFinoA = corpo?.validoFinoA ?? null;
   if (!couponId) {
     return new Response(JSON.stringify({ errore: "Parametro mancante: couponId" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-  if (validoFinoA !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(validoFinoA))) {
+  if (!aggiornaRegola && !haValidoFinoA) {
+    return new Response(JSON.stringify({ errore: "Niente da aggiornare: passa validoFinoA oppure aggiornaRegola" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  if (haValidoFinoA && validoFinoA !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(validoFinoA))) {
     return new Response(JSON.stringify({ errore: "validoFinoA dev'essere una data aaaa-mm-gg, oppure null" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const { data: riga, error: erroreLettura } = await supabase.from("coupon").select("id, codice, woo_coupon_id, valido_fino_a").eq("id", couponId).single();
+  const { data: riga, error: erroreLettura } = await supabase.from("coupon").select("*").eq("id", couponId).single();
   if (erroreLettura || !riga) {
     return new Response(JSON.stringify({ errore: "Coupon non trovato" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -73,12 +83,28 @@ Deno.serve(async (req) => {
   }
   const auth = "Basic " + btoa(`${consumerKeyWrite}:${consumerSecretWrite}`);
 
+  // il carico da mandare al sito: la scadenza (stringa vuota, non null:
+  // e' cosi' che WooCommerce toglie una scadenza) e/o la regola di sconto,
+  // costruita come in woo-crea-coupon
+  const payloadWoo: Record<string, unknown> = {};
+  if (haValidoFinoA) payloadWoo.date_expires = validoFinoA === null ? "" : validoFinoA;
+  if (aggiornaRegola) {
+    payloadWoo.discount_type = "percent";
+    payloadWoo.amount = String(riga.valore ?? 0);
+    if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
+      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, { key: "_ed_sconto_margine_pct", value: "" }];
+    } else if (riga.base_sconto === "margine") {
+      payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, { key: "_ed_fasce_sconto", value: "" }];
+    } else {
+      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: "" }, { key: "_ed_sconto_margine_pct", value: "" }];
+    }
+  }
+
   try {
-    // stringa vuota, non null: è così che WooCommerce toglie una scadenza
     const rispostaWoo = await fetch(`${siteUrl}/wp-json/wc/v3/coupons/${riga.woo_coupon_id}`, {
       method: "PUT",
       headers: { Authorization: auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ date_expires: validoFinoA === null ? "" : validoFinoA }),
+      body: JSON.stringify(payloadWoo),
     });
     if (!rispostaWoo.ok) {
       const testo = await rispostaWoo.text();
@@ -87,12 +113,14 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ errore: `WooCommerce ha rifiutato l'aggiornamento (${rispostaWoo.status})`, dettaglio: testo }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { error: erroreUpdate } = await supabase.from("coupon").update({ valido_fino_a: validoFinoA }).eq("id", couponId);
-    if (erroreUpdate) {
-      return new Response(JSON.stringify({ errore: "Aggiornato su WooCommerce ma non nel database locale: " + erroreUpdate.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (haValidoFinoA) {
+      const { error: erroreUpdate } = await supabase.from("coupon").update({ valido_fino_a: validoFinoA }).eq("id", couponId);
+      if (erroreUpdate) {
+        return new Response(JSON.stringify({ errore: "Aggiornato su WooCommerce ma non nel database locale: " + erroreUpdate.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
 
-    return new Response(JSON.stringify({ ok: true, codice: riga.codice, prima: riga.valido_fino_a, adesso: validoFinoA }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: true, codice: riga.codice, regola: aggiornaRegola ? (riga.tipo_regola_sconto || "semplice") : undefined, prima: riga.valido_fino_a, adesso: haValidoFinoA ? validoFinoA : riga.valido_fino_a }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ errore: "Errore di rete verso WooCommerce: " + String(e) }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
