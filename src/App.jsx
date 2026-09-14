@@ -52540,17 +52540,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           riga, una a sinistra e una a destra; i moduli si aprono sotto */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
         <label htmlFor="pos-spedizione" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "10px 0", cursor: "pointer" }}>
-          <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
-          <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <IconaCamionConsegna size={17} color={GOLD} />
+          <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <IconaCamionConsegna size={34} color={GOLD} />
           </span>
+          <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
           <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese di spedizione — non ho il prodotto con me</span>
         </label>
         <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "10px 0", cursor: "pointer" }}>
-          <input id="pos-richiede-fattura" type="checkbox" checked={fattAttiva} onChange={(e) => setFattAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
-          <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <IconaCatDocumento size={17} color={GOLD} />
+          <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <IconaCatDocumento size={34} color={GOLD} />
           </span>
+          <input id="pos-richiede-fattura" type="checkbox" checked={fattAttiva} onChange={(e) => setFattAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
           <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Richiede fattura</span>
         </label>
       </div>
