@@ -18810,8 +18810,14 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
   const [msg, setMsg] = useState("");
   const modificatoLocalmenteRef = React.useRef(false);
 
+  // Ogni volta che la riga arriva di nuovo dal database, la scheda la
+  // prende. Prima la ignorava se qui si era toccato qualcosa: cosi' una
+  // scheda ritoccata a mano non vedeva piu' la calibrazione mandata dalle
+  // altre con "Applica a tutti", e sembrava che il tasto non facesse
+  // niente. Le modifiche locali sono gia' scritte prima di ricaricare,
+  // quindi la riga che arriva le contiene.
   useEffect(() => {
-    if (!modificatoLocalmenteRef.current) setConfig(categoria);
+    setConfig(categoria);
   }, [categoria]);
 
   // Il logo nero e quello bianco sono lo stesso disegno in due colori:
@@ -18884,6 +18890,13 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
     if (!window.confirm(`Applicare questa calibrazione ad altri ${altre.length} loghi? Quelli con "Regola solo questo logo" restano come sono.`)) return;
     setApplicandoATutti(true);
     const base = anchePerAltraVariante(campiCalibrazione(prefisso));
+    // anche la propria riga riceve le due varianti allineate: se il bianco
+    // era rimasto indietro rispetto al nero, qui si rimette in pari
+    {
+      const { error } = await supabase.from("loghi_categorie").update(base).eq("chiave", categoria.chiave);
+      if (error) { setApplicandoATutti(false); setMsg("Errore: " + testoErrore(error)); return; }
+    }
+    let errori = 0;
     for (const altra of altre) {
       const suoi = {};
       Object.entries(base).forEach(([chiave, valore]) => {
@@ -18893,11 +18906,12 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome, famigliaNumero, tutt
         const sua = larghezzePerCategoria?.[altra.chiave]?.[variante];
         suoi[chiave] = mia && sua ? Math.max(6, Math.round(valore * (sua / mia))) : valore;
       });
-      await supabase.from("loghi_categorie").update(suoi).eq("chiave", altra.chiave);
+      const { error } = await supabase.from("loghi_categorie").update(suoi).eq("chiave", altra.chiave);
+      if (error) errori += 1;
     }
     setApplicandoATutti(false);
     modificatoLocalmenteRef.current = false;
-    setMsg(`Calibrazione applicata ad altri ${altre.length} loghi.`);
+    setMsg(errori ? `Calibrazione applicata a ${altre.length - errori} loghi, ${errori} non salvat${errori === 1 ? "o" : "i"}.` : `Calibrazione applicata ad altri ${altre.length} loghi.`);
     ricarica(["loghi_categorie"]);
   }
 
