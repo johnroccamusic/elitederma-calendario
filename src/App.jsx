@@ -1692,16 +1692,15 @@ function spicchioTorta(cx, cy, r, gradoIniziale, gradoFinale, punti = 40) {
 const PERCORSO_TORTA_CORPO = spicchioTorta(10, 13, 6.5, -25, 270);
 const PERCORSO_TORTA_FETTA = spicchioTorta(14.5, 7.8, 3.2, -90, -25);
 function IconaTileStatistiche({ size = 44, color = NAVY }) {
-  // quattro barre che salgono e la freccia sopra
+  // tre barre che salgono, senza base, e la freccia che parte sopra la
+  // prima e punta in alto a destra
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 21h20" />
-      <rect x="3.2" y="14.5" width="3.4" height="6.5" rx="0.5" />
-      <rect x="8.2" y="12.2" width="3.4" height="8.8" rx="0.5" />
-      <rect x="13.2" y="10" width="3.4" height="11" rx="0.5" />
-      <rect x="18.2" y="7.5" width="3.4" height="13.5" rx="0.5" />
-      <path d="M3.6 11.6c5.6-1 11-3.4 15.4-7.6" />
-      <path d="M15.6 3.8l3.8-.6-.5 3.8" />
+      <rect x="3.4" y="14.6" width="4.2" height="6.6" rx="0.8" />
+      <rect x="9.9" y="12.2" width="4.2" height="9" rx="0.8" />
+      <rect x="16.4" y="9.6" width="4.2" height="11.6" rx="0.8" />
+      <path d="M4.4 12.4c5.2-1 9.9-3.2 14.2-7" />
+      <path d="M15.4 4.8l3.7-.6-.6 3.7" />
     </svg>
   );
 }
