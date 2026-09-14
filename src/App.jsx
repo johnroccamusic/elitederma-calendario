@@ -52395,7 +52395,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {/* sconto e coupon in una tessera sola: sono due modi di fare la
           stessa cosa e si escludono a vicenda, tenerli vicini lo dice
           senza doverlo scrivere */}
-      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: isMobile ? 10 : 14, display: "flex", gap: puoScontare ? 8 : (isMobile ? 10 : 14), alignItems: "flex-end", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
+      <div style={{ border: `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: puoScontare ? undefined : "#EDF2F8", borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: isMobile ? 10 : 14, display: "flex", gap: puoScontare ? 8 : (isMobile ? 10 : 14), alignItems: "flex-end", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
         {puoScontare && (
           <>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
@@ -52428,7 +52428,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             {((!corsoPosId && couponReferralPersonale) || couponDellEdizione(corsoPosId)) && (
               <div style={{ flex: 1, minWidth: 0 }}>
               {!corsoPosId && couponReferralPersonale && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 0 }}>
                   <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
                   <span style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.2 }}>
                     <span style={{ ...fontBody, fontSize: 15.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
@@ -52440,7 +52440,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 </label>
               )}
               {couponDellEdizione(corsoPosId) && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY, marginBottom: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY, marginBottom: 0 }}>
                   <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
                   Applica sconto del corso
                   {scontoCorsoAttivo && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 8px" }}>−{couponDellEdizione(corsoPosId).valore}%</span>}
