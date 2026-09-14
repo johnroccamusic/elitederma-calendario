@@ -13821,6 +13821,151 @@ function nomeFileUnico(baseSicura, estensione, nomiEsistenti) {
 // "Aggiungi", sempre in coda alla griglia); tutti possono scaricare una
 // locandina — su mobile, se il telefono lo supporta, tramite la
 // condivisione nativa così finisce direttamente nella galleria foto
+// ---------- Modulistica ----------
+// La cartella dei moduli: contratti, liberatorie, schede da far compilare,
+// qualunque documento che serve piu' volte. Vive nella cartella
+// "modulistica" dello stesso spazio file delle locandine (Prezzi corsi
+// legge solo la radice, quindi le due cose non si mischiano): nessuna
+// tabella, l'elenco e' quello dei file. Chi amministra carica e toglie,
+// tutti aprono e scaricano.
+const CARTELLA_MODULISTICA = "modulistica";
+function iconaTipoFile(nome) {
+  const est = (String(nome || "").split(".").pop() || "").toLowerCase();
+  if (est === "pdf") return { sigla: "PDF", colore: "#C0392B" };
+  if (["doc", "docx", "odt", "rtf"].includes(est)) return { sigla: "DOC", colore: "#2B579A" };
+  if (["xls", "xlsx", "csv", "ods"].includes(est)) return { sigla: "XLS", colore: "#217346" };
+  if (["ppt", "pptx", "key"].includes(est)) return { sigla: "PPT", colore: "#B7472A" };
+  if (["jpg", "jpeg", "png", "webp", "gif", "heic"].includes(est)) return { sigla: "IMG", colore: "#8A6A1B" };
+  if (["zip", "rar"].includes(est)) return { sigla: "ZIP", colore: MUTED };
+  return { sigla: est.toUpperCase().slice(0, 4) || "FILE", colore: MUTED };
+}
+function PaginaModulistica({ ruoloUtente, onBack, titolo = "Modulistica" }) {
+  const isMobile = useIsMobile();
+  const puoGestire = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
+  const [documenti, setDocumenti] = useState([]);
+  const [caricando, setCaricando] = useState(true);
+  const [caricandoUpload, setCaricandoUpload] = useState(null);
+  const [eliminandoNome, setEliminandoNome] = useState(null);
+  const [scaricandoNome, setScaricandoNome] = useState(null);
+  const [ricerca, setRicerca] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function ricaricaDocumenti() {
+    const { data, error } = await supabase.storage.from("locandine-corsi").list(CARTELLA_MODULISTICA, { limit: 500, sortBy: { column: "name", order: "asc" } });
+    if (error) { setMsg("Errore nel leggere la modulistica: " + error.message); return; }
+    // il segnaposto vuoto che Supabase mette nelle cartelle nuove non e' un documento
+    const file = (data || []).filter((f) => f.name && !f.name.startsWith(".") && f.id);
+    setDocumenti(file.map((f) => {
+      const percorso = `${CARTELLA_MODULISTICA}/${f.name}`;
+      const base = supabase.storage.from("locandine-corsi").getPublicUrl(percorso).data.publicUrl;
+      const versione = f.updated_at || f.created_at || "";
+      return {
+        nome: f.name, percorso, titolo: titoloDaNomeFile(f.name),
+        url: versione ? `${base}?v=${encodeURIComponent(versione)}` : base,
+        dimensione: f.metadata?.size || null, aggiornato: (f.updated_at || f.created_at || "").slice(0, 10),
+      };
+    }));
+  }
+  useEffect(() => {
+    (async () => { await ricaricaDocumenti(); setCaricando(false); })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function caricaFile(fileList) {
+    if (!puoGestire) return;
+    const file = Array.from(fileList || []);
+    if (!file.length) return;
+    setMsg("");
+    setCaricandoUpload({ fatti: 0, totale: file.length });
+    const nomiEsistenti = new Set(documenti.map((d) => d.nome));
+    for (const f of file) {
+      const { baseSicura, estensione } = nomeFileSicuro(f.name);
+      const nomeFinale = nomeFileUnico(baseSicura, estensione, nomiEsistenti);
+      nomiEsistenti.add(nomeFinale);
+      const { error } = await supabase.storage.from("locandine-corsi").upload(`${CARTELLA_MODULISTICA}/${nomeFinale}`, f, { contentType: f.type || "application/octet-stream" });
+      if (error) setMsg(`Errore nel caricare ${f.name}: ${error.message}`);
+      setCaricandoUpload((prev) => (prev ? { ...prev, fatti: prev.fatti + 1 } : null));
+    }
+    setCaricandoUpload(null);
+    await ricaricaDocumenti();
+  }
+  async function eliminaDocumento(doc) {
+    if (!window.confirm(`Eliminare "${doc.titolo}"? Il file non sarà più recuperabile.`)) return;
+    setEliminandoNome(doc.nome);
+    const { error } = await supabase.storage.from("locandine-corsi").remove([doc.percorso]);
+    setEliminandoNome(null);
+    if (error) { setMsg("Errore nell'eliminare il documento: " + error.message); return; }
+    await ricaricaDocumenti();
+  }
+  async function scaricaOCondividi(doc) {
+    setScaricandoNome(doc.nome);
+    try {
+      const { data, error } = await supabase.storage.from("locandine-corsi").download(doc.percorso);
+      if (error) throw error;
+      if (isMobile && navigator.share && navigator.canShare) {
+        const file = new File([data], doc.nome, { type: data.type || "application/octet-stream" });
+        if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: doc.titolo }); return; }
+      }
+      scaricaBlob(data, doc.nome);
+    } catch (e) {
+      setMsg("Non riesco a scaricare il documento: " + (e?.message || e));
+    } finally {
+      setScaricandoNome(null);
+    }
+  }
+  const fmtDimensione = (n) => (n == null ? "" : n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  const q = ricerca.trim().toLowerCase();
+  const elenco = documenti.filter((d) => !q || d.titolo.toLowerCase().includes(q) || d.nome.toLowerCase().includes(q));
+  const tastoPiccolo = { ...fontBody, fontSize: 12, fontWeight: 700, borderRadius: 16, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY };
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "40px 20px" }}>
+      <TopBar title={titolo} onBack={onBack} titoloIndietro="Normative" />
+      <div style={{ ...cardStyle }}>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.55, marginBottom: 14 }}>
+          Moduli, contratti, liberatorie e schede da compilare: qualunque documento che serve più volte. Si apre e si scarica da qui;
+          {puoGestire ? " carica nuovi file con il tasto qui sotto, anche più di uno insieme." : " per aggiungere o togliere documenti serve un amministratore."}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+          {puoGestire && (
+            <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 16, padding: "9px 16px", cursor: caricandoUpload ? "default" : "pointer", opacity: caricandoUpload ? 0.6 : 1, whiteSpace: "nowrap" }}>
+              {caricandoUpload ? `Carico ${caricandoUpload.fatti}/${caricandoUpload.totale}…` : "+ Carica documenti"}
+              <input type="file" multiple disabled={!!caricandoUpload} onChange={(e) => { caricaFile(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+            </label>
+          )}
+          <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
+            <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca un documento…" />
+          </div>
+        </div>
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.startsWith("Errore") || msg.startsWith("Non") ? "#C0392B" : "#2E7D32", marginBottom: 10 }}>{msg}</div>}
+        {caricando ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Caricamento…</div>
+        ) : elenco.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>{documenti.length === 0 ? "Nessun documento ancora caricato." : "Nessun documento corrisponde alla ricerca."}</div>
+        ) : elenco.map((doc) => {
+          const tipo = iconaTipoFile(doc.nome);
+          return (
+            <div key={doc.nome} style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+              <span style={{ width: 42, height: 42, borderRadius: 10, background: "#F6F2EA", color: tipo.colore, display: "flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.4, flexShrink: 0 }}>{tipo.sigla}</span>
+              <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={doc.nome}>{doc.titolo}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{[fmtDimensione(doc.dimensione), doc.aggiornato ? `aggiornato il ${fmtData(doc.aggiornato)}` : null].filter(Boolean).join(" · ")}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <a href={doc.url} target="_blank" rel="noopener noreferrer" style={{ ...tastoPiccolo, textDecoration: "none", display: "inline-block" }}>Apri</a>
+                <button type="button" onClick={() => scaricaOCondividi(doc)} disabled={scaricandoNome === doc.nome} style={{ ...tastoPiccolo, opacity: scaricandoNome === doc.nome ? 0.6 : 1 }}>{scaricandoNome === doc.nome ? "Scarico…" : "Scarica"}</button>
+                {puoGestire && (
+                  <button type="button" onClick={() => eliminaDocumento(doc)} disabled={eliminandoNome === doc.nome} title="Elimina il documento" style={{ ...tastoPiccolo, color: "#C0392B", opacity: eliminandoNome === doc.nome ? 0.6 : 1 }}>Rimuovi</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordineLocandine, onSalvaOrdineLocandine }) {
   const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
@@ -22551,6 +22696,7 @@ const TASTI_HOME = [
 const AREA_MADRE_VISTA = {
   ritornoalcorso: ["normative"],
   mappanormativepmu: ["normative"],
+  modulistica: ["normative"],
   prossimecontabilita: ["gestionedate"],
   amministrazione: ["erp"],
   catalogocategoriecosti: ["erp"],
@@ -32039,7 +32185,7 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
 // documenti che le accompagnano. Per ora ospita un solo argomento —
 // "Ritorno al Corso" — ed e' fatta con la stessa griglia di tessere delle
 // altre aree, cosi' aggiungerne altri e' solo una riga in piu'.
-function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onApriMappaNormative, onBack, titolo = "Normative" }) {
+function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onApriMappaNormative, onApriModulistica, onBack, titolo = "Normative" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -32057,6 +32203,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
           definizioni={[
             { chiave: "ritornoalcorso", title: "Regole Ritorno al Corso", descrizione: "Le regole per chi torna a frequentare un corso già fatto.", Icona: IconaTileNormative, attivo: true, onClick: onApriRitornoAlCorso || (() => {}) },
             { chiave: "mappanormativepmu", title: "Mappa normative regionali", descrizione: "Cosa serve per esercitare il trucco permanente, regione per regione.", Icona: IconaPin, attivo: true, onClick: onApriMappaNormative || (() => {}) },
+            { chiave: "modulistica", title: "Modulistica", descrizione: "Moduli, contratti e documenti da scaricare e compilare.", Icona: IconaTileLoghi, attivo: true, onClick: onApriModulistica || (() => {}) },
           ]}
         />
       </div>
@@ -60819,6 +60966,7 @@ export default function App() {
     normative: [],
     ritornoalcorso: ["normative_testi"],
     mappanormativepmu: [],
+    modulistica: [],
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
@@ -61713,6 +61861,7 @@ export default function App() {
     { chiave: "normative", titolo: etichettaTasto("home", "normative", "Normative"), apri: apriNormative, figli: [
       { chiave: "ritornoalcorso", titolo: etichettaTasto("normative", "ritornoalcorso", "Regole Ritorno al Corso"), apri: () => setView("ritornoalcorso") },
       { chiave: "mappanormativepmu", titolo: etichettaTasto("normative", "mappanormativepmu", "Mappa normative regionali"), apri: () => setView("mappanormativepmu") },
+      { chiave: "modulistica", titolo: etichettaTasto("normative", "modulistica", "Modulistica"), apri: () => setView("modulistica") },
     ] },
     { chiave: "progettiincorso", titolo: etichettaTasto("home", "progettiincorso", "Progetti in corso"), apri: apriProgetti, figli: [] },
   ].map((area) => ({
@@ -62818,9 +62967,14 @@ export default function App() {
           etichetteTasti={layoutTasti.normative?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("normative", chiave, testo)}
           onApriRitornoAlCorso={() => setView("ritornoalcorso")}
           onApriMappaNormative={() => setView("mappanormativepmu")}
+          onApriModulistica={() => setView("modulistica")}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "normative", "Normative")}
         />
+      )}
+
+      {view === "modulistica" && (
+        <PaginaModulistica ruoloUtente={ruoloUtente} onBack={() => setView("normative")} titolo={etichettaTasto("normative", "modulistica", "Modulistica")} />
       )}
 
       {view === "mappanormativepmu" && (
