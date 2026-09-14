@@ -24426,7 +24426,10 @@ function PannelloRiepilogoAmministrativo({
                           assistente e se li porta scritti dietro ("3gg"):
                           quella colonna dice come si paga la riga, non quanti
                           giorni dura. */}
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }} title="Solo per la parte in contanti">Cash a</div>
+                      <div style={{ minWidth: 0, display: "flex", justifyContent: "center", gap: isMobile ? 6 : 8 }} title="Dove va la parte in contanti della riga">
+                        <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Busta</span>
+                        <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Scad.</span>
+                      </div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }}>Modalità</div>
                     </div>
                     {righeSpeseTutte.map((r) => {
@@ -24486,12 +24489,11 @@ function PannelloRiepilogoAmministrativo({
                               </span>
                             )}
                             {!r.flagPerVenditore && (r.cash || 0) > 0 && !r.cashPagato && (
-                              <div style={{ display: "flex", gap: isMobile ? 4 : 6, justifyContent: "center" }}>
+                              <div style={{ display: "flex", gap: 0, justifyContent: "center" }}>
                                 {[{ k: "busta", l: "Busta", t: "La quota in contanti esce dalla busta di questo corso e va in prima nota con Pagamenti effettuati" }, { k: "scad", l: "Scad.", t: "La quota in contanti va nello scadenziario passivo (Quadro impegni): si decide poi se pagarla dalla cassa contanti o con bonifico" }].map((o) => {
                                   const attiva = o.k === "scad" ? r.cashRinviato : !r.cashRinviato;
                                   return (
-                                    <label key={o.k} title={o.t} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
-                                      <span style={{ ...fontBody, fontSize: isMobile ? 8 : 9.5, fontWeight: 700, color: attiva ? (o.k === "scad" ? "#1F4E8C" : NAVY) : MUTED }}>{o.l}</span>
+                                    <label key={o.k} title={o.t} style={{ display: "flex", alignItems: "center", cursor: "pointer", width: isMobile ? 22 : 30, justifyContent: "center" }}>
                                       <input
                                         type="checkbox"
                                         checked={attiva}
@@ -24623,7 +24625,7 @@ function PannelloRiepilogoAmministrativo({
                                         contanti e la sposta a ogni tocco.
                                         Sparisce quando la quota della classe
                                         e' gia' stata registrata come pagata */}
-                                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
+                                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
                                       {suoCash > 0 && !r.cashPagato && (() => {
                                         const rv = venditoriDecisi.find((x) => x.chiave === v.chiave);
                                         const nelloScad = !!rv?.cashRinviato;
@@ -24634,8 +24636,7 @@ function PannelloRiepilogoAmministrativo({
                                             {[{ k: "busta", l: "Busta" }, { k: "scad", l: "Scad." }].map((o) => {
                                               const attiva = o.k === "scad" ? nelloScad : !nelloScad;
                                               return (
-                                                <label key={o.k} title={o.k === "busta" ? "La quota in contanti di questo venditore esce dalla busta del corso" : "La quota in contanti di questo venditore va nello scadenziario passivo"} style={{ display: "flex", alignItems: "center", gap: 1.5, cursor: "pointer", lineHeight: 1 }}>
-                                                  <span style={{ ...fontBody, fontSize: 8.5, fontWeight: 700, color: attiva ? (o.k === "scad" ? "#1F4E8C" : NAVY) : MUTED }}>{o.l}</span>
+                                                <label key={o.k} title={o.k === "busta" ? "La quota in contanti di questo venditore esce dalla busta del corso" : "La quota in contanti di questo venditore va nello scadenziario passivo"} style={{ display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", lineHeight: 1, width: isMobile ? 22 : 30 }}>
                                                   <input
                                                     type="checkbox" checked={attiva}
                                                     onChange={() => {
