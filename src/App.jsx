@@ -19736,14 +19736,20 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   }
   useEffect(() => { caricaUltimi(); }, []);
 
-  const OPZIONI_CORSO = [...CORSI_LOGO, { chiave: "master_assistant", etichetta: "Master Assistant" }, { chiave: "master", etichetta: "Master" }];
-  const richiedeVariante = corso && corso !== "master_assistant" && corso !== "master";
-  const chiaveCategoria = corso ? (richiedeVariante ? `${corso}_${variante}` : corso) : null;
+  // Tre cose diverse da generare: il logo di un'allieva (master, corso,
+  // variante, nome, e il numero progressivo), il logo Master e il logo
+  // Master Assistant. Gli ultimi due sono titoli: chiedono solo il nome,
+  // non sono legati a una master ne' a un corso e non portano numero.
+  const [modo, setModo] = useState("allieva");
+  const OPZIONI_CORSO = CORSI_LOGO;
+  const senzaNumero = modo !== "allieva";
+  const richiedeVariante = !senzaNumero && !!corso;
+  const chiaveCategoria = senzaNumero ? modo : (corso ? (richiedeVariante ? `${corso}_${variante}` : corso) : null);
   const categoria = chiaveCategoria ? loghiCategorie.find((c) => c.chiave === chiaveCategoria) : null;
   const masterScelta = master.find((m) => m.id === masterId);
 
   const prossimoNumero = loghiImpostazioni?.prossimo_numero ?? 1;
-  const anteprimaCodice = masterScelta && nomeAllieva.trim() ? calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero) : null;
+  const anteprimaCodice = !senzaNumero && masterScelta && nomeAllieva.trim() ? calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero) : null;
 
   useEffect(() => {
     async function caricaFontGenerazione() {
@@ -19773,11 +19779,10 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   // sotto e basta: si possono rifare quante volte si vuole, il codice
   // resta lo stesso. Il numero si consuma quando si scarica, che e' il
   // momento in cui il logo esce davvero da qui.
-  const senzaNumero = categoria?.chiave === "master";
   async function genera() {
-    if (!masterScelta) { setMsg("Scegli la master."); return; }
-    if (!categoria) { setMsg("Scegli il tipo di corso/logo."); return; }
-    if (!nomeAllieva.trim()) { setMsg("Inserisci il nome dell'allieva."); return; }
+    if (!senzaNumero && !masterScelta) { setMsg("Scegli la master."); return; }
+    if (!categoria) { setMsg(senzaNumero ? "Questo logo non è ancora configurato in Setting loghi." : "Scegli il tipo di corso/logo."); return; }
+    if (!nomeAllieva.trim()) { setMsg(senzaNumero ? "Inserisci il nome." : "Inserisci il nome dell'allieva."); return; }
     if (!categoria.logo_nero_path) { setMsg("Manca ancora il logo nero di questa categoria in Setting loghi."); return; }
     if (categoria.richiede_bianco && !categoria.logo_bianco_path) { setMsg("Manca ancora il logo bianco di questa categoria in Setting loghi."); return; }
 
@@ -19827,7 +19832,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
       anteprime.forEach((a) => URL.revokeObjectURL(a.url));
       setAnteprime(fatti);
       setCodiceGenerato(codice || "senza numero");
-      setMsg(senzaNumero ? "Loghi pronti qui sotto: il logo Master non porta numero." : "Loghi pronti qui sotto. Finché non li scarichi il codice resta libero: puoi rigenerarli quante volte vuoi.");
+      setMsg(senzaNumero ? `Loghi pronti qui sotto: il logo ${categoria.etichetta} non porta numero.` : "Loghi pronti qui sotto. Finché non li scarichi il codice resta libero: puoi rigenerarli quante volte vuoi.");
     } catch (e) {
       setMsg("Errore nella generazione: " + e.message);
     }
@@ -19846,7 +19851,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
       setScaricando(false);
       anteprime.forEach((a) => URL.revokeObjectURL(a.url));
       setAnteprime([]);
-      setMsg("Loghi Master scaricati: nessun numero consumato.");
+      setMsg(`Loghi ${categoria?.etichetta || ""} scaricati: nessun numero consumato.`);
       return;
     }
 
@@ -19877,18 +19882,37 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title={titolo} onBack={onBack} />
       <div style={cardStyle}>
-        <Field label="Master">
-          <select style={inputStyle} value={masterId} onChange={(e) => setMasterId(e.target.value)}>
-            <option value="">— scegli —</option>
-            {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-          </select>
-        </Field>
-        <Field label="Tipo di corso">
-          <select style={inputStyle} value={corso} onChange={(e) => setCorso(e.target.value)}>
-            <option value="">— scegli —</option>
-            {OPZIONI_CORSO.map((c) => <option key={c.chiave} value={c.chiave}>{c.etichetta}</option>)}
-          </select>
-        </Field>
+        {/* cosa si genera: il selettore a pillole in cima, e sotto solo i
+            campi che servono a quella scelta */}
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 16, flexWrap: "wrap" }}>
+          {[{ v: "allieva", l: "Logo allieva" }, { v: "master", l: "Genera logo Master" }, { v: "master_assistant", l: "Genera logo Master Assistant" }].map((o) => (
+            <button
+              key={o.v} type="button" onClick={() => { setModo(o.v); setMsg(""); }} data-niente-ombra="1"
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "8px 12px", borderRadius: 16, border: "none", cursor: "pointer", flex: "1 1 auto", background: modo === o.v ? NAVY : "transparent", color: modo === o.v ? "#fff" : NAVY }}
+            >{o.l}</button>
+          ))}
+        </div>
+        {!senzaNumero && (
+          <>
+            <Field label="Master">
+              <select style={inputStyle} value={masterId} onChange={(e) => setMasterId(e.target.value)}>
+                <option value="">— scegli —</option>
+                {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+              </select>
+            </Field>
+            <Field label="Tipo di corso">
+              <select style={inputStyle} value={corso} onChange={(e) => setCorso(e.target.value)}>
+                <option value="">— scegli —</option>
+                {OPZIONI_CORSO.map((c) => <option key={c.chiave} value={c.chiave}>{c.etichetta}</option>)}
+              </select>
+            </Field>
+          </>
+        )}
+        {senzaNumero && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+            Il logo {categoria?.etichetta || (modo === "master" ? "Master" : "Master Assistant")} chiede solo il nome: non è legato a una master né a un corso e non porta il numero progressivo.
+          </div>
+        )}
         {richiedeVariante && (
           <Field label="Tipo di logo">
             <div style={{ display: "flex", gap: 14, ...fontBody, fontSize: 13, color: NAVY }}>
@@ -19901,7 +19925,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
             </div>
           </Field>
         )}
-        <Field label="Nome allieva">
+        <Field label={senzaNumero ? "Nome" : "Nome allieva"}>
           <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeAllieva} onChange={(e) => setNomeAllieva(e.target.value)} placeholder="Nome Cognome" />
         </Field>
 
@@ -19925,7 +19949,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
         <div style={{ ...cardStyle, marginTop: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
             <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
-              {senzaNumero ? "Anteprima — logo Master, senza numero" : `Anteprima — codice ${codiceGenerato}`}
+              {senzaNumero ? `Anteprima — logo ${categoria?.etichetta || ""}, senza numero` : `Anteprima — codice ${codiceGenerato}`}
             </div>
             {!senzaNumero && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>numero {prossimoNumero}, ancora libero</div>}
           </div>
@@ -19943,7 +19967,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
             {scaricando ? "Scarico…" : senzaNumero ? `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`}` : `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`} e usa il numero ${prossimoNumero}`}
           </Button>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
-            {senzaNumero ? "Il logo Master non porta il numero progressivo: si scarica e basta." : `Finché non scarichi, il numero ${prossimoNumero} resta libero: puoi cambiare nome o categoria e rigenerare quante volte vuoi.`}
+            {senzaNumero ? `Il logo ${categoria?.etichetta || ""} non porta il numero progressivo: si scarica e basta.` : `Finché non scarichi, il numero ${prossimoNumero} resta libero: puoi cambiare nome o categoria e rigenerare quante volte vuoi.`}
           </div>
         </div>
       )}
