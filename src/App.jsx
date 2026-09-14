@@ -51871,7 +51871,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     : null;
   const fasceContantiInUso = couponAFasce && (couponPersonaleAttivo
     ? (pagamentoContaComeContanti(metodoPagamento) && Array.isArray(fasceContantiReferralPos) && fasceContantiReferralPos.length > 0)
-    : (metodoPagamento === "contanti" && Array.isArray(fasceContantiCorsiPos) && fasceContantiCorsiPos.length > 0));
+    : (pagamentoContaComeContanti(metodoPagamento) && Array.isArray(fasceContantiCorsiPos) && fasceContantiCorsiPos.length > 0));
   const scontoCoupon = couponAFasce
     ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive)
     : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
