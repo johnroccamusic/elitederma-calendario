@@ -57374,7 +57374,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     // direbbe di avere roba che sta gia' dentro una scatola. Fino al
     // ritiro si puo' comunque tornare indietro, riaprire il pacco e
     // aggiungere: il ripristino rimette dentro quello che era uscito.
-    if (fase === "da_preparare") {
+    // `fase` e' la PROSSIMA fase, quella in cui si entra: il pacco e'
+    // preparato quando si lascia "da_preparare". Il controllo guardava la
+    // fase d'arrivo, che "da_preparare" non e' mai, e lo scarico non
+    // scattava (9-14 settembre 2026)
+    if (statoDi(corsoData.id).fase === "da_preparare") {
       if (!(await chiediConferma("Pacco preparato: scarico dal magazzino i prodotti che ci vanno dentro?"))) return;
       // se lo scarico è bloccato (magazzino insufficiente) la fase NON
       // avanza: altrimenti il pacco risulterebbe preparato senza scarico
@@ -57402,10 +57406,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       mostraAvviso("Il pacco è già stato ritirato dal corriere: da qui non si torna indietro.");
       return;
     }
-    // si esce da "da_preparare" tornando indietro solo quando la fase
-    // ATTUALE è proprio quella: è lì che è scattato lo scarico, quindi è
-    // lì che va annullato — il pacco si riapre e i pezzi rientrano
-    if (statoDi(corsoData.id).fase === "da_preparare") {
+    // si torna a "da_preparare" solo riaprendo il pacco: e' alla
+    // preparazione che e' scattato lo scarico, quindi e' qui che va
+    // annullato — i pezzi rientrano in magazzino. Le altre fasi indietro
+    // (bolla, ritiro non ancora avvenuto) non muovono niente
+    if (faseTarget === "da_preparare") {
       if (!(await chiediConferma("Il pacco si riapre e i prodotti rientrano in magazzino. Confermi?"))) return;
       await ripristinaMagazzinoDaScarico(corsoData);
     }
