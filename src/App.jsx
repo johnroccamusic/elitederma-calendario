@@ -24007,7 +24007,9 @@ function PannelloRiepilogoAmministrativo({
   // quello che "Ripristina pagamenti" cancella: le spese scritte da qui e
   // gli impegni di questa classe, cosi' tutto torna da pagare
   const speseDisposte = speseClasseReali.filter((x) => x.origine === "automatico" && String(x.origine_scadenziario_chiave || "").startsWith("cash_"));
-  const impegniDisposti = (impegni || []).filter((x) => x.origine_tipo === "classe_cash" && x.origine_id === corsoData.id);
+  // sono impegni "corso" di questa classe con la chiave "cash_…": quelli di
+  // alloggio e location, che hanno altre chiavi, non si toccano
+  const impegniDisposti = (impegni || []).filter((x) => x.origine_id === corsoData.id && String(x.chiave_origine || "").startsWith("cash_"));
 
   // "Non dal cash del corso": la quota esce dalla busta e diventa un
   // impegno. Serve quando in aula il contante non basta a coprire quello
@@ -24017,7 +24019,7 @@ function PannelloRiepilogoAmministrativo({
     const chiave = chiaveCashRiga(r);
     const { error } = await supabase.from("impegno").insert({
       descrizione: `${r.nome} — contanti non coperti`,
-      origine_tipo: "classe_cash", origine_id: corsoData.id, chiave_origine: chiave,
+      origine_tipo: "corso", origine_id: corsoData.id, chiave_origine: chiave,
       importo_previsto: round2(r.cash), data_prevista: corsoData.data_fine || dataOggiStr(), stato: "aperto",
     });
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
@@ -24130,7 +24132,7 @@ function PannelloRiepilogoAmministrativo({
     if (rinviiAutomaticiDaScrivere.length > 0) {
       const righe = rinviiAutomaticiDaScrivere.map((x) => ({
         descrizione: `${x.nome} — contanti non coperti`,
-        origine_tipo: "classe_cash", origine_id: corsoData.id, chiave_origine: x.chiave,
+        origine_tipo: "corso", origine_id: corsoData.id, chiave_origine: x.chiave,
         importo_previsto: round2(x.cash), data_prevista: corsoData.data_fine || dataOggiStr(), stato: "aperto",
       }));
       const { error } = await supabase.from("impegno").insert(righe);
