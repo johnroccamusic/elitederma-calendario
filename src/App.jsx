@@ -24183,6 +24183,38 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
   );
 }
 
+// Una casella del Riepilogo Cash: icona in un tondo chiaro, etichetta su
+// due righe, filo di separazione, la cifra grande e sotto, se c'e', una
+// nota in una pastiglia grigia con la sua iconcina. L'ultima casella, il
+// cash pulito, sta su fondo sabbia con il bordo oro
+function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evidenziata = false, isMobile = false }) {
+  const tratto = { fill: "none", stroke: NAVY, strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" };
+  const icone = {
+    mano: <svg width="22" height="22" viewBox="0 0 24 24" {...tratto}><circle cx="13" cy="7" r="4" /><path d="M13 5.5v3M11.8 6.2h2.4M11.8 7.8h2.4" /><path d="M3 15.5h3l3 1.5h4a1.5 1.5 0 0 1 0 3H9" /><path d="M13 20h5l3-2.2a1.4 1.4 0 0 0-1.9-2L16 17.5" /></svg>,
+    documento: <svg width="22" height="22" viewBox="0 0 24 24" {...tratto}><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5" /><path d="M10 13h6M10 16.5h4" /></svg>,
+    portafoglio: <svg width="22" height="22" viewBox="0 0 24 24" {...tratto}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M16 14.5h2" /><path d="M6 7V5.5A1.5 1.5 0 0 1 7.5 4H16" /></svg>,
+    ritorno: <svg width="22" height="22" viewBox="0 0 24 24" {...tratto}><path d="M9 6H15a5 5 0 0 1 0 10H6" /><path d="M9 13l-3 3 3 3" /></svg>,
+    scintilla: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B7952B" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3c.6 3.8 2.2 5.4 6 6-3.8.6-5.4 2.2-6 6-.6-3.8-2.2-5.4-6-6 3.8-.6 5.4-2.2 6-6z" /><path d="M19 15c.3 1.6 1 2.3 2.6 2.6-1.6.3-2.3 1-2.6 2.6-.3-1.6-1-2.3-2.6-2.6 1.6-.3 2.3-1 2.6-2.6z" /></svg>,
+    orologio: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>,
+    portafoglioPiccolo: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M16 14.5h2" /></svg>,
+    giu: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B7952B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 8v8M8.5 12.5L12 16l3.5-3.5" /></svg>,
+  };
+  const cifra = `€ ${Number(valore || 0).toLocaleString("it-IT", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return (
+    <div style={{ flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0, boxSizing: "border-box", padding: isMobile ? "12px 10px" : "16px 14px", borderRadius: 16, background: evidenziata ? "#F6EFE1" : "#fff", border: `1px solid ${evidenziata ? "#D9C48F" : CREAM_BORDER}`, boxShadow: "var(--ombra-aree, none)", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: isMobile ? 34 : 40, height: isMobile ? 34 : 40, borderRadius: "50%", background: evidenziata ? "#EFE3C8" : "#EEEDEA", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: isMobile ? 8 : 12 }}>{icone[icona]}</div>
+      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.3, minHeight: isMobile ? "2.6em" : "2.6em", display: "flex", alignItems: "flex-end", paddingBottom: 8, borderBottom: `1px solid ${evidenziata ? "#E6D7B4" : CREAM_BORDER}`, marginBottom: 10 }}>{etichetta}</div>
+      <div style={{ ...fontBody, fontSize: isMobile ? 17 : 24, fontWeight: 800, color: NAVY, whiteSpace: "nowrap", letterSpacing: -0.3 }}>{cifra}</div>
+      {nota && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "8px 10px", borderRadius: 10, background: evidenziata ? "#EFE3C8" : "#EEEDEA", ...fontBody, fontSize: isMobile ? 9.5 : 11.5, color: MUTED, lineHeight: 1.3 }}>
+          {notaIcona && <span style={{ display: "flex", flexShrink: 0 }}>{icone[notaIcona]}</span>}
+          <span>{nota}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PannelloRiepilogoAmministrativo({
   corsoData, iscritti, spese, venditeShop, prodottiShop,
   corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel,
@@ -25210,44 +25242,28 @@ function PannelloRiepilogoAmministrativo({
                 )}
 
                 <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 16 }}>Riepilogo Cash</div>
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 6 }}>Riepilogo Cash</div>
+                  <div style={{ width: 56, height: 2, background: "#D9C48F", margin: "0 auto 16px" }} />
                   <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: isMobile ? "wrap" : "nowrap", gap: isMobile ? 6 : 10 }}>
                     {/* Le cinque caselle del cash, da sinistra a destra come
                         vanno le cose: quanto e' entrato, quanto costa in
-                        contanti la classe, quanto di quel costo esce dalla
-                        busta, quanto e' stato rinviato allo scadenziario, e
-                        quanto resta in busta. L'ultima si muove solo quando
+                        contanti la classe, quanto di quel costo e' uscito
+                        dalla busta, quanto e' stato rinviato allo scadenziario,
+                        e quanto resta in busta. L'ultima si muove solo quando
                         i pagamenti sono stati disposti davvero. */}
-                    {[
-                      { etichetta: "Cash incassato al corso", valore: contantiClasse, nota: daIncassareAncoraClasse > 0 ? `€ ${daIncassareAncoraClasse} ancora da incassare` : null },
-                      { etichetta: "Totale cash da pagare", valore: totaleCashDaPagareClasse, nota: "dalla busta o rinviato" },
-                      // preso dalla busta = uscito davvero, cioe' disposto e
-                      // registrato; quello solo deciso sta nella nota
-                      { etichetta: "Pagamenti cash presi dalla busta", valore: cashRegistratoBustaClasse, nota: cashDaDisporreClasse > 0 ? `€ ${cashDaDisporreClasse} da disporre` : null },
-                      { etichetta: "Pagamenti cash rinviati", valore: cashRinviatiClasse, nota: cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null },
-                    ].map((c) => (
-                      <div key={c.etichetta} style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "flex-start", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.2, marginBottom: isMobile ? 5 : 8, minHeight: isMobile ? "2.4em" : "3.6em", display: "flex", alignItems: "flex-end" }}>{c.etichetta}</div>
-                        <div style={{ ...fontBody, fontSize: isMobile ? 13 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {c.valore}</div>
-                        {c.nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, marginTop: 4, lineHeight: 1.2 }}>{c.nota}</div>}
-                      </div>
-                    ))}
-                    <div style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "flex-start", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.2, marginBottom: isMobile ? 5 : 8, minHeight: isMobile ? "2.4em" : "3.6em", display: "flex", alignItems: "flex-end" }}>Cash pulito in busta</div>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
-                      {venditeAlCorsoContanti > 0 && cassaContantiClasse > 0 && (
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, marginTop: 4, lineHeight: 1.2 }}>di cui € {venditeAlCorsoContanti} di vendite</div>
-                      )}
-                      {cashDaDisporreClasse > 0 && (
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, marginTop: 4, lineHeight: 1.2 }}>scende a € {Math.max(0, round2(cassaContantiClasse - cashDaDisporreClasse))} dopo Disponi pagamenti</div>
-                      )}
-                      {/* il contante mancante non sparisce: solo, non si
-                          scrive piu' come una busta negativa — e' quello
-                          che qualcuno ha dovuto mettere da fuori */}
-                      {cashMancanteClasse > 0 && (
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: "#C0392B", marginTop: 4, lineHeight: 1.2 }}>€ {cashMancanteClasse} messi da fuori</div>
-                      )}
-                    </div>
+                    <CasellaRiepilogoCash isMobile={isMobile} icona="mano" etichetta="Cash incassato al corso" valore={contantiClasse} nota={daIncassareAncoraClasse > 0 ? `€ ${daIncassareAncoraClasse} ancora da incassare` : null} notaIcona="orologio" />
+                    <CasellaRiepilogoCash isMobile={isMobile} icona="documento" etichetta="Totale cash da pagare" valore={totaleCashDaPagareClasse} nota="dalla busta o rinviato" notaIcona="orologio" />
+                    <CasellaRiepilogoCash isMobile={isMobile} icona="portafoglio" etichetta="Pagamenti cash presi dalla busta" valore={cashRegistratoBustaClasse} nota={cashDaDisporreClasse > 0 ? `€ ${cashDaDisporreClasse} da disporre` : null} notaIcona="portafoglioPiccolo" />
+                    <CasellaRiepilogoCash isMobile={isMobile} icona="ritorno" etichetta="Pagamenti cash rinviati" valore={cashRinviatiClasse} nota={cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null} notaIcona="ritorno" />
+                    <CasellaRiepilogoCash
+                      isMobile={isMobile} evidenziata icona="scintilla" etichetta="Cash pulito in busta" valore={cassaContantiClasse}
+                      nota={cashMancanteClasse > 0
+                        ? `€ ${cashMancanteClasse} messi da fuori`
+                        : cashDaDisporreClasse > 0
+                          ? `Scende a € ${Math.max(0, round2(cassaContantiClasse - cashDaDisporreClasse))} dopo Disponi pagamenti`
+                          : venditeAlCorsoContanti > 0 && cassaContantiClasse > 0 ? `di cui € ${venditeAlCorsoContanti} di vendite` : null}
+                      notaIcona="giu"
+                    />
                   </div>
                   {/* il tasto sotto la riga: nella riga le cinque caselle si
                       prendono tutto lo spazio */}
@@ -29294,6 +29310,8 @@ function VistaMaster({ param, onEsci = null }) {
     return (
       <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, padding: 20, textAlign: "center" }}>
         Link non valido o corso non trovato.
+        {/* da dentro l'app non si deve restare chiusi qui */}
+        {onEsci && <div style={{ marginTop: 16 }}><button onClick={onEsci} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "12px 36px", cursor: "pointer" }}>Esci</button></div>}
       </div>
     );
   }
