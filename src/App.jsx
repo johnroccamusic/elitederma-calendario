@@ -53090,6 +53090,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // sempre: senza, gli ultimi prodotti finirebbero sotto
     return (
       <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 16px 214px" }}>
+        <PannelloCarrelliSospesi
+          lista={listaSospesi} aperto={pannelloSospesiAperto} idCorrente={carrelloSospesoId} isMobile={isMobile}
+          onApri={() => setPannelloSospesiAperto(true)} onChiudi={() => setPannelloSospesiAperto(false)}
+          onScegli={apriCarrelloSospeso} onElimina={eliminaCarrelloSospeso}
+        />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
