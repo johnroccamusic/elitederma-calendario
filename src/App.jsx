@@ -52491,7 +52491,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           mezzo schermo e il totale finiva sotto la piega */}
       <div style={{
         background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 14, borderLeft: `4px solid ${GOLD}`,
-        padding: isMobile ? "7px 14px" : "11px 18px", marginBottom: isMobile ? 12 : 16,
+        padding: isMobile ? "7px 14px" : "11px 18px", marginBottom: isMobile ? 4 : 5,
         display: isMobile ? "flex" : "block", alignItems: "stretch", gap: 14,
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -52549,14 +52549,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           senza fatturare e si fattura senza spedire — e stanno sulla stessa
           riga, una a sinistra e una a destra; i moduli si aprono sotto */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
-        <label htmlFor="pos-spedizione" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "10px 0", cursor: "pointer" }}>
+        <label htmlFor="pos-spedizione" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "3px 0 10px", cursor: "pointer" }}>
           <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <IconaCamionConsegna size={34} color={GOLD} />
           </span>
           <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
           <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese spedizione</span>
         </label>
-        <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "10px 0", cursor: "pointer" }}>
+        <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "3px 0 10px", cursor: "pointer" }}>
           <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <IconaCatDocumento size={34} color={GOLD} />
           </span>
