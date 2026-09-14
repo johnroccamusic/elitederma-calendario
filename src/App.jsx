@@ -10588,6 +10588,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       const alCorso = !!v.corso_data_id;
       const fasceCanale = alCorso ? fasceCorsiPerPagamento(fasceCorsoDash, fasceContantiDash, v.metodo_pagamento === "contanti") : fasceReferralDash;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+        if (r.spedizione) return;
         const prodotto = prodottoPerIdPunti[r.prodotto_id];
         // pagata in contanti -> la riga dei contanti; carta o sito -> l'altra
         const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti, v.metodo_pagamento === "contanti");
@@ -11153,6 +11154,7 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
     const mappa = {};
     venditeCorso.filter(filtro).forEach((v) => {
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+        if (r.spedizione) return;
         const id = idProdottoRiga(r);
         if (id) mappa[id] = (mappa[id] || 0) + (r.quantita || 0);
       });
@@ -40075,6 +40077,8 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         // di come l'allievo ha pagato
         const fasceCanale = alCorso ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, v.metodo_pagamento === "contanti") : fasceScontoValide(regolaReferralMaster?.fasce);
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+          if (r.spedizione) return;
+        if (r.spedizione) return;
           const q = Number(r.quantita) || 0;
           const prodotto = prodottoPerId[r.prodotto_id];
           const pp = puntiProdotto(prodotto, sicurezzaPunti, v.metodo_pagamento === "contanti");
@@ -51210,6 +51214,8 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
 // origine="pos"), così compare da sola nei totali di "Vendite shop" e
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
+// spese di spedizione per una vendita al banco da spedire
+const COSTO_SPEDIZIONE_POS = 6.90;
 function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, titolo = "POS Vendita diretta" }) {
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
@@ -51740,6 +51746,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       : [];
   const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, (couponNum > 0 || couponAFasce) ? scontoCoupon : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
   const totaleNetto = round2(subtotale - scontoApplicato);
+  // La spedizione si paga: 6,90 sul totale quando la vendita va spedita.
+  // Entra nel conto come una riga a se', cosi' il totale e' sempre la
+  // somma delle righe; un omaggio non la fa pagare
+  const speseSpedizione = spedizioneAttiva && !omaggioAttivo ? COSTO_SPEDIZIONE_POS : 0;
+  const totaleConSpedizione = round2(totaleNetto + speseSpedizione);
   // L'IVA si scorpora solo se quella vendita un documento fiscale ce
   // l'ha. Una vendita in contanti senza fattura non genera IVA: non c'e'
   // un'imposta da versare, quindi l'imponibile e' il totale e l'IVA e'
@@ -51751,11 +51762,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // corso, riepiloghi, statistiche) l'IVA non si ricalcola mai, si legge
   // la differenza fra totale e imponibile registrati qui.
   const senzaIva = metodoPagamento === "contanti" && !fattAttiva;
-  const imponibile = senzaIva ? totaleNetto : round2(totaleNetto / 1.22);
-  const iva = round2(totaleNetto - imponibile);
+  const imponibile = senzaIva ? totaleConSpedizione : round2(totaleConSpedizione / 1.22);
+  const iva = round2(totaleConSpedizione - imponibile);
   // omaggio: il magazzino si scarica lo stesso, ma non entra un euro —
   // il totale "da incassare" e le sue componenti diventano sempre zero
-  const totaleDaIncassare = omaggioAttivo ? 0 : totaleNetto;
+  const totaleDaIncassare = omaggioAttivo ? 0 : totaleConSpedizione;
   const imponibileDaRegistrare = omaggioAttivo ? 0 : imponibile;
   const ivaDaRegistrare = omaggioAttivo ? 0 : iva;
 
@@ -51825,6 +51836,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       };
     });
 
+    // la spedizione come riga: nessun prodotto dietro, niente scarico,
+    // niente punti — chi legge la vendita la vede e i totali tornano
+    if (speseSpedizione > 0) prodottiRiga.push({ prodotto_id: null, nome: "Spedizione", quantita: 1, prezzo_listino: speseSpedizione, sconto_riga: 0, sconto_pct: 0, totale_riga: speseSpedizione, spedizione: true });
     // Al banco c'è gente che aspetta: la schermata si svuota subito e le
     // scritture (scarico magazzino, vendita, eventuale spedizione) vanno
     // avanti per conto loro. Tutto quello che serve viene fotografato ora,
@@ -52287,11 +52301,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", minWidth: 120 }}>
               <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.25 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
               <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, marginTop: 4 }}>{fmtEuroErp2(totaleDaIncassare)}</span>
+              {speseSpedizione > 0 && <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>di cui spedizione {fmtEuroErp2(speseSpedizione)}</span>}
             </div>
           </>
         ) : (
           <>
             <div style={{ height: 1, background: CREAM_BORDER, margin: "10px 0" }} />
+            {speseSpedizione > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Spedizione</span>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(speseSpedizione)}</span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
               <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
