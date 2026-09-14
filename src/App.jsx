@@ -17331,7 +17331,7 @@ const ALIQUOTA_IVA_RIEPILOGO_CLASSE = 22;
 // griglia con la stessa impronta di quella della tabella sopra (2fr per la
 // voce, 1fr per ogni importo, una colonna fissa in fondo), cosi' le due
 // tabelle restano incolonnate fra loro.
-const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 22px 46px 18px";
+const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 48px 46px 18px";
 // Sei colonne: voce, i tre importi, il cestino, la modalita'.
 //
 // Le tre degli importi sono a larghezza fissa e stretta - una cifra di
@@ -17348,7 +17348,7 @@ const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minma
 // L'ultima colonna, stretta, e' il "+" che apre l'appunto sotto la riga.
 // Sta in tutte e due le tabelle anche se solo una lo usa, come gia' il
 // cestino: e' quello che le tiene incolonnate fra loro.
-const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 54px 54px 54px 28px 92px 20px";
+const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 54px 54px 54px 66px 92px 20px";
 
 function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie }) {
   const isMobile = useIsMobile();
@@ -23959,22 +23959,20 @@ function PannelloRiepilogoAmministrativo({
   // di averlo pagato, o a lasciare la busta in rosso.
   async function rinviaCashAgliImpegni(r) {
     const chiave = chiaveCashRiga(r);
-    if (!window.confirm(`Togliere ${fmtEuroErp2(r.cash)} di "${r.nome}" dal contante di questo corso?\n\nVa nel Quadro impegni, dove si potrà aspettare la fattura oppure pagarlo dalla cassa contanti.`)) return;
     const { error } = await supabase.from("impegno").insert({
       descrizione: `${r.nome} — contanti non coperti`,
       origine_tipo: "classe_cash", origine_id: corsoData.id, chiave_origine: chiave,
       importo_previsto: round2(r.cash), data_prevista: corsoData.data_fine || dataOggiStr(), stato: "aperto",
     });
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    setMsg("Spostato nel Quadro impegni: non pesa più sulla busta di questo corso.");
+    setMsg(`${r.nome}: ${fmtEuroErp2(r.cash)} in contanti nello scadenziario passivo, non pesa più sulla busta di questo corso.`);
     ricarica(["impegno"]);
   }
   async function riportaCashSulCorso(r) {
     if (!r.impegnoCash) return;
-    if (!window.confirm(`Rimettere ${fmtEuroErp2(r.cash)} di "${r.nome}" a carico del contante di questo corso?\n\nL'impegno viene tolto dal Quadro impegni.`)) return;
     const { error } = await supabase.from("impegno").delete().eq("id", r.impegnoCash.id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    setMsg("Rimesso a carico della busta.");
+    setMsg(`${r.nome}: ${fmtEuroErp2(r.cash)} in contanti di nuovo a carico della busta di questo corso.`);
     ricarica(["impegno"]);
   }
   const totaleCashDaRegistrare = round2(cashDaRegistrare.reduce((s, r) => s + r.cash, 0));
@@ -24330,13 +24328,16 @@ function PannelloRiepilogoAmministrativo({
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Totale</div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Bonifico</div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Cash</div>
-                      {/* il cestino non ha titolo: un'icona che cancella non
-                          ha bisogno di essere annunciata. La modalita' si
+                      {/* Dove finisce la parte in contanti della riga: nella
+                          busta di questo corso (esce subito e va in prima
+                          nota) o nello scadenziario passivo, il Quadro
+                          impegni, dove si decide poi se pagarla dalla cassa
+                          contanti o con un bonifico. La modalita' si
                           chiamava "Giorni", ma i giorni li ha solo chi ha un
                           assistente e se li porta scritti dietro ("3gg"):
                           quella colonna dice come si paga la riga, non quanti
                           giorni dura. */}
-                      <div />
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }} title="Solo per la parte in contanti">Cash a</div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }}>Modalità</div>
                     </div>
                     {righeSpeseTutte.map((r) => {
@@ -24382,28 +24383,31 @@ function PannelloRiepilogoAmministrativo({
                               <input style={{ ...campoCompattoQui, textAlign: "right" }} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
                             )}
                           </div>
-                          {/* La colonna del cestino: su queste righe non si
-                              cancella niente — sono voci fisse — ma e' il
-                              posto dove si dice che la quota in contanti
-                              non la copre questo corso. */}
+                          {/* Il flag "Cash a": Busta o Scadenziario, per la
+                              sola parte in contanti della riga. Busta = esce
+                              dalla busta di questo corso e va in prima nota
+                              con "Pagamenti effettuati"; Scad. = va nello
+                              scadenziario passivo (Quadro impegni), e li' si
+                              decide se pagarla dalla cassa contanti o con
+                              bonifico. Stesse caselle di B/C/½ qui accanto. */}
                           <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                             {(r.cash || 0) > 0 && !r.cashPagato && (
-                              <button
-                                type="button"
-                                onClick={() => (r.cashRinviato ? riportaCashSulCorso(r) : rinviaCashAgliImpegni(r))}
-                                title={r.cashRinviato
-                                  ? "È nel Quadro impegni: premi per rimetterlo a carico del contante di questo corso"
-                                  : "Il contante del corso non basta: manda questa quota nel Quadro impegni"}
-                                style={{
-                                  ...fontBody, fontSize: 9.5, fontWeight: 700, lineHeight: 1,
-                                  border: `1px solid ${r.cashRinviato ? "#A8C4E8" : CREAM_BORDER}`, borderRadius: 7,
-                                  background: r.cashRinviato ? "#EDF3FB" : "#fff",
-                                  color: r.cashRinviato ? "#1F4E8C" : MUTED,
-                                  padding: "4px 6px", cursor: "pointer", whiteSpace: "nowrap",
-                                }}
-                              >
-                                {r.cashRinviato ? "impegni" : "↗"}
-                              </button>
+                              <div style={{ display: "flex", gap: isMobile ? 4 : 6, justifyContent: "center" }}>
+                                {[{ k: "busta", l: "Busta", t: "La quota in contanti esce dalla busta di questo corso e va in prima nota con Pagamenti effettuati" }, { k: "scad", l: "Scad.", t: "La quota in contanti va nello scadenziario passivo (Quadro impegni): si decide poi se pagarla dalla cassa contanti o con bonifico" }].map((o) => {
+                                  const attiva = o.k === "scad" ? r.cashRinviato : !r.cashRinviato;
+                                  return (
+                                    <label key={o.k} title={o.t} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
+                                      <span style={{ ...fontBody, fontSize: isMobile ? 8 : 9.5, fontWeight: 700, color: attiva ? (o.k === "scad" ? "#1F4E8C" : NAVY) : MUTED }}>{o.l}</span>
+                                      <input
+                                        type="checkbox"
+                                        checked={attiva}
+                                        onChange={() => { if (attiva) return; if (o.k === "scad") rinviaCashAgliImpegni(r); else riportaCashSulCorso(r); }}
+                                        style={{ width: 13, height: 13, cursor: "pointer", margin: 0 }}
+                                      />
+                                    </label>
+                                  );
+                                })}
+                              </div>
                             )}
                             {r.cashPagato && (
                               <span title="Contante già registrato come spesa pagata" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>pagato</span>
