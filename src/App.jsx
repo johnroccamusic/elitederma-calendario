@@ -19678,6 +19678,15 @@ function totaleCarrelloSospeso(c) {
 // dito dal bordo destro verso il centro (il gesto lo ascolta il POS).
 function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, onElimina, idCorrente, isMobile }) {
   const n = lista.length;
+  // il pannello si richiude col dito verso destra, lo stesso verso in cui
+  // "rientra" nel bordo; la freccia sul lato sinistro lo dice senza parole
+  const tocco = useRef(null);
+  const toccoInizio = (e) => { const t = e.touches && e.touches[0]; tocco.current = t ? { x: t.clientX, y: t.clientY } : null; };
+  const toccoMossa = (e) => {
+    if (!tocco.current) return;
+    const t = e.touches && e.touches[0];
+    if (t && t.clientX - tocco.current.x > 55 && Math.abs(t.clientY - tocco.current.y) < 80) { tocco.current = null; onChiudi(); }
+  };
   const testoLinguetta = n === 0 ? "Carrelli" : `${n} carrell${n === 1 ? "o" : "i"} sospes${n === 1 ? "o" : "i"}`;
   const ordinati = [...lista].sort((a, b) => String(b.aggiornato || "").localeCompare(String(a.aggiornato || "")));
   return (
@@ -19698,7 +19707,14 @@ function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, on
       </button>
       {aperto && (
         <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: "rgba(20,20,30,0.4)", zIndex: 2301 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "min(380px, 92vw)", background: "#fff", boxShadow: "-6px 0 24px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column" }}>
+          <div onClick={(e) => e.stopPropagation()} onTouchStart={toccoInizio} onTouchMove={toccoMossa} onTouchEnd={() => { tocco.current = null; }} style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "min(380px, 92vw)", background: "#fff", boxShadow: "-6px 0 24px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column" }}>
+            {/* la freccia verso destra sul bordo: "trascina di qua per
+                chiudere". Sta a meta' altezza, dove cade il pollice */}
+            <button onClick={onChiudi} data-niente-ombra title="Trascina verso destra per chiudere" style={{ position: "absolute", left: 0, top: "50%", transform: "translate(-100%, -50%)", background: NAVY, color: "#fff", border: "none", borderRadius: "10px 0 0 10px", padding: "14px 6px", cursor: "pointer", display: "flex", alignItems: "center", boxShadow: "-3px 0 10px rgba(14,27,51,0.28)" }}>
+              <svg width="18" height="26" viewBox="0 0 18 26" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 13h13" /><path d="M9 6l6 7-6 7" />
+              </svg>
+            </button>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
               <div>
                 <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrelli sospesi</div>
