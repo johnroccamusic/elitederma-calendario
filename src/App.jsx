@@ -19654,15 +19654,19 @@ async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, 
     // sigla lunga usciva dal disegno senza che ci fosse modo di contenerla.
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const numSxPx = (canvas.width * (categoria[`${pfx}_numero_limite_sx`] ?? 0)) / 100;
-    const numDxPx = (canvas.width * (categoria[`${pfx}_numero_limite_dx`] ?? 100)) / 100;
-    const spazioNumero = Math.max(1, numDxPx - numSxPx);
-    const spaziaturaNumero = inPixel(categoria[`${pfx}_numero_spaziatura`]);
-    const numAdatt = adattaTestoDentro(codiceTesto, inPixel(categoria[`${pfx}_numero_font_size`]), famigliaNumero, spazioNumero, spaziaturaNumero);
-    conOmbraBianca(ombraNumero, () => disegnaNomeConSpaziatura(
-      ctx, codiceTesto, (numSxPx + numDxPx) / 2, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100,
-      numAdatt.fontSize, famigliaNumero, colore, spaziaturaNumero,
-    ));
+    // il logo Master non porta il numero progressivo: senza codice non si
+    // disegna niente in quel punto
+    if (codiceTesto) {
+      const numSxPx = (canvas.width * (categoria[`${pfx}_numero_limite_sx`] ?? 0)) / 100;
+      const numDxPx = (canvas.width * (categoria[`${pfx}_numero_limite_dx`] ?? 100)) / 100;
+      const spazioNumero = Math.max(1, numDxPx - numSxPx);
+      const spaziaturaNumero = inPixel(categoria[`${pfx}_numero_spaziatura`]);
+      const numAdatt = adattaTestoDentro(codiceTesto, inPixel(categoria[`${pfx}_numero_font_size`]), famigliaNumero, spazioNumero, spaziaturaNumero);
+      conOmbraBianca(ombraNumero, () => disegnaNomeConSpaziatura(
+        ctx, codiceTesto, (numSxPx + numDxPx) / 2, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100,
+        numAdatt.fontSize, famigliaNumero, colore, spaziaturaNumero,
+      ));
+    }
 
     const limiteSxPx = (canvas.width * categoria[`${pfx}_nome_limite_sx`]) / 100;
     const limiteDxPx = (canvas.width * categoria[`${pfx}_nome_limite_dx`]) / 100;
@@ -19755,6 +19759,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   // sotto e basta: si possono rifare quante volte si vuole, il codice
   // resta lo stesso. Il numero si consuma quando si scarica, che e' il
   // momento in cui il logo esce davvero da qui.
+  const senzaNumero = categoria?.chiave === "master";
   async function genera() {
     if (!masterScelta) { setMsg("Scegli la master."); return; }
     if (!categoria) { setMsg("Scegli il tipo di corso/logo."); return; }
@@ -19765,7 +19770,10 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     setGenerando(true);
     setMsg("");
     try {
-      const codice = calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero);
+      // il logo Master e' un titolo, non una licenza numerata: niente
+      // codice progressivo, e il contatore non si tocca
+      const codice = senzaNumero ? "" : calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero);
+      const suffisso = codice ? `-${codice}` : `-${nomeFileSicuro(nomeAllieva.trim()).baseSicura}`;
       const fatti = [];
       const nero = await componiLogoPng({
         percorsoLogo: categoria.logo_nero_path,
@@ -19778,7 +19786,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
         ombraNome: ombraLogoDi(loghiImpostazioni, "nome"),
         ombraNumero: ombraLogoDi(loghiImpostazioni, "numero"),
       });
-      fatti.push({ variante: "nero", blob: nero.blob, url: URL.createObjectURL(nero.blob), nomeFile: `${categoria.chiave}-nero-${codice}.png` });
+      fatti.push({ variante: "nero", blob: nero.blob, url: URL.createObjectURL(nero.blob), nomeFile: `${categoria.chiave}-nero${suffisso}.png` });
 
       if (categoria.richiede_bianco) {
         // il bianco usa la stessa calibrazione del nero: qui gli si passa
@@ -19797,15 +19805,15 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
           ombraNome: ombraLogoDi(loghiImpostazioni, "nome"),
           ombraNumero: ombraLogoDi(loghiImpostazioni, "numero"),
         });
-        fatti.push({ variante: "bianco", blob: bianco.blob, url: URL.createObjectURL(bianco.blob), nomeFile: `${categoria.chiave}-bianco-${codice}.png` });
+        fatti.push({ variante: "bianco", blob: bianco.blob, url: URL.createObjectURL(bianco.blob), nomeFile: `${categoria.chiave}-bianco${suffisso}.png` });
       }
 
       // le anteprime di prima non servono piu': gli indirizzi temporanei si
       // liberano, o restano appesi alla pagina per tutta la sessione
       anteprime.forEach((a) => URL.revokeObjectURL(a.url));
       setAnteprime(fatti);
-      setCodiceGenerato(codice);
-      setMsg("Loghi pronti qui sotto. Finché non li scarichi il codice resta libero: puoi rigenerarli quante volte vuoi.");
+      setCodiceGenerato(codice || "senza numero");
+      setMsg(senzaNumero ? "Loghi pronti qui sotto: il logo Master non porta numero." : "Loghi pronti qui sotto. Finché non li scarichi il codice resta libero: puoi rigenerarli quante volte vuoi.");
     } catch (e) {
       setMsg("Errore nella generazione: " + e.message);
     }
@@ -19820,6 +19828,13 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     if (anteprime.length === 0 || !codiceGenerato) return;
     setScaricando(true);
     anteprime.forEach((a) => scaricaBlob(a.blob, a.nomeFile));
+    if (senzaNumero) {
+      setScaricando(false);
+      anteprime.forEach((a) => URL.revokeObjectURL(a.url));
+      setAnteprime([]);
+      setMsg("Loghi Master scaricati: nessun numero consumato.");
+      return;
+    }
 
     const { error: erroreStorico } = await supabase.from("loghi_generati").insert({
       numero: prossimoNumero, codice: codiceGenerato,
@@ -19896,9 +19911,9 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
         <div style={{ ...cardStyle, marginTop: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
             <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
-              Anteprima — codice {codiceGenerato}
+              {senzaNumero ? "Anteprima — logo Master, senza numero" : `Anteprima — codice ${codiceGenerato}`}
             </div>
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>numero {prossimoNumero}, ancora libero</div>
+            {!senzaNumero && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>numero {prossimoNumero}, ancora libero</div>}
           </div>
           {anteprime.map((a) => (
             <div key={a.variante} style={{ marginBottom: 12 }}>
@@ -19911,10 +19926,10 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
             </div>
           ))}
           <Button onClick={scarica} disabled={scaricando} style={{ width: "100%" }}>
-            {scaricando ? "Scarico…" : `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`} e usa il numero ${prossimoNumero}`}
+            {scaricando ? "Scarico…" : senzaNumero ? `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`}` : `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`} e usa il numero ${prossimoNumero}`}
           </Button>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
-            Finché non scarichi, il numero {prossimoNumero} resta libero: puoi cambiare nome o categoria e rigenerare quante volte vuoi.
+            {senzaNumero ? "Il logo Master non porta il numero progressivo: si scarica e basta." : `Finché non scarichi, il numero ${prossimoNumero} resta libero: puoi cambiare nome o categoria e rigenerare quante volte vuoi.`}
           </div>
         </div>
       )}
