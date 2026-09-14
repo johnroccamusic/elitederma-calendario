@@ -19833,17 +19833,28 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
     if (!destinataria) { setMsg(senzaNumero ? `Nessuna master si chiama "${nomeAllieva.trim()}": controlla il nome, deve essere quello dell'anagrafica.` : "Scegli la master."); return; }
     setPubblicando(true); setMsg("");
     try {
+      // ogni pubblicazione scrive file nuovi, con la data nel nome: se si
+      // riscrivesse lo stesso percorso la copia in cache potrebbe restare
+      // quella vecchia, e la master scaricherebbe il logo di prima. I file
+      // del logo sostituito si cancellano dopo
+      const marca = Date.now();
       const percorsi = {};
       for (const a of anteprime) {
-        const percorso = `master/${destinataria.id}/${categoria.chiave}-${a.variante}.png`;
+        const percorso = `master/${destinataria.id}/${categoria.chiave}-${a.variante}-${marca}.png`;
         const { error } = await supabase.storage.from("loghi-immagini").upload(percorso, a.blob, { upsert: true, contentType: "image/png" });
         if (error) throw error;
         percorsi[a.variante] = percorso;
       }
-      const esistenti = ((loghiPubblicati || {})[destinataria.id] || []).filter((x) => x.chiave !== categoria.chiave);
+      const tutti = (loghiPubblicati || {})[destinataria.id] || [];
+      const sostituiti = tutti.filter((x) => x.chiave === categoria.chiave);
+      const esistenti = tutti.filter((x) => x.chiave !== categoria.chiave);
+      const vecchiFile = sostituiti.flatMap((x) => [x.nero, x.bianco]).filter((f) => f && !Object.values(percorsi).includes(f));
+      if (vecchiFile.length) await supabase.storage.from("loghi-immagini").remove(vecchiFile);
       const voce = { chiave: categoria.chiave, etichetta: categoria.etichetta, nome: nomeAllieva.trim(), codice: senzaNumero ? null : codiceGenerato, nero: percorsi.nero || null, bianco: percorsi.bianco || null, ts: new Date().toISOString() };
       salvaLoghiPubblicati({ ...(loghiPubblicati || {}), [destinataria.id]: [voce, ...esistenti] });
-      setMsg(`Pubblicato sulla dashboard di ${toTitleCase(destinataria.nome)}: trova i loghi in alto, nero e bianco da scaricare.`);
+      setMsg(sostituiti.length
+        ? `Pubblicato sulla dashboard di ${toTitleCase(destinataria.nome)}: il logo ${categoria.etichetta} nuovo ha preso il posto di quello di prima.`
+        : `Pubblicato sulla dashboard di ${toTitleCase(destinataria.nome)}: trova i loghi in alto, nero e bianco da scaricare.`);
     } catch (e) {
       setMsg("Non riesco a pubblicare: " + (e?.message || e));
     }
