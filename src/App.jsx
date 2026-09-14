@@ -19870,6 +19870,24 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   // non sono legati a una master ne' a un corso e non portano numero.
   const [modo, setModo] = useState("allieva");
   const OPZIONI_CORSO = CORSI_LOGO;
+  const nomeModo = (m) => (m === "master" ? "Master" : m === "master_assistant" ? "Master Assistant" : "allieva");
+  // Cambiare sezione azzera tutto: campi, anteprima e codice. Se c'e' un
+  // logo generato e non ancora scaricato, prima si avvisa: quel logo
+  // andrebbe perso in silenzio, e non si capirebbe piu' cosa si sta
+  // guardando
+  function cambiaModo(nuovo) {
+    if (nuovo === modo) return;
+    if (anteprime.length > 0 && !window.confirm(`Stai per lasciare la generazione del logo "${nomeModo(modo)}" senza aver scaricato il logo. Vuoi continuare?`)) return;
+    anteprime.forEach((a) => URL.revokeObjectURL(a.url));
+    setAnteprime([]);
+    setCodiceGenerato(null);
+    setNomeAllieva("");
+    setCorso("");
+    setVariante("artist");
+    setMasterId("");
+    setMsg("");
+    setModo(nuovo);
+  }
   const senzaNumero = modo !== "allieva";
   const richiedeVariante = !senzaNumero && !!corso;
   const chiaveCategoria = senzaNumero ? modo : (corso ? (richiedeVariante ? `${corso}_${variante}` : corso) : null);
@@ -20015,7 +20033,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 16, flexWrap: "wrap" }}>
           {[{ v: "allieva", l: "Logo allieva" }, { v: "master", l: "Genera logo Master" }, { v: "master_assistant", l: "Genera logo Master Assistant" }].map((o) => (
             <button
-              key={o.v} type="button" onClick={() => { setModo(o.v); setMsg(""); }} data-niente-ombra="1"
+              key={o.v} type="button" onClick={() => cambiaModo(o.v)} data-niente-ombra="1"
               style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "8px 12px", borderRadius: 16, border: "none", cursor: "pointer", flex: "1 1 auto", background: modo === o.v ? NAVY : "transparent", color: modo === o.v ? "#fff" : NAVY }}
             >{o.l}</button>
           ))}
