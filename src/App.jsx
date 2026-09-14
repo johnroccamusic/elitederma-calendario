@@ -19660,6 +19660,84 @@ function prefissoCalibrazioneLogo(categoria) {
 // percorsi dei due PNG nello spazio "loghi-immagini" (cartella master/).
 // Vive fra le impostazioni condivise: nessuna tabella nuova.
 const CHIAVE_LOGHI_MASTER_PUBBLICATI = "loghi_masterPubblicati";
+
+// Carrelli sospesi del POS: un carrello salvato ma non pagato, che si
+// riapre e si completa nel tempo (la cliente che "aggiunge dopo", il kit
+// che si prepara in due giorni). Vivono nelle impostazioni condivise,
+// quindi si vedono da qualunque dispositivo; NON sono vendite (niente
+// contabilita', niente scarico) ma i loro pezzi sono gia' promessi: il POS
+// li toglie dal disponibile finche' il carrello non si paga o si elimina
+const CHIAVE_CARRELLI_SOSPESI = "pos_carrelliSospesi";
+function totaleCarrelloSospeso(c) {
+  return (c?.carrello || []).reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0);
+}
+
+// La linguetta a meta' dello schermo, a destra, e il pannello che tira
+// fuori: la lista dei carrelli sospesi con nome (le note), chi l'ha
+// salvato, quando, e l'importo. Da telefono si apre anche trascinando il
+// dito dal bordo destro verso il centro (il gesto lo ascolta il POS).
+function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, onElimina, idCorrente, isMobile }) {
+  const n = lista.length;
+  const testoLinguetta = n === 0 ? "Carrelli" : `${n} carrell${n === 1 ? "o" : "i"} sospes${n === 1 ? "o" : "i"}`;
+  const ordinati = [...lista].sort((a, b) => String(b.aggiornato || "").localeCompare(String(a.aggiornato || "")));
+  return (
+    <>
+      <button
+        onClick={onApri}
+        title="Carrelli sospesi"
+        data-niente-ombra
+        style={{
+          position: "fixed", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 2300,
+          writingMode: "vertical-rl", padding: isMobile ? "12px 7px" : "14px 9px",
+          background: NAVY, color: "#fff", border: "none", borderRadius: "10px 0 0 10px", cursor: "pointer",
+          boxShadow: "-3px 0 10px rgba(14,27,51,0.28)",
+          ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
+        }}
+      >
+        {testoLinguetta}
+      </button>
+      {aperto && (
+        <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: "rgba(20,20,30,0.4)", zIndex: 2301 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "min(380px, 92vw)", background: "#fff", boxShadow: "-6px 0 24px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <div>
+                <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrelli sospesi</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Salvati, non pagati. I pezzi dentro non sono in vendita.</div>
+              </div>
+              <button onClick={onChiudi} data-niente-ombra style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, fontSize: 22, lineHeight: 1, padding: 4 }} title="Chiudi">×</button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
+              {ordinati.length === 0 && (
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 12, textAlign: "center" }}>
+                  Nessun carrello sospeso. Nel carrello, "Salva carrello" lo mette qui per riprenderlo dopo.
+                </div>
+              )}
+              {ordinati.map((c) => {
+                const pezzi = (c.carrello || []).reduce((t, r) => t + (Number(r.quantita) || 0), 0);
+                const corrente = c.id === idCorrente;
+                return (
+                  <div key={c.id} onClick={() => onScegli(c)} style={{ border: `1.5px solid ${corrente ? GOLD : CREAM_BORDER}`, background: corrente ? "#FDF8EC" : "#fff", borderRadius: 12, padding: "10px 12px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nome || "Carrello senza nome"}</div>
+                      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>
+                        {pezzi} pezz{pezzi === 1 ? "o" : "i"}{c.operatore?.nome ? ` · ${toTitleCase(c.operatore.nome)}` : ""}{c.aggiornato ? ` · ${new Date(c.aggiornato).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}
+                        {corrente ? " · aperto adesso" : ""}
+                      </div>
+                    </div>
+                    <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(totaleCarrelloSospeso(c))}</div>
+                    <button onClick={(e) => { e.stopPropagation(); onElimina(c); }} data-niente-ombra title="Elimina il carrello sospeso" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "inline-flex" }}>
+                      <IconaCestino size={15} color="#C0392B" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 // Il logo "Student work": uno solo, uguale per tutte, senza nome ne'
 // numero. Si carica in Setting loghi e ogni master lo trova nella sua
 // dashboard, in fila dopo il logo nero e quello bianco
@@ -51666,6 +51744,29 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [msg, setMsg] = useState("");
   const [mostraStorico, setMostraStorico] = useState(false);
   const [mostraResiCambio, setMostraResiCambio] = useState(false);
+  // i carrelli sospesi (vedi CHIAVE_CARRELLI_SOSPESI): la lista condivisa,
+  // quale di questi e' aperto adesso nel POS, e se il pannello e' fuori
+  const [carrelliSospesiCondivisi, salvaCarrelliSospesi] = useImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
+  const listaSospesi = Array.isArray(carrelliSospesiCondivisi) ? carrelliSospesiCondivisi : [];
+  const [carrelloSospesoId, setCarrelloSospesoId] = useState(null);
+  const [pannelloSospesiAperto, setPannelloSospesiAperto] = useState(false);
+  // si scrive sempre sull'ultima lista arrivata, non su quella chiusa nella
+  // funzione: un'altra persona puo' aver salvato un carrello nel frattempo
+  const sospesiAttuali = () => (Array.isArray(LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI]) ? LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI] : []);
+  // da telefono il pannello si tira fuori col dito dal bordo destro
+  useEffect(() => {
+    if (!isMobile) return;
+    let partenza = null;
+    const inizio = (e) => { const t = e.touches && e.touches[0]; partenza = t && t.clientX > window.innerWidth - 30 ? { x: t.clientX, y: t.clientY } : null; };
+    const mossa = (e) => {
+      if (!partenza) return;
+      const t = e.touches && e.touches[0];
+      if (t && partenza.x - t.clientX > 45 && Math.abs(t.clientY - partenza.y) < 70) { partenza = null; setPannelloSospesiAperto(true); }
+    };
+    window.addEventListener("touchstart", inizio, { passive: true });
+    window.addEventListener("touchmove", mossa, { passive: true });
+    return () => { window.removeEventListener("touchstart", inizio); window.removeEventListener("touchmove", mossa); };
+  }, [isMobile]);
   const [carrelloEspanso, setCarrelloEspanso] = useState(false); // solo mobile: carrello come foglio a comparsa dal basso
   // solo mobile: le categorie stanno ripiegate sotto la barra di ricerca e
   // scendono a tendina da una linguetta. Trenta caselle occupavano meta'
@@ -51724,8 +51825,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   function disponibiliDi(prodottoId) {
     const p = trovaProdotto(prodottoId);
     if (!p) return 0;
-    if (bundleVirtuale(p)) return disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerId);
-    return (p.quantita || 0);
+    const base = bundleVirtuale(p) ? disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerId) : (p.quantita || 0);
+    return Math.max(0, base - riservatiAltrove(prodottoId));
+  }
+  // i pezzi dentro gli ALTRI carrelli sospesi sono promessi: non si
+  // rivendono. Quello aperto adesso non conta, sono i pezzi che si stanno
+  // guardando
+  function riservatiAltrove(prodottoId) {
+    return listaSospesi.reduce((tot, c) => {
+      if (c.id === carrelloSospesoId) return tot;
+      return tot + (c.carrello || []).filter((r) => r.prodottoId === prodottoId).reduce((s2, r) => s2 + (Number(r.quantita) || 0), 0);
+    }, 0);
   }
 
   function aggiungiAlCarrello(p) {
@@ -51755,6 +51865,76 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setCarrello((prev) => prev.filter((r) => r.prodottoId !== prodottoId));
   }
   function svuotaCarrello() { setCarrello([]); }
+  // la fotografia del carrello da mettere in sospeso: righe, note, metodo,
+  // corso, sconti e i dati di spedizione e fattura gia' scritti
+  function fotografaCarrello() {
+    return {
+      carrello, note, metodoPagamento, corsoPosId, scontoTipo, scontoValore, couponCodiceTesto, referralPersonaleAttivo, scontoCorsoAttivo, omaggioAttivo,
+      spedizioneAttiva, sped: { spedIscrittoId, spedNome, spedCognome, spedIndirizzo, spedCivico, spedCitta, spedCap, spedProvincia, spedCitofono, spedInterno, spedCellulare },
+      fattAttiva, fattComeSpedizione, fatt: { fattClienteId, fattDitta, fattNome, fattCognome, fattPiva, fattCf, fattCodDest, fattPec, fattIndirizzo, fattCivico, fattCap, fattCitta, fattProv },
+    };
+  }
+  function ripristinaCarrello(c) {
+    setCarrello(Array.isArray(c.carrello) ? c.carrello : []);
+    setNote(c.note || "");
+    setMetodoPagamento(c.metodoPagamento || "pos");
+    setCorsoPosId(c.corsoPosId || "");
+    setScontoTipo(c.scontoTipo || "percentuale"); setScontoValore(c.scontoValore || "");
+    setScontoCorsoAttivo(c.scontoCorsoAttivo !== false);
+    setOmaggioAttivo(!!c.omaggioAttivo);
+    setSpedizioneAttiva(!!c.spedizioneAttiva);
+    const sp = c.sped || {};
+    setSpedIscrittoId(sp.spedIscrittoId || ""); setSpedNome(sp.spedNome || ""); setSpedCognome(sp.spedCognome || ""); setSpedIndirizzo(sp.spedIndirizzo || "");
+    setSpedCivico(sp.spedCivico || ""); setSpedCitta(sp.spedCitta || ""); setSpedCap(sp.spedCap || ""); setSpedProvincia(sp.spedProvincia || "");
+    setSpedCitofono(sp.spedCitofono || ""); setSpedInterno(sp.spedInterno || ""); setSpedCellulare(sp.spedCellulare || "");
+    setFattAttiva(!!c.fattAttiva); setFattComeSpedizione(c.fattComeSpedizione !== false);
+    const f = c.fatt || {};
+    setFattClienteId(f.fattClienteId || ""); setFattDitta(f.fattDitta || ""); setFattNome(f.fattNome || ""); setFattCognome(f.fattCognome || "");
+    setFattPiva(f.fattPiva || ""); setFattCf(f.fattCf || ""); setFattCodDest(f.fattCodDest || ""); setFattPec(f.fattPec || "");
+    setFattIndirizzo(f.fattIndirizzo || ""); setFattCivico(f.fattCivico || ""); setFattCap(f.fattCap || ""); setFattCitta(f.fattCitta || ""); setFattProv(f.fattProv || "");
+    // il coupon si rimette passando dalle stesse strade di quando si
+    // scrive a mano, cosi' lo sconto attivo e' coerente col codice
+    if (!c.corsoPosId && c.referralPersonaleAttivo && couponReferralPersonale) commutaReferralPersonale(true);
+    else if (c.couponCodiceTesto) applicaCodiceCoupon(c.couponCodiceTesto);
+    else { setCouponCodiceTesto(""); setCouponAttivo(null); setCouponValore(""); setReferralPersonaleAttivo(false); }
+  }
+  function salvaCarrelloSospeso() {
+    if (carrello.length === 0) { setMsg("Il carrello è vuoto: niente da salvare."); return; }
+    // il nome e' la prima riga delle note; senza note lo si chiede, e
+    // finisce nelle note cosi' la volta dopo si riconosce
+    let nome = note.trim().split("\n")[0].trim();
+    if (!nome) {
+      const risposta = window.prompt("Dai un nome a questo carrello (per esempio il nome della cliente):", "");
+      if (risposta === null) return;
+      nome = risposta.trim() || `Carrello delle ${new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
+    }
+    const adesso = new Date().toISOString();
+    const lista = sospesiAttuali();
+    const esistente = lista.find((c) => c.id === carrelloSospesoId);
+    const voce = {
+      ...(esistente || { id: `cs_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, creato: adesso, operatore }),
+      ...fotografaCarrello(),
+      nome, note: note.trim() || nome, aggiornato: adesso, totale: totaleDaIncassare,
+    };
+    salvaCarrelliSospesi(esistente ? lista.map((c) => (c.id === voce.id ? voce : c)) : [...lista, voce]);
+    setCarrelloSospesoId(null);
+    nuovaVendita();
+    setCarrelloEspanso(false);
+    setMsg(`Carrello "${nome}" salvato fra i sospesi: lo ritrovi nella linguetta a destra.`);
+  }
+  function apriCarrelloSospeso(c) {
+    if (carrello.length > 0 && carrelloSospesoId !== c.id && !window.confirm("Il carrello che hai adesso verrà sostituito e, se non l'hai salvato, andrà perso. Continuare?")) return;
+    ripristinaCarrello(c);
+    setCarrelloSospesoId(c.id);
+    setPannelloSospesiAperto(false);
+    setMsg("");
+    if (isMobile) setCarrelloEspanso(true);
+  }
+  function eliminaCarrelloSospeso(c) {
+    if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}"? I suoi pezzi tornano in vendita.`)) return;
+    salvaCarrelliSospesi(sospesiAttuali().filter((x) => x.id !== c.id));
+    if (carrelloSospesoId === c.id) setCarrelloSospesoId(null);
+  }
   // Il coupon di un'edizione: uno solo, quello nato per quella classe.
   // Un codice vale se esiste e se oggi e' dentro la sua finestra di
   // validita'. Un codice scaduto non sconta: e' il motivo per cui i coupon
@@ -52131,6 +52311,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       caricaClientiFattura();
     }
 
+    // pagato: non e' piu' sospeso
+    if (carrelloSospesoId) {
+      salvaCarrelliSospesi(sospesiAttuali().filter((c) => c.id !== carrelloSospesoId));
+      setCarrelloSospesoId(null);
+    }
     nuovaVendita();
     setMsg(datiSpedizione
       ? `${etichettaEsito} e spedizione inviata a Raf.${fattAttiva ? " Fattura da emettere." : ""}`
@@ -52742,14 +52927,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
       {!operatore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>Nessun account riconosciuto in questa sessione: esci e rientra con la tua password per poter vendere.</div>}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: (msg.startsWith("Vendita registrata") || msg.startsWith("Omaggio registrato")) ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
+      {carrelloSospesoId && (
+        <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "5px 10px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ flex: 1, minWidth: 0 }}>Stai lavorando su un carrello sospeso: pagalo o risalvalo per ritrovarlo dopo.</span>
+          <button onClick={() => { setCarrelloSospesoId(null); nuovaVendita(); }} data-niente-ombra style={{ background: "transparent", border: "none", cursor: "pointer", color: "#8A6A1B", ...fontBody, fontSize: 11.5, fontWeight: 700, textDecoration: "underline", padding: 0 }}>Lascia</button>
+        </div>
+      )}
       {(() => {
         const bloccato = carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim());
         return (
+          <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginBottom: 10 }}>
           <button
             onClick={confermaVendita}
             disabled={bloccato}
             style={{
-              width: "100%", marginBottom: 10, display: "flex", alignItems: "center", gap: 10,
+              flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10,
               background: NAVY, color: "#fff", border: "none", borderRadius: 14,
               padding: isMobile ? "12px 14px" : "16px 18px", cursor: bloccato ? "default" : "pointer", opacity: bloccato ? 0.45 : 1,
               ...fontBody, fontSize: isMobile ? 13.5 : 15, fontWeight: 700,
@@ -52763,6 +52955,23 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             </span>
             <span style={{ display: "inline-flex", flexShrink: 0 }}><IconaChevronDestra size={18} color="#fff" /></span>
           </button>
+          {/* a destra: il carrello si mette da parte senza pagarlo, per
+              riprenderlo dalla linguetta dei carrelli sospesi */}
+          <button
+            onClick={salvaCarrelloSospeso}
+            disabled={carrello.length === 0}
+            title="Mette il carrello fra i sospesi, da riprendere e pagare dopo"
+            style={{
+              flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+              background: "#fff", color: NAVY, border: `1.5px solid ${NAVY}`, borderRadius: 14,
+              padding: isMobile ? "8px 12px" : "10px 16px", cursor: carrello.length === 0 ? "default" : "pointer", opacity: carrello.length === 0 ? 0.45 : 1,
+              ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, lineHeight: 1.15,
+            }}
+          >
+            <span style={{ display: "inline-flex", color: GOLD }}><IconaCarrelloPos size={16} color={GOLD} /></span>
+            <span>Salva<br />carrello</span>
+          </button>
+          </div>
         );
       })()}
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
@@ -53057,6 +53266,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "32px 28px 60px" }}>
+      <PannelloCarrelliSospesi
+        lista={listaSospesi} aperto={pannelloSospesiAperto} idCorrente={carrelloSospesoId} isMobile={isMobile}
+        onApri={() => setPannelloSospesiAperto(true)} onChiudi={() => setPannelloSospesiAperto(false)}
+        onScegli={apriCarrelloSospeso} onElimina={eliminaCarrelloSospeso}
+      />
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -61921,6 +62135,10 @@ export default function App() {
   // lo store delle impaginazioni condivise deve sapere chi sta usando
   // l'app: solo il programmatore fissa la vista per tutti
   useEffect(() => { impostaRuoloApp(ruoloUtente); }, [ruoloUtente]);
+  // i carrelli sospesi del POS: il numero lampeggia sul riquadro POS della
+  // home, cosi' chi esce dal POS non se li dimentica dentro
+  const [carrelliSospesiApp] = useImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
+  const numeroCarrelliSospesi = Array.isArray(carrelliSospesiApp) ? carrelliSospesiApp.length : 0;
   const [viewPrimaDiAdvisor, setViewPrimaDiAdvisor] = useState("magazzino");
   // la scheda di un prodotto aperta da fuori (dall'Advisor, cliccando il
   // nome): il magazzino la apre appena entra, e il primo "indietro"
@@ -63036,7 +63254,7 @@ export default function App() {
               { chiave: "agenda", title: "Agenda", descrizione: "Visualizza calendario, impegni e promemoria", Icona: IconaTileAgenda, attivo: haAccessoAgenda(), onClick: apriAgenda },
               { chiave: "erp", title: "Amministrazione", descrizione: "Finanziaria e organizzativa", Icona: IconaTileCostiRicavi, attivo: tastoAbilitato("erp"), onClick: apriErp },
               { chiave: "magazzinoshop", title: "Gestione magazzino e shop", descrizione: "Prodotti, scorte, shop online e relative vendite", Icona: IconaTileGestioneMagazzino, attivo: tastoAbilitato("magazzinoshop"), onClick: apriMagazzinoShop },
-              { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos },
+              { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos, badge: numeroCarrelliSospesi },
               { chiave: "logisticaprodotti", title: "Logistica prodotti", descrizione: "Spedizioni, tracciamenti e documenti", Icona: IconaTileLogistica, attivo: tastoAbilitato("logisticaprodotti"), onClick: apriLogisticaProdotti, badge: pacchiDaSpedire },
               { chiave: "compensipremi", title: "Area compensi e premi", descrizione: "Coupon, referral, provvigioni e premi", Icona: IconaTileOmaggio, attivo: tastoAbilitato("compensipremi"), onClick: apriCompensiPremi },
               { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaTileLoghi, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
