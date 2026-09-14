@@ -10715,6 +10715,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
         </div>
         {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 10 }}>Area master</div>}
+        {masterSel && <LoghiMasterPubblicati masterId={masterSel.id} />}
 
         {/* Il referral code personale, subito sotto il nome: e' la prima
             cosa che una master cerca quando entra qui, e finora doveva
@@ -19622,6 +19623,56 @@ function prefissoCalibrazioneLogo(categoria) {
   return categoria?.logo_nero_path ? "nero" : "bianco";
 }
 
+// I loghi pubblicati sulla dashboard di una master: per ogni master un
+// elenco di {chiave, etichetta, nome, codice, nero, bianco, ts}, con i
+// percorsi dei due PNG nello spazio "loghi-immagini" (cartella master/).
+// Vive fra le impostazioni condivise: nessuna tabella nuova.
+const CHIAVE_LOGHI_MASTER_PUBBLICATI = "loghi_masterPubblicati";
+function LoghiMasterPubblicati({ masterId }) {
+  const [pubblicati] = useImpostazioneCondivisa(CHIAVE_LOGHI_MASTER_PUBBLICATI, {});
+  const [scaricando, setScaricando] = useState(null);
+  const [msg, setMsg] = useState("");
+  const miei = (pubblicati && pubblicati[masterId]) || [];
+  if (!masterId || miei.length === 0) return null;
+  async function scarica(logo, variante) {
+    const percorso = logo[variante];
+    if (!percorso) return;
+    setScaricando(`${logo.chiave}-${variante}`); setMsg("");
+    try {
+      const { data, error } = await supabase.storage.from("loghi-immagini").download(percorso);
+      if (error) throw error;
+      scaricaBlob(data, `${logo.chiave}-${variante}-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`);
+    } catch (e) { setMsg("Non riesco a scaricare il logo: " + (e?.message || e)); }
+    setScaricando(null);
+  }
+  const tasto = (logo, variante, etichetta) => (
+    <button
+      type="button" onClick={() => scarica(logo, variante)} disabled={!logo[variante] || scaricando === `${logo.chiave}-${variante}`}
+      style={{ ...fontBody, fontSize: 12, fontWeight: 700, borderRadius: 16, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${NAVY}`, background: variante === "nero" ? NAVY : "#fff", color: variante === "nero" ? "#fff" : NAVY, opacity: !logo[variante] ? 0.4 : 1 }}
+    >
+      {scaricando === `${logo.chiave}-${variante}` ? "Scarico…" : etichetta}
+    </button>
+  );
+  return (
+    <div style={{ ...cardStyle, marginBottom: 14 }}>
+      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>I tuoi loghi</div>
+      {miei.map((logo) => (
+        <div key={logo.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{logo.etichetta}</div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{[logo.nome ? toTitleCase(logo.nome) : null, logo.codice || null, logo.ts ? fmtData(String(logo.ts).slice(0, 10)) : null].filter(Boolean).join(" · ")}</div>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {tasto(logo, "nero", "Scarica nero")}
+            {tasto(logo, "bianco", "Scarica bianco")}
+          </div>
+        </div>
+      ))}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
 // Rifa' e scarica un logo gia' assegnato, tale e quale: stessa categoria,
 // stesso nome, stesso codice. Non consuma nessun numero e non scrive
 // nello storico: e' una ristampa. Il file si perde, il codice no.
@@ -19769,6 +19820,36 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   // storico.
   const [ultimi, setUltimi] = useState(null);
   const [mostraStorico, setMostraStorico] = useState(false);
+  // "Pubblica sulla dashboard della master": i due PNG dell'anteprima
+  // finiscono nello spazio file e la master li trova in cima alla sua
+  // dashboard. La master e' quella scelta per il logo di un'allieva; per
+  // i loghi Master e Master Assistant si riconosce dal nome scritto.
+  const [loghiPubblicati, salvaLoghiPubblicati] = useImpostazioneCondivisa(CHIAVE_LOGHI_MASTER_PUBBLICATI, {});
+  const [pubblicando, setPubblicando] = useState(false);
+  const normalizzaNome = (t) => String(t || "").trim().toUpperCase().replace(/\s+/g, " ");
+  const masterPerNome = (nome) => master.find((m) => normalizzaNome(m.nome) === normalizzaNome(nome)) || null;
+  async function pubblicaSullaDashboard() {
+    if (anteprime.length === 0 || !categoria) return;
+    const destinataria = senzaNumero ? masterPerNome(nomeAllieva) : masterScelta;
+    if (!destinataria) { setMsg(senzaNumero ? `Nessuna master si chiama "${nomeAllieva.trim()}": controlla il nome, deve essere quello dell'anagrafica.` : "Scegli la master."); return; }
+    setPubblicando(true); setMsg("");
+    try {
+      const percorsi = {};
+      for (const a of anteprime) {
+        const percorso = `master/${destinataria.id}/${categoria.chiave}-${a.variante}.png`;
+        const { error } = await supabase.storage.from("loghi-immagini").upload(percorso, a.blob, { upsert: true, contentType: "image/png" });
+        if (error) throw error;
+        percorsi[a.variante] = percorso;
+      }
+      const esistenti = ((loghiPubblicati || {})[destinataria.id] || []).filter((x) => x.chiave !== categoria.chiave);
+      const voce = { chiave: categoria.chiave, etichetta: categoria.etichetta, nome: nomeAllieva.trim(), codice: senzaNumero ? null : codiceGenerato, nero: percorsi.nero || null, bianco: percorsi.bianco || null, ts: new Date().toISOString() };
+      salvaLoghiPubblicati({ ...(loghiPubblicati || {}), [destinataria.id]: [voce, ...esistenti] });
+      setMsg(`Pubblicato sulla dashboard di ${toTitleCase(destinataria.nome)}: trova i loghi in alto, nero e bianco da scaricare.`);
+    } catch (e) {
+      setMsg("Non riesco a pubblicare: " + (e?.message || e));
+    }
+    setPubblicando(false);
+  }
   // "Riscarica": ristampa un logo gia' assegnato, senza toccare il contatore
   const [riscaricandoId, setRiscaricandoId] = useState(null);
   async function riscarica(riga) {
@@ -20010,9 +20091,14 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
               </div>
             </div>
           ))}
-          <Button onClick={scarica} disabled={scaricando} style={{ width: "100%" }}>
-            {scaricando ? "Scarico…" : senzaNumero ? `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`}` : `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`} e usa il numero ${prossimoNumero}`}
-          </Button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Button onClick={scarica} disabled={scaricando || pubblicando} style={{ flex: "1 1 220px" }}>
+              {scaricando ? "Scarico…" : senzaNumero ? `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`}` : `Scarica ${anteprime.length === 1 ? "il logo" : `i ${anteprime.length} loghi`} e usa il numero ${prossimoNumero}`}
+            </Button>
+            <Button variant="ghost" onClick={pubblicaSullaDashboard} disabled={scaricando || pubblicando} style={{ flex: "1 1 220px" }} title={senzaNumero ? "La master si riconosce dal nome scritto sopra" : "La master scelta sopra"}>
+              {pubblicando ? "Pubblico…" : "Pubblica sulla dashboard della master"}
+            </Button>
+          </div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
             {senzaNumero ? `Il logo ${categoria?.etichetta || ""} non porta il numero progressivo: si scarica e basta.` : `Finché non scarichi, il numero ${prossimoNumero} resta libero: puoi cambiare nome o categoria e rigenerare quante volte vuoi.`}
           </div>
