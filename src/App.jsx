@@ -52438,14 +52438,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </div>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={etichettaPos}>Codice sconto extra</div>
-              <input
-                style={{ ...inputStyle, textTransform: "uppercase", opacity: (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
-                value={couponCodiceTesto}
-                disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
-                onChange={(e) => applicaCodiceCoupon(e.target.value)}
-                placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso per usarne un altro" : referralPersonaleInUso ? "Spegni il tuo referral per usare un altro codice" : "Codice dato dall'amministrazione"}
-              />
+              {/* le tre parole una sull'altra a sinistra, la casella a destra */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ ...etichettaPos, marginBottom: 0, lineHeight: 1.15, flexShrink: 0 }}>Codice<br />sconto<br />extra</div>
+                <input
+                  style={{ ...inputStyle, textTransform: "uppercase", opacity: (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
+                  value={couponCodiceTesto}
+                  disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
+                  onChange={(e) => applicaCodiceCoupon(e.target.value)}
+                  placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso per usarne un altro" : referralPersonaleInUso ? "Spegni il tuo referral per usare un altro codice" : "Codice dato dall'amministrazione"}
+                />
+              </div>
               {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
                 couponAttivo ? (
                   <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 4 }}>
