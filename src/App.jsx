@@ -51475,6 +51475,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // registrata ma genera un ordine per la sede (spedizioni_pos)
   const [spedizioneAttiva, setSpedizioneAttiva] = useState(false);
   const campoSped = { ...inputStyle, padding: "5px 8px", fontSize: 12, borderRadius: 7 };
+  // le stesse ombre del resto dell'app: quella delle aree dati sul
+  // riquadro dei conti, quella dei tondi bianchi back/home (che la
+  // prendono dalla regola globale degli "altri pulsanti") sui due dischi
+  // con le icone di spedizione e fattura, che essendo span non la
+  // ricevono da soli
+  const [aspettoTastiPos] = useAspettoTasti();
+  const ombraDischiPos = ombraCssTasto(aspettoTastiPos.pulsanti.ombra);
   const [spedIscrittoId, setSpedIscrittoId] = useState("");
   const [spedNome, setSpedNome] = useState("");
   const [spedCognome, setSpedCognome] = useState("");
@@ -52490,7 +52497,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           fianco a fianco: in colonna il riquadro diventava alto quanto
           mezzo schermo e il totale finiva sotto la piega */}
       <div style={{
-        background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 14, borderLeft: `4px solid ${GOLD}`,
+        background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 14, borderLeft: `4px solid ${GOLD}`, boxShadow: "var(--ombra-aree, none)",
         padding: isMobile ? "7px 14px" : "11px 18px", marginBottom: isMobile ? 4 : 5,
         display: isMobile ? "flex" : "block", alignItems: "stretch", gap: 14,
       }}>
@@ -52550,14 +52557,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           riga, una a sinistra e una a destra; i moduli si aprono sotto */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
         <label htmlFor="pos-spedizione" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "3px 0 10px", cursor: "pointer" }}>
-          <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: ombraDischiPos }}>
             <IconaCamionConsegna size={34} color={GOLD} />
           </span>
           <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
           <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese spedizione</span>
         </label>
         <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "3px 0 10px", cursor: "pointer" }}>
-          <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: ombraDischiPos }}>
             <IconaCatDocumento size={34} color={GOLD} />
           </span>
           <input id="pos-richiede-fattura" type="checkbox" checked={fattAttiva} onChange={(e) => setFattAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
