@@ -23673,6 +23673,10 @@ function PannelloRiepilogoAmministrativo({
   corsoData, iscritti, spese, venditeShop, prodottiShop,
   corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel,
   costiCategorie, costiSottocategorie, quoteVenditoriSplit, ricarica, onMessaggio, onIntestazione,
+  // il Quadro impegni: serve a sapere quali quote in contanti sono gia'
+  // state rinviate. Mancava dalla firma e il pannello cadeva alla prima
+  // riga che lo leggeva: schermata bianca dall'11/09
+  impegni = [],
 }) {
   const setMsg = onMessaggio || (() => {});
   const isMobile = useIsMobile();
@@ -26861,7 +26865,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
       {vista === "lista" && costiAperto && (
         <PannelloRiepilogoAmministrativo
-          quoteVenditoriSplit={quoteVenditoriSplit}
+          quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni}
           corsoData={corsoData} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
           corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
@@ -29079,7 +29083,7 @@ function VistaBiglietti({ param, tipo }) {
 // linguaggio delle schede master — targhetta della data del colore del
 // corso, nome e citta', e il tasto per entrare nella classe.
 function PaginaProssimeContabilita({
-  quoteVenditoriSplit,
+  quoteVenditoriSplit, impegni = [],
   corsi, corsiDate, location, iscritti, spese, venditeShop, prodottiShop, corsiDateDocenti,
   master, masterCorsi, assistente, assistenteCorsi, leva, hotel,
   costiCategorie, costiSottocategorie, ricarica,
@@ -29232,7 +29236,7 @@ function PaginaProssimeContabilita({
                   con gli stessi campi modificabili */}
               <div style={{ marginTop: 14 }}>
                 <PannelloRiepilogoAmministrativo
-                  quoteVenditoriSplit={quoteVenditoriSplit}
+                  quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni}
                   corsoData={cd} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
                   corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
                   assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
@@ -60595,7 +60599,7 @@ export default function App() {
     // tasto Advisor, che infatti il pallino lo mostrava
     // gli stessi dati che servono al riepilogo dentro la scheda del corso:
     // i conti sono gli stessi, quindi gli ingredienti anche
-    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
+    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno"],
     normative: [],
     ritornoalcorso: ["normative_testi"],
     mappanormativepmu: [],
@@ -60605,7 +60609,7 @@ export default function App() {
     // "agende" e "password_menu"/"utenti_app" (queste ultime gia' fra le
     // essenziali) servono all'area "Utenti", che da ora vive qui dentro
     impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali", "agende"],
-    gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
+    gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare", "impegno"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
@@ -62577,7 +62581,7 @@ export default function App() {
           />
         </div>
         <PaginaProssimeContabilita
-          quoteVenditoriSplit={quoteVenditoriSplit}
+          quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegnoTabella}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop} corsiDateDocenti={corsiDateDocenti}
           master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
