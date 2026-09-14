@@ -60964,7 +60964,7 @@ export default function App() {
     cercaiscritto: ["corsi", "location", "corsi_date", "iscritti"],
     // "impegno" serve al riepilogo amministrativo: una quota in contanti
     // puo' essere rinviata agli impegni quando il cash del corso non basta
-    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "impegno", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
+    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "impegno", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "vendite_shop"],
   };
 
   async function caricaIniziale() {
