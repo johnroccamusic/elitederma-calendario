@@ -9718,7 +9718,9 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           dalla classe. Ogni pulsante dice dove porta, e da ogni area si
           torna qui con l'indietro. */}
       <div style={filo} />
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flexWrap: "wrap", padding: spaziatura }}>
+      {/* tutti su una riga sola, anche da telefono: sono tasti di due
+          parole, e le due parole stanno una sopra l'altra */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 12, flexWrap: "nowrap", padding: spaziatura }}>
         {[
           onApriClasse && { testo: "Dettagli corso", onClick: () => onApriClasse(corsoData.id) },
           onApriModelle && { testo: "Dettagli modelle", onClick: () => onApriModelle(corsoData.id) },
@@ -9728,12 +9730,13 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             key={t.testo}
             onClick={(e) => { e.stopPropagation(); t.onClick(); }}
             style={{
-              ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY,
+              ...fontBody, fontSize: isMobile ? 12 : 15, fontWeight: 700, color: NAVY, lineHeight: 1.15,
               background: "#F7F4EC", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12,
-              padding: isMobile ? "10px 14px" : "12px 20px", cursor: "pointer", whiteSpace: "nowrap",
+              padding: isMobile ? "8px 6px" : "10px 16px", cursor: "pointer", textAlign: "center",
+              flex: "1 1 0", minWidth: 0,
             }}
           >
-            {t.testo}
+            {t.testo.split(" ").map((parola, i) => <span key={i} style={{ display: "block" }}>{parola}</span>)}
           </button>
         ))}
         {couponVisibile && (
@@ -9743,12 +9746,14 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           <div
             title="Il codice sconto da dare agli allievi di questa classe"
             style={{
-              ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: "#C0392B",
+              ...fontBody, fontSize: isMobile ? 12 : 15, fontWeight: 700, color: "#C0392B", lineHeight: 1.15,
               background: "#FBF5F3", border: "1px solid #F0D4CE", borderRadius: 12,
-              padding: isMobile ? "10px 14px" : "12px 20px", whiteSpace: "nowrap", marginLeft: "auto",
+              padding: isMobile ? "8px 6px" : "10px 16px", marginLeft: "auto", textAlign: "center",
+              flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center",
             }}
           >
-            Coupon code: {codiceReferral.toUpperCase()}
+            <span style={{ fontSize: isMobile ? 10 : 12, fontWeight: 600 }}>Coupon</span>
+            <span>{codiceReferral.toUpperCase()}</span>
           </div>
         )}
       </div>
