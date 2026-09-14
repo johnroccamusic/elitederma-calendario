@@ -40722,7 +40722,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
     if (cambiandoMetodo || !nuovo || nuovo === v.metodo_pagamento) return;
     setMsgMetodo("");
     const totale = round2(v.totale || 0);
-    const senzaIva = nuovo === "contanti" && !v.richiede_fattura;
+    const senzaIva = pagamentoContaComeContanti(nuovo) && !v.richiede_fattura;
     const imponibile = senzaIva ? totale : round2(totale / 1.22);
     const iva = round2(totale - imponibile);
     setConfermaMetodo({
@@ -51309,9 +51309,10 @@ const COSTO_SPEDIZIONE_POS = 6.90;
 // Come si legge il metodo di una vendita al banco. Tre modi: POS/carta,
 // contanti, buono Amazon. Nei conti il buono sta con la carta: e' un
 // incasso non in contanti, con l'IVA scorporata come per la carta
-// I punti: il buono Amazon vale come i contanti, la riga di conto piu'
-// alta per la master (cedibile sul prezzo al pubblico). L'IVA invece
-// resta scorporata come per la carta: qui si decide solo dei punti
+// Il buono Amazon vale come i contanti: per i punti (la riga di conto
+// piu' alta per la master, cedibile sul prezzo al pubblico), per le
+// fasce di sconto della seconda serie e per l'IVA, che senza fattura non
+// si genera. Resta fuori solo dalla busta: un buono non e' una banconota
 function pagamentoContaComeContanti(metodo) {
   return metodo === "contanti" || metodo === "buono_amazon";
 }
@@ -51900,7 +51901,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // Il POS resta l'unico posto dove si decide: piu' avanti (scheda
   // corso, riepiloghi, statistiche) l'IVA non si ricalcola mai, si legge
   // la differenza fra totale e imponibile registrati qui.
-  const senzaIva = metodoPagamento === "contanti" && !fattAttiva;
+  // contanti e buono Amazon: senza fattura non si genera IVA
+  const senzaIva = pagamentoContaComeContanti(metodoPagamento) && !fattAttiva;
   const imponibile = senzaIva ? totaleConSpedizione : round2(totaleConSpedizione / 1.22);
   const iva = round2(totaleConSpedizione - imponibile);
   // omaggio: il magazzino si scarica lo stesso, ma non entra un euro —
