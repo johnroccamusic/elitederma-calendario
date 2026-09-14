@@ -19713,7 +19713,6 @@ function LoghiMasterPubblicati({ masterId }) {
   const sw = { nero: studentWork?.nero?.percorso || null, bianco: studentWork?.bianco?.percorso || null };
   const haStudentWork = !!(sw.nero || sw.bianco);
   if (!masterId || (miei.length === 0 && !haStudentWork)) return null;
-  const righe = miei.length ? miei : [{ chiave: "__solo_student_work", etichetta: "", nome: "", nero: null, bianco: null }];
   async function scarica(percorso, nomeFile, chiaveStato) {
     if (!percorso) return;
     setScaricando(chiaveStato); setMsg("");
@@ -19724,28 +19723,50 @@ function LoghiMasterPubblicati({ masterId }) {
     } catch (e) { setMsg("Non riesco a scaricare il logo: " + (e?.message || e)); }
     setScaricando(null);
   }
-  const link = (chiaveStato, percorso, nomeFile, etichetta) => (
+  // Il disegno: un titolo sottile, poi due riquadri affiancati, "Logo
+  // Elitederma" con i due file della master e "Student work" con i due
+  // di tutte. Ogni file e' un tasto bianco con l'icona di scarico
+  const IconaScaricoLogo = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12" /><path d="M7 10l5 5 5-5" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  );
+  const tasto = (chiaveStato, percorso, nomeFile, etichetta) => (
     <button
+      key={chiaveStato}
       type="button" onClick={() => scarica(percorso, nomeFile, chiaveStato)} disabled={!percorso || scaricando === chiaveStato}
-      style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, whiteSpace: "nowrap" }}
+      style={{ display: "flex", alignItems: "center", gap: 10, ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", cursor: "pointer", flex: "1 1 150px", minWidth: 0, opacity: scaricando === chiaveStato ? 0.6 : 1, boxShadow: "0 1px 3px rgba(14,27,51,0.08)" }}
     >
-      {scaricando === chiaveStato ? "scarico…" : etichetta}
+      <IconaScaricoLogo />
+      <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
+      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{scaricando === chiaveStato ? "Scarico…" : etichetta}</span>
     </button>
   );
+  const riquadro = (titolo, tasti) => (
+    <div key={titolo} style={{ flex: "1 1 280px", minWidth: 0, background: "rgba(241,236,226,0.7)", borderRadius: 14, padding: "12px 12px 14px" }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>{titolo}</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{tasti}</div>
+    </div>
+  );
+  const riquadriMiei = miei.map((logo) => riquadro(
+    miei.length > 1 ? `Logo ${logo.etichetta}` : "Logo Elitederma",
+    [
+      logo.nero && tasto(`${logo.chiave}-nero`, logo.nero, `${logo.chiave}-nero-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`, "Logo nero"),
+      logo.bianco && tasto(`${logo.chiave}-bianco`, logo.bianco, `${logo.chiave}-bianco-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`, "Logo bianco"),
+    ].filter(Boolean),
+  ));
+  const riquadroStudentWork = haStudentWork ? riquadro("Student work", [
+    sw.nero && tasto("sw-nero", sw.nero, studentWork?.nero?.nome || "student-work-nero.png", "Student work nero"),
+    sw.bianco && tasto("sw-bianco", sw.bianco, studentWork?.bianco?.nome || "student-work-bianco.png", "Student work bianco"),
+  ].filter(Boolean)) : null;
   return (
-    <div style={{ marginBottom: 14 }}>
-      {righe.map((logo, i) => (
-        <div key={logo.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 10, flexWrap: "wrap", padding: "4px 0" }}>
-          <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
-            Scarica i tuoi loghi{miei.length > 1 ? ` (${logo.etichetta})` : ""}
-          </span>
-          {logo.nero && link(`${logo.chiave}-nero`, logo.nero, `${logo.chiave}-nero-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`, "logo nero")}
-          {logo.bianco && link(`${logo.chiave}-bianco`, logo.bianco, `${logo.chiave}-bianco-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`, "logo bianco")}
-          {i === 0 && sw.nero && link("sw-nero", sw.nero, studentWork?.nero?.nome || "student-work-nero.png", "student work nero")}
-          {i === 0 && sw.bianco && link("sw-bianco", sw.bianco, studentWork?.bianco?.nome || "student-work-bianco.png", "student work bianco")}
-        </div>
-      ))}
-      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 4 }}>{msg}</div>}
+    <div style={{ marginBottom: 18, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Scarica i tuoi loghi</div>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "stretch" }}>
+        {riquadriMiei}
+        {riquadroStudentWork}
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginTop: 6 }}>{msg}</div>}
     </div>
   );
 }
