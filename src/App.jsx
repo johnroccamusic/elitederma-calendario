@@ -24775,7 +24775,7 @@ function PannelloRiepilogoAmministrativo({
 
                 <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
                   <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 16 }}>Riepilogo Cash</div>
-                  <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", gap: isMobile ? 6 : 14 }}>
+                  <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: isMobile ? "wrap" : "nowrap", gap: isMobile ? 6 : 10 }}>
                     {/* Le cinque caselle del cash, da sinistra a destra come
                         vanno le cose: quanto e' entrato, quanto costa in
                         contanti la classe, quanto di quel costo esce dalla
@@ -24788,29 +24788,33 @@ function PannelloRiepilogoAmministrativo({
                       { etichetta: "Pagamenti cash presi dalla busta", valore: cashPresoDallaBustaClasse, nota: cashDaDisporreClasse > 0 ? `€ ${cashDaDisporreClasse} ancora da disporre` : null },
                       { etichetta: "Pagamenti cash rinviati", valore: cashRinviatiClasse, nota: cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null },
                     ].map((c) => (
-                      <div key={c.etichetta} style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 40%" : "0 0 auto", minWidth: 0 }}>
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>{c.etichetta}</div>
-                        <div style={{ ...fontBody, fontSize: isMobile ? 13 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {c.valore}</div>
-                        {c.nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, color: MUTED, marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>{c.nota}</div>}
+                      <div key={c.etichetta} style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>{c.etichetta}</div>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 13 : 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {c.valore}</div>
+                        {c.nota && <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, marginTop: 4, lineHeight: 1.2 }}>{c.nota}</div>}
                       </div>
                     ))}
-                    <div style={{ padding: isMobile ? "10px 6px" : "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 40%" : "0 0 auto", minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Cash pulito in busta</div>
-                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 22, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
+                    <div style={{ padding: isMobile ? "10px 6px" : "12px 12px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center", flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, lineHeight: 1.2, marginBottom: isMobile ? 5 : 8 }}>Cash pulito in busta</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 20, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>€ {cassaContantiClasse}</div>
                       {venditeAlCorsoContanti > 0 && cassaContantiClasse > 0 && (
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, color: MUTED, marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>di cui € {venditeAlCorsoContanti} di vendite</div>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, marginTop: 4, lineHeight: 1.2 }}>di cui € {venditeAlCorsoContanti} di vendite</div>
                       )}
                       {cashDaDisporreClasse > 0 && (
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, color: MUTED, marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>scende a € {Math.max(0, round2(cassaContantiClasse - cashDaDisporreClasse))} dopo Disponi pagamenti</div>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, color: MUTED, marginTop: 4, lineHeight: 1.2 }}>scende a € {Math.max(0, round2(cassaContantiClasse - cashDaDisporreClasse))} dopo Disponi pagamenti</div>
                       )}
                       {/* il contante mancante non sparisce: solo, non si
                           scrive piu' come una busta negativa — e' quello
                           che qualcuno ha dovuto mettere da fuori */}
                       {cashMancanteClasse > 0 && (
-                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 11, fontWeight: 700, color: "#C0392B", marginTop: 4, whiteSpace: isMobile ? "normal" : "nowrap", lineHeight: 1.2 }}>€ {cashMancanteClasse} messi da fuori</div>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: "#C0392B", marginTop: 4, lineHeight: 1.2 }}>€ {cashMancanteClasse} messi da fuori</div>
                       )}
                     </div>
-                    <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={isMobile ? { alignSelf: "center", flex: "1 1 0", minWidth: 0, padding: "9px 4px", fontSize: 11 } : { alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
+                  </div>
+                  {/* il tasto sotto la riga: nella riga le cinque caselle si
+                      prendono tutto lo spazio */}
+                  <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+                    <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={isMobile ? { padding: "9px 18px", fontSize: 12 } : {}}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
                   </div>
 
                   {/* "Pagamenti effettuati" sta prima della busta perche'
