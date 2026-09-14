@@ -10759,7 +10759,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
 
         {masterSel && puntiMasterImpostazioni && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Le tue provvigioni</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Le tue provvigioni</div>
+              {/* a destra del titolo, basso due terzi di un tasto normale */}
+              <button onClick={() => setMostraDettaglioPunti(true)} data-niente-ombra style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "transparent", border: `1.5px solid ${NAVY}`, borderRadius: 10, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: 1.2 }}>Dettaglio per codice</button>
+            </div>
             <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}.</div>
             {(() => {
               // le 4 card stanno su una riga sola a qualunque larghezza: sul
@@ -10814,7 +10818,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             </div>
               );
             })()}
-            <Button variant="ghost" onClick={() => setMostraDettaglioPunti(true)}>Dettaglio per codice</Button>
           </div>
         )}
 
