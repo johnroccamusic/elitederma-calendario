@@ -19724,7 +19724,7 @@ function LoghiMasterPubblicati({ masterId }) {
     setScaricando(null);
   }
   // Il disegno: un titolo sottile, poi due riquadri affiancati, "Logo
-  // Elitederma" con i due file della master e "Student work" con i due
+  // Master" con i due file della master e "Student work" con i due
   // di tutte. Ogni file e' un tasto bianco con l'icona di scarico
   const IconaScaricoLogo = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -19749,7 +19749,9 @@ function LoghiMasterPubblicati({ masterId }) {
     </div>
   );
   const riquadriMiei = miei.map((logo) => riquadro(
-    miei.length > 1 ? `Logo ${logo.etichetta}` : "Logo Elitederma",
+    // il titolo del riquadro e' il tipo di logo: "Logo Master", "Logo
+    // Master Assistant"
+    `Logo ${logo.etichetta || "Master"}`,
     [
       logo.nero && tasto(`${logo.chiave}-nero`, logo.nero, `${logo.chiave}-nero-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`, "Logo nero"),
       logo.bianco && tasto(`${logo.chiave}-bianco`, logo.bianco, `${logo.chiave}-bianco-${nomeFileSicuro(logo.nome || "logo").baseSicura}.png`, "Logo bianco"),
