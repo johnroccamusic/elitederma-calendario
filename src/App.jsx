@@ -39808,6 +39808,9 @@ function PaginaInserimentoCostiRicavi({
           ruoloUtente={ruoloUtente}
         />
 
+        {/* 15px d'aria fra l'ultima etichetta delle schede e i filtri
+            sotto: senza, "Abbonamenti e contratti (3)" toccava le frecce */}
+        <div style={{ height: 15 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
           {!personalizzatoPN && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
