@@ -10777,8 +10777,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // così i numeri delle 4 card partono tutti dalla stessa riga
               // dentro un quadrato lo spazio e' quello che e': etichetta,
               // numero e riga sotto si stringono invece di sfondare
-              const lblPunti = { ...fontBody, fontSize: isMobile ? 8.5 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, marginBottom: isMobile ? 0 : 6, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center" } : {}) };
-              const numPunti = { ...fontDisplay, fontSize: isMobile ? 16 : 24, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", ...(isMobile ? { textAlign: "center" } : {}) };
+              const lblPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, marginBottom: isMobile ? 0 : 6, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center" } : {}) };
+              const numPunti = { ...fontDisplay, fontSize: isMobile ? 18 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", ...(isMobile ? { textAlign: "center" } : {}) };
               const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
               return (
             // quattro colonne uguali, non quattro flex che possono andare a
@@ -10793,15 +10793,15 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                   attesa. Gli importi restano calcolati e nel dettaglio per
                   codice, per chi amministra */}
               <div style={cardPunti}>
-                <div style={lblPunti}>Vendite al corso</div>
+                <div style={lblPunti}>Vendite<br />al corso</div>
                 <div style={numPunti}>{provvigioniMaster.venditeCorso}</div>
               </div>
               <div style={cardPunti}>
-                <div style={lblPunti}>Vendite con referral</div>
+                <div style={lblPunti}>Vendite con<br />referral</div>
                 <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
               </div>
               <div style={cardPunti}>
-                <div style={lblPunti}>Punti accumulati</div>
+                <div style={lblPunti}>Punti<br />accumulati</div>
                 {/* i punti maturati davvero: quelli dei prodotti venduti,
                     ridotti con le quote per canale di Gestione punti (e, in
                     futuro, dello sconto usato dagli allievi) */}
@@ -10812,7 +10812,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                   senza le quote per canale. Se un prodotto vale 100 punti
                   e alla master ne restano 80, qui contano 100 */}
               <div style={cardPunti}>
-                <div style={lblPunti}>Punti bonus</div>
+                <div style={lblPunti}>Punti<br />bonus</div>
                 <div style={{ ...numPunti, color: GOLD }}>{fmtPunti(provvigioniMaster.puntiAccumulati)}</div>
               </div>
             </div>
