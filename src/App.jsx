@@ -51829,6 +51829,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [msg, setMsg] = useState("");
   const [mostraStorico, setMostraStorico] = useState(false);
   const [mostraResiCambio, setMostraResiCambio] = useState(false);
+  // Quante schede per riga (impostazione condivisa): un hook, quindi deve
+  // stare qui prima dei return anticipati di Resi/Cambio e Storico vendite
+  // — messo dopo, aprendo quelle pagine React contava meno hook e la
+  // pagina si bloccava senza fare niente
+  const [colonnePos, setColonnePos] = useImpostazioneCondivisa(CHIAVE_COLONNE_POS, 5);
+  const colonneProdottiPos = Math.min(6, Math.max(2, Number(colonnePos) || 5));
   // i carrelli sospesi (vedi CHIAVE_CARRELLI_SOSPESI): la lista condivisa,
   // quale di questi e' aperto adesso nel POS, e se il pannello e' fuori
   const [carrelliSospesiCondivisi, salvaCarrelliSospesi] = useImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
@@ -53058,8 +53064,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // vende al banco guarda immagini, non nomi: quante gliene stanno
   // davanti cambia quanto e' veloce. Da telefono non si sceglie — li' e'
   // un elenco, non una griglia.
-  const [colonnePos, setColonnePos] = useImpostazioneCondivisa(CHIAVE_COLONNE_POS, 5);
-  const colonneProdottiPos = Math.min(6, Math.max(2, Number(colonnePos) || 5));
+  // (il hook delle colonne sta piu' su, fra gli altri hook: qui sotto ai
+  // return anticipati di Resi/Storico faceva saltare React)
   const elencoProdotti = isMobile ? (
     <div>
       {prodottiPagina.map((p) => {
