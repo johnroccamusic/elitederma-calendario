@@ -35222,6 +35222,12 @@ function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga, data
   const elementi = [];
   righe.forEach((riga, idx) => {
     const data = dataDi(riga);
+    // le voci senza data stanno sotto un'intestazione loro, non
+    // appiccicate all'ultimo mese come se fossero di quel mese
+    if (!data && meseAttuale !== "senza") {
+      elementi.push(<div key="mese-senza" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.8, padding: "12px 0 6px" }}>Senza data — completa la scheda per collocarla nel mese giusto</div>);
+      meseAttuale = "senza"; giornoAttuale = null;
+    }
     const chiaveMese = data ? data.slice(0, 7) : null;
     if (chiaveMese && chiaveMese !== meseAttuale) {
       const [anno, mese] = chiaveMese.split("-").map(Number);
@@ -37900,8 +37906,13 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   const scaduteContoPassivo = mesiScadutiPassivo.reduce((s, [, v]) => s + v.count, 0);
   const scaduteTotalePassivo = mesiScadutiPassivo.reduce((s, [, v]) => s + v.totale, 0);
 
+  // una voce senza data (spesa da pagare senza data documento, pagata
+  // senza data di pagamento) prima veniva contata nel segnalino ma
+  // nascosta dal filtro anno/mese: il conto diceva 3 e l'elenco ne
+  // mostrava 2. Ora passa sempre, in coda, sotto "Senza data"
+  const senzaDataPassivo = elencoPassivoBase.filter((r) => !dataDiPassivoAttuale(r));
   const elencoAnnoPassivo = elencoPassivoBase.filter((r) => { const d = dataDiPassivoAttuale(r); return d && d.slice(0, 4) === String(annoScadPassivo); });
-  const elencoMesePassivo = meseScadPassivo ? elencoAnnoPassivo.filter((r) => Number(dataDiPassivoAttuale(r).slice(5, 7)) === meseScadPassivo) : elencoAnnoPassivo;
+  const elencoMesePassivo = [...(meseScadPassivo ? elencoAnnoPassivo.filter((r) => Number(dataDiPassivoAttuale(r).slice(5, 7)) === meseScadPassivo) : elencoAnnoPassivo), ...senzaDataPassivo];
   const elencoFiltratoPassivo = ricercaScadPassivo.trim()
     ? elencoMesePassivo.filter((r) => {
         const q = ricercaScadPassivo.trim().toLowerCase();
