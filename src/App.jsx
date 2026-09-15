@@ -24544,7 +24544,7 @@ function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evide
 }
 
 function PannelloRiepilogoAmministrativo({
-  corsoData, iscritti, spese, venditeShop, prodottiShop,
+  corsoData, iscritti, spese, venditeShop, prodottiShop, corsi = [],
   corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel,
   costiCategorie, costiSottocategorie, quoteVenditoriSplit, ricarica, onMessaggio, onIntestazione,
   // il Quadro impegni: serve a sapere quali quote in contanti sono gia'
@@ -24866,18 +24866,27 @@ function PannelloRiepilogoAmministrativo({
     const chiave = chiaveCashRiga(r);
     const cashPagato = chiaviSpeseEsistenti.has(chiave);
     if (r.tipo === "venditore") {
-      let rinviatoImporto = 0;
+      // Ogni venditore ha la sua spesa in prima nota ("Quota vendite
+      // Katia, Pmu Base Roma 13–19 ott"), con la sua chiave. La chiave
+      // della riga intera e' quella delle spese scritte prima, quando la
+      // quota usciva tutta insieme: se c'e', vale per tutti
+      let rinviatoImporto = 0, pagatoImporto = 0, daDisporreImporto = 0;
       righeVenditoriCash.forEach((v) => {
+        const suoPagato = cashPagato || chiaviSpeseEsistenti.has(`cash_venditore_${v.rigaId}`);
         let rinviato = v.cashRinviato, rinvioAutomatico = false;
-        if (!cashPagato && !rinviato && v.suoCash > 0 && !prendiDallaBusta(v.suoCash)) { rinviato = true; rinvioAutomatico = true; }
+        if (!suoPagato && !rinviato && v.suoCash > 0 && !prendiDallaBusta(v.suoCash)) { rinviato = true; rinvioAutomatico = true; }
         if (rinviato) rinviatoImporto = round2(rinviatoImporto + v.suoCash);
-        venditoriDecisi.push({ ...v, cashRinviato: rinviato, rinvioAutomatico });
+        else if (suoPagato) pagatoImporto = round2(pagatoImporto + v.suoCash);
+        else daDisporreImporto = round2(daDisporreImporto + v.suoCash);
+        venditoriDecisi.push({ ...v, cashPagato: suoPagato, cashRinviato: rinviato, rinvioAutomatico });
       });
       return {
         ...r,
         cash: round2(Math.max(0, (r.cash || 0) - rinviatoImporto)),
         cashRinviatoImporto: rinviatoImporto,
-        cashPagato, cashRinviato: false, impegnoCash: null, cashGiaRegistrato: cashPagato, flagPerVenditore: true,
+        cashDaDisporreImporto: daDisporreImporto,
+        cashPagato: daDisporreImporto <= 0 && pagatoImporto > 0,
+        cashRinviato: false, impegnoCash: null, cashGiaRegistrato: daDisporreImporto <= 0, flagPerVenditore: true,
       };
     }
     const impegnoCash = impegniPerChiave.get(chiave) || null;
@@ -24891,7 +24900,20 @@ function PannelloRiepilogoAmministrativo({
   // quello che "Disponi pagamenti" scrive: le quote da pagare subito come
   // spese in prima nota, i rinvii automatici come impegni nello
   // scadenziario (quelli scelti a mano ci sono gia')
-  const cashDaRegistrare = righeSpeseTutte.filter((r) => (r.cash || 0) > 0 && !r.cashGiaRegistrato);
+  // Le voci che Disponi scrive in prima nota, ognuna con la provenienza:
+  // "Rimborso taxi, Laminazione Roma 16 set". La quota venditori non va
+  // sommata: un venditore, una spesa, col suo nome
+  const provenienza = provenienzaClasse(corsoData, corsi, location);
+  const nomeProprio = (t) => String(t || "").toLowerCase().replace(/(^|\s)(\S)/g, (m, sp, c) => sp + c.toUpperCase()).trim();
+  const cashDaRegistrare = righeSpeseTutte.flatMap((r) => {
+    if (r.tipo === "venditore") {
+      return venditoriDecisi
+        .filter((v) => v.suoCash > 0 && !v.cashPagato && !v.cashRinviato)
+        .map((v) => ({ nome: `Quota vendite ${nomeProprio(v.nome)}`, descrizione: `Quota vendite ${nomeProprio(v.nome)}, ${provenienza}`, cash: v.suoCash, chiave: `cash_venditore_${v.rigaId}` }));
+    }
+    if ((r.cash || 0) > 0 && !r.cashGiaRegistrato) return [{ nome: r.nome, descrizione: `${r.nome}, ${provenienza}`, cash: r.cash, chiave: chiaveCashRiga(r) }];
+    return [];
+  });
   const rinviiAutomaticiDaScrivere = [
     ...righeSpeseTutte.filter((r) => r.rinvioAutomatico).map((r) => ({ nome: r.nome, cash: r.cash, chiave: chiaveCashRiga(r) })),
     ...venditoriDecisi.filter((v) => v.rinvioAutomatico).map((v) => ({ nome: `${v.nome} (quota venditore)`, cash: v.suoCash, chiave: `cash_venditore_${v.rigaId}` })),
@@ -25009,7 +25031,7 @@ function PannelloRiepilogoAmministrativo({
     setRegistrandoCash(true);
     if (cashDaRegistrare.length > 0) {
       const righe = cashDaRegistrare.map((r) => ({
-        descrizione: r.nome,
+        descrizione: r.descrizione,
         tipo_ambito: "classe", classe_id: corsoData.id, sede_id: corsoData.location_id, corso_id: corsoData.corso_id,
         // pagati in contanti senza fattura: nessuna IVA da scorporare, come
         // per le vendite al banco. Se poi la fattura arriva, la spesa si
@@ -25018,7 +25040,7 @@ function PannelloRiepilogoAmministrativo({
         importo_pagato_cash: round2(r.cash),
         data_documento: corsoData.data_fine || dataPagamentiCash,
         stato: "pagata", data_pagamento: dataPagamentiCash, metodo_pagamento: "Contanti",
-        origine: "automatico", origine_scadenziario_chiave: chiaveCashRiga(r),
+        origine: "automatico", origine_scadenziario_chiave: r.chiave,
       }));
       const { error } = await supabase.from("spese").insert(righe);
       if (error) { setRegistrandoCash(false); setMsg("Errore: " + testoErrore(error)); return; }
@@ -25554,8 +25576,9 @@ function PannelloRiepilogoAmministrativo({
                                         Sparisce quando la quota della classe
                                         e' gia' stata registrata come pagata */}
                                     <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 0 }}>
-                                      {suoCash > 0 && !r.cashPagato && (() => {
+                                      {suoCash > 0 && (() => {
                                         const rv = venditoriDecisi.find((x) => x.chiave === v.chiave);
+                                        if (rv?.cashPagato) return <span title="Quota già in prima nota, pagata dalla busta" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>pagato</span>;
                                         if (rv?.pagatoDalloScadenziario) return <span title="Saldata dallo scadenziario passivo, non dalla busta" style={{ ...fontBody, fontSize: 8.5, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap" }}>pagata da scad.</span>;
                                         const nelloScad = !!rv?.cashRinviato;
                                         // le stesse due caselle delle righe fisse, con
@@ -28068,7 +28091,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
       {vista === "lista" && costiAperto && (
         <PannelloRiepilogoAmministrativo
-          quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni}
+          quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni} corsi={corsi}
           corsoData={corsoData} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
           corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
@@ -30448,7 +30471,7 @@ function PaginaProssimeContabilita({
                   con gli stessi campi modificabili */}
               <div style={{ marginTop: 14 }}>
                 <PannelloRiepilogoAmministrativo
-                  quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni}
+                  quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni} corsi={corsi}
                   corsoData={cd} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
                   corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
                   assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
@@ -30551,7 +30574,7 @@ function contiRiepilogoClasse({
   // busta: contano fra i costi, non qui. La busta sono solo i contanti
   // incassati in aula; vedi spesaUscitaDallaBusta
   const cashRegistrato = round2(speseClasse.filter(spesaUscitaDallaBusta).reduce((s, x) => s + (x.importo_pagato_cash || 0), 0));
-  const cashDaDisporre = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashGiaRegistrato ? 0 : (r.cash || 0)), 0));
+  const cashDaDisporre = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashGiaRegistrato ? 0 : (r.cashDaDisporreImporto ?? r.cash ?? 0)), 0));
   const cashRinviati = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashRinviato ? (r.cash || 0) : 0) + (r.cashRinviatoImporto || 0), 0));
   const totaleCashDaPagare = round2(cashDaDisporre + cashRinviati + cashRegistrato);
   const daIncassare = round2(contanti + pos);
@@ -37065,6 +37088,25 @@ function spesaUscitaDallaBusta(s) {
 // 2, 3... le appendici chiuse (una riga ciascuna in corsi_date_buste),
 // vuoto e' "non ancora in nessuna busta". Sulle vendite si scrive al
 // momento della spunta; sui pagamenti nasce gia' col numero dell'appendice.
+
+// "Pmu Base Roma 13–19 ott": corso, sede e date in breve. E' la
+// provenienza che ogni spesa disposta dalla busta porta con se' in prima
+// nota: senza, "Rimborso taxi" da solo non dice di quale classe era
+function provenienzaClasse(cd, corsi, location) {
+  const parole = (t) => String(t || "").toLowerCase().replace(/(^|\s)(\S)/g, (m, sp, c) => sp + c.toUpperCase()).trim();
+  const corso = parole((corsi || []).find((c) => c.id === cd?.corso_id)?.nome);
+  const sede = parole((location || []).find((l) => l.id === cd?.location_id)?.nome);
+  const inizio = cd?.data_inizio || "";
+  const fine = cd?.data_fine || inizio;
+  let date = "";
+  if (inizio) {
+    const [, mI, gI] = inizio.split("-").map(Number);
+    const [, mF, gF] = fine.split("-").map(Number);
+    const mese = (m) => (MESI_ABBR[m - 1] || "").toLowerCase();
+    date = inizio === fine ? `${gI} ${mese(mI)}` : mI === mF ? `${gI}–${gF} ${mese(mI)}` : `${gI} ${mese(mI)} – ${gF} ${mese(mF)}`;
+  }
+  return [corso, sede, date].filter(Boolean).join(" ");
+}
 
 // una vendita in contanti che non sta nella prima busta, quando la prima
 // busta e' gia' chiusa: e' materia di un'appendice
