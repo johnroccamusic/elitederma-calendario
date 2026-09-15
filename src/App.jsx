@@ -24447,7 +24447,9 @@ function PannelloRiepilogoAmministrativo({
   const [speseClasseOverride, setSpeseClasseOverride] = useState({});
   const [speseClasseNuove, setSpeseClasseNuove] = useState([]);
   const [speseClasseRimosse, setSpeseClasseRimosse] = useState(new Set());
-  const speseClasseReali = (spese || []).filter((s) => s.classe_id === corsoData.id);
+  // solo la prima contabilita': i pagamenti usciti da un'appendice
+  // (busta_numero >= 2) hanno la loro lista piu' in basso
+  const speseClasseReali = speseDellaPrimaBusta(spese, corsoData.id);
   const idsSpeseClasseReali = new Set(speseClasseReali.map((s) => s.id));
   const speseClasse = [...speseClasseReali, ...speseClasseNuove.filter((s) => !idsSpeseClasseReali.has(s.id))]
     .filter((s) => !speseClasseRimosse.has(s.id))
@@ -24510,19 +24512,20 @@ function PannelloRiepilogoAmministrativo({
   // sono incassi veri, fatti in aula, e il contante finisce nella stessa
   // busta del resto. Restano un blocco a sé perché non sono quote del
   // corso: si registrano dal POS, uno per uno, nel momento in cui si incassa
-  const venditeAlCorso = (venditeShop || []).filter((v) => v.corso_data_id === corsoData.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio");
-  const righeVenditeAlCorso = (() => {
-    const mappa = {};
-    venditeAlCorso.forEach((v) => {
-      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
-        const chiave = r.prodotto_id || r.nome || "—";
-        if (!mappa[chiave]) mappa[chiave] = { chiave, nome: r.nome || "—", quantita: 0, totale: 0 };
-        mappa[chiave].quantita += r.quantita || 0;
-        mappa[chiave].totale = round2(mappa[chiave].totale + (r.totale_riga || 0));
-      });
-    });
-    return Object.values(mappa).sort((a, b) => b.totale - a.totale);
-  })();
+  // Una volta chiusa la busta, le vendite in contanti arrivate dopo non
+  // stanno qui: sono di un'appendice (vedi contiAppendici piu' in basso)
+  const venditeAlCorso = venditeDellaPrimaBusta(venditeShop, corsoData);
+  const righeVenditeAlCorso = righeProdottiVendite(venditeAlCorso);
+  // Le buste dopo la prima. Tabella piccola e letta solo da qui e dalla
+  // cassa contanti: ognuno se la carica da solo invece di passare dal
+  // caricatore globale
+  const [busteAppendici, setBusteAppendici] = useState([]);
+  async function caricaBusteAppendici() {
+    const { data } = await supabase.from("corsi_date_buste").select("*").eq("corso_data_id", corsoData.id).order("numero");
+    setBusteAppendici(data || []);
+  }
+  useEffect(() => { caricaBusteAppendici(); }, [corsoData.id]);
+  const appendici = contiAppendici({ cd: corsoData, venditeShop, spese, buste: busteAppendici });
 
   // sovrascrittura ottimistica dello split Bonifico/Cash di una riga
   // (master/location/assistente): "ricarica" rifà l'intero fetchDati,
@@ -24926,13 +24929,121 @@ function PannelloRiepilogoAmministrativo({
   }
 
   async function segnaBustaRientrata(rientrata) {
+    // La prima busta non si riapre se dopo di lei e' gia' nata
+    // un'appendice: il suo importo e' stato contato, e quello che e'
+    // arrivato dopo ha la sua lista
+    if (!rientrata && (appendici.chiuse.length > 0 || (appendici.aperta && !appendici.aperta.vuota))) {
+      setMsg("La prima busta non si riapre: le vendite arrivate dopo stanno nell'appendice qui sotto.");
+      return;
+    }
     const campi = rientrata
       ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse }
       : { busta_rientrata_il: null, busta_importo: null };
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    // le vendite in contanti contate in questa busta si marcano come sue:
+    // una collegata al corso da domani in poi andra' nell'appendice
+    if (rientrata) {
+      await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", corsoData.id).eq("metodo_pagamento", "contanti").is("busta_numero", null);
+    } else {
+      await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", 1);
+    }
     setMsg(rientrata ? "Busta segnata come rientrata: il contante è in cassa." : "Busta rimessa fuori dalla cassa.");
-    ricarica(["corsi_date"]);
+    ricarica(["corsi_date", "vendite_shop"]);
+  }
+
+  // ----- Appendice: la busta aperta dopo la prima -----
+  const [dataPagamentiAppendice, setDataPagamentiAppendice] = useState(dataOggiStr());
+  const [salvandoAppendice, setSalvandoAppendice] = useState(false);
+  async function aggiungiPagamentoAppendice() {
+    const numero = appendici.aperta?.numero;
+    if (!numero) return;
+    const { error } = await supabase.from("spese").insert({
+      tipo_ambito: "classe", classe_id: corsoData.id, sede_id: corsoData.location_id, corso_id: corsoData.corso_id,
+      descrizione: null, imponibile: 0, iva_percentuale: 0, totale: 0, importo_pagato_cash: 0,
+      // pagato in contanti dalla busta dell'appendice; entra in prima nota
+      // (data_pagamento) solo con Disponi pagamenti
+      stato: "pagata", metodo_pagamento: "Contanti", data_pagamento: null,
+      data_documento: dataOggiStr(), origine: "manuale", busta_numero: numero,
+    });
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    ricarica(["spese"]);
+  }
+  async function salvaPagamentoAppendice(id, campi) {
+    const { error } = await supabase.from("spese").update(campi).eq("id", id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    ricarica(["spese"]);
+  }
+  async function eliminaPagamentoAppendice(id) {
+    if (!window.confirm("Eliminare questo pagamento dall'appendice?")) return;
+    const { error } = await supabase.from("spese").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    ricarica(["spese"]);
+  }
+  // come per la prima busta: da qui i pagamenti smettono di essere
+  // appunti e vanno in prima nota con la loro data
+  async function disponiPagamentiAppendice() {
+    const a = appendici.aperta;
+    if (!a) return;
+    const daDisporre = a.spese.filter((x) => !x.data_pagamento);
+    if (daDisporre.length === 0) return;
+    if (daDisporre.some((x) => !(x.totale > 0))) { setMsg("C'è un pagamento senza importo: scrivilo o eliminalo."); return; }
+    if (a.cashDaDisporre > a.pulito + 0.004) { setMsg(`I pagamenti (${fmtEuroErp2(a.cashDaDisporre)}) superano il contante dell'appendice (${fmtEuroErp2(a.pulito)}).`); return; }
+    const elenco = daDisporre.map((x) => `· ${x.descrizione || "Pagamento"}: ${fmtEuroErp2(x.totale)}`).join("\n");
+    if (!window.confirm(`Disporre i pagamenti in contanti della busta ${a.numero} del ${fmtData(dataPagamentiAppendice)}?\n\n${elenco}\n\nVanno in prima nota come uscite di cassa di quel giorno.`)) return;
+    setSalvandoAppendice(true);
+    const { error } = await supabase.from("spese").update({ data_pagamento: dataPagamentiAppendice }).in("id", daDisporre.map((x) => x.id));
+    setSalvandoAppendice(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(`Pagamenti disposti: ${fmtEuroErp2(a.cashDaDisporre)} dalla busta ${a.numero} in prima nota.`);
+    ricarica(["spese"]);
+  }
+  async function ripristinaPagamentiAppendice() {
+    const a = appendici.aperta;
+    if (!a) return;
+    const disposti = a.spese.filter((x) => x.data_pagamento);
+    if (disposti.length === 0) return;
+    if (!window.confirm(`Ripristinare i pagamenti della busta ${a.numero}?\n\n${disposti.length} pagament${disposti.length === 1 ? "o" : "i"} tornano da disporre e escono dalla prima nota.`)) return;
+    setSalvandoAppendice(true);
+    const { error } = await supabase.from("spese").update({ data_pagamento: null }).in("id", disposti.map((x) => x.id));
+    setSalvandoAppendice(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    ricarica(["spese"]);
+  }
+  // La spunta: l'importo si congela e la cassa contanti lo somma. Le
+  // vendite dentro prendono il numero della busta, cosi' una vendita che
+  // arriva domani apre la busta dopo invece di finire in questa
+  async function segnaAppendiceInCassa() {
+    const a = appendici.aperta;
+    if (!a || a.vuota) return;
+    if (a.cashDaDisporre > 0) { setMsg("Prima disponi i pagamenti, poi metti la busta in cassa."); return; }
+    if (!window.confirm(`Mettere in cassa la busta ${a.numero} con ${fmtEuroErp2(a.pulito)}?\n\nL'importo si congela: da qui in poi non si ricalcola.`)) return;
+    setSalvandoAppendice(true);
+    const { error } = await supabase.from("corsi_date_buste").insert({ corso_data_id: corsoData.id, numero: a.numero, rientrata_il: dataOggiStr(), importo: a.pulito });
+    if (error) { setSalvandoAppendice(false); setMsg("Errore: " + testoErrore(error)); return; }
+    if (a.vendite.length > 0) {
+      await supabase.from("vendite_shop").update({ busta_numero: a.numero }).in("id", a.vendite.map((v) => v.id));
+    }
+    setSalvandoAppendice(false);
+    setMsg(`Busta ${a.numero} in cassa: ${fmtEuroErp2(a.pulito)} entrati in cassa contanti.`);
+    await caricaBusteAppendici();
+    ricarica(["vendite_shop"]);
+  }
+  // Solo l'ultima chiusa si puo' rimettere fuori, e solo per correggere
+  // un errore appena fatto: le sue vendite tornano senza busta e l'importo
+  // sparisce dalla cassa
+  async function riapriUltimaAppendice() {
+    const ultima = appendici.chiuse[appendici.chiuse.length - 1];
+    if (!ultima) return;
+    if (!window.confirm(`Rimettere fuori dalla cassa la busta ${ultima.numero} (${fmtEuroErp2(ultima.importo)})?`)) return;
+    setSalvandoAppendice(true);
+    const { error } = await supabase.from("corsi_date_buste").delete().eq("id", ultima.id);
+    if (error) { setSalvandoAppendice(false); setMsg("Errore: " + testoErrore(error)); return; }
+    await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", ultima.numero);
+    setSalvandoAppendice(false);
+    setMsg(`Busta ${ultima.numero} rimessa fuori dalla cassa.`);
+    await caricaBusteAppendici();
+    ricarica(["vendite_shop"]);
   }
 
   async function salvaCostiClasse() {
@@ -25555,6 +25666,116 @@ function PannelloRiepilogoAmministrativo({
                       {corsoData.busta_rientrata_il ? "Busta in cassa" : "Ok, busta in cassa"}
                     </label>
                   </div>
+
+                  {/* Appendice vendite al corso: solo a prima busta chiusa.
+                      Le buste gia' in cassa stanno sopra, ripiegate su una
+                      riga; sotto c'e' quella aperta, con le vendite arrivate
+                      dopo, i pagamenti fatti con quei contanti, Disponi e la
+                      spunta. Compare quando c'e' qualcosa dentro, o basta un
+                      tasto per aggiungere un pagamento */}
+                  {corsoData.busta_rientrata_il && (appendici.chiuse.length > 0 || (appendici.aperta && !appendici.aperta.vuota)) && (
+                    <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 4 }}>Appendice vendite al corso</div>
+                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, textAlign: "center", marginBottom: 12 }}>
+                        Vendite in contanti arrivate dopo la chiusura della busta. La prima busta resta com'è: questi contanti hanno una busta loro.
+                      </div>
+                      {appendici.chiuse.map((b, idx) => (
+                        <details key={b.id} style={{ marginBottom: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "8px 12px" }}>
+                          <summary style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#2E7D32", cursor: "pointer" }}>
+                            Busta {b.numero} in cassa — {fmtData(b.rientrata_il)} — {euroRiepilogo(b.importo || 0)}
+                          </summary>
+                          <div style={{ marginTop: 8 }}>
+                            {b.righeProdotti.map((r) => (
+                              <div key={r.chiave} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 12.5, color: NAVY, padding: "4px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                                <span>{r.nome} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
+                                <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>€ {r.totale}</span>
+                              </div>
+                            ))}
+                            {b.spese.map((x) => (
+                              <div key={x.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 12.5, color: MUTED, padding: "4px 0" }}>
+                                <span>− {x.descrizione || "Pagamento"}{x.data_pagamento ? ` (${fmtData(x.data_pagamento)})` : ""}</span>
+                                <span style={{ whiteSpace: "nowrap" }}>€ {x.totale}</span>
+                              </div>
+                            ))}
+                            {idx === appendici.chiuse.length - 1 && (!appendici.aperta || appendici.aperta.vuota) && (
+                              <button onClick={riapriUltimaAppendice} disabled={salvandoAppendice} style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", textDecoration: "underline" }}>
+                                Rimetti fuori dalla cassa
+                              </button>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                      {appendici.aperta && !appendici.aperta.vuota && (() => {
+                        const a = appendici.aperta;
+                        const daDisporre = a.spese.filter((x) => !x.data_pagamento);
+                        const disposti = a.spese.filter((x) => x.data_pagamento);
+                        return (
+                          <div style={{ border: `1px solid ${GOLD}`, borderRadius: 12, padding: "12px 14px", background: "#fff" }}>
+                            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Busta {a.numero} — aperta</div>
+                            {a.righeProdotti.length === 0 ? (
+                              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 8 }}>Nessuna vendita in contanti in questa busta.</div>
+                            ) : a.righeProdotti.map((r) => (
+                              <div key={r.chiave} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 13, color: NAVY, padding: "5px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                                <span>{r.nome} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
+                                <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>€ {r.totale}</span>
+                              </div>
+                            ))}
+                            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, margin: "12px 0 6px" }}>Pagamenti in contanti da questa busta</div>
+                            {a.spese.map((x) => (
+                              <RigaPagamentoAppendice key={x.id} spesa={x} bloccata={!!x.data_pagamento} onSalva={(campi) => salvaPagamentoAppendice(x.id, campi)} onElimina={() => eliminaPagamentoAppendice(x.id)} />
+                            ))}
+                            <button onClick={aggiungiPagamentoAppendice} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "6px 12px", cursor: "pointer", marginTop: 4 }}>+ Aggiungi pagamento</button>
+                            <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 12, marginTop: 14 }}>
+                              {[
+                                { l: "Contanti incassati", v: a.contanti },
+                                { l: "Pagati dalla busta", v: a.cashDisposto },
+                                { l: "Cash pulito", v: a.pulito, forte: true },
+                              ].map((c) => (
+                                <div key={c.l} style={{ padding: "10px 16px", borderRadius: 12, border: `1px solid ${c.forte ? GOLD : CREAM_BORDER}`, background: c.forte ? BG_CHIARO : "#fff", textAlign: "center" }}>
+                                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{c.l}</div>
+                                  <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {c.v}</div>
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, minWidth: 0 }}>
+                                {daDisporre.length > 0
+                                  ? `${daDisporre.length} pagament${daDisporre.length === 1 ? "o" : "i"} per ${euroRiepilogo(a.cashDaDisporre)} da disporre — finché non li disponi non sono in prima nota.`
+                                  : disposti.length > 0 ? `${disposti.length} pagament${disposti.length === 1 ? "o" : "i"} in prima nota.` : "Nessun pagamento da questa busta."}
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                {daDisporre.length > 0 ? (
+                                  <>
+                                    <input type="date" value={dataPagamentiAppendice} onChange={(e) => setDataPagamentiAppendice(e.target.value)} style={{ ...campoCompattoStyle, width: 140 }} />
+                                    <Button onClick={disponiPagamentiAppendice} disabled={salvandoAppendice}>{salvandoAppendice ? "Dispongo…" : "Disponi pagamenti"}</Button>
+                                  </>
+                                ) : disposti.length > 0 && (
+                                  <Button variant="ghost" onClick={ripristinaPagamentiAppendice} disabled={salvandoAppendice}>Ripristina pagamenti</Button>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Finché non la spunti, questo contante non entra nella cassa contanti.</div>
+                              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
+                                <input type="checkbox" checked={false} onChange={segnaAppendiceInCassa} disabled={salvandoAppendice} style={{ width: 20, height: 20, cursor: "pointer" }} />
+                                Ok, busta {a.numero} in cassa
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {/* a prima busta chiusa e senza appendice: il tasto per
+                      aprirne una con un pagamento. Le vendite ci arrivano
+                      da sole dal POS */}
+                  {corsoData.busta_rientrata_il && appendici.aperta && appendici.aperta.vuota && (
+                    <div style={{ marginTop: 10, textAlign: "right" }}>
+                      <button onClick={aggiungiPagamentoAppendice} title="Apre la busta successiva con un pagamento in contanti" style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                        + Pagamento in contanti dopo la chiusura (busta {appendici.aperta.numero})
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -29979,8 +30200,8 @@ function PaginaProssimeContabilita({
         const conti = contiRiepilogoClasse({
           incassiExtra: Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [],
           listaIscritti,
-          venditeAlCorso: (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio"),
-          speseClasse: (spese || []).filter((x) => x.classe_id === cd.id),
+          venditeAlCorso: venditeDellaPrimaBusta(venditeShop, cd),
+          speseClasse: speseDellaPrimaBusta(spese, cd.id),
           costiExtra: Array.isArray(cd.costi_extra) ? cd.costi_extra : [],
           righeSpeseTutte, totaleSpeseAutomaticheClasse,
         });
@@ -36742,6 +36963,115 @@ function spesaUscitaDallaBusta(s) {
   return true;
 }
 
+// ---------- Appendici: le buste dopo la prima ----------
+//
+// La busta di un corso, una volta segnata in cassa, non si riapre: il suo
+// importo e' congelato ed e' quello che la cassa ha contato. Ma una vendita
+// in contanti puo' arrivare — o essere collegata al corso — anche dopo. Quei
+// soldi non possono entrare nella busta gia' contata, e non possono
+// nemmeno entrare in cassa da soli: finche' la master non li consegna a
+// mano nessuno li ha visti. Vanno in una busta successiva, l'"appendice":
+// ha la sua lista di vendite, i suoi pagamenti in contanti, il suo Disponi
+// pagamenti e la sua spunta "in cassa", e quando si chiude puo' nascerne
+// un'altra.
+//
+// Chi sta dove lo dice busta_numero, non la data: 1 e' la prima busta,
+// 2, 3... le appendici chiuse (una riga ciascuna in corsi_date_buste),
+// vuoto e' "non ancora in nessuna busta". Sulle vendite si scrive al
+// momento della spunta; sui pagamenti nasce gia' col numero dell'appendice.
+
+// una vendita in contanti che non sta nella prima busta, quando la prima
+// busta e' gia' chiusa: e' materia di un'appendice
+function venditaInAppendice(v, cd) {
+  return !!cd?.busta_rientrata_il && v.metodo_pagamento === "contanti" && v.busta_numero !== 1;
+}
+// le vendite che il Riepilogo della classe conta nella prima busta: tutte
+// finche' la busta e' aperta, poi solo quelle contate quel giorno
+function venditeDellaPrimaBusta(venditeShop, cd) {
+  return (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio" && !venditaInAppendice(v, cd));
+}
+// le spese della prima contabilita' della classe: quelle uscite da
+// un'appendice hanno busta_numero >= 2 e non toccano la prima busta
+function speseDellaPrimaBusta(spese, cdId) {
+  return (spese || []).filter((x) => x.classe_id === cdId && !(x.busta_numero > 1));
+}
+// i prodotti venduti raggruppati per riga, come nel blocco "Vendite al corso"
+function righeProdottiVendite(vendite) {
+  const mappa = {};
+  vendite.forEach((v) => {
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+      const chiave = r.prodotto_id || r.nome || "—";
+      if (!mappa[chiave]) mappa[chiave] = { chiave, nome: r.nome || "—", quantita: 0, totale: 0 };
+      mappa[chiave].quantita += r.quantita || 0;
+      mappa[chiave].totale = round2(mappa[chiave].totale + (r.totale_riga || 0));
+    });
+  });
+  return Object.values(mappa).sort((a, b) => b.totale - a.totale);
+}
+// Le appendici di una classe: quelle chiuse (una per riga di
+// corsi_date_buste, con l'importo congelato) e quella aperta, che esiste
+// solo se la prima busta e' gia' in cassa. L'aperta ha il numero dopo
+// l'ultima chiusa; raccoglie le vendite in contanti senza busta e i
+// pagamenti nati con quel numero. Il suo cash pulito segue la regola della
+// prima busta: scende solo con i pagamenti gia' disposti (data_pagamento),
+// non con quelli soltanto scritti.
+function contiAppendici({ cd, venditeShop, spese, buste }) {
+  if (!cd?.busta_rientrata_il) return { chiuse: [], aperta: null };
+  const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio" && v.metodo_pagamento === "contanti");
+  const speseCorso = (spese || []).filter((x) => x.classe_id === cd.id && x.busta_numero > 1);
+  const chiuse = (buste || []).filter((b) => b.corso_data_id === cd.id).sort((a, b) => a.numero - b.numero).map((b) => {
+    const vendite = venditeCorso.filter((v) => v.busta_numero === b.numero);
+    const speseBusta = speseCorso.filter((x) => x.busta_numero === b.numero);
+    return { ...b, vendite, righeProdotti: righeProdottiVendite(vendite), contanti: round2(vendite.reduce((s, v) => s + (v.totale || 0), 0)), spese: speseBusta, cashDisposto: round2(speseBusta.reduce((s, x) => s + (x.totale || 0), 0)) };
+  });
+  const numero = chiuse.length > 0 ? chiuse[chiuse.length - 1].numero + 1 : 2;
+  const vendite = venditeCorso.filter((v) => v.busta_numero == null);
+  const speseAperta = speseCorso.filter((x) => x.busta_numero === numero);
+  const contanti = round2(vendite.reduce((s, v) => s + (v.totale || 0), 0));
+  const cashDisposto = round2(speseAperta.filter((x) => x.data_pagamento).reduce((s, x) => s + (x.totale || 0), 0));
+  const cashDaDisporre = round2(speseAperta.filter((x) => !x.data_pagamento).reduce((s, x) => s + (x.totale || 0), 0));
+  const aperta = {
+    numero, vendite, righeProdotti: righeProdottiVendite(vendite), contanti, spese: speseAperta, cashDisposto, cashDaDisporre,
+    pulito: Math.max(0, round2(contanti - cashDisposto)),
+    // un'appendice senza niente dentro non esiste ancora: non si mostra e
+    // non conta come "in arrivo"
+    vuota: vendite.length === 0 && speseAperta.length === 0,
+  };
+  return { chiuse, aperta };
+}
+
+// Una riga di pagamento dell'appendice: voce, importo, cestino. Piu'
+// semplice della riga dei Costi della classe: qui si paga solo in
+// contanti, dalla busta, e non c'e' ne' bonifico ne' modalita'
+function RigaPagamentoAppendice({ spesa, onSalva, onElimina, bloccata }) {
+  const isMobile = useIsMobile();
+  const campoQui = isMobile ? { ...campoCompattoStyle, padding: "5px 4px", fontSize: 10.5 } : { ...campoCompattoStyle, padding: "5px 5px", fontSize: 11.5 };
+  const [descrizione, setDescrizione] = useState(spesa.descrizione || "");
+  const [totale, setTotale] = useState(spesa.totale != null ? String(spesa.totale) : "");
+  useEffect(() => { setDescrizione(spesa.descrizione || ""); setTotale(spesa.totale != null ? String(spesa.totale) : ""); }, [spesa.descrizione, spesa.totale]);
+  function commitDescrizione() {
+    const v = descrizione.trim();
+    if (v === (spesa.descrizione || "")) return;
+    onSalva({ descrizione: v || null });
+  }
+  function commitTotale() {
+    const v = totale === "" ? 0 : parseNum(totale);
+    if (v === (spesa.totale ?? 0)) return;
+    onSalva({ totale: round2(v), imponibile: round2(v), importo_pagato_cash: round2(v) });
+  }
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 90px 36px", gap: 8, alignItems: "center", marginBottom: 4 }}>
+      <input value={descrizione} onChange={(e) => setDescrizione(e.target.value)} onBlur={commitDescrizione} disabled={bloccata} placeholder="Voce" style={{ ...campoQui, width: "100%" }} />
+      <input value={totale} onChange={(e) => setTotale(e.target.value)} onBlur={commitTotale} disabled={bloccata} inputMode="decimal" placeholder="€" style={{ ...campoQui, width: "100%", textAlign: "right" }} />
+      {bloccata ? (
+        <span style={{ ...fontBody, fontSize: 10.5, color: "#2E7D32", fontWeight: 700, textAlign: "center" }} title={`Pagato il ${fmtData(spesa.data_pagamento)}`}>pagato</span>
+      ) : (
+        <button onClick={onElimina} title="Elimina questo pagamento" style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", fontSize: 15, padding: 0 }}>🗑</button>
+      )}
+    </div>
+  );
+}
+
 function PannelloCassaContanti({
   corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
   leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, ricarica, onApriClasse,
@@ -36749,6 +37079,10 @@ function PannelloCassaContanti({
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
   const [buste, setBuste] = useState([]);
+  // le buste dopo la prima (appendici chiuse), tutte: quelle rientrate
+  // dall'apertura in poi entrano nel saldo, tutte servono a sapere che
+  // numero ha l'appendice aperta di ogni corso
+  const [busteAppendici, setBusteAppendici] = useState([]);
   const [venditeSenzaCorso, setVenditeSenzaCorso] = useState(0);
   const [speseDallaCassa, setSpeseDallaCassa] = useState(0);
   const [ricorrenti, setRicorrenti] = useState([]);
@@ -36770,7 +37104,7 @@ function PannelloCassaContanti({
     setApertura(imp || null);
     setAperturaData(aperta);
     setAperturaSaldo(String(imp?.saldo_iniziale ?? 0));
-    const [mov, bus, ven, spe, ric] = await Promise.all([
+    const [mov, bus, ven, spe, ric, app] = await Promise.all([
       supabase.from("cassa_contanti_movimenti").select("*").gte("data", aperta).order("data", { ascending: false }).order("creato_il", { ascending: false }),
       // solo le buste dichiarate rientrate, con l'importo congelato in quel
       // momento: quello e' il contante davvero arrivato in amministrazione
@@ -36781,17 +37115,22 @@ function PannelloCassaContanti({
       supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
       supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento, classe_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
+      supabase.from("corsi_date_buste").select("*").order("numero"),
     ]);
     if (mov.error) { setMsg(`Non riesco a leggere la cassa: ${mov.error.message}`); setMovimenti([]); return; }
     setMovimenti(mov.data || []);
     setBuste(bus.data || []);
+    setBusteAppendici(app.data || []);
     setVenditeSenzaCorso(round2((ven.data || []).reduce((s, v) => s + (v.totale || 0), 0)));
     setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x)).reduce((s, x) => s + (x.totale || 0), 0)));
     setRicorrenti(ric.data || []);
   }
   useEffect(() => { carica(); }, []);
 
-  const totaleBuste = round2(buste.reduce((s, b) => s + (b.busta_importo || 0), 0));
+  // le appendici chiuse entrano come le prime buste, con la data in cui
+  // sono rientrate
+  const appendiciRientrate = busteAppendici.filter((b) => b.rientrata_il >= (apertura?.aperta_il || "0000-00-00"));
+  const totaleBuste = round2(buste.reduce((s, b) => s + (b.busta_importo || 0), 0) + appendiciRientrate.reduce((s, b) => s + (b.importo || 0), 0));
   const versamenti = round2((movimenti || []).filter((m) => m.tipo === "versamento").reduce((s, m) => s + (m.importo || 0), 0));
   const prelievi = round2((movimenti || []).filter((m) => m.tipo === "prelievo").reduce((s, m) => s + (m.importo || 0), 0));
   const saldoIniziale = round2(Number(apertura?.saldo_iniziale) || 0);
@@ -36844,7 +37183,13 @@ function PannelloCassaContanti({
     let totale = 0;
     const righe = [];
     (corsiDate || []).forEach((cd) => {
-      if (cd.busta_rientrata_il) return;
+      // a prima busta chiusa puo' esserci un'appendice aperta con dentro
+      // contante: anche quella sta arrivando
+      if (cd.busta_rientrata_il) {
+        const { aperta } = contiAppendici({ cd, venditeShop, spese, buste: busteAppendici });
+        if (aperta && !aperta.vuota && aperta.pulito > 0) { totale += aperta.pulito; righe.push({ cd, importo: aperta.pulito, appendice: aperta }); }
+        return;
+      }
       const fine = cd.data_fine || cd.data_inizio || "";
       if (!fine || fine >= oggi) return;
       const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
@@ -36856,8 +37201,8 @@ function PannelloCassaContanti({
       const conti = contiRiepilogoClasse({
         incassiExtra: Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [],
         listaIscritti,
-        venditeAlCorso: (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio"),
-        speseClasse: (spese || []).filter((x) => x.classe_id === cd.id),
+        venditeAlCorso: venditeDellaPrimaBusta(venditeShop, cd),
+        speseClasse: speseDellaPrimaBusta(spese, cd.id),
         costiExtra: Array.isArray(cd.costi_extra) ? cd.costi_extra : [],
         righeSpeseTutte, totaleSpeseAutomaticheClasse,
       });
@@ -36869,7 +37214,7 @@ function PannelloCassaContanti({
     });
     righe.sort((a, b) => String(a.cd.data_inizio).localeCompare(String(b.cd.data_inizio)));
     return { totale: round2(totale), quante: righe.length, righe };
-  }, [corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop]);
+  }, [corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici]);
 
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
@@ -36946,8 +37291,11 @@ function PannelloCassaContanti({
       .update({ busta_rientrata_il: dataOggiStr(), busta_importo: importo })
       .eq("id", cd.id);
     if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
+    // le vendite in contanti contate in questa busta si marcano come sue,
+    // come dalla scheda della classe: quelle di domani vanno in appendice
+    await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", cd.id).eq("metodo_pagamento", "contanti").is("busta_numero", null);
     setMsg("");
-    ricarica?.(["corsi_date"]);
+    ricarica?.(["corsi_date", "vendite_shop"]);
     carica();
   }
 
@@ -37047,11 +37395,11 @@ function PannelloCassaContanti({
       {busteInArrivo.righe.length > 0 && (
         <div style={{ ...cardStyle, marginBottom: 14 }}>
           <TitoloSezioneRiepilogo>Contabilità di ritorno</TitoloSezioneRiepilogo>
-          {busteInArrivo.righe.map(({ cd, importo }) => {
+          {busteInArrivo.righe.map(({ cd, importo, appendice }) => {
             const nomeCorso = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "Corso";
             const nomeSede = (location || []).find((l) => l.id === cd.location_id)?.nome || "";
             return (
-              <div key={cd.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div key={appendice ? `${cd.id}_${appendice.numero}` : cd.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
                 {/* il nome della busta e' il nome di una classe: cliccarlo
                     porta ai suoi conti. Da li' Indietro riporta qui, perche'
                     la pagina di partenza viene registrata come per ogni
@@ -37062,7 +37410,7 @@ function PannelloCassaContanti({
                   style={{ minWidth: 0, flex: "1 1 220px", cursor: onApriClasse ? "pointer" : "default" }}
                 >
                   <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere", textDecoration: onApriClasse ? "underline" : "none", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}>
-                    Busta {nomeSede ? `${nomeSede} — ` : ""}{nomeCorso}
+                    Busta {appendice ? `${appendice.numero} ` : ""}{nomeSede ? `${nomeSede} — ` : ""}{nomeCorso}
                   </div>
                   <div style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, color: MUTED }}>
                     {fmtIntervalloEsteso(cd.data_inizio, cd.data_fine || cd.data_inizio)} — {euroRiepilogo(importo)}
@@ -37074,10 +37422,16 @@ function PannelloCassaContanti({
                     spuntarlo era far confermare a mano una cosa che si sa
                     gia' — restava solo da metterla in cassa, ed e' l'unica
                     cosa che qui si puo' fare. */}
-                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", flexShrink: 0, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
-                  <input type="checkbox" checked={false} onChange={() => segnaBustaInCassa(cd, importo)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                  Ok, busta in cassa
-                </label>
+                {/* un'appendice si chiude dalla scheda della classe, dove si
+                    dispongono prima i suoi pagamenti: da qui si vede e si apre */}
+                {appendice ? (
+                  <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 }}>{appendice.cashDaDisporre > 0 ? "pagamenti da disporre" : "si chiude dalla classe"}</span>
+                ) : (
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", flexShrink: 0, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
+                    <input type="checkbox" checked={false} onChange={() => segnaBustaInCassa(cd, importo)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                    Ok, busta in cassa
+                  </label>
+                )}
               </div>
             );
           })}
@@ -37099,7 +37453,7 @@ function PannelloCassaContanti({
         </div>
         {[
           { voce: `Saldo all'apertura (${apertura?.aperta_il ? fmtData(apertura.aperta_il) : "—"})`, importo: saldoIniziale, segno: 1 },
-          { voce: `Buste rientrate dai corsi (${buste.length})`, importo: totaleBuste, segno: 1 },
+          { voce: `Buste rientrate dai corsi (${buste.length + appendiciRientrate.length})`, importo: totaleBuste, segno: 1 },
           { voce: "Vendite in contanti al banco, fuori dai corsi", importo: venditeSenzaCorso, segno: 1 },
           { voce: `Versamenti (${storico.filter((m) => m.tipo === "versamento").length})`, importo: versamenti, segno: 1 },
           { voce: `Prelievi (${storico.filter((m) => m.tipo === "prelievo").length})`, importo: prelievi, segno: -1 },
@@ -61858,7 +62212,7 @@ export default function App() {
     // la Dashboard master somma provvigione_master e raggruppa per
     // codice_coupon, e senza queste colonne vedeva zero euro e "senza
     // referral" su tutto — le vendite c'erano, i soldi no
-    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi").eq("simulazione", false).order("data_ordine", { ascending: false })).data || []),
+    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi, busta_numero").eq("simulazione", false).order("data_ordine", { ascending: false })).data || []),
     // le prove, a parte: servono solo a Logistica, per mostrarle e per
     // poterle buttare
     vendite_simulate: async () => setVenditeSimulate((await supabase.from("vendite_shop").select("*").eq("simulazione", true).order("data_ordine", { ascending: false })).data || []),
