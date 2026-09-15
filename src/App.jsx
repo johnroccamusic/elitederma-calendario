@@ -24709,7 +24709,7 @@ function PannelloRiepilogoAmministrativo({
   // quello che da qui e' gia' uscito come spesa pagata. Il contante
   // incassato non dipende dalle righe di costo, quindi lo si legge prima
   // di decidere qualunque cosa
-  const cashRegistratoClasse = round2(speseClasse.filter((x) => x.origine !== "scadenziario_cash").reduce((somma, x) => somma + (x.importo_pagato_cash || 0), 0));
+  const cashRegistratoClasse = round2(speseClasse.filter(spesaUscitaDallaBusta).reduce((somma, x) => somma + (x.importo_pagato_cash || 0), 0));
   const contantiIncassatiClasse = contiRiepilogoClasse({ incassiExtra, listaIscritti, venditeAlCorso, speseClasse, costiExtra, righeSpeseTutte: [], totaleSpeseAutomaticheClasse }).contanti;
   // La passeggiata: riga per riga nell'ordine della tabella, i venditori
   // uno per uno al posto della loro riga totale. Ogni quota in contanti
@@ -30183,9 +30183,11 @@ function contiRiepilogoClasse({
   // passivo, a mano o perche' la busta non bastava. Il totale da pagare
   // e' la somma di tutti e tre: quanto costa in contanti questa classe,
   // comunque lo si paghi
-  // le quote saldate dallo scadenziario ("scadenziario_cash") non sono
-  // uscite dalla busta: contano fra i costi, non qui
-  const cashRegistrato = round2(speseClasse.filter((x) => x.origine !== "scadenziario_cash").reduce((s, x) => s + (x.importo_pagato_cash || 0), 0));
+  // le quote saldate dallo scadenziario — le rinviate ("scadenziario_cash")
+  // e le parti bonifico pagate "da cassa contanti" — non sono uscite dalla
+  // busta: contano fra i costi, non qui. La busta sono solo i contanti
+  // incassati in aula; vedi spesaUscitaDallaBusta
+  const cashRegistrato = round2(speseClasse.filter(spesaUscitaDallaBusta).reduce((s, x) => s + (x.importo_pagato_cash || 0), 0));
   const cashDaDisporre = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashGiaRegistrato ? 0 : (r.cash || 0)), 0));
   const cashRinviati = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashRinviato ? (r.cash || 0) : 0) + (r.cashRinviatoImporto || 0), 0));
   const totaleCashDaPagare = round2(cashDaDisporre + cashRinviati + cashRegistrato);
@@ -38124,8 +38126,14 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
       imponibile: round2(item.totale), iva_percentuale: 0, totale: round2(item.totale),
       importo_pagato_cash: round2(item.totale),
       data_documento: item.corsoData?.data_fine || dataPagamento,
-      stato: "pagata", data_pagamento: dataPagamento, metodo_pagamento: "Contanti",
-      origine: "automatico", origine_scadenziario_chiave: item.chiave,
+      // Esce dalla cassa contanti, non dalla busta del corso: la busta sono
+      // solo i contanti incassati in aula, e una parte bonifico pagata in
+      // contanti dall'amministrazione non li ha mai toccati. L'origine
+      // "scadenziario_cash" e' la stessa delle quote rinviate saldate da
+      // qui: il Riepilogo della classe la lascia fuori dal cash pulito, la
+      // cassa contanti la scala.
+      stato: "pagata", data_pagamento: dataPagamento, metodo_pagamento: "Cassa contanti",
+      origine: "scadenziario_cash", origine_scadenziario_chiave: item.chiave,
     });
     if (error) { setMsgImpegni("Errore: " + testoErrore(error)); return; }
     setMsgImpegni(`"${item.nome}" pagato dalla cassa contanti: ora è in prima nota.`);
