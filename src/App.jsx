@@ -2848,6 +2848,10 @@ function TileHome({
   // GrigliaTasti): toccando il testo sotto l'icona invece di aprire il
   // tasto. Assente per chi non è programmatore o per le cartelle.
   onRinominaEtichetta,
+  // sul telefono l'etichetta su due righe con lo spazio riservato: solo
+  // per le schede di Contabilita', dove i nomi sono lunghi e si
+  // accavallavano. Ovunque altro resta la riga sola di sempre
+  etichettaDueRighe = false,
 }) {
   const isMobile = useIsMobile();
   const ricca = !!Icona;
@@ -2890,16 +2894,17 @@ function TileHome({
         style={{
           // pixel fissi, come le icone di Apple: la cella e' solo lo spazio
           // in cui sta, e se e' piu' stretta del tasto vince la cella
-          // il tasto occupa tutta la cella: il quadrato dentro ha la sua
-          // misura, ma l'etichetta sotto ha bisogno della larghezza della
-          // cella per andare a capo senza toccare le vicine
-          ...fontBody, width: "100%", minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
+          // pixel fissi, come le icone di Apple: la cella e' solo lo spazio
+          // in cui sta, e se e' piu' stretta del tasto vince la cella. Con
+          // l'etichetta su due righe il tasto prende tutta la cella, perche'
+          // l'etichetta ha bisogno di quella larghezza per andare a capo
+          ...fontBody, width: etichettaDueRighe ? "100%" : `min(100%, ${aspettoMobile.dimensione}px)`, minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
           display: "flex", flexDirection: "column", alignItems: "center", cursor: attivo ? "pointer" : "default",
           opacity: attenuato ? 0.5 : 1,
         }}
       >
         <div style={{
-          width: `min(100%, ${aspettoMobile.dimensione}px)`, aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
+          width: etichettaDueRighe ? `min(100%, ${aspettoMobile.dimensione}px)` : "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
           background: aspettoMobile.stile === "medaglione" ? sfondoMedaglione(aspettoMobile.cuscino) : (attivo ? aspettoMobile.colore : "#F1EAE0"), borderRadius: aspettoMobile.raggio,
           boxShadow: aspettoMobile.stile === "medaglione" ? ombraMedaglione(aspettoMobile.ombra) : ombraCssTasto(aspettoMobile.ombra),
@@ -2925,14 +2930,14 @@ function TileHome({
         <div
           onClick={onRinominaEtichetta ? (e) => { e.stopPropagation(); onRinominaEtichetta(); } : undefined}
           title={onRinominaEtichetta ? "Tocca per rinominare questo tasto" : undefined}
-          // Due righe, sempre: prima l'etichetta stava su una riga sola
-          // larga quanto serviva e "Abbonamenti e contratti (3)" finiva
-          // sopra "Note di credito". Lo spazio delle due righe e' riservato
-          // anche a chi ne usa una, cosi' le file di tasti restano tutte
-          // alla stessa distanza
           style={{
-            ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center", width: "100%", minHeight: "2.5em",
-            whiteSpace: "normal", overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+            ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center",
+            // in Contabilita' due righe con lo spazio riservato anche a chi
+            // ne usa una, cosi' le file restano alla stessa distanza;
+            // altrove la riga sola larga quanto serve, com'e' sempre stata
+            ...(etichettaDueRighe
+              ? { width: "100%", minHeight: "2.5em", whiteSpace: "normal", overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }
+              : { width: "max-content", maxWidth: "none", whiteSpace: "nowrap" }),
             ...(onRinominaEtichetta ? { cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 } : {}),
           }}
         >
@@ -24909,18 +24914,24 @@ function PannelloRiepilogoAmministrativo({
   // quello che "Disponi pagamenti" scrive: le quote da pagare subito come
   // spese in prima nota, i rinvii automatici come impegni nello
   // scadenziario (quelli scelti a mano ci sono gia')
-  // Le voci che Disponi scrive in prima nota, ognuna con la provenienza:
-  // "Rimborso taxi, Laminazione Roma 16 set". La quota venditori non va
-  // sommata: un venditore, una spesa, col suo nome
+  // Le voci che Disponi scrive in prima nota, ognuna col nome della
+  // classe: "Spesa tal dei tali - corso, citta', data". La quota venditori
+  // e' una riga sola con la provenienza, e sotto, nella nota, il dettaglio
+  // venditore per venditore: "Katia - 260 · Gina - 260"
   const provenienza = provenienzaClasse(corsoData, corsi, location);
   const nomeProprio = (t) => String(t || "").toLowerCase().replace(/(^|\s)(\S)/g, (m, sp, c) => sp + c.toUpperCase()).trim();
   const cashDaRegistrare = righeSpeseTutte.flatMap((r) => {
     if (r.tipo === "venditore") {
-      return venditoriDecisi
-        .filter((v) => v.suoCash > 0 && !v.cashPagato && !v.cashRinviato)
-        .map((v) => ({ nome: `Quota vendite ${nomeProprio(v.nome)}`, descrizione: `Quota vendite ${nomeProprio(v.nome)}, ${provenienza}`, cash: v.suoCash, chiave: `cash_venditore_${v.rigaId}` }));
+      const daDisporre = venditoriDecisi.filter((v) => v.suoCash > 0 && !v.cashPagato && !v.cashRinviato);
+      if (daDisporre.length === 0) return [];
+      return [{
+        nome: r.nome, descrizione: `${r.nome} - ${provenienza}`,
+        cash: round2(daDisporre.reduce((somma, v) => somma + v.suoCash, 0)),
+        chiave: chiaveCashRiga(r),
+        note: daDisporre.map((v) => `${nomeProprio(v.nome)} - ${v.suoCash}`).join(" · "),
+      }];
     }
-    if ((r.cash || 0) > 0 && !r.cashGiaRegistrato) return [{ nome: r.nome, descrizione: `${r.nome}, ${provenienza}`, cash: r.cash, chiave: chiaveCashRiga(r) }];
+    if ((r.cash || 0) > 0 && !r.cashGiaRegistrato) return [{ nome: r.nome, descrizione: `${r.nome} - ${provenienza}`, cash: r.cash, chiave: chiaveCashRiga(r), note: null }];
     return [];
   });
   const rinviiAutomaticiDaScrivere = [
@@ -25040,7 +25051,7 @@ function PannelloRiepilogoAmministrativo({
     setRegistrandoCash(true);
     if (cashDaRegistrare.length > 0) {
       const righe = cashDaRegistrare.map((r) => ({
-        descrizione: r.descrizione,
+        descrizione: r.descrizione, note: r.note || null,
         tipo_ambito: "classe", classe_id: corsoData.id, sede_id: corsoData.location_id, corso_id: corsoData.corso_id,
         // pagati in contanti senza fattura: nessuna IVA da scorporare, come
         // per le vendite al banco. Se poi la fattura arriva, la spesa si
@@ -35934,6 +35945,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
               badge={s.badge}
               maniglia={maniglia}
               evidenziato={attivo}
+              etichettaDueRighe
             />
             {aiuto(s.chiave)?.testo && (
               <span style={{ position: "absolute", top: 6, right: 6 }}>
@@ -37098,9 +37110,10 @@ function spesaUscitaDallaBusta(s) {
 // vuoto e' "non ancora in nessuna busta". Sulle vendite si scrive al
 // momento della spunta; sui pagamenti nasce gia' col numero dell'appendice.
 
-// "Pmu Base Roma 13–19 ott": corso, sede e date in breve. E' la
+// "Pmu Base, Roma, 13–18 set 2026": corso, citta' e date. E' la
 // provenienza che ogni spesa disposta dalla busta porta con se' in prima
-// nota: senza, "Rimborso taxi" da solo non dice di quale classe era
+// nota, "Rimborso taxi - Laminazione, Roma, 16 set 2026": senza, il nome
+// da solo non dice di quale classe era
 function provenienzaClasse(cd, corsi, location) {
   const parole = (t) => String(t || "").toLowerCase().replace(/(^|\s)(\S)/g, (m, sp, c) => sp + c.toUpperCase()).trim();
   const corso = parole((corsi || []).find((c) => c.id === cd?.corso_id)?.nome);
@@ -37109,12 +37122,12 @@ function provenienzaClasse(cd, corsi, location) {
   const fine = cd?.data_fine || inizio;
   let date = "";
   if (inizio) {
-    const [, mI, gI] = inizio.split("-").map(Number);
+    const [aI, mI, gI] = inizio.split("-").map(Number);
     const [, mF, gF] = fine.split("-").map(Number);
     const mese = (m) => (MESI_ABBR[m - 1] || "").toLowerCase();
-    date = inizio === fine ? `${gI} ${mese(mI)}` : mI === mF ? `${gI}–${gF} ${mese(mI)}` : `${gI} ${mese(mI)} – ${gF} ${mese(mF)}`;
+    date = (inizio === fine ? `${gI} ${mese(mI)}` : mI === mF ? `${gI}–${gF} ${mese(mI)}` : `${gI} ${mese(mI)} – ${gF} ${mese(mF)}`) + ` ${aI}`;
   }
-  return [corso, sede, date].filter(Boolean).join(" ");
+  return [corso, sede, date].filter(Boolean).join(", ");
 }
 
 // una vendita in contanti che non sta nella prima busta, quando la prima
@@ -39362,7 +39375,9 @@ function PaginaInserimentoCostiRicavi({
     return {
       id: s.id, virtuale: false, dataDocumento: s.data_pagamento || s.data_documento,
       descrizione: s.descrizione || sottocategoria?.nome || "Spesa",
-      sottotitolo: (categoria?.nome || "—") + (fornitore ? ` · ${fornitore.nome}` : ""),
+      // la nota sta sotto il titolo: per la quota venditori e' il dettaglio
+      // "Katia - 260 · Gina - 260"
+      sottotitolo: [categoria?.nome, fornitore?.nome, s.note].filter(Boolean).join(" · ") || "—",
       chips: [sottocategoria?.nome, fornitore?.nome].filter(Boolean),
       importo: s.totale, spesaReale: s,
     };
