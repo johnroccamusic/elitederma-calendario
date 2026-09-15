@@ -36289,32 +36289,36 @@ function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, ca
   ) : (
     <>
       <RiquadroDataCard etichetta="Scadenza" data={scadenza} />
-      {!aperto && onPagaDaCassa && (
-        <button onClick={() => setCassaAperta((v) => !v)} disabled={pagandoCassa} style={{ ...tastoOro, flex: "1 1 auto" }}>
-          <IconaQiPortafoglio size={20} />{pagandoCassa ? "Registro…" : "Pagato da cassa"}
-        </button>
-      )}
-      {!aperto && onPagaBonificoAttesa && (
-        <button
-          onClick={async () => {
-            const quando = scadenza || dataOggiStr();
-            if (!window.confirm(`Pagare "${nome}" con bonifico senza aspettare la fattura?\n\nVa nello Scadenziario Passivo come spesa da pagare di ${fmtEuroErp(totale)} con scadenza ${fmtData(quando)}: quando carichi il bonifico e la segni pagata, passa in prima nota.`)) return;
-            setPagandoCassa(true);
-            await onPagaBonificoAttesa({ scadenza: quando });
-            setPagandoCassa(false);
-          }}
-          disabled={pagandoCassa}
-          title="Sposta l'impegno nello Scadenziario Passivo da pagare con bonifico, senza aspettare la fattura"
-          style={{ ...tastoNavy, flex: "1 1 auto", justifyContent: "space-between" }}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><IconaQiBanca size={20} /><span style={{ lineHeight: 1.2 }}>Paga con bonifico<br />in attesa</span></span>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
-        </button>
-      )}
+      {/* i tre tasti stanno sempre su una riga sola, larghi uguali: sul
+          telefono la riga va sotto la scadenza e i testi si stringono,
+          ma non si spezzano mai su due file */}
       {!aperto && (
-        <button onClick={() => setAperto(true)} style={{ ...stileTastoCardChiaro(isMobile), flex: isMobile ? "1 1 100%" : "0 0 auto" }}>
-          Registra fattura
-        </button>
+        <div style={{ display: "flex", gap: isMobile ? 6 : 10, flex: "1 1 320px", minWidth: 0, flexWrap: "nowrap" }}>
+          {onPagaDaCassa && (
+            <button onClick={() => setCassaAperta((v) => !v)} disabled={pagandoCassa} style={{ ...tastoOro, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "13px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
+              <IconaQiPortafoglio size={isMobile ? 16 : 20} /><span>{pagandoCassa ? "Registro…" : "Pagato da cassa"}</span>
+            </button>
+          )}
+          {onPagaBonificoAttesa && (
+            <button
+              onClick={async () => {
+                const quando = scadenza || dataOggiStr();
+                if (!window.confirm(`Pagare "${nome}" con bonifico senza aspettare la fattura?\n\nVa nello Scadenziario Passivo come spesa da pagare di ${fmtEuroErp(totale)} con scadenza ${fmtData(quando)}: quando carichi il bonifico e la segni pagata, passa in prima nota.`)) return;
+                setPagandoCassa(true);
+                await onPagaBonificoAttesa({ scadenza: quando });
+                setPagandoCassa(false);
+              }}
+              disabled={pagandoCassa}
+              title="Sposta l'impegno nello Scadenziario Passivo da pagare con bonifico, senza aspettare la fattura"
+              style={{ ...tastoNavy, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", textAlign: "center" }}
+            >
+              <IconaQiBanca size={isMobile ? 16 : 20} /><span style={{ lineHeight: 1.15 }}>Bonifico<br />in attesa</span>
+            </button>
+          )}
+          <button onClick={() => setAperto(true)} style={{ ...stileTastoCardChiaro(isMobile), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
+            Registra fattura
+          </button>
+        </div>
       )}
     </>
   );
