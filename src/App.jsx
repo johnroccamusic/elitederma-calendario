@@ -37286,19 +37286,6 @@ function PannelloCassaContanti({
   // "Ok, busta in cassa" e' la stessa identica scrittura del tasto nella
   // scheda della classe — data di rientro e importo congelato — perche' i
   // due punti devono fare la stessa cosa, non due cose simili.
-  async function segnaBustaInCassa(cd, importo) {
-    const { error } = await supabase.from("corsi_date")
-      .update({ busta_rientrata_il: dataOggiStr(), busta_importo: importo })
-      .eq("id", cd.id);
-    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
-    // le vendite in contanti contate in questa busta si marcano come sue,
-    // come dalla scheda della classe: quelle di domani vanno in appendice
-    await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", cd.id).eq("metodo_pagamento", "contanti").is("busta_numero", null);
-    setMsg("");
-    ricarica?.(["corsi_date", "vendite_shop"]);
-    carica();
-  }
-
   async function aggiungiRicorrente() {
     const valore = importoSpesa === "" ? null : parseNum(importoSpesa);
     if (!nomeSpesa.trim() || valore == null || !(valore >= 0)) { setMsg("Servono un nome e un importo."); return; }
@@ -37386,15 +37373,20 @@ function PannelloCassaContanti({
         );
       })()}
 
-      {/* Le buste per strada, una per una. Il numero in cima dice quanto sta
-          tornando; qui si vede da dove torna e si segna il viaggio: "in
-          arrivo" quando parte, "ok, busta in cassa" quando il contante e'
-          nel cassetto. Solo il secondo muove i soldi.
-          Una riga sparisce dalla lista appena la busta e' in cassa: da li'
-          in poi la si trova nel saldo, non piu' fra quelle attese. */}
+      {/* Le contabilita' che aspettano di essere approvate: le buste dei
+          corsi finiti e le appendici aperte. Da qui si vede solo l'elenco,
+          e si apre la classe. Nessuna busta si chiude da qui: prima c'era
+          una spunta "ok, busta in cassa" ed e' stata tolta, perche' mettere
+          in cassa un contante senza aver approvato incassi e spese nel
+          Riepilogo della classe vuol dire congelare un importo che nessuno
+          ha controllato. Una riga sparisce appena la busta e' in cassa: da
+          li' in poi la si trova nel saldo. */}
       {busteInArrivo.righe.length > 0 && (
         <div style={{ ...cardStyle, marginBottom: 14 }}>
-          <TitoloSezioneRiepilogo>Contabilità di ritorno</TitoloSezioneRiepilogo>
+          <TitoloSezioneRiepilogo>Avvisi contabilità da approvare</TitoloSezioneRiepilogo>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6 }}>
+            Si approvano dal Riepilogo amministrativo della classe: incassi, spese, Disponi pagamenti e poi la busta in cassa.
+          </div>
           {busteInArrivo.righe.map(({ cd, importo, appendice }) => {
             const nomeCorso = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "Corso";
             const nomeSede = (location || []).find((l) => l.id === cd.location_id)?.nome || "";
@@ -37416,22 +37408,11 @@ function PannelloCassaContanti({
                     {fmtIntervalloEsteso(cd.data_inizio, cd.data_fine || cd.data_inizio)} — {euroRiepilogo(importo)}
                   </div>
                 </div>
-                {/* Una casella sola, e non e' "in arrivo": se il corso e'
-                    chiuso la busta e' per forza in viaggio, ed e' proprio il
-                    fatto di comparire in questa lista a dirlo. Chiedere di
-                    spuntarlo era far confermare a mano una cosa che si sa
-                    gia' — restava solo da metterla in cassa, ed e' l'unica
-                    cosa che qui si puo' fare. */}
-                {/* un'appendice si chiude dalla scheda della classe, dove si
-                    dispongono prima i suoi pagamenti: da qui si vede e si apre */}
-                {appendice ? (
-                  <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flexShrink: 0 }}>{appendice.cashDaDisporre > 0 ? "pagamenti da disporre" : "si chiude dalla classe"}</span>
-                ) : (
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", flexShrink: 0, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
-                    <input type="checkbox" checked={false} onChange={() => segnaBustaInCassa(cd, importo)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                    Ok, busta in cassa
-                  </label>
-                )}
+                {/* solo un avviso: cosa manca per approvare. Il gesto sta
+                    nella classe */}
+                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6D1D", flexShrink: 0, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  {appendice ? (appendice.cashDaDisporre > 0 ? "Appendice: pagamenti da disporre" : "Appendice da approvare") : "Da approvare"}
+                </span>
               </div>
             );
           })}
