@@ -2890,13 +2890,16 @@ function TileHome({
         style={{
           // pixel fissi, come le icone di Apple: la cella e' solo lo spazio
           // in cui sta, e se e' piu' stretta del tasto vince la cella
-          ...fontBody, width: `min(100%, ${aspettoMobile.dimensione}px)`, minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
+          // il tasto occupa tutta la cella: il quadrato dentro ha la sua
+          // misura, ma l'etichetta sotto ha bisogno della larghezza della
+          // cella per andare a capo senza toccare le vicine
+          ...fontBody, width: "100%", minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
           display: "flex", flexDirection: "column", alignItems: "center", cursor: attivo ? "pointer" : "default",
           opacity: attenuato ? 0.5 : 1,
         }}
       >
         <div style={{
-          width: "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
+          width: `min(100%, ${aspettoMobile.dimensione}px)`, aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
           background: aspettoMobile.stile === "medaglione" ? sfondoMedaglione(aspettoMobile.cuscino) : (attivo ? aspettoMobile.colore : "#F1EAE0"), borderRadius: aspettoMobile.raggio,
           boxShadow: aspettoMobile.stile === "medaglione" ? ombraMedaglione(aspettoMobile.ombra) : ombraCssTasto(aspettoMobile.ombra),
@@ -2922,8 +2925,14 @@ function TileHome({
         <div
           onClick={onRinominaEtichetta ? (e) => { e.stopPropagation(); onRinominaEtichetta(); } : undefined}
           title={onRinominaEtichetta ? "Tocca per rinominare questo tasto" : undefined}
+          // Due righe, sempre: prima l'etichetta stava su una riga sola
+          // larga quanto serviva e "Abbonamenti e contratti (3)" finiva
+          // sopra "Note di credito". Lo spazio delle due righe e' riservato
+          // anche a chi ne usa una, cosi' le file di tasti restano tutte
+          // alla stessa distanza
           style={{
-            ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center", width: "max-content", maxWidth: "none", whiteSpace: "nowrap",
+            ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center", width: "100%", minHeight: "2.5em",
+            whiteSpace: "normal", overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
             ...(onRinominaEtichetta ? { cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 } : {}),
           }}
         >
