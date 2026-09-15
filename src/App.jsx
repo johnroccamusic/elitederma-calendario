@@ -30745,7 +30745,9 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
             <button onClick={chiudiModifica} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "7px 15px", cursor: "pointer" }}>Fine</button>
           ) : (
             <button onClick={() => setInModifica(true)} title="Modifica" style={{ background: "none", border: "none", padding: 3, cursor: "pointer", color: NAVY, display: "flex" }}>
-              <IconaMatitaNota size={isMobile ? 16 : 18} />
+              {/* sul telefono le tre icone sono il 60% piu' grandi: a 16px
+                  erano un bersaglio da mancare col pollice */}
+              <IconaMatitaNota size={isMobile ? 26 : 18} />
             </button>
           )}
           <button
@@ -30753,10 +30755,10 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
             title={archiviato ? "Riporta fra i progetti attivi" : "Archivia"}
             style={{ background: "none", border: "none", padding: 3, cursor: "pointer", color: NAVY, display: "flex" }}
           >
-            <IconaArchivio size={isMobile ? 16 : 18} />
+            <IconaArchivio size={isMobile ? 26 : 18} />
           </button>
           <button onClick={onElimina} title="Elimina definitivamente" style={{ background: "none", border: "none", padding: 3, cursor: "pointer", color: "#C0392B", display: "flex" }}>
-            <IconaCestino size={isMobile ? 17 : 19} />
+            <IconaCestino size={isMobile ? 27 : 19} />
           </button>
         </div>
       </div>
@@ -30996,6 +30998,9 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
     carica();
   }
   async function archivia(p, dentro) {
+    // archiviare toglie il progetto dalla lista di lavoro: con le icone
+    // grandi sul telefono un tocco per sbaglio e' facile, meglio chiedere
+    if (dentro && !window.confirm(`Archiviare "${p.nome}"?\n\nSparisce dai progetti aperti e lo ritrovi nello storico, da dove puoi riportarlo indietro.`)) return;
     await salva(p.id, { archiviato_il: dentro ? new Date().toISOString() : null });
   }
 
