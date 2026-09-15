@@ -667,7 +667,10 @@ function larghezzaUtile() {
   // dal telefono, con la vista scrivania forzata, la larghezza e' quella
   // di un monitor: tutto l'impaginato risponde come su un computer
   if (vistaForzata === "desktop") return Math.max(window.innerWidth, LARGHEZZA_VISTA_DESKTOP);
-  return window.innerWidth;
+  // tornati alla vista telefono, innerWidth puo' restare per un po' quella
+  // larga della viewport precedente: lo schermo fisico non mente
+  const schermo = (window.screen && window.screen.width) || window.innerWidth;
+  return Math.min(window.innerWidth, schermo);
 }
 
 // "Vista scrivania" dal telefono: un tastino in alto a destra che fa
@@ -702,26 +705,35 @@ function dispositivoTouchPiccolo() {
   try { return navigator.maxTouchPoints > 0 && Math.min(window.screen.width, window.screen.height) <= 900; } catch (e) { return false; }
 }
 function TastoVistaForzata() {
-  const [vista, setVista] = useState(vistaForzata);
   if (!dispositivoTouchPiccolo()) return null;
-  const desktop = vista === "desktop";
+  const desktop = vistaForzata === "desktop";
+  // In vista scrivania la pagina e' rimpicciolita per starci tutta: un
+  // tasto da 34px diventa un puntino. Si ingrandisce di quanto la pagina
+  // e' stata ridotta, cosi' sul vetro misura sempre lo stesso.
+  const fattore = desktop ? Math.max(1, LARGHEZZA_VISTA_DESKTOP / ((window.screen && window.screen.width) || LARGHEZZA_VISTA_DESKTOP)) : 1;
+  const lato = Math.round(34 * fattore);
+  const icona = Math.round(16 * fattore);
   return (
     <button
       type="button"
-      onClick={() => { applicaVistaForzata(desktop ? null : "desktop"); setVista(desktop ? null : "desktop"); }}
+      // Si cambia vista e si ricarica: cambiare la viewport a pagina
+      // aperta lascia il browser del telefono a meta' strada (titoli
+      // grandi, larghezze vecchie). Ripartire da capo e' l'unico modo
+      // pulito, e la scelta e' gia' salvata sul dispositivo.
+      onClick={() => { applicaVistaForzata(desktop ? null : "desktop"); window.location.reload(); }}
       title={desktop ? "Torna alla vista telefono" : "Vedi come sul computer (poi puoi ingrandire con due dita)"}
       style={{
-        position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 8px)", right: 8, zIndex: 9999,
-        width: 34, height: 34, borderRadius: "50%", border: `1px solid ${desktop ? "#0E1B33" : "#E8E3D6"}`,
+        position: "fixed", top: `calc(env(safe-area-inset-top, 0px) + ${Math.round(8 * fattore)}px)`, right: Math.round(8 * fattore), zIndex: 9999,
+        width: lato, height: lato, borderRadius: "50%", border: `${fattore > 1 ? 2 : 1}px solid ${desktop ? "#0E1B33" : "#E8E3D6"}`,
         background: desktop ? "#0E1B33" : "rgba(255,255,255,0.92)", color: desktop ? "#fff" : "#0E1B33",
         display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
         boxShadow: "0 2px 8px rgba(14,27,51,0.25)", padding: 0,
       }}
     >
       {desktop ? (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></svg>
+        <svg width={icona} height={icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></svg>
       ) : (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2" /><path d="M8 20.5h8M12 17v3.5" /></svg>
+        <svg width={icona} height={icona} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2" /><path d="M8 20.5h8M12 17v3.5" /></svg>
       )}
     </button>
   );
