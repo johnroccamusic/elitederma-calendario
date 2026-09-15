@@ -19696,70 +19696,19 @@ function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, on
   const n = lista.length;
   const testoLinguetta = n === 0 ? "Carrelli" : `${n} carrell${n === 1 ? "o" : "i"} sospes${n === 1 ? "o" : "i"}`;
   const ordinati = [...lista].sort((a, b) => String(b.aggiornato || "").localeCompare(String(a.aggiornato || "")));
-  // Il pannello segue il dito, non scatta: in apertura entra dal bordo
-  // destro man mano che si trascina, in chiusura esce verso destra. Al
-  // rilascio finisce da solo la corsa dalla parte piu' vicina (un terzo
-  // della larghezza decide). `drag` e' lo scostamento in pixel mentre il
-  // dito e' giu' (0 = tutto dentro); senza dito comanda `dentro`, con la
-  // transizione css. `montato` tiene il pannello nel dom anche mentre esce
-  // aperto occupa il 20% in meno di prima: 304 px, o il 74% dello schermo
-  const larghezza = () => Math.min(304, (typeof window !== "undefined" ? window.innerWidth : 400) * 0.74);
-  const [drag, setDrag] = useState(null);
+  // Si apre e si chiude con un tocco (linguetta, freccia, fuori dal
+  // pannello), ma non a scatto: scivola dentro dal bordo destro e scivola
+  // fuori, in un quarto di secondo. Niente trascinamento col dito: da
+  // telefono bastava il tocco, e il gesto confondeva. `montato` tiene il
+  // pannello nel dom anche mentre esce, `dentro` decide la posizione
   const [montato, setMontato] = useState(aperto);
   const [dentro, setDentro] = useState(aperto);
-  const tocco = useRef(null);
   useEffect(() => {
     if (aperto) { setMontato(true); const r = requestAnimationFrame(() => setDentro(true)); return () => cancelAnimationFrame(r); }
     setDentro(false);
-    const t = setTimeout(() => setMontato(false), 320);
+    const t = setTimeout(() => setMontato(false), 280);
     return () => clearTimeout(t);
   }, [aperto]);
-  // apertura col dito dal bordo destro dello schermo (solo telefono)
-  useEffect(() => {
-    if (!isMobile) return;
-    const inizio = (e) => {
-      const t = e.touches && e.touches[0];
-      if (!t || aperto || t.clientX < window.innerWidth - 30) { tocco.current = null; return; }
-      tocco.current = { x: t.clientX, y: t.clientY, verso: "apre", L: larghezza() };
-      setMontato(true); setDrag({ offset: larghezza() });
-    };
-    const mossa = (e) => {
-      const g = tocco.current; const t = e.touches && e.touches[0];
-      if (!g || g.verso !== "apre" || !t) return;
-      setDrag({ offset: Math.max(0, Math.min(g.L, g.L - (g.x - t.clientX))) });
-    };
-    const fine = () => {
-      const g = tocco.current; if (!g || g.verso !== "apre") return;
-      tocco.current = null;
-      setDrag((d) => {
-        const percorso = d ? g.L - d.offset : 0;
-        if (percorso > g.L / 3) { setDentro(true); onApri(); }
-        else { setDentro(false); setTimeout(() => { setMontato((m) => (aperto ? m : false)); }, 320); }
-        return null;
-      });
-    };
-    window.addEventListener("touchstart", inizio, { passive: true });
-    window.addEventListener("touchmove", mossa, { passive: true });
-    window.addEventListener("touchend", fine, { passive: true });
-    window.addEventListener("touchcancel", fine, { passive: true });
-    return () => { window.removeEventListener("touchstart", inizio); window.removeEventListener("touchmove", mossa); window.removeEventListener("touchend", fine); window.removeEventListener("touchcancel", fine); };
-  }, [isMobile, aperto]);
-  // chiusura col dito sul pannello, verso destra
-  const toccoInizio = (e) => { const t = e.touches && e.touches[0]; tocco.current = t ? { x: t.clientX, y: t.clientY, verso: "chiude", L: larghezza() } : null; };
-  const toccoMossa = (e) => {
-    const g = tocco.current; const t = e.touches && e.touches[0];
-    if (!g || g.verso !== "chiude" || !t) return;
-    setDrag({ offset: Math.max(0, Math.min(g.L, t.clientX - g.x)) });
-  };
-  const toccoFine = () => {
-    const g = tocco.current; if (!g || g.verso !== "chiude") return;
-    tocco.current = null;
-    setDrag((d) => { if (d && d.offset > g.L / 3) { setDentro(false); onChiudi(); } return null; });
-  };
-  const L = larghezza();
-  const offset = drag ? drag.offset : (dentro ? 0 : L);
-  const chiuso = !drag && !dentro;
-  const frazione = Math.max(0, Math.min(1, 1 - offset / L));
   return (
     <>
       <button
@@ -19776,15 +19725,15 @@ function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, on
       >
         {testoLinguetta}
       </button>
-      {(montato || drag) && (
-        <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: `rgba(20,20,30,${(0.4 * frazione).toFixed(3)})`, zIndex: 2301, pointerEvents: chiuso ? "none" : "auto", transition: drag ? "none" : "background 0.3s ease" }}>
+      {montato && (
+        <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: dentro ? "rgba(20,20,30,0.4)" : "rgba(20,20,30,0)", zIndex: 2301, pointerEvents: dentro ? "auto" : "none", transition: "background 0.25s ease" }}>
           <div
-            onClick={(e) => e.stopPropagation()} onTouchStart={toccoInizio} onTouchMove={toccoMossa} onTouchEnd={toccoFine} onTouchCancel={toccoFine}
-            style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "min(304px, 74vw)", background: "#fff", boxShadow: "-6px 0 24px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", transform: `translateX(${offset}px)`, transition: drag ? "none" : "transform 0.3s ease", willChange: "transform" }}
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "min(304px, 74vw)", background: "#fff", boxShadow: "-6px 0 24px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", transform: dentro ? "translateX(0)" : "translateX(105%)", transition: "transform 0.25s ease-out", willChange: "transform" }}
           >
-            {/* la freccia verso destra sul bordo: "trascina di qua per
-                chiudere". Sta a meta' altezza, dove cade il pollice */}
-            <button onClick={onChiudi} data-niente-ombra title="Trascina verso destra per chiudere" style={{ position: "absolute", left: 0, top: "50%", transform: "translate(-100%, -50%)", background: NAVY, color: "#fff", border: "none", borderRadius: "10px 0 0 10px", padding: "14px 6px", cursor: "pointer", display: "flex", alignItems: "center", boxShadow: "-3px 0 10px rgba(14,27,51,0.28)" }}>
+            {/* la freccia verso destra sul bordo: un tocco e il pannello
+                rientra. Sta a meta' altezza, dove cade il pollice */}
+            <button onClick={onChiudi} data-niente-ombra title="Chiudi" style={{ position: "absolute", left: 0, top: "50%", transform: "translate(-100%, -50%)", background: NAVY, color: "#fff", border: "none", borderRadius: "10px 0 0 10px", padding: "14px 6px", cursor: "pointer", display: "flex", alignItems: "center", boxShadow: "-3px 0 10px rgba(14,27,51,0.28)" }}>
               <svg width="18" height="26" viewBox="0 0 18 26" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M2 13h13" /><path d="M9 6l6 7-6 7" />
               </svg>
