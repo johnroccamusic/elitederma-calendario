@@ -36042,27 +36042,37 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
     await onConferma({ file, dataPagamento, metodo });
     setSalvando(false);
   }
-  const chips = [categoriaNome, scadenza ? `Scade ${fmtData(scadenza)}` : null, iban ? `IBAN ${iban}` : null].filter(Boolean);
+  const isMobile = useIsMobile();
+  // Stessa card del Quadro impegni: sotto, la scadenza e i due tasti;
+  // ancora sotto, la data del pagamento e la ricevuta da allegare
+  const piede = disabilitato ? (
+    <div style={{ ...fontBody, fontSize: 12, color: "#C0392B" }}>{motivoDisabilitato}</div>
+  ) : (
+    <>
+      <RiquadroDataCard etichetta="Scadenza" data={scadenza} />
+      <button onClick={() => confermaPagato("Cassa contanti")} disabled={salvando} title="Esce dalla cassa contanti: il saldo si aggiorna subito" style={{ ...stileTastoCardOro(isMobile, salvando), flex: "1 1 auto" }}>
+        <IconaQiPortafoglio size={20} />{salvando ? "Salvo…" : "Pagato da cassa"}
+      </button>
+      <button onClick={() => confermaPagato("Bonifico")} disabled={salvando} title="Esce dal conto corrente" style={{ ...stileTastoCardNavy(isMobile, salvando), flex: "1 1 auto", justifyContent: "space-between" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><IconaQiBanca size={20} /><span style={{ lineHeight: 1.2 }}>{salvando ? "Salvo…" : <>Pagato da<br />conto corrente</>}</span></span>
+        <span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
+      </button>
+    </>
+  );
   return (
-    <div style={{ padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <RigaAmministrazione data={dataDebito} titolo={fornitore || nome} sottotitolo={oggetto || corsoLabel} chips={chips} importo={fmtEuroErp(totale)} bordoSotto={false} senzaPadding>
-        {disabilitato && (
-          <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
-        )}
-      </RigaAmministrazione>
+    <CardAmministrazione
+      data={dataDebito} titolo={fornitore || nome} corsoLabel={oggetto || corsoLabel}
+      chips={[categoriaNome ? { Icona: IconaQiDocumento, testo: categoriaNome } : null, iban ? `IBAN ${iban}` : null]}
+      importo={fmtEuroErp(totale)} piede={piede}
+    >
       {!disabilitato && (
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: 12, background: BG_CHIARO, borderRadius: 14 }}>
+          <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 100%" }}>Data del pagamento e ricevuta, prima di premere uno dei due tasti</span>
           <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
           <CampoFileTrascinabile onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
-          <button onClick={() => confermaPagato("Cassa contanti")} disabled={salvando} title="Esce dalla cassa contanti: il saldo si aggiorna subito" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 16, padding: "9px 14px", cursor: salvando ? "default" : "pointer", opacity: salvando ? 0.6 : 1 }}>
-            {salvando ? "Salvo…" : "Pagato da cassa contanti"}
-          </button>
-          <button onClick={() => confermaPagato("Bonifico")} disabled={salvando} title="Esce dal conto corrente" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 14px", cursor: salvando ? "default" : "pointer", opacity: salvando ? 0.6 : 1 }}>
-            {salvando ? "Salvo…" : "Pagato da conto corrente"}
-          </button>
         </div>
       )}
-    </div>
+    </CardAmministrazione>
   );
 }
 
@@ -36070,8 +36080,163 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
 // che apre numero/data fattura + scadenza (pre-compilata se già nota da
 // Assegnazione Master → Gestisci) + copia fattura opzionale — al salvataggio
 // nasce la spesa vera (stato "Fatturata") e la riga sparisce da qui
-function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura, onPagaDaCassa, onPagaBonificoAttesa }) {
+// le icone piccole della card del Quadro impegni: tratto sottile, colore
+// del testo accanto
+function IconaQiDocumento({ size = 15, color = MUTED }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h4" />
+    </svg>
+  );
+}
+function IconaQiEdificio({ size = 15, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="3" width="14" height="18" rx="1.5" /><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M10 21v-3h4v3" />
+    </svg>
+  );
+}
+function IconaQiLetto({ size = 15, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 18V8M3 14h18v4M21 14v-3a2 2 0 0 0-2-2h-8v5" /><circle cx="7" cy="10.5" r="1.8" />
+    </svg>
+  );
+}
+function IconaQiSedia({ size = 15, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 12V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v7" /><path d="M4 12h16v3H4zM6 15v6M18 15v6" />
+    </svg>
+  );
+}
+function IconaQiPersona({ size = 15, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />
+    </svg>
+  );
+}
+function IconaQiCalendario({ size = 22, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" />
+    </svg>
+  );
+}
+function IconaQiPortafoglio({ size = 20, color = "#8A6D1D" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+    </svg>
+  );
+}
+function IconaQiBanca({ size = 20, color = "#fff" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9.5 12 4l9 5.5" /><path d="M5 9.5v8M9.5 9.5v8M14.5 9.5v8M19 9.5v8M3 21h18" />
+    </svg>
+  );
+}
+// La card delle liste di Contabilita' (Quadro impegni, Scadenziario,
+// Prima nota): a sinistra il giorno, al centro la voce con sede, classe e
+// le etichette, a destra l'importo; sotto la riga con i tasti ("piede") e
+// dopo quello che si apre (children). Disegnata sul mock del 15/09/2026.
+// Le etichette sono testi o { Icona, testo }.
+function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children }) {
+  const isMobile = useIsMobile();
+  const [anno, mese, giorno] = (data || "").split("-").map(Number);
+  const riquadro = { background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 16px", boxSizing: "border-box" };
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? 14 : 18, marginBottom: 14, boxShadow: "0 10px 24px -18px rgba(14,27,51,0.35)" }}>
+      <div style={{ display: "flex", gap: isMobile ? 12 : 16, alignItems: "stretch" }}>
+        <div style={{ ...riquadro, flex: "0 0 auto", minWidth: isMobile ? 64 : 76, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: isMobile ? "10px 8px" : "12px 10px" }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 30 : 34, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{giorno ? String(giorno).padStart(2, "0") : "—"}</div>
+          {mese ? <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", marginTop: 4 }}>{MESI_ABBR[mese - 1]}</div> : null}
+          {anno ? <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{anno}</div> : null}
+          {data ? <div style={{ ...fontBody, fontSize: 10, color: MUTED, marginTop: 8, paddingTop: 6, borderTop: `1px solid ${CREAM_BORDER}`, width: "100%", textAlign: "center", letterSpacing: 0.4 }}>{giornoSettimanaAbbr(data)}</div> : null}
+        </div>
+        <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 16.5 : 19, fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{titolo}</div>
+          {sede && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, ...fontBody, fontSize: 13.5, color: NAVY }}>
+              <IconaPin size={15} color={NAVY} />{sede}
+            </div>
+          )}
+          {corsoLabel && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, ...fontBody, fontSize: 13, color: MUTED, minWidth: 0 }}>
+              <IconaQiDocumento size={15} color={MUTED} /><span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{corsoLabel}</span>
+            </div>
+          )}
+          {chips.filter(Boolean).length > 0 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              {chips.filter(Boolean).map((c, i) => {
+                const Icona = typeof c === "object" ? c.Icona : null;
+                const testo = typeof c === "object" ? c.testo : c;
+                return (
+                  <span key={i} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG_CHIARO, borderRadius: 12, padding: "7px 12px", display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    {Icona && <Icona size={14} color={NAVY} />}{testo}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {importo != null && (
+          <div style={{ ...riquadro, flex: "0 0 auto", alignSelf: "flex-start", textAlign: "center", minWidth: isMobile ? 90 : 120 }}>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichettaImporto}</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: coloreImporto || NAVY, marginTop: 4, whiteSpace: "nowrap" }}>{importo}</div>
+          </div>
+        )}
+      </div>
+      {piede && (
+        <>
+          <div style={{ height: 1, background: CREAM_BORDER, margin: isMobile ? "14px 0" : "16px 0" }} />
+          <div style={{ display: "flex", alignItems: "stretch", gap: 10, flexWrap: "wrap" }}>{piede}</div>
+        </>
+      )}
+      {children}
+    </div>
+  );
+}
+// la casella "Scadenza" (o altra data) del piede della card
+function RiquadroDataCard({ etichetta = "Scadenza", data }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 16px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
+      <IconaQiCalendario size={22} color={NAVY} />
+      <div>
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichetta}</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 16, fontWeight: 700, color: NAVY, marginTop: 2, whiteSpace: "nowrap" }}>{data ? fmtData(data) : "—"}</div>
+      </div>
+    </div>
+  );
+}
+// i due tasti del piede: oro col contorno (contanti) e blu pieno (conto)
+function stileTastoCardOro(isMobile, spento) {
+  return { ...fontBody, fontSize: isMobile ? 13 : 13.5, fontWeight: 700, color: "#8A6D1D", background: "#fff", border: "1.5px solid #8A6D1D", borderRadius: 14, padding: isMobile ? "12px 14px" : "13px 18px", cursor: spento ? "default" : "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, whiteSpace: "nowrap", opacity: spento ? 0.6 : 1 };
+}
+function stileTastoCardNavy(isMobile, spento) {
+  return { ...fontBody, fontSize: isMobile ? 13 : 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: isMobile ? "10px 14px" : "11px 18px", cursor: spento ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 10, textAlign: "left", opacity: spento ? 0.6 : 1 };
+}
+function stileTastoCardChiaro(isMobile) {
+  return { ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 14px", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 };
+}
+
+// il giorno della settimana in tre lettere, per il blocco della data
+function giornoSettimanaAbbr(dataStr) {
+  if (!dataStr) return "";
+  const [a, m, g] = dataStr.split("-").map(Number);
+  const d = new Date(a, m - 1, g);
+  return isNaN(d) ? "" : GIORNI_SETTIMANA_ABBR[d.getDay()].toUpperCase();
+}
+
+function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura, onPagaDaCassa, onPagaBonificoAttesa }) {
+  const isMobile = useIsMobile();
   const [aperto, setAperto] = useState(false);
+  // "Pagato da cassa" apre una riga con la data invece di chiedere subito:
+  // il giorno in cui i contanti sono usciti va scelto, non dato per oggi
+  const [cassaAperta, setCassaAperta] = useState(false);
   // Un impegno ha due sbocchi, non uno: o arriva la fattura e si va in
   // scadenziario, oppure lo si paga in contanti e finisce dritto in prima
   // nota. Finora c'era solo il primo, e chi pagava dalla cassa doveva
@@ -36116,52 +36281,69 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
     await onRegistraFattura({ numeroFattura: numeroFattura.trim(), dataFattura, scadenza, file }, altriSelezionati);
     setSalvando(false);
   }
+  const IconaCategoria = tipo === "alloggio" ? IconaQiLetto : tipo === "location" ? IconaQiSedia : IconaQiPersona;
+  const tastoOro = stileTastoCardOro(isMobile, pagandoCassa);
+  const tastoNavy = stileTastoCardNavy(isMobile, pagandoCassa);
+  const piede = disabilitato ? (
+    <div style={{ ...fontBody, fontSize: 12, color: "#C0392B" }}>{motivoDisabilitato}</div>
+  ) : (
+    <>
+      <RiquadroDataCard etichetta="Scadenza" data={scadenza} />
+      {!aperto && onPagaDaCassa && (
+        <button onClick={() => setCassaAperta((v) => !v)} disabled={pagandoCassa} style={{ ...tastoOro, flex: "1 1 auto" }}>
+          <IconaQiPortafoglio size={20} />{pagandoCassa ? "Registro…" : "Pagato da cassa"}
+        </button>
+      )}
+      {!aperto && onPagaBonificoAttesa && (
+        <button
+          onClick={async () => {
+            const quando = scadenza || dataOggiStr();
+            if (!window.confirm(`Pagare "${nome}" con bonifico senza aspettare la fattura?\n\nVa nello Scadenziario Passivo come spesa da pagare di ${fmtEuroErp(totale)} con scadenza ${fmtData(quando)}: quando carichi il bonifico e la segni pagata, passa in prima nota.`)) return;
+            setPagandoCassa(true);
+            await onPagaBonificoAttesa({ scadenza: quando });
+            setPagandoCassa(false);
+          }}
+          disabled={pagandoCassa}
+          title="Sposta l'impegno nello Scadenziario Passivo da pagare con bonifico, senza aspettare la fattura"
+          style={{ ...tastoNavy, flex: "1 1 auto", justifyContent: "space-between" }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><IconaQiBanca size={20} /><span style={{ lineHeight: 1.2 }}>Paga con bonifico<br />in attesa</span></span>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+      )}
+      {!aperto && (
+        <button onClick={() => setAperto(true)} style={{ ...stileTastoCardChiaro(isMobile), flex: isMobile ? "1 1 100%" : "0 0 auto" }}>
+          Registra fattura
+        </button>
+      )}
+    </>
+  );
   return (
-    <div style={{ padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <RigaAmministrazione data={dataCreazione} titolo={nome} sottotitolo={corsoLabel} chips={[fornitore, categoriaNome].filter(Boolean)} importo={fmtEuroErp(totale)} bordoSotto={false} senzaPadding>
-        {disabilitato ? (
-          <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
-        ) : !aperto ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
-            {onPagaDaCassa && (
-              <>
-                <input type="date" title="Il giorno in cui i contanti sono usciti" value={dataCassa} onChange={(e) => setDataCassa(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "7px 9px", fontSize: 12 }} />
-                <button
-                  onClick={async () => {
-                    if (!window.confirm(`Pagare "${nome}" dalla cassa contanti il ${fmtData(dataCassa)}?\n\nDiventa una spesa pagata di ${fmtEuroErp(totale)} e compare in prima nota come uscita di cassa di quel giorno.`)) return;
-                    setPagandoCassa(true);
-                    await onPagaDaCassa({ dataPagamento: dataCassa });
-                    setPagandoCassa(false);
-                  }}
-                  disabled={pagandoCassa}
-                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 16, padding: "9px 14px", cursor: pagandoCassa ? "default" : "pointer", opacity: pagandoCassa ? 0.6 : 1 }}
-                >
-                  {pagandoCassa ? "Registro…" : "Pagato da cassa"}
-                </button>
-              </>
-            )}
-            {onPagaBonificoAttesa && (
-              <button
-                onClick={async () => {
-                  const quando = scadenza || dataOggiStr();
-                  if (!window.confirm(`Pagare "${nome}" con bonifico senza aspettare la fattura?\n\nVa nello Scadenziario Passivo come spesa da pagare di ${fmtEuroErp(totale)} con scadenza ${fmtData(quando)}: quando carichi il bonifico e la segni pagata, passa in prima nota.`)) return;
-                  setPagandoCassa(true);
-                  await onPagaBonificoAttesa({ scadenza: quando });
-                  setPagandoCassa(false);
-                }}
-                disabled={pagandoCassa}
-                title="Sposta l'impegno nello Scadenziario Passivo da pagare con bonifico, senza aspettare la fattura"
-                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "9px 14px", cursor: pagandoCassa ? "default" : "pointer", opacity: pagandoCassa ? 0.6 : 1 }}
-              >
-                Paga con bonifico in attesa di fattura
-              </button>
-            )}
-            <button onClick={() => setAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer" }}>
-              Registra fattura
-            </button>
-          </div>
-        ) : null}
-      </RigaAmministrazione>
+    <CardAmministrazione
+      data={dataCreazione} titolo={nome} sede={sede} corsoLabel={corsoLabel}
+      chips={[fornitore ? { Icona: IconaQiEdificio, testo: fornitore } : null, categoriaNome ? { Icona: IconaCategoria, testo: categoriaNome } : null]}
+      importo={fmtEuroErp(totale)} piede={piede}
+    >
+      {cassaAperta && !aperto && !disabilitato && onPagaDaCassa && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10, padding: 12, background: BG_CHIARO, borderRadius: 14 }}>
+          <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Il giorno in cui i contanti sono usciti:</span>
+          <input type="date" value={dataCassa} onChange={(e) => setDataCassa(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "8px 10px", fontSize: 13 }} />
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Pagare "${nome}" dalla cassa contanti il ${fmtData(dataCassa)}?\n\nDiventa una spesa pagata di ${fmtEuroErp(totale)} e compare in prima nota come uscita di cassa di quel giorno.`)) return;
+              setPagandoCassa(true);
+              await onPagaDaCassa({ dataPagamento: dataCassa });
+              setPagandoCassa(false);
+              setCassaAperta(false);
+            }}
+            disabled={pagandoCassa}
+            style={{ ...tastoOro, padding: "9px 14px", opacity: pagandoCassa ? 0.6 : 1 }}
+          >
+            {pagandoCassa ? "Registro…" : "Conferma"}
+          </button>
+          <button onClick={() => setCassaAperta(false)} style={{ ...fontBody, fontSize: 12.5, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+        </div>
+      )}
       {aperto && !disabilitato && (
         <div style={{ marginTop: 10 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -36207,7 +36389,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
           )}
         </div>
       )}
-    </div>
+    </CardAmministrazione>
   );
 }
 
@@ -38235,6 +38417,9 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   useEffect(() => { onCambiaTab?.(tab); }, [tab]);
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
   const [subTabImpegni, setSubTabImpegni] = useState("attivi");
+  // il mese mostrato nel Quadro impegni (YYYY-MM); vuoto = quello di oggi
+  // o il primo con impegni
+  const [meseImpegni, setMeseImpegni] = useState(null);
   const [subTabAttivo, setSubTabAttivo] = useState("attive");
   const [msg, setMsg] = useState("");
 
@@ -38848,14 +39033,36 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
               </button>
             </div>
             {msgImpegni && <div style={{ ...fontBody, fontSize: 13, color: msgImpegni.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgImpegni}</div>}
-            {subTabImpegni === "attivi" && (
-              <div style={{ ...cardStyle }}>
-                {impegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno in attesa di fattura.</div>}
-                {elencoConIntestazioniMese(impegni, (item) => item.corsoData?.data_fine || null, (item) => (
+            {subTabImpegni === "attivi" && (() => {
+              // Un mese alla volta, con le frecce in cima: gli impegni si
+              // leggono per il mese del corso a cui appartengono. Si parte
+              // dal mese di oggi se ha qualcosa, altrimenti dal primo che
+              // ne ha; i mesi vuoti si saltano
+              const meseDi = (item) => String(item.corsoData?.data_fine || item.corsoData?.data_inizio || "").slice(0, 7);
+              const mesiConImpegni = [...new Set(impegni.map(meseDi).filter(Boolean))].sort();
+              const meseCorrente = meseImpegni && mesiConImpegni.includes(meseImpegni) ? meseImpegni : (mesiConImpegni.includes(dataOggiStr().slice(0, 7)) ? dataOggiStr().slice(0, 7) : (mesiConImpegni[0] || dataOggiStr().slice(0, 7)));
+              const idx = mesiConImpegni.indexOf(meseCorrente);
+              const precedente = idx > 0 ? mesiConImpegni[idx - 1] : null;
+              const successivo = idx >= 0 && idx < mesiConImpegni.length - 1 ? mesiConImpegni[idx + 1] : null;
+              const [annoM, meseM] = meseCorrente.split("-").map(Number);
+              const impegniDelMese = impegni.filter((item) => meseDi(item) === meseCorrente).sort((a, b) => String(a.corsoData?.data_fine || "").localeCompare(String(b.corsoData?.data_fine || "")));
+              const freccia = (attiva) => ({ width: 40, height: 40, borderRadius: "50%", border: "none", background: BG_CHIARO, color: attiva ? NAVY : CREAM_BORDER, fontSize: 20, cursor: attiva ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" });
+              return (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 16 }}>
+                  <button onClick={() => precedente && setMeseImpegni(precedente)} disabled={!precedente} style={freccia(!!precedente)}>‹</button>
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, minWidth: 190, textAlign: "center" }}>{MESI[meseM - 1]} {annoM}</div>
+                  <button onClick={() => successivo && setMeseImpegni(successivo)} disabled={!successivo} style={freccia(!!successivo)}>›</button>
+                </div>
+                {impegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0", textAlign: "center" }}>Nessun impegno in attesa di fattura.</div>}
+                {impegni.length > 0 && impegniDelMese.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0", textAlign: "center" }}>Nessun impegno in questo mese.</div>}
+                {impegniDelMese.map((item) => (
                   <RigaQuadroImpegni
                     key={item.key}
                     nome={item.nome}
                     corsoLabel={etichettaCorso(item.corsoData)}
+                    sede={item.corsoData?.location_id ? toTitleCase((location || []).find((l) => l.id === item.corsoData.location_id)?.nome || "") : ""}
+                    tipo={item.tipo}
                     fornitore={item.fornitore}
                     totale={item.totale}
                     categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
@@ -38872,7 +39079,8 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                   />
                 ))}
               </div>
-            )}
+              );
+            })()}
             {subTabImpegni === "storico" && (
               <div style={{ ...cardStyle }}>
                 {storicoImpegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno registrato ancora.</div>}
@@ -39169,21 +39377,28 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome,
                   ].filter(Boolean);
                   return (
-                    <RigaAmministrazione
+                    <CardAmministrazione
                       key={spesa.id}
                       data={spesa.data_pagamento}
                       titolo={fornitoriById[spesa.fornitore_id]?.nome || spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}
-                      sottotitolo={oggettoDiSpesa(spesa, corsoData)}
+                      corsoLabel={oggettoDiSpesa(spesa, corsoData)}
                       chips={chips}
-                      importo={fmtEuroErp(bonifico)}
-                    >
-                      {spesa.allegato_path && (
-                        <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri ricevuta" style={{ display: "flex", color: NAVY }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                        </a>
+                      importo={fmtEuroErp(bonifico)} etichettaImporto="Pagato"
+                      piede={(
+                        <>
+                          <RiquadroDataCard etichetta="Pagata il" data={spesa.data_pagamento} />
+                          {spesa.allegato_path && (
+                            <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri ricevuta" style={{ ...stileTastoCardChiaro(isMobile), textDecoration: "none" }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                              Ricevuta
+                            </a>
+                          )}
+                          <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...stileTastoCardNavy(isMobile, false), flex: "1 1 auto", justifyContent: "space-between" }}>
+                            <span>Modifica spesa</span><span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
+                          </button>
+                        </>
                       )}
-                      <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
-                    </RigaAmministrazione>
+                    />
                   );
                 }, dataDiPassivoEvase)}
               </div>
@@ -39237,15 +39452,23 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
               <div style={{ ...cardStyle }}>
                 {elencoFiltratoScadAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
                 {elencoScadenzeConIntestazioni(elencoFiltratoScadAttivo, riepilogoMeseFiltratoScadAttivo, (item) => (
-                  <RigaAmministrazione
+                  <CardAmministrazione
                     key={item.key}
                     data={item.scadenza}
                     titolo={`${item.iscritto.nome} ${item.iscritto.cognome}`}
-                    sottotitolo={`${item.fase} · ${etichettaCorso(item.corsoData)}`}
-                    importo={fmtEuroErp(item.importo)}
-                  >
-                    <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vai alla scheda</button>
-                  </RigaAmministrazione>
+                    sede={item.corsoData?.location_id ? toTitleCase(locationById[item.corsoData.location_id]?.nome || "") : ""}
+                    corsoLabel={etichettaCorso(item.corsoData)}
+                    chips={[{ Icona: IconaQiPersona, testo: item.fase }]}
+                    importo={fmtEuroErp(item.importo)} etichettaImporto="Da incassare"
+                    piede={(
+                      <>
+                        <RiquadroDataCard etichetta="Scadenza" data={item.scadenza} />
+                        <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...stileTastoCardNavy(isMobile, false), flex: "1 1 auto", justifyContent: "space-between" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><IconaQiPersona size={20} color="#fff" />Vai alla scheda</span><span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
+                        </button>
+                      </>
+                    )}
+                  />
                 ))}
                 <div style={{ marginTop: 14 }}>
                   <button onClick={() => setInfoScadAttivoAperto((v) => !v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
@@ -39263,15 +39486,23 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
               <div style={{ ...cardStyle }}>
                 {elencoFiltratoScadAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
                 {elencoScadenzeConIntestazioni(elencoFiltratoScadAttivo, riepilogoMeseFiltratoScadAttivo, (item) => (
-                  <RigaAmministrazione
+                  <CardAmministrazione
                     key={item.key}
                     data={item.scadenza}
                     titolo={`${item.iscritto.nome} ${item.iscritto.cognome}`}
-                    sottotitolo={`${item.fase} · ${etichettaCorso(item.corsoData)}`}
-                    importo={fmtEuroErp(item.importo)}
-                  >
-                    <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vai alla scheda</button>
-                  </RigaAmministrazione>
+                    sede={item.corsoData?.location_id ? toTitleCase(locationById[item.corsoData.location_id]?.nome || "") : ""}
+                    corsoLabel={etichettaCorso(item.corsoData)}
+                    chips={[{ Icona: IconaQiPersona, testo: item.fase }]}
+                    importo={fmtEuroErp(item.importo)} etichettaImporto="Incassato"
+                    piede={(
+                      <>
+                        <RiquadroDataCard etichetta="Scadenza" data={item.scadenza} />
+                        <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...stileTastoCardNavy(isMobile, false), flex: "1 1 auto", justifyContent: "space-between" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><IconaQiPersona size={20} color="#fff" />Vai alla scheda</span><span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
+                        </button>
+                      </>
+                    )}
+                  />
                 ))}
               </div>
             )}
@@ -39611,49 +39842,31 @@ function PaginaInserimentoCostiRicavi({
             <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa nel periodo.</div>
           ) : (
             <>
-              {!isMobile && (
-                <div style={{ display: "flex", gap: 12, padding: "0 0 8px", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 4 }}>
-                  <div style={{ flex: "0 0 56px", ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Data</div>
-                  <div style={{ flex: "1 1 auto", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Descrizione</div>
-                  <div style={{ flex: "0 0 100px", textAlign: "right", ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Importo</div>
-                  <div style={{ flex: "0 0 120px", ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Stato</div>
-                  <div style={{ flex: "0 0 60px" }} />
-                </div>
-              )}
               {righeVisibili.map((riga) => {
-                const [anno, mese, giorno] = (riga.dataDocumento || "").split("-").map(Number);
                 const stato = COLORE_STATO_SPESA[riga.spesaReale.stato] || COLORE_STATO_SPESA.preventivata;
                 return (
-                  <div key={riga.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${CREAM_BORDER}`, flexWrap: isMobile ? "wrap" : "nowrap" }}>
-                    <div style={{ flex: "0 0 56px", textAlign: "center" }}>
-                      <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{giorno ? String(giorno).padStart(2, "0") : "—"}</div>
-                      {mese && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase" }}>{MESI_ABBR[mese - 1]}</div>}
-                      {anno && <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{anno}</div>}
-                    </div>
-                    <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-                      <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY }}>{riga.descrizione}</div>
-                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>{riga.sottotitolo}</div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5 }}>
-                        {riga.chips.map((c) => <ChipSpesa key={c}>{c}</ChipSpesa>)}
-                      </div>
-                    </div>
-                    <div style={{ flex: isMobile ? "1 1 auto" : "0 0 100px", textAlign: "right", ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{fmtEuroErp(riga.importo)}</div>
-                    <div style={{ flex: isMobile ? "1 1 auto" : "0 0 120px" }}>
-                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
-                        {etichettaOpzione(STATI_SPESA, riga.spesaReale.stato)}
-                      </span>
-                    </div>
-                    <div style={{ flex: "0 0 60px", display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                  <CardAmministrazione
+                    key={riga.id}
+                    data={riga.dataDocumento}
+                    titolo={riga.descrizione}
+                    corsoLabel={riga.sottotitolo && riga.sottotitolo !== "—" ? riga.sottotitolo : null}
+                    chips={riga.chips}
+                    importo={fmtEuroErp(riga.importo)}
+                    piede={(
                       <>
-                          <button onClick={() => onApriModificaSpesa(riga.id)} title="Modifica" style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex" }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                          </button>
-                          <button onClick={() => eliminaSpesa(riga.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex" }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-                          </button>
+                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 14, padding: "12px 16px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center" }}>
+                          {etichettaOpzione(STATI_SPESA, riga.spesaReale.stato)}
+                        </span>
+                        <span style={{ flex: "1 1 auto" }} />
+                        <button onClick={() => onApriModificaSpesa(riga.id)} title="Modifica" style={{ ...stileTastoCardChiaro(isMobile), padding: "10px 12px" }}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                        </button>
+                        <button onClick={() => eliminaSpesa(riga.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: "10px 8px", display: "flex", alignItems: "center" }}>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                        </button>
                       </>
-                    </div>
-                  </div>
+                    )}
+                  />
                 );
               })}
               {!mostraTutte && righeUniteRicerca.length > SPESE_PAGINA_INIZIALE && (
