@@ -1793,6 +1793,98 @@ function IconaTileCatalogo({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+// Le dieci schede di Contabilita', nello stesso stile delle altre tessere:
+// tratto nero, un dettaglio oro
+function IconaTilePrimaNota({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 2.8h14v18.4l-2.3-1.6-2.3 1.6-2.4-1.6-2.4 1.6-2.3-1.6L5 21.2z" />
+      <path d="M8.3 8h7.4M8.3 11.5h7.4" />
+      <path d="M8.3 15h4.4" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileBanca({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9.2 12 4l9 5.2" />
+      <path d="M4.5 9.2v9.3M9.5 9.2v9.3M14.5 9.2v9.3M19.5 9.2v9.3" />
+      <path d="M2.8 21.2h18.4" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileImpegni({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4.5" width="18" height="16.5" rx="1.8" />
+      <path d="M3 9.5h18M8 2.8v3.4M16 2.8v3.4" />
+      <path d="m8.8 15.2 2.2 2.2 4.4-4.4" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileFattureRicevute({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6.5a1.5 1.5 0 0 1 1.5-1.5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" />
+      <path d="M12 11v5M9.6 13.6 12 16l2.4-2.4" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileNoteCredito({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2.8h8.5L19 7.3v13.9H6z" />
+      <path d="M14.5 2.8v4.5H19" />
+      <path d="M15.2 15.2H9.4M11.6 12.8l-2.4 2.4 2.4 2.4" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileScadenzePassive({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4.5" width="18" height="16.5" rx="1.8" />
+      <path d="M3 9.5h18M8 2.8v3.4M16 2.8v3.4" />
+      <path d="M12 12.3v5.2M9.6 15.1 12 17.5l2.4-2.4" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileScadenzeAttive({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4.5" width="18" height="16.5" rx="1.8" />
+      <path d="M3 9.5h18M8 2.8v3.4M16 2.8v3.4" />
+      <path d="M12 17.5v-5.2M9.6 14.7 12 12.3l2.4 2.4" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileCassaContanti({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="6" width="19" height="12" rx="1.8" />
+      <circle cx="12" cy="12" r="2.8" stroke={GOLD} />
+      <path d="M5.5 9.2v.01M18.5 14.8v.01" />
+    </svg>
+  );
+}
+function IconaTileCassaConsulenze({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10" cy="8" r="3.4" />
+      <path d="M3.5 20.5c0-3.6 2.9-6.2 6.5-6.2s6.5 2.6 6.5 6.2" />
+      <path d="M16.5 5.5h4.5M18.75 3.25v4.5" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileAbbonamenti({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.5 12a8.5 8.5 0 0 1-14.6 5.9" />
+      <path d="M3.5 12a8.5 8.5 0 0 1 14.6-5.9" />
+      <path d="M18.1 2.9v3.7h-3.7" stroke={GOLD} />
+      <path d="M5.9 21.1v-3.7h3.7" stroke={GOLD} />
+    </svg>
+  );
+}
 function IconaTileAnagrafiche({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -2867,7 +2959,9 @@ function TileHome({
           {descrizione && (
             <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12, color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
           )}
-          <div style={{ fontSize: isMobile ? 13 : 16, color: coloreTesto, paddingTop: isMobile ? 6 : 12 }}>&rarr;</div>
+          {/* niente freccia in fondo: copriva la descrizione e non diceva
+              niente che il tasto non dicesse gia'. Tolta il 15/09/2026 da
+              tutte le tessere, Home compresa */}
         </>
       ) : (
         <span style={{ ...fontDisplay, fontSize: isMobile ? 13 : 22, fontWeight: 700, lineHeight: 1.15, color: coloreTesto }}>{title}</span>
@@ -24244,10 +24338,12 @@ function BloccoValoriRiepilogoMobile({ titolo, voci }) {
   );
 }
 
-function TitoloSezioneRiepilogo({ children }) {
+// "grande": i titoli delle tre sezioni della cassa contanti, chiesti
+// quattro punti piu' grandi e piu' pesanti del resto (15/09/2026)
+function TitoloSezioneRiepilogo({ children, grande = false }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, whiteSpace: "nowrap" }}>{children}</div>
+      <div style={{ ...fontBody, fontSize: grande ? 16 : 12, fontWeight: grande ? 800 : 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, whiteSpace: "nowrap" }}>{children}</div>
       <div style={{ flex: 1, height: 1, background: GOLD, opacity: 0.45 }} />
     </div>
   );
@@ -35698,21 +35794,24 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
   // Le schede come dati e non come JSX scritto a mano: per riordinarle
   // bisogna poterle mettere in un ordine diverso da quello in cui sono
   // scritte, e un elenco si riordina, del markup no.
+  // Le stesse tessere di tutte le altre pagine (TileHome): prima erano
+  // dieci tasti disegnati a parte, con il medaglione oro, diversi da
+  // tutto il resto dell'app
   const schede = [
-    { chiave: "primanota", titolo: "Prima nota cassa", sotto: "Movimenti e registrazioni", Icona: IconaRicevutaErp, onClick: onApriPrimaNotaCassa },
-    { chiave: "banca", titolo: "Movimenti banca", sotto: "Estratto conto da riconciliare", Icona: IconaEdificioErp },
-    { chiave: "impegni", titolo: `Quadro impegni (${impegniCount})`, sotto: "Impegni presi e da saldare", Icona: IconaCalendarioCard },
-    { chiave: "documenti", titolo: `Fatture ricevute (${documentiCount})`, sotto: "Gestione fornitori", Icona: IconaCartellaShop },
-    { chiave: "notecredito", titolo: `Note di credito (${noteCreditoCount})`, sotto: "Emissione e gestione", Icona: IconaCartellaShop },
+    { chiave: "primanota", titolo: "Prima nota cassa", sotto: "Movimenti e registrazioni", Icona: IconaTilePrimaNota, onClick: onApriPrimaNotaCassa },
+    { chiave: "banca", titolo: "Movimenti banca", sotto: "Estratto conto da riconciliare", Icona: IconaTileBanca },
+    { chiave: "impegni", titolo: `Quadro impegni (${impegniCount})`, sotto: "Impegni presi e da saldare", Icona: IconaTileImpegni },
+    { chiave: "documenti", titolo: `Fatture ricevute (${documentiCount})`, sotto: "Gestione fornitori", Icona: IconaTileFattureRicevute },
+    { chiave: "notecredito", titolo: `Note di credito (${noteCreditoCount})`, sotto: "Emissione e gestione", Icona: IconaTileNoteCredito },
     // il pallino lampeggiante sulla sola scheda del passivo: e' l'unica
     // coda dove il ritardo costa qualcosa a qualcun altro — un fornitore
     // che aspetta — e il numero fra parentesi nel titolo si legge solo se
     // lo si va a cercare
-    { chiave: "passivo", titolo: `Scadenziario Passivo (${passivoCount})`, sotto: "Scadenze da pagare", Icona: IconaCalendarioCard, badge: passivoCount },
-    { chiave: "attivo", titolo: `Scadenziario Attivo (${attivoCount})`, sotto: "Incassi e scadenze attive", Icona: IconaCalendarioCard },
-    { chiave: "fondocassa", titolo: "Cassa contanti", sotto: "Entrate e uscite contanti", Icona: IconaRicevutaErp },
-    { chiave: "consulenze", titolo: "Cassa consulenze", sotto: "", Icona: IconaPersonaSemplice },
-    { chiave: "abbonamenti", titolo: `Abbonamenti e contratti (${abbonamentiCount})`, sotto: "Gestione ricorrenti", Icona: IconaPersonaSemplice },
+    { chiave: "passivo", titolo: `Scadenziario Passivo (${passivoCount})`, sotto: "Scadenze da pagare", Icona: IconaTileScadenzePassive, badge: passivoCount },
+    { chiave: "attivo", titolo: `Scadenziario Attivo (${attivoCount})`, sotto: "Incassi e scadenze attive", Icona: IconaTileScadenzeAttive },
+    { chiave: "fondocassa", titolo: "Cassa contanti", sotto: "Entrate e uscite contanti", Icona: IconaTileCassaContanti },
+    { chiave: "consulenze", titolo: "Cassa consulenze", sotto: "", Icona: IconaTileCassaConsulenze },
+    { chiave: "abbonamenti", titolo: `Abbonamenti e contratti (${abbonamentiCount})`, sotto: "Gestione ricorrenti", Icona: IconaTileAbbonamenti },
   ];
 
   // In coda le schede mai viste in un ordine salvato: una scheda aggiunta
@@ -35740,87 +35839,38 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
     }}>
       {ordinate.map((s) => {
         const attivo = schedaAttiva === s.chiave;
+        // la maniglia e' un elemento a se' e solo lei e' trascinabile:
+        // se lo fosse tutta la tessera, ogni tentativo di premerla
+        // rischierebbe di spostarla invece di aprirla. Stesso disegno
+        // della maniglia di GrigliaTasti
+        const maniglia = onSalvaOrdine ? (
+          <span
+            draggable
+            onDragStart={(e) => { e.stopPropagation(); trascinata.current = s.chiave; }}
+            onDragEnd={() => { trascinata.current = null; }}
+            onClick={(e) => e.stopPropagation()}
+            title="Trascina per spostare questa scheda"
+            style={{ position: "absolute", top: 6, left: 6, zIndex: 2, cursor: "grab", color: MUTED, fontSize: 15, lineHeight: 1, padding: "3px 5px", userSelect: "none", background: "rgba(255,255,255,0.85)", borderRadius: 6 }}
+          >⠿</span>
+        ) : null;
         return (
-          <div key={s.chiave} style={{ position: "relative", minWidth: 0, display: "flex" }}
+          <div key={s.chiave} style={{ position: "relative", minWidth: 0, display: "flex", justifyContent: "center" }}
             onDragOver={onSalvaOrdine ? (e) => e.preventDefault() : undefined}
             onDrop={onSalvaOrdine ? (e) => { e.preventDefault(); sposta(trascinata.current, s.chiave); trascinata.current = null; } : undefined}
           >
-            <button
+            <TileHome
+              title={s.titolo}
+              descrizione={isMobile ? undefined : s.sotto}
+              Icona={s.Icona}
               onClick={s.onClick || (() => onApriScheda(s.chiave))}
-              style={{
-                width: "100%", minWidth: 0, boxSizing: "border-box", cursor: "pointer", textAlign: "center",
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-                gap: isMobile ? 3 : 4, padding: isMobile ? "10px 4px" : "12px 10px",
-                borderRadius: isMobile ? 12 : 18,
-                background: attivo ? BG : "#FBF7F0",
-                border: `${attivo ? 2 : 1}px solid ${attivo ? GOLD : CREAM_BORDER}`,
-                // quadrata, non rettangolare: l'altezza segue la larghezza
-                aspectRatio: "1 / 1", overflow: "hidden",
-              }}
-            >
-              {/* il medaglione tondo: l'icona non galleggia sul fondo della
-                  scheda, sta dentro un cerchio che la stacca */}
-              <span style={{
-                width: isMobile ? 34 : 54, height: isMobile ? 34 : 54, borderRadius: "50%", flexShrink: 0,
-                background: "#F3E7D2", position: "relative",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <s.Icona size={isMobile ? 18 : 28} color={GOLD} />
-                {/* sta attaccato all'icona e non a un angolo della scheda:
-                    gli angoli sono gia' presi dalla maniglia e dal punto
-                    interrogativo, e un terzo segno lassu' non si
-                    distinguerebbe dagli altri due */}
-                {s.badge > 0 && (
-                  <>
-                    <style>{`@keyframes lampeggiaBadgeTasto { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }`}</style>
-                    <span
-                      title={`${s.badge} scadenz${s.badge === 1 ? "a" : "e"} da pagare`}
-                      style={{
-                        position: "absolute", top: isMobile ? -4 : -3, right: isMobile ? -6 : -6,
-                        ...fontBody, fontSize: isMobile ? 9 : 11, fontWeight: 700, color: "#fff", background: "#C0392B",
-                        borderRadius: 20, minWidth: isMobile ? 16 : 20, height: isMobile ? 16 : 20,
-                        display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px",
-                        animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite",
-                        boxShadow: "0 1px 3px rgba(14,27,51,0.3)",
-                      }}
-                    >{s.badge}</span>
-                  </>
-                )}
-              </span>
-              <span style={{ ...fontBody, fontSize: isMobile ? 8.5 : 13.5, fontWeight: 700, lineHeight: 1.2, color: NAVY, overflowWrap: "anywhere", marginTop: isMobile ? 0 : 4 }}>{s.titolo}</span>
-              {/* la riga di spiegazione sta solo su desktop: in un quadrato
-                  da ~78px ruberebbe lo spazio al nome, che conta di piu' */}
-              {!isMobile && s.sotto && (
-                <span style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.25, color: MUTED }}>{s.sotto}</span>
-              )}
-              {!isMobile && (
-                <span style={{
-                  width: 24, height: 24, borderRadius: "50%", marginTop: 2,
-                  border: `1px solid ${attivo ? GOLD : CREAM_BORDER}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  ...fontBody, fontSize: 13, color: attivo ? GOLD : MUTED,
-                }}>›</span>
-              )}
-            </button>
+              badge={s.badge}
+              maniglia={maniglia}
+              evidenziato={attivo}
+            />
             {aiuto(s.chiave)?.testo && (
               <span style={{ position: "absolute", top: 6, right: 6 }}>
                 <AiutoInfo chiave={`amministrazione.${s.chiave}`} predefinito={AIUTI_TAB_AMMINISTRAZIONE[s.chiave]} ruoloUtente={ruoloUtente} />
               </span>
-            )}
-            {/* la maniglia e' un elemento a se' e solo lei e' trascinabile:
-                se lo fosse tutta la scheda, ogni tentativo di premerla
-                rischierebbe di spostarla invece di aprirla */}
-            {onSalvaOrdine && (
-              <span
-                draggable
-                onDragStart={() => { trascinata.current = s.chiave; }}
-                onDragEnd={() => { trascinata.current = null; }}
-                title="Trascina per spostare questa scheda"
-                style={{
-                  position: "absolute", top: 5, left: 6, cursor: "grab", lineHeight: 1, userSelect: "none",
-                  ...fontBody, fontSize: 11, color: MUTED,
-                }}
-              >⠿</span>
             )}
           </div>
         );
@@ -37383,7 +37433,7 @@ function PannelloCassaContanti({
           li' in poi la si trova nel saldo. */}
       {busteInArrivo.righe.length > 0 && (
         <div style={{ ...cardStyle, marginBottom: 14 }}>
-          <TitoloSezioneRiepilogo>Avvisi contabilità da approvare</TitoloSezioneRiepilogo>
+          <TitoloSezioneRiepilogo grande>Avvisi contabilità da approvare</TitoloSezioneRiepilogo>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6 }}>
             Si approvano dal Riepilogo amministrativo della classe: incassi, spese, Disponi pagamenti e poi la busta in cassa.
           </div>
@@ -37422,7 +37472,7 @@ function PannelloCassaContanti({
       {/* da dove viene il saldo, riga per riga: una cassa che mostra solo il
           totale non si puo' controllare */}
       <div style={{ ...cardStyle, marginBottom: 14 }}>
-        <TitoloSezioneRiepilogo>Come si compone</TitoloSezioneRiepilogo>
+        <TitoloSezioneRiepilogo grande>Come si compone</TitoloSezioneRiepilogo>
         {/* Detto a voce alta perche' altrimenti e' una regola invisibile:
             riconciliando a settembre una fattura pagata in contanti a
             luglio, quella non deve scalare niente da questa cassa — la
@@ -37523,7 +37573,7 @@ function PannelloCassaContanti({
       {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
 
       <div style={cardStyle}>
-        <TitoloSezioneRiepilogo>Storico prelievi e versamenti</TitoloSezioneRiepilogo>
+        <TitoloSezioneRiepilogo grande>Storico prelievi e versamenti</TitoloSezioneRiepilogo>
         {movimenti == null ? <RigaCassaVuota testo="Carico…" />
           : storico.length === 0 ? <RigaCassaVuota testo="Nessun prelievo e nessun versamento." />
           : storico.map((m) => (
@@ -38635,9 +38685,12 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                 <button
                   key={r.chiave}
                   onClick={r.onClick}
-                  style={{ textAlign: "left", background: r.valore > 0 ? r.sfondo : "#fff", border: `1px solid ${r.valore > 0 ? `${r.colore}44` : CREAM_BORDER}`, borderRadius: isMobile ? 10 : 14, padding: isMobile ? "8px 7px" : "12px 12px", minWidth: 0, cursor: "pointer" }}
+                  // testo e numero al centro; sul telefono i quattro restano
+                  // in riga e l'etichetta va su due righe, con lo spazio
+                  // gia' riservato cosi' i numeri stanno alla stessa altezza
+                  style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: r.valore > 0 ? r.sfondo : "#fff", border: `1px solid ${r.valore > 0 ? `${r.colore}44` : CREAM_BORDER}`, borderRadius: isMobile ? 10 : 14, padding: isMobile ? "8px 4px" : "12px 12px", minWidth: 0, cursor: "pointer" }}
                 >
-                  <div style={{ ...fontBody, fontSize: isMobile ? 7.5 : 9.5, fontWeight: 700, color: r.valore > 0 ? r.colore : MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, marginBottom: isMobile ? 3 : 5, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.etichetta}</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 7.5 : 9.5, fontWeight: 700, color: r.valore > 0 ? r.colore : MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, marginBottom: isMobile ? 3 : 5, lineHeight: 1.2, minHeight: isMobile ? "2.4em" : undefined, display: "flex", alignItems: "center", justifyContent: "center", overflowWrap: "anywhere" }}>{r.etichetta}</div>
                   <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 22, fontWeight: 700, color: r.valore > 0 ? NAVY : MUTED, lineHeight: 1 }}>{r.valore}</div>
                 </button>
               ))}
