@@ -39943,7 +39943,7 @@ function PaginaInserimentoCostiRicavi({
           </div>
 
           {topCategoriePN.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(230px, 1fr))", gap: isMobile ? 10 : 12, marginBottom: isMobile ? 18 : 22 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : `repeat(${topCategoriePN.length}, minmax(0, 1fr))`, gap: isMobile ? 10 : 12, marginBottom: isMobile ? 18 : 22 }}>
               {topCategoriePN.map((c) => {
                 const Icona = iconaPerCategoriaSpesa(c.nome);
                 const attiva = ricercaPN.trim().toLowerCase() === c.nome.toLowerCase();
