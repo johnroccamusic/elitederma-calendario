@@ -276,6 +276,13 @@ function useImpostazioneCondivisa(chiave, predefinito) {
   useEffect(() => {
     if (!LAYOUT_ASCOLTATORI[chiave]) LAYOUT_ASCOLTATORI[chiave] = new Set();
     LAYOUT_ASCOLTATORI[chiave].add(setValore);
+    // quando la chiave cambia (i preferiti del dock: prima del login e'
+    // quella del ruolo, dopo quella della persona) lo stato deve ripartire
+    // dalla copia in memoria della chiave NUOVA. Prima restava quello della
+    // vecchia — tre posti vuoti — e il database, trovando la copia locale
+    // gia' uguale alla sua, non avvisava nessuno: i preferiti sembravano
+    // spariti, e il primo che se ne rimetteva uno salvava sopra ai veri
+    setValore(LAYOUT_CACHE[chiave] ?? predefinito);
     caricaLayoutCondiviso(chiave);
     return () => { LAYOUT_ASCOLTATORI[chiave].delete(setValore); };
   }, [chiave]);
@@ -305,6 +312,7 @@ function useLayoutCondiviso(chiave, predefinito) {
   useEffect(() => {
     if (!LAYOUT_ASCOLTATORI[chiave]) LAYOUT_ASCOLTATORI[chiave] = new Set();
     LAYOUT_ASCOLTATORI[chiave].add(setValore);
+    setValore(LAYOUT_CACHE[chiave] ?? predefinito);
     caricaLayoutCondiviso(chiave);
     return () => { LAYOUT_ASCOLTATORI[chiave].delete(setValore); };
   }, [chiave]);
@@ -62866,13 +62874,19 @@ export default function App() {
     // trova cosi' il percorso giusto, come se ci si fosse arrivati a mano
     voce.apri();
   }
+  // si parte sempre dall'ultima copia in memoria della chiave giusta, non
+  // dallo stato: se questo fosse indietro, un posto nuovo cancellerebbe
+  // gli altri due
+  const preferitiFreschi = () => { const c = LAYOUT_CACHE[`preferiti_dock_${idUtentePreferiti}`]; return Array.isArray(c) ? c : (preferitiDock || []); };
   function scegliPreferito(voce) {
-    const nuovi = [0, 1, 2].map((i) => (i === slotPreferitoInScelta ? { chiave: voce.chiave, area: voce.area || null } : (preferitiDock || [])[i] || null));
+    const base = preferitiFreschi();
+    const nuovi = [0, 1, 2].map((i) => (i === slotPreferitoInScelta ? { chiave: voce.chiave, area: voce.area || null } : base[i] || null));
     salvaPreferitiDock(nuovi);
     setSlotPreferitoInScelta(null);
   }
   function togliPreferito(indice) {
-    salvaPreferitiDock([0, 1, 2].map((i) => (i === indice ? null : (preferitiDock || [])[i] || null)));
+    const base = preferitiFreschi();
+    salvaPreferitiDock([0, 1, 2].map((i) => (i === indice ? null : base[i] || null)));
   }
   // la maniglietta: la stessa del dock in basso, piu' piccola e in
   // verticale, grigia. Sta sempre di lato — a sinistra del dock quando
