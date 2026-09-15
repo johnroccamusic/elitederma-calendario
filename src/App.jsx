@@ -53085,7 +53085,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             </div>
             <button
               onClick={() => aggiungiAlCarrello(p)} disabled={esaurito} title="Aggiungi al carrello"
-              style={{ width: 34, height: 34, borderRadius: 9, border: "none", background: esaurito ? "#E5E1D6" : GOLD, color: "#fff", fontSize: 18, flexShrink: 0, cursor: esaurito ? "default" : "pointer" }}
+              style={{ width: 44, height: 44, borderRadius: 12, border: "none", background: esaurito ? "#E5E1D6" : GOLD, color: "#fff", fontSize: 23, flexShrink: 0, cursor: esaurito ? "default" : "pointer" }}
             >+</button>
           </div>
         );
