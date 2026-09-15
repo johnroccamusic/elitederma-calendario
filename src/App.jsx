@@ -36289,6 +36289,32 @@ function stileTastoCardChiaro(isMobile) {
   return { ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 14px", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 };
 }
 
+// le icone delle tessere categoria in cima alla Prima nota: scelte dal
+// nome della categoria, con un ripiego generico
+function IconaCatPuntini({ size = 22, color = NAVY }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill={color}><circle cx="5" cy="12" r="2.2" /><circle cx="12" cy="12" r="2.2" /><circle cx="19" cy="12" r="2.2" /></svg>);
+}
+function IconaCatScatola({ size = 22, color = NAVY }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z" /><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10" /></svg>);
+}
+function IconaCatCasa({ size = 22, color = NAVY }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10v10.5h13V10" /><path d="M10 20.5v-6h4v6" /></svg>);
+}
+function IconaCatMegafono({ size = 22, color = NAVY }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10v4a1 1 0 0 0 1 1h3l8 4V5L7 9H4a1 1 0 0 0-1 1z" /><path d="M18 9.5a3.5 3.5 0 0 1 0 5M8 15l1.5 5" /></svg>);
+}
+function iconaPerCategoriaSpesa(nome) {
+  const n = String(nome || "").toLowerCase();
+  if (n === "altro" || n === "altre" || n === "varie") return IconaCatPuntini;
+  if (/prodott|merce|acquist|magazzin|rivendit/.test(n)) return IconaCatScatola;
+  if (/affitt|canone|sede|aul|locat|ufficio/.test(n)) return IconaCatCasa;
+  if (/comunicaz|marketing|pubblic|social|agenz|sponsor/.test(n)) return IconaCatMegafono;
+  if (/hotel|alloggi|soggiorn/.test(n)) return IconaQiLetto;
+  if (/master|assistent|compens|venditor|provvig|modell|consulen|stipend|collabor/.test(n)) return IconaQiPersona;
+  if (/banca|bonific|finanz|interess|commission/.test(n)) return IconaQiBanca;
+  return IconaQiDocumento;
+}
+
 // il giorno della settimana in tre lettere, per il blocco della data
 function giornoSettimanaAbbr(dataStr) {
   if (!dataStr) return "";
@@ -39884,30 +39910,61 @@ function PaginaInserimentoCostiRicavi({
         ) : null}
 
         <div style={{ ...cardStyle, marginBottom: 0, padding: isMobile ? 16 : 26 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
-            <div>
-              <div style={{ ...fontHero, fontSize: 26, color: NAVY }}>Spese · {personalizzatoPN ? `${fmtData(customDa)} – ${fmtData(customA)}` : etichettaPeriodoPrimaNota(annoPN, granularitaPN, mesePN, trimestrePN)}</div>
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{righeUniteRicerca.length} vo{righeUniteRicerca.length === 1 ? "ce" : "ci"}</div>
+          {/* L'intestazione sul mock del 15/09/2026: il titolo grande col
+              periodo, sotto quante voci; il riquadro del totale con il
+              confronto col periodo prima; poi le quattro categorie piu'
+              pesanti come tessere con l'icona, toccabili per filtrare. */}
+          <div style={{ marginBottom: isMobile ? 16 : 20 }}>
+            <div style={{ ...fontHero, fontSize: isMobile ? 32 : 40, color: NAVY, lineHeight: 1.1, overflowWrap: "anywhere" }}>Spese · {personalizzatoPN ? `${fmtData(customDa)} – ${fmtData(customA)}` : etichettaPeriodoPrimaNota(annoPN, granularitaPN, mesePN, trimestrePN)}</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 14 : 15, color: MUTED, marginTop: 6 }}>{righeUniteRicerca.length} vo{righeUniteRicerca.length === 1 ? "ce" : "ci"}</div>
+          </div>
+
+          <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 22, padding: isMobile ? "18px 18px 16px" : "24px 28px 22px", marginBottom: isMobile ? 14 : 18 }}>
+            <div style={{ position: "absolute", right: isMobile ? -10 : 10, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
+              <IconaQiPortafoglio size={isMobile ? 130 : 170} color="#8A6D1D" />
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>Totale periodo</div>
-              <div style={{ ...fontHero, fontSize: 24, color: NAVY }}>{fmtEuroErp(totaleSpese)}</div>
-              {!personalizzatoPN && variazionePctPN !== null && (
-                <div style={{ ...fontBody, fontSize: 12, color: variazionePctPN >= 0 ? "#C0392B" : "#2E7D32", marginTop: 2 }}>
-                  <b>{variazionePctPN >= 0 ? "+" : ""}{Math.round(variazionePctPN)}%</b> vs {granularitaPN === "anno" ? periodoPrecPN.anno : granularitaPN === "trimestre" ? `T${periodoPrecPN.trimestre}` : MESI[periodoPrecPN.mese - 1].toLowerCase()} ({fmtEuroErp(totalePrecedentePN)})
+            <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 2 }}>Totale periodo</div>
+            <div style={{ ...fontHero, fontSize: isMobile ? 46 : 58, color: NAVY, lineHeight: 1.05, marginTop: 6, position: "relative" }}>{fmtEuroErp(totaleSpese)}</div>
+            {!personalizzatoPN && variazionePctPN !== null && (() => {
+              const sale = variazionePctPN >= 0;
+              const colore = sale ? "#C0392B" : "#2E7D32";
+              const periodoPrima = granularitaPN === "anno" ? periodoPrecPN.anno : granularitaPN === "trimestre" ? `T${periodoPrecPN.trimestre}` : MESI[periodoPrecPN.mese - 1].toLowerCase();
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, position: "relative", flexWrap: "wrap" }}>
+                  <span style={{ width: 36, height: 36, borderRadius: "50%", background: sale ? "#FBE4E1" : "#E3F3EA", color: colore, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sale ? "none" : "scaleY(-1)" }}><path d="M7 17 17 7M9 7h8v8" /></svg>
+                  </span>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 15 : 16, color: colore }}>
+                    <b>{sale ? "+" : ""}{Math.round(variazionePctPN)}%</b> vs {periodoPrima} ({fmtEuroErp(totalePrecedentePN)})
+                  </span>
                 </div>
-              )}
-            </div>
+              );
+            })()}
           </div>
 
           {topCategoriePN.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-              {topCategoriePN.map((c) => (
-                <div key={c.nome} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "8px 12px", minWidth: 120 }}>
-                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY }}>{c.nome}</div>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, marginTop: 1 }}>{fmtEuroErp(c.totale)}</div>
-                </div>
-              ))}
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(230px, 1fr))", gap: isMobile ? 10 : 12, marginBottom: isMobile ? 18 : 22 }}>
+              {topCategoriePN.map((c) => {
+                const Icona = iconaPerCategoriaSpesa(c.nome);
+                const attiva = ricercaPN.trim().toLowerCase() === c.nome.toLowerCase();
+                return (
+                  <button
+                    key={c.nome}
+                    onClick={() => setRicercaPN(attiva ? "" : c.nome)}
+                    title={attiva ? "Togli il filtro" : `Mostra solo le spese di ${c.nome}`}
+                    style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, textAlign: "left", background: "#fff", border: `1px solid ${attiva ? NAVY : CREAM_BORDER}`, borderRadius: 18, padding: isMobile ? "12px 12px" : "16px 18px", cursor: "pointer", minWidth: 0, boxShadow: "0 8px 20px -16px rgba(14,27,51,0.35)" }}
+                  >
+                    <span style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: BG_CHIARO, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Icona size={isMobile ? 20 : 24} color={NAVY} />
+                    </span>
+                    <span style={{ minWidth: 0, flex: "1 1 auto" }}>
+                      <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 12.5 : 14, fontWeight: 600, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{c.nome}</span>
+                      <span style={{ display: "block", ...fontHero, fontSize: isMobile ? 22 : 26, color: "#8A6D1D", marginTop: 4, whiteSpace: "nowrap" }}>{fmtEuroErp(c.totale)}</span>
+                    </span>
+                    <span style={{ ...fontBody, fontSize: 18, color: NAVY, flexShrink: 0 }}>›</span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
