@@ -36197,14 +36197,12 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
         </div>
         <div style={{ flex: "1 1 auto", minWidth: 0 }}>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 16.5 : 19, fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{titolo}</div>
-          {sede && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, ...fontBody, fontSize: 13.5, color: NAVY }}>
-              <IconaPin size={15} color={NAVY} />{sede}
-            </div>
-          )}
+          {/* la riga della sede da sola non c'e' piu': la classe qui sotto
+              dice gia' corso, citta' e data, e ripetere la citta' sopra
+              era una riga in piu' senza niente dentro */}
           {corsoLabel && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, ...fontBody, fontSize: 13, color: MUTED, minWidth: 0 }}>
-              <IconaQiDocumento size={15} color={MUTED} /><span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{corsoLabel}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, ...fontBody, fontSize: 15, color: NAVY, minWidth: 0 }}>
+              <IconaQiDocumento size={16} color={NAVY} /><span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{corsoLabel}</span>
             </div>
           )}
           {chips.filter(Boolean).length > 0 && (
