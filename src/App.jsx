@@ -38201,7 +38201,10 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           const daRiconciliare = documenti.filter((d) => d.tipo !== "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
           const ncDaRiconciliare = documenti.filter((d) => d.tipo === "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
           const daImportare = (fattureRicevuteFic || []).filter((f) => !f.spesa_id && dentroContabilita(f)).length;
-          const speseDaPagare = (spese || []).filter((sp) => sp.stato && sp.stato !== "pagata").length + daPagare.length;
+          // lo stesso numero dello Scadenziario Passivo: daPagare contiene
+          // gia' le spese reali non pagate, sommarle un'altra volta le
+          // contava due volte ("3" in cima, "2" nell'elenco)
+          const speseDaPagare = daPagare.length;
           const riquadri = [
             { chiave: "riconciliare", etichetta: "Documenti da riconciliare", valore: daRiconciliare, colore: "#C67C2E", sfondo: "#FBEEE0", onClick: onApriRiconciliazione },
             { chiave: "importare", etichetta: "Spese da importare", valore: daImportare, colore: "#B8860B", sfondo: "#FBF3E0", onClick: () => setTab("documenti") },
