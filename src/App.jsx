@@ -2859,6 +2859,23 @@ function TileHome({
   const [aspettoTasti] = useAspettoTasti();
   const aspettoMobile = aspettoTasti.mobile;
   const aspettoDesktop = aspettoTasti.desktop;
+  // Sulla scrivania icona e testi seguono la larghezza vera del tasto:
+  // la misura di riferimento e' quella di Aspetto dell'app, e dove la
+  // griglia stringe il tasto (cinque per riga in Contabilita') tutto si
+  // rimpicciolisce in proporzione invece di restare grande dentro un
+  // quadrato piccolo. Un tasto a misura piena non cambia.
+  const rifTasto = useRef(null);
+  const [larghezzaTasto, setLarghezzaTasto] = useState(null);
+  useLayoutEffect(() => {
+    const el = rifTasto.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const misura = () => setLarghezzaTasto(el.clientWidth || null);
+    misura();
+    const osservatore = new ResizeObserver(misura);
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, []);
+  const scala = larghezzaTasto ? Math.min(1, larghezzaTasto / (aspettoDesktop.dimensione || 300)) : 1;
   if (isMobile && ricca) {
     return (
       <button
@@ -2917,6 +2934,7 @@ function TileHome({
   }
   return (
     <button
+      ref={rifTasto}
       data-niente-ombra="1"
       onClick={attivo ? onClick : undefined}
       disabled={!attivo}
@@ -2934,7 +2952,7 @@ function TileHome({
         display: "flex", flexDirection: "column", alignItems: ricca ? "center" : "stretch", justifyContent: ricca ? "center" : "flex-end", minWidth: 0,
         background: attivo ? (isMobile ? "#FFFFFF" : aspettoDesktop.colore) : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : aspettoDesktop.raggio,
         boxShadow: isMobile ? "none" : ombraCssTasto(aspettoDesktop.ombra),
-        padding: ricca ? (isMobile ? "16px 10px 12px" : "28px 22px 22px") : (isMobile ? "8px 10px" : 22),
+        padding: ricca ? (isMobile ? "16px 10px 12px" : `${Math.round(28 * scala)}px ${Math.round(22 * scala)}px ${Math.round(22 * scala)}px`) : (isMobile ? "8px 10px" : 22),
         cursor: attivo ? "pointer" : "default", overflow: "hidden",
         opacity: attenuato ? 0.5 : 1,
         outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
@@ -2954,10 +2972,10 @@ function TileHome({
       )}
       {ricca ? (
         <>
-          <div style={{ color: coloreIcona, marginBottom: isMobile ? 6 : 12 }}><Icona size={isMobile ? 26 : aspettoDesktop.icona} color={coloreIcona} /></div>
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 17, fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : 7, lineHeight: 1.2 }}>{title}</div>
+          <div style={{ color: coloreIcona, marginBottom: isMobile ? 6 : Math.round(12 * scala) }}><Icona size={isMobile ? 26 : Math.round(aspettoDesktop.icona * scala)} color={coloreIcona} /></div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : Math.max(11, 17 * scala), fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : Math.round(7 * scala), lineHeight: 1.2 }}>{title}</div>
           {descrizione && (
-            <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12, color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, 12 * scala), color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
           )}
           {/* niente freccia in fondo: copriva la descrizione e non diceva
               niente che il tasto non dicesse gia'. Tolta il 15/09/2026 da
