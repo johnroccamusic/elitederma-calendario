@@ -19684,6 +19684,72 @@ const CHIAVE_LOGHI_MASTER_PUBBLICATI = "loghi_masterPubblicati";
 // contabilita', niente scarico) ma i loro pezzi sono gia' promessi: il POS
 // li toglie dal disponibile finche' il carrello non si paga o si elimina
 const CHIAVE_CARRELLI_SOSPESI = "pos_carrelliSospesi";
+// chi sta usando il POS: master, venditore o utente dell'app — la stessa
+// identita' che il POS scrive sulle vendite e sui carrelli sospesi
+function operatoreCorrente(utenteLoggato, venditoreLoggato) {
+  return utenteLoggato?.masterId
+    ? { tipo: "master", id: utenteLoggato.masterId, nome: utenteLoggato.nome }
+    : (venditoreLoggato || utenteLoggato?.venditoreId)
+    ? { tipo: "venditore", id: venditoreLoggato?.id || utenteLoggato.venditoreId, nome: venditoreLoggato?.nome || utenteLoggato.venditoreNome || utenteLoggato.nome }
+    : utenteLoggato
+    ? { tipo: "utente", id: utenteLoggato.id, nome: utenteLoggato.nome }
+    : null;
+}
+function stessoOperatore(a, b) {
+  return !!a && !!b && a.tipo === b.tipo && String(a.id) === String(b.id);
+}
+// I carrelli sospesi sono di chi li ha salvati: nel POS ognuno vede i
+// suoi. La merce dentro pero' e' ferma per tutti, e un carrello
+// dimenticato e' materiale sottratto al magazzino: per questo chi
+// amministra ha, in Magazzino e shop, l'elenco completo con chi, quando
+// (data e ora di creazione) e quanto
+function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, isMobile }) {
+  const ordinati = [...lista].sort((a, b) => String(b.creato || "").localeCompare(String(a.creato || "")));
+  const quando = (iso) => (iso ? new Date(iso).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
+  const pezziTotali = ordinati.reduce((t, c) => t + (c.carrello || []).reduce((s2, r) => s2 + (Number(r.quantita) || 0), 0), 0);
+  return (
+    <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: "rgba(20,20,30,0.45)", zIndex: 2400, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: isMobile ? "16px 8px" : "40px 16px", overflowY: "auto" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(760px, 100%)", background: "#fff", borderRadius: 16, boxShadow: "0 12px 40px rgba(0,0,0,0.25)", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 18px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrelli sospesi</div>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{ordinati.length} carrell{ordinati.length === 1 ? "o" : "i"} · {pezziTotali} pezz{pezziTotali === 1 ? "o" : "i"} fermi in magazzino, non vendibili finché il carrello non si paga o si elimina.</div>
+          </div>
+          <button onClick={onChiudi} data-niente-ombra title="Chiudi" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, fontSize: 24, lineHeight: 1, padding: 4 }}>×</button>
+        </div>
+        <div style={{ padding: 14, maxHeight: "70vh", overflowY: "auto" }}>
+          {ordinati.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 16 }}>Nessun carrello sospeso: tutto il materiale è in vendita.</div>}
+          {ordinati.map((c) => (
+            <div key={c.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: NAVY }}>{c.nome || "Carrello senza nome"}</div>
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>
+                    <b style={{ color: NAVY }}>{c.operatore?.nome ? toTitleCase(c.operatore.nome) : "operatore sconosciuto"}</b>
+                    {c.operatore?.tipo ? ` (${c.operatore.tipo})` : ""} · creato il {quando(c.creato)}{c.aggiornato && c.aggiornato !== c.creato ? ` · ultima modifica ${quando(c.aggiornato)}` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(totaleCarrelloSospeso(c))}</div>
+                  <button onClick={() => onElimina(c)} data-niente-ombra style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}>Elimina</button>
+                </div>
+              </div>
+              <div style={{ marginTop: 8, borderTop: `1px dashed ${CREAM_BORDER}`, paddingTop: 6 }}>
+                {(c.carrello || []).map((r, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 12.5, color: NAVY, padding: "2px 0" }}>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.quantita} × {r.nome}{r.sku ? <span style={{ color: MUTED }}> · {r.sku}</span> : null}</span>
+                    <span style={{ whiteSpace: "nowrap" }}>{fmtEuroErp2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0))}</span>
+                  </div>
+                ))}
+                {c.note && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>Note: {c.note}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 function totaleCarrelloSospeso(c) {
   return (c?.carrello || []).reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0);
 }
@@ -32757,12 +32823,33 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
 
 function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
+  // i carrelli sospesi di TUTTI gli utenti del POS, per chi amministra:
+  // un carrello dimenticato tiene fermo materiale che nessuno puo'
+  // vendere, e da qui si vede di chi e' e da quando
+  const puoVedereSospesi = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
+  const [carrelliSospesiTutti, salvaCarrelliSospesiTutti] = useImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
+  const sospesiTutti = Array.isArray(carrelliSospesiTutti) ? carrelliSospesiTutti : [];
+  const [mostraSospesi, setMostraSospesi] = useState(false);
+  function eliminaSospeso(c) {
+    if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}" di ${c.operatore?.nome ? toTitleCase(c.operatore.nome) : "operatore sconosciuto"}? I suoi pezzi tornano in vendita.`)) return;
+    const attuali = Array.isArray(LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI]) ? LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI] : [];
+    salvaCarrelliSospesiTutti(attuali.filter((x) => x.id !== c.id));
+  }
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
+      {mostraSospesi && puoVedereSospesi && (
+        <PannelloCarrelliSospesiAmministrazione lista={sospesiTutti} isMobile={isMobile} onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso} />
+      )}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+          {puoVedereSospesi && (
+            <button onClick={() => setMostraSospesi(true)} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: isMobile ? 12 : 13, fontWeight: 700, color: sospesiTutti.length > 0 ? "#fff" : NAVY, background: sospesiTutti.length > 0 ? "#C0392B" : "#fff", border: `1px solid ${sospesiTutti.length > 0 ? "#C0392B" : CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? "8px 12px" : "10px 16px", cursor: "pointer" }}>
+              <IconaCarrelloPos size={16} color={sospesiTutti.length > 0 ? "#fff" : GOLD} />
+              Carrelli sospesi{sospesiTutti.length > 0 ? ` (${sospesiTutti.length})` : ""}
+            </button>
+          )}
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Magazzino fisico, shop online e le vendite che ne derivano.</div>
         {/* "Gestione shop" (il front office) non ha più un tasto suo: si
@@ -51502,13 +51589,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // master, poi venditore, poi utente operativo nominale (Amministratore/
   // Stefano/Elena…) — sulle vendite prodotti si definiscono i target con
   // premio produzione, quindi va sempre saputo con certezza chi ha venduto
-  const operatore = utenteLoggato?.masterId
-    ? { tipo: "master", id: utenteLoggato.masterId, nome: utenteLoggato.nome }
-    : (venditoreLoggato || utenteLoggato?.venditoreId)
-    ? { tipo: "venditore", id: venditoreLoggato?.id || utenteLoggato.venditoreId, nome: venditoreLoggato?.nome || utenteLoggato.venditoreNome || utenteLoggato.nome }
-    : utenteLoggato
-    ? { tipo: "utente", id: utenteLoggato.id, nome: utenteLoggato.nome }
-    : null;
+  const operatore = operatoreCorrente(utenteLoggato, venditoreLoggato);
   // target in corso per l'operatore loggato (solo master/venditore: i
   // target esistono solo per questi due soggetti, vedi Target
   // Master/Venditori in Impostazioni), con l'avanzamento già calcolato
@@ -51820,6 +51901,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // quale di questi e' aperto adesso nel POS, e se il pannello e' fuori
   const [carrelliSospesiCondivisi, salvaCarrelliSospesi] = useImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
   const listaSospesi = Array.isArray(carrelliSospesiCondivisi) ? carrelliSospesiCondivisi : [];
+  // nel POS ognuno vede i SUOI carrelli sospesi; quelli degli altri
+  // restano invisibili qui (ma i loro pezzi sono fermi per tutti: vedi
+  // riservatiAltrove). L'elenco completo ce l'ha chi amministra, in
+  // Magazzino e shop
+  const mieiSospesi = listaSospesi.filter((c) => stessoOperatore(c.operatore, operatore));
   const [carrelloSospesoId, setCarrelloSospesoId] = useState(null);
   const [pannelloSospesiAperto, setPannelloSospesiAperto] = useState(false);
   // si scrive sempre sull'ultima lista arrivata, non su quella chiusa nella
@@ -53149,7 +53235,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return (
       <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 16px 214px" }}>
         <PannelloCarrelliSospesi
-          lista={listaSospesi} aperto={pannelloSospesiAperto} idCorrente={carrelloSospesoId} isMobile={isMobile}
+          lista={mieiSospesi} aperto={pannelloSospesiAperto} idCorrente={carrelloSospesoId} isMobile={isMobile}
           onApri={() => setPannelloSospesiAperto(true)} onChiudi={() => setPannelloSospesiAperto(false)}
           onScegli={apriCarrelloSospeso} onElimina={eliminaCarrelloSospeso}
         />
@@ -53330,7 +53416,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "32px 28px 60px" }}>
       <PannelloCarrelliSospesi
-        lista={listaSospesi} aperto={pannelloSospesiAperto} idCorrente={carrelloSospesoId} isMobile={isMobile}
+        lista={mieiSospesi} aperto={pannelloSospesiAperto} idCorrente={carrelloSospesoId} isMobile={isMobile}
         onApri={() => setPannelloSospesiAperto(true)} onChiudi={() => setPannelloSospesiAperto(false)}
         onScegli={apriCarrelloSospeso} onElimina={eliminaCarrelloSospeso}
       />
@@ -62201,7 +62287,8 @@ export default function App() {
   // i carrelli sospesi del POS: il numero lampeggia sul riquadro POS della
   // home, cosi' chi esce dal POS non se li dimentica dentro
   const [carrelliSospesiApp] = useImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
-  const numeroCarrelliSospesi = Array.isArray(carrelliSospesiApp) ? carrelliSospesiApp.length : 0;
+  const operatoreApp = operatoreCorrente(utenteLoggato, venditoreLoggato);
+  const numeroCarrelliSospesi = (Array.isArray(carrelliSospesiApp) ? carrelliSospesiApp : []).filter((c) => stessoOperatore(c.operatore, operatoreApp)).length;
   const [viewPrimaDiAdvisor, setViewPrimaDiAdvisor] = useState("magazzino");
   // la scheda di un prodotto aperta da fuori (dall'Advisor, cliccando il
   // nome): il magazzino la apre appena entra, e il primo "indietro"
