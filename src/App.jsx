@@ -704,7 +704,14 @@ function applicaVistaForzata(v) {
 function dispositivoTouchPiccolo() {
   try { return navigator.maxTouchPoints > 0 && Math.min(window.screen.width, window.screen.height) <= 900; } catch (e) { return false; }
 }
-function TastoVistaForzata() {
+function TastoVistaForzata({ programmatore = false }) {
+  // solo per chi programma: serve a controllare il lavoro, non a usare
+  // l'app. Se la vista era rimasta forzata da un accesso precedente e
+  // ora il ruolo non lo permette, si torna al telefono da soli
+  if (!programmatore) {
+    if (vistaForzata === "desktop") { applicaVistaForzata(null); window.location.reload(); }
+    return null;
+  }
   if (!dispositivoTouchPiccolo()) return null;
   const desktop = vistaForzata === "desktop";
   // In vista scrivania la pagina e' rimpicciolita per starci tutta: un
@@ -64222,7 +64229,7 @@ export default function App() {
       <StiliGlobaliAspetto />
       {/* dal telefono: il tastino in alto a destra per vedere l'app come
           sul computer, con il pizzico per ingrandire */}
-      <TastoVistaForzata />
+      <TastoVistaForzata programmatore={ruoloUtente === "programmatore"} />
       {preferitiDisponibili && slotPreferitoInScelta != null && (
         <ModaleScegliPreferito
           destinazioni={destinazioniPreferiti} onScegli={scegliPreferito} onClose={() => setSlotPreferitoInScelta(null)}
