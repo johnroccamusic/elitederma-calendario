@@ -36293,9 +36293,9 @@ function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, ca
           telefono la riga va sotto la scadenza e i testi si stringono,
           ma non si spezzano mai su due file */}
       {!aperto && (
-        <div style={{ display: "flex", gap: isMobile ? 6 : 10, flex: "1 1 320px", minWidth: 0, flexWrap: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 320px", minWidth: 0, flexWrap: "nowrap" }}>
           {onPagaDaCassa && (
-            <button onClick={() => setCassaAperta((v) => !v)} disabled={pagandoCassa} style={{ ...tastoOro, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "13px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
+            <button onClick={() => setCassaAperta((v) => !v)} disabled={pagandoCassa} style={{ ...tastoOro, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
               <IconaQiPortafoglio size={isMobile ? 16 : 20} /><span>{pagandoCassa ? "Registro…" : "Pagato da cassa"}</span>
             </button>
           )}
@@ -36312,7 +36312,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, ca
               title="Sposta l'impegno nello Scadenziario Passivo da pagare con bonifico, senza aspettare la fattura"
               style={{ ...tastoNavy, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", textAlign: "center" }}
             >
-              <IconaQiBanca size={isMobile ? 16 : 20} /><span style={{ lineHeight: 1.15 }}>Bonifico<br />in attesa</span>
+              <IconaQiBanca size={isMobile ? 16 : 20} /><span style={{ lineHeight: 1.15, whiteSpace: "normal" }}>Bonifico in attesa</span>
             </button>
           )}
           <button onClick={() => setAperto(true)} style={{ ...stileTastoCardChiaro(isMobile), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
