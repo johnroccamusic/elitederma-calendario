@@ -24458,6 +24458,16 @@ function PannelloRiepilogoAmministrativo({
     // riga che si sposta da sola dopo ogni spunta e' una riga che non si
     // ritrova piu'
     .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")) || String(a.id).localeCompare(String(b.id)));
+  // Le righe che si mostrano e si modificano a mano sono solo le spese
+  // libere. Una spesa con origine_scadenziario_chiave e' la registrazione
+  // di una riga automatica che sta gia' qui sopra — il compenso disposto
+  // dalla busta, la parte bonifico pagata dallo Scadenziario, la fattura
+  // dell'alloggio — e mostrarla di nuovo la faceva comparire come un
+  // doppione senza nome ("Altra voce", stesso importo) con tanto di
+  // cestino: cancellarla toglieva il pagamento dalla prima nota e la riga
+  // tornava da disporre. In speseClasse restano tutte, perche' il cash
+  // uscito dalla busta si legge da li'.
+  const speseClasseLibere = speseClasse.filter((s) => !s.origine_scadenziario_chiave);
   async function salvaCampiSpesaClasse(id, campi) {
     setSpeseClasseOverride((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), ...campi } }));
     const { error } = await supabase.from("spese").update(campi).eq("id", id);
@@ -25369,11 +25379,11 @@ function PannelloRiepilogoAmministrativo({
                     })}
                   </div>
                 )}
-                {speseClasse.length === 0 ? (
+                {speseClasseLibere.length === 0 ? (
                   <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Nessuna spesa registrata per questa classe.</div>
                 ) : (
                   <div style={{ marginBottom: 12 }}>
-                    {speseClasse.map((spesa) => (
+                    {speseClasseLibere.map((spesa) => (
                       <RigaCostoClasse
                         key={spesa.id}
                         spesa={spesa}
@@ -30172,8 +30182,13 @@ function contiRiepilogoClasse({
   // mani del master in aula
   const contanti = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? (((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i)) : 0), 0) + incassiExtraContanti + venditeContanti);
   const pos = round2(listaIscritti.reduce((s, i) => s + (i.incassato && i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos + venditePos);
+  // Le spese con origine_scadenziario_chiave sono i pagamenti delle righe
+  // automatiche (compensi disposti dalla busta, parti bonifico saldate,
+  // fatture di alloggio e location): il loro costo sta gia' in
+  // totaleSpeseAutomaticheClasse, e sommarle di nuovo raddoppiava il
+  // totale costi ogni volta che si disponeva un pagamento
   const totaleCosti = round2(
-    totaleSpeseAutomaticheClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0)
+    totaleSpeseAutomaticheClasse + speseClasse.filter((x) => !x.origine_scadenziario_chiave).reduce((s, x) => s + (x.totale || 0), 0)
     + costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   // Le quote in contanti si leggono in tre modi. `cashRegistrato` e' gia'
