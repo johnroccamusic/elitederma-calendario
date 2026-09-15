@@ -663,7 +663,69 @@ function applicaZoomPagina(z) {
 // media query) ma in pratica significava che chi ingrandiva un po' si
 // ritrovava di colpo l'app del telefono sul monitor: il layout lo decide
 // lo schermo, non quanto e' grande il testo.
-function larghezzaUtile() { return window.innerWidth; }
+function larghezzaUtile() {
+  // dal telefono, con la vista scrivania forzata, la larghezza e' quella
+  // di un monitor: tutto l'impaginato risponde come su un computer
+  if (vistaForzata === "desktop") return Math.max(window.innerWidth, LARGHEZZA_VISTA_DESKTOP);
+  return window.innerWidth;
+}
+
+// "Vista scrivania" dal telefono: un tastino in alto a destra che fa
+// vedere l'app come sul computer. Serve a chi controlla il lavoro fatto:
+// la pagina si impagina larga, e si puo' stringere e allargare con due
+// dita, cosa che nella vista telefono e' spenta (viewport bloccata e
+// touch-action pan-x pan-y in index.html). La scelta resta sul
+// dispositivo, non e' condivisa.
+const CHIAVE_VISTA_FORZATA = "elitederma_vista_forzata";
+const LARGHEZZA_VISTA_DESKTOP = 1180;
+const VIEWPORT_TELEFONO = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
+let vistaForzata = (() => { try { return window.localStorage.getItem(CHIAVE_VISTA_FORZATA) === "desktop" ? "desktop" : null; } catch (e) { return null; } })();
+function applicaVistaForzata(v) {
+  vistaForzata = v === "desktop" ? "desktop" : null;
+  try { if (vistaForzata) window.localStorage.setItem(CHIAVE_VISTA_FORZATA, "desktop"); else window.localStorage.removeItem(CHIAVE_VISTA_FORZATA); } catch (e) { /* navigazione privata */ }
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (meta) {
+    meta.setAttribute("content", vistaForzata
+      // la scala iniziale fa stare tutta la larghezza nello schermo; poi
+      // il pizzico ingrandisce fino a 4 volte
+      ? `width=${LARGHEZZA_VISTA_DESKTOP}, initial-scale=${(window.screen.width / LARGHEZZA_VISTA_DESKTOP).toFixed(3)}, minimum-scale=0.2, maximum-scale=4, user-scalable=yes, viewport-fit=cover`
+      : VIEWPORT_TELEFONO);
+  }
+  const touch = vistaForzata ? "auto" : "";
+  document.documentElement.style.touchAction = touch;
+  if (document.body) document.body.style.touchAction = touch;
+  window.dispatchEvent(new Event("zoom-pagina"));
+}
+// il tastino si mostra solo su un telefono o tablet vero: schermo
+// touch e lato corto piccolo. Su un computer non ha senso
+function dispositivoTouchPiccolo() {
+  try { return navigator.maxTouchPoints > 0 && Math.min(window.screen.width, window.screen.height) <= 900; } catch (e) { return false; }
+}
+function TastoVistaForzata() {
+  const [vista, setVista] = useState(vistaForzata);
+  if (!dispositivoTouchPiccolo()) return null;
+  const desktop = vista === "desktop";
+  return (
+    <button
+      type="button"
+      onClick={() => { applicaVistaForzata(desktop ? null : "desktop"); setVista(desktop ? null : "desktop"); }}
+      title={desktop ? "Torna alla vista telefono" : "Vedi come sul computer (poi puoi ingrandire con due dita)"}
+      style={{
+        position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 8px)", right: 8, zIndex: 9999,
+        width: 34, height: 34, borderRadius: "50%", border: `1px solid ${desktop ? "#0E1B33" : "#E8E3D6"}`,
+        background: desktop ? "#0E1B33" : "rgba(255,255,255,0.92)", color: desktop ? "#fff" : "#0E1B33",
+        display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+        boxShadow: "0 2px 8px rgba(14,27,51,0.25)", padding: 0,
+      }}
+    >
+      {desktop ? (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></svg>
+      ) : (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2" /><path d="M8 20.5h8M12 17v3.5" /></svg>
+      )}
+    </button>
+  );
+}
 
 // L'ascolto sta qui, a livello di modulo: cosi' lo zoom vale ovunque —
 // gestionale, pagina pubblica delle modelle, vista master — e non solo
@@ -675,6 +737,7 @@ function larghezzaUtile() { return window.innerWidth; }
 // arriva come una rotellina con ctrlKey: viene zoomato anche quello, in
 // modo continuo perche' i suoi passi sono piccoli.
 if (typeof window !== "undefined") {
+  if (vistaForzata === "desktop") applicaVistaForzata("desktop");
   applicaZoomPagina(leggiZoomSalvato());
   // Sul Mac lo zoom si fa solo con Cmd. Il pizzico sul trackpad arriva
   // come Ctrl+rotellina, ed e' facilissimo farlo senza accorgersene
@@ -64006,6 +64069,9 @@ export default function App() {
           regola sola, valida ovunque, invece di 321 pastiglie toccate a
           mano */}
       <StiliGlobaliAspetto />
+      {/* dal telefono: il tastino in alto a destra per vedere l'app come
+          sul computer, con il pizzico per ingrandire */}
+      <TastoVistaForzata />
       {preferitiDisponibili && slotPreferitoInScelta != null && (
         <ModaleScegliPreferito
           destinazioni={destinazioniPreferiti} onScegli={scegliPreferito} onClose={() => setSlotPreferitoInScelta(null)}
