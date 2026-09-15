@@ -36704,6 +36704,26 @@ function RigaCassaVuota({ testo }) {
 // senza che nessuno l'abbia mandata.
 const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico", "Bonifico periodico", "Domiciliazione bancaria", "Cassa contanti"];
 const METODI_SPESA_DALLA_CASSA = new Set(["Cassa contanti", "Contanti", "Cash no iva"]);
+// Una spesa di classe pagata in contanti e' uscita dalla BUSTA di quel
+// corso, non dalla cassa contanti: la busta entra in cassa gia' al netto
+// ("busta_importo" e' il cash pulito, cioe' l'incassato meno queste spese),
+// e toglierle di nuovo dal saldo le conterebbe due volte. E' successo
+// davvero con "Disponi pagamenti": ogni compenso disposto scendeva dalla
+// busta E dalla cassa, e la cassa — che e' il fondo accumulato da tutti i
+// corsi — perdeva soldi mai usciti da li'.
+//
+// Dalla cassa escono solo i contanti che non passano da una busta: le
+// spese aziendali senza classe, e le quote di classe saldate dallo
+// Scadenziario con "Pagato da cassa contanti" — quelle rinviate (origine
+// "scadenziario_cash") e quelle della parte bonifico (origine "automatico"
+// con la chiave della riga, senza il prefisso "cash_").
+function spesaUscitaDallaBusta(s) {
+  if (!s.classe_id) return false;
+  if (s.origine === "scadenziario_cash") return false;
+  const chiave = String(s.origine_scadenziario_chiave || "");
+  if (s.origine === "automatico" && chiave && !chiave.startsWith("cash_")) return false;
+  return true;
+}
 
 function PannelloCassaContanti({
   corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
@@ -36742,14 +36762,14 @@ function PannelloCassaContanti({
       // quelle di un corso stanno gia' dentro la sua busta, e contarle qui
       // vorrebbe dire contarle due volte
       supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
-      supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento").eq("stato", "pagata").gte("data_pagamento", aperta),
+      supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento, classe_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
     ]);
     if (mov.error) { setMsg(`Non riesco a leggere la cassa: ${mov.error.message}`); setMovimenti([]); return; }
     setMovimenti(mov.data || []);
     setBuste(bus.data || []);
     setVenditeSenzaCorso(round2((ven.data || []).reduce((s, v) => s + (v.totale || 0), 0)));
-    setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento)).reduce((s, x) => s + (x.totale || 0), 0)));
+    setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x)).reduce((s, x) => s + (x.totale || 0), 0)));
     setRicorrenti(ric.data || []);
   }
   useEffect(() => { carica(); }, []);
