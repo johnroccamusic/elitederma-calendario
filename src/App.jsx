@@ -36082,33 +36082,60 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
     setSalvando(false);
   }
   const isMobile = useIsMobile();
-  // Stessa card del Quadro impegni: sotto, la scadenza e i due tasti;
-  // ancora sotto, la data del pagamento e la ricevuta da allegare
+  // Nessuno dei due tasti paga da solo: apre una finestra con la data del
+  // pagamento (e, per il bonifico, la ricevuta da allegare) e si paga
+  // solo con Conferma, oppure si annulla. Prima il tasto scriveva subito
+  // in prima nota e un tocco per sbaglio segnava pagato quello che non lo
+  // era.
+  const [pannello, setPannello] = useState(null); // null | "cassa" | "bonifico"
+  const chiudiPannello = () => { setPannello(null); setFile(null); };
   const piede = disabilitato ? (
     <div style={{ ...fontBody, fontSize: 12, color: "#C0392B" }}>{motivoDisabilitato}</div>
   ) : (
     <>
       <RiquadroDataCard etichetta="Scadenza" data={scadenza} />
-      <button onClick={() => confermaPagato("Cassa contanti")} disabled={salvando} title="Esce dalla cassa contanti: il saldo si aggiorna subito" style={{ ...stileTastoCardOro(isMobile, salvando), flex: "1 1 auto" }}>
-        <IconaQiPortafoglio size={20} />{salvando ? "Salvo…" : "Pagato da cassa"}
-      </button>
-      <button onClick={() => confermaPagato("Bonifico")} disabled={salvando} title="Esce dal conto corrente" style={{ ...stileTastoCardNavy(isMobile, salvando), flex: "1 1 auto", justifyContent: "space-between" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><IconaQiBanca size={20} /><span style={{ lineHeight: 1.2 }}>{salvando ? "Salvo…" : <>Pagato da<br />conto corrente</>}</span></span>
-        <span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
-      </button>
+      <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: "nowrap" }}>
+        <button onClick={() => setPannello(pannello === "cassa" ? null : "cassa")} disabled={salvando} title="Esce dalla cassa contanti: il saldo si aggiorna subito" style={{ ...stileTastoCardOro(isMobile, salvando), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", outline: pannello === "cassa" ? `2px solid #8A6D1D` : "none" }}>
+          {!isMobile && <IconaQiPortafoglio size={20} />}<span>Pagato da cassa</span>
+        </button>
+        <button onClick={() => setPannello(pannello === "bonifico" ? null : "bonifico")} disabled={salvando} title="Esce dal conto corrente" style={{ ...stileTastoCardNavy(isMobile, salvando), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", textAlign: "center", outline: pannello === "bonifico" ? `2px solid ${GOLD}` : "none" }}>
+          {!isMobile && <IconaQiBanca size={20} />}<span style={{ lineHeight: 1.15, whiteSpace: "normal" }}>Pagato da conto corrente</span>
+        </button>
+      </div>
     </>
   );
+  const eCassa = pannello === "cassa";
   return (
     <CardAmministrazione
       data={dataDebito} titolo={fornitore || nome} corsoLabel={oggetto || corsoLabel}
       chips={[categoriaNome ? { Icona: IconaQiDocumento, testo: categoriaNome } : null, iban ? `IBAN ${iban}` : null]}
       importo={fmtEuroErp(totale)} piede={piede}
     >
-      {!disabilitato && (
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: 12, background: BG_CHIARO, borderRadius: 14 }}>
-          <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 100%" }}>Data del pagamento e ricevuta, prima di premere uno dei due tasti</span>
-          <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
-          <CampoFileTrascinabile onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
+      {pannello && !disabilitato && (
+        <div style={{ marginTop: 12, padding: isMobile ? 14 : 16, background: "#fff", border: `1.5px solid ${eCassa ? "#8A6D1D" : NAVY}`, borderRadius: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{eCassa ? "Pagato da cassa contanti" : "Pagato da conto corrente"}</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
+            {eCassa
+              ? `${fmtEuroErp(totale)} escono dalla cassa contanti e vanno in prima nota con la data qui sotto.`
+              : `${fmtEuroErp(totale)} escono dal conto e vanno in prima nota con la data qui sotto. La ricevuta del bonifico si può allegare.`}
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+            <label style={{ ...fontBody, fontSize: 12, color: NAVY, display: "flex", alignItems: "center", gap: 8 }}>
+              Data del pagamento
+              <input type="date" style={{ ...inputStyle, width: "auto", padding: "8px 10px", fontSize: 13 }} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
+            </label>
+            {!eCassa && <CampoFileTrascinabile onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 200px", minWidth: 0 }} />}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+            <button
+              onClick={async () => { await confermaPagato(eCassa ? "Cassa contanti" : "Bonifico"); chiudiPannello(); }}
+              disabled={salvando || !dataPagamento}
+              style={{ ...(eCassa ? stileTastoCardOro(isMobile, salvando || !dataPagamento) : stileTastoCardNavy(isMobile, salvando || !dataPagamento)), flex: "1 1 160px", justifyContent: "center", padding: "12px 16px" }}
+            >
+              {salvando ? "Salvo…" : `Conferma: pagato il ${dataPagamento ? fmtData(dataPagamento) : "…"}`}
+            </button>
+            <button onClick={chiudiPannello} disabled={salvando} style={{ ...stileTastoCardChiaro(isMobile), flex: "0 1 auto", padding: "12px 16px" }}>Annulla</button>
+          </div>
         </div>
       )}
     </CardAmministrazione>
