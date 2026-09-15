@@ -300,6 +300,9 @@ function useImpostazioneCondivisa(chiave, predefinito) {
 // Vive fra le impaginazioni condivise perche' e' esattamente quello: una
 // preferenza del programmatore, salvata una volta e valida ovunque.
 const CHIAVE_MANIGLIE = "maniglie_impaginazione";
+// i cerchietti "i" con le istruzioni dei tasti: un interruttore solo per
+// tutta l'app, in Aspetto dell'app. Vuoto = accesi
+const CHIAVE_AIUTI = "aiuti_visibili";
 function useManiglieAttive() {
   const [attive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   return attive === true;
@@ -15546,6 +15549,8 @@ function PaginaAspettoApp() {
   // non se ne vede nessuna. Stava in fondo a Setting, nascosto: qui sta
   // con il resto dell'aspetto
   const [maniglieAttive, salvaManiglieAttive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
+  // e i cerchietti "i" con le istruzioni dei tasti, stessa cosa
+  const [aiutiVisibili, salvaAiutiVisibili] = useLayoutCondiviso(CHIAVE_AIUTI, true);
   // l'elemento selezionato si ricorda sul dispositivo: si esce, si torna,
   // e si riprende da dove si era
   const [quale, setQualeStato] = useState(() => { try { return localStorage.getItem("aspetto_app_quale") || "mobile"; } catch { return "mobile"; } });
@@ -15628,6 +15633,37 @@ function PaginaAspettoApp() {
             background: maniglieAttive ? "#E7F3E9" : BG,
             borderRadius: 12, padding: "3px 9px",
           }}>{maniglieAttive ? "ON" : "OFF"}</span>
+        </button>
+      </div>
+
+      <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Cerchietti “i” con le istruzioni</div>
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+            {aiutiVisibili !== false
+              ? "Accesi: sui tasti compare il cerchietto “i” e toccandolo si legge cosa fa quel tasto."
+              : "Spenti: nessun cerchietto “i” in tutta l'app. Le istruzioni restano salvate e tornano quando li riaccendi."}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => salvaAiutiVisibili(aiutiVisibili === false)}
+          title="Accende o spegne i cerchietti “i” con le istruzioni dei tasti, in tutta l'app"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0,
+            ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY,
+            background: "#fff", border: `1px solid ${aiutiVisibili !== false ? "#1F7A33" : CREAM_BORDER}`, borderRadius: 22,
+            padding: "9px 14px", cursor: "pointer",
+          }}
+        >
+          <span style={{ width: 16, height: 16, borderRadius: "50%", border: "1px solid currentColor", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: aiutiVisibili !== false ? "#1F7A33" : MUTED }}>i</span>
+          {aiutiVisibili !== false ? "Spegni i cerchietti" : "Accendi i cerchietti"}
+          <span style={{
+            ...fontBody, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6,
+            color: aiutiVisibili !== false ? "#1F7A33" : MUTED,
+            background: aiutiVisibili !== false ? "#E7F3E9" : BG,
+            borderRadius: 12, padding: "3px 9px",
+          }}>{aiutiVisibili !== false ? "ON" : "OFF"}</span>
         </button>
       </div>
 
@@ -35798,11 +35834,14 @@ async function salvaAiuto(chiave, testo) {
 function AiutoInfo({ chiave, predefinito, ruoloUtente }) {
   const [aperta, setAperta] = useState(false);
   const [testi, setTesti] = useState(AIUTI_CACHE || {});
+  const [visibili] = useLayoutCondiviso(CHIAVE_AIUTI, true);
   useEffect(() => {
     AIUTI_ASCOLTATORI.add(setTesti);
     caricaAiuti();
     return () => { AIUTI_ASCOLTATORI.delete(setTesti); };
   }, []);
+  // spenti da Aspetto dell'app: niente cerchietto, da nessuna parte
+  if (visibili === false) return null;
   const testo = testi[chiave] || predefinito || "Nessuna spiegazione ancora: tasto destro qui sopra per scriverla.";
   return (
     <span style={{ position: "relative", display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
