@@ -4660,7 +4660,7 @@ function TastoAggiungiQuota({ testo, onClick }) {
   );
 }
 
-function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip, azioneInFondo }) {
+function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip, azioneInFondo, incassatoIl, onIncassatoIl }) {
   const isMobile = useIsMobile();
   // Da telefono il titolo va su due righe e tutto il resto cresce di tre
   // punti: lo spazio che il titolo lascia libero si spende in corpo del
@@ -4768,6 +4768,17 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
             )}
           </div>
         </>
+      )}
+      {/* La data in cui i soldi sono arrivati davvero: per il bonifico
+          l'accredito in banca, per gli altri il giorno del pagamento. E'
+          la data con cui la quota entra in prima nota (dal 16/09/2026);
+          prima c'era solo "pagato", senza un giorno. */}
+      {pagato && onIncassatoIl && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap", ...fontBody, fontSize: isMobile ? 11 : 12, color: NAVY }}>
+          <span style={{ color: MUTED, whiteSpace: "nowrap" }}>{valori?.metodo === "Bonifico" ? "Accreditato il" : "Incassato il"}</span>
+          <input type="date" value={incassatoIl || ""} disabled={soloLettura} onChange={(e) => onIncassatoIl(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: isMobile ? 11.5 : 12.5 }} />
+          <span style={{ color: MUTED, fontSize: 10.5 }}>è la data con cui entra in prima nota</span>
+        </div>
       )}
       {onMetodo && valori.metodo === "Rate" && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -26115,6 +26126,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false, integrazioneId: null };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
   const [pagAccontoPagato, setPagAccontoPagato] = useState(false);
+  // il giorno in cui acconto e pre corso sono stati incassati (per il
+  // bonifico, accreditati): la data con cui entrano in prima nota
+  const [pagAccontoIncassatoIl, setPagAccontoIncassatoIl] = useState("");
+  const [pagPrecorsoIncassatoIl, setPagPrecorsoIncassatoIl] = useState("");
   // pagamenti aggiuntivi di acconto oltre al primo (pulsante "+"): stesso
   // conto (acconto), semplicemente arrivati in un secondo momento — non
   // toccano "Da avere al corso", che resta sempre a scrittura manuale
@@ -26775,8 +26790,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setVecchiaIscrizione(false);
-    setPagAcconto(QUOTA_VUOTA); setPagAccontoPagato(false); setAccontoExtra([]);
-    setPagPrecorso(QUOTA_VUOTA); setPagPrecorsoPagato(false); setPrecorsoExtra([]);
+    setPagAcconto(QUOTA_VUOTA); setPagAccontoPagato(false); setPagAccontoIncassatoIl(""); setAccontoExtra([]);
+    setPagPrecorso(QUOTA_VUOTA); setPagPrecorsoPagato(false); setPagPrecorsoIncassatoIl(""); setPrecorsoExtra([]);
     setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setCorsoParziale(false); setGiorniPresenza([]); setTipoOfferta(""); setTagliaDivisa("");
@@ -26813,6 +26828,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       bonificoSkip: i.acconto_bonifico_skip === true,
     });
     setPagAccontoPagato(i.acconto_pagato === true);
+    setPagAccontoIncassatoIl(i.acconto_pagato_il || "");
     setAccontoExtra(Array.isArray(i.acconto_extra) ? i.acconto_extra.map((r) => ({
       imponibile: r.imponibile != null ? String(r.imponibile) : "",
       totale: r.totale != null ? String(r.totale) : "",
@@ -26836,6 +26852,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       bonificoSkip: i.precorso_bonifico_skip === true,
     });
     setPagPrecorsoPagato(i.precorso_pagato === true);
+    setPagPrecorsoIncassatoIl(i.precorso_pagato_il || "");
     setPrecorsoExtra(Array.isArray(i.precorso_extra) ? i.precorso_extra.map((r) => ({
       imponibile: r.imponibile != null ? String(r.imponibile) : "",
       totale: r.totale != null ? String(r.totale) : "",
@@ -27127,6 +27144,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         acconto_metodo: pagAcconto.metodo || null,
         acconto_interessi: pagAcconto.metodo === "Rate" && pagAcconto.interessi !== "" ? parseNum(pagAcconto.interessi) : null,
         acconto_pagato: pagAccontoPagato,
+        acconto_pagato_il: pagAccontoPagato ? (pagAccontoIncassatoIl || dataOggiStr()) : null,
         acconto_bonifico_file: pathBonificoAcconto,
         acconto_bonifico_segnalato: segnalatoAcconto,
         acconto_bonifico_skip: !!pagAcconto.bonificoSkip,
@@ -27146,6 +27164,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         precorso_metodo: pagPrecorso.metodo || null,
         precorso_interessi: pagPrecorso.metodo === "Rate" && pagPrecorso.interessi !== "" ? parseNum(pagPrecorso.interessi) : null,
         precorso_pagato: pagPrecorsoPagato,
+        precorso_pagato_il: pagPrecorsoPagato ? (pagPrecorsoIncassatoIl || dataOggiStr()) : null,
         precorso_bonifico_file: pathBonificoPrecorso,
         precorso_bonifico_segnalato: segnalatoPrecorso,
         precorso_bonifico_skip: !!pagPrecorso.bonificoSkip,
@@ -27655,7 +27674,15 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   }
 
   async function toggleIncassato(i) {
-    const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
+    // con l'incasso si scrive anche il giorno: e' la data con cui il saldo
+    // entra in prima nota. Si puo' correggere dalla fascia, sotto
+    const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato, saldo_incassato_il: !i.incassato ? dataOggiStr() : null }).eq("id", i.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    ricarica(["iscritti"]);
+  }
+  async function salvaDataIncasso(i, data) {
+    if (!data) return;
+    const { error } = await supabase.from("iscritti").update({ saldo_incassato_il: data }).eq("id", i.id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["iscritti"]);
   }
@@ -28772,8 +28799,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               })
             }
             pagato={pagAccontoPagato}
-            onPagato={setPagAccontoPagato}
-            onBonificoFile={(f) => { setPagAcconto((prev) => ({ ...prev, bonificoFileNuovo: f })); if (f) setPagAccontoPagato(true); }}
+            onPagato={(v) => { setPagAccontoPagato(v); if (v && !pagAccontoIncassatoIl) setPagAccontoIncassatoIl(dataOggiStr()); }}
+            incassatoIl={pagAccontoIncassatoIl} onIncassatoIl={setPagAccontoIncassatoIl}
+            onBonificoFile={(f) => { setPagAcconto((prev) => ({ ...prev, bonificoFileNuovo: f })); if (f) { setPagAccontoPagato(true); if (!pagAccontoIncassatoIl) setPagAccontoIncassatoIl(dataOggiStr()); } }}
             mostraSaltaFile={adminSbloccato}
             onBonificoSkip={(v) => setPagAcconto((prev) => ({ ...prev, bonificoSkip: v }))}
             azioneInFondo={accontoExtra.length === 0
@@ -28820,8 +28848,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             onMetodo={(v) => setPagPrecorso((prev) => conMetodoAggiornatoSenzaBlocco(prev, v))}
             onInteressi={(v) => setPagPrecorso((prev) => ({ ...prev, interessi: v }))}
             pagato={pagPrecorsoPagato}
-            onPagato={setPagPrecorsoPagato}
-            onBonificoFile={(f) => { setPagPrecorso((prev) => ({ ...prev, bonificoFileNuovo: f })); if (f) setPagPrecorsoPagato(true); }}
+            onPagato={(v) => { setPagPrecorsoPagato(v); if (v && !pagPrecorsoIncassatoIl) setPagPrecorsoIncassatoIl(dataOggiStr()); }}
+            incassatoIl={pagPrecorsoIncassatoIl} onIncassatoIl={setPagPrecorsoIncassatoIl}
+            onBonificoFile={(f) => { setPagPrecorso((prev) => ({ ...prev, bonificoFileNuovo: f })); if (f) { setPagPrecorsoPagato(true); if (!pagPrecorsoIncassatoIl) setPagPrecorsoIncassatoIl(dataOggiStr()); } }}
             mostraSaltaFile={adminSbloccato}
             onBonificoSkip={(v) => setPagPrecorso((prev) => ({ ...prev, bonificoSkip: v }))}
             azioneInFondo={precorsoExtra.length === 0
@@ -29822,6 +29851,14 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                               {i.incassato ? "Incassato" : "Da incassare"}
                             </div>
                             <div style={{ ...fontBody, fontSize: isMobile ? 30 : 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap", lineHeight: 1.1 }}>{euroScheda(daIncassare)}</div>
+                            {/* la data dell'incasso, modificabile: e' quella
+                                con cui il saldo entra in prima nota */}
+                            {i.incassato && !nienteDaIncassare && (
+                              <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, ...fontBody, fontSize: 11, color: coloreIncasso }}>
+                                <span>il</span>
+                                <input type="date" value={i.saldo_incassato_il || ""} onChange={(e) => salvaDataIncasso(i, e.target.value)} style={{ ...inputStyle, width: "auto", padding: "4px 6px", fontSize: 11.5 }} />
+                              </div>
+                            )}
                           </div>
                           {!nienteDaIncassare && (
                             <span style={{
@@ -39730,10 +39767,13 @@ function PaginaInserimentoCostiRicavi({
   ruoloUtente, quoteVenditoriSplit, impegnoTabella = [],
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
-  abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic,
+  abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, venditeShop = [],
   ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab,
 }) {
   const isMobile = useIsMobile();
+  // "tutto", "entrate" o "uscite": la prima nota e' un libro cassa con
+  // tutti e due i versi, e si puo' guardare un verso alla volta
+  const [vistaPN, setVistaPN] = useState("tutto");
   // periodo navigabile — stessa filosofia della barra anno/mese di
   // Scadenziario Attivo: qui su tre granularità (mese/trimestre/anno)
   // invece dei vecchi 5 pulsanti fissi "ultimo mese/trimestre/anno
@@ -39808,11 +39848,68 @@ function PaginaInserimentoCostiRicavi({
 
   const totaleSpese = round2(righeUniteRicerca.reduce((s, r) => s + (r.importo || 0), 0));
 
+  // Le ENTRATE. Acconto, pre corso e saldo entrano nel giorno in cui il
+  // cliente ha pagato davvero — la data messa quando in contabilita' si
+  // segna "pagato" (per i bonifici l'accredito in banca) — e non quando
+  // la busta rientra in cassa: quello e' uno spostamento di contanti gia'
+  // incassati, che la cassa contanti conta per conto suo. Tre voci
+  // separate per allievo, con corso, citta', data e tipo di pagamento.
+  // Le vendite POS, anche quelle di un corso, con la data dell'incasso.
+  // Tolto il "pagato", la voce sparisce; rimesso, ricompare.
+  const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const etichettaCorsoPN = (cd) => cd ? `${corsiById[cd.corso_id]?.nome || "?"} · ${locationById[cd.location_id]?.nome ? toTitleCase(locationById[cd.location_id].nome) : "?"} · ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}` : null;
+  const entrateTutte = [];
+  (iscritti || []).forEach((i) => {
+    const cd = corsiDateById[i.corso_data_id] || null;
+    const nome = `${i.nome || ""} ${i.cognome || ""}`.trim() || "Allievo";
+    const dataIscrizione = (i.ts || "").slice(0, 10) || null;
+    const aggiungi = (chiave, fase, data, totale, metodo) => {
+      if (!(totale > 0)) return;
+      entrateTutte.push({ id: `e_${i.id}_${chiave}`, tipo: "entrata", data: data || dataIscrizione, titolo: nome, corsoData: cd, fase, metodo: metodo || "—", importo: round2(totale), iscritto: i });
+    };
+    if (i.acconto_pagato && i.acconto_metodo) aggiungi("acconto", "Acconto", i.acconto_pagato_il, totQuota(i, "acconto"), i.acconto_metodo);
+    (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r, idx) => {
+      if (r.pagato && r.metodo) aggiungi(`acconto_${idx}`, "Acconto", i.acconto_pagato_il, round2((r.totale || 0) + (r.metodo === "Rate" ? (r.interessi || 0) : 0)), r.metodo);
+    });
+    if (i.precorso_pagato && i.precorso_metodo) aggiungi("precorso", "Pre corso", i.precorso_pagato_il, totQuota(i, "precorso"), i.precorso_metodo);
+    (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r, idx) => {
+      if (r.pagato && r.metodo) aggiungi(`precorso_${idx}`, "Pre corso", i.precorso_pagato_il, round2((r.totale || 0) + (r.metodo === "Rate" ? (r.interessi || 0) : 0)), r.metodo);
+    });
+    if (i.incassato && i.saldo_metodo) aggiungi("saldo", "Saldo al corso", i.saldo_incassato_il || cd?.data_inizio, (i.saldo_totale || 0) + modelleTotaleDi(i), i.saldo_metodo);
+  });
+  (venditeShop || []).forEach((v) => {
+    if (v.tipo_movimento === "annullamento" || v.tipo_movimento === "omaggio") return;
+    if (!(v.totale > 0) || !v.data_ordine) return;
+    const pos = v.origine === "pos";
+    entrateTutte.push({
+      id: `v_${v.id}`, tipo: "entrata", data: String(v.data_ordine).slice(0, 10),
+      titolo: v.cliente_nome || (pos ? "Vendita al banco" : "Ordine shop"), corsoData: v.corso_data_id ? corsiDateById[v.corso_data_id] || null : null,
+      fase: pos ? "Vendita POS" : "Vendita shop", metodo: v.metodo_pagamento ? toTitleCase(v.metodo_pagamento) : "—", importo: round2(v.totale), vendita: v,
+    });
+  });
+  const entrateNelPeriodo = entrateTutte.filter((e) => e.data && e.data >= range.inizio && e.data <= range.fine);
+  const entrateRicercate = ricercaPN.trim()
+    ? entrateNelPeriodo.filter((e) => { const q = ricercaPN.trim().toLowerCase(); return `${e.titolo} ${e.fase} ${e.metodo} ${etichettaCorsoPN(e.corsoData) || ""}`.toLowerCase().includes(q); })
+    : entrateNelPeriodo;
+  const totaleEntrate = round2(entrateRicercate.reduce((s, e) => s + e.importo, 0));
+  const saldoPeriodo = round2(totaleEntrate - totaleSpese);
+
+  // i movimenti da mostrare, entrate e uscite insieme, dal piu' recente
+  const movimentiPN = [
+    ...(vistaPN === "uscite" ? [] : entrateRicercate),
+    ...(vistaPN === "entrate" ? [] : righeUniteRicerca.map((r) => ({ ...r, tipo: "uscita", data: r.dataDocumento }))),
+  ].sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+  const movimentiVisibili = mostraTutte ? movimentiPN : movimentiPN.slice(0, SPESE_PAGINA_INIZIALE);
+
   // confronto col periodo precedente, stessa granularità e durata
   const periodoPrecPN = periodoPrecedentePrimaNota(annoPN, granularitaPN, mesePN, trimestrePN);
   const rangePrecPN = rangeGranularitaPrimaNota(periodoPrecPN.anno, granularitaPN, periodoPrecPN.mese, periodoPrecPN.trimestre);
   const totalePrecedentePN = round2(spesePagate.filter((s) => dataCassaPN(s) >= rangePrecPN.inizio && dataCassaPN(s) <= rangePrecPN.fine).reduce((s, r) => s + (r.totale || 0), 0));
   const variazionePctPN = personalizzatoPN ? null : variazionePctErp(totaleSpese, totalePrecedentePN);
+  const entratePrecedentiPN = round2(entrateTutte.filter((e) => e.data && e.data >= rangePrecPN.inizio && e.data <= rangePrecPN.fine).reduce((s, e) => s + e.importo, 0));
+  const variazioneEntratePN = personalizzatoPN ? null : variazionePctErp(totaleEntrate, entratePrecedentiPN);
+  const saldoPrecedentePN = round2(entratePrecedentiPN - totalePrecedentePN);
+  const etichettaPeriodoPrecPN = granularitaPN === "anno" ? String(periodoPrecPN.anno) : granularitaPN === "trimestre" ? `T${periodoPrecPN.trimestre}` : MESI[periodoPrecPN.mese - 1].toLowerCase();
 
   // "N non pagate": spese non ancora pagate con data nel periodo in
   // vista — solo un avviso incrociato verso Scadenziario Passivo, mai
@@ -39883,7 +39980,7 @@ function PaginaInserimentoCostiRicavi({
           <PannelloImportCsv costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} onClose={() => setImportCsvAperto(false)} ricarica={ricarica} />
         )}
         <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 6 }}>Prima nota cassa</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le spese inserite manualmente, con modifica ed eliminazione.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Il libro cassa: tutte le entrate e tutte le uscite nel giorno in cui i soldi si sono mossi davvero.</div>
 
         <TabsAmministrazione
           schedaAttiva="primanota"
@@ -39925,7 +40022,7 @@ function PaginaInserimentoCostiRicavi({
           )}
           <button onClick={() => setPersonalizzatoPN((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: personalizzatoPN ? "#fff" : NAVY, background: personalizzatoPN ? NAVY : "#fff", border: `1px solid ${personalizzatoPN ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Data personalizzata</button>
           <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
-            <CampoRicerca value={ricercaPN} onChange={(e) => setRicercaPN(e.target.value)} placeholder="Cerca spesa, fornitore, categoria…" />
+            <CampoRicerca value={ricercaPN} onChange={(e) => setRicercaPN(e.target.value)} placeholder="Cerca allievo, spesa, fornitore, categoria…" />
           </div>
         </div>
 
@@ -39973,39 +40070,63 @@ function PaginaInserimentoCostiRicavi({
         ) : null}
 
         <div style={{ ...cardStyle, marginBottom: 0, padding: isMobile ? 16 : 26 }}>
-          {/* L'intestazione sul mock del 15/09/2026: il titolo grande col
-              periodo, sotto quante voci; il riquadro del totale con il
-              confronto col periodo prima; poi le quattro categorie piu'
-              pesanti come tessere con l'icona, toccabili per filtrare. */}
+          {/* Il libro cassa: titolo col periodo, sotto quante entrate e
+              quante uscite; il riquadro del saldo del periodo col
+              confronto; i due riquadri di entrate e uscite; le categorie
+              di spesa piu' pesanti; poi i movimenti, un verso alla volta o
+              tutti insieme. Disegnato sul mock del 15/09/2026, allargato
+              alle entrate il 16/09/2026. */}
           <div style={{ marginBottom: isMobile ? 16 : 20 }}>
-            <div style={{ ...fontHero, fontSize: isMobile ? 32 : 40, color: NAVY, lineHeight: 1.1, overflowWrap: "anywhere" }}>Spese · {personalizzatoPN ? `${fmtData(customDa)} – ${fmtData(customA)}` : etichettaPeriodoPrimaNota(annoPN, granularitaPN, mesePN, trimestrePN)}</div>
-            <div style={{ ...fontBody, fontSize: isMobile ? 14 : 15, color: MUTED, marginTop: 6 }}>{righeUniteRicerca.length} vo{righeUniteRicerca.length === 1 ? "ce" : "ci"}</div>
+            <div style={{ ...fontHero, fontSize: isMobile ? 32 : 40, color: NAVY, lineHeight: 1.1, overflowWrap: "anywhere" }}>Prima nota · {personalizzatoPN ? `${fmtData(customDa)} – ${fmtData(customA)}` : etichettaPeriodoPrimaNota(annoPN, granularitaPN, mesePN, trimestrePN)}</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 14 : 15, color: MUTED, marginTop: 6 }}>{entrateRicercate.length} entrat{entrateRicercate.length === 1 ? "a" : "e"} · {righeUniteRicerca.length} uscit{righeUniteRicerca.length === 1 ? "a" : "e"}</div>
           </div>
 
-          <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 22, padding: isMobile ? "18px 18px 16px" : "24px 28px 22px", marginBottom: isMobile ? 14 : 18 }}>
-            <div style={{ position: "absolute", right: isMobile ? -10 : 10, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
-              <IconaQiPortafoglio size={isMobile ? 130 : 170} color="#8A6D1D" />
-            </div>
-            <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 2 }}>Totale periodo</div>
-            <div style={{ ...fontHero, fontSize: isMobile ? 46 : 58, color: NAVY, lineHeight: 1.05, marginTop: 6, position: "relative" }}>{fmtEuroErp(totaleSpese)}</div>
-            {!personalizzatoPN && variazionePctPN !== null && (() => {
-              const sale = variazionePctPN >= 0;
-              const colore = sale ? "#C0392B" : "#2E7D32";
-              const periodoPrima = granularitaPN === "anno" ? periodoPrecPN.anno : granularitaPN === "trimestre" ? `T${periodoPrecPN.trimestre}` : MESI[periodoPrecPN.mese - 1].toLowerCase();
+          {(() => {
+            const confronto = (attuale, precedente, pct, invertito) => {
+              if (personalizzatoPN || pct === null || pct === undefined) return null;
+              const sale = attuale >= precedente;
+              // per le uscite salire e' male, per entrate e saldo e' bene
+              const bene = invertito ? !sale : sale;
+              const colore = bene ? "#2E7D32" : "#C0392B";
               return (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, position: "relative", flexWrap: "wrap" }}>
-                  <span style={{ width: 36, height: 36, borderRadius: "50%", background: sale ? "#FBE4E1" : "#E3F3EA", color: colore, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sale ? "none" : "scaleY(-1)" }}><path d="M7 17 17 7M9 7h8v8" /></svg>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, position: "relative", flexWrap: "wrap" }}>
+                  <span style={{ width: 28, height: 28, borderRadius: "50%", background: bene ? "#E3F3EA" : "#FBE4E1", color: colore, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sale ? "none" : "scaleY(-1)" }}><path d="M7 17 17 7M9 7h8v8" /></svg>
                   </span>
-                  <span style={{ ...fontBody, fontSize: isMobile ? 15 : 16, color: colore }}>
-                    <b>{sale ? "+" : ""}{Math.round(variazionePctPN)}%</b> vs {periodoPrima} ({fmtEuroErp(totalePrecedentePN)})
+                  <span style={{ ...fontBody, fontSize: isMobile ? 13 : 14, color: colore }}>
+                    <b>{pct >= 0 ? "+" : ""}{Math.round(pct)}%</b> vs {etichettaPeriodoPrecPN} ({fmtEuroErp(precedente)})
                   </span>
                 </div>
               );
-            })()}
-          </div>
+            };
+            const saldoPositivo = saldoPeriodo >= 0;
+            return (
+              <>
+                <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 22, padding: isMobile ? "18px 18px 16px" : "24px 28px 22px", marginBottom: isMobile ? 12 : 14 }}>
+                  <div style={{ position: "absolute", right: isMobile ? -10 : 10, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
+                    <IconaQiPortafoglio size={isMobile ? 130 : 170} color="#8A6D1D" />
+                  </div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 2 }}>Saldo del periodo</div>
+                  <div style={{ ...fontHero, fontSize: isMobile ? 44 : 56, color: saldoPositivo ? NAVY : "#C0392B", lineHeight: 1.05, marginTop: 6, position: "relative" }}>{saldoPositivo ? "" : "−"}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, marginTop: 6, position: "relative" }}>entrate meno uscite del periodo{!personalizzatoPN ? ` · ${etichettaPeriodoPrecPN}: ${saldoPrecedentePN < 0 ? "−" : ""}${fmtEuroErp(Math.abs(saldoPrecedentePN))}` : ""}</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12, marginBottom: isMobile ? 14 : 18 }}>
+                  <div style={{ background: "#EEF7F0", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 1.2 }}>Entrate</div>
+                    <div style={{ ...fontHero, fontSize: isMobile ? 26 : 32, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(totaleEntrate)}</div>
+                    {confronto(totaleEntrate, entratePrecedentiPN, variazioneEntratePN, false)}
+                  </div>
+                  <div style={{ background: "#FBEEEC", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 1.2 }}>Uscite</div>
+                    <div style={{ ...fontHero, fontSize: isMobile ? 26 : 32, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(totaleSpese)}</div>
+                    {confronto(totaleSpese, totalePrecedentePN, variazionePctPN, true)}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
-          {topCategoriePN.length > 0 && (
+          {topCategoriePN.length > 0 && vistaPN !== "entrate" && (
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : `repeat(${topCategoriePN.length}, minmax(0, 1fr))`, gap: isMobile ? 10 : 12, marginBottom: isMobile ? 18 : 22 }}>
               {topCategoriePN.map((c) => {
                 const Icona = iconaPerCategoriaSpesa(c.nome);
@@ -40031,30 +40152,48 @@ function PaginaInserimentoCostiRicavi({
             </div>
           )}
 
-          {righeUniteRicerca.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa nel periodo.</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+            {[{ v: "tutto", l: "Tutti i movimenti" }, { v: "entrate", l: `Entrate (${entrateRicercate.length})` }, { v: "uscite", l: `Uscite (${righeUniteRicerca.length})` }].map((o) => (
+              <TabPillola key={o.v} attivo={vistaPN === o.v} onClick={() => setVistaPN(o.v)}>{o.l}</TabPillola>
+            ))}
+          </div>
+
+          {movimentiPN.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun movimento nel periodo.</div>
           ) : (
             <>
-              {righeVisibili.map((riga) => {
-                const stato = COLORE_STATO_SPESA[riga.spesaReale.stato] || COLORE_STATO_SPESA.preventivata;
+              {movimentiVisibili.map((m) => {
+                if (m.tipo === "entrata") {
+                  return (
+                    <CardAmministrazione
+                      key={m.id}
+                      data={m.data}
+                      titolo={m.titolo}
+                      corsoLabel={etichettaCorsoPN(m.corsoData)}
+                      chips={[{ Icona: IconaQiPersona, testo: m.fase }, m.metodo]}
+                      importo={`+ ${fmtEuroErp(m.importo)}`} etichettaImporto="Entrata" coloreImporto="#2E7D32"
+                    />
+                  );
+                }
+                const stato = COLORE_STATO_SPESA[m.spesaReale.stato] || COLORE_STATO_SPESA.preventivata;
                 return (
                   <CardAmministrazione
-                    key={riga.id}
-                    data={riga.dataDocumento}
-                    titolo={riga.descrizione}
-                    corsoLabel={riga.sottotitolo && riga.sottotitolo !== "—" ? riga.sottotitolo : null}
-                    chips={riga.chips}
-                    importo={fmtEuroErp(riga.importo)}
+                    key={m.id}
+                    data={m.dataDocumento}
+                    titolo={m.descrizione}
+                    corsoLabel={m.sottotitolo && m.sottotitolo !== "—" ? m.sottotitolo : null}
+                    chips={m.chips}
+                    importo={`− ${fmtEuroErp(m.importo)}`} etichettaImporto="Uscita" coloreImporto="#C0392B"
                     piede={(
                       <>
                         <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 14, padding: "12px 16px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center" }}>
-                          {etichettaOpzione(STATI_SPESA, riga.spesaReale.stato)}
+                          {etichettaOpzione(STATI_SPESA, m.spesaReale.stato)}
                         </span>
                         <span style={{ flex: "1 1 auto" }} />
-                        <button onClick={() => onApriModificaSpesa(riga.id)} title="Modifica" style={{ ...stileTastoCardChiaro(isMobile), padding: "10px 12px" }}>
+                        <button onClick={() => onApriModificaSpesa(m.id)} title="Modifica" style={{ ...stileTastoCardChiaro(isMobile), padding: "10px 12px" }}>
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                         </button>
-                        <button onClick={() => eliminaSpesa(riga.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: "10px 8px", display: "flex", alignItems: "center" }}>
+                        <button onClick={() => eliminaSpesa(m.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: "10px 8px", display: "flex", alignItems: "center" }}>
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                         </button>
                       </>
@@ -40062,10 +40201,10 @@ function PaginaInserimentoCostiRicavi({
                   />
                 );
               })}
-              {!mostraTutte && righeUniteRicerca.length > SPESE_PAGINA_INIZIALE && (
+              {!mostraTutte && movimentiPN.length > SPESE_PAGINA_INIZIALE && (
                 <div style={{ textAlign: "center", marginTop: 14 }}>
                   <button onClick={() => setMostraTutte(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    Mostra altre spese
+                    Mostra altri movimenti ({movimentiPN.length - SPESE_PAGINA_INIZIALE})
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                   </button>
                 </div>
@@ -64659,7 +64798,7 @@ export default function App() {
           ruoloUtente={ruoloUtente}
           spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
-          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} venditeShop={venditeShop}
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
           categorieGruppi={categorieGruppi}
