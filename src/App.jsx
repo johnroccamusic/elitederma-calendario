@@ -9109,7 +9109,7 @@ function TastoApriLinkSlide({ corso }) {
   });
   return (
     <div onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: 14, padding: isMobile ? "5px 8px" : "6px 10px" }}>
-      <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6 }}>Slide corso</span>
+      <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.1, textAlign: "center" }}>Slide<br />corso</span>
       <button onClick={apri} style={stileTasto(true)}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14 21 3M15 3h6v6M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
         Apri link
