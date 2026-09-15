@@ -36240,11 +36240,13 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
 function RiquadroDataCard({ etichetta = "Scadenza", data }) {
   const isMobile = useIsMobile();
   return (
-    <div style={{ background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 16px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
-      <IconaQiCalendario size={22} color={NAVY} />
+    // sul telefono sta in riga con i tasti: niente icona, imbottitura
+    // stretta e la data su una riga sola
+    <div style={{ background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "8px 10px" : "12px 16px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
+      {!isMobile && <IconaQiCalendario size={22} color={NAVY} />}
       <div>
-        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichetta}</div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 16, fontWeight: 700, color: NAVY, marginTop: 2, whiteSpace: "nowrap" }}>{data ? fmtData(data) : "—"}</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichetta}</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, color: NAVY, marginTop: 2, whiteSpace: "nowrap" }}>{data ? fmtData(data) : "—"}</div>
       </div>
     </div>
   );
@@ -36330,10 +36332,10 @@ function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, ca
           telefono la riga va sotto la scadenza e i testi si stringono,
           ma non si spezzano mai su due file */}
       {!aperto && (
-        <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 320px", minWidth: 0, flexWrap: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: "nowrap" }}>
           {onPagaDaCassa && (
             <button onClick={() => setCassaAperta((v) => !v)} disabled={pagandoCassa} style={{ ...tastoOro, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
-              <IconaQiPortafoglio size={isMobile ? 16 : 20} /><span>{pagandoCassa ? "Registro…" : "Pagato da cassa"}</span>
+              {!isMobile && <IconaQiPortafoglio size={20} />}<span>{pagandoCassa ? "Registro…" : "Pagato da cassa"}</span>
             </button>
           )}
           {onPagaBonificoAttesa && (
@@ -36349,7 +36351,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, ca
               title="Sposta l'impegno nello Scadenziario Passivo da pagare con bonifico, senza aspettare la fattura"
               style={{ ...tastoNavy, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", textAlign: "center" }}
             >
-              <IconaQiBanca size={isMobile ? 16 : 20} /><span style={{ lineHeight: 1.15, whiteSpace: "normal" }}>Bonifico in attesa</span>
+              {!isMobile && <IconaQiBanca size={20} />}<span style={{ lineHeight: 1.15, whiteSpace: "normal" }}>Bonifico in attesa</span>
             </button>
           )}
           <button onClick={() => setAperto(true)} style={{ ...stileTastoCardChiaro(isMobile), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
