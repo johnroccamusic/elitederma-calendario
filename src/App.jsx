@@ -25960,13 +25960,23 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     page.drawText(testo, { x, y, size: fontSize, font, color: rgbFn(r, g, b) });
   }
 
-  // il modello di diploma di un allievo: prima il suo pacchetto (il posto
-  // dove si carica oggi, in Impostazioni → Tipologie di kit), poi quello
-  // del corso, che resta come ripiego per i pacchetti che non ne hanno uno
+  // il modello di diploma di un allievo viene SOLO dai pacchetti
+  // (Impostazioni → Tipologie di kit): il suo, se e' un pacchetto di
+  // questo corso e ha un diploma; altrimenti l'ultimo diploma caricato
+  // fra i pacchetti di questo corso. Il modello salvato sulla definizione
+  // del corso non si guarda piu': il 15/09/2026 due allieve di
+  // Laminazione — una senza pacchetto, una col pacchetto Extension —
+  // erano uscite col diploma vecchio rimasto li', mentre le altre
+  // quattro avevano quello nuovo del pacchetto
   const kitPerIdDiplomi = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
+  const tsDiploma = (k) => Number((String(k?.diploma_path || "").match(/diploma-(\d+)-/) || [])[1] || 0);
+  const ultimoDiplomaDelCorso = (kitDefinizioni || [])
+    .filter((k) => k.corso_id === corso?.id && k.diploma_path)
+    .sort((a, b) => tsDiploma(b) - tsDiploma(a))[0]?.diploma_path || null;
   const percorsoDiplomaDi = (iscritto) => {
     const kit = iscritto?.kit_id ? kitPerIdDiplomi[iscritto.kit_id] : null;
-    return kit?.diploma_path || corso?.diploma_template_path || null;
+    if (kit && kit.corso_id === corso?.id && kit.diploma_path) return kit.diploma_path;
+    return ultimoDiplomaDelCorso;
   };
 
   async function stampaDiplomi() {
@@ -26100,11 +26110,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       }
 
       if (outputPdf.getPageCount() === 0) {
-        window.alert(`Nessun diploma generato: ${senzaModello.join(", ")} non ha un modello, né sul pacchetto né sul corso.`);
+        window.alert(`Nessun diploma generato: nessun pacchetto di questo corso ha un modello di diploma (${senzaModello.join(", ")}).`);
         return;
       }
       if (senzaModello.length > 0) {
-        window.alert(`Diplomi generati, tranne per: ${senzaModello.join(", ")} — al loro pacchetto non è associato nessun modello.`);
+        window.alert(`Diplomi generati, tranne per: ${senzaModello.join(", ")} — nessun pacchetto di questo corso ha un modello di diploma.`);
       }
       const bytesFinali = await outputPdf.save();
       const blob = new Blob([bytesFinali], { type: "application/pdf" });
