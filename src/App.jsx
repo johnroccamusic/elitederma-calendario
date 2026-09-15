@@ -2973,9 +2973,14 @@ function TileHome({
       {ricca ? (
         <>
           <div style={{ color: coloreIcona, marginBottom: isMobile ? 6 : Math.round(12 * scala) }}><Icona size={isMobile ? 26 : Math.round(aspettoDesktop.icona * scala)} color={coloreIcona} /></div>
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : Math.max(11, 17 * scala), fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : Math.round(7 * scala), lineHeight: 1.2 }}>{title}</div>
+          {/* Sulla scrivania il titolo ha sempre lo spazio di due righe e la
+              descrizione di due, che servano o no: cosi' in una griglia
+              tutte le icone stanno alla stessa altezza e tutti i titoli
+              partono dallo stesso punto, anche se un nome va a capo e il
+              vicino no. Un titolo corto sta al centro del suo spazio. */}
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : Math.max(11, 17 * scala), fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : Math.round(7 * scala), lineHeight: 1.2, ...(isMobile ? {} : { minHeight: "2.4em", display: "flex", alignItems: "center", justifyContent: "center" }) }}>{title}</div>
           {descrizione && (
-            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, 12 * scala), color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, 12 * scala), color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden", ...(isMobile ? {} : { minHeight: "2.7em" }) }}>{descrizione}</div>
           )}
           {/* niente freccia in fondo: copriva la descrizione e non diceva
               niente che il tasto non dicesse gia'. Tolta il 15/09/2026 da
@@ -14340,7 +14345,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                     outline: dragRef.current && dragRef.current !== l.nome && suCursoreNome === l.nome ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
                   }}
                 >
-                  {programmatore && (
+                  {programmatore && maniglieAttive && (
                     <span
                       draggable
                       onDragStart={(e) => { e.stopPropagation(); iniziaTrascinamento(l.nome); }}
@@ -15521,6 +15526,12 @@ function AnteprimaOmbraGenerale({ etichetta, sottotitolo, tipo, ombra, raggio = 
 function PaginaAspettoApp() {
   const isMobile = useIsMobile();
   const [aspetto, salvaAspetto] = useAspettoTasti();
+  // Le maniglie "⠿" per spostare i tasti: un interruttore solo, per
+  // tutta l'app, telefono e computer. Acceso, ogni griglia di tasti e le
+  // schede di Contabilita' mostrano la maniglia e si trascinano; spento,
+  // non se ne vede nessuna. Stava in fondo a Setting, nascosto: qui sta
+  // con il resto dell'aspetto
+  const [maniglieAttive, salvaManiglieAttive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   // l'elemento selezionato si ricorda sul dispositivo: si esce, si torna,
   // e si riprende da dove si era
   const [quale, setQualeStato] = useState(() => { try { return localStorage.getItem("aspetto_app_quale") || "mobile"; } catch { return "mobile"; } });
@@ -15573,6 +15584,37 @@ function PaginaAspettoApp() {
         I tasti quadrati della home e delle pagine a tasti, e i tasti del dock. Le misure sono in pixel e non cambiano
         con lo schermo. Il telefono e il computer si regolano separati: clicca quello che vuoi modificare e usa i
         comandi qui sotto. Vale per tutti, non solo per te.
+      </div>
+
+      <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Maniglie per spostare i tasti</div>
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+            {maniglieAttive
+              ? "Accese: su ogni tasto compare la maniglia ⠿ e trascinandola il tasto cambia posto, telefono e computer."
+              : "Spente: nessuna maniglia in tutta l'app. I tasti restano dove sono."}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => salvaManiglieAttive(!maniglieAttive)}
+          title="Accende o spegne le maniglie ⠿ per spostare i tasti, in tutta l'app"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0,
+            ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY,
+            background: "#fff", border: `1px solid ${maniglieAttive ? "#1F7A33" : CREAM_BORDER}`, borderRadius: 22,
+            padding: "9px 14px", cursor: "pointer",
+          }}
+        >
+          <span style={{ fontSize: 15, color: maniglieAttive ? "#1F7A33" : MUTED, lineHeight: 1 }}>⠿</span>
+          {maniglieAttive ? "Spegni le maniglie" : "Accendi le maniglie"}
+          <span style={{
+            ...fontBody, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6,
+            color: maniglieAttive ? "#1F7A33" : MUTED,
+            background: maniglieAttive ? "#E7F3E9" : BG,
+            borderRadius: 12, padding: "3px 9px",
+          }}>{maniglieAttive ? "ON" : "OFF"}</span>
+        </button>
       </div>
 
       <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18 }}>
@@ -16360,7 +16402,6 @@ function DefinizioneProvvigioni() {
 }
 
 function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
-  const [maniglieAttive, salvaManiglieAttive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -16975,34 +17016,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       )}
 
 
-      {/* L'interruttore delle maniglie di trascinamento: in fondo, piccolo,
-          e solo per il programmatore. Non apre una pagina, accende una
-          modalita' — e per il resto del tempo non deve stare fra i piedi.
-          Spente, le pagine mostrano lo spazio vero degli elementi, che e'
-          quello che vedono tutti gli altri. */}
-      {programmatore && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
-          <button
-            type="button"
-            onClick={() => salvaManiglieAttive(!maniglieAttive)}
-            title="Accende o spegne i punti da trascinare per spostare tasti e pannelli, in tutta l'app"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              ...fontBody, fontSize: 12, fontWeight: 600, color: MUTED,
-              background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20,
-              padding: "7px 12px", cursor: "pointer",
-            }}
-          >
-            Maniglie trascinamento:
-            <span style={{
-              ...fontBody, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6,
-              color: maniglieAttive ? "#1F7A33" : MUTED,
-              background: maniglieAttive ? "#E7F3E9" : BG,
-              borderRadius: 12, padding: "3px 9px",
-            }}>{maniglieAttive ? "ON" : "OFF"}</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -35861,7 +35874,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
         // se lo fosse tutta la tessera, ogni tentativo di premerla
         // rischierebbe di spostarla invece di aprirla. Stesso disegno
         // della maniglia di GrigliaTasti
-        const maniglia = onSalvaOrdine ? (
+        const maniglia = onSalvaOrdine && maniglieAttive ? (
           <span
             draggable
             onDragStart={(e) => { e.stopPropagation(); trascinata.current = s.chiave; }}
