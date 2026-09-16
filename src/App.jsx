@@ -870,6 +870,7 @@ function PannelloStileOggetti({ vista, programmatore }) {
   const [selezione, setSelezione] = useState(null); // { chiave, voce, elemento }
   const [proprieta, setProprieta] = useState("sfondo");
   const rifPannello = useRef(null);
+  const rifTasto = useRef(null);
   // i colori salvati valgono per tutti: si applicano a ogni cambio di
   // pagina e a ogni cambio della mappa
   useEffect(() => {
@@ -884,7 +885,11 @@ function PannelloStileOggetti({ vista, programmatore }) {
   useEffect(() => {
     if (!attivo) return;
     let evidenziato = null;
-    const dentroPannello = (el) => rifPannello.current && rifPannello.current.contains(el);
+    // il pannello e il tasto "Stile" stesso non si intercettano: altrimenti
+    // il tasto non si spegneva piu' (successo il 16/09/2026)
+    const dentroPannello = (el) => (rifPannello.current && rifPannello.current.contains(el)) || (rifTasto.current && rifTasto.current.contains(el));
+    const tasto = (e) => { if (e.key === "Escape") setAttivo(false); };
+    document.addEventListener("keydown", tasto);
     const sopra = (e) => {
       const el = e.target;
       if (!(el instanceof Element) || dentroPannello(el)) return;
@@ -913,6 +918,7 @@ function PannelloStileOggetti({ vista, programmatore }) {
       document.removeEventListener("mouseover", sopra, true);
       document.removeEventListener("mouseout", fuori, true);
       document.removeEventListener("click", click, true);
+      document.removeEventListener("keydown", tasto);
       document.body.style.cursor = cursore;
       if (evidenziato) evidenziato.style.outline = "";
     };
@@ -936,9 +942,10 @@ function PannelloStileOggetti({ vista, programmatore }) {
   return (
     <>
       <button
+        ref={rifTasto}
         type="button"
         onClick={() => { setAttivo((a) => !a); setSelezione(null); }}
-        title={attivo ? "Esci dalla modalita' Stile" : "Stile: tocca un oggetto e scegli il suo colore"}
+        title={attivo ? "Esci dalla modalita' Stile (o premi Esc)" : "Stile: tocca un oggetto e scegli il suo colore"}
         style={{ position: "fixed", right: 12, bottom: 96, zIndex: 9998, ...fontBody, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: attivo ? "#fff" : NAVY, background: attivo ? "#C0392B" : "rgba(255,255,255,0.95)", border: `1.5px solid ${attivo ? "#C0392B" : NAVY}`, borderRadius: 999, padding: "9px 14px", cursor: "pointer", boxShadow: "0 3px 10px rgba(14,27,51,0.28)" }}
       >
         Stile{quantiQui ? ` (${quantiQui})` : ""}
