@@ -75,11 +75,33 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   `master_vista` (solo i campi che la pagina disegna, solo quella classe) e
   `master_segna_incassato` (unica scrittura, vincolata a `corso_data_id`).
   Su entrambe l'esecuzione è revocata a `public`.
-  `?modelle=` e `?biglietti=` **non** hanno ancora questo trattamento: leggono
-  ancora le tabelle con la chiave anon.
-- **`Accesso.jsx` è il gate vero, non l'SSO.** Finché non c'è una sessione
-  Supabase, `App.jsx` non viene nemmeno importato. Le tre rotte pubbliche
-  (`master`, `modelle`, `biglietti`) sono l'unica deroga.
+  Dal 17/09/2026 anche `?modelle=` e `?biglietti=` hanno le loro funzioni
+  (`modelle_vista`, `modelle_salva_trattamenti`, `modelle_leggi_trattamenti`,
+  `biglietti_vista`, più `slug_link`/`classe_da_link`): create e verificate,
+  **ma l'app non è ancora stata collegata** — le due pagine leggono ancora le
+  tabelle. Lo slug SQL è stato confrontato con `slugify` di App.jsx su tutti
+  i 44 nomi di corsi e città: identico.
+- **`Accesso.jsx` NON è collegato. Verificato il 17/09/2026.** Il file esiste,
+  è completo e funzionante (213 righe: form di login, e `<App />` dentro una
+  volta ottenuta la sessione), ma **nessuno lo importa**: `main.jsx` rende
+  `<App />` direttamente. Nel bundle pubblicato la stringa "Area riservata
+  allo staff" non compare proprio.
+
+  Conseguenza: **nessun utente ha mai una sessione Supabase. Tutti sono
+  `anon`, sempre.** L'unico cancello è la password interna del Gate dentro
+  `App.jsx`, confrontata lato client con `venditori`/`utenti_app`/
+  `password_menu` — tabelle che, con le policy attuali, chiunque legge con la
+  chiave pubblicabile. Le password lì dentro sono in chiaro.
+
+  È anche la spiegazione del rollback del 15/08: la migrazione portò le
+  policy a `to authenticated` mentre **nessuno** era autenticato, e l'app
+  morì all'istante. Chiudere le policy PRIMA di collegare `Accesso.jsx`
+  rifarebbe lo stesso danno.
+
+  Ordine corretto: collegare il gate → dare un account a chi deve entrare →
+  poi chiudere le policy. Le tre rotte pubbliche (`master`, `modelle`,
+  `biglietti`) restano la deroga, e dal 17/09/2026 passano tutte da funzioni
+  `security definer` (vedi sotto).
 - **`VITE_ACCESS_CODE` e `VITE_ADMIN_CODE` finiscono nel bundle pubblico.** In
   Vite tutto ciò che inizia con `VITE_` è visibile. `ADMIN_CODE` ha anche un
   fallback in chiaro nel sorgente (`"ED26"`). Da eliminare quando i ruoli
