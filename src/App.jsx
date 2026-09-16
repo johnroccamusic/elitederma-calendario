@@ -38844,7 +38844,7 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
       <div style={{ ...cardStyle, padding: isMobile ? 16 : 26 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <button onClick={() => spostaPeriodo(-1)} title="Periodo precedente" style={freccia}>‹</button>
-          <div style={{ ...fontHero, fontSize: isMobile ? 26 : 36, color: NAVY, lineHeight: 1.1, flex: "1 1 auto", minWidth: 0, overflowWrap: "anywhere" }}>Banca · {etichettaPeriodoPrimaNota(anno, granularita, mese, trimestre)}</div>
+          <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 36, color: NAVY, lineHeight: 1.1, flex: "1 1 auto", minWidth: 0, overflowWrap: "anywhere" }}>Banca · {etichettaPeriodoPrimaNota(anno, granularita, mese, trimestre)}</div>
           <button onClick={() => spostaPeriodo(1)} title="Periodo successivo" style={freccia}>›</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: isMobile ? 16 : 20 }}>
@@ -38863,7 +38863,7 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
             <IconaQiBanca size={isMobile ? 130 : 170} color="#8A6D1D" />
           </div>
           <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 2 }}>Saldo del periodo</div>
-          <div style={{ ...fontHero, fontSize: isMobile ? 44 : 56, color: saldoPeriodo >= 0 ? NAVY : "#C0392B", lineHeight: 1.05, marginTop: 6, position: "relative" }}>{saldoPeriodo < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
+          <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 44 : 56, color: saldoPeriodo >= 0 ? NAVY : "#C0392B", lineHeight: 1.05, marginTop: 6, position: "relative" }}>{saldoPeriodo < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
           <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, marginTop: 6, position: "relative" }}>
             entrate meno uscite, senza gli ignorati · {etichettaPrec}: {saldoPrec < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPrec))}
             {ultimoConSaldo ? ` · saldo conto al ${fmtData(ultimoConSaldo.data_operazione)}: ${fmtEuroErp2(Number(ultimoConSaldo.saldo))}` : ""}
@@ -38872,12 +38872,12 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12, marginBottom: isMobile ? 14 : 18 }}>
           <div style={{ background: "#EEF7F0", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
             <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 1.2 }}>Entrate</div>
-            <div style={{ ...fontHero, fontSize: isMobile ? 26 : 32, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(entrate)}</div>
+            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 32, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(entrate)}</div>
             {confronto(entrate, entratePrec, false)}
           </div>
           <div style={{ background: "#FBEEEC", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
             <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 1.2 }}>Uscite</div>
-            <div style={{ ...fontHero, fontSize: isMobile ? 26 : 32, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(uscite)}</div>
+            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 32, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(uscite)}</div>
             {confronto(uscite, uscitePrec, true)}
           </div>
         </div>
