@@ -9749,9 +9749,9 @@ function PaginaDashboardVenditori({
                 {targetAttiviVenditore.map(({ t, avanzamento }) => <PannelloTarget key={t.id} t={t} avanzamento={avanzamento} />)}
               </div>
             )}
-            <div style={{ marginBottom: 20 }}>
-              <Button variant="ghost" onClick={() => setMostraRiepilogoPos(true)}>Riepilogo vendita prodotti</Button>
-            </div>
+            {/* il tasto "Riepilogo vendita prodotti" e' stato tolto da qui il
+                16/09/2026: il riepilogo resta raggiungibile dalle sue altre
+                strade, e la pagina comincia dal periodo di analisi */}
             <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Periodo di analisi</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
               <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
