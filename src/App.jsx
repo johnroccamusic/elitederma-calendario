@@ -16142,26 +16142,29 @@ function IconaGruppoAllievi({ size = 30, color = "#8B8FA3" }) {
 const SPUNTA_BLU = { width: 22, height: 22, accentColor: "#2F80ED", cursor: "pointer", flexShrink: 0, margin: 0 };
 function PannelloTurnoGiorno({ etichetta, Icona, mattina, pomeriggio, tipo, opzioniTipo, onCambiaMattina, onCambiaPomeriggio, onCambiaTipo, spento = false }) {
   const isMobile = useIsMobile();
-  const titolino = { ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 };
+  // MAT e POM impilati, vicini: la colonna del turno resta stretta e il
+  // trattamento prende lo spazio che avanza. Corpi due punti piu' piccoli
+  const titolino = { ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 };
+  const spuntaPiccola = { ...SPUNTA_BLU, width: 18, height: 18 };
   return (
-    <div style={{ background: "#EFECE4", borderRadius: 14, padding: isMobile ? "12px 12px" : "14px 16px", opacity: spento ? 0.55 : 1, display: "flex", alignItems: "center", gap: isMobile ? 12 : 16 }}>
-      {Icona && <div style={{ flexShrink: 0, width: isMobile ? 36 : 44, display: "flex", justifyContent: "center" }}><Icona size={isMobile ? 30 : 36} /></div>}
+    <div style={{ background: "#EFECE4", borderRadius: 14, padding: isMobile ? "10px 10px" : "12px 14px", opacity: spento ? 0.55 : 1, display: "flex", alignItems: "center", gap: isMobile ? 10 : 14 }}>
+      {Icona && <div style={{ flexShrink: 0, width: isMobile ? 32 : 40, display: "flex", justifyContent: "center" }}><Icona size={isMobile ? 28 : 34} /></div>}
       <div style={{ flex: "0 0 auto", minWidth: 0 }}>
         <div style={titolino}>{etichetta || "Turno"}</div>
-        <div style={{ display: "flex", gap: isMobile ? 12 : 18, ...fontBody, fontSize: 13.5, fontWeight: 600, color: NAVY }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: spento ? "default" : "pointer" }}>
-            <input type="checkbox" checked={!!mattina} disabled={spento} onChange={(e) => onCambiaMattina(e.target.checked)} style={SPUNTA_BLU} /> MAT
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: spento ? "default" : "pointer" }}>
+            <input type="checkbox" checked={!!mattina} disabled={spento} onChange={(e) => onCambiaMattina(e.target.checked)} style={spuntaPiccola} /> MAT
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: spento ? "default" : "pointer" }}>
-            <input type="checkbox" checked={!!pomeriggio} disabled={spento} onChange={(e) => onCambiaPomeriggio(e.target.checked)} style={SPUNTA_BLU} /> POM
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: spento ? "default" : "pointer" }}>
+            <input type="checkbox" checked={!!pomeriggio} disabled={spento} onChange={(e) => onCambiaPomeriggio(e.target.checked)} style={spuntaPiccola} /> POM
           </label>
         </div>
       </div>
       <div style={{ width: 1, alignSelf: "stretch", background: "#D9D3C6", flexShrink: 0 }} />
-      <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+      <div style={{ flex: "1 1 120px", minWidth: 0 }}>
         <div style={titolino}>Trattamento</div>
         <select
-          style={{ ...inputStyle, fontSize: 13, fontWeight: 600, background: "#fff", borderRadius: 12, padding: "10px 12px", textTransform: "uppercase" }}
+          style={{ ...inputStyle, fontSize: 11, fontWeight: 600, background: "#fff", borderRadius: 12, padding: "9px 10px", textTransform: "uppercase" }}
           value={tipo || ""} disabled={spento}
           onChange={(e) => onCambiaTipo(e.target.value)}
         >
