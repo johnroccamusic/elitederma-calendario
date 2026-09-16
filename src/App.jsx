@@ -2105,11 +2105,11 @@ function IconaTileClassificazioneVoci({ size = 44, color = NAVY }) {
 // tetto di quello davanti: non li si può nascondere davvero, perché il
 // tasto cambia colore di fondo quando è disattivato e una campitura
 // piena si vedrebbe: si lascia invece capire che passano dietro.
-function IconaTileMagazziniEsterni({ size = 44 }) {
+function IconaTileMagazziniEsterni({ size = 44, color = NAVY }) {
   const lato = size + 5;
   return (
     <svg width={lato} height={lato} viewBox="0 0 24 24" fill="none">
-      <g stroke={NAVY} strokeLinecap="round" strokeLinejoin="round">
+      <g stroke={color} strokeLinecap="round" strokeLinejoin="round">
         {/* i due capannoni dietro, più piccoli e più in alto */}
         <path d="M1.3 11V5.8L5.2 3l3.9 2.8v1.6" strokeWidth="1.5" />
         <path d="M3.4 7h3.6" strokeWidth="1.2" strokeLinecap="butt" />
@@ -2130,8 +2130,9 @@ function IconaTileMagazziniEsterni({ size = 44 }) {
 // la lente del tasto "Classificazione voci di vendita": classificare le
 // voci vuol dire andarle a guardare una per una. Nera, con l'impugnatura
 // piena e inclinata e il riflesso sul vetro
-function IconaTileVerificaVoci({ size = 44 }) {
-  const nero = "#111111";
+function IconaTileVerificaVoci({ size = 44, color = "#111111" }) {
+  // "nero" e' il colore passato: nel disco blu delle tessere arriva bianco
+  const nero = color;
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <path d="M9.9 14.1 3.3 20.7l1.8 1.8 6.6-6.6z" fill={nero} />
