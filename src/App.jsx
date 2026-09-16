@@ -6469,14 +6469,36 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
   const [ricerca, setRicerca] = useState("");
   const [anno, setAnno] = useState("tutti");
   const [aperto, setAperto] = useState({});
+  // gli abbinamenti confermati a mano: periodo (codice + primo ordine) -> classe
+  const [conferme, setConferme] = useState([]);
+  const [msg, setMsg] = useState("");
+  async function caricaConferme() {
+    const { data } = await supabase.from("codici_periodi_corso").select("*");
+    setConferme(data || []);
+  }
   useEffect(() => {
     let vivo = true;
     Promise.all([
       supabase.from("woo_ordini_con_codice").select("*").order("data", { ascending: false }).limit(5000),
       supabase.from("coupon").select("codice, master_id, corsi_date_id, valido_da, valido_fino_a"),
-    ]).then(([u, c]) => { if (!vivo) return; setUsi(u.data || []); setCoupon(c.data || []); });
+      supabase.from("codici_periodi_corso").select("*"),
+    ]).then(([u, c, k]) => { if (!vivo) return; setUsi(u.data || []); setCoupon(c.data || []); setConferme(k.data || []); });
     return () => { vivo = false; };
   }, []);
+  const confermaDi = (codice, periodo) => conferme.find((k) => k.codice === codice && k.dal === periodo.dal) || null;
+  // Conferma: quel periodo e' quel corso. Si salva sul database, cosi' la
+  // prossima volta e' gia' scritto e non piu' solo proposto
+  async function confermaCorso(codice, periodo, cd) {
+    const { error } = await supabase.from("codici_periodi_corso").upsert({ codice, dal: periodo.dal, al: periodo.al, corsi_date_id: cd.id, confermato_il: new Date().toISOString() }, { onConflict: "codice,dal" });
+    if (error) { setMsg("Non salvato: " + testoErrore(error)); return; }
+    setMsg("");
+    await caricaConferme();
+  }
+  async function togliConferma(k) {
+    const { error } = await supabase.from("codici_periodi_corso").delete().eq("id", k.id);
+    if (error) { setMsg("Non tolto: " + testoErrore(error)); return; }
+    await caricaConferme();
+  }
   const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
   const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
@@ -6544,6 +6566,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
           </div>
         </div>
 
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
         {usi === null && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico gli ordini…</div>}
         {usi !== null && codici.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun codice usato nel periodo.</div>}
         {codici.map((c) => {
@@ -6582,17 +6605,35 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
                           {aperto[chiave] ? "Nascondi ordini" : "Ordini"}
                         </button>
                       </div>
-                      {probabili.length > 0 ? (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                          {probabili.map((x, j) => (
-                            <span key={x.cd.id} title={x.motivo} style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: j === 0 ? "#fff" : NAVY, background: j === 0 ? NAVY : BG_CHIARO, borderRadius: 10, padding: "4px 10px" }}>
-                              {etichettaClasse(x.cd)}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>Nessun corso in calendario in quei giorni.</div>
-                      )}
+                      {(() => {
+                        const k = confermaDi(c.codice, p);
+                        const cdConfermata = k ? (corsiDate || []).find((x) => x.id === k.corsi_date_id) : null;
+                        if (k && cdConfermata) {
+                          // confermato: il corso in verde, con la spunta, e
+                          // il tasto per togliere l'abbinamento
+                          return (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+                              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: "#2E7D32", borderRadius: 10, padding: "5px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                <IconaAvvisoSpunta size={12} color="#fff" />{etichettaClasse(cdConfermata)}
+                              </span>
+                              <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>confermato il {fmtData(String(k.confermato_il).slice(0, 10))}</span>
+                              <button onClick={() => togliConferma(k)} style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Togli</button>
+                            </div>
+                          );
+                        }
+                        if (probabili.length === 0) return <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>Nessun corso in calendario in quei giorni.</div>;
+                        // proposte: ognuna e' un tasto, si preme quella giusta
+                        return (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+                            <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>È il corso:</span>
+                            {probabili.map((x, j) => (
+                              <button key={x.cd.id} onClick={() => confermaCorso(c.codice, p, x.cd)} title={`${x.motivo} — clicca per confermare`} style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: j === 0 ? "#fff" : NAVY, background: j === 0 ? NAVY : BG_CHIARO, border: "none", borderRadius: 10, padding: "5px 10px", cursor: "pointer" }}>
+                                {etichettaClasse(x.cd)}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       {aperto[chiave] && (
                         <div style={{ marginTop: 8, background: BG_CHIARO, borderRadius: 10, padding: "6px 10px" }}>
                           {p.usi.map((u) => (
