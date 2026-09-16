@@ -37766,6 +37766,67 @@ function RigaPagamentoAppendice({ spesa, onSalva, onElimina, bloccata }) {
   );
 }
 
+// Il riquadro segnalatore (16/09/2026): alto il 42% della base, sempre.
+// Misura la propria larghezza e da quella ricava tutto — il medaglione,
+// l'imbottitura, i corpi dei testi — cosi' in una riga di riquadri uguali
+// i font sono uguali, e su una riga piu' stretta si stringono insieme.
+// A sinistra il disco col medaglione e l'icona bianca, la riga verticale,
+// a destra l'etichetta colorata su piu' righe e il numero grande; sotto,
+// se c'e', la nota. Lo usano gli avvisi di Contabilita', la riga della
+// cassa contanti e le caselle di Gestione magazzino.
+function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfondo = "#FFFFFF", colore, onClick, evidenziato = false, titolo }) {
+  const rif = useRef(null);
+  const [larghezza, setLarghezza] = useState(0);
+  useLayoutEffect(() => {
+    const el = rif.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const misura = () => setLarghezza(el.clientWidth || 0);
+    misura();
+    const oss = new ResizeObserver(misura);
+    oss.observe(el);
+    return () => oss.disconnect();
+  }, []);
+  const w = larghezza || 220;
+  const h = Math.round(w * 0.42);
+  const lato = Math.round(h * 0.80);
+  const spazio = Math.round(h * 0.09);
+  const corpoEtichetta = Math.max(7, h * 0.115);
+  const testoValore = String(valore ?? "");
+  // il numero al 32% dell'altezza, ma non oltre quello che la sua colonna
+  // puo' contenere: "€ 5987,00" e' piu' lungo di "64"
+  const larghezzaColonna = Math.max(20, w - lato * 0.8 - spazio * 4 - 1);
+  const corpoValore = Math.max(9, Math.min(h * 0.32, larghezzaColonna / (Math.max(1, testoValore.length) * 0.58)));
+  const corpoPiccolo = Math.max(6.5, h * 0.10);
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag
+      ref={rif}
+      onClick={onClick}
+      title={titolo}
+      style={{
+        width: "100%", height: h, boxSizing: "border-box", minWidth: 0, textAlign: "left",
+        display: "flex", alignItems: "center", gap: spazio,
+        padding: `${spazio}px ${Math.round(spazio * 1.3)}px`,
+        borderRadius: Math.round(h * 0.2), cursor: onClick ? "pointer" : "default",
+        ...superficieCuscino(sfondo),
+        outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 1,
+        overflow: "hidden", ...fontBody,
+      }}
+    >
+      <span style={{ display: "flex", color: "#fff", flexShrink: 0 }}>
+        <DiscoMedaglione lato={lato} icona={Math.round(lato * 0.6 * 0.52)} rapportoDisco={0.60} rapportoIcona={0.52} colore={disco || "#6E7391"} pozzettoColore={sfondo === "#FFFFFF" || sfondo === "#fff" ? "#EDEDED" : "#F2EBDD"} Icona={Icona} attivo />
+      </span>
+      <span style={{ width: 1, alignSelf: "stretch", background: `${colore || "#6E7391"}33`, flexShrink: 0 }} />
+      <span style={{ minWidth: 0, flex: "1 1 auto", display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" }}>
+        <span style={{ fontSize: corpoEtichetta, fontWeight: 700, color: colore || "#6E7391", textTransform: "uppercase", letterSpacing: corpoEtichetta > 9 ? 0.4 : 0, lineHeight: 1.15, overflowWrap: "normal", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{etichetta}</span>
+        <span style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, color: NAVY, lineHeight: 1.05, marginTop: Math.round(h * 0.03), whiteSpace: "nowrap", overflow: "hidden" }}>{valore}</span>
+        {unita && <span style={{ fontSize: corpoPiccolo, color: MUTED, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{unita}</span>}
+        {nota && <span style={{ fontSize: corpoPiccolo, color: NAVY, lineHeight: 1.2, marginTop: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{nota}</span>}
+      </span>
+    </Tag>
+  );
+}
+
 // le icone dei cinque avvisi in cima a Contabilita' (bianche nel disco)
 function IconaAvvisoDocumento({ size = 20, color = "#fff" }) {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2.8h8.5L19 7.3v13.9H6z" /><path d="M14.5 2.8v4.5H19M9 12h6M9 15.5h6" /></svg>);
@@ -38065,20 +38126,14 @@ function PannelloCassaContanti({
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: isMobile ? 4 : 10, marginBottom: 14 }}>
             {celle.map((c) => (
               <div key={c.etichetta} style={{ minWidth: 0 }}>
-              <CellaImportoRiepilogo
-                isMobile={isMobile}
-                compatta={isMobile}
-                grande={!isMobile}
-                Icona={c.Icona}
-                label={c.etichetta}
-                valore={euroRiepilogo(c.valore)}
-                colore={c.colore}
-                nota={c.nota}
-                corpoImposto={corpoImporti}
-                onCorpoNecessario={(n) => segnalaCorpo(c.etichetta, n)}
-                altezzaEtichettaImposta={altezzaEtichette}
-                onAltezzaEtichetta={(h) => segnalaAltezza(c.etichetta, h)}
+              {/* il riquadro segnalatore, alto il 42% della base: i cinque
+                  hanno la stessa larghezza e quindi gli stessi corpi */}
+              <RiquadroSegnalatore
+                etichetta={c.etichetta} valore={euroRiepilogo(c.valore)} nota={c.nota} Icona={c.Icona}
+                colore={c.colore === NAVY ? "#6E7391" : c.colore}
+                disco={c.colore === "#C0392B" ? "#C0392B" : (c.colore === GOLD || c.colore === "#8A6D1D") ? "#B8860B" : "#6E7391"}
               />
+
               </div>
             ))}
           </div>
@@ -39674,20 +39729,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           return (
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${riquadri.length}, minmax(0, 1fr))`, gap: isMobile ? 5 : 10, marginBottom: 18, alignItems: "stretch" }}>
               {riquadri.map((r) => (
-                <button
-                  key={r.chiave}
-                  onClick={r.onClick}
-                  style={{ textAlign: "left", display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, ...superficieCuscino(r.sfondo), borderRadius: isMobile ? 12 : 18, padding: isMobile ? "8px 6px" : "12px 14px", minWidth: 0, cursor: "pointer" }}
-                >
-                  {/* le proporzioni della reference: pozzetto largo, disco al
-                      75% del pozzetto, icona a meta' del disco */}
-                  <DiscoMedaglione lato={isMobile ? 48 : 80} icona={isMobile ? 14 : 24} rapportoDisco={0.60} rapportoIcona={0.52} colore={r.disco} pozzettoColore={r.sfondo === "#fff" ? "#EDEDED" : "#F2EBDD"} Icona={r.Icona} attivo />
-                  <div style={{ width: 1, alignSelf: "stretch", background: `${r.colore}33`, flexShrink: 0 }} />
-                  <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 7.5 : 11, fontWeight: 700, color: r.colore, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.etichetta}</div>
-                    <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 28, fontWeight: 700, color: NAVY, lineHeight: 1.05, marginTop: isMobile ? 2 : 4 }}>{r.valore}</div>
-                  </div>
-                </button>
+                <RiquadroSegnalatore key={r.chiave} etichetta={r.etichetta} valore={r.valore} Icona={r.Icona} disco={r.disco} sfondo={r.sfondo === "#fff" ? "#FFFFFF" : r.sfondo} colore={r.colore} onClick={r.onClick} />
               ))}
             </div>
           );
@@ -45594,47 +45636,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 })(),
               ].map((c) => {
                 const scelto = c.filtro && filtroRapido === c.chiave;
-                // Lo stesso vestito degli avvisi di Contabilita' (16/09/2026):
-                // il disco col medaglione e l'icona bianca a sinistra, la
-                // riga verticale, l'etichetta colorata e il numero grande.
-                // Il disco e' grigio-blu dove non c'e' urgenza, oro dove
-                // c'e' da fare, rosso dove qualcosa e' scoperto
                 const tintaDisco = c.tinta === "#C0392B" ? "#C0392B" : c.tinta === "#2E7D32" ? "#2E7D32" : (c.tinta === MUTED ? "#6E7391" : "#B8860B");
-                const corpo = (
-                  <>
-                    <span style={{ display: "flex", color: "#fff", flexShrink: 0 }}>
-                      <DiscoMedaglione lato={isMobile ? 44 : 80} icona={isMobile ? 13 : 22} rapportoDisco={0.60} rapportoIcona={0.52} colore={tintaDisco} pozzettoColore={c.sfondo ? "#F2EBDD" : "#EDEDED"} Icona={c.Icona} attivo />
-                    </span>
-                    <span style={{ width: 1, alignSelf: "stretch", background: `${tintaDisco}33`, flexShrink: 0 }} />
-                    <span style={{ minWidth: 0, flex: "1 1 auto", display: "flex", flexDirection: "column" }}>
-                      <span style={{ ...fontBody, fontSize: isMobile ? 7.5 : 11, fontWeight: 700, color: tintaDisco, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>{c.etichetta}</span>
-                      <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 28, fontWeight: 700, color: NAVY, lineHeight: 1.05, marginTop: isMobile ? 2 : 4 }}>{c.valore.toLocaleString("it-IT")}</span>
-                      <span style={{ ...fontBody, fontSize: isMobile ? 7.5 : 11, color: MUTED, lineHeight: 1.2 }}>{c.unita}</span>
-                      {c.nota && !isMobile && (
-                        <span style={{ ...fontBody, fontSize: 10, color: NAVY, lineHeight: 1.3, marginTop: 4, paddingRight: 18, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.nota}</span>
-                      )}
-                    </span>
-                  </>
-                );
-                const stile = {
-                  display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, padding: isMobile ? "8px 6px" : "12px 14px", borderRadius: isMobile ? 12 : 18,
-                  ...superficieCuscino(c.sfondo && !c.sfondo.endsWith("12") ? c.sfondo : (scelto ? BG : "#FFFFFF")),
-                  outline: scelto ? `2px solid ${NAVY}` : "none", outlineOffset: 1,
-                  textAlign: "left", minHeight: 0, position: "relative", overflow: "hidden",
-                };
-                if (!c.filtro && !c.azione) return <div key={c.chiave} style={stile}>{corpo}</div>;
+                const sfondoRiquadro = c.sfondo && !c.sfondo.endsWith("12") ? c.sfondo : (scelto ? BG : "#FFFFFF");
                 return (
-                  <button key={c.chiave} onClick={c.azione || (() => setFiltroRapido(c.chiave))} style={{ ...stile, cursor: "pointer" }}>
-                    {corpo}
-                    {/* la freccetta da telefono non c'e': in un quarto di
-                        schermo si sarebbe mangiata il numero, e la tessera
-                        e' tutta un tasto */}
-                    {!isMobile && (
-                      <span style={{ position: "absolute", right: 14, bottom: 14, display: "inline-flex" }}>
-                        <IconaChevronDestra size={16} color={MUTED} />
-                      </span>
-                    )}
-                  </button>
+                  <RiquadroSegnalatore
+                    key={c.chiave}
+                    etichetta={c.etichetta} valore={c.valore.toLocaleString("it-IT")} unita={c.unita} nota={isMobile ? null : c.nota}
+                    Icona={c.Icona} disco={tintaDisco} colore={tintaDisco} sfondo={sfondoRiquadro}
+                    onClick={c.azione || (c.filtro ? () => setFiltroRapido(c.chiave) : undefined)} evidenziato={scelto}
+                  />
                 );
               })}
             </div>
