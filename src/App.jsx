@@ -38305,7 +38305,100 @@ function unisciEstrattoBanca(ofx, righeCsv, nomeFile) {
   });
 }
 
-function PannelloMovimentiBanca() {
+// ---------- Riconciliazione banca <-> prima nota ----------
+//
+// Un movimento dell'estratto conto e' o una spesa gia' scritta in prima
+// nota (allora si "riconcilia": si collega e basta) o una spesa che
+// nessuno ha ancora registrato (allora si "contabilizza": si apre il
+// modulo della spesa gia' compilato, e al salvataggio il movimento resta
+// collegato). In tutti e due i casi il movimento diventa grigio.
+
+// da che tasca sono usciti i soldi, letto dal testo della banca
+function metodoDaMovimentoBanca(m) {
+  const d = String(m?.descrizione || "").toLowerCase();
+  if (/con carta|pos\b|pagamento carta/.test(d)) return "Carta Nexi";
+  if (/sdd|addebito diretto|domiciliaz/.test(d)) return "Domiciliazione bancaria";
+  if (/paypal/.test(d)) return "PayPal";
+  return "Bonifico";
+}
+// le parole "vere" di un testo, per confrontare l'intestazione del
+// movimento con fornitore e descrizione della spesa
+function paroleChiaveBanca(testo) {
+  return String(testo || "").toLowerCase().replace(/[^a-z0-9àèéìòù]+/g, " ").split(" ").filter((w) => w.length >= 4 && !/^(srl|spa|snc|sas|bonifico|fattura|pagamento|favore|disposto|addebito|core|scad|comm|cred|vs|disp)$/.test(w));
+}
+// Le spese in prima nota che possono essere questo movimento: stesso
+// importo piu' o meno il 5%, pagate non in contanti, non gia' collegate
+// a un altro movimento, entro 60 giorni. Prima quelle con l'intestazione
+// che combacia e la data piu' vicina
+function candidatiSpesaPerMovimento(m, spese, fornitoriById, collegateIds, tolleranzaPct = 5) {
+  const importo = Math.abs(Number(m.importo) || 0);
+  if (!(importo > 0)) return [];
+  const paroleMov = new Set(paroleChiaveBanca(`${controparteBanca(m.descrizione, m.causale)} ${m.descrizione}`));
+  const giorniMov = Date.parse(m.data_operazione || "") / 86400000;
+  return (spese || [])
+    .filter((sp) => sp.stato === "pagata" && !METODI_SPESA_DALLA_CASSA.has(sp.metodo_pagamento || "") && !collegateIds.has(sp.id))
+    .map((sp) => {
+      const tot = Number(sp.totale) || 0;
+      const scarto = Math.abs(tot - importo) / importo;
+      if (scarto > tolleranzaPct / 100) return null;
+      const fornitore = sp.fornitore_id ? fornitoriById[sp.fornitore_id]?.nome || "" : "";
+      const paroleSp = paroleChiaveBanca(`${fornitore} ${sp.descrizione || ""}`);
+      const comuni = paroleSp.filter((w) => paroleMov.has(w)).length;
+      const dataSp = sp.data_pagamento || sp.data_documento || "";
+      const giorni = dataSp ? Math.abs(Date.parse(dataSp) / 86400000 - giorniMov) : 999;
+      if (giorni > 60) return null;
+      // punteggio: importo esatto vale molto, nome che combacia di piu',
+      // data vicina un po'
+      const punteggio = (scarto === 0 ? 3 : scarto < 0.01 ? 2 : 1) + comuni * 3 + (giorni <= 3 ? 2 : giorni <= 15 ? 1 : 0);
+      return { spesa: sp, fornitore, comuni, giorni, scarto, punteggio };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.punteggio - a.punteggio || a.giorni - b.giorni)
+    .slice(0, 4);
+}
+// una regola vale per un movimento se l'importo sta nella tolleranza e,
+// se la regola ha un testo, la descrizione lo contiene
+function regolaCorrispondeAlMovimento(r, m) {
+  if (r.attiva === false) return false;
+  const importo = Number(m.importo) || 0;
+  if (r.solo_uscite !== false && importo >= 0) return false;
+  const base = Number(r.importo) || 0;
+  if (!(base > 0)) return false;
+  if (Math.abs(Math.abs(importo) - base) / base > (Number(r.tolleranza_pct) || 0) / 100) return false;
+  const testo = String(r.descrizione_contiene || "").trim().toLowerCase();
+  if (testo && !String(m.descrizione || "").toLowerCase().includes(testo)) return false;
+  return true;
+}
+// Applica le regole ai movimenti "nuovi": per ognuno che combacia nasce
+// la spesa pagata e il movimento si collega. Torna quanti ne ha fatti
+async function applicaRegoleBanca(movimentiNuovi, regole) {
+  let fatti = 0;
+  for (const m of movimentiNuovi) {
+    if (m.stato !== "nuovo") continue;
+    const regola = (regole || []).find((r) => regolaCorrispondeAlMovimento(r, m));
+    if (!regola) continue;
+    const totale = round2(Math.abs(Number(m.importo) || 0));
+    const iva = Number(regola.iva_percentuale) || 0;
+    const { data: spesa, error } = await supabase.from("spese").insert({
+      descrizione: regola.spesa_descrizione || controparteBanca(m.descrizione, m.causale),
+      categoria_id: regola.categoria_id || null, sottocategoria_id: regola.sottocategoria_id || null, fornitore_id: regola.fornitore_id || null,
+      tipo_ambito: regola.tipo_ambito || "generale", sede_id: regola.sede_id || null, corso_id: regola.corso_id || null, classe_id: regola.classe_id || null, evento_id: regola.evento_id || null,
+      imponibile: round2(totale / (1 + iva / 100)), iva_percentuale: iva, totale,
+      data_documento: m.data_operazione, data_pagamento: m.data_operazione, stato: "pagata",
+      metodo_pagamento: regola.metodo_pagamento || metodoDaMovimentoBanca(m),
+      origine: "automatico", note: `Contabilizzata in automatico dalla regola banca (${fmtEuroErp2(Number(regola.importo))} ±${Number(regola.tolleranza_pct) || 0}%)`,
+    }).select().single();
+    if (error || !spesa) continue;
+    const { error: e2 } = await supabase.from("movimenti_banca").update({ stato: "riconciliato", collegato_tipo: "spesa", collegato_id: spesa.id, nota: "contabilizzata:regola" }).eq("id", m.id);
+    if (e2) continue;
+    await supabase.from("regole_banca").update({ usata_volte: (Number(regola.usata_volte) || 0) + 1 }).eq("id", regola.id);
+    regola.usata_volte = (Number(regola.usata_volte) || 0) + 1;
+    fatti += 1;
+  }
+  return fatti;
+}
+
+function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [], costiSottocategorie = [], ricarica, onContabilizza }) {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
   const [filtro, setFiltro] = useState("nuovo");
@@ -38313,20 +38406,62 @@ function PannelloMovimentiBanca() {
   const [msg, setMsg] = useState("");
   const [importando, setImportando] = useState(false);
   const [leggendo, setLeggendo] = useState(false);
+  const [regole, setRegole] = useState([]);
+  const [regoleAperte, setRegoleAperte] = useState(false);
+  const [applicandoRegole, setApplicandoRegole] = useState(false);
+  const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
 
   async function carica() {
     // il tetto e' alto ma esiste: con qualche anno di estratti conto la
     // lista va spezzata per periodo, e allora si vedra' che serve
-    const { data: righe, error } = await supabase
-      .from("movimenti_banca")
-      .select("*")
-      .order("data_operazione", { ascending: false })
-      .order("progressivo", { ascending: true })
-      .limit(1500);
+    const [{ data: righe, error }, { data: reg }] = await Promise.all([
+      supabase.from("movimenti_banca").select("*").order("data_operazione", { ascending: false }).order("progressivo", { ascending: true }).limit(1500),
+      supabase.from("regole_banca").select("*").order("creata_il", { ascending: false }),
+    ]);
     if (error) { setMsg(`Non riesco a leggere i movimenti: ${testoErrore(error)}`); setMovimenti([]); return; }
     setMovimenti(righe || []);
+    setRegole(reg || []);
   }
   useEffect(() => { carica(); }, []);
+
+  // le spese gia' collegate a un movimento non si propongono a un altro
+  const spesaCollegateIds = new Set((movimenti || []).filter((m) => m.collegato_tipo === "spesa" && m.collegato_id).map((m) => m.collegato_id));
+  const speseById = Object.fromEntries((spese || []).map((sp) => [sp.id, sp]));
+
+  // Riconcilia: il movimento e' quella spesa, gia' in prima nota. Si
+  // collega e diventa grigio; la prima nota non cambia
+  async function riconcilia(m, spesa) {
+    const { error } = await supabase.from("movimenti_banca").update({ stato: "riconciliato", collegato_tipo: "spesa", collegato_id: spesa.id, nota: "riconciliata" }).eq("id", m.id);
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
+    setMovimenti((prec) => (prec || []).map((x) => (x.id === m.id ? { ...x, stato: "riconciliato", collegato_tipo: "spesa", collegato_id: spesa.id, nota: "riconciliata" } : x)));
+  }
+  // il contrario: il collegamento si scioglie e il movimento torna da
+  // sistemare. Una spesa nata da Contabilizza resta in prima nota: se non
+  // la si vuole, si cancella da li'
+  async function scollega(m) {
+    const { error } = await supabase.from("movimenti_banca").update({ stato: "nuovo", collegato_tipo: null, collegato_id: null, nota: null }).eq("id", m.id);
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
+    setMovimenti((prec) => (prec || []).map((x) => (x.id === m.id ? { ...x, stato: "nuovo", collegato_tipo: null, collegato_id: null, nota: null } : x)));
+  }
+  async function applicaRegoleAiNuovi() {
+    setApplicandoRegole(true); setMsg("");
+    const fatti = await applicaRegoleBanca((movimenti || []).filter((m) => m.stato === "nuovo"), regole);
+    setApplicandoRegole(false);
+    setMsg(fatti > 0 ? `Contabilizzati in automatico ${fatti} movimenti con le regole.` : "Nessun movimento da sistemare corrisponde a una regola.");
+    await carica();
+    if (fatti > 0) ricarica?.(["spese"]);
+  }
+  async function toggleRegola(r) {
+    const { error } = await supabase.from("regole_banca").update({ attiva: !r.attiva }).eq("id", r.id);
+    if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
+    setRegole((prec) => prec.map((x) => (x.id === r.id ? { ...x, attiva: !r.attiva } : x)));
+  }
+  async function eliminaRegola(r) {
+    if (!window.confirm("Eliminare questa regola? Le spese gia' contabilizzate restano.")) return;
+    const { error } = await supabase.from("regole_banca").delete().eq("id", r.id);
+    if (error) { setMsg(`Non eliminata: ${testoErrore(error)}`); return; }
+    setRegole((prec) => prec.filter((x) => x.id !== r.id));
+  }
 
   async function scegliFile(e) {
     const files = Array.from(e.target.files || []);
@@ -38384,10 +38519,20 @@ function PannelloMovimentiBanca() {
       const { error } = await supabase.from("movimenti_banca").upsert(blocco, { onConflict: "impronta", ignoreDuplicates: true });
       if (error) { setImportando(false); setMsg(`Import interrotto: ${testoErrore(error)}`); await carica(); return; }
     }
+    // Appena importati, le regole automatiche: i movimenti appena entrati
+    // che combaciano diventano subito spese pagate e risultano gia'
+    // contabilizzati
+    let automatici = 0;
+    if (regole.some((r) => r.attiva !== false)) {
+      const impronte = anteprima.righe.map((m) => m.impronta).filter(Boolean);
+      const { data: appenaEntrati } = await supabase.from("movimenti_banca").select("*").in("impronta", impronte).eq("stato", "nuovo");
+      automatici = await applicaRegoleBanca(appenaEntrati || [], regole);
+    }
     setImportando(false);
-    setMsg(`Importati ${anteprima.righe.length} movimenti.`);
+    setMsg(`Importati ${anteprima.righe.length} movimenti.${automatici > 0 ? ` ${automatici} contabilizzati in automatico con le regole.` : ""}`);
     setAnteprima(null);
     await carica();
+    if (automatici > 0) ricarica?.(["spese"]);
   }
 
   async function cambiaStato(riga, stato) {
@@ -38512,6 +38657,39 @@ function PannelloMovimentiBanca() {
         {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.startsWith("Import") && !msg.includes("interrotto") ? "#2E7D32" : "#C0392B", marginTop: 12 }}>{msg}</div>}
       </div>
 
+      {/* Le regole automatiche: nascono dal modulo della spesa quando si
+          contabilizza un movimento e si spunta "ricordati"; qui si vedono,
+          si spengono, si cancellano, e si applicano a quello che e' gia'
+          da sistemare */}
+      <div style={{ ...cardStyle, padding: isMobile ? 14 : 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Regole automatiche ({regole.length})</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 200px", minWidth: 0 }}>Si creano dal modulo della spesa, quando contabilizzi un movimento e spunti "contabilizza in automatico i prossimi".</div>
+          {regole.length > 0 && (
+            <button onClick={applicaRegoleAiNuovi} disabled={applicandoRegole} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", opacity: applicandoRegole ? 0.6 : 1 }}>
+              {applicandoRegole ? "Applico…" : "Applica alle righe da sistemare"}
+            </button>
+          )}
+          {regole.length > 0 && (
+            <button onClick={() => setRegoleAperte((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>
+              {regoleAperte ? "Nascondi" : "Vedi le regole"}
+            </button>
+          )}
+        </div>
+        {regoleAperte && regole.map((r) => (
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, opacity: r.attiva === false ? 0.5 : 1 }}>
+            <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{r.spesa_descrizione || "Spesa"} · {fmtEuroErp2(Number(r.importo))} ±{Number(r.tolleranza_pct) || 0}%</div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                {r.descrizione_contiene ? `se la descrizione contiene "${r.descrizione_contiene}"` : "qualunque descrizione"} · {sottocategoriaCostoDi(costiSottocategorie, r.sottocategoria_id)?.nome || categoriaCostoDi(costiCategorie, r.categoria_id)?.nome || "senza categoria"} · usata {r.usata_volte || 0} volte
+              </div>
+            </div>
+            <button onClick={() => toggleRegola(r)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "6px 12px", cursor: "pointer" }}>{r.attiva === false ? "Riattiva" : "Sospendi"}</button>
+            <button onClick={() => eliminaRegola(r)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer" }}>Elimina</button>
+          </div>
+        ))}
+      </div>
+
       {/* Lo stesso impianto della Prima nota: titolo col periodo e le
           frecce, saldo del periodo col confronto, entrate e uscite, le
           pillole di stato, poi i movimenti a card */}
@@ -38572,29 +38750,75 @@ function PannelloMovimentiBanca() {
         {visibili.map((m) => {
           const importo = Number(m.importo) || 0;
           const entrata = importo >= 0;
+          const daSistemare = m.stato === "nuovo";
+          const collegata = m.stato === "riconciliato";
+          // "riconciliata" se era gia' in prima nota, "contabilizzata" se la
+          // spesa e' nata da qui (a mano o da una regola)
+          const etichettaCollegata = collegata ? (String(m.nota || "").startsWith("contabilizzata") ? (String(m.nota || "").endsWith("regola") ? "Contabilizzata da regola" : "Contabilizzata") : "Riconciliata") : null;
+          const spesaCollegata = collegata && m.collegato_id ? speseById[m.collegato_id] : null;
+          const candidati = daSistemare && !entrata ? candidatiSpesaPerMovimento(m, spese, fornitoriById, spesaCollegateIds) : [];
           return (
-            <CardAmministrazione
-              key={m.id}
-              data={m.data_operazione}
-              titolo={controparteBanca(m.descrizione, m.causale)}
-              corsoLabel={m.descrizione}
-              chips={[m.causale ? { Icona: IconaQiBanca, testo: m.causale } : null, m.stato === "ignorato" ? "Ignorato" : m.stato === "riconciliato" ? "Riconciliato" : null]}
-              importo={`${entrata ? "+" : "−"} ${fmtEuroErp2(Math.abs(importo))}`} etichettaImporto={entrata ? "Entrata" : "Uscita"} coloreImporto={entrata ? "#2E7D32" : "#C0392B"}
-              piede={(
-                <>
-                  <span style={{ flex: "1 1 auto" }} />
-                  {m.stato === "nuovo" ? (
-                    <button onClick={() => cambiaStato(m, "ignorato")} title="Non entra in prima nota: giroconti, movimenti tecnici" style={{ ...stileTastoCardChiaro(isMobile), color: MUTED }}>
-                      Ignora
-                    </button>
-                  ) : (
-                    <button onClick={() => cambiaStato(m, "nuovo")} style={stileTastoCardChiaro(isMobile)}>
-                      Rimetti fra quelli da sistemare
-                    </button>
-                  )}
-                </>
-              )}
-            />
+            <div key={m.id} style={{ opacity: collegata || m.stato === "ignorato" ? 0.62 : 1, filter: collegata ? "grayscale(0.6)" : "none" }}>
+              <CardAmministrazione
+                data={m.data_operazione}
+                titolo={controparteBanca(m.descrizione, m.causale)}
+                corsoLabel={m.descrizione}
+                chips={[
+                  m.causale ? { Icona: IconaQiBanca, testo: m.causale } : null,
+                  m.stato === "ignorato" ? "Ignorato" : null,
+                  etichettaCollegata ? { Icona: IconaQiDocumento, testo: `${etichettaCollegata}${spesaCollegata ? ` · ${spesaCollegata.descrizione || "spesa"}` : ""}` } : null,
+                  daSistemare && candidati.length > 0 ? { Icona: IconaQiDocumento, testo: `Trovat${candidati.length === 1 ? "o un importo riconciliabile" : `i ${candidati.length} importi riconciliabili`}` } : null,
+                ]}
+                importo={`${entrata ? "+" : "−"} ${fmtEuroErp2(Math.abs(importo))}`} etichettaImporto={entrata ? "Entrata" : "Uscita"} coloreImporto={entrata ? "#2E7D32" : "#C0392B"}
+                piede={(
+                  <>
+                    <span style={{ flex: "1 1 auto" }} />
+                    {daSistemare && (
+                      <>
+                        <button onClick={() => cambiaStato(m, "ignorato")} title="Non entra in prima nota: giroconti, movimenti tecnici" style={{ ...stileTastoCardChiaro(isMobile), color: MUTED }}>
+                          Ignora
+                        </button>
+                        {!entrata && onContabilizza && (
+                          <button onClick={() => onContabilizza(m)} title="Apre il modulo della spesa gia' compilato: categoria, classe e imputazione, poi il movimento risulta contabilizzato" style={{ ...stileTastoCardNavy(isMobile, false), justifyContent: "space-between", gap: 10 }}>
+                            <span>Contabilizza</span><span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {collegata && (
+                      <button onClick={() => scollega(m)} title="Scioglie il collegamento: il movimento torna da sistemare" style={stileTastoCardChiaro(isMobile)}>
+                        Scollega
+                      </button>
+                    )}
+                    {m.stato === "ignorato" && (
+                      <button onClick={() => cambiaStato(m, "nuovo")} style={stileTastoCardChiaro(isMobile)}>
+                        Rimetti fra quelli da sistemare
+                      </button>
+                    )}
+                  </>
+                )}
+              >
+                {/* i possibili abbinamenti in prima nota, sotto la riga: si
+                    sceglie quello giusto e si preme Riconcilia */}
+                {candidati.length > 0 && (
+                  <div style={{ marginTop: 12, padding: isMobile ? 10 : 12, background: BG_CHIARO, borderRadius: 14 }}>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Possibili spese in prima nota</div>
+                    {candidati.map((c) => (
+                      <div key={c.spesa.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{c.fornitore ? `${c.fornitore} · ` : ""}{c.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, c.spesa.sottocategoria_id)?.nome || "Spesa"}</div>
+                          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                            {fmtData(c.spesa.data_pagamento || c.spesa.data_documento)} · {c.spesa.metodo_pagamento || "—"}{c.scarto > 0 ? ` · importo diverso del ${(c.scarto * 100).toFixed(1)}%` : " · stesso importo"}{c.comuni > 0 ? " · intestazione che combacia" : ""}
+                          </div>
+                        </div>
+                        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(Number(c.spesa.totale))}</div>
+                        <button onClick={() => riconcilia(m, c.spesa)} style={{ ...stileTastoCardOro(isMobile, false), padding: "8px 14px", fontSize: 12.5 }}>Riconcilia</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardAmministrazione>
+            </div>
           );
         })}
         {tutti.length >= 1500 && (
@@ -38707,7 +38931,7 @@ function PannelloCassaConsulenze() {
   );
 }
 
-function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
+function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriNuovaSpesaDaMovimentoBanca, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -39321,7 +39545,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           />
         )}
         {tab === "consulenze" && <PannelloCassaConsulenze />}
-        {tab === "banca" && <PannelloMovimentiBanca />}
+        {tab === "banca" && <PannelloMovimentiBanca spese={spese} fornitori={fornitori} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} onContabilizza={onApriNuovaSpesaDaMovimentoBanca} />}
 
         {tab === "impegni" && (
           <div>
@@ -61634,7 +61858,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   const [ibanFornitore, setIbanFornitore] = useState(() => (fornitori || []).find((f) => f.id === (prefill?.fornitoreId || spesaEsistente?.fornitore_id))?.iban || "");
   const [numeroDocumento, setNumeroDocumento] = useState(prefill?.numeroDocumento || spesaEsistente?.numero_documento || "");
   const [dataDocumento, setDataDocumento] = useState(prefill?.dataDocumento || spesaEsistente?.data_documento || dataOggiStr());
-  const [dataPagamento, setDataPagamento] = useState(spesaEsistente?.data_pagamento || "");
+  const [dataPagamento, setDataPagamento] = useState(spesaEsistente?.data_pagamento || prefill?.dataPagamento || "");
   const [scadenzaPagamento, setScadenzaPagamento] = useState(spesaEsistente?.scadenza_pagamento || "");
   const [competenzaDa, setCompetenzaDa] = useState(spesaEsistente?.competenza_da || "");
   const [competenzaA, setCompetenzaA] = useState(spesaEsistente?.competenza_a || "");
@@ -61643,7 +61867,14 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   const [iva, setIva] = useState(spesaEsistente?.iva_percentuale ?? (prefill?.ivaPercentuale ?? 22));
   const [esenteIva, setEsenteIva] = useState(spesaEsistente ? spesaEsistente.iva_percentuale === 0 : prefill?.ivaPercentuale === 0);
   const [stato, setStato] = useState(spesaEsistente?.stato || prefill?.statoIniziale || "pagata");
-  const [metodoPagamento, setMetodoPagamento] = useState(spesaEsistente?.metodo_pagamento || "");
+  const [metodoPagamento, setMetodoPagamento] = useState(spesaEsistente?.metodo_pagamento || prefill?.metodoPagamento || "");
+  // Contabilizza da Movimenti banca: al salvataggio il movimento resta
+  // collegato a questa spesa. E si puo' chiedere di ricordarsi la
+  // scelta: una regola che contabilizza da sola i prossimi movimenti con
+  // lo stesso importo (piu' o meno una tolleranza) e lo stesso testo
+  const [creaRegola, setCreaRegola] = useState(false);
+  const [regolaTolleranza, setRegolaTolleranza] = useState("5");
+  const [regolaTesto, setRegolaTesto] = useState(prefill?.movimentoControparte || "");
   const [note, setNote] = useState(spesaEsistente?.note || "");
 
   const [tipoAmbito, setTipoAmbito] = useState(prefill?.classeId ? "classe" : spesaEsistente?.tipo_ambito || "generale");
@@ -61815,6 +62046,20 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     if (prefill?.fatturaFicId) {
       await supabase.from("fatture_ricevute_fic").update({ spesa_id: idSpesa }).eq("id", prefill.fatturaFicId);
     }
+    // spesa nata da "Contabilizza" su un movimento banca: il movimento
+    // resta collegato e diventa grigio; con la spunta nasce anche la regola
+    if (prefill?.movimentoBancaId && !spesaId) {
+      await supabase.from("movimenti_banca").update({ stato: "riconciliato", collegato_tipo: "spesa", collegato_id: idSpesa, nota: "contabilizzata" }).eq("id", prefill.movimentoBancaId);
+      if (creaRegola) {
+        await supabase.from("regole_banca").insert({
+          descrizione_contiene: regolaTesto.trim() || null,
+          importo: payload.totale, tolleranza_pct: Math.max(0, parseNum(regolaTolleranza) || 0), solo_uscite: true,
+          spesa_descrizione: payload.descrizione, categoria_id: payload.categoria_id || null, sottocategoria_id: payload.sottocategoria_id || null, fornitore_id: payload.fornitore_id || null,
+          tipo_ambito: payload.tipo_ambito || "generale", sede_id: payload.sede_id || null, corso_id: payload.corso_id || null, classe_id: payload.classe_id || null, evento_id: payload.evento_id || null,
+          iva_percentuale: payload.iva_percentuale || 0, metodo_pagamento: payload.metodo_pagamento || null,
+        });
+      }
+    }
 
     setSalvando(false);
     ricarica(prefill?.fatturaFicId ? ["fornitori", "spese", "spese_attribuzioni", "fatture_ricevute_fic"] : ["fornitori", "spese", "spese_attribuzioni"]);
@@ -61884,6 +62129,29 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
             </div>
           </div>
           <Field label="IBAN fornitore (opzionale, resta associato al fornitore)"><input style={inputStyle} placeholder="es. IT00X0000000000000000000000" value={ibanFornitore} onChange={(e) => setIbanFornitore(e.target.value)} /></Field>
+          {prefill?.movimentoBancaId && !spesaId && (
+            <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid ${GOLD}` }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.6 }}>Dal movimento banca</div>
+              <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 4 }}>{fmtData(prefill.dataPagamento)} · {fmtEuroErp2(Number(prefill.totale))} · {prefill.movimentoDescrizione}</div>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 4 }}>Al salvataggio il movimento risulta contabilizzato e diventa grigio.</div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 12, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                <input type="checkbox" checked={creaRegola} onChange={(e) => setCreaRegola(e.target.checked)} style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0 }} />
+                <span>Contabilizza in automatico i prossimi movimenti uguali a questo, con la stessa categoria e imputazione</span>
+              </label>
+              {creaRegola && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 10, paddingLeft: 28 }}>
+                  <label style={{ ...fontBody, fontSize: 12.5, color: NAVY, display: "flex", alignItems: "center", gap: 6 }}>
+                    Importo {fmtEuroErp2(Number(totale === "" ? prefill.totale : parseNum(totale)))} più o meno
+                    <input type="number" min="0" max="100" step="1" value={regolaTolleranza} onChange={(e) => setRegolaTolleranza(e.target.value)} style={{ ...inputStyle, width: 64, padding: "6px 8px" }} /> %
+                  </label>
+                  <label style={{ ...fontBody, fontSize: 12.5, color: NAVY, display: "flex", alignItems: "center", gap: 6, flex: "1 1 260px", minWidth: 0 }}>
+                    e la descrizione contiene
+                    <input type="text" value={regolaTesto} onChange={(e) => setRegolaTesto(e.target.value)} placeholder="vuoto = qualunque descrizione" style={{ ...inputStyle, flex: "1 1 auto", minWidth: 0, padding: "6px 8px" }} />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
           {prefill?.ficDocumentoId && (
             <div style={{ marginBottom: 14 }}>
               <button type="button" onClick={vediDocumentoOriginaleFic} disabled={caricandoAllegatoFic} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", opacity: caricandoAllegatoFic ? 0.6 : 1 }}>
@@ -63925,6 +64193,26 @@ export default function App() {
     setSpesaRitornoView("amministrazione");
     apriViewProtetta("spesaform");
   }
+  // "Contabilizza" su un movimento banca: il modulo della spesa gia'
+  // compilato con data, importo, intestazione e da che tasca e' uscito;
+  // si torna a Contabilita' sulla scheda della banca
+  function apriNuovaSpesaDaMovimentoBanca(m) {
+    const controparte = controparteBanca(m.descrizione, m.causale);
+    const fornitoreEsistente = (fornitori || []).find((ft) => ft.nome && controparte && ft.nome.trim().toLowerCase() === controparte.trim().toLowerCase());
+    setSpesaInModifica(null);
+    setSpesaPrefill({
+      descrizione: controparte,
+      fornitoreId: fornitoreEsistente?.id || null,
+      nomeFornitore: fornitoreEsistente ? null : null,
+      dataDocumento: m.data_operazione, dataPagamento: m.data_operazione,
+      totale: round2(Math.abs(Number(m.importo) || 0)), ivaPercentuale: 0,
+      statoIniziale: "pagata", metodoPagamento: metodoDaMovimentoBanca(m),
+      movimentoBancaId: m.id, movimentoDescrizione: m.descrizione, movimentoControparte: controparte,
+    });
+    setAmministrazioneTabIniziale("banca");
+    setSpesaRitornoView("amministrazione");
+    apriViewProtetta("spesaform");
+  }
   function apriRiconciliazione(documentoFornitoreId) {
     setDocumentoFornitoreApertoId(documentoFornitoreId);
     apriViewProtetta("riconciliazione");
@@ -64766,6 +65054,7 @@ export default function App() {
           onApriNuovoAbbonamento={apriNuovoAbbonamento}
           onApriModificaAbbonamento={apriModificaAbbonamento}
           onApriNuovaSpesaDaFatturaFic={apriNuovaSpesaDaFatturaFic}
+          onApriNuovaSpesaDaMovimentoBanca={apriNuovaSpesaDaMovimentoBanca}
           onApriRiconciliazione={apriRiconciliazione}
           tabIniziale={amministrazioneTabIniziale}
           onCambiaTab={setAmministrazioneTabIniziale}
