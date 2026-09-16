@@ -42425,7 +42425,62 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
   );
 }
 
-function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiShop = [], bundleComponenti = [], origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+  // Cancellare una vendita: non deve restarne niente. Sparisce la riga (e
+  // con lei prima nota, cassa, provvigioni, statistiche, che la leggono
+  // da li'), spariscono la spedizione e le righe preparate, spariscono
+  // gli annullamenti/resi/cambi che la citavano, e il magazzino torna
+  // com'era prima della vendita — a meno che i pezzi non fossero usciti
+  // dai kit del corso (allora il magazzino non era stato toccato) o che un
+  // annullamento li avesse gia' rimessi. Annullamenti, resi e cambi non si
+  // cancellano da soli: si cancella la vendita a cui appartengono.
+  const [eliminandoVendita, setEliminandoVendita] = useState(null);
+  const [msgElimina, setMsgElimina] = useState("");
+  async function eliminaVendita(v) {
+    if (v.tipo_movimento && v.tipo_movimento !== "vendita") { setMsgElimina("Questa riga è un movimento legato a una vendita: cancella la vendita originale e sparisce anche lei."); return; }
+    const collegate = (venditeShop || []).filter((x) => x.vendita_collegata_id === v.id);
+    const giaAnnullata = collegate.some((x) => x.tipo_movimento === "annullamento");
+    const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
+    const rimetteStock = !v.prelevato_dai_kit && !giaAnnullata && righe.some((r) => r.quantita > 0);
+    const testo = [
+      `Vuoi veramente cancellare la vendita #${v.numero_ordine || v.woo_order_id} del ${v.data_ordine ? fmtData(String(v.data_ordine).slice(0, 10)) : "—"} da ${fmtEuroErp2(Number(v.totale) || 0)}?`,
+      "",
+      "Non ne resterà traccia: sparisce da prima nota, cassa contanti, provvigioni e statistiche.",
+      collegate.length > 0 ? `Spariscono anche ${collegate.length} movimenti collegati (annullamenti, resi o cambi).` : null,
+      rimetteStock ? "I pezzi venduti tornano in magazzino." : (v.prelevato_dai_kit ? "I pezzi erano usciti dai kit del corso: il magazzino non cambia." : giaAnnullata ? "Era già annullata: il magazzino non cambia." : null),
+    ].filter((r) => r !== null).join("\n");
+    if (!window.confirm(testo)) return;
+    setEliminandoVendita(v.id); setMsgElimina("");
+    if (rimetteStock) {
+      const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+      const perNome = Object.fromEntries((prodottiShop || []).map((p) => [String(p.nome || "").trim().toLowerCase(), p]));
+      for (const r of righe) {
+        if (!(r.quantita > 0)) continue;
+        const prodotto = (r.prodotto_id && perId[r.prodotto_id]) || perNome[String(r.nome || "").trim().toLowerCase()];
+        if (!prodotto) continue;
+        const righeDaMuovere = bundleVirtuale(prodotto)
+          ? righeBundleCon(prodotto.id, bundleComponenti, perId).map((b) => ({ prodotto: b.prodotto, quantita: r.quantita * b.quantitaPerBundle }))
+          : [{ prodotto, quantita: r.quantita }];
+        for (const m of righeDaMuovere) {
+          const errore = await muoviStock(m.prodotto, m.quantita, { origine: "reso", nota: `Vendita #${v.numero_ordine || v.woo_order_id} cancellata` });
+          if (errore) { setEliminandoVendita(null); setMsgElimina("Magazzino non aggiornato, vendita NON cancellata: " + errore); return; }
+        }
+      }
+    }
+    // la spedizione al banco e le sue righe preparate, poi i movimenti
+    // collegati, poi la vendita
+    const { data: spedizioni } = await supabase.from("spedizioni_pos").select("id").eq("vendita_id", v.id);
+    for (const sp of spedizioni || []) {
+      await supabase.from("righe_preparate_spedizione").delete().eq("spedizione_pos_id", sp.id);
+      await supabase.from("spedizioni_pos").delete().eq("id", sp.id);
+    }
+    if (collegate.length > 0) await supabase.from("vendite_shop").delete().in("id", collegate.map((x) => x.id));
+    const { error } = await supabase.from("vendite_shop").delete().eq("id", v.id);
+    setEliminandoVendita(null);
+    if (error) { setMsgElimina("Vendita non cancellata: " + testoErrore(error)); return; }
+    setMsgElimina(`Vendita #${v.numero_ordine || v.woo_order_id} cancellata${rimetteStock ? ", magazzino rimesso a posto" : ""}.`);
+    ricarica(["vendite_shop", "prodotti_shop", "spedizioni_pos"]);
+  }
   // "Frangente": in quale occasione e' stata fatta la vendita. Il POS
   // registra la classe quando chi vende ne sceglie una — e' il caso della
   // master che vende in aula — e da li' si risale al nome del corso.
@@ -42725,6 +42780,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
         )}
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
+            {msgElimina && <div style={{ ...fontBody, fontSize: 13, color: msgElimina.startsWith("Vendita #") ? "#2E7D32" : "#C0392B", padding: "10px 14px" }}>{msgElimina}</div>}
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
@@ -42733,6 +42789,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                     : [{ c: "cliente", l: "Cliente" }]), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Prezzo pagato" }].map((th) => (
                     <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
+                  <th style={{ width: 44, borderBottom: `1px solid ${CREAM_BORDER}` }} />
                 </tr>
               </thead>
               <tbody>
@@ -42886,6 +42943,17 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], origine, r
                           );
                         })()}
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
+                        {/* il cestino: chiede conferma e non lascia traccia */}
+                        <td style={{ padding: "12px 10px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                          <button
+                            onClick={() => eliminaVendita(v)}
+                            disabled={eliminandoVendita === v.id}
+                            title={v.tipo_movimento && v.tipo_movimento !== "vendita" ? "Si cancella la vendita originale: sparisce anche questo movimento" : "Cancella la vendita, senza lasciarne traccia"}
+                            style={{ border: "none", background: "none", cursor: "pointer", color: v.tipo_movimento && v.tipo_movimento !== "vendita" ? MUTED : "#C0392B", padding: 6, display: "flex", opacity: eliminandoVendita === v.id ? 0.5 : 1 }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -65359,11 +65427,11 @@ export default function App() {
       )}
 
       {view === "venditeshop" && (
-        <PaginaVenditeShop venditeShop={venditeShop} origine="woocommerce" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditeshop", "Vendite Shop Online")} />
+        <PaginaVenditeShop venditeShop={venditeShop} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} origine="woocommerce" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditeshop", "Vendite Shop Online")} />
       )}
 
       {view === "venditealbanco" && (
-        <PaginaVenditeShop venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} origine="pos" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
+        <PaginaVenditeShop venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} origine="pos" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
       )}
 
       {view === "omaggi" && (
