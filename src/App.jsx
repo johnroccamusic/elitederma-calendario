@@ -45399,17 +45399,18 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: "#B8860B", whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile carta/shop (${fmtEuroErp2(p.cedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
           {/* casella e % sulla prima riga, allineate a quelle del titolo;
               gli euro accantonati sotto, cosi' la colonna resta dritta */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
-              <input type="number" min="0" max="100" step="1" value={sicurezzaBozza} placeholder={String(sicurezzaPunti)}
-                onChange={(e) => setSicurezzaBozza(e.target.value)}
-                onBlur={salvaSicurezzaProdotto}
-                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                onClick={(e) => e.stopPropagation()}
-                style={{ ...fontBody, width: 40, fontSize: 11.5, fontWeight: 700, color: p.sicurezza_punti_pct != null ? NAVY : MUTED, textAlign: "center", padding: "2px 3px", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
-              <span style={{ fontSize: 11 }}>%</span>
-            </div>
-            <span style={{ fontSize: 10.5 }}>{p.sicurezzaEuro != null ? `−${fmtEuroErp2(p.sicurezzaEuro)}` : "—"}</span>
+          {/* casella, % e poi gli euro accantonati a destra, in uno spazio
+              di larghezza fissa: lo stesso spazio (vuoto) sta nel titolo,
+              cosi' le caselle restano incolonnate con quella in cima */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
+            <input type="number" min="0" max="100" step="1" value={sicurezzaBozza} placeholder={String(sicurezzaPunti)}
+              onChange={(e) => setSicurezzaBozza(e.target.value)}
+              onBlur={salvaSicurezzaProdotto}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ ...fontBody, width: 40, fontSize: 11.5, fontWeight: 700, color: p.sicurezza_punti_pct != null ? NAVY : MUTED, textAlign: "center", padding: "2px 3px", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+            <span style={{ fontSize: 11 }}>%</span>
+            <span style={{ fontSize: 10.5, width: 56, textAlign: "left", paddingLeft: 4, whiteSpace: "nowrap" }}>{p.sicurezzaEuro != null ? `−${fmtEuroErp2(p.sicurezzaEuro)}` : "—"}</span>
           </div>
         </td>
     ),
@@ -46595,6 +46596,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                           <input type="number" min="0" max="100" step="1" value={sicurezzaPunti} onChange={(e) => cambiaSicurezzaPunti(e.target.value)} draggable={false} title="Percentuale di sicurezza tolta dal cedibile prima di calcolare i punti. Vale in tutta l'app, come in Gestione punti"
                             style={{ ...fontBody, width: 40, fontSize: 11.5, fontWeight: 700, color: "#B8860B", textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
                           <span style={{ fontSize: 11, color: NAVY }}>%</span>
+                          <span style={{ width: 56, paddingLeft: 4 }} />
                         </div>
                       )}
                       {col.quotaIndice != null && (
