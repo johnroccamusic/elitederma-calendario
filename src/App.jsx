@@ -101,12 +101,12 @@ const ARANCIO_POMERIGGIO = "#E8873A";
 const VERDE_TROVATA = "#E9F6EC";
 const ROSSO_DA_TROVARE = "#FDECEC";
 
-const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
-// Il titolo di una pagina, sempre lo stesso: Prompt 700, 24 fissi,
+const fontDisplay = { fontFamily: "'Figtree',sans-serif", fontWeight: 500 };
+// Il titolo di una pagina, sempre lo stesso: Figtree 700, 24 fissi,
 // maiuscolo. Erano 19, 20, 21, 22, 24, 26, 28, 30, 32 — alcuni che si
 // rimpicciolivano da telefono e altri no — e passando da una pagina
 // all'altra il titolo cambiava taglia a ogni porta.
-const stileTitoloPagina = { fontFamily: "'Prompt',sans-serif", fontSize: 24, fontWeight: 700, textTransform: "uppercase", lineHeight: 1.15 };
+const stileTitoloPagina = { fontFamily: "'Figtree',sans-serif", fontSize: 24, fontWeight: 700, textTransform: "uppercase", lineHeight: 1.15 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
 // serif elegante per il titolo del corso nell'intestazione scura
 // (Contabilità classe / schede di inserimento allievo): unico punto dove
@@ -12397,7 +12397,7 @@ function PopupVoceAgenda({ voce, onSalva, onElimina, onChiudi }) {
 // una singola "pagina" di taccuino: quella di un giorno (con gli
 // appuntamenti) o quella note della settimana (ottava carta della riga)
 // carattere per le intestazioni delle carte: serif, diverso di proposito
-// dal resto dell'app (Prompt/Roboto) per dare l'aria di un vero taccuino
+// dal resto dell'app (Figtree/Roboto) per dare l'aria di un vero taccuino
 const fontQuaderno = { fontFamily: "Georgia, 'Times New Roman', serif" };
 // tavolozza alternata per mese: un mese la carta ha i toni caldi di
 // sempre, il successivo un celeste chiaro "carta da zucchero" — così,
@@ -61964,7 +61964,7 @@ function renderaFatturaElettronicaHtml(xmlTesto) {
 <style>
   body{font-family:'Roboto',Arial,sans-serif;background:#F7F5EF;color:#0E1B33;margin:0;padding:32px 20px;}
   .foglio{max-width:760px;margin:0 auto;background:#fff;border:1px solid #E8E3D6;border-radius:14px;padding:32px 36px;}
-  h1{font-family:'Prompt',Arial,sans-serif;font-size:24px;margin:0 0 2px;}
+  h1{font-family:'Figtree',Arial,sans-serif;font-size:24px;margin:0 0 2px;}
   .sub{color:#8B8FA3;font-size:13px;margin-bottom:22px;}
   .riga-campi{display:flex;flex-wrap:wrap;gap:22px;margin-bottom:20px;}
   .campo{min-width:150px;}
@@ -61975,7 +61975,7 @@ function renderaFatturaElettronicaHtml(xmlTesto) {
   td{padding:7px 8px;border-bottom:1px solid #F1EEE4;}
   td.num{text-align:right;white-space:nowrap;}
   .totale{font-size:20px;font-weight:700;text-align:right;margin-top:10px;}
-  .sezione{margin-top:26px;font-family:'Prompt',Arial,sans-serif;font-size:12px;font-weight:700;color:#C9A26D;text-transform:uppercase;letter-spacing:.8px;}
+  .sezione{margin-top:26px;font-family:'Figtree',Arial,sans-serif;font-size:12px;font-weight:700;color:#C9A26D;text-transform:uppercase;letter-spacing:.8px;}
   .causali{font-size:12px;color:#8B8FA3;margin-top:4px;}
 </style></head>
 <body>
