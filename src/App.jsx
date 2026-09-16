@@ -17352,65 +17352,14 @@ function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungi
     ...(onProssimeContabilita ? [{ chiave: "contabilita", testo: "Prossime contabilità", Icona: IconaLibroContabile, onClick: onProssimeContabilita }] : []),
     { chiave: "acconti", testo: "Verifica pagamenti", Icona: IconaRicevutaErp, onClick: onVerificaAcconti, badge: numeroAccontiInAttesa },
   ];
-  // Sul telefono sono gli stessi tasti della home: il quadrato col disco
-  // blu e l'icona, l'etichetta sotto su due righe. Sul computer restano le
-  // tessere chiare con il medaglione
-  if (isMobile) {
-    return (
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${voci.length}, minmax(0, 1fr))`, gap: 6, maxWidth: 620, margin: "0 auto 14px" }}>
-        {voci.map((t) => (
-          <TileHome key={t.chiave} title={t.testo} Icona={t.Icona} onClick={t.onClick} badge={t.badge} evidenziato={attivo === t.chiave} etichettaDueRighe />
-        ))}
-      </div>
-    );
-  }
+  // Gli stessi tasti della home, telefono e computer: sul telefono il
+  // quadrato col disco blu e l'etichetta sotto su due righe, sul computer
+  // il medaglione con icona e titolo che si riducono con la tessera
   return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${voci.length}, minmax(0, 1fr))`, gap: isMobile ? 8 : 14, maxWidth: 620, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
-      {voci.map((t) => {
-        const scelto = attivo === t.chiave;
-        return (
-          <div key={t.chiave} style={{ position: "relative", minWidth: 0, display: "flex" }}>
-            {t.badge > 0 && <style>{`@keyframes lampeggiaBadgeTasto { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }`}</style>}
-            <button
-              onClick={t.onClick}
-              style={{
-                ...fontDisplay, fontSize: isMobile ? 12 : 14.5, fontWeight: 700, lineHeight: 1.2,
-                width: "100%", aspectRatio: "1 / 1", minWidth: 0, boxSizing: "border-box", overflow: "hidden", cursor: "pointer",
-                // dall'alto e non centrati: centrando il contenuto, un testo
-                // su due righe spinge su la sua icona e le quattro non sono
-                // piu' in linea — ne' le icone ne' la prima riga delle scritte
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-                gap: isMobile ? 8 : 11, textAlign: "center", overflowWrap: "anywhere",
-                padding: isMobile ? "14px 5px 8px" : "20px 8px 12px", borderRadius: isMobile ? 14 : 18,
-                background: scelto ? "#fff" : "#FBF7F0",
-                border: `${scelto ? 2 : 1}px solid ${scelto ? GOLD : CREAM_BORDER}`,
-                color: scelto ? NAVY : GRAFITE,
-              }}
-            >
-              <span style={{
-                width: isMobile ? 36 : 48, height: isMobile ? 36 : 48, borderRadius: "50%", flexShrink: 0,
-                background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <t.Icona size={isMobile ? 18 : 24} color={GOLD} />
-              </span>
-              {t.testo}
-            </button>
-            {t.badge > 0 && (
-              <span
-                title={`${t.badge} da verificare`}
-                style={{
-                  position: "absolute", top: -6, right: -6,
-                  ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#fff", background: "#C0392B",
-                  borderRadius: 20, minWidth: isMobile ? 20 : 22, height: isMobile ? 20 : 22,
-                  display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box",
-                  animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite",
-                  boxShadow: "0 1px 3px rgba(14,27,51,0.3)",
-                }}
-              >{t.badge}</span>
-            )}
-          </div>
-        );
-      })}
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${voci.length}, minmax(0, 1fr))`, gap: isMobile ? 6 : 14, maxWidth: isMobile ? 620 : 760, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
+      {voci.map((t) => (
+        <TileHome key={t.chiave} title={t.testo} Icona={t.Icona} onClick={t.onClick} badge={t.badge} evidenziato={attivo === t.chiave} etichettaDueRighe />
+      ))}
     </div>
   );
 }
