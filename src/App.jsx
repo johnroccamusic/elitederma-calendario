@@ -6655,7 +6655,6 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
                   Sezione <b style={{ color: NAVY }}>{sz.nome}</b>{sz.master_id && masterById[sz.master_id] ? ` · master ${toTitleCase(masterById[sz.master_id].nome || "")}` : ""}
                   <button onClick={() => eliminaSezione(sz)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Elimina sezione</button>
                 </div>
-                </div>
               </>
             );
           })()}
@@ -6664,7 +6663,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
               <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Nomi trovati nei codici — crea la sezione e i suoi codici ci finiscono dentro</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {nomiProposti.map((n) => (
-                  <button key={n.nome} onClick={() => creaSezione(n.nome, n.codici)} title={n.codici.join(", ")} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#FBF3E0", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "6px 12px", cursor: "pointer" }}>
+                  <button key={n.nome} onClick={() => { if (window.confirm(`Creare la sezione "${n.nome}" e metterci dentro ${n.codici.length} codic${n.codici.length === 1 ? "e" : "i"}?\n\n${n.codici.join(", ")}`)) creaSezione(n.nome, n.codici); }} title={n.codici.join(", ")} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#FBF3E0", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "6px 12px", cursor: "pointer" }}>
                     + {n.nome} <span style={{ color: MUTED, fontWeight: 400 }}>({n.codici.length} codic{n.codici.length === 1 ? "e" : "i"})</span>
                   </button>
                 ))}
