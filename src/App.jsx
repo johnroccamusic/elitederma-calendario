@@ -2870,17 +2870,24 @@ function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true, pozzettoCo
 }
 // Il cuscino bianco: un velo di grigio verso il basso e i riflessi
 // interni lo fanno sembrare pieno e morbido
+// Il cuscino, sul riferimento del 16/09/2026: bianco che scende appena
+// verso il grigio, un riflesso netto in alto, un orlo in ombra in basso
+// che da' spessore, un filo grigio intorno e un'ombra morbida sotto.
+// Vale per ogni forma: tessere, riquadri larghi, pastiglie
 function sfondoMedaglione(colore = "#FFFFFF") {
   const c = colore || "#FFFFFF";
-  return `linear-gradient(180deg, ${mescolaColore(c, "#ffffff", 0.15)} 0%, ${c} 60%, ${mescolaColore(c, "#000000", 0.06)} 100%)`;
+  return `linear-gradient(180deg, ${mescolaColore(c, "#ffffff", 0.35)} 0%, ${c} 55%, ${mescolaColore(c, "#000000", 0.07)} 100%)`;
 }
-// l'ombra del cuscino: una base fissa che lo stacca dal fondo, come nel
-// riferimento, piu' quella scelta dai comandi e i riflessi interni
+// gli spessori del cuscino, da soli: per i riquadri colorati che non
+// passano da Aspetto dell'app
+const SPESSORE_CUSCINO = "inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -5px 0 rgba(120,126,138,0.28), inset 0 -6px 8px rgba(14,27,51,0.06), inset 0 0 0 1px rgba(14,27,51,0.06), 0 0 0 1px rgba(120,126,138,0.22), 0 12px 22px -12px rgba(14,27,51,0.40), 0 2px 4px rgba(14,27,51,0.08)";
+function superficieCuscino(colore = "#FFFFFF") {
+  return { background: sfondoMedaglione(colore), boxShadow: SPESSORE_CUSCINO, border: "none" };
+}
+// l'ombra del cuscino: gli spessori fissi piu' l'ombra scelta dai comandi
 function ombraMedaglione(ombra) {
   const esterna = ombraCssTasto(ombra);
-  const base = "0 6px 12px rgba(14,27,51,0.16), 0 1px 2px rgba(14,27,51,0.10)";
-  const interne = "inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -4px 6px rgba(14,27,51,0.09), inset 0 0 0 1px rgba(14,27,51,0.05)";
-  return esterna === "none" ? `${base}, ${interne}` : `${esterna}, ${base}, ${interne}`;
+  return esterna === "none" ? SPESSORE_CUSCINO : `${esterna}, ${SPESSORE_CUSCINO}`;
 }
 // L'ombra come la vuole il CSS. Intensita' zero vuol dire "nessuna
 // ombra": e' cosi' che si toglie, senza aggiungere un interruttore che
@@ -24754,8 +24761,7 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
       // "grande" (la riga della cassa contanti) ha il vestito degli avvisi
       // di Contabilita' (16/09/2026): bianco morbido con l'ombra, senza
       // bordo, e il disco col medaglione al posto del tondo chiaro
-      background: grande ? "#fff" : "#FCFBF8", border: grande ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: compatta ? 10 : grande ? 18 : 14,
-      boxShadow: grande ? "0 10px 22px -16px rgba(14,27,51,0.45), 0 1px 2px rgba(14,27,51,0.08)" : "none",
+      ...(grande ? superficieCuscino("#FFFFFF") : { background: "#FCFBF8", border: `1px solid ${CREAM_BORDER}` }), borderRadius: compatta ? 10 : grande ? 18 : 14,
       padding: compatta ? "8px 6px" : grande ? "12px 14px" : colonna ? "8px 5px" : (isMobile ? "10px 10px" : "12px 14px"),
       overflow: "hidden",
     }}>
@@ -24763,7 +24769,7 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
         <span style={{ display: "flex", color: "#fff", flexShrink: 0 }}>
           {/* grigio-blu per i numeri neutri, oro per quello che aspetta,
               rosso per quello che manca: lo stesso codice degli avvisi */}
-          <DiscoMedaglione lato={isMobile ? 48 : 64} icona={isMobile ? 15 : 22} colore={colore === "#C0392B" ? "#C0392B" : (colore === GOLD || colore === "#8A6D1D" || colore === "#B8860B") ? "#B8860B" : "#6E7391"} pozzettoColore="#EDEDED" Icona={Icona} attivo />
+          <DiscoMedaglione lato={isMobile ? 52 : 76} icona={isMobile ? 15 : 22} rapportoDisco={0.60} rapportoIcona={0.52} colore={colore === "#C0392B" ? "#C0392B" : (colore === GOLD || colore === "#8A6D1D" || colore === "#B8860B") ? "#B8860B" : "#6E7391"} pozzettoColore="#EDEDED" Icona={Icona} attivo />
         </span>
       ) : (
         <span style={{
@@ -39671,9 +39677,11 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                 <button
                   key={r.chiave}
                   onClick={r.onClick}
-                  style={{ textAlign: "left", display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, background: r.sfondo, border: "none", borderRadius: isMobile ? 12 : 18, padding: isMobile ? "8px 6px" : "12px 14px", minWidth: 0, cursor: "pointer", boxShadow: "0 10px 22px -16px rgba(14,27,51,0.45), 0 1px 2px rgba(14,27,51,0.08)" }}
+                  style={{ textAlign: "left", display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, ...superficieCuscino(r.sfondo), borderRadius: isMobile ? 12 : 18, padding: isMobile ? "8px 6px" : "12px 14px", minWidth: 0, cursor: "pointer" }}
                 >
-                  <DiscoMedaglione lato={isMobile ? 44 : 72} icona={isMobile ? 14 : 24} colore={r.disco} pozzettoColore={r.sfondo === "#fff" ? "#EDEDED" : "#F2EBDD"} Icona={r.Icona} attivo />
+                  {/* le proporzioni della reference: pozzetto largo, disco al
+                      75% del pozzetto, icona a meta' del disco */}
+                  <DiscoMedaglione lato={isMobile ? 48 : 80} icona={isMobile ? 14 : 24} rapportoDisco={0.60} rapportoIcona={0.52} colore={r.disco} pozzettoColore={r.sfondo === "#fff" ? "#EDEDED" : "#F2EBDD"} Icona={r.Icona} attivo />
                   <div style={{ width: 1, alignSelf: "stretch", background: `${r.colore}33`, flexShrink: 0 }} />
                   <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                     <div style={{ ...fontBody, fontSize: isMobile ? 7.5 : 11, fontWeight: 700, color: r.colore, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.etichetta}</div>
@@ -45595,7 +45603,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 const corpo = (
                   <>
                     <span style={{ display: "flex", color: "#fff", flexShrink: 0 }}>
-                      <DiscoMedaglione lato={isMobile ? 40 : 64} icona={isMobile ? 13 : 22} colore={tintaDisco} pozzettoColore={c.sfondo ? "#F2EBDD" : "#EDEDED"} Icona={c.Icona} attivo />
+                      <DiscoMedaglione lato={isMobile ? 44 : 80} icona={isMobile ? 13 : 22} rapportoDisco={0.60} rapportoIcona={0.52} colore={tintaDisco} pozzettoColore={c.sfondo ? "#F2EBDD" : "#EDEDED"} Icona={c.Icona} attivo />
                     </span>
                     <span style={{ width: 1, alignSelf: "stretch", background: `${tintaDisco}33`, flexShrink: 0 }} />
                     <span style={{ minWidth: 0, flex: "1 1 auto", display: "flex", flexDirection: "column" }}>
@@ -45610,8 +45618,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 );
                 const stile = {
                   display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, padding: isMobile ? "8px 6px" : "12px 14px", borderRadius: isMobile ? 12 : 18,
-                  border: "none", background: c.sfondo || (scelto ? BG : "#fff"),
-                  boxShadow: "0 10px 22px -16px rgba(14,27,51,0.45), 0 1px 2px rgba(14,27,51,0.08)",
+                  ...superficieCuscino(c.sfondo && !c.sfondo.endsWith("12") ? c.sfondo : (scelto ? BG : "#FFFFFF")),
                   outline: scelto ? `2px solid ${NAVY}` : "none", outlineOffset: 1,
                   textAlign: "left", minHeight: 0, position: "relative", overflow: "hidden",
                 };
@@ -46792,13 +46799,12 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
     return (
       <div style={{
         display: "flex", alignItems: "center", gap: isMobile ? 5 : 8,
-        border: "none", background: sfondo, borderRadius: 14,
-        boxShadow: "0 8px 18px -14px rgba(14,27,51,0.45), 0 1px 2px rgba(14,27,51,0.08)",
+        ...superficieCuscino(sfondo), borderRadius: 14,
         padding: isMobile ? "6px 8px" : "6px 12px 6px 8px",
         ...(isMobile ? { flex: "1 1 0", minWidth: 0 } : {}),
       }}>
         <span style={{ display: "flex", color: "#fff", flexShrink: 0 }}>
-          <DiscoMedaglione lato={isMobile ? 32 : 40} icona={isMobile ? 11 : 14} colore={colore} pozzettoColore="#F2EBDD" Icona={Icona} attivo />
+          <DiscoMedaglione lato={isMobile ? 36 : 48} icona={isMobile ? 11 : 14} rapportoDisco={0.60} rapportoIcona={0.52} colore={colore} pozzettoColore="#F2EBDD" Icona={Icona} attivo />
         </span>
         <span style={{ ...fontDisplay, fontSize: isMobile ? 15 : 18, fontWeight: 700, color: colore }}>{numero}</span>
         <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: MUTED, lineHeight: 1.2, minWidth: 0 }}>
