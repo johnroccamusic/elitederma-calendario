@@ -42461,7 +42461,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
       "Non ne resterà traccia: sparisce da prima nota, cassa contanti, provvigioni e statistiche.",
       collegate.length > 0 ? `Spariscono anche ${collegate.length} movimenti collegati (annullamenti, resi o cambi).` : null,
       rimetteStock ? "I pezzi venduti tornano in magazzino." : (v.prelevato_dai_kit ? "I pezzi erano usciti dai kit del corso: il magazzino non cambia." : giaAnnullata ? "Era già annullata: il magazzino non cambia." : null),
-      v.metodo_pagamento === "contanti" && (Number(v.totale) || 0) > 0 && !giaAnnullata ? `I ${fmtEuroErp2(Number(v.totale))} in contanti escono dalla cassa: non sono mai stati incassati.` : null,
+      v.metodo_pagamento === "contanti" && (Number(v.totale) || 0) > 0 && !giaAnnullata ? `I ${fmtEuroErp2(Number(v.totale))} in contanti non sono mai stati incassati: se la busta del corso era già in cassa, si riapre e torna da approvare.` : null,
     ].filter((r) => r !== null).join("\n");
     if (!window.confirm(testo)) return;
     setEliminandoVendita(v.id); setMsgElimina("");
@@ -42492,30 +42492,39 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     const { error } = await supabase.from("vendite_shop").delete().eq("id", v.id);
     setEliminandoVendita(null);
     if (error) { setMsgElimina("Vendita non cancellata: " + testoErrore(error)); return; }
-    // Il contante di quella vendita non e' mai stato incassato: deve
-    // uscire anche dalla cassa contanti. Per una vendita al banco, o di un
-    // corso con la busta ancora aperta, succede da solo (la cassa le
-    // ricalcola). Se invece la vendita stava in una busta gia' chiusa —
-    // la prima o un'appendice — l'importo di quella busta e' congelato e
-    // va abbassato a mano della stessa cifra
-    let bustaAbbassata = "";
+    // Il contante di quella vendita non e' mai stato incassato. Per una
+    // vendita al banco, o di un corso con la busta ancora aperta, la cassa
+    // se ne accorge da sola. Se invece la vendita stava in una busta gia'
+    // approvata — la prima o un'appendice — quella contabilita' non vale
+    // piu': la busta si riapre, esce dalla cassa e torna fra le
+    // "Contabilita' da approvare", da rivedere e rimettere in cassa con la
+    // cifra giusta. Non si corregge in silenzio (deciso il 16/09/2026).
+    let bustaRiaperta = "";
     if (v.metodo_pagamento === "contanti" && v.corso_data_id && !giaAnnullata && (Number(v.totale) || 0) > 0) {
       const cd = (corsiDate || []).find((x) => x.id === v.corso_data_id);
-      const cifra = round2(Number(v.totale) || 0);
-      if (v.busta_numero === 1 && cd?.busta_rientrata_il) {
-        const nuovo = Math.max(0, round2((Number(cd.busta_importo) || 0) - cifra));
-        const { error: e2 } = await supabase.from("corsi_date").update({ busta_importo: nuovo }).eq("id", cd.id);
-        if (!e2) bustaAbbassata = `, la busta del corso scende a ${fmtEuroErp2(nuovo)}`;
-      } else if (v.busta_numero > 1) {
-        const { data: busta } = await supabase.from("corsi_date_buste").select("id, importo").eq("corso_data_id", v.corso_data_id).eq("numero", v.busta_numero).maybeSingle();
+      if (v.busta_numero > 1) {
+        const { data: busta } = await supabase.from("corsi_date_buste").select("id").eq("corso_data_id", v.corso_data_id).eq("numero", v.busta_numero).maybeSingle();
         if (busta) {
-          const nuovo = Math.max(0, round2((Number(busta.importo) || 0) - cifra));
-          const { error: e2 } = await supabase.from("corsi_date_buste").update({ importo: nuovo }).eq("id", busta.id);
-          if (!e2) bustaAbbassata = `, la busta ${v.busta_numero} del corso scende a ${fmtEuroErp2(nuovo)}`;
+          await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", v.corso_data_id).eq("busta_numero", v.busta_numero);
+          const { error: e2 } = await supabase.from("corsi_date_buste").delete().eq("id", busta.id);
+          if (!e2) bustaRiaperta = `. La busta ${v.busta_numero} del corso è uscita dalla cassa e torna fra le contabilità da approvare`;
+        }
+      } else if (v.busta_numero === 1 && cd?.busta_rientrata_il) {
+        const { data: appendici } = await supabase.from("corsi_date_buste").select("id").eq("corso_data_id", v.corso_data_id);
+        if ((appendici || []).length > 0) {
+          // la prima busta non si riapre se dopo di lei ci sono appendici:
+          // qui si puo' solo abbassare l'importo congelato
+          const nuovo = Math.max(0, round2((Number(cd.busta_importo) || 0) - round2(Number(v.totale) || 0)));
+          const { error: e2 } = await supabase.from("corsi_date").update({ busta_importo: nuovo }).eq("id", cd.id);
+          if (!e2) bustaRiaperta = `. La busta del corso ha già delle appendici e non si riapre: il suo importo scende a ${fmtEuroErp2(nuovo)}`;
+        } else {
+          await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", v.corso_data_id).eq("busta_numero", 1);
+          const { error: e2 } = await supabase.from("corsi_date").update({ busta_rientrata_il: null, busta_importo: null }).eq("id", cd.id);
+          if (!e2) bustaRiaperta = ". La busta del corso è uscita dalla cassa e torna fra le contabilità da approvare";
         }
       }
     }
-    setMsgElimina(`Vendita #${v.numero_ordine || v.woo_order_id} cancellata${rimetteStock ? ", magazzino rimesso a posto" : ""}${bustaAbbassata}.`);
+    setMsgElimina(`Vendita #${v.numero_ordine || v.woo_order_id} cancellata${rimetteStock ? ", magazzino rimesso a posto" : ""}${bustaRiaperta}.`);
     ricarica(["vendite_shop", "prodotti_shop", "spedizioni_pos", "corsi_date"]);
   }
   // "Frangente": in quale occasione e' stata fatta la vendita. Il POS
