@@ -37790,13 +37790,25 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
   const h = Math.round(w * 0.42);
   const lato = Math.round(h * 0.80);
   const spazio = Math.round(h * 0.09);
-  const corpoEtichetta = Math.max(7, h * 0.115);
+  // Se i testi non ci stanno nell'altezza, si riducono loro — a passi,
+  // finche' entrano — e non il riquadro: in una pagina i riquadri devono
+  // restare tutti della stessa misura. La colonna dei testi si misura
+  // dopo ogni disegno; al cambio di larghezza si riparte da uno
+  const rifColonna = useRef(null);
+  const [scala, setScala] = useState(1);
+  useLayoutEffect(() => { setScala(1); }, [w, etichetta, valore, unita, nota]);
+  useLayoutEffect(() => {
+    const col = rifColonna.current;
+    if (!col) return;
+    if (col.scrollHeight > col.clientHeight + 1 && scala > 0.5) setScala((v) => Math.max(0.5, round2(v - 0.06)));
+  });
+  const corpoEtichetta = Math.max(6, h * 0.115 * scala);
   const testoValore = String(valore ?? "");
   // il numero al 32% dell'altezza, ma non oltre quello che la sua colonna
   // puo' contenere: "€ 5987,00" e' piu' lungo di "64"
   const larghezzaColonna = Math.max(20, w - lato * 0.8 - spazio * 4 - 1);
-  const corpoValore = Math.max(9, Math.min(h * 0.32, larghezzaColonna / (Math.max(1, testoValore.length) * 0.58)));
-  const corpoPiccolo = Math.max(6.5, h * 0.10);
+  const corpoValore = Math.max(8, Math.min(h * 0.32 * scala, larghezzaColonna / (Math.max(1, testoValore.length) * 0.58)));
+  const corpoPiccolo = Math.max(6, h * 0.10 * scala);
   const Tag = onClick ? "button" : "div";
   return (
     <Tag
@@ -37804,10 +37816,9 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
       onClick={onClick}
       title={titolo}
       style={{
-        // il 42% e' l'altezza voluta, non un tetto: su un telefono stretto
-        // il contenuto non ci sta e il riquadro cresce invece di tagliare
-        // i testi. La riga tiene tutti i riquadri alla stessa altezza
-        width: "100%", minHeight: h, height: "auto", boxSizing: "border-box", minWidth: 0, textAlign: "left",
+        // il 42% e' l'altezza, sempre: i riquadri di una pagina sono tutti
+        // della stessa misura, e a stringersi sono i testi (vedi scala)
+        width: "100%", height: h, boxSizing: "border-box", minWidth: 0, textAlign: "left",
         display: "flex", alignItems: "center", gap: spazio,
         padding: `${spazio}px ${Math.round(spazio * 1.3)}px`,
         borderRadius: Math.round(h * 0.2), cursor: onClick ? "pointer" : "default",
@@ -37820,9 +37831,9 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
         <DiscoMedaglione lato={lato} icona={Math.round(lato * 0.6 * 0.52)} rapportoDisco={0.60} rapportoIcona={0.52} colore={disco || "#6E7391"} pozzettoColore={sfondo === "#FFFFFF" || sfondo === "#fff" ? "#EDEDED" : "#F2EBDD"} Icona={Icona} attivo />
       </span>
       <span style={{ width: 1, alignSelf: "stretch", background: `${colore || "#6E7391"}33`, flexShrink: 0 }} />
-      <span style={{ minWidth: 0, flex: "1 1 auto", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "stretch" }}>
+      <span ref={rifColonna} style={{ minWidth: 0, flex: "1 1 auto", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "stretch", overflow: "hidden" }}>
         <span style={{ fontSize: corpoEtichetta, fontWeight: 700, color: colore || "#6E7391", textTransform: "uppercase", letterSpacing: corpoEtichetta > 9 ? 0.4 : 0, lineHeight: 1.15, overflowWrap: "normal", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{etichetta}</span>
-        <span style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, color: NAVY, lineHeight: 1.1, marginTop: Math.round(h * 0.03), whiteSpace: "nowrap", overflow: "visible" }}>{valore}</span>
+        <span style={{ ...fontDisplay, fontSize: corpoValore, fontWeight: 700, color: NAVY, lineHeight: 1.1, marginTop: Math.round(h * 0.03 * scala), whiteSpace: "nowrap" }}>{valore}</span>
         {unita && <span style={{ fontSize: corpoPiccolo, color: MUTED, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{unita}</span>}
         {nota && <span style={{ fontSize: corpoPiccolo, color: NAVY, lineHeight: 1.2, marginTop: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{nota}</span>}
       </span>
