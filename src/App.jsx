@@ -667,6 +667,9 @@ function larghezzaUtile() {
   // dal telefono, con la vista scrivania forzata, la larghezza e' quella
   // di un monitor: tutto l'impaginato risponde come su un computer
   if (vistaForzata === "desktop") return Math.max(window.innerWidth, LARGHEZZA_VISTA_DESKTOP);
+  // dal computer, col telefono simulato, la larghezza e' quella del
+  // telefono disegnato al centro dello schermo
+  if (vistaForzata === "mobile") return LARGHEZZA_VISTA_MOBILE;
   // tornati alla vista telefono, innerWidth puo' restare per un po' quella
   // larga della viewport precedente: lo schermo fisico non mente
   const schermo = (window.screen && window.screen.width) || window.innerWidth;
@@ -681,20 +684,32 @@ function larghezzaUtile() {
 // dispositivo, non e' condivisa.
 const CHIAVE_VISTA_FORZATA = "elitederma_vista_forzata";
 const LARGHEZZA_VISTA_DESKTOP = 1180;
+// il telefono simulato dal computer: le misure di un iPhone in verticale
+const LARGHEZZA_VISTA_MOBILE = 390;
+const ALTEZZA_VISTA_MOBILE = 844;
 const VIEWPORT_TELEFONO = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
-let vistaForzata = (() => { try { return window.localStorage.getItem(CHIAVE_VISTA_FORZATA) === "desktop" ? "desktop" : null; } catch (e) { return null; } })();
+let vistaForzata = (() => {
+  try {
+    const v = window.localStorage.getItem(CHIAVE_VISTA_FORZATA);
+    return v === "desktop" || v === "mobile" ? v : null;
+  } catch (e) { return null; }
+})();
+// "desktop": dal telefono, l'app come sul computer (viewport larga, pizzico
+// per ingrandire). "mobile": dal computer, l'app dentro un telefono
+// disegnato al centro dello schermo. null: ognuno com'e'
 function applicaVistaForzata(v) {
-  vistaForzata = v === "desktop" ? "desktop" : null;
-  try { if (vistaForzata) window.localStorage.setItem(CHIAVE_VISTA_FORZATA, "desktop"); else window.localStorage.removeItem(CHIAVE_VISTA_FORZATA); } catch (e) { /* navigazione privata */ }
+  vistaForzata = v === "desktop" || v === "mobile" ? v : null;
+  try { if (vistaForzata) window.localStorage.setItem(CHIAVE_VISTA_FORZATA, vistaForzata); else window.localStorage.removeItem(CHIAVE_VISTA_FORZATA); } catch (e) { /* navigazione privata */ }
+  const desktopDalTelefono = vistaForzata === "desktop";
   const meta = document.querySelector('meta[name="viewport"]');
   if (meta) {
-    meta.setAttribute("content", vistaForzata
+    meta.setAttribute("content", desktopDalTelefono
       // la scala iniziale fa stare tutta la larghezza nello schermo; poi
       // il pizzico ingrandisce fino a 4 volte
       ? `width=${LARGHEZZA_VISTA_DESKTOP}, initial-scale=${(window.screen.width / LARGHEZZA_VISTA_DESKTOP).toFixed(3)}, minimum-scale=0.2, maximum-scale=4, user-scalable=yes, viewport-fit=cover`
       : VIEWPORT_TELEFONO);
   }
-  const touch = vistaForzata ? "auto" : "";
+  const touch = desktopDalTelefono ? "auto" : "";
   document.documentElement.style.touchAction = touch;
   if (document.body) document.body.style.touchAction = touch;
   window.dispatchEvent(new Event("zoom-pagina"));
@@ -704,15 +719,50 @@ function applicaVistaForzata(v) {
 function dispositivoTouchPiccolo() {
   try { return navigator.maxTouchPoints > 0 && Math.min(window.screen.width, window.screen.height) <= 900; } catch (e) { return false; }
 }
+function CorniceTelefono({ attiva, children }) {
+  if (!attiva) return children;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 0, background: "radial-gradient(circle at 50% 30%, #3A3F4B 0%, #14171E 70%)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "auto", padding: 24 }}>
+      <div style={{ width: LARGHEZZA_VISTA_MOBILE + 24, height: ALTEZZA_VISTA_MOBILE + 24, flexShrink: 0, borderRadius: 54, background: "#0B0D12", boxShadow: "0 30px 80px rgba(0,0,0,0.6), inset 0 0 0 2px #2A2E38", padding: 12, boxSizing: "border-box", position: "relative" }}>
+        {/* la tacca in cima, per capire subito che e' un telefono */}
+        <div style={{ position: "absolute", top: 22, left: "50%", transform: "translateX(-50%)", width: 110, height: 28, borderRadius: 16, background: "#0B0D12", zIndex: 2 }} />
+        <div style={{ width: LARGHEZZA_VISTA_MOBILE, height: ALTEZZA_VISTA_MOBILE, borderRadius: 44, overflow: "auto", background: "#F6F1E7", position: "relative", transform: "translateZ(0)", WebkitOverflowScrolling: "touch" }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TastoVistaForzata({ programmatore = false }) {
   // solo per chi programma: serve a controllare il lavoro, non a usare
   // l'app. Se la vista era rimasta forzata da un accesso precedente e
-  // ora il ruolo non lo permette, si torna al telefono da soli
+  // ora il ruolo non lo permette, si torna normali da soli
   if (!programmatore) {
-    if (vistaForzata === "desktop") { applicaVistaForzata(null); window.location.reload(); }
+    if (vistaForzata) { applicaVistaForzata(null); window.location.reload(); }
     return null;
   }
-  if (!dispositivoTouchPiccolo()) return null;
+  // dal computer il tastino sta solo dentro il telefono simulato, per
+  // uscirne: per entrarci c'e' l'icona accanto a "Programmatore · Esci"
+  if (!dispositivoTouchPiccolo()) {
+    if (vistaForzata !== "mobile") return null;
+    return (
+      <button
+        type="button"
+        onClick={() => { applicaVistaForzata(null); window.location.reload(); }}
+        title="Torna alla vista computer"
+        style={{
+          position: "fixed", top: 8, right: 8, zIndex: 9999,
+          width: 34, height: 34, borderRadius: "50%", border: "1px solid #0E1B33",
+          background: "#0E1B33", color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+          boxShadow: "0 2px 8px rgba(14,27,51,0.25)", padding: 0,
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2" /><path d="M8 20.5h8M12 17v3.5" /></svg>
+      </button>
+    );
+  }
   const desktop = vistaForzata === "desktop";
   // In vista scrivania la pagina e' rimpicciolita per starci tutta: un
   // tasto da 34px diventa un puntino. Si ingrandisce di quanto la pagina
@@ -756,7 +806,11 @@ function TastoVistaForzata({ programmatore = false }) {
 // arriva come una rotellina con ctrlKey: viene zoomato anche quello, in
 // modo continuo perche' i suoi passi sono piccoli.
 if (typeof window !== "undefined") {
-  if (vistaForzata === "desktop") applicaVistaForzata("desktop");
+  // ogni vista forzata ha senso solo sul suo dispositivo: la scrivania
+  // dal telefono, il telefono dal computer. Altrimenti si torna normali
+  if (vistaForzata === "desktop" && !dispositivoTouchPiccolo()) vistaForzata = null;
+  if (vistaForzata === "mobile" && dispositivoTouchPiccolo()) vistaForzata = null;
+  if (vistaForzata) applicaVistaForzata(vistaForzata);
   applicaZoomPagina(leggiZoomSalvato());
   // Sul Mac lo zoom si fa solo con Cmd. Il pizzico sul trackpad arriva
   // come Ctrl+rotellina, ed e' facilissimo farlo senza accorgersene
@@ -881,9 +935,9 @@ function ContenitoreCoricato({ attivo, children }) {
 }
 
 function useIsPortrait() {
-  const [portrait, setPortrait] = useState(() => (typeof window === "undefined" ? true : window.innerHeight >= window.innerWidth));
+  const [portrait, setPortrait] = useState(() => (typeof window === "undefined" ? true : vistaForzata === "mobile" || window.innerHeight >= window.innerWidth));
   useEffect(() => {
-    function aggiorna() { setPortrait(window.innerHeight >= window.innerWidth); }
+    function aggiorna() { setPortrait(vistaForzata === "mobile" || window.innerHeight >= window.innerWidth); }
     window.addEventListener("resize", aggiorna);
     window.addEventListener("orientationchange", aggiorna);
     return () => { window.removeEventListener("resize", aggiorna); window.removeEventListener("orientationchange", aggiorna); };
@@ -64585,8 +64639,12 @@ export default function App() {
   );
 
   return (
-    // questo contenitore avvolge OGNI schermata dell'app: lo spazio in
-    // cima vale quindi ovunque, non solo in home
+    // Dal computer, col telefono simulato, tutta l'app sta dentro una
+    // cornice da telefono al centro dello schermo. La cornice ha un
+    // transform: cosi' tutto quello che nell'app e' "position: fixed"
+    // (dock, tastini, finestre) resta dentro il telefono invece di
+    // finire agli angoli del monitor
+    <CorniceTelefono attiva={vistaForzata === "mobile"}>
     <div style={{
       ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh",
       // da scrivania il dock sta in cima: lo spazio va lasciato li', o
@@ -64852,6 +64910,15 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: isMobile ? 8 : 18, borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: isMobile ? 12 : 28 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 1.2 }}>ELITEDERMA</div>
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+              {/* dal computer, solo per chi programma: l'app dentro un
+                  telefono disegnato al centro dello schermo, per
+                  controllare la vista telefono senza prendere il telefono */}
+              {ruoloUtente === "programmatore" && !isMobile && !dispositivoTouchPiccolo() && (
+                <button onClick={() => { applicaVistaForzata("mobile"); window.location.reload(); }} title="Simula la vista telefono" style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer" }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></svg>
+                  Vista telefono
+                </button>
+              )}
               <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{toTitleCase(ruoloUtente)}</span>
               <button onClick={esci} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0 }}>Esci</button>
             </div>
@@ -65805,5 +65872,6 @@ export default function App() {
       )}
       <IndicatoreZoom />
     </div>
+    </CorniceTelefono>
   );
 }
