@@ -38396,14 +38396,67 @@ function PannelloMovimentiBanca() {
     setMovimenti((prec) => (prec || []).map((m) => (m.id === riga.id ? { ...m, stato } : m)));
   }
 
+  // Il periodo, come in Prima nota: mese, trimestre o anno, con le frecce
+  // che scorrono di un passo. I movimenti si leggono per data operazione
+  const [granularita, setGranularita] = useState("mese");
+  const [anno, setAnno] = useState(Number(dataOggiStr().slice(0, 4)));
+  const [mese, setMese] = useState(Number(dataOggiStr().slice(5, 7)));
+  const [trimestre, setTrimestre] = useState(Math.ceil(Number(dataOggiStr().slice(5, 7)) / 3));
+  const range = rangeGranularitaPrimaNota(anno, granularita, mese, trimestre);
+  const periodoPrec = periodoPrecedentePrimaNota(anno, granularita, mese, trimestre);
+  const rangePrec = rangeGranularitaPrimaNota(periodoPrec.anno, granularita, periodoPrec.mese, periodoPrec.trimestre);
+  const etichettaPrec = granularita === "anno" ? String(periodoPrec.anno) : granularita === "trimestre" ? `T${periodoPrec.trimestre}` : MESI[periodoPrec.mese - 1].toLowerCase();
+  function spostaPeriodo(verso) {
+    if (granularita === "anno") { setAnno((a) => a + verso); return; }
+    if (granularita === "trimestre") {
+      const t = trimestre + verso;
+      if (t < 1) { setTrimestre(4); setAnno((a) => a - 1); } else if (t > 4) { setTrimestre(1); setAnno((a) => a + 1); } else setTrimestre(t);
+      return;
+    }
+    const m = mese + verso;
+    if (m < 1) { setMese(12); setAnno((a) => a - 1); } else if (m > 12) { setMese(1); setAnno((a) => a + 1); } else setMese(m);
+  }
+
   const tutti = movimenti || [];
   const nuovi = tutti.filter((m) => m.stato === "nuovo");
   const ignorati = tutti.filter((m) => m.stato === "ignorato");
   const riconciliati = tutti.filter((m) => m.stato === "riconciliato");
-  const visibili = filtro === "tutti" ? tutti : tutti.filter((m) => m.stato === filtro);
+  const nelPeriodo = tutti.filter((m) => m.data_operazione >= range.inizio && m.data_operazione <= range.fine);
+  const visibili = (filtro === "tutti" ? nelPeriodo : nelPeriodo.filter((m) => m.stato === filtro))
+    .sort((a, b) => String(b.data_operazione).localeCompare(String(a.data_operazione)) || (a.progressivo || 0) - (b.progressivo || 0));
 
-  const entrate = round2(visibili.filter((m) => Number(m.importo) > 0).reduce((s, m) => s + Number(m.importo), 0));
-  const uscite = round2(visibili.filter((m) => Number(m.importo) < 0).reduce((s, m) => s + Number(m.importo), 0));
+  // i totali del periodo contano tutto tranne gli ignorati (giroconti e
+  // movimenti tecnici non sono ne' entrate ne' uscite)
+  const contati = nelPeriodo.filter((m) => m.stato !== "ignorato");
+  const entrate = round2(contati.filter((m) => Number(m.importo) > 0).reduce((s, m) => s + Number(m.importo), 0));
+  const uscite = round2(contati.filter((m) => Number(m.importo) < 0).reduce((s, m) => s - Number(m.importo), 0));
+  const saldoPeriodo = round2(entrate - uscite);
+  const contatiPrec = tutti.filter((m) => m.stato !== "ignorato" && m.data_operazione >= rangePrec.inizio && m.data_operazione <= rangePrec.fine);
+  const entratePrec = round2(contatiPrec.filter((m) => Number(m.importo) > 0).reduce((s, m) => s + Number(m.importo), 0));
+  const uscitePrec = round2(contatiPrec.filter((m) => Number(m.importo) < 0).reduce((s, m) => s - Number(m.importo), 0));
+  const saldoPrec = round2(entratePrec - uscitePrec);
+  // il saldo del conto: quello scritto dalla banca sull'ultimo movimento
+  // che ce l'ha (arriva dall'OFX)
+  const ultimoConSaldo = tutti.find((m) => m.saldo != null);
+
+  const confronto = (attuale, precedente, invertito) => {
+    const pct = variazionePctErp(attuale, precedente);
+    if (pct === null || pct === undefined) return null;
+    const sale = attuale >= precedente;
+    const bene = invertito ? !sale : sale;
+    const colore = bene ? "#2E7D32" : "#C0392B";
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        <span style={{ width: 28, height: 28, borderRadius: "50%", background: bene ? "#E3F3EA" : "#FBE4E1", color: colore, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sale ? "none" : "scaleY(-1)" }}><path d="M7 17 17 7M9 7h8v8" /></svg>
+        </span>
+        <span style={{ ...fontBody, fontSize: isMobile ? 13 : 14, color: colore }}>
+          <b>{pct >= 0 ? "+" : ""}{Math.round(pct)}%</b> vs {etichettaPrec} ({fmtEuroErp(precedente)})
+        </span>
+      </div>
+    );
+  };
+  const freccia = { width: 40, height: 40, borderRadius: "50%", border: "none", background: BG_CHIARO, color: NAVY, fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
 
   return (
     <div>
@@ -38459,57 +38512,89 @@ function PannelloMovimentiBanca() {
         {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.startsWith("Import") && !msg.includes("interrotto") ? "#2E7D32" : "#C0392B", marginTop: 12 }}>{msg}</div>}
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        <TabPillola attivo={filtro === "nuovo"} onClick={() => setFiltro("nuovo")}>Da sistemare ({nuovi.length})</TabPillola>
-        <TabPillola attivo={filtro === "riconciliato"} onClick={() => setFiltro("riconciliato")}>Riconciliati ({riconciliati.length})</TabPillola>
-        <TabPillola attivo={filtro === "ignorato"} onClick={() => setFiltro("ignorato")}>Ignorati ({ignorati.length})</TabPillola>
-        <TabPillola attivo={filtro === "tutti"} onClick={() => setFiltro("tutti")}>Tutti ({tutti.length})</TabPillola>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 14 }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Entrate</div>
-            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#2E7D32" }}>{fmtEuroErp2(entrate)}</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Uscite</div>
-            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#C0392B" }}>{fmtEuroErp2(uscite)}</div>
+      {/* Lo stesso impianto della Prima nota: titolo col periodo e le
+          frecce, saldo del periodo col confronto, entrate e uscite, le
+          pillole di stato, poi i movimenti a card */}
+      <div style={{ ...cardStyle, padding: isMobile ? 16 : 26 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <button onClick={() => spostaPeriodo(-1)} title="Periodo precedente" style={freccia}>‹</button>
+          <div style={{ ...fontHero, fontSize: isMobile ? 26 : 36, color: NAVY, lineHeight: 1.1, flex: "1 1 auto", minWidth: 0, overflowWrap: "anywhere" }}>Banca · {etichettaPeriodoPrimaNota(anno, granularita, mese, trimestre)}</div>
+          <button onClick={() => spostaPeriodo(1)} title="Periodo successivo" style={freccia}>›</button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: isMobile ? 16 : 20 }}>
+          <div style={{ ...fontBody, fontSize: isMobile ? 14 : 15, color: MUTED }}>{nelPeriodo.length} moviment{nelPeriodo.length === 1 ? "o" : "i"}</div>
+          <div style={{ display: "flex", gap: 2, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 3, marginLeft: "auto" }}>
+            {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((g) => (
+              <button key={g.v} onClick={() => setGranularita(g.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "7px 13px", borderRadius: 13, border: "none", background: granularita === g.v ? NAVY : "transparent", color: granularita === g.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                {g.l}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
 
-      <div style={{ ...cardStyle }}>
+        <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 22, padding: isMobile ? "18px 18px 16px" : "24px 28px 22px", marginBottom: isMobile ? 12 : 14 }}>
+          <div style={{ position: "absolute", right: isMobile ? -10 : 10, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
+            <IconaQiBanca size={isMobile ? 130 : 170} color="#8A6D1D" />
+          </div>
+          <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 2 }}>Saldo del periodo</div>
+          <div style={{ ...fontHero, fontSize: isMobile ? 44 : 56, color: saldoPeriodo >= 0 ? NAVY : "#C0392B", lineHeight: 1.05, marginTop: 6, position: "relative" }}>{saldoPeriodo < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
+          <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, marginTop: 6, position: "relative" }}>
+            entrate meno uscite, senza gli ignorati · {etichettaPrec}: {saldoPrec < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPrec))}
+            {ultimoConSaldo ? ` · saldo conto al ${fmtData(ultimoConSaldo.data_operazione)}: ${fmtEuroErp2(Number(ultimoConSaldo.saldo))}` : ""}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12, marginBottom: isMobile ? 14 : 18 }}>
+          <div style={{ background: "#EEF7F0", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 1.2 }}>Entrate</div>
+            <div style={{ ...fontHero, fontSize: isMobile ? 26 : 32, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(entrate)}</div>
+            {confronto(entrate, entratePrec, false)}
+          </div>
+          <div style={{ background: "#FBEEEC", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 1.2 }}>Uscite</div>
+            <div style={{ ...fontHero, fontSize: isMobile ? 26 : 32, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(uscite)}</div>
+            {confronto(uscite, uscitePrec, true)}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+          <TabPillola attivo={filtro === "nuovo"} onClick={() => setFiltro("nuovo")}>Da sistemare ({nelPeriodo.filter((m) => m.stato === "nuovo").length})</TabPillola>
+          <TabPillola attivo={filtro === "riconciliato"} onClick={() => setFiltro("riconciliato")}>Riconciliati ({nelPeriodo.filter((m) => m.stato === "riconciliato").length})</TabPillola>
+          <TabPillola attivo={filtro === "ignorato"} onClick={() => setFiltro("ignorato")}>Ignorati ({nelPeriodo.filter((m) => m.stato === "ignorato").length})</TabPillola>
+          <TabPillola attivo={filtro === "tutti"} onClick={() => setFiltro("tutti")}>Tutti ({nelPeriodo.length})</TabPillola>
+        </div>
+
         {movimenti === null && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Carico…</div>}
         {movimenti !== null && visibili.length === 0 && (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>
-            {tutti.length === 0 ? "Nessun movimento importato: carica l'estratto conto qui sopra." : "Nessun movimento in questo stato."}
+            {tutti.length === 0 ? "Nessun movimento importato: carica l'estratto conto qui sopra." : nelPeriodo.length === 0 ? "Nessun movimento in questo periodo." : "Nessun movimento in questo stato."}
           </div>
         )}
-        {elencoConIntestazioniMese(visibili, (m) => m.data_operazione, (m) => {
+        {visibili.map((m) => {
           const importo = Number(m.importo) || 0;
-          const chips = [m.causale, m.stato === "ignorato" ? "Ignorato" : null].filter(Boolean);
+          const entrata = importo >= 0;
           return (
-            <RigaAmministrazione
+            <CardAmministrazione
               key={m.id}
               data={m.data_operazione}
               titolo={controparteBanca(m.descrizione, m.causale)}
-              sottotitolo={m.descrizione}
-              chips={chips}
-              importo={fmtEuroErp2(importo)}
-              coloreImporto={importo < 0 ? "#C0392B" : "#2E7D32"}
-            >
-              <div style={{ flex: "0 0 auto", display: "flex", gap: 6 }}>
-                {m.stato === "nuovo" ? (
-                  <button onClick={() => cambiaStato(m, "ignorato")} title="Non entra in prima nota: giroconti, movimenti tecnici"
-                    style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "7px 12px", cursor: "pointer" }}>
-                    Ignora
-                  </button>
-                ) : (
-                  <button onClick={() => cambiaStato(m, "nuovo")}
-                    style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "7px 12px", cursor: "pointer" }}>
-                    Rimetti
-                  </button>
-                )}
-              </div>
-            </RigaAmministrazione>
+              corsoLabel={m.descrizione}
+              chips={[m.causale ? { Icona: IconaQiBanca, testo: m.causale } : null, m.stato === "ignorato" ? "Ignorato" : m.stato === "riconciliato" ? "Riconciliato" : null]}
+              importo={`${entrata ? "+" : "−"} ${fmtEuroErp2(Math.abs(importo))}`} etichettaImporto={entrata ? "Entrata" : "Uscita"} coloreImporto={entrata ? "#2E7D32" : "#C0392B"}
+              piede={(
+                <>
+                  <span style={{ flex: "1 1 auto" }} />
+                  {m.stato === "nuovo" ? (
+                    <button onClick={() => cambiaStato(m, "ignorato")} title="Non entra in prima nota: giroconti, movimenti tecnici" style={{ ...stileTastoCardChiaro(isMobile), color: MUTED }}>
+                      Ignora
+                    </button>
+                  ) : (
+                    <button onClick={() => cambiaStato(m, "nuovo")} style={stileTastoCardChiaro(isMobile)}>
+                      Rimetti fra quelli da sistemare
+                    </button>
+                  )}
+                </>
+              )}
+            />
           );
         })}
         {tutti.length >= 1500 && (
