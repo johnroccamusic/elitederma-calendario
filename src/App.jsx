@@ -37747,6 +37747,43 @@ function RigaPagamentoAppendice({ spesa, onSalva, onElimina, bloccata }) {
   );
 }
 
+// Le contabilita' da approvare: le buste dei corsi finiti non ancora in
+// cassa (con contante dentro) e le appendici aperte. Le legge la cassa
+// contanti per la lista "Avvisi" e Contabilita' per il riquadro in cima
+function contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici }) {
+  const oggi = dataOggiStr();
+  let totale = 0;
+  const righe = [];
+  (corsiDate || []).forEach((cd) => {
+    if (cd.busta_rientrata_il) {
+      const { aperta } = contiAppendici({ cd, venditeShop, spese, buste: busteAppendici });
+      if (aperta && !aperta.vuota && aperta.pulito > 0) { totale += aperta.pulito; righe.push({ cd, importo: aperta.pulito, appendice: aperta }); }
+      return;
+    }
+    const fine = cd.data_fine || cd.data_inizio || "";
+    if (!fine || fine >= oggi) return;
+    const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
+    const { righeSpeseTutte, totaleSpeseAutomaticheClasse } = calcolaRigheSpeseCorso(
+      cd,
+      { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit },
+      {}
+    );
+    const conti = contiRiepilogoClasse({
+      incassiExtra: Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [],
+      listaIscritti,
+      venditeAlCorso: venditeDellaPrimaBusta(venditeShop, cd),
+      speseClasse: speseDellaPrimaBusta(spese, cd.id),
+      costiExtra: Array.isArray(cd.costi_extra) ? cd.costi_extra : [],
+      righeSpeseTutte, totaleSpeseAutomaticheClasse,
+    });
+    if (conti.cassaContanti <= 0) return;
+    totale += conti.cassaContanti;
+    righe.push({ cd, importo: conti.cassaContanti });
+  });
+  righe.sort((a, b) => String(a.cd.data_inizio).localeCompare(String(b.cd.data_inizio)));
+  return { totale: round2(totale), quante: righe.length, righe };
+}
+
 function PannelloCassaContanti({
   corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
   leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, ricarica, onApriClasse,
@@ -37853,44 +37890,8 @@ function PannelloCassaContanti({
   // spuntata oggi finisce comunque in cassa. Escluderla da "in arrivo"
   // farebbe comparire dal nulla il giorno della spunta un contante che
   // nessuno aveva annunciato.
-  const busteInArrivo = useMemo(() => {
-    const oggi = dataOggiStr();
-    let totale = 0;
-    const righe = [];
-    (corsiDate || []).forEach((cd) => {
-      // a prima busta chiusa puo' esserci un'appendice aperta con dentro
-      // contante: anche quella sta arrivando
-      if (cd.busta_rientrata_il) {
-        const { aperta } = contiAppendici({ cd, venditeShop, spese, buste: busteAppendici });
-        if (aperta && !aperta.vuota && aperta.pulito > 0) { totale += aperta.pulito; righe.push({ cd, importo: aperta.pulito, appendice: aperta }); }
-        return;
-      }
-      const fine = cd.data_fine || cd.data_inizio || "";
-      if (!fine || fine >= oggi) return;
-      const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
-      const { righeSpeseTutte, totaleSpeseAutomaticheClasse } = calcolaRigheSpeseCorso(
-        cd,
-        { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit },
-        {}
-      );
-      const conti = contiRiepilogoClasse({
-        incassiExtra: Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [],
-        listaIscritti,
-        venditeAlCorso: venditeDellaPrimaBusta(venditeShop, cd),
-        speseClasse: speseDellaPrimaBusta(spese, cd.id),
-        costiExtra: Array.isArray(cd.costi_extra) ? cd.costi_extra : [],
-        righeSpeseTutte, totaleSpeseAutomaticheClasse,
-      });
-      // una busta vuota o in rosso non sta "arrivando": non c'e' contante
-      // per strada, c'e' semmai un buco da coprire, ed e' un'altra storia
-      if (conti.cassaContanti <= 0) return;
-      totale += conti.cassaContanti;
-      righe.push({ cd, importo: conti.cassaContanti });
-    });
-    righe.sort((a, b) => String(a.cd.data_inizio).localeCompare(String(b.cd.data_inizio)));
-    return { totale: round2(totale), quante: righe.length, righe };
-  }, [corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici]);
-
+  const busteInArrivo = useMemo(() => contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici }),
+    [corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici]);
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
     if (valore == null || !(valore > 0)) { setMsg("Serve un importo maggiore di zero."); return; }
@@ -39062,6 +39063,14 @@ function PannelloCassaConsulenze() {
 function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriNuovaSpesaDaMovimentoBanca, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
+  // le buste dopo la prima, per contare le contabilita' da approvare in
+  // cima: tabella piccola, letta qui da sola
+  const [busteAppendiciAmm, setBusteAppendiciAmm] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("corsi_date_buste").select("*").then(({ data }) => { if (vivo) setBusteAppendiciAmm(data || []); });
+    return () => { vivo = false; };
+  }, [corsiDate, spese, venditeShop]);
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
   // pagina (es. la scheda di un allievo da Scadenziario Attivo) e poi si
   // torna "Indietro", questa pagina viene rimontata da zero e deve
@@ -39602,6 +39611,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           const daRiconciliare = documenti.filter((d) => d.tipo !== "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
           const ncDaRiconciliare = documenti.filter((d) => d.tipo === "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
           const daImportare = (fattureRicevuteFic || []).filter((f) => !f.spesa_id && dentroContabilita(f)).length;
+          const contabilitaDaApprovareConto = contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici: busteAppendiciAmm }).quante;
           // lo stesso numero dello Scadenziario Passivo: daPagare contiene
           // gia' le spese reali non pagate, sommarle un'altra volta le
           // contava due volte ("3" in cima, "2" nell'elenco)
@@ -39611,6 +39621,9 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
             { chiave: "importare", etichetta: "Spese da importare", valore: daImportare, colore: "#B8860B", sfondo: "#FBF3E0", onClick: () => setTab("documenti") },
             { chiave: "pagare", etichetta: "Spese da pagare", valore: speseDaPagare, colore: "#C0392B", sfondo: "#FBE4E1", onClick: () => setTab("passivo") },
             { chiave: "notecredito", etichetta: "Note di credito da riconciliare", valore: ncDaRiconciliare, colore: "#8E44AD", sfondo: "#F3EAF6", onClick: onApriRiconciliazione },
+            // le buste dei corsi finiti e le appendici aperte: si approvano
+            // dal Riepilogo della classe, la cassa contanti le elenca
+            { chiave: "daapprovare", etichetta: "Contabilità da approvare", valore: contabilitaDaApprovareConto, colore: "#8A6D1D", sfondo: "#FBF3E0", onClick: () => setTab("fondocassa") },
           ];
           // I quattro avvisi su una riga sola, sempre. Con auto-fit e un
           // minimo di 190px andavano a capo due e due appena lo spazio si
