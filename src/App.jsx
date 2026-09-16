@@ -3108,8 +3108,13 @@ function TileHome({
         ...fontBody, textAlign: ricca ? "center" : "left", width: isMobile ? "90%" : `min(100%, ${aspettoDesktop.dimensione}px)`, margin: "0 auto", boxSizing: "border-box",
         aspectRatio: "1 / 1", position: "relative",
         display: "flex", flexDirection: "column", alignItems: ricca ? "center" : "stretch", justifyContent: ricca ? "center" : "flex-end", minWidth: 0,
-        background: attivo ? (isMobile ? "#FFFFFF" : aspettoDesktop.colore) : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : aspettoDesktop.raggio,
-        boxShadow: isMobile ? "none" : ombraCssTasto(aspettoDesktop.ombra),
+        // Dal computer la tessera e' il medaglione del telefono, in grande
+        // (16/09/2026): cuscino bianco morbido, pozzetto incassato, disco
+        // blu con l'icona bianca. Il disco e il pozzetto prendono i colori
+        // scelti per il telefono in Aspetto dell'app, cosi' i due mondi
+        // restano uguali
+        background: attivo ? (isMobile ? "#FFFFFF" : (ricca ? sfondoMedaglione(aspettoMobile.cuscino || "#FFFFFF") : aspettoDesktop.colore)) : "#F1EAE0", border: ricca && !isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : aspettoDesktop.raggio,
+        boxShadow: isMobile ? "none" : (ricca ? ombraMedaglione(aspettoDesktop.ombra) : ombraCssTasto(aspettoDesktop.ombra)),
         padding: ricca ? (isMobile ? "16px 10px 12px" : `${Math.round(28 * scala)}px ${Math.round(22 * scala)}px ${Math.round(22 * scala)}px`) : (isMobile ? "8px 10px" : 22),
         cursor: attivo ? "pointer" : "default", overflow: "hidden",
         opacity: attenuato ? 0.5 : 1,
@@ -3130,7 +3135,19 @@ function TileHome({
       )}
       {ricca ? (
         <>
-          <div style={{ color: coloreIcona, marginBottom: isMobile ? 6 : Math.round(12 * scala) }}><Icona size={isMobile ? 26 : Math.round(aspettoDesktop.icona * scala)} color={coloreIcona} /></div>
+          {isMobile ? (
+            <div style={{ color: coloreIcona, marginBottom: 6 }}><Icona size={26} color={coloreIcona} /></div>
+          ) : (
+            <div style={{ marginBottom: Math.round(14 * scala), display: "flex", justifyContent: "center" }}>
+              <DiscoMedaglione
+                lato={Math.round((larghezzaTasto || aspettoDesktop.dimensione || 300) * 0.62)}
+                icona={Math.round(aspettoDesktop.icona * scala)}
+                colore={aspettoMobile.disco || ASPETTO_TASTI_DEFAULT.mobile.disco}
+                pozzettoColore={aspettoMobile.pozzetto || ASPETTO_TASTI_DEFAULT.mobile.pozzetto}
+                Icona={Icona} attivo={attivo}
+              />
+            </div>
+          )}
           {/* Sulla scrivania il titolo ha sempre lo spazio di due righe e la
               descrizione di due, che servano o no: cosi' in una griglia
               tutte le icone stanno alla stessa altezza e tutti i titoli
