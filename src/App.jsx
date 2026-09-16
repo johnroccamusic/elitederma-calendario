@@ -23202,7 +23202,9 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
       {/* titolo a sinistra, pillola a destra sulla stessa riga, sempre:
           niente a capo sul telefono */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "nowrap" }}>
-        <div style={{ flex: "1 1 auto", minWidth: 0 }}><TopBar title="Calendario" onBack={onBack} /></div>
+        {/* TopBar porta un margine sotto di 22px: si annulla qui, cosi' la
+            pillola si centra sul titolo e non su titolo piu' margine */}
+        <div style={{ flex: "1 1 auto", minWidth: 0, marginBottom: -22 }}><TopBar title="Calendario" onBack={onBack} /></div>
         {/* la stessa pillola a segmenti di "Programmati | Passati": Oggi
             richiude lo storico e torna al mese in corso, Storico apre
             l'anno passato */}
