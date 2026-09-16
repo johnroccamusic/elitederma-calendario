@@ -27,18 +27,17 @@
 // il gestionale puo' chiederlo subito dopo ogni salvataggio.
 //
 // Installazione: Code Snippets → Aggiungi nuovo → incollare tutto il file
-// (senza la riga "<?php") → "Esegui ovunque" → Salva e attiva. La chiave
-// e' la stessa dello snippet del menu: la si legge da li' (costante o
-// variabile ELITEDERMA_BRIDGE_SECRET) e va scritta qui sotto.
+// (senza la riga "<?php") → "Esegui ovunque" → Salva e attiva. Niente da
+// cambiare: la chiave arriva dallo snippet del menu.
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 // La chiave condivisa col gestionale (WP_MENU_BRIDGE_SECRET nelle
-// variabili delle edge function). Se lo snippet del menu la definisce
-// gia' come costante, quella vince e questa riga non serve.
-if ( ! defined( 'ELITEDERMA_BRIDGE_SECRET' ) ) {
-	define( 'ELITEDERMA_BRIDGE_SECRET', 'SCRIVI-QUI-LA-CHIAVE' );
-}
+// variabili delle edge function) e' la costante ELITEDERMA_BRIDGE_SECRET,
+// definita nello snippet del menu ("Claude access", riga 1). Qui non si
+// ridefinisce: due define della stessa costante farebbero scattare un
+// avviso PHP, e la si legge comunque solo a richiesta arrivata, quando
+// tutti gli snippet sono gia' caricati.
 
 add_action( 'rest_api_init', function () {
 	register_rest_route( 'elitederma/v1', '/svuota-cache', array(
