@@ -23142,20 +23142,30 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
   }
 
   const oggi = new Date();
-  // elenco continuo di mesi: da 6 mesi fa a 12 mesi avanti, così basta scorrere invece di usare frecce
+  // Il calendario parte dal mese in corso e va avanti dodici mesi: i mesi
+  // passati non stanno sopra a far scorrere, si aprono col tasto "Storico"
+  // (un anno indietro). Vale ovunque il calendario compare: Gestione
+  // corsi, dashboard dei venditori, gestione modelle.
+  const [storicoAperto, setStoricoAperto] = useState(false);
   const mesi = useMemo(() => {
     const arr = [];
-    for (let i = -6; i <= 12; i++) {
+    for (let i = storicoAperto ? -12 : 0; i <= 12; i++) {
       const d = new Date(oggi.getFullYear(), oggi.getMonth() + i, 1);
       arr.push({ anno: d.getFullYear(), mese: d.getMonth() });
     }
     return arr;
-  }, []);
+  }, [storicoAperto]);
 
   const refOggi = React.useRef(null);
   useEffect(() => {
     refOggi.current?.scrollIntoView({ block: "start" });
   }, []);
+  // aperto lo storico, si va al primo mese passato: altrimenti dodici mesi
+  // compaiono sopra e non si vede nessun cambiamento
+  const refPrimoStorico = React.useRef(null);
+  useEffect(() => {
+    if (storicoAperto) refPrimoStorico.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [storicoAperto]);
 
   return (
     <div
@@ -23169,12 +23179,15 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
       onContextMenu={spostabile ? (e) => e.preventDefault() : undefined}
       style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <TopBar title="Calendario" onBack={onBack} />
-        <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button variant="ghost" onClick={() => setStoricoAperto((v) => !v)}>{storicoAperto ? "Nascondi storico" : "Storico"}</Button>
+          <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
+        </div>
       </div>
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
-        Scorri su o giù per vedere gli altri mesi. Clicca un corso per aprire iscritti e posti disponibili (doppio click per eliminarlo), clicca un giorno vuoto per crearne uno nuovo.
+        Il calendario parte da questo mese; i mesi passati sono nello Storico. Clicca un corso per aprire iscritti e posti disponibili (doppio click per eliminarlo), clicca un giorno vuoto per crearne uno nuovo.
         {spostabile && <> Per <b>spostare un corso</b>: tieni premuto il <b>tasto destro</b> sulla sua barra e trascinalo sul giorno voluto.</>}
       </div>
 
@@ -23184,7 +23197,7 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
         // (quella passata dal chiamante, es. i controlli sticky di
         // "Gestione corsi", oppure quella globale Indietro/Avanti),
         // nascondendolo parzialmente dietro di essa
-        <div key={`${anno}-${mese}`} style={{ scrollMarginTop }} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
+        <div key={`${anno}-${mese}`} style={{ scrollMarginTop }} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : (storicoAperto && anno === mesi[0].anno && mese === mesi[0].mese ? refPrimoStorico : null)}>
           <MeseGriglia
             anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
             onApriData={onApriData} corsoById={corsoById} locById={locById}
