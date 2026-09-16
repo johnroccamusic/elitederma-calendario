@@ -17277,6 +17277,18 @@ function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungi
     ...(onProssimeContabilita ? [{ chiave: "contabilita", testo: "Prossime contabilità", Icona: IconaLibroContabile, onClick: onProssimeContabilita }] : []),
     { chiave: "acconti", testo: "Verifica pagamenti", Icona: IconaRicevutaErp, onClick: onVerificaAcconti, badge: numeroAccontiInAttesa },
   ];
+  // Sul telefono sono gli stessi tasti della home: il quadrato col disco
+  // blu e l'icona, l'etichetta sotto su due righe. Sul computer restano le
+  // tessere chiare con il medaglione
+  if (isMobile) {
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${voci.length}, minmax(0, 1fr))`, gap: 6, maxWidth: 620, margin: "0 auto 14px" }}>
+        {voci.map((t) => (
+          <TileHome key={t.chiave} title={t.testo} Icona={t.Icona} onClick={t.onClick} badge={t.badge} evidenziato={attivo === t.chiave} etichettaDueRighe />
+        ))}
+      </div>
+    );
+  }
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${voci.length}, minmax(0, 1fr))`, gap: isMobile ? 8 : 14, maxWidth: 620, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
       {voci.map((t) => {
