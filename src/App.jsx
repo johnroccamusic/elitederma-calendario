@@ -22797,9 +22797,13 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
   // se restano alla dimensione pensata per desktop: qui si ingrandiscono
   // corsia, intestazione del giorno e i relativi font
   const isMobile = useIsMobile();
-  const LANE_H = isMobile ? 28 : 20; // altezza di ogni "corsia" di eventi (px)
-  const HEADER_H = isMobile ? 20 : 26; // spazio per il numero del giorno
-  const GAP_LANE = isMobile ? 2 : 4; // spazio verticale tra due corsie di eventi sovrapposti
+  // Aria dimezzata fra le barre, fra il numero e la prima barra e fra
+  // l'ultima e il fondo della cella (16/09/2026): la corsia e' piu'
+  // bassa di 2, il gap fra corsie e' la meta', il numero del giorno
+  // cede 2 pixel e il fondo della cella 3
+  const LANE_H = isMobile ? 26 : 18; // altezza di ogni "corsia" di eventi (px)
+  const HEADER_H = isMobile ? 18 : 24; // spazio per il numero del giorno
+  const GAP_LANE = isMobile ? 1 : 2; // spazio verticale tra due corsie di eventi sovrapposti
   const GAP_GIORNO = 1; // spazio orizzontale tra le colonne dei giorni: celle quasi a contatto
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
@@ -22856,7 +22860,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
         // nella stessa settimana la pila di barre sborda oltre il fondo
         // della casella del giorno, perché lo spazio libero calcolato non
         // teneva conto di quanto gap si accumula andando avanti
-        const rowHeight = HEADER_H + numLane * LANE_H + Math.max(0, numLane - 1) * GAP_LANE + 6;
+        const rowHeight = HEADER_H + numLane * LANE_H + Math.max(0, numLane - 1) * GAP_LANE + 3;
 
         return (
           <div key={wi} style={{ position: "relative", marginBottom: 2 }}>
@@ -22925,7 +22929,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       // restare a contatto per sembrare un pezzo unico
                       marginLeft: continuaPrima ? 0 : 3,
                       marginRight: continuaDopo ? 0 : 3,
-                      height: LANE_H - 4,
+                      height: LANE_H - 2,
                       // niente bordo/contorno: lo sfondo (tinta piena, e il
                       // pezzetto verticale che cresce nella cella
                       // dell'ultimo giorno) è disegnato cella per cella da
@@ -22933,7 +22937,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       // altrimenti la cella dell'ultimo giorno non potrebbe
                       // mai restare "scoperta" sopra il pezzetto
                       borderRadius: 4,
-                      clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
+                      clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 2),
                       overflow: "hidden",
                       color: "#000",
                       fontSize: (isMobile ? 9 : 8) * fontScaleBarre,
@@ -22952,7 +22956,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       {contenutoBarraCalendario({
                         etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
                         giorniTotali, indiciGiorno, fontSizeBadge: (isMobile ? 8 : 7) * fontScaleBarre, gap: GAP_GIORNO, inset: 6,
-                        continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 4), isMobile, fontScaleBarre,
+                        continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 2), isMobile, fontScaleBarre,
                         occupancy, coloreCorso,
                       })}
                     </div>
