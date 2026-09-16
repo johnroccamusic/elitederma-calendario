@@ -31143,56 +31143,30 @@ function VistaRicercaModelle({ param, mostraClasse, corsoDataId }) {
   // funziona: chi cerca le modelle deve poter scrivere nome e telefono
   // anche se non sa dire di chi e' il merito
   const [reperitori, setReperitori] = useState([]);
-  useEffect(() => { caricaReperitoriModelle().then(setReperitori).catch(() => setReperitori([])); }, []);
 
+  // Dal 17/09/2026 questa pagina non legge piu' le tabelle: passa da
+  // modelle_vista, che gira con i permessi del database ma restituisce solo
+  // i campi che la pagina disegna. Prima faceva "select *" su iscritti e si
+  // portava in una pagina pubblica telefono, email, importi e note di ogni
+  // allieva — leggibili da chiunque, perche' la chiave sta nel programma
+  // scaricabile dal sito. Lo slug lo riconosce il database (slug_link),
+  // identico a slugify: i link gia' in giro continuano a funzionare.
   useEffect(() => {
+    let vivo = true;
     async function carica() {
-      // dall'app: l'edizione arriva gia' identificata, niente slug da
-      // riconoscere
-      if (corsoDataId) {
-        const [{ data: cd }, { data: corsi }, { data: location }, { data: master }] = await Promise.all([
-          supabase.from("corsi_date").select("*").eq("id", corsoDataId).maybeSingle(),
-          supabase.from("corsi").select("*"),
-          supabase.from("location").select("*"),
-          supabase.from("master").select("*"),
-        ]);
-        if (!cd) { setErrore(true); return; }
-        const corso = (corsi || []).find((c) => c.id === cd.corso_id) || null;
-        const loc = (location || []).find((l) => l.id === cd.location_id) || null;
-        const { data: iscritti } = await supabase.from("iscritti").select("*").eq("corso_data_id", cd.id).order("ts");
-        const masterNome = cd.master_id ? (master || []).find((m) => m.id === cd.master_id)?.nome : null;
-        setDati({ cd, corso, loc, masterNome, iscritti: iscritti || [] });
-        return;
-      }
-      const parti = decodeURIComponent(param || "").split("/");
-      const [slugCorso, slugCitta, dataLeggibile] = parti;
-      const match = (dataLeggibile || "").match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-      if (!slugCorso || !slugCitta || !match) { setErrore(true); return; }
-      const dataIso = `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
-
-      const [{ data: corsi }, { data: location }, { data: master }] = await Promise.all([
-        supabase.from("corsi").select("*"),
-        supabase.from("location").select("*"),
-        supabase.from("master").select("*"),
-      ]);
-      const corso = (corsi || []).find((c) => slugify(c.nome) === slugCorso);
-      const loc = (location || []).find((l) => slugify(l.nome) === slugCitta);
-      if (!corso || !loc) { setErrore(true); return; }
-
-      const { data: cd } = await supabase
-        .from("corsi_date")
-        .select("*")
-        .eq("corso_id", corso.id)
-        .eq("location_id", loc.id)
-        .eq("data_inizio", dataIso)
-        .maybeSingle();
-      if (!cd) { setErrore(true); return; }
-
-      const { data: iscritti } = await supabase.from("iscritti").select("*").eq("corso_data_id", cd.id).order("ts");
-      const masterNome = cd.master_id ? (master || []).find((m) => m.id === cd.master_id)?.nome : null;
-      setDati({ cd, corso, loc, masterNome, iscritti: iscritti || [] });
+      const { data, error } = await supabase.rpc("modelle_vista", {
+        p_slug: corsoDataId ? null : (param || null),
+        p_corso_data_id: corsoDataId || null,
+      });
+      if (!vivo) return;
+      if (error || !data) { setErrore(true); return; }
+      setDati({ cd: data.cd, corso: data.corso, loc: data.loc, masterNome: data.masterNome, iscritti: data.iscritti || [] });
+      // la deduplica di chi puo' firmare il reperimento resta in JavaScript,
+      // dove e' gia' collaudata: il database manda le tre liste separate
+      setReperitori(componiReperitoriModelle(data.reperitoriMaster, data.reperitoriVenditori, data.reperitoriUtenti));
     }
     carica();
+    return () => { vivo = false; };
   }, [param, corsoDataId]);
 
   if (errore) {
@@ -31226,18 +31200,29 @@ function VistaRicercaModelle({ param, mostraClasse, corsoDataId }) {
     // si rilegge dal database: questa pagina sta aperta per ore sul
     // telefono di chi cerca le modelle, e quello che ha in memoria puo'
     // essere vecchio quanto la mattina
-    const { data: riga } = await supabase.from("iscritti").select("tipi_modelle").eq("id", iscrittoId).maybeSingle();
-    const elenco = Array.isArray(riga?.tipi_modelle) ? riga.tipi_modelle : [];
+    const { data: riga } = await supabase.rpc("modelle_leggi_trattamenti", {
+      p_iscritto: iscrittoId,
+      p_slug: corsoDataId ? null : (param || null),
+      p_corso_data_id: corsoDataId || null,
+    });
+    const elenco = Array.isArray(riga) ? riga : [];
     let nuovoElenco = elenco;
     Object.entries(campi).forEach(([nomeCampo, valoreCampo]) => {
       nuovoElenco = (nomeCampo === "nome_modella" || nomeCampo === "telefono_modella")
         ? gruppoModellaAggiornaCampo(nuovoElenco, idx, nomeCampo, valoreCampo)
         : nuovoElenco.map((m, i) => (i === idx ? { ...m, [nomeCampo]: valoreCampo } : m));
     });
-    const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
+    // la funzione scrive SOLO i trattamenti, e solo se l'allieva appartiene
+    // davvero alla classe del link: prima si poteva riscrivere la riga di
+    // chiunque, conoscendone l'id
+    const { data: fatto, error } = await supabase.rpc("modelle_salva_trattamenti", {
+      p_iscritto: iscrittoId, p_elenco: nuovoElenco,
+      p_slug: corsoDataId ? null : (param || null),
+      p_corso_data_id: corsoDataId || null,
+    });
     // un errore di rete o di permessi qui spariva senza dire niente, e chi
     // aveva appena premuto Conferma restava convinto di aver salvato
-    if (error) { window.alert("Non sono riuscito a salvare: " + error.message + "\nControlla la connessione e riprova."); return; }
+    if (error || fatto === false) { window.alert("Non sono riuscito a salvare: " + (error?.message || "la modifica non è stata accettata") + "\nControlla la connessione e riprova."); return; }
     setDati((prev) => ({
       ...prev,
       iscritti: prev.iscritti.map((x) => (x.id === iscrittoId ? { ...x, tipi_modelle: nuovoElenco } : x)),
@@ -31249,8 +31234,12 @@ function VistaRicercaModelle({ param, mostraClasse, corsoDataId }) {
     const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
     const nuovoElenco = spuntato ? gruppoModellaSpunta(elenco, idx, altroIdx) : gruppoModellaTogli(elenco, altroIdx);
     if (!nuovoElenco) return;
-    const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
-    if (error) { window.alert("Non sono riuscito a salvare: " + error.message); return; }
+    const { data: fatto, error } = await supabase.rpc("modelle_salva_trattamenti", {
+      p_iscritto: iscrittoId, p_elenco: nuovoElenco,
+      p_slug: corsoDataId ? null : (param || null),
+      p_corso_data_id: corsoDataId || null,
+    });
+    if (error || fatto === false) { window.alert("Non sono riuscito a salvare: " + (error?.message || "la modifica non è stata accettata")); return; }
     setDati((prev) => ({
       ...prev,
       iscritti: prev.iscritti.map((x) => (x.id === iscrittoId ? { ...x, tipi_modelle: nuovoElenco } : x)),
@@ -31341,34 +31330,19 @@ function VistaBiglietti({ param, tipo }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
 
+  // Come la pagina delle modelle: dal 17/09/2026 passa da biglietti_vista.
+  // Della sede escono solo le date e i file dei biglietti — prima la pagina
+  // leggeva "select *" su location, che contiene IBAN e partita IVA
   useEffect(() => {
+    let vivo = true;
     async function carica() {
-      const parti = decodeURIComponent(param || "").split("/");
-      const [slugCorso, slugCitta, slugDataParte] = parti;
-      const dataInfo = leggiSlugData(slugDataParte);
-      if (!slugCorso || !slugCitta || !dataInfo) { setErrore(true); return; }
-      const dataIso = `${dataInfo.anno}-${String(dataInfo.mese).padStart(2, "0")}-${String(dataInfo.giorno).padStart(2, "0")}`;
-
-      const [{ data: corsi }, { data: location }] = await Promise.all([
-        supabase.from("corsi").select("*"),
-        supabase.from("location").select("*"),
-      ]);
-      const corso = (corsi || []).find((c) => slugify(c.nome) === slugCorso);
-      const loc = (location || []).find((l) => slugify(l.nome) === slugCitta);
-      if (!corso || !loc) { setErrore(true); return; }
-
-      const { data: cd } = await supabase
-        .from("corsi_date")
-        .select("*")
-        .eq("corso_id", corso.id)
-        .eq("location_id", loc.id)
-        .eq("data_inizio", dataIso)
-        .maybeSingle();
-      if (!cd) { setErrore(true); return; }
-
-      setDati({ cd, corso, loc });
+      const { data, error } = await supabase.rpc("biglietti_vista", { p_slug: param || null });
+      if (!vivo) return;
+      if (error || !data) { setErrore(true); return; }
+      setDati({ cd: data.cd, corso: data.corso, loc: data.loc });
     }
     carica();
+    return () => { vivo = false; };
   }, [param]);
 
   if (errore) {
