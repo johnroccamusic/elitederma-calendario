@@ -23201,10 +23201,22 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <TopBar title="Calendario" onBack={onBack} />
-        <div style={{ display: "flex", gap: 8 }}>
-          <Button variant="ghost" onClick={() => setStoricoAperto((v) => !v)}>{storicoAperto ? "Nascondi storico" : "Storico"}</Button>
-          <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
-        </div>
+        {/* la stessa pillola a segmenti di "Programmati | Passati": Oggi
+            richiude lo storico e torna al mese in corso, Storico apre
+            l'anno passato */}
+        <PillolaSegmentata
+          compatto={isMobile}
+          valore={storicoAperto ? "storico" : "oggi"}
+          onCambia={(v) => {
+            if (v === "storico") { setStoricoAperto(true); return; }
+            setStoricoAperto(false);
+            setTimeout(() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" }), 0);
+          }}
+          voci={[
+            { chiave: "oggi", testo: "Oggi" },
+            { chiave: "storico", testo: "Storico" },
+          ]}
+        />
       </div>
 
       {mesi.map(({ anno, mese }) => (
