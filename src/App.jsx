@@ -6433,7 +6433,193 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
 // aree che prima stavano nell'hub ERP (Performance Aziendale, ex
 // "Dashboard analisi", e Statistiche Vendite Prodotti), essendo entrambe
 // analisi/numeri più che gestione operativa
-function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Statistiche" }) {
+// ---------- Statistiche -> Analisi codici sconto ----------
+//
+// I codici sconto del sito, ricostruiti dagli ordini: per ogni codice, i
+// periodi in cui e' stato usato. Un codice dato a una master durava una
+// settimana e serviva a vendere in aula: gli ordini di quei giorni sono
+// le vendite di quel corso. Due usi a piu' di sette giorni di distanza
+// sono due periodi diversi. Per ogni periodo si propone il corso a cui
+// appartiene: prima il corso a cui il codice e' legato in anagrafica
+// (tabella coupon), poi un corso della stessa master, poi un corso in
+// calendario in quei giorni.
+const GIORNI_STACCO_CODICE = 7;
+function raggruppaUsiCodice(usi) {
+  const ordinati = [...usi].sort((a, b) => String(a.data).localeCompare(String(b.data)));
+  const periodi = [];
+  ordinati.forEach((u) => {
+    const ultimo = periodi[periodi.length - 1];
+    if (ultimo && differenzaGiorni(ultimo.al, u.data) <= GIORNI_STACCO_CODICE) {
+      ultimo.al = u.data; ultimo.usi.push(u);
+    } else {
+      periodi.push({ dal: u.data, al: u.data, usi: [u] });
+    }
+  });
+  return periodi.map((p) => ({
+    ...p,
+    ordini: p.usi.length,
+    incasso: round2(p.usi.reduce((s, u) => s + (Number(u.totale) || 0), 0)),
+    sconto: round2(p.usi.reduce((s, u) => s + (Number(u.sconto) || 0), 0)),
+  }));
+}
+function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], master = [], onBack, titolo = "Analisi codici sconto" }) {
+  const isMobile = useIsMobile();
+  const [usi, setUsi] = useState(null);
+  const [coupon, setCoupon] = useState([]);
+  const [ricerca, setRicerca] = useState("");
+  const [anno, setAnno] = useState("tutti");
+  const [aperto, setAperto] = useState({});
+  useEffect(() => {
+    let vivo = true;
+    Promise.all([
+      supabase.from("woo_ordini_con_codice").select("*").order("data", { ascending: false }).limit(5000),
+      supabase.from("coupon").select("codice, master_id, corsi_date_id, valido_da, valido_fino_a"),
+    ]).then(([u, c]) => { if (!vivo) return; setUsi(u.data || []); setCoupon(c.data || []); });
+    return () => { vivo = false; };
+  }, []);
+  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
+  const couponPerCodice = useMemo(() => Object.fromEntries((coupon || []).map((c) => [String(c.codice || "").trim().toLowerCase(), c])), [coupon]);
+  const etichettaClasse = (cd) => cd ? `${corsoById[cd.corso_id]?.nome || "?"} · ${locById[cd.location_id]?.nome ? toTitleCase(locById[cd.location_id].nome) : "?"} · ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}${cd.master_id && masterById[cd.master_id] ? ` · ${toTitleCase(masterById[cd.master_id].nome || "")}` : ""}` : null;
+  // il corso di un periodo: legame diretto, stessa master, o calendario
+  function corsiProbabili(codice, periodo) {
+    const c = couponPerCodice[codice];
+    const finestraOk = (cd) => {
+      const inizio = addGiorni(cd.data_inizio, -GIORNI_STACCO_CODICE);
+      const fine = addGiorni(cd.data_fine || cd.data_inizio, GIORNI_STACCO_CODICE);
+      return periodo.dal <= fine && periodo.al >= inizio;
+    };
+    const lista = [];
+    if (c?.corsi_date_id) { const cd = (corsiDate || []).find((x) => x.id === c.corsi_date_id); if (cd) lista.push({ cd, motivo: "codice legato a questa classe" }); }
+    (corsiDate || []).filter(finestraOk).forEach((cd) => {
+      if (lista.some((x) => x.cd.id === cd.id)) return;
+      if (c?.master_id && cd.master_id === c.master_id) lista.push({ cd, motivo: "stessa master del codice, in quei giorni" });
+    });
+    (corsiDate || []).filter(finestraOk).forEach((cd) => {
+      if (lista.some((x) => x.cd.id === cd.id)) return;
+      lista.push({ cd, motivo: "corso in calendario in quei giorni" });
+    });
+    return lista.slice(0, 3);
+  }
+  const anni = useMemo(() => [...new Set((usi || []).map((u) => String(u.data).slice(0, 4)))].sort().reverse(), [usi]);
+  const codici = useMemo(() => {
+    const perCodice = {};
+    (usi || []).forEach((u) => {
+      if (anno !== "tutti" && String(u.data).slice(0, 4) !== anno) return;
+      const k = u.codice || "—";
+      (perCodice[k] = perCodice[k] || []).push(u);
+    });
+    return Object.entries(perCodice)
+      .map(([codice, lista]) => {
+        const periodi = raggruppaUsiCodice(lista);
+        return { codice, ordini: lista.length, incasso: round2(lista.reduce((s, u) => s + (Number(u.totale) || 0), 0)), sconto: round2(lista.reduce((s, u) => s + (Number(u.sconto) || 0), 0)), periodi, coupon: couponPerCodice[codice] || null };
+      })
+      .filter((c) => !ricerca.trim() || c.codice.includes(ricerca.trim().toLowerCase()) || (c.coupon?.master_id && (masterById[c.coupon.master_id]?.nome || "").toLowerCase().includes(ricerca.trim().toLowerCase())))
+      .sort((a, b) => b.incasso - a.incasso);
+  }, [usi, anno, ricerca, couponPerCodice, masterById]);
+  const totOrdini = codici.reduce((s, c) => s + c.ordini, 0);
+  const totIncasso = round2(codici.reduce((s, c) => s + c.incasso, 0));
+  const totSconto = round2(codici.reduce((s, c) => s + c.sconto, 0));
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+          <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 18 }}>I codici sconto usati negli ordini del sito, raggruppati per codice e per periodo d'uso: ogni periodo è, quasi sempre, il corso di una master.</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))", gap: isMobile ? 6 : 12, marginBottom: 16 }}>
+          <RiquadroSegnalatore etichetta="Codici usati" valore={codici.length} Icona={IconaAvvisoDocumento} disco="#6E7391" colore="#6E7391" />
+          <RiquadroSegnalatore etichetta="Ordini con codice" valore={totOrdini} Icona={IconaAvvisoCarta} disco="#6E7391" colore="#6E7391" />
+          <RiquadroSegnalatore etichetta="Incasso con codice" valore={fmtEuroErp(totIncasso)} unita={`sconti ${fmtEuroErp(totSconto)}`} Icona={IconaAvvisoMonete} disco="#B8860B" colore="#B8860B" sfondo="#FBF3E0" />
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <TabPillola attivo={anno === "tutti"} onClick={() => setAnno("tutti")}>Tutti gli anni</TabPillola>
+          {anni.map((a) => <TabPillola key={a} attivo={anno === a} onClick={() => setAnno(a)}>{a}</TabPillola>)}
+          <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
+            <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca codice o master…" />
+          </div>
+        </div>
+
+        {usi === null && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico gli ordini…</div>}
+        {usi !== null && codici.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun codice usato nel periodo.</div>}
+        {codici.map((c) => {
+          const masterCodice = c.coupon?.master_id ? masterById[c.coupon.master_id] : null;
+          const espanso = !!aperto[c.codice];
+          return (
+            <div key={c.codice} style={{ ...cardStyle, padding: isMobile ? 14 : 18, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0, flex: "1 1 220px" }}>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{c.codice}</div>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>
+                    {c.ordini} ordin{c.ordini === 1 ? "e" : "i"} · {c.periodi.length} period{c.periodi.length === 1 ? "o" : "i"}
+                    {masterCodice ? ` · codice di ${toTitleCase(masterCodice.nome || "")}` : ""}
+                    {c.coupon?.valido_fino_a ? ` · valido fino al ${fmtData(c.coupon.valido_fino_a)}` : ""}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Incasso</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(c.incasso)}</div>
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>sconti {fmtEuroErp2(c.sconto)}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                {c.periodi.map((p, i) => {
+                  const probabili = corsiProbabili(c.codice, p);
+                  const chiave = `${c.codice}_${i}`;
+                  return (
+                    <div key={chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                          {p.dal === p.al ? fmtData(p.dal) : `${fmtData(p.dal)} → ${fmtData(p.al)}`}
+                        </div>
+                        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{p.ordini} ordin{p.ordini === 1 ? "e" : "i"}</div>
+                        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginLeft: "auto", whiteSpace: "nowrap" }}>{fmtEuroErp2(p.incasso)}</div>
+                        <button onClick={() => setAperto((prec) => ({ ...prec, [chiave]: !prec[chiave] }))} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "4px 10px", cursor: "pointer" }}>
+                          {aperto[chiave] ? "Nascondi ordini" : "Ordini"}
+                        </button>
+                      </div>
+                      {probabili.length > 0 ? (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                          {probabili.map((x, j) => (
+                            <span key={x.cd.id} title={x.motivo} style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: j === 0 ? "#fff" : NAVY, background: j === 0 ? NAVY : BG_CHIARO, borderRadius: 10, padding: "4px 10px" }}>
+                              {etichettaClasse(x.cd)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>Nessun corso in calendario in quei giorni.</div>
+                      )}
+                      {aperto[chiave] && (
+                        <div style={{ marginTop: 8, background: BG_CHIARO, borderRadius: 10, padding: "6px 10px" }}>
+                          {p.usi.map((u) => (
+                            <div key={u.vendita_id + u.codice} style={{ display: "flex", gap: 10, ...fontBody, fontSize: 12, color: NAVY, padding: "4px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                              <span style={{ whiteSpace: "nowrap" }}>{fmtData(u.data)}</span>
+                              <span style={{ color: MUTED }}>#{u.numero_ordine}</span>
+                              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.cliente || "—"}</span>
+                              <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{fmtEuroErp2(Number(u.totale))}</span>
+                              <span style={{ color: MUTED, whiteSpace: "nowrap" }}>−{fmtEuroErp2(Number(u.sconto))}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {espanso ? null : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti, onApriAnalisiCodici, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Statistiche" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -6449,6 +6635,7 @@ function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriP
             { chiave: "venditori", title: "Statistiche venditori", descrizione: "Iscrizioni fatte da ciascun venditore, per corso.", Icona: IconaTileVenditori, attivo: true, onClick: onApriVenditori },
             { chiave: "master", title: "Statistiche Master", descrizione: "Vendite prodotti conseguite da ogni master, per mese, trimestre e oltre.", Icona: IconaTileMaster, attivo: true, onClick: onApriStatisticheMaster },
             { chiave: "performance", title: "Performance Aziendale", descrizione: "Analizza performance, trend e KPI dell'Academy.", Icona: IconaTileDashboardAnalisi, attivo: true, onClick: onApriPerformanceAziendale },
+            { chiave: "analisicodici", title: "Analisi codici sconto", descrizione: "I codici del sito raggruppati per periodo d'uso: quanto ha venduto ogni master con il suo codice, corso per corso.", Icona: IconaTileCoupon, attivo: true, onClick: onApriAnalisiCodici },
             { chiave: "venditeprodotti", title: "Statistiche Totali Vendite Prodotti", descrizione: "Shop online e vendite al banco, per operatore e per prodotto — separate dalle vendite corsi.", Icona: IconaGruppoVenditeProdotti, attivo: true, onClick: onApriStatisticheVenditeProdotti },
           ]}
         />
@@ -65477,6 +65664,10 @@ export default function App() {
         />
       )}
 
+      {view === "statanalisicodici" && (
+        <PaginaAnalisiCodiciSconto corsi={corsi} location={location} corsiDate={corsiDate} master={master} onBack={() => setView("statistiche")} titolo={etichettaTasto("statistiche", "analisicodici", "Analisi codici sconto")} />
+      )}
+
       {view === "statvenditeshop" && (
         <PaginaStatisticheVenditeCanale
           venditeShop={venditeShop} wooCoupon={wooCoupon} ricarica={fetchDati}
@@ -65957,6 +66148,7 @@ export default function App() {
           onApriStatisticheMaster={apriStatisticheMaster}
           onApriPerformanceAziendale={apriDashboardAnalisi}
           onApriStatisticheVenditeProdotti={apriStatisticheVenditeProdotti}
+          onApriAnalisiCodici={() => setView("statanalisicodici")}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.statistiche?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("statistiche", { ordine: o })}
           colonneTasti={layoutTasti.statistiche?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("statistiche", { colonne: n })}
           etichetteTasti={layoutTasti.statistiche?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("statistiche", chiave, testo)}
