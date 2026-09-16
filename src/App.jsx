@@ -3135,6 +3135,10 @@ const SPESSORE_CUSCINO = "inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -5px 0 rg
 // ma con una luce in alto, un bordo basso appena piu' scuro e un'ombra
 // corta, come tutti gli elementi nuovi. Al posto del bordo di un pixel
 const SPESSORE_LEGGERO = "inset 0 1px 0 rgba(255,255,255,1), inset 0 -3px 0 rgba(120,126,138,0.22), 0 0 0 1px rgba(120,126,138,0.20), 0 6px 12px -8px rgba(14,27,51,0.38), 0 1px 2px rgba(14,27,51,0.06)";
+// l'incavo delle barre di ricerca (16/09/2026): lo stesso spessore dei
+// tasti dei filtri ma al contrario, come se il campo fosse scavato nella
+// pagina: ombra dentro in alto, luce sul bordo basso
+const INCAVO_LEGGERO = "inset 0 3px 5px rgba(14,27,51,0.16), inset 0 1px 0 rgba(120,126,138,0.28), inset 0 -1px 0 rgba(255,255,255,0.95), 0 0 0 1px rgba(120,126,138,0.18), 0 1px 0 rgba(255,255,255,0.7)";
 function superficieCuscino(colore = "#FFFFFF") {
   return { background: sfondoMedaglione(colore), boxShadow: SPESSORE_CUSCINO, border: "none" };
 }
@@ -22900,7 +22904,7 @@ function CampoRicerca({ value, onChange, placeholder, style }) {
         placeholder={placeholder}
         enterKeyHint="search"
         onKeyDown={(e) => { if (e.key === "Enter") ref.current?.blur(); }}
-        style={{ ...inputStyle, paddingRight: 44, width: "100%", boxSizing: "border-box" }}
+        style={{ ...inputStyle, paddingRight: 44, width: "100%", boxSizing: "border-box", border: "none", boxShadow: INCAVO_LEGGERO, background: "#fff" }}
       />
       <button
         type="button"
