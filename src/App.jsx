@@ -14760,16 +14760,25 @@ function PaginaGestioneModelle({
             <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 4 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Fabbisogno, scadenze e assegnazioni</div>
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <TabPillola attivo={tabGM === "dashboard"} onClick={() => setTabGM("dashboard")}>Dashboard</TabPillola>
-            <TabPillola attivo={tabGM === "richieste"} onClick={() => setTabGM("richieste")}>Calendario corsi</TabPillola>
-            <TabPillola attivo={tabGM === "archivio"} onClick={() => setTabGM("archivio")}>Archivio corsi</TabPillola>
-            <TabPillola attivo={tabGM === "crm"} onClick={() => setTabGM("crm")}>CRM modelle</TabPillola>
-            {/* il numero rosso dice subito se c'e' qualcosa di storto: senza,
-                nessuno aprirebbe mai una tab che di solito e' vuota */}
-            <TabPillola attivo={tabGM === "dasistemare"} onClick={() => setTabGM("dasistemare")}>
-              Da sistemare{quantiDaSistemare > 0 ? ` (${quantiDaSistemare})` : ""}
-            </TabPillola>
+          {/* dal telefono le cinque pillole stanno su una riga sola sotto
+              al titolo, da bordo a bordo, e si scorrono col dito (16/09/2026);
+              sul computer restano accanto al titolo */}
+          <div style={isMobile
+            ? { flex: "1 1 100%", display: "flex", gap: 6, flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch", margin: "6px -16px 0 -96px", padding: "2px 16px 6px 16px", scrollbarWidth: "none" }
+            : { display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[
+              { chiave: "dashboard", testo: "Dashboard" },
+              { chiave: "richieste", testo: "Calendario corsi" },
+              { chiave: "archivio", testo: "Archivio corsi" },
+              { chiave: "crm", testo: "CRM modelle" },
+              // il numero rosso dice subito se c'e' qualcosa di storto: senza,
+              // nessuno aprirebbe mai una tab che di solito e' vuota
+              { chiave: "dasistemare", testo: `Da sistemare${quantiDaSistemare > 0 ? ` (${quantiDaSistemare})` : ""}` },
+            ].map((t) => (
+              <span key={t.chiave} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
+                <TabPillola attivo={tabGM === t.chiave} onClick={() => setTabGM(t.chiave)}>{t.testo}</TabPillola>
+              </span>
+            ))}
           </div>
         </div>
         <div style={{ marginBottom: 20 }} />
