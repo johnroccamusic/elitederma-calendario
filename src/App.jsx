@@ -41531,30 +41531,19 @@ function PaginaInserimentoCostiRicavi({
             );
           })()}
 
+          {/* le categorie piu' pesanti come tasti segnalatori (16/09/2026):
+              disco con l'icona, nome in oro e importo grande; quella scelta
+              come filtro e' evidenziata. Sul telefono due per riga */}
           {topCategoriePN.length > 0 && vistaPN !== "entrate" && (
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : `repeat(${topCategoriePN.length}, minmax(0, 1fr))`, gap: isMobile ? 10 : 12, marginBottom: isMobile ? 18 : 22 }}>
-              {topCategoriePN.map((c) => {
-                const Icona = iconaPerCategoriaSpesa(c.nome);
-                const attiva = ricercaPN.trim().toLowerCase() === c.nome.toLowerCase();
-                return (
-                  <button
-                    key={c.nome}
-                    onClick={() => setRicercaPN(attiva ? "" : c.nome)}
-                    title={attiva ? "Togli il filtro" : `Mostra solo le spese di ${c.nome}`}
-                    style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, textAlign: "left", background: "#fff", border: `1px solid ${attiva ? NAVY : CREAM_BORDER}`, borderRadius: 18, padding: isMobile ? "12px 12px" : "16px 18px", cursor: "pointer", minWidth: 0, boxShadow: "0 8px 20px -16px rgba(14,27,51,0.35)" }}
-                  >
-                    <span style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: BG_CHIARO, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Icona size={isMobile ? 20 : 24} color={NAVY} />
-                    </span>
-                    <span style={{ minWidth: 0, flex: "1 1 auto" }}>
-                      <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 12.5 : 14, fontWeight: 600, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{c.nome}</span>
-                      <span style={{ display: "block", ...fontHero, fontSize: isMobile ? 22 : 26, color: "#8A6D1D", marginTop: 4, whiteSpace: "nowrap" }}>{fmtEuroErp(c.totale)}</span>
-                    </span>
-                    <span style={{ ...fontBody, fontSize: 18, color: NAVY, flexShrink: 0 }}>›</span>
-                  </button>
-                );
-              })}
-            </div>
+            <RigaSegnalatoriInLinea isMobile={isMobile} perRigaTelefono={2} style={{ marginBottom: isMobile ? 18 : 22 }} riquadri={topCategoriePN.map((c) => {
+              const attiva = ricercaPN.trim().toLowerCase() === c.nome.toLowerCase();
+              return {
+                chiave: c.nome, etichetta: c.nome, valore: fmtEuroErp(c.totale),
+                Icona: iconaPerCategoriaSpesa(c.nome), disco: attiva ? NAVY : "#B8860B", colore: "#8A6D1D", sfondo: attiva ? "#FBF3E0" : "#FFFFFF",
+                evidenziato: attiva, titolo: attiva ? "Togli il filtro" : `Mostra solo le spese di ${c.nome}`,
+                onClick: () => setRicercaPN(attiva ? "" : c.nome),
+              };
+            })} />
           )}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
