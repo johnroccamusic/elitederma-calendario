@@ -23198,10 +23198,6 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
           <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
         </div>
       </div>
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
-        Il calendario parte da questo mese; i mesi passati sono nello Storico. Clicca un corso per aprire iscritti e posti disponibili (doppio click per eliminarlo), clicca un giorno vuoto per crearne uno nuovo.
-        {spostabile && <> Per <b>spostare un corso</b>: tieni premuto il <b>tasto destro</b> sulla sua barra e trascinalo sul giorno voluto.</>}
-      </div>
 
       {mesi.map(({ anno, mese }) => (
         // scrollMarginTop: lo scroll automatico al mese corrente (block:"start")
