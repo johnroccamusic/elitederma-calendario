@@ -3119,7 +3119,11 @@ function TileHome({
         boxShadow: isMobile ? "none" : (ricca ? ombraMedaglione(aspettoDesktop.ombra) : ombraCssTasto(aspettoDesktop.ombra)),
         // le proporzioni del mock del 16/09/2026, misurate sul tasto: il
         // pozzetto parte al 13% dell'altezza, il titolo al 6,5% del lato
-        padding: ricca ? (isMobile ? "16px 10px 12px" : `${Math.round(latoTessera * 0.13)}px ${Math.round(latoTessera * 0.07)}px ${Math.round(latoTessera * 0.05)}px`) : (isMobile ? "8px 10px" : 22),
+        // misurato sulla reference del 16/09/2026 (634px di lato): il
+        // pozzetto parte all'8,7% dall'alto ed e' largo il 60%; il disco e'
+        // il 45% del lato; il titolo e' centrato al 74% e la descrizione
+        // all'82%; sotto resta il 14%
+        padding: ricca ? (isMobile ? "16px 10px 12px" : `${Math.round(latoTessera * 0.087)}px ${Math.round(latoTessera * 0.06)}px ${Math.round(latoTessera * 0.12)}px`) : (isMobile ? "8px 10px" : 22),
         cursor: attivo ? "pointer" : "default", overflow: "hidden",
         opacity: attenuato ? 0.5 : 1,
         outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
@@ -3142,15 +3146,16 @@ function TileHome({
           {isMobile ? (
             <div style={{ color: coloreIcona, marginBottom: 6 }}><Icona size={26} color={coloreIcona} /></div>
           ) : (
-            <div style={{ marginBottom: Math.round(latoTessera * 0.07), display: "flex", justifyContent: "center" }}>
-              {/* dal mock: pozzetto al 58% del lato, disco al 40%, icona al
-                  57% del disco */}
+            <div style={{ marginBottom: Math.round(latoTessera * 0.025), display: "flex", justifyContent: "center" }}>
+              {/* dalla reference: pozzetto al 60% del lato, disco al 45%
+                  (blu #2C4573, non il blu notte del telefono), icona al 52%
+                  del disco, pozzetto grigio chiarissimo */}
               <DiscoMedaglione
-                lato={Math.round(latoTessera * 0.725)}
-                icona={Math.round(latoTessera * 0.4 * 0.57)}
-                rapportoDisco={0.552} rapportoIcona={0.57}
-                colore={aspettoMobile.disco || ASPETTO_TASTI_DEFAULT.mobile.disco}
-                pozzettoColore={aspettoMobile.pozzetto || ASPETTO_TASTI_DEFAULT.mobile.pozzetto}
+                lato={Math.round(latoTessera * 0.75)}
+                icona={Math.round(latoTessera * 0.45 * 0.52)}
+                rapportoDisco={0.60} rapportoIcona={0.52}
+                colore="#2C4573"
+                pozzettoColore="#EBEBEB"
                 Icona={Icona} attivo={attivo}
               />
             </div>
@@ -3160,9 +3165,9 @@ function TileHome({
               tutte le icone stanno alla stessa altezza e tutti i titoli
               partono dallo stesso punto, anche se un nome va a capo e il
               vicino no. Un titolo corto sta al centro del suo spazio. */}
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : Math.max(11, latoTessera * 0.065), fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : Math.round(latoTessera * 0.012), lineHeight: 1.15, ...(isMobile ? {} : { minHeight: "2.3em", display: "flex", alignItems: "center", justifyContent: "center" }) }}>{title}</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : Math.max(11, latoTessera * 0.065), fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : Math.round(latoTessera * 0.01), lineHeight: 1.15, ...(isMobile ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>{title}</div>
           {descrizione && (
-            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, latoTessera * 0.044), color: MUTED, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden", ...(isMobile ? {} : { minHeight: "2.6em" }) }}>{descrizione}</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, latoTessera * 0.045), color: "#4A5068", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
           )}
           {/* niente freccia in fondo: copriva la descrizione e non diceva
               niente che il tasto non dicesse gia'. Tolta il 15/09/2026 da
