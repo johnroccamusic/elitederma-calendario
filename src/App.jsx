@@ -13956,22 +13956,28 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   // davvero non ci sta. Il nome invece non si tronca mai: se non basta lo
   // spazio va a capo su due righe, piuttosto che tagliare il nome
   // dell'allieva
-  // Come nel mock del 16/09/2026: il nome a sinistra, in maiuscolo, e a
-  // destra una pastiglia per ogni trattamento ancora scoperto
+  // Il nome a sinistra, in maiuscolo, e le pastiglie dei trattamenti in
+  // COLONNE fisse (sopracciglia, labbra, eyeliner, poi il resto): la stessa
+  // colonna per tutte le allieve, cosi' si leggono in verticale. Le
+  // pastiglie sul computer sono il 30% piu' piccole di quelle del mock,
+  // per lasciare spazio al nome (chiesto il 16/09/2026)
   const anteprimaAllievi = nomiAllievi.length > 0 && (
     <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
       <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: "#6E7391", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>Modelle ancora da trovare</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `minmax(90px, 1.6fr) repeat(${tipiPresenti.length}, minmax(0, 1fr))`, columnGap: 6, rowGap: 8, alignItems: "center" }}>
         {nomiAllievi.map((nome) => (
-          <div key={nome} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 15, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nome.toUpperCase()}</span>
-            <span style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-              {trattamentiPerAllievo.get(nome).map((t) => {
-                const { colore, sfondo } = coloreTipoModella(t);
-                return <span key={t} style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: colore, background: sfondo, borderRadius: 999, padding: isMobile ? "5px 10px" : "7px 14px", whiteSpace: "nowrap" }}>{t || "—"}</span>;
-              })}
-            </span>
-          </div>
+          <React.Fragment key={nome}>
+            <span style={{ ...fontBody, fontSize: isMobile ? 12 : 14, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nome.toUpperCase()}</span>
+            {tipiPresenti.map((t) => {
+              const { colore, sfondo } = coloreTipoModella(t);
+              const ha = trattamentiPerAllievo.get(nome).includes(t);
+              return (
+                <div key={t} style={{ minWidth: 0, textAlign: "center" }}>
+                  {ha && <span title={t} style={{ ...fontBody, fontSize: isMobile ? 9 : 9, fontWeight: 700, color: colore, background: sfondo, borderRadius: 999, padding: isMobile ? "3px 6px" : "5px 10px", display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "uppercase" }}>{t || "—"}</span>}
+                </div>
+              );
+            })}
+          </React.Fragment>
         ))}
       </div>
     </div>
