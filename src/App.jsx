@@ -38315,7 +38315,10 @@ function stileRigaSegnalatori(isMobile, extra = {}) {
     ? { display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, WebkitOverflowScrolling: "touch", ...extra }
     : { display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", ...extra };
 }
-function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfondo = "#FFFFFF", colore, onClick, evidenziato = false, titolo }) {
+// "fattore" (dal 16/09/2026): la stessa misura moltiplicata, disco, riga,
+// testi e numero compresi, per quando una riga deve tenere tutti i
+// riquadri su una linea sola (vedi RigaSegnalatoriInLinea)
+function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfondo = "#FFFFFF", colore, onClick, evidenziato = false, titolo, fattore = 1 }) {
   const rif = useRef(null);
   const [larghezza, setLarghezza] = useState(0);
   useLayoutEffect(() => {
@@ -38330,8 +38333,8 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
   // misura fissa, decisa il 16/09/2026: 225 di base per 95 di altezza,
   // ovunque e su ogni schermo. La larghezza misurata non serve piu' alla
   // misura, resta solo per rifare i calcoli quando cambia il contenitore
-  const w = LARGHEZZA_SEGNALATORE;
-  const h = ALTEZZA_SEGNALATORE;
+  const w = Math.round(LARGHEZZA_SEGNALATORE * fattore);
+  const h = Math.round(ALTEZZA_SEGNALATORE * fattore);
   const lato = Math.round(h * 0.80);
   const spazio = Math.round(h * 0.09);
   // Se i testi non ci stanno nell'altezza, si riducono loro — a passi,
@@ -38382,6 +38385,36 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
         {nota && <span style={{ fontSize: corpoPiccolo, color: NAVY, lineHeight: 1.2, marginTop: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{nota}</span>}
       </span>
     </Tag>
+  );
+}
+
+// Una riga di riquadri che sul computer stanno SEMPRE su una linea sola:
+// se la pagina e' piu' stretta di (n x 225 + spazi), i riquadri si
+// rimpiccioliscono tutti dello stesso fattore, testi e icone compresi,
+// invece di andare a capo. Sul telefono scorrono di lato a misura piena,
+// come prima. Chiesto il 16/09/2026 per i cinque avvisi di Contabilita'
+function RigaSegnalatoriInLinea({ isMobile, riquadri, gap = 12, style = {} }) {
+  const rif = useRef(null);
+  const [larghezzaRiga, setLarghezzaRiga] = useState(0);
+  useLayoutEffect(() => {
+    const el = rif.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const misura = () => setLarghezzaRiga(el.clientWidth || 0);
+    misura();
+    const oss = new ResizeObserver(misura);
+    oss.observe(el);
+    return () => oss.disconnect();
+  }, []);
+  const n = riquadri.length;
+  const fattore = isMobile || !larghezzaRiga || n === 0
+    ? 1
+    : Math.max(0.4, Math.min(1, (larghezzaRiga - gap * (n - 1)) / (n * LARGHEZZA_SEGNALATORE)));
+  return (
+    <div ref={rif} style={isMobile ? stileRigaSegnalatori(true, style) : { display: "flex", gap, flexWrap: "nowrap", justifyContent: "center", ...style }}>
+      {riquadri.map((r) => (
+        <RiquadroSegnalatore key={r.chiave} etichetta={r.etichetta} valore={r.valore} unita={r.unita} nota={r.nota} Icona={r.Icona} disco={r.disco} sfondo={r.sfondo === "#fff" ? "#FFFFFF" : r.sfondo} colore={r.colore} onClick={r.onClick} evidenziato={r.evidenziato} titolo={r.titolo} fattore={fattore} />
+      ))}
+    </div>
   );
 }
 
@@ -40284,13 +40317,9 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           // minimo di 190px andavano a capo due e due appena lo spazio si
           // stringeva, e quattro numeri che devono leggersi in un colpo
           // d'occhio diventavano due blocchi da scorrere.
-          return (
-            <div style={stileRigaSegnalatori(isMobile, { marginBottom: 18 })}>
-              {riquadri.map((r) => (
-                <RiquadroSegnalatore key={r.chiave} etichetta={r.etichetta} valore={r.valore} Icona={r.Icona} disco={r.disco} sfondo={r.sfondo === "#fff" ? "#FFFFFF" : r.sfondo} colore={r.colore} onClick={r.onClick} />
-              ))}
-            </div>
-          );
+          // cinque su una linea sola, sempre: se non ci stanno a misura
+          // piena si rimpiccioliscono tutti insieme (RigaSegnalatoriInLinea)
+          return <RigaSegnalatoriInLinea isMobile={isMobile} riquadri={riquadri} style={{ marginBottom: 18 }} />;
         })()}
 
         {/* I quattro avvisi e le schede sono due cose diverse: i primi
