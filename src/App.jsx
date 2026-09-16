@@ -57219,6 +57219,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // In entrambi i casi l'esito arriva nella striscia in alto: se
     // qualcosa non va, il prodotto è nominato e la scheda si riapre com'era
     if (esciDopo) chiudiSchedaProdotto();
+    lanciaSalvataggioProdotto(f, calcolo, componentiSnapshot);
+  }
+
+  // il salvataggio in background, comune a "Salva" e a "Duplica prodotto":
+  // riceve una copia del modulo e va avanti da solo
+  function lanciaSalvataggioProdotto(f, calcolo, componentiSnapshot) {
     // la conferma si da' subito, senza aspettare WooCommerce: da qui in
     // poi e' un lavoro in background, e chi salva puo' andare avanti. Se
     // poi non andasse, se ne accorge dall'avviso rosso qui sotto
@@ -57272,6 +57278,39 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         setConfermaSalvataggio(null);
         setErroreSalvataggio(f.nome.trim());
       });
+  }
+
+  // "Duplica prodotto": un prodotto nuovo, identico a quello aperto in
+  // tutto tranne il nome, che si chiede prima e deve essere diverso. Le
+  // foto restano le stesse (sul sito si riusano gli stessi file, senza
+  // ricaricarli), le categorie, i prezzi, la natura, la distinta base e i
+  // dati di riordino si copiano; lo stock no — un articolo appena creato
+  // non ha pezzi finche' non li si carica. Il gemello nasce sul sito con
+  // lo stesso giro di "Salva", quindi finisce subito su WooCommerce.
+  function duplicaProdotto() {
+    if (!prodottoForm?.id) return;
+    const nomeAttuale = prodottoForm.nome.trim();
+    const risposta = window.prompt("Nome del nuovo prodotto (deve essere diverso da quello attuale):", nomeAttuale);
+    if (risposta == null) return;
+    const nuovoNome = risposta.trim();
+    if (!nuovoNome) { window.alert("Serve un nome per il nuovo prodotto."); return; }
+    if (nuovoNome.toLowerCase() === nomeAttuale.toLowerCase()) { window.alert("Il nome del duplicato deve essere diverso da quello del prodotto di partenza."); return; }
+    const giaEsistente = (prodottiShop || []).some((p) => String(p.nome || "").trim().toLowerCase() === nuovoNome.toLowerCase());
+    if (giaEsistente && !window.confirm(`Esiste gia' un prodotto che si chiama "${nuovoNome}". Vuoi crearne un altro con lo stesso nome?`)) return;
+    const f = {
+      ...prodottoForm,
+      id: null,
+      wooProductId: null,
+      nome: nuovoNome,
+      qtaStock: "0",
+      sbloccaOffline: [],
+      sbloccaPos: [],
+      immagini: (prodottoForm.immagini || []).filter((im) => im?.url).map((im) => ({ url: im.url, wooImageId: im.wooImageId || null })),
+    };
+    const calcolo = calcoloPrezzi;
+    if (calcolo.prezzoNetto != null && !(calcolo.prezzoNetto > 0)) { setMsgErrore("Il prezzo di vendita deve essere maggiore di zero."); return; }
+    setMsgErrore(""); setMsgSuccesso("");
+    lanciaSalvataggioProdotto(f, calcolo, [...componenti]);
   }
 
   // gli stessi dati di scorta e riordino valgono quasi sempre per una
@@ -57632,7 +57671,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: colonneLibere ? "visible" : "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{prodottoForm.id ? "Modifica prodotto" : "Nuovo prodotto"}</div>
-        <Button onClick={() => salvaProdotto(false)}>Salva</Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {prodottoForm.id && (
+            <button onClick={duplicaProdotto} title="Crea un prodotto identico a questo, con un altro nome, e lo pubblica sul sito" style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 8, padding: "9px 12px", cursor: "pointer" }}>
+              Duplica prodotto
+            </button>
+          )}
+          <Button onClick={() => salvaProdotto(false)}>Salva</Button>
+        </div>
       </div>
       {messaggi}
       <Field label="Immagini prodotto">
