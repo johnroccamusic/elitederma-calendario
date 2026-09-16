@@ -3131,6 +3131,10 @@ function sfondoMedaglione(colore = "#FFFFFF") {
 // gli spessori del cuscino, da soli: per i riquadri colorati che non
 // passano da Aspetto dell'app
 const SPESSORE_CUSCINO = "inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -5px 0 rgba(120,126,138,0.28), inset 0 -6px 8px rgba(14,27,51,0.06), inset 0 0 0 1px rgba(14,27,51,0.06), 0 0 0 1px rgba(120,126,138,0.22), 0 12px 22px -12px rgba(14,27,51,0.40), 0 2px 4px rgba(14,27,51,0.08)";
+// lo spessore LEGGERO dei tasti dei filtri (16/09/2026): restano bianchi,
+// ma con una luce in alto, un bordo basso appena piu' scuro e un'ombra
+// corta, come tutti gli elementi nuovi. Al posto del bordo di un pixel
+const SPESSORE_LEGGERO = "inset 0 1px 0 rgba(255,255,255,1), inset 0 -3px 0 rgba(120,126,138,0.22), 0 0 0 1px rgba(120,126,138,0.20), 0 6px 12px -8px rgba(14,27,51,0.38), 0 1px 2px rgba(14,27,51,0.06)";
 function superficieCuscino(colore = "#FFFFFF") {
   return { background: sfondoMedaglione(colore), boxShadow: SPESSORE_CUSCINO, border: "none" };
 }
@@ -9048,11 +9052,11 @@ function SezioneDateCorsi({
           onClick={() => setCronologicoHome((v) => !v)}
           style={isMobile ? {
             ...fontBody, fontSize: 10.5, fontWeight: 600, padding: "6px 8px 7px", borderRadius: 10,
-            border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
+            border: "none", boxShadow: SPESSORE_LEGGERO, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
             cursor: "pointer", width: "100%", minWidth: 0, aspectRatio: "1 / 1", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
           } : {
             ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
-            border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
+            border: "none", boxShadow: SPESSORE_LEGGERO, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
             cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
           }}
         >
@@ -9063,11 +9067,11 @@ function SezioneDateCorsi({
           onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
           style={isMobile ? {
             ...fontBody, fontSize: 10.5, fontWeight: 600, padding: "6px 8px 7px", borderRadius: 10,
-            border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY,
+            border: "none", boxShadow: SPESSORE_LEGGERO, background: "#fff", color: NAVY,
             cursor: "pointer", width: "100%", minWidth: 0, aspectRatio: "1 / 1", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
           } : {
             ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
-            border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY,
+            border: "none", boxShadow: SPESSORE_LEGGERO, background: "#fff", color: NAVY,
             cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
           }}
         >
@@ -22953,13 +22957,13 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
         onClick={onToggle}
         style={compatto ? {
           ...fontBody, fontWeight: 600, fontSize: 10.5, padding: "6px 8px 7px", borderRadius: 10,
-          border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
+          border: "none", boxShadow: SPESSORE_LEGGERO,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
           width: "100%", minWidth: 0, aspectRatio: "1 / 1", overflow: "hidden",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
         } : {
           ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 10,
-          border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
+          border: "none", boxShadow: SPESSORE_LEGGERO,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
           overflow: "hidden", width: "auto", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         }}
