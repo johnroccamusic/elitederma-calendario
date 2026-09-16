@@ -70,7 +70,7 @@ function elitederma_svuota_cache( $richiesta ) {
 	if ( ! $breeze_presente ) {
 		return new WP_REST_Response( array(
 			'ok'      => false,
-			'errore'  => 'Breeze non risulta attivo su questo sito: la cache non e\' stata svuotata.',
+			'errore'  => 'Breeze non risulta attivo su questo sito: cache non svuotata.',
 		), 200 );
 	}
 
