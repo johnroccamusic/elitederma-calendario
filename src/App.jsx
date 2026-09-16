@@ -28996,50 +28996,48 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 const anno = String(corsoData.data_inizio || "").slice(0, 4);
                 const VERDE_FONDO = "#EFF4EC";
                 const VERDE = "#5F7F4B";
-                const cella = (chiave, Icona, label, contenuto, idx) => {
+                // Mock del 16/09/2026: tre schede bianche affiancate, ognuna
+                // con l'icona grande in un quadrato a sinistra e, a destra,
+                // l'etichetta piccola, il dato grande e il resto sotto. La
+                // disponibilita' e' su verde, con l'icona verde
+                const cella = (chiave, Icona, label, contenuto) => {
                   const disponibilita = chiave === "disponibilita";
                   return (
                     <div key={chiave} style={{
-                      flex: "1 1 0", minWidth: 0,
-                      padding: disponibilita ? "7px 8px" : "7px 0 7px 9px",
-                      marginLeft: idx > 0 ? 0 : 0,
-                      borderLeft: idx > 0 && !disponibilita ? `1px solid ${CREAM_BORDER}` : "none",
-                      borderRadius: disponibilita ? 12 : 0,
-                      background: disponibilita ? VERDE_FONDO : "transparent",
+                      flex: "1 1 0", minWidth: 0, display: "flex", alignItems: "flex-start", gap: 8,
+                      padding: "12px 10px 12px 10px", borderRadius: 18,
+                      background: disponibilita ? VERDE_FONDO : "#fff",
+                      boxShadow: "0 6px 16px rgba(14,27,51,0.08)", border: `1px solid ${disponibilita ? "#E1EAD9" : "#F1EDE4"}`,
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                        <span style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, background: disponibilita ? "#E1EAD9" : BG_CHIARO, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                          <Icona size={13} color={disponibilita ? VERDE : GOLD} />
-                        </span>
-                        <span style={{ ...fontBody, fontSize: 8.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1, lineHeight: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                      <span style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: disponibilita ? "#E1EAD9" : "#F1ECDF", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                        <Icona size={24} color={disponibilita ? VERDE : GOLD} />
+                      </span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1.2, lineHeight: 1, marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+                        {contenuto}
                       </div>
-                      {contenuto}
                     </div>
                   );
                 };
                 return (
-                  <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 6, marginBottom: spaziIscrizioni.dopoDateBox }}>
+                  <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, marginBottom: spaziIscrizioni.dopoDateBox }}>
                     {cella("date", IconaDataAccento, "Date", (
                       <>
-                        <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.15 }}>{giorni}</div>
-                        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>{[siglaMese, anno].filter(Boolean).join(" ")}</div>
+                        <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: NAVY, lineHeight: 1.05, whiteSpace: "nowrap" }}>{String(giorni).replace("-", " - ")}</div>
+                        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#6E7391", lineHeight: 1.2, marginTop: 3, textTransform: "uppercase", letterSpacing: 0.6 }}>{[siglaMese, anno].filter(Boolean).join(" ")}</div>
                       </>
-                    ), 0)}
+                    ))}
                     {corsoData.master_id && cella("master", IconaMasterAccento, "Master", (
-                      /* il nome su una riga sola: si rimpicciolisce quel
-                         tanto che serve invece di spezzarsi fra le lettere */
-                      <ValoreAdattato base={14.5} minimo={8.5} style={{ ...fontBody, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>
+                      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: NAVY, lineHeight: 1.2, textTransform: "uppercase", overflowWrap: "anywhere" }}>
                         {(master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?"}
-                      </ValoreAdattato>
-                    ), 1)}
-                    {cella("disponibilita", IconaDisponibilitaAccento, "Disponibilità", (
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 5, minWidth: 0 }}>
-                        <span style={{ ...fontDisplay, fontSize: 21, fontWeight: 700, color: liberi === 0 ? "#C0392B" : NAVY, lineHeight: 1 }}>{liberi}</span>
-                        <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 600, color: NAVY, lineHeight: 1.1 }}>
-                          post{liberi === 1 ? "o" : "i"}<br />liber{liberi === 1 ? "o" : "i"}
-                        </span>
                       </div>
-                    ), 2)}
+                    ))}
+                    {cella("disponibilita", IconaDisponibilitaAccento, "Disponibilità", (
+                      <>
+                        <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: liberi === 0 ? "#C0392B" : NAVY, lineHeight: 1.05 }}>{liberi}</div>
+                        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, lineHeight: 1.2, marginTop: 3, whiteSpace: "nowrap" }}>post{liberi === 1 ? "o" : "i"} liber{liberi === 1 ? "o" : "i"}</div>
+                      </>
+                    ))}
                   </div>
                 );
               }
@@ -29072,9 +29070,20 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             {manigliaRidimensiona("dateBoxPaddingV", "y")}
             {manigliaSpazio("dopoDateBox")}
             {tornaSpeciale ? (
+              isMobile ? (
+                // dal telefono: la pillola larga col contorno oro, la
+                // freccia, una riga e la scritta (mock del 16/09/2026)
+                <div style={{ position: "relative" }}>
+                  <button onClick={onTornaGestioneModelle} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 0, background: "rgba(255,255,255,0.6)", border: "1.5px solid #C9B58A", borderRadius: 999, padding: "14px 16px", cursor: "pointer", boxSizing: "border-box" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", paddingRight: 14, borderRight: "1px solid #D5C9AF" }}><IconaFrecciaSinistra size={22} color="#9C7A2E" /></span>
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.6, paddingLeft: 16 }}>Torna a Gestione modelle</span>
+                  </button>
+                </div>
+              ) : (
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                 <BottonePulsanteScheda p={{ chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }} />
               </div>
+              )
             ) : (
               <>
                 <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: spaziIscrizioni.dopoDivider }} />
