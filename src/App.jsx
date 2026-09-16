@@ -2837,14 +2837,14 @@ function mescolaColore(a, b, t) {
 // sopra, l'icona bianca con un filo d'ombra, come fosse incisa. Tutto in
 // proporzione al lato, cosi' in anteprima e sul telefono e' lo stesso
 // disegno
-function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true, pozzettoColore = "#E6E6E4" }) {
+function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true, pozzettoColore = "#E6E6E4", rapportoDisco = 0.62, rapportoIcona = 0.66 }) {
   const pozzetto = Math.round(lato * 0.80);
   // il pozzetto sfuma dal colore scelto scurito in alto (l'ombra che
   // scende dal bordo) fino quasi al bianco in basso (il bordo che riprende luce)
   const pz = pozzettoColore || "#E6E6E4";
   const sfondoPozzetto = `linear-gradient(180deg, ${mescolaColore(pz, "#000000", 0.08)} 0%, ${pz} 45%, ${mescolaColore(pz, "#ffffff", 0.75)} 100%)`;
-  const diametro = Math.round(lato * 0.62);
-  const misuraIcona = Math.min(Math.round(icona), Math.round(diametro * 0.66));
+  const diametro = Math.round(lato * rapportoDisco);
+  const misuraIcona = Math.min(Math.round(icona), Math.round(diametro * rapportoIcona));
   const u = Math.max(1, lato / 60); // unita' di ombra: cresce col tasto
   const tinta = attivo ? colore : "#C9C4B8";
   return (
@@ -3024,6 +3024,8 @@ function TileHome({
     return () => osservatore.disconnect();
   }, []);
   const scala = larghezzaTasto ? Math.min(1, larghezzaTasto / (aspettoDesktop.dimensione || 300)) : 1;
+  // il lato vero della tessera, per le proporzioni del medaglione
+  const latoTessera = larghezzaTasto || aspettoDesktop.dimensione || 300;
   if (isMobile && ricca) {
     return (
       <button
@@ -3115,7 +3117,9 @@ function TileHome({
         // restano uguali
         background: attivo ? (isMobile ? "#FFFFFF" : (ricca ? sfondoMedaglione(aspettoMobile.cuscino || "#FFFFFF") : aspettoDesktop.colore)) : "#F1EAE0", border: ricca && !isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : aspettoDesktop.raggio,
         boxShadow: isMobile ? "none" : (ricca ? ombraMedaglione(aspettoDesktop.ombra) : ombraCssTasto(aspettoDesktop.ombra)),
-        padding: ricca ? (isMobile ? "16px 10px 12px" : `${Math.round(28 * scala)}px ${Math.round(22 * scala)}px ${Math.round(22 * scala)}px`) : (isMobile ? "8px 10px" : 22),
+        // le proporzioni del mock del 16/09/2026, misurate sul tasto: il
+        // pozzetto parte al 13% dell'altezza, il titolo al 6,5% del lato
+        padding: ricca ? (isMobile ? "16px 10px 12px" : `${Math.round(latoTessera * 0.13)}px ${Math.round(latoTessera * 0.07)}px ${Math.round(latoTessera * 0.05)}px`) : (isMobile ? "8px 10px" : 22),
         cursor: attivo ? "pointer" : "default", overflow: "hidden",
         opacity: attenuato ? 0.5 : 1,
         outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
@@ -3138,10 +3142,13 @@ function TileHome({
           {isMobile ? (
             <div style={{ color: coloreIcona, marginBottom: 6 }}><Icona size={26} color={coloreIcona} /></div>
           ) : (
-            <div style={{ marginBottom: Math.round(14 * scala), display: "flex", justifyContent: "center" }}>
+            <div style={{ marginBottom: Math.round(latoTessera * 0.07), display: "flex", justifyContent: "center" }}>
+              {/* dal mock: pozzetto al 58% del lato, disco al 40%, icona al
+                  57% del disco */}
               <DiscoMedaglione
-                lato={Math.round((larghezzaTasto || aspettoDesktop.dimensione || 300) * 0.62)}
-                icona={Math.round(aspettoDesktop.icona * scala)}
+                lato={Math.round(latoTessera * 0.725)}
+                icona={Math.round(latoTessera * 0.4 * 0.57)}
+                rapportoDisco={0.552} rapportoIcona={0.57}
                 colore={aspettoMobile.disco || ASPETTO_TASTI_DEFAULT.mobile.disco}
                 pozzettoColore={aspettoMobile.pozzetto || ASPETTO_TASTI_DEFAULT.mobile.pozzetto}
                 Icona={Icona} attivo={attivo}
@@ -3153,9 +3160,9 @@ function TileHome({
               tutte le icone stanno alla stessa altezza e tutti i titoli
               partono dallo stesso punto, anche se un nome va a capo e il
               vicino no. Un titolo corto sta al centro del suo spazio. */}
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : Math.max(11, 17 * scala), fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : Math.round(7 * scala), lineHeight: 1.2, ...(isMobile ? {} : { minHeight: "2.4em", display: "flex", alignItems: "center", justifyContent: "center" }) }}>{title}</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : Math.max(11, latoTessera * 0.065), fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : Math.round(latoTessera * 0.012), lineHeight: 1.15, ...(isMobile ? {} : { minHeight: "2.3em", display: "flex", alignItems: "center", justifyContent: "center" }) }}>{title}</div>
           {descrizione && (
-            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, 12 * scala), color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden", ...(isMobile ? {} : { minHeight: "2.7em" }) }}>{descrizione}</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, latoTessera * 0.044), color: MUTED, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden", ...(isMobile ? {} : { minHeight: "2.6em" }) }}>{descrizione}</div>
           )}
           {/* niente freccia in fondo: copriva la descrizione e non diceva
               niente che il tasto non dicesse gia'. Tolta il 15/09/2026 da
