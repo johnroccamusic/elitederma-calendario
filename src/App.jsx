@@ -46567,6 +46567,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         // distinguevano piu' l'una dall'altra
                         whiteSpace: "normal", overflowWrap: "break-word", lineHeight: 1.25, verticalAlign: "bottom", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative", opacity: colonnaTrascinata === col.label ? 0.45 : 1 }}
                     >
+                      {/* la maniglietta: da qui si prende la colonna e la si
+                          porta dove si vuole (tutto il titolo e' trascinabile,
+                          ma senza un segno nessuno lo sapeva) */}
+                      <span title="Trascina per spostare la colonna" style={{ display: "block", fontSize: 13, lineHeight: 1, color: colonnaTrascinata === col.label ? NAVY : "#B9B3A8", marginBottom: 3, cursor: "grab", userSelect: "none" }}>⠿</span>
                       {etichettaColonna(col.label)}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
                       {col.riallinea && (() => {
                         const conPropria = (prodottiShop || []).filter((x) => x.sicurezza_punti_pct != null).length;
