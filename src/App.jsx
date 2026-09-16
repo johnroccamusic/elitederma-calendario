@@ -6649,11 +6649,27 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
           {sezioneAttiva !== "tutte" && sezioneAttiva !== "senza" && (() => {
             const sz = sezioni.find((x) => x.id === sezioneAttiva);
             if (!sz) return null;
+            // i conti della persona: totale, quanti periodi (cioe' corsi),
+            // media per corso e per ordine, sui codici della sezione e
+            // sull'anno scelto
+            const periodiSezione = codici.flatMap((c) => c.periodi);
+            const ordiniSezione = codici.reduce((t, c) => t + c.ordini, 0);
+            const totaleSezione = round2(codici.reduce((t, c) => t + c.incasso, 0));
+            const mediaCorso = periodiSezione.length ? round2(totaleSezione / periodiSezione.length) : 0;
+            const mediaOrdine = ordiniSezione ? round2(totaleSezione / ordiniSezione) : 0;
             return (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, ...fontBody, fontSize: 12.5, color: MUTED }}>
-                Sezione <b style={{ color: NAVY }}>{sz.nome}</b>{sz.master_id && masterById[sz.master_id] ? ` · master ${toTitleCase(masterById[sz.master_id].nome || "")}` : ""}
-                <button onClick={() => eliminaSezione(sz)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Elimina sezione</button>
-              </div>
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, ...fontBody, fontSize: 12.5, color: MUTED }}>
+                  Sezione <b style={{ color: NAVY }}>{sz.nome}</b>{sz.master_id && masterById[sz.master_id] ? ` · master ${toTitleCase(masterById[sz.master_id].nome || "")}` : ""}
+                  <button onClick={() => eliminaSezione(sz)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Elimina sezione</button>
+                </div>
+                <div style={stileRigaSegnalatori(isMobile, { marginTop: 12 })}>
+                  <RiquadroSegnalatore etichetta="Totale venduto" valore={fmtEuroErp(totaleSezione)} unita={`${ordiniSezione} ordin${ordiniSezione === 1 ? "e" : "i"}`} Icona={IconaAvvisoMonete} disco="#B8860B" colore="#B8860B" sfondo="#FBF3E0" />
+                  <RiquadroSegnalatore etichetta="Corsi (periodi)" valore={periodiSezione.length} unita={`${codici.length} codic${codici.length === 1 ? "e" : "i"}`} Icona={IconaAvvisoDocumento} disco="#6E7391" colore="#6E7391" />
+                  <RiquadroSegnalatore etichetta="Media per corso" valore={fmtEuroErp(mediaCorso)} unita="venduto per periodo" Icona={IconaAvvisoSpunta} disco="#2E7D32" colore="#2E7D32" />
+                  <RiquadroSegnalatore etichetta="Media per ordine" valore={fmtEuroErp(mediaOrdine)} unita="scontrino medio" Icona={IconaAvvisoCarta} disco="#6E7391" colore="#6E7391" />
+                </div>
+              </>
             );
           })()}
           {nomiProposti.length > 0 && (
