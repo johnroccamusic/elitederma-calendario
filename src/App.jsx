@@ -14783,10 +14783,12 @@ function PaginaGestioneModelle({
             scorrono col dito (16/09/2026). E' una riga a se', fuori dal
             blocco del titolo: dentro, si incollava al tasto e sbordava */}
         {isMobile && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch", margin: "14px -16px 0", padding: "2px 16px 8px", scrollbarWidth: "none", boxSizing: "border-box", width: "calc(100% + 32px)" }}>
-            {pilloleGM.map((t) => (
+          <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", justifyContent: "space-between", overflowX: "auto", WebkitOverflowScrolling: "touch", margin: "14px -16px 0", padding: "2px 16px 8px", scrollbarWidth: "none", boxSizing: "border-box", width: "calc(100% + 32px)" }}>
+            {/* dal telefono senza "Da sistemare" (16/09/2026): quattro pillole
+                compatte distribuite su tutta la larghezza */}
+            {pilloleGM.filter((t) => t.chiave !== "dasistemare").map((t) => (
               <span key={t.chiave} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
-                <TabPillola attivo={tabGM === t.chiave} onClick={() => setTabGM(t.chiave)}>{t.testo}</TabPillola>
+                <TabPillola compatto attivo={tabGM === t.chiave} onClick={() => setTabGM(t.chiave)}>{t.testo}</TabPillola>
               </span>
             ))}
           </div>
