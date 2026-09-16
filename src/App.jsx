@@ -57139,7 +57139,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       }
       const erroreInterni = idProdotto ? await salvaDatiInterni(idProdotto, calcolo, f, componentiSnapshot) : null;
       if (erroreInterni) return { errore: "Salvato sul sito, ma i dati di magazzino no: " + erroreInterni };
-      return { idProdotto, tabelle: ["prodotti_shop", "prodotti_categorie", "prodotti_immagini", "categorie_prodotti"] };
+      return { idProdotto, avvisoCache: data?.avvisoCache || null, tabelle: ["prodotti_shop", "prodotti_categorie", "prodotti_immagini", "categorie_prodotti"] };
     }
 
     // niente prezzo, oppure "solo offline": prodotto solo interno. Se era
@@ -57247,9 +57247,13 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           if (!prev) return prev;
           const stessoProdotto = f.id ? prev.id === f.id : prev.id == null && prev.nome === f.nome;
           if (!stessoProdotto) return prev;
-          setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
+          setMsgSuccesso((f.id ? "Prodotto salvato." : "Prodotto creato.") + (esito.avvisoCache ? " " + esito.avvisoCache : ""));
           return f.id ? prev : { ...prev, id: esito.idProdotto };
         });
+        // salvato sul sito ma con la cache ancora piena: il cliente vedrebbe
+        // ancora il prezzo vecchio, e va detto nella stessa finestra che ha
+        // appena detto "salvato"
+        if (esito.avvisoCache) setConfermaSalvataggio((prev) => (prev && prev.nome === f.nome.trim() ? { ...prev, avviso: esito.avvisoCache } : prev));
         await ricarica(esito.tabelle);
         // Il salvataggio va in background: chi chiude la scheda e riapre
         // subito lo stesso prodotto lo riapre dai dati di prima, e vede
@@ -57524,7 +57528,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         })}
         {(inRiordino ? prodottiInRiordino : prodottiFiltrati).length === 0 && <div style={{ gridColumn: "1 / -1", ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessun prodotto.</div>}
       </div>
-      <button onClick={nuovoProdotto} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "10px 10px", cursor: "pointer", marginTop: 10 }}>+ Nuovo prodotto</button>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10 }}>
+        <button onClick={nuovoProdotto} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "10px 10px", cursor: "pointer" }}>+ Nuovo prodotto</button>
+        <TastoSvuotaCacheSito />
+      </div>
     </div>
   );
 
@@ -58539,10 +58546,37 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             GRAZIE, {confermaSalvataggio.nuovo ? "il nuovo prodotto è stato salvato." : "il prodotto è stato salvato."}
           </div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8 }}>{confermaSalvataggio.nome}</div>
+          {confermaSalvataggio.avviso && <div style={{ ...fontBody, fontSize: 12.5, color: "#b45309", background: "#fef3c7", borderRadius: 8, padding: "8px 10px", marginTop: 12, lineHeight: 1.4 }}>{confermaSalvataggio.avviso}</div>}
           <Button onClick={() => setConfermaSalvataggio(null)} style={{ width: "100%", marginTop: 18 }}>Chiudi</Button>
         </Modal>
       )}
     </div>
+  );
+}
+
+// "Svuota cache del sito": il sito tiene in cache le pagine (Breeze sul
+// server e Cloudflare davanti) fino a 30 giorni. Le scritture dell'app
+// svuotano da sole la parte che toccano; questo tasto butta via tutto,
+// per quando si e' lavorato direttamente su WordPress o si vuole essere
+// sicuri che il sito mostri quello che c'e' in anagrafica.
+function TastoSvuotaCacheSito() {
+  const [inCorso, setInCorso] = useState(false);
+  const [esito, setEsito] = useState("");
+  async function svuota() {
+    setInCorso(true);
+    setEsito("");
+    const { data, error } = await supabase.functions.invoke("wp-svuota-cache");
+    setInCorso(false);
+    if (error || data?.errore) { setEsito("Non riuscito: " + (data?.errore || error.message)); return; }
+    setEsito("Cache del sito svuotata: le pagine mostrano i dati aggiornati.");
+  }
+  return (
+    <>
+      <button onClick={svuota} disabled={inCorso} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 8, padding: "9px 10px", cursor: inCorso ? "wait" : "pointer", opacity: inCorso ? 0.6 : 1 }}>
+        {inCorso ? "Svuoto…" : "Svuota cache del sito"}
+      </button>
+      {esito && <span style={{ ...fontBody, fontSize: 12, color: esito.startsWith("Non riuscito") ? "#b91c1c" : "#15803d" }}>{esito}</span>}
+    </>
   );
 }
 

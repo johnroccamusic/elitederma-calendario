@@ -16,6 +16,7 @@
 // Chiamata dall'app: supabase.functions.invoke('woo-elimina-prodotto', { body: { prodottoId } })
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { svuotaCacheSito } from "../_shared/cacheSito.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -79,5 +80,9 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ errore: "Cancellato da WooCommerce ma non scollegato in locale: " + erroreUpdate.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  // le pagine di elenco in cache lo mostrerebbero ancora: si svuota tutto,
+  // la pagina del prodotto non esiste piu' e Breeze non saprebbe quali
+  // elenchi toccare
+  const avvisoCache = riga.woo_product_id ? await svuotaCacheSito({ tutto: true }) : null;
+  return new Response(JSON.stringify({ ok: true, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

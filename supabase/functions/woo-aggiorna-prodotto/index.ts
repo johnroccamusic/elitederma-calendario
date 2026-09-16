@@ -20,6 +20,7 @@
 // prezzoVendita/quantita sono opzionali: passa solo quelli cambiati.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { svuotaCacheSito } from "../_shared/cacheSito.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -126,5 +127,8 @@ Deno.serve(async (req) => {
     );
   }
 
-  return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, quantita: cambiaGiacenza ? quantita : undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  // la pagina del prodotto e' in cache sul sito (Breeze + Cloudflare):
+  // prezzo e disponibilita' cambiano solo se la si svuota
+  const avvisoCache = await svuotaCacheSito({ prodottiWooIds: [prodotto.woo_product_id] });
+  return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, quantita: cambiaGiacenza ? quantita : undefined, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

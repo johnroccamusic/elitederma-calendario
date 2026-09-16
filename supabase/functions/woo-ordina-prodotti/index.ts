@@ -25,6 +25,7 @@
 //   corretto il 6 settembre 2026.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { svuotaCacheSito } from "../_shared/cacheSito.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -119,5 +120,7 @@ Deno.serve(async (req) => {
     if (error) return risposta({ errore: "Salvato sullo shop, ma non nel database: " + error.message }, 500);
   }
 
-  return risposta({ aggiornati: daScrivere.length, saltati });
+  // l'ordine nuovo si vede nelle pagine di elenco, che sono in cache
+  const avvisoCache = daScrivere.length ? await svuotaCacheSito({ tutto: true }) : null;
+  return risposta({ aggiornati: daScrivere.length, saltati, avvisoCache: avvisoCache || undefined });
 });

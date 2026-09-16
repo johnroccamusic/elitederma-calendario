@@ -28,6 +28,7 @@
 //   }})
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { svuotaCacheSito } from "../_shared/cacheSito.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -121,7 +122,10 @@ Deno.serve(async (req) => {
         // "Sincronizza catalogo" da Magazzino la recupera comunque
         return new Response(JSON.stringify({ errore: "Creata su WooCommerce ma non nel database locale: " + erroreInsert.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      return new Response(JSON.stringify({ ok: true, categoria: riga }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // menu e pagine di elenco sono in cache: una categoria nuova o
+      // rinominata si vede solo svuotando tutto
+      const avvisoCache = await svuotaCacheSito({ tutto: true });
+      return new Response(JSON.stringify({ ok: true, categoria: riga, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // modifica ed elimina hanno entrambe bisogno del woo_category_id esistente
@@ -174,7 +178,8 @@ Deno.serve(async (req) => {
       if (erroreUpdate) {
         return new Response(JSON.stringify({ errore: "Aggiornata su WooCommerce ma non nel database locale: " + erroreUpdate.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const avvisoCache = await svuotaCacheSito({ tutto: true });
+      return new Response(JSON.stringify({ ok: true, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // azione === "elimina": le tassonomie WooCommerce non hanno un
@@ -198,7 +203,8 @@ Deno.serve(async (req) => {
     if (erroreDelete) {
       return new Response(JSON.stringify({ errore: "Eliminata su WooCommerce ma non nel database locale: " + erroreDelete.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const avvisoCache = await svuotaCacheSito({ tutto: true });
+    return new Response(JSON.stringify({ ok: true, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ errore: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

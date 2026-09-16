@@ -34,6 +34,7 @@
 //   }})
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { svuotaCacheSito } from "../_shared/cacheSito.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -184,7 +185,10 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ errore: "Creato su WooCommerce ma non nel database locale: " + erroreInsert.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       await sincronizzaCollegamentiLocali(riga.id, creato, categorieIds);
-      return new Response(JSON.stringify({ ok: true, prodottoId: riga.id }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // le pagine di elenco (shop, categorie) sono in cache: senza questo il
+      // prodotto nuovo non compare finche' la cache non scade
+      const avvisoCache = await svuotaCacheSito({ prodottiWooIds: [creato.id] });
+      return new Response(JSON.stringify({ ok: true, prodottoId: riga.id, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // azione === "modifica"
@@ -242,7 +246,11 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ errore: "Aggiornato su WooCommerce ma non nel database locale: " + erroreUpdate.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     await sincronizzaCollegamentiLocali(prodottoId, aggiornato, categorieIds);
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // WooCommerce ha il prezzo e le foto nuove, ma la pagina che vedono i
+    // clienti e' in cache (Breeze + Cloudflare, fino a 30 giorni): va
+    // svuotata adesso, altrimenti il sito continua a mostrare quelle vecchie
+    const avvisoCache = await svuotaCacheSito({ prodottiWooIds: [prodottoEsistente.woo_product_id] });
+    return new Response(JSON.stringify({ ok: true, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ errore: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
