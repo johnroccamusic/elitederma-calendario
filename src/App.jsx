@@ -45557,7 +45557,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             {/* da scrivania la griglia occupa meta' pagina, al centro: quattro
                 quadrati larghi un quarto dello schermo erano enormi, e i
                 testi dentro restano della loro misura */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: isMobile ? 5 : 10, alignItems: "stretch", width: isMobile ? "100%" : "50%", margin: "0 auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: isMobile ? 5 : 12, alignItems: "stretch", width: isMobile ? "100%" : "72%", margin: "0 auto" }}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
                 { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", valore: fermi.length, unita: "prodotti", filtro: true },
@@ -45586,51 +45586,34 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 })(),
               ].map((c) => {
                 const scelto = c.filtro && filtroRapido === c.chiave;
+                // Lo stesso vestito degli avvisi di Contabilita' (16/09/2026):
+                // il disco col medaglione e l'icona bianca a sinistra, la
+                // riga verticale, l'etichetta colorata e il numero grande.
+                // Il disco e' grigio-blu dove non c'e' urgenza, oro dove
+                // c'e' da fare, rosso dove qualcosa e' scoperto
+                const tintaDisco = c.tinta === "#C0392B" ? "#C0392B" : c.tinta === "#2E7D32" ? "#2E7D32" : (c.tinta === MUTED ? "#6E7391" : "#B8860B");
                 const corpo = (
                   <>
-                    <span style={{
-                      display: "flex", alignItems: "center", gap: isMobile ? 4 : 8,
-                      flexDirection: isMobile ? "column" : "row",
-                      minHeight: isMobile ? 0 : 34,
-                    }}>
-                      {/* l'icona in un tondo del suo colore appena accennato:
-                          nuda, accanto a un'etichetta su piu' righe, si
-                          perdeva */}
-                      <span style={{
-                        display: "inline-flex", flexShrink: 0, color: c.tinta, marginTop: isMobile ? 0 : 1,
-                        ...(isMobile ? { width: 24, height: 24, borderRadius: "50%", background: `${c.tinta}1F`, alignItems: "center", justifyContent: "center" } : {}),
-                      }}><c.Icona size={isMobile ? 13 : 18} color={c.tinta} /></span>
-                      <span style={{
-                        ...fontBody, fontSize: isMobile ? 8.5 : (c.maiuscolo ? 10.5 : 12.5), fontWeight: 700, color: NAVY, lineHeight: 1.2,
-                        ...(isMobile ? { textAlign: "center" } : {}),
-                        ...(c.maiuscolo ? { textTransform: "uppercase", letterSpacing: 0.6 } : {}),
-                      }}>{c.etichetta}</span>
+                    <span style={{ display: "flex", color: "#fff", flexShrink: 0 }}>
+                      <DiscoMedaglione lato={isMobile ? 40 : 64} icona={isMobile ? 13 : 22} colore={tintaDisco} pozzettoColore={c.sfondo ? "#F2EBDD" : "#EDEDED"} Icona={c.Icona} attivo />
                     </span>
-                    <span style={{ display: "block", marginTop: isMobile ? 4 : 10, textAlign: "center" }}>
-                      <span style={{ ...fontDisplay, fontSize: isMobile ? 19 : 30, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1 }}>{c.valore.toLocaleString("it-IT")}</span>
-                      <span style={{ ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, display: "block", lineHeight: 1.2 }}>{c.unita}</span>
+                    <span style={{ width: 1, alignSelf: "stretch", background: `${tintaDisco}33`, flexShrink: 0 }} />
+                    <span style={{ minWidth: 0, flex: "1 1 auto", display: "flex", flexDirection: "column" }}>
+                      <span style={{ ...fontBody, fontSize: isMobile ? 7.5 : 11, fontWeight: 700, color: tintaDisco, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>{c.etichetta}</span>
+                      <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 28, fontWeight: 700, color: NAVY, lineHeight: 1.05, marginTop: isMobile ? 2 : 4 }}>{c.valore.toLocaleString("it-IT")}</span>
+                      <span style={{ ...fontBody, fontSize: isMobile ? 7.5 : 11, color: MUTED, lineHeight: 1.2 }}>{c.unita}</span>
+                      {c.nota && !isMobile && (
+                        <span style={{ ...fontBody, fontSize: 10, color: NAVY, lineHeight: 1.3, marginTop: 4, paddingRight: 18, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.nota}</span>
+                      )}
                     </span>
-                    {/* la nota si appoggia in fondo: cosi' una tessera con
-                        due righe di spiegazione resta alta come le altre */}
-                    {c.nota && !isMobile && (
-                      <span style={{ ...fontBody, fontSize: 10, color: NAVY, lineHeight: 1.3, marginTop: "auto", paddingTop: 6, paddingRight: 22, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.nota}</span>
-                    )}
                   </>
                 );
-                // il filo rosso a sinistra solo dove c'e' davvero qualcosa
-                // che non puo' aspettare: se lo portassero tutte non
-                // direbbe piu' niente
-                const accento = isMobile && ((c.chiave === "sottoscorta" && c.valore > 0) || c.tinta === "#C0392B");
                 const stile = {
-                  display: "flex", flexDirection: "column", padding: isMobile ? "9px 6px" : "16px 18px", borderRadius: isMobile ? 13 : 16,
-                  border: `1px solid ${c.bordo || (scelto ? GOLD : CREAM_BORDER)}`, background: c.sfondo || (scelto ? BG : "#fff"),
-                  ...(accento ? { borderLeft: "3px solid #C0392B" } : {}),
-                  // quadrate, da telefono come da scrivania: la larghezza la
-                  // decide la griglia (un quarto della riga), l'altezza segue.
-                  // Se il contenuto non ci sta — telefono stretto — la tessera
-                  // cresce un po' invece di tagliare, perche' il rapporto e'
-                  // una preferenza e non un vincolo
-                  textAlign: "left", aspectRatio: "1 / 1", minHeight: 0, position: "relative", overflow: "hidden",
+                  display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, padding: isMobile ? "8px 6px" : "12px 14px", borderRadius: isMobile ? 12 : 18,
+                  border: "none", background: c.sfondo || (scelto ? BG : "#fff"),
+                  boxShadow: "0 10px 22px -16px rgba(14,27,51,0.45), 0 1px 2px rgba(14,27,51,0.08)",
+                  outline: scelto ? `2px solid ${NAVY}` : "none", outlineOffset: 1,
+                  textAlign: "left", minHeight: 0, position: "relative", overflow: "hidden",
                 };
                 if (!c.filtro && !c.azione) return <div key={c.chiave} style={stile}>{corpo}</div>;
                 return (
@@ -46802,15 +46785,21 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
   // larghezza in parti uguali: a capo diventavano due piu' una, e quella
   // sola sotto sembrava un avviso di un altro tipo. Ci stanno stringendo
   // bordi e corpi, non tagliando le parole.
+  // le tre pastiglie col medaglione piccolo, come gli avvisi di
+  // Contabilita' (16/09/2026): disco colorato con l'icona bianca, il
+  // numero e le due righe di testo
   function Pastiglia({ Icona, colore, bordo, sfondo, numero, righe }) {
     return (
       <div style={{
         display: "flex", alignItems: "center", gap: isMobile ? 5 : 8,
-        border: `1px solid ${bordo}`, background: sfondo, borderRadius: 12,
-        padding: isMobile ? "7px 8px" : "8px 12px",
+        border: "none", background: sfondo, borderRadius: 14,
+        boxShadow: "0 8px 18px -14px rgba(14,27,51,0.45), 0 1px 2px rgba(14,27,51,0.08)",
+        padding: isMobile ? "6px 8px" : "6px 12px 6px 8px",
         ...(isMobile ? { flex: "1 1 0", minWidth: 0 } : {}),
       }}>
-        <span style={{ display: "inline-flex", color: colore, flexShrink: 0 }}><Icona size={isMobile ? 14 : 17} color={colore} /></span>
+        <span style={{ display: "flex", color: "#fff", flexShrink: 0 }}>
+          <DiscoMedaglione lato={isMobile ? 32 : 40} icona={isMobile ? 11 : 14} colore={colore} pozzettoColore="#F2EBDD" Icona={Icona} attivo />
+        </span>
         <span style={{ ...fontDisplay, fontSize: isMobile ? 15 : 18, fontWeight: 700, color: colore }}>{numero}</span>
         <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: MUTED, lineHeight: 1.2, minWidth: 0 }}>
           {righe.map((r) => <span key={r} style={{ display: "block" }}>{r}</span>)}
