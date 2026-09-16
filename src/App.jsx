@@ -45115,7 +45115,9 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
   );
 }
 
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false }) {
+// sicurezzaPunti, pctQuotaColonna ed euroQuota arrivano dalla pagina: sono
+// le percentuali scritte nei titoli delle colonne "Sicurezza" e "Quota"
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
   // prezzo di vendita e costo di acquisto non sono più modificabili da
   // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
   // anche cosa mandare a WooCommerce (il lordo, mai il netto)
@@ -46530,7 +46532,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
