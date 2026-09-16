@@ -1,0 +1,7 @@
+-- I reperitori tornano come TRE liste separate (master, venditori, utenti)
+-- invece che una sola gia' fusa: la deduplica ("Andrea Paura" master e
+-- "Andrea" venditore sono la stessa persona) vive in componiReperitoriModelle
+-- in App.jsx, ed e' gia' collaudata. Rifarla in SQL vorrebbe dire due
+-- versioni della stessa regola destinate a divergere.
+-- Applicata via MCP il 17/09/2026. Il corpo completo della funzione sta
+-- nella migrazione 20260917010000, qui cambia solo la parte "reperitori".
