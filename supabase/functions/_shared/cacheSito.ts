@@ -50,6 +50,13 @@ export async function chiediSvuotaCache(opzioni: { prodottiWooIds?: (number | nu
     if (!dati?.ok) {
       return { avviso: "La cache del sito non e' stata svuotata: " + (dati?.errore || "risposta inattesa dal sito."), dati: dati?.dati ?? null };
     }
+    // Breeze ha svuotato la sua cache ma non quella di Cloudflare: succede
+    // quando in wp-config.php mancano CDN_SITE_ID e CDN_SITE_TOKEN, che
+    // Cloudways mette con l'integrazione Cloudflare. Senza, i clienti
+    // continuano a vedere la pagina vecchia, e va detto
+    if (dati?.dati && dati.dati.cloudflare_attivo === false) {
+      return { avviso: "Salvato sul sito, ma la cache di Cloudflare non si svuota: su WordPress mancano CDN_SITE_ID e CDN_SITE_TOKEN in wp-config.php (integrazione Cloudflare di Cloudways). Finche' non ci sono, svuota la cache dal pannello Cloudways.", dati: dati.dati };
+    }
     return { avviso: null, dati: dati?.dati ?? null };
   } catch (e) {
     console.error("svuotaCacheSito: sito non raggiunto", e instanceof Error ? e.message : String(e));
