@@ -17262,14 +17262,14 @@ function TastiSospesi({ children }) {
           calendario che scorre sotto non si legge attraverso le etichette.
           Solo qui, dove i tasti sono sospesi: nelle altre sezioni poggiano
           su uno sfondo pieno e non serve */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 15, pointerEvents: "none", paddingTop: distanzaDalTop, paddingBottom: isMobile ? 10 : 14, background: "rgba(255,255,255,0.78)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "0 8px 20px -18px rgba(14,27,51,0.35)" }}>
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 15, pointerEvents: "none", paddingTop: distanzaDalTop, paddingBottom: 0, marginBottom: isMobile ? -5 : 0, background: "rgba(255,255,255,0.55)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", boxShadow: "0 8px 20px -18px rgba(14,27,51,0.35)" }}>
         <div ref={rif} style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0 24px" : "0 32px", pointerEvents: "auto" }}>
           {children}
         </div>
       </div>
       {/* lo spazio che la barra occupava prima di staccarsi dal flusso: da
           desktop comprendeva anche il distacco dall'alto, da mobile no */}
-      <div aria-hidden style={{ height: altezza + (isMobile ? 10 : distanzaDalTop + 14) }} />
+      <div aria-hidden style={{ height: altezza + (isMobile ? 0 : distanzaDalTop) }} />
     </>
   );
 }
