@@ -22785,6 +22785,8 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
 // in CalendarioModifica, non da questa barra: se lo spostamento la fa
 // comparire in una settimana diversa, React distrugge e ricrea il suo nodo
 // DOM, e qualunque cattura del puntore impostata su di essa andrebbe persa.
+// quanto togliere al corpo dei nomi dei corsi nelle barre del calendario
+const RIDUZIONE_NOME_CORSO_CALENDARIO = 2;
 function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, onSpostaDaBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento, fontScaleBarre = 1 }) {
   // su schermi stretti (cellulare) le barre dei corsi diventano illeggibili
   // se restano alla dimensione pensata per desktop: qui si ingrandiscono
@@ -22929,7 +22931,11 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       overflow: "hidden",
                       color: "#000",
-                      fontSize: (isMobile ? 9 : 8) * fontScaleBarre,
+                      // il nome del corso due punti piu' piccolo (16/09/2026,
+                      // in prova): le frazioni dei giorni hanno la loro
+                      // misura e non cambiano. Per tornare indietro basta
+                      // azzerare RIDUZIONE_NOME_CORSO_CALENDARIO
+                      fontSize: ((isMobile ? 9 : 8) - RIDUZIONE_NOME_CORSO_CALENDARIO) * fontScaleBarre,
                       fontWeight: 500,
                       ...fontBody,
                       cursor: evidenziata ? (onSpostaDaBarra ? "grabbing" : "grab") : "pointer",
