@@ -37249,7 +37249,9 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
   const [anno, mese, giorno] = (data || "").split("-").map(Number);
   const riquadro = { background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 16px", boxSizing: "border-box" };
   return (
-    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? 14 : 18, marginBottom: 14, boxShadow: "0 10px 24px -18px rgba(14,27,51,0.35)" }}>
+    // la stessa superficie a cuscino delle schede di Gestione modelle
+    // (16/09/2026): spessore in basso e luce in alto, al posto del bordo
+    <div style={{ ...superficieCuscino("#FFFFFF"), borderRadius: 22, padding: isMobile ? 14 : 18, marginBottom: 14 }}>
       <div style={{ display: "flex", gap: isMobile ? 12 : 16, alignItems: "stretch" }}>
         <div style={{ ...riquadro, flex: "0 0 auto", minWidth: isMobile ? 64 : 76, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: isMobile ? "10px 8px" : "12px 10px" }}>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 30 : 34, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{giorno ? String(giorno).padStart(2, "0") : "—"}</div>
