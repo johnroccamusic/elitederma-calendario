@@ -44830,6 +44830,10 @@ const COLONNE_MAGAZZINO = [
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
   // la tabella. Vedi cedibileContantiDi
   { label: "Cedibile carta/shop", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 74 },
+  // la sicurezza che si toglie dal cedibile prima di fare i punti: la
+  // percentuale e' quella di Gestione punti, si cambia anche qui nel
+  // titolo, e vale in tutta l'app
+  { label: "Sicurezza", campo: "sicurezzaEuro", direzioneIniziale: "desc", larghezza: 66, sicurezza: true },
   // "Punti totali prodotto" (dal 16/09/2026): il doppio dei punti del
   // pezzo, vedi il conto piu' sotto
   { label: "Punti totali prodotto", campo: "punti", direzioneIniziale: "desc", larghezza: 74 },
@@ -45338,6 +45342,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Cedibile carta/shop": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Pagamento con carta o dal sito: si versa l'IVA, quindi il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
+    "Sicurezza": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: "#B8860B", whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Il ${sicurezzaPunti}% del cedibile carta/shop (${fmtEuroErp2(p.cedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta` : "Senza cedibile non c'e' niente da accantonare"}>{p.sicurezzaEuro != null ? `−${fmtEuroErp2(p.sicurezzaEuro)}` : "—"}</td>
+    ),
     "Punti totali prodotto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
@@ -45428,6 +45435,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Margine %": <td style={tdContanti} title="Quanto resta del prezzo al pubblico, tolto il costo di acquisto">{p.margineContanti != null ? fmtPctErp(p.margineContanti) : "N/D"}</td>,
     "Margine €": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
     "Cedibile carta/shop": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Cedibile in contanti: il ${numeroFascia(p.cedibileContantiPct)}% del prezzo al pubblico, per un margine sul lordo del ${fmtPctErp(p.margineContanti)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
+    "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${sicurezzaPunti}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * sicurezzaPunti) / 100))}` : "—"}</td>,
     "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
     ...Object.fromEntries([0, 1, 2].map((i) => [`Quota ${i + 1}`, <td key={`qc${i}`} style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.puntiContanti)} punti totali in contanti, in euro` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtEuroErp2(euroQuota(p.puntiContanti, i)) : "—"}</td>])),
   };
@@ -45539,8 +45547,15 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   // la percentuale di sicurezza della regola dei punti, decisa in
   // Gestione punti: le colonne dei punti la seguono
-  const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
+  const [schemaPuntiSalvato, salvaSchemaPunti] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
+  // la percentuale di sicurezza si cambia anche dal titolo della colonna
+  // "Sicurezza": e' la stessa impostazione di Gestione punti, quindi
+  // abbassarla o alzarla qui cambia i punti in tutta l'app
+  const cambiaSicurezzaPunti = (valore) => {
+    const n = Math.max(0, Math.min(100, Number(String(valore).replace(",", ".")) || 0));
+    salvaSchemaPunti({ ...(schemaPuntiSalvato || SCHEMA_PUNTI_MASTER_DEFAULT), accantonamentoPct: n });
+  };
   // le percentuali delle tre colonne "Quota": si scrivono in cima alla
   // colonna e valgono per tutti
   const [quoteColonneSalvate, salvaQuoteColonne] = useImpostazioneCondivisa(CHIAVE_QUOTE_COLONNE_PUNTI, QUOTE_COLONNE_PUNTI_DEFAULT);
@@ -45931,6 +45946,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     const puntiContanti = puntiContantiPezzo != null ? round2(puntiContantiPezzo * 2) : null;
     // le tre quote in euro dei punti totali, per ordinare e mostrare
     const quota1 = euroQuota(punti, 0), quota2 = euroQuota(punti, 1), quota3 = euroQuota(punti, 2);
+    // quanto si toglie dal cedibile per la sicurezza, in euro
+    const sicurezzaEuro = cedibileEuro != null ? round2((Number(cedibileEuro) * sicurezzaPunti) / 100) : null;
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
@@ -45948,6 +45965,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       cedibileEuro,
       punti,
       quota1, quota2, quota3,
+      sicurezzaEuro,
       margineContanti: contanti.margine,
       cedibileContantiPct: contanti.pct,
       cedibileContantiEuro: contanti.euro,
@@ -46463,6 +46481,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         whiteSpace: "normal", overflowWrap: "break-word", lineHeight: 1.25, verticalAlign: "bottom", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative", opacity: colonnaTrascinata === col.label ? 0.45 : 1 }}
                     >
                       {etichettaColonna(col.label)}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
+                      {col.sicurezza && (
+                        // la percentuale di sicurezza, la stessa di Gestione
+                        // punti: cambiarla qui cambia i punti ovunque
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
+                          onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                          <input type="number" min="0" max="100" step="1" value={sicurezzaPunti} onChange={(e) => cambiaSicurezzaPunti(e.target.value)} draggable={false} title="Percentuale di sicurezza tolta dal cedibile prima di calcolare i punti. Vale in tutta l'app, come in Gestione punti"
+                            style={{ ...fontBody, width: 40, fontSize: 10.5, fontWeight: 700, color: "#B8860B", textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+                          <span style={{ fontSize: 10, color: NAVY }}>%</span>
+                        </div>
+                      )}
                       {col.quotaIndice != null && (
                         // la percentuale della quota si scrive qui, nel
                         // titolo: click e trascinamento non devono
