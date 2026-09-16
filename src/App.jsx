@@ -14363,7 +14363,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
       {/* i quattro tasti segnalatori (dal 16/09/2026, prima quattro quadrati
           chiari): disco a sinistra, etichetta colorata e numero grande,
           sempre su una riga sola */}
-      <RigaSegnalatoriInLinea isMobile={isMobile} style={{ marginBottom: isMobile ? 36 : 72 }} riquadri={[
+      <RigaSegnalatoriInLinea isMobile={isMobile} inLineaAncheSuTelefono style={{ marginBottom: isMobile ? 36 : 72 }} riquadri={[
         { chiave: "richieste", etichetta: "Modelle richieste", valore: totaleRichieste, unita: `su ${corsiDistinti} cors${corsiDistinti === 1 ? "o" : "i"}`, colore: "#6E7391", disco: "#6E7391", sfondo: "#FFFFFF", Icona: IconaSegnalatorePersona },
         // "in 15 gg" e basta: l'orologio dice il resto
         { chiave: "scadenza", etichetta: `In ${scadenzaGiorni} gg`, valore: edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0), colore: "#C0392B", disco: "#C0392B", sfondo: "#FBE4E1", Icona: IconaSegnalatoreOrologio },
@@ -14735,12 +14735,6 @@ function PaginaGestioneModelle({
   titolo = "Gestione modelle",
 }) {
   const isMobile = useIsMobile();
-  // dal telefono questa pagina si vede esattamente come sul computer,
-  // rimpicciolita per starci tutta (chiesto il 16/09/2026)
-  useEffect(() => {
-    applicaSchermataComeDesktop(true);
-    return () => applicaSchermataComeDesktop(false);
-  }, []);
   const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio | crm | dasistemare
   const quantiDaSistemare = useMemo(
     () => raccogliModelleDaSistemare({ corsiDate, corsi, location, iscritti, corsiGiorni }).length,
@@ -38597,7 +38591,7 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
 // rimpiccioliscono tutti dello stesso fattore, testi e icone compresi,
 // invece di andare a capo. Sul telefono scorrono di lato a misura piena,
 // come prima. Chiesto il 16/09/2026 per i cinque avvisi di Contabilita'
-function RigaSegnalatoriInLinea({ isMobile, riquadri, gap = 12, style = {} }) {
+function RigaSegnalatoriInLinea({ isMobile, riquadri, gap = 12, style = {}, inLineaAncheSuTelefono = false }) {
   const rif = useRef(null);
   const [larghezzaRiga, setLarghezzaRiga] = useState(0);
   useLayoutEffect(() => {
@@ -38610,11 +38604,15 @@ function RigaSegnalatoriInLinea({ isMobile, riquadri, gap = 12, style = {} }) {
     return () => oss.disconnect();
   }, []);
   const n = riquadri.length;
-  const fattore = isMobile || !larghezzaRiga || n === 0
+  // sul telefono di norma scorrono a misura piena; con
+  // inLineaAncheSuTelefono si rimpiccioliscono per stare tutti in vista
+  const scala = !isMobile || inLineaAncheSuTelefono;
+  const spazio = isMobile ? Math.min(gap, 6) : gap;
+  const fattore = !scala || !larghezzaRiga || n === 0
     ? 1
-    : Math.max(0.4, Math.min(1, (larghezzaRiga - gap * (n - 1)) / (n * LARGHEZZA_SEGNALATORE)));
+    : Math.max(0.3, Math.min(1, (larghezzaRiga - spazio * (n - 1)) / (n * LARGHEZZA_SEGNALATORE)));
   return (
-    <div ref={rif} style={isMobile ? stileRigaSegnalatori(true, style) : { display: "flex", gap, flexWrap: "nowrap", justifyContent: "center", ...style }}>
+    <div ref={rif} style={!scala ? stileRigaSegnalatori(true, style) : { display: "flex", gap: spazio, flexWrap: "nowrap", justifyContent: "center", ...style }}>
       {riquadri.map((r) => (
         <RiquadroSegnalatore key={r.chiave} etichetta={r.etichetta} valore={r.valore} unita={r.unita} nota={r.nota} Icona={r.Icona} disco={r.disco} sfondo={r.sfondo === "#fff" ? "#FFFFFF" : r.sfondo} colore={r.colore} onClick={r.onClick} evidenziato={r.evidenziato} titolo={r.titolo} fattore={fattore} />
       ))}
