@@ -778,6 +778,205 @@ function CorniceTelefono({ attiva, children }) {
   );
 }
 
+// ---------- Stile: un colore a mano su qualunque oggetto ----------
+// Chiesto il 16/09/2026. In modalita' programmatore c'e' un tasto
+// flottante "Stile": acceso, si tocca un oggetto qualunque della pagina
+// e compare una tavolozza di 256 colori; il colore scelto resta su
+// quell'oggetto, per tutti, in quella pagina. L'oggetto si riconosce dal
+// suo percorso nella pagina (tag e posizione) e, se ne ha uno, dal testo:
+// cosi' lo si ritrova anche dopo che React lo ha ridisegnato. I colori
+// stanno fra le impostazioni condivise (stile_colori_oggetti) e si
+// riapplicano a ogni cambiamento della pagina, con un osservatore.
+const CHIAVE_STILE_OGGETTI = "stile_colori_oggetti";
+// 256 colori: la prima riga sono sedici grigi dal nero al bianco, le
+// altre quindici sono quindici tinte, ognuna in sedici chiarezze
+const PALETTE_STILE_256 = (() => {
+  const hex = (r, g, b) => "#" + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("").toUpperCase();
+  const hsl = (h, sat, l) => {
+    const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+    const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    return hex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+  };
+  const out = [];
+  for (let i = 0; i < 16; i++) { const v = Math.round((i / 15) * 255); out.push(hex(v, v, v)); }
+  for (let t = 0; t < 15; t++) for (let i = 0; i < 16; i++) out.push(hsl(t * 24, 0.82, 0.12 + (i / 15) * 0.80));
+  return out;
+})();
+let STILE_MAPPA = {};
+let STILE_VISTA = null;
+let STILE_OSSERVATORE = null;
+let STILE_RICHIESTA = 0;
+function stilePercorsoElemento(el) {
+  const parti = [];
+  let e = el;
+  while (e && e.nodeType === 1 && e !== document.body) {
+    if (e.id) { parti.unshift(`#${CSS.escape(e.id)}`); break; }
+    let i = 1, fr = e.previousElementSibling;
+    while (fr) { if (fr.tagName === e.tagName) i++; fr = fr.previousElementSibling; }
+    parti.unshift(`${e.tagName.toLowerCase()}:nth-of-type(${i})`);
+    e = e.parentElement;
+  }
+  return parti.join(" > ");
+}
+function stileTestoBreve(el) { return (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 60); }
+function stileTrovaElemento(voce) {
+  let el = null;
+  try { el = document.querySelector(voce.percorso); } catch (e) { el = null; }
+  if (el && (!voce.testo || stileTestoBreve(el) === voce.testo)) return el;
+  // ridisegnato altrove: lo stesso tag con lo stesso testo
+  if (voce.testo) {
+    const candidati = document.querySelectorAll(voce.tag);
+    for (const c of candidati) if (stileTestoBreve(c) === voce.testo) return c;
+  }
+  return el;
+}
+function stileProprietaCss(proprieta) { return proprieta === "testo" ? "color" : proprieta === "bordo" ? "border-color" : "background-color"; }
+function stileApplicaVoce(el, voce) {
+  const prop = stileProprietaCss(voce.proprieta);
+  if (el.style.getPropertyValue(prop) === voce.colore && el.style.getPropertyPriority(prop) === "important") return;
+  el.style.setProperty(prop, voce.colore, "important");
+  if (prop === "background-color") el.style.setProperty("background-image", "none", "important");
+  el.dataset.stileOggetto = "1";
+}
+function stilePulisciTutto() {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll("[data-stile-oggetto]").forEach((el) => {
+    ["background-color", "background-image", "color", "border-color"].forEach((prop) => { if (el.style.getPropertyPriority(prop) === "important") el.style.removeProperty(prop); });
+    delete el.dataset.stileOggetto;
+  });
+}
+function stileApplicaTutto() {
+  if (typeof document === "undefined" || !STILE_VISTA) return;
+  Object.values(STILE_MAPPA).forEach((voce) => {
+    if (!voce || voce.vista !== STILE_VISTA) return;
+    const el = stileTrovaElemento(voce);
+    if (el) stileApplicaVoce(el, voce);
+  });
+}
+// l'osservatore: a ogni cambiamento della pagina si riapplicano i colori
+// (una volta per fotogramma). stileApplicaVoce non tocca quello che e'
+// gia' a posto, quindi il giro si ferma da solo
+function stileAvviaOsservatore() {
+  if (STILE_OSSERVATORE || typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+  STILE_OSSERVATORE = new MutationObserver(() => {
+    if (STILE_RICHIESTA) return;
+    STILE_RICHIESTA = requestAnimationFrame(() => { STILE_RICHIESTA = 0; stileApplicaTutto(); });
+  });
+  STILE_OSSERVATORE.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+}
+function PannelloStileOggetti({ vista, programmatore }) {
+  const [mappa, salvaMappa] = useImpostazioneCondivisa(CHIAVE_STILE_OGGETTI, {});
+  const [attivo, setAttivo] = useState(false);
+  const [selezione, setSelezione] = useState(null); // { chiave, voce, elemento }
+  const [proprieta, setProprieta] = useState("sfondo");
+  const rifPannello = useRef(null);
+  // i colori salvati valgono per tutti: si applicano a ogni cambio di
+  // pagina e a ogni cambio della mappa
+  useEffect(() => {
+    STILE_MAPPA = mappa || {};
+    STILE_VISTA = vista;
+    stilePulisciTutto();
+    stileApplicaTutto();
+    stileAvviaOsservatore();
+  }, [mappa, vista]);
+  // in modalita' "Stile": l'oggetto sotto il mouse si evidenzia, e il
+  // click lo sceglie invece di fare quello che farebbe
+  useEffect(() => {
+    if (!attivo) return;
+    let evidenziato = null;
+    const dentroPannello = (el) => rifPannello.current && rifPannello.current.contains(el);
+    const sopra = (e) => {
+      const el = e.target;
+      if (!(el instanceof Element) || dentroPannello(el)) return;
+      if (evidenziato && evidenziato !== el) evidenziato.style.outline = "";
+      evidenziato = el;
+      el.style.outline = "2px dashed #C0392B";
+    };
+    const fuori = (e) => { const el = e.target; if (el instanceof Element && !dentroPannello(el)) el.style.outline = ""; };
+    const click = (e) => {
+      const el = e.target;
+      if (!(el instanceof Element) || dentroPannello(el)) return;
+      e.preventDefault(); e.stopPropagation();
+      el.style.outline = "";
+      const percorso = stilePercorsoElemento(el);
+      const chiave = `${vista}|${percorso}`;
+      const esistente = (mappa || {})[chiave];
+      setProprieta(esistente?.proprieta || "sfondo");
+      setSelezione({ chiave, elemento: el, voce: { vista, percorso, tag: el.tagName.toLowerCase(), testo: stileTestoBreve(el) }, esistente: esistente || null });
+    };
+    document.addEventListener("mouseover", sopra, true);
+    document.addEventListener("mouseout", fuori, true);
+    document.addEventListener("click", click, true);
+    const cursore = document.body.style.cursor;
+    document.body.style.cursor = "crosshair";
+    return () => {
+      document.removeEventListener("mouseover", sopra, true);
+      document.removeEventListener("mouseout", fuori, true);
+      document.removeEventListener("click", click, true);
+      document.body.style.cursor = cursore;
+      if (evidenziato) evidenziato.style.outline = "";
+    };
+  }, [attivo, vista, mappa]);
+  if (!programmatore) return null;
+  function scegliColore(colore) {
+    if (!selezione) return;
+    const voce = { ...selezione.voce, proprieta, colore };
+    salvaMappa({ ...(mappa || {}), [selezione.chiave]: voce });
+    stileApplicaVoce(selezione.elemento, voce);
+    setSelezione((sel) => (sel ? { ...sel, esistente: voce } : sel));
+  }
+  function togliColore() {
+    if (!selezione) return;
+    const nuova = { ...(mappa || {}) };
+    delete nuova[selezione.chiave];
+    salvaMappa(nuova);
+    setSelezione(null);
+  }
+  const quantiQui = Object.values(mappa || {}).filter((v) => v && v.vista === vista).length;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setAttivo((a) => !a); setSelezione(null); }}
+        title={attivo ? "Esci dalla modalita' Stile" : "Stile: tocca un oggetto e scegli il suo colore"}
+        style={{ position: "fixed", right: 12, bottom: 96, zIndex: 9998, ...fontBody, fontSize: 12.5, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: attivo ? "#fff" : NAVY, background: attivo ? "#C0392B" : "rgba(255,255,255,0.95)", border: `1.5px solid ${attivo ? "#C0392B" : NAVY}`, borderRadius: 999, padding: "9px 14px", cursor: "pointer", boxShadow: "0 3px 10px rgba(14,27,51,0.28)" }}
+      >
+        Stile{quantiQui ? ` (${quantiQui})` : ""}
+      </button>
+      {attivo && selezione && (
+        <div ref={rifPannello} style={{ position: "fixed", right: 12, bottom: 144, zIndex: 9999, width: 344, maxWidth: "calc(100vw - 24px)", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: "0 12px 30px rgba(14,27,51,0.3)", padding: 12, ...fontBody, cursor: "default" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Oggetto scelto · {selezione.voce.tag}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{selezione.voce.testo || "(senza testo)"}</div>
+            </div>
+            <button type="button" onClick={() => setSelezione(null)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 8px", cursor: "pointer" }}>Chiudi</button>
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+            {[{ v: "sfondo", l: "Sfondo" }, { v: "testo", l: "Testo" }, { v: "bordo", l: "Bordo" }].map((o) => (
+              <button key={o.v} type="button" onClick={() => setProprieta(o.v)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: proprieta === o.v ? "#fff" : NAVY, background: proprieta === o.v ? NAVY : "#fff", border: `1px solid ${NAVY}`, borderRadius: 999, padding: "5px 10px", cursor: "pointer" }}>{o.l}</button>
+            ))}
+            {selezione.esistente && (
+              <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: MUTED }}>
+                <span style={{ width: 16, height: 16, borderRadius: 4, background: selezione.esistente.colore, border: `1px solid ${CREAM_BORDER}` }} />{selezione.esistente.colore}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(16, 1fr)", gap: 2 }}>
+            {PALETTE_STILE_256.map((c) => (
+              <button key={c} type="button" onClick={() => scegliColore(c)} title={c} style={{ aspectRatio: "1 / 1", width: "100%", background: c, border: selezione.esistente?.colore === c && selezione.esistente?.proprieta === proprieta ? "2px solid #000" : "1px solid rgba(0,0,0,0.08)", borderRadius: 3, cursor: "pointer", padding: 0 }} />
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+            <span style={{ fontSize: 11, color: MUTED }}>Vale per tutti, in questa pagina.</span>
+            <button type="button" onClick={togliColore} disabled={!selezione.esistente} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: selezione.esistente ? "#C0392B" : MUTED, background: "none", border: "none", cursor: selezione.esistente ? "pointer" : "default", textDecoration: "underline" }}>Togli colore</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function TastoVistaForzata({ programmatore = false }) {
   // solo per chi programma: serve a controllare il lavoro, non a usare
   // l'app. Se la vista era rimasta forzata da un accesso precedente e
@@ -65800,6 +65999,9 @@ export default function App() {
       {/* dal telefono: il tastino in alto a destra per vedere l'app come
           sul computer, con il pizzico per ingrandire */}
       <TastoVistaForzata programmatore={ruoloUtente === "programmatore"} />
+      {/* "Stile": i colori scelti a mano sugli oggetti. Il tasto lo vede
+          solo il programmatore, i colori li vedono tutti */}
+      <PannelloStileOggetti vista={view} programmatore={ruoloUtente === "programmatore"} />
       {preferitiDisponibili && slotPreferitoInScelta != null && (
         <ModaleScegliPreferito
           destinazioni={destinazioniPreferiti} onScegli={scegliPreferito} onClose={() => setSlotPreferitoInScelta(null)}
