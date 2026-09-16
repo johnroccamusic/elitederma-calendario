@@ -17082,17 +17082,21 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
               <Field label="Nome corso">
                 <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeCorso} onChange={(e) => setNomeCorso(e.target.value.toUpperCase())} placeholder="es. MICROBLADING" />
               </Field>
-              <Field label="Categoria (opzionale)">
-                <input style={{ ...inputStyle, textTransform: "uppercase" }} value={categoriaCorso} onChange={(e) => setCategoriaCorso(e.target.value.toUpperCase())} placeholder="es. PMU" />
-              </Field>
-              <div style={{ display: "flex", gap: 14 }}>
-                <div style={{ flex: 1 }}>
-                  <Field label="Colore">
-                    <input type="color" value={colore} onChange={(e) => setColore(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
+              {/* categoria, colore e posti su una riga sola, telefono e
+                  computer: la categoria prende lo spazio che avanza */}
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                  <Field label="Categoria">
+                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={categoriaCorso} onChange={(e) => setCategoriaCorso(e.target.value.toUpperCase())} placeholder="es. PMU" />
                   </Field>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Posti massimi">
+                <div style={{ flex: "0 0 74px" }}>
+                  <Field label="Colore">
+                    <input type="color" value={colore} onChange={(e) => setColore(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 2, boxSizing: "border-box" }} />
+                  </Field>
+                </div>
+                <div style={{ flex: "0 0 82px" }}>
+                  <Field label="Posti">
                     <input type="number" min="1" style={inputStyle} value={postiMax} onChange={(e) => setPostiMax(e.target.value)} />
                   </Field>
                 </div>
@@ -17128,17 +17132,21 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
                 <Field label="Nome corso">
                   <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeCorso} onChange={(e) => setModNomeCorso(e.target.value.toUpperCase())} />
                 </Field>
-                <Field label="Categoria (opzionale)">
-                  <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modCategoriaCorso} onChange={(e) => setModCategoriaCorso(e.target.value.toUpperCase())} placeholder="es. PMU" />
-                </Field>
-                <div style={{ display: "flex", gap: 14 }}>
-                  <div style={{ flex: 1 }}>
-                    <Field label="Colore">
-                      <input type="color" value={modColoreCorso} onChange={(e) => setModColoreCorso(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
+                {/* categoria, colore e posti su una riga sola, telefono e
+                    computer: la categoria prende lo spazio che avanza */}
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                    <Field label="Categoria">
+                      <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modCategoriaCorso} onChange={(e) => setModCategoriaCorso(e.target.value.toUpperCase())} placeholder="es. PMU" />
                     </Field>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <Field label="Posti massimi">
+                  <div style={{ flex: "0 0 74px" }}>
+                    <Field label="Colore">
+                      <input type="color" value={modColoreCorso} onChange={(e) => setModColoreCorso(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 2, boxSizing: "border-box" }} />
+                    </Field>
+                  </div>
+                  <div style={{ flex: "0 0 82px" }}>
+                    <Field label="Posti">
                       <input type="number" min="1" style={inputStyle} value={modPostiCorso} onChange={(e) => setModPostiCorso(e.target.value)} />
                     </Field>
                   </div>
