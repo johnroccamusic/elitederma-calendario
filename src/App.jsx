@@ -9716,7 +9716,7 @@ function PaginaDashboardVenditori({
             {/* sul telefono la stessa griglia della home (quattro colonne,
                 stesso spazio): i tre tasti stanno vicini come li'. Prima
                 erano tre colonne larghe e i tasti finivano lontani */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : "repeat(3, minmax(0, 1fr))", gap: isMobile ? 14 : 14, maxWidth: isMobile ? "none" : 620, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, calc((100% - 3 * 14px) / 4))" : "repeat(3, minmax(0, 1fr))", gap: 14, justifyContent: "center", maxWidth: isMobile ? "none" : 620, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
               {[
                 { chiave: "corsi", testo: "Iscrivi allievo", Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
                 { chiave: "performance", testo: "Performance di vendita", Icona: IconaFrecciaTrend },
