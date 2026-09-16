@@ -14400,7 +14400,9 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </select>
       </div>
 
-      <div style={cardStyle}>
+      {/* niente scheda intorno (16/09/2026): titolo e schede stanno
+          direttamente sulla pagina */}
+      <div style={{ marginBottom: 18 }}>
         <div style={{ marginBottom: 4 }}>
           <div style={{ ...hStyle, marginBottom: 0 }}>Priorità prossimi 60 giorni</div>
           <div style={subStyle}>In ordine di urgenza</div>
