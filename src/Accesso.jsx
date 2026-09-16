@@ -144,7 +144,8 @@ export default function Accesso() {
           }}
         >
           <div style={{ height: 3, width: 44, background: GOLD, borderRadius: 2, marginBottom: 20 }} />
-          <h1 style={{ margin: "0 0 6px", fontSize: 21, color: NAVY, letterSpacing: "-.01em" }}>
+          {/* +20% dal 16/09/2026 (era 21) */}
+          <h1 style={{ margin: "0 0 6px", fontSize: 25, color: NAVY, letterSpacing: "-.01em" }}>
             Accademia Elitederma
           </h1>
           <p style={{ margin: "0 0 24px", fontSize: 13.5, color: "#8B8FA3" }}>
