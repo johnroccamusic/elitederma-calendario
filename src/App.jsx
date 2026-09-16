@@ -38646,12 +38646,15 @@ function RigaSegnalatoriInLinea({ isMobile, riquadri, gap = 12, style = {}, inLi
   // sul telefono di norma scorrono a misura piena; con
   // inLineaAncheSuTelefono si rimpiccioliscono per stare tutti in vista,
   // con perRigaTelefono vanno a capo ogni tanti
-  const perRiga = isMobile && perRigaTelefono > 0 ? Math.min(perRigaTelefono, n) : n;
   const scala = !isMobile || inLineaAncheSuTelefono || perRigaTelefono > 0;
   const spazio = isMobile ? Math.min(gap, 8) : gap;
-  const fattore = !scala || !larghezzaRiga || n === 0
-    ? 1
-    : Math.max(0.3, Math.min(1, (larghezzaRiga - spazio * (perRiga - 1)) / (perRiga * LARGHEZZA_SEGNALATORE)));
+  const fattorePer = (k) => (!larghezzaRiga || k === 0 ? 1 : Math.min(1, (larghezzaRiga - spazio * (k - 1)) / (k * LARGHEZZA_SEGNALATORE)));
+  let perRiga = isMobile && perRigaTelefono > 0 ? Math.min(perRigaTelefono, n) : n;
+  // sotto la meta' della misura i riquadri non si leggono piu' (e a un
+  // certo punto sbordavano dallo schermo, 16/09/2026): piuttosto vanno su
+  // due righe, la prima con uno in piu'
+  if (scala && perRiga > 1 && fattorePer(perRiga) < 0.5) perRiga = Math.ceil(n / 2);
+  const fattore = !scala ? 1 : Math.max(0.3, fattorePer(perRiga));
   return (
     <div ref={rif} style={!scala ? stileRigaSegnalatori(true, style) : { display: "flex", gap: spazio, flexWrap: perRiga < n ? "wrap" : "nowrap", justifyContent: "center", ...style }}>
       {riquadri.map((r) => (
@@ -40572,7 +40575,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           // d'occhio diventavano due blocchi da scorrere.
           // cinque su una linea sola, sempre: se non ci stanno a misura
           // piena si rimpiccioliscono tutti insieme (RigaSegnalatoriInLinea)
-          return <RigaSegnalatoriInLinea isMobile={isMobile} riquadri={riquadri} style={{ marginBottom: 18 }} />;
+          return <RigaSegnalatoriInLinea isMobile={isMobile} perRigaTelefono={3} riquadri={riquadri} style={{ marginBottom: 18 }} />;
         })()}
 
         {/* I quattro avvisi e le schede sono due cose diverse: i primi
