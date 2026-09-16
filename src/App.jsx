@@ -24730,7 +24730,7 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
   }, [label, compatta, isMobile]);
   useEffect(() => { onAltezzaEtichetta?.(altezzaEtichetta); }, [altezzaEtichetta, onAltezzaEtichetta]);
   const stileEtichetta = {
-    ...fontBody, fontSize: compatta ? 7.5 : grande ? 10.5 : colonna ? 12 : (isMobile ? 9 : 10.5), color: MUTED,
+    ...fontBody, fontSize: compatta ? 7.5 : grande ? 11 : colonna ? 12 : (isMobile ? 9 : 10.5), color: grande ? colore : MUTED, fontWeight: grande ? 700 : 400,
     textTransform: "uppercase", letterSpacing: compatta ? 0 : grande ? 0.5 : (isMobile ? 0.2 : 0.6),
     lineHeight: 1.25, overflowWrap: "anywhere",
   };
@@ -24751,17 +24751,29 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
       alignItems: "center", justifyContent: colonna ? "space-between" : undefined,
       gap: compatta ? 5 : grande ? 10 : colonna ? 6 : (isMobile ? 8 : 12), minWidth: 0,
       ...(colonna ? { aspectRatio: "1 / 1", textAlign: "center" } : null),
-      background: grande ? "#FDFCFA" : "#FCFBF8", border: `1px solid ${CREAM_BORDER}`, borderRadius: compatta ? 10 : grande ? 16 : 14,
-      padding: compatta ? "8px 6px" : grande ? "12px 12px" : colonna ? "8px 5px" : (isMobile ? "10px 10px" : "12px 14px"),
+      // "grande" (la riga della cassa contanti) ha il vestito degli avvisi
+      // di Contabilita' (16/09/2026): bianco morbido con l'ombra, senza
+      // bordo, e il disco col medaglione al posto del tondo chiaro
+      background: grande ? "#fff" : "#FCFBF8", border: grande ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: compatta ? 10 : grande ? 18 : 14,
+      boxShadow: grande ? "0 10px 22px -16px rgba(14,27,51,0.45), 0 1px 2px rgba(14,27,51,0.08)" : "none",
+      padding: compatta ? "8px 6px" : grande ? "12px 14px" : colonna ? "8px 5px" : (isMobile ? "10px 10px" : "12px 14px"),
       overflow: "hidden",
     }}>
-      <span style={{
-        width: medaglione, height: medaglione, flexShrink: 0, borderRadius: "50%",
-        background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: colore,
-      }}>
-        <Icona size={compatta ? 12 : grande ? 17 : colonna ? 30 : (isMobile ? 16 : 20)} />
-      </span>
-      {!compatta && !colonna && <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0, margin: grande ? "2px 0" : 0 }} />}
+      {grande ? (
+        <span style={{ display: "flex", color: "#fff", flexShrink: 0 }}>
+          {/* grigio-blu per i numeri neutri, oro per quello che aspetta,
+              rosso per quello che manca: lo stesso codice degli avvisi */}
+          <DiscoMedaglione lato={isMobile ? 48 : 64} icona={isMobile ? 15 : 22} colore={colore === "#C0392B" ? "#C0392B" : (colore === GOLD || colore === "#8A6D1D" || colore === "#B8860B") ? "#B8860B" : "#6E7391"} pozzettoColore="#EDEDED" Icona={Icona} attivo />
+        </span>
+      ) : (
+        <span style={{
+          width: medaglione, height: medaglione, flexShrink: 0, borderRadius: "50%",
+          background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: colore,
+        }}>
+          <Icona size={compatta ? 12 : colonna ? 30 : (isMobile ? 16 : 20)} />
+        </span>
+      )}
+      {!compatta && !colonna && <span style={{ width: 1, alignSelf: "stretch", background: grande ? `${colore}33` : CREAM_BORDER, flexShrink: 0, margin: grande ? "2px 0" : 0 }} />}
       <div ref={rifBox} style={{
         minWidth: 0, flex: 1, width: colonna ? "100%" : undefined, position: "relative",
         // etichetta al centro e importo appoggiato in fondo: le celle
