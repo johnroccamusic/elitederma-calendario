@@ -34326,12 +34326,6 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
-          {puoVedereSospesi && (
-            <button onClick={() => setMostraSospesi(true)} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8, ...fontBody, fontSize: isMobile ? 12 : 13, fontWeight: 700, color: sospesiTutti.length > 0 ? "#fff" : NAVY, background: sospesiTutti.length > 0 ? "#C0392B" : "#fff", border: `1px solid ${sospesiTutti.length > 0 ? "#C0392B" : CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? "8px 12px" : "10px 16px", cursor: "pointer" }}>
-              <IconaCarrelloPos size={16} color={sospesiTutti.length > 0 ? "#fff" : GOLD} />
-              Carrelli sospesi{sospesiTutti.length > 0 ? ` (${sospesiTutti.length})` : ""}
-            </button>
-          )}
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Magazzino fisico, shop online e le vendite che ne derivano.</div>
         {/* "Gestione shop" (il front office) non ha più un tasto suo: si
@@ -34346,6 +34340,9 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
             { chiave: "venditealbanco", title: "Vendite al banco", descrizione: "Tutte le vendite fatte con il POS interno.", Icona: IconaTilePos, attivo: true, onClick: onApriVenditeAlBanco },
             { chiave: "prodottiusatikit", title: "Prodotti usati per i kit", descrizione: "Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiUsatiKit },
             { chiave: "omaggi", title: "Omaggi", descrizione: "Prodotti usciti dal POS senza essere venduti, regalati.", Icona: IconaTileOmaggio, attivo: true, onClick: onApriOmaggi },
+            // i carrelli sospesi come tasto vero, con icona e disco, al posto
+            // del tastino accanto al titolo (16/09/2026); solo per chi amministra
+            ...(puoVedereSospesi ? [{ chiave: "carrellisospesi", title: "Carrelli sospesi", descrizione: "I carrelli salvati e non pagati di tutti gli operatori: materiale fermo che nessuno può vendere.", Icona: IconaCarrelloPos, attivo: true, onClick: () => setMostraSospesi(true), badge: sospesiTutti.length || undefined }] : []),
             { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
           ]}
         />
