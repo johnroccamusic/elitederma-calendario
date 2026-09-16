@@ -44859,6 +44859,9 @@ const COLONNE_MAGAZZINO = [
   // percentuale e' quella di Gestione punti, si cambia anche qui nel
   // titolo, e vale in tutta l'app
   { label: "Sicurezza", campo: "sicurezzaEuro", direzioneIniziale: "desc", larghezza: 66, sicurezza: true },
+  // il tasto che riporta la percentuale del prodotto a quella generale
+  // scritta nel titolo di "Sicurezza"; nel titolo, quello per tutti
+  { label: "Riallinea", campo: null, larghezza: 78, riallinea: true },
   // "Punti totali prodotto" (dal 16/09/2026): il doppio dei punti del
   // pezzo, vedi il conto piu' sotto
   { label: "Punti totali prodotto", campo: "punti", direzioneIniziale: "desc", larghezza: 74 },
@@ -45157,6 +45160,15 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     if (error) { window.alert("Percentuale di sicurezza non salvata: " + testoErrore(error)); return; }
     if (ricarica) ricarica(["prodotti_shop"]);
   }
+  // "Riallinea %": via la percentuale propria, il prodotto torna a seguire
+  // quella generale del titolo
+  async function riallineaSicurezzaProdotto() {
+    if (p.sicurezza_punti_pct == null) return;
+    const { error } = await supabase.from("prodotti_shop").update({ sicurezza_punti_pct: null }).eq("id", p.id);
+    if (error) { window.alert("Non riallineato: " + testoErrore(error)); return; }
+    setSicurezzaBozza("");
+    if (ricarica) ricarica(["prodotti_shop"]);
+  }
   // prezzo di vendita e costo di acquisto non sono più modificabili da
   // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
   // anche cosa mandare a WooCommerce (il lordo, mai il netto)
@@ -45397,6 +45409,15 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           </div>
         </td>
     ),
+    "Riallinea": (
+        <td style={{ ...tdStyle, whiteSpace: "nowrap", textAlign: "center" }}>
+          <button onClick={(e) => { e.stopPropagation(); riallineaSicurezzaProdotto(); }} disabled={p.sicurezza_punti_pct == null}
+            title={p.sicurezza_punti_pct != null ? `Torna alla percentuale generale (${sicurezzaPunti}%)` : "Segue gia' la percentuale generale"}
+            style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: p.sicurezza_punti_pct != null ? "#fff" : MUTED, background: p.sicurezza_punti_pct != null ? NAVY : "transparent", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 8, padding: "4px 7px", cursor: p.sicurezza_punti_pct != null ? "pointer" : "default", opacity: p.sicurezza_punti_pct != null ? 1 : 0.6 }}>
+            Riallinea %
+          </button>
+        </td>
+    ),
     "Punti totali prodotto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
@@ -45488,6 +45509,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Margine €": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
     "Cedibile carta/shop": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Cedibile in contanti: il ${numeroFascia(p.cedibileContantiPct)}% del prezzo al pubblico, per un margine sul lordo del ${fmtPctErp(p.margineContanti)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * p.sicurezzaProdotto) / 100))}` : "—"}</td>,
+    "Riallinea": <td style={tdContanti} />,
     "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
     ...Object.fromEntries([0, 1, 2].map((i) => [`Quota ${i + 1}`, <td key={`qc${i}`} style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.puntiContanti)} punti totali in contanti, in euro` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtEuroErp2(euroQuota(p.puntiContanti, i)) : "—"}</td>])),
   };
@@ -45621,6 +45643,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     salvaQuoteColonne(nuove);
   };
   const euroQuota = (punti, i) => (punti != null ? round2((punti * pctQuotaColonna(i)) / 100) : null);
+  // tutti i prodotti con una percentuale propria tornano a quella generale
+  async function riallineaSicurezzaTutti() {
+    const ids = (prodottiShop || []).filter((x) => x.sicurezza_punti_pct != null).map((x) => x.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Riportare ${ids.length} prodott${ids.length === 1 ? "o" : "i"} alla percentuale di sicurezza generale (${sicurezzaPunti}%)?`)) return;
+    const { error } = await supabase.from("prodotti_shop").update({ sicurezza_punti_pct: null }).in("id", ids);
+    if (error) { window.alert("Non riallineati: " + testoErrore(error)); return; }
+    if (ricarica) ricarica(["prodotti_shop"]);
+  }
   // la tabella del cedibile puo' essere ridisegnata da Gestione punti:
   // basta ascoltarla, le righe qui sotto si ricalcolano a ogni disegno
   useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
@@ -46537,6 +46568,17 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         whiteSpace: "normal", overflowWrap: "break-word", lineHeight: 1.25, verticalAlign: "bottom", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative", opacity: colonnaTrascinata === col.label ? 0.45 : 1 }}
                     >
                       {etichettaColonna(col.label)}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
+                      {col.riallinea && (() => {
+                        const conPropria = (prodottiShop || []).filter((x) => x.sicurezza_punti_pct != null).length;
+                        return (
+                          <div style={{ marginTop: 3 }} draggable={false} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                            <button onClick={riallineaSicurezzaTutti} disabled={conPropria === 0} title={conPropria ? `${conPropria} prodotti hanno una percentuale propria: riportali tutti al ${sicurezzaPunti}%` : "Nessun prodotto ha una percentuale propria"}
+                              style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: conPropria ? NAVY : MUTED, background: "#fff", border: `1px solid ${conPropria ? NAVY : CREAM_BORDER}`, borderRadius: 8, padding: "3px 6px", cursor: conPropria ? "pointer" : "default", textTransform: "none", letterSpacing: 0 }}>
+                              Tutti ({conPropria})
+                            </button>
+                          </div>
+                        );
+                      })()}
                       {col.sicurezza && (
                         // la percentuale di sicurezza, la stessa di Gestione
                         // punti: cambiarla qui cambia i punti ovunque
