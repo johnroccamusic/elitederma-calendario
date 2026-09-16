@@ -45397,15 +45397,19 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     ),
     "Sicurezza": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: "#B8860B", whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile carta/shop (${fmtEuroErp2(p.cedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
-            <input type="number" min="0" max="100" step="1" value={sicurezzaBozza} placeholder={String(sicurezzaPunti)}
-              onChange={(e) => setSicurezzaBozza(e.target.value)}
-              onBlur={salvaSicurezzaProdotto}
-              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ ...fontBody, width: 38, fontSize: 12.5, fontWeight: 700, color: p.sicurezza_punti_pct != null ? NAVY : MUTED, textAlign: "center", padding: "2px 3px", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
-            <span style={{ fontSize: 12 }}>%</span>
-            <span>{p.sicurezzaEuro != null ? `−${fmtEuroErp2(p.sicurezzaEuro)}` : "—"}</span>
+          {/* casella e % sulla prima riga, allineate a quelle del titolo;
+              gli euro accantonati sotto, cosi' la colonna resta dritta */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
+              <input type="number" min="0" max="100" step="1" value={sicurezzaBozza} placeholder={String(sicurezzaPunti)}
+                onChange={(e) => setSicurezzaBozza(e.target.value)}
+                onBlur={salvaSicurezzaProdotto}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                onClick={(e) => e.stopPropagation()}
+                style={{ ...fontBody, width: 40, fontSize: 12.5, fontWeight: 700, color: p.sicurezza_punti_pct != null ? NAVY : MUTED, textAlign: "center", padding: "2px 3px", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+              <span style={{ fontSize: 12 }}>%</span>
+            </div>
+            <span style={{ fontSize: 11.5 }}>{p.sicurezzaEuro != null ? `−${fmtEuroErp2(p.sicurezzaEuro)}` : "—"}</span>
           </div>
         </td>
     ),
