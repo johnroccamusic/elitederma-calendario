@@ -9709,7 +9709,10 @@ function PaginaDashboardVenditori({
             {/* Le stesse tessere dei tasti secondari (Contabilita', Gestione
                 corsi): medaglione e titolo, la scelta e' quella evidenziata.
                 Dal 16/09/2026, prima erano tre quadrati chiari a se' */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isMobile ? 6 : 14, maxWidth: isMobile ? 520 : 620, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
+            {/* sul telefono la stessa griglia della home (quattro colonne,
+                stesso spazio): i tre tasti stanno vicini come li'. Prima
+                erano tre colonne larghe e i tasti finivano lontani */}
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : "repeat(3, minmax(0, 1fr))", gap: isMobile ? 14 : 14, maxWidth: isMobile ? "none" : 620, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
               {[
                 { chiave: "corsi", testo: "Iscrivi allievo", Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
                 { chiave: "performance", testo: "Performance di vendita", Icona: IconaFrecciaTrend },
