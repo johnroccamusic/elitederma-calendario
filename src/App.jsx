@@ -3833,7 +3833,7 @@ function cedibileContantiDi(p, costoAcquisto = p?.costo_acquisto) {
 }
 // I punti di UN pezzo di un prodotto, letti dalla sua anagrafica di oggi:
 // margine -> quota cedibile -> meno la sicurezza. E' la stessa regola
-// delle colonne "Punti carta/shop" e "Punti contanti" di Dettaglio
+// della colonna "Punti totali prodotto" (che pero' mostra il doppio) di Dettaglio
 // prodotti, e vale solo per quello che si vende dall'app (POS o sito
 // pubblicato). Null se non si sa il margine. `contanti` sceglie la
 // seconda riga: e' vero quando la vendita e' stata pagata in contanti.
@@ -44775,7 +44775,9 @@ const COLONNE_MAGAZZINO = [
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
   // la tabella. Vedi cedibileContantiDi
   { label: "Cedibile carta/shop", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 74 },
-  { label: "Punti carta/shop", campo: "punti", direzioneIniziale: "desc", larghezza: 66 },
+  // "Punti totali prodotto" (dal 16/09/2026): il doppio dei punti del
+  // pezzo, vedi il conto piu' sotto
+  { label: "Punti totali prodotto", campo: "punti", direzioneIniziale: "desc", larghezza: 74 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
@@ -44791,7 +44793,7 @@ const COLONNE_MAGAZZINO = [
 // significherebbe perdere quello che l'utente ci ha gia' sistemato sopra
 // — la colonna finirebbe in fondo alla tabella, larga come al primo
 // giorno. Qui il vecchio nome continua a valere per quel che e' salvato
-const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop", "Cedibile €": "Cedibile carta/shop", "Punti": "Punti carta/shop" };
+const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop", "Cedibile €": "Cedibile carta/shop", "Punti": "Punti totali prodotto", "Punti carta/shop": "Punti totali prodotto" };
 const COLONNE_MAGAZZINO_NOME_VECCHIO = Object.fromEntries(
   Object.entries(COLONNE_MAGAZZINO_RINOMINATE).map(([vecchio, nuovo]) => [nuovo, vecchio])
 );
@@ -45276,8 +45278,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Cedibile carta/shop": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Pagamento con carta o dal sito: si versa l'IVA, quindi il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
-    "Punti carta/shop": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
+    "Punti totali prodotto": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
@@ -45363,7 +45365,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Margine %": <td style={tdContanti} title="Quanto resta del prezzo al pubblico, tolto il costo di acquisto">{p.margineContanti != null ? fmtPctErp(p.margineContanti) : "N/D"}</td>,
     "Margine €": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
     "Cedibile carta/shop": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Cedibile in contanti: il ${numeroFascia(p.cedibileContantiPct)}% del prezzo al pubblico, per un margine sul lordo del ${fmtPctErp(p.margineContanti)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
-    "Punti carta/shop": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
+    "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
   };
   const elencoColonne = colonne || COLONNE_MAGAZZINO;
   return (
@@ -45839,11 +45841,17 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // registrati e' un'altra cosa e non viene toccato: qui si legge, non
     // si scrive nulla sul sito
     const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
-    const punti = inVenditaViaApp ? puntiDaCedibile(cedibileEuro, sicurezzaPunti) : null;
+    // "Punti totali prodotto" (16/09/2026): il DOPPIO dei punti del pezzo
+    // (cedibile meno sicurezza, per due). Vale solo per questa colonna e
+    // per la sua riga dei contanti: dashboard, POS e Gestione punti
+    // continuano a leggere puntiProdotto, che non raddoppia
+    const puntiPezzo = inVenditaViaApp ? puntiDaCedibile(cedibileEuro, sicurezzaPunti) : null;
+    const punti = puntiPezzo != null ? round2(puntiPezzo * 2) : null;
     // la seconda riga di conto, per chi paga in contanti: stesso costo
     // (per i bundle quello ricavato dai componenti), ma sul prezzo lordo
     const contanti = cedibileContantiDi(p, costoEffettivo);
-    const puntiContanti = inVenditaViaApp && contanti.euro != null ? puntiDaCedibile(contanti.euro, sicurezzaPunti) : null;
+    const puntiContantiPezzo = inVenditaViaApp && contanti.euro != null ? puntiDaCedibile(contanti.euro, sicurezzaPunti) : null;
+    const puntiContanti = puntiContantiPezzo != null ? round2(puntiContantiPezzo * 2) : null;
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
