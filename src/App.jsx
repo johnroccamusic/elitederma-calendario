@@ -36093,7 +36093,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
     { chiave: "banca", titolo: "Movimenti banca", sotto: "Estratto conto da riconciliare", Icona: IconaTileBanca },
     { chiave: "impegni", titolo: `Quadro impegni (${impegniCount})`, sotto: "Impegni presi e da saldare", Icona: IconaTileImpegni },
     { chiave: "documenti", titolo: `Fatture ricevute (${documentiCount})`, sotto: "Gestione fornitori", Icona: IconaTileFattureRicevute },
-    { chiave: "notecredito", titolo: `Note di credito (${noteCreditoCount})`, sotto: "Emissione e gestione", Icona: IconaTileNoteCredito },
+    { chiave: "notecredito", titolo: `Note di credito${noteCreditoCount != null ? ` (${noteCreditoCount})` : ""}`, sotto: "Emissione e gestione", Icona: IconaTileNoteCredito },
     // il pallino lampeggiante sulla sola scheda del passivo: e' l'unica
     // coda dove il ritardo costa qualcosa a qualcun altro — un fornitore
     // che aspetta — e il numero fra parentesi nel titolo si legge solo se
@@ -36125,8 +36125,10 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
   return (
     <div style={{
       display: "grid",
-      gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))",
-      gap: isMobile ? 6 : 12, alignItems: "stretch",
+      // cinque per fila anche sul telefono: dieci schede fanno due file
+      // piene invece di tre con un buco. Le etichette stanno su due righe
+      gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+      gap: isMobile ? 4 : 12, alignItems: "stretch",
     }}>
       {ordinate.map((s) => {
         const attivo = schedaAttiva === s.chiave;
