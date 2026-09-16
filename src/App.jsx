@@ -23199,11 +23199,14 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
       // subito sotto quello che c'e' prima, senza uno spazio vuoto
       style={{ maxWidth: 820, margin: "0 auto", padding: isMobile ? "0 12px 40px" : "40px 20px" }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-        <TopBar title="Calendario" onBack={onBack} />
+      {/* titolo a sinistra, pillola a destra sulla stessa riga, sempre:
+          niente a capo sul telefono */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "nowrap" }}>
+        <div style={{ flex: "1 1 auto", minWidth: 0 }}><TopBar title="Calendario" onBack={onBack} /></div>
         {/* la stessa pillola a segmenti di "Programmati | Passati": Oggi
             richiude lo storico e torna al mese in corso, Storico apre
             l'anno passato */}
+        <div style={{ flexShrink: 0 }}>
         <PillolaSegmentata
           compatto={isMobile}
           valore={storicoAperto ? "storico" : "oggi"}
@@ -23217,6 +23220,7 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
             { chiave: "storico", testo: "Storico" },
           ]}
         />
+      </div>
       </div>
 
       {mesi.map(({ anno, mese }) => (
