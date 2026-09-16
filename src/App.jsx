@@ -37748,6 +37748,23 @@ function RigaPagamentoAppendice({ spesa, onSalva, onElimina, bloccata }) {
   );
 }
 
+// le icone dei cinque avvisi in cima a Contabilita' (bianche nel disco)
+function IconaAvvisoDocumento({ size = 20, color = "#fff" }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2.8h8.5L19 7.3v13.9H6z" /><path d="M14.5 2.8v4.5H19M9 12h6M9 15.5h6" /></svg>);
+}
+function IconaAvvisoMonete({ size = 20, color = "#fff" }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="6" rx="7.5" ry="3" /><path d="M4.5 6v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6" /><path d="M4.5 12v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6" /></svg>);
+}
+function IconaAvvisoCarta({ size = 20, color = "#fff" }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5" /><path d="M2.5 10h19M6.5 15h4" /></svg>);
+}
+function IconaAvvisoDocumentoPiu({ size = 20, color = "#fff" }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2.8h8.5L19 7.3v13.9H6z" /><path d="M14.5 2.8v4.5H19M12 11v6M9 14h6" /></svg>);
+}
+function IconaAvvisoSpunta({ size = 20, color = "#fff" }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
+}
+
 // Le contabilita' da approvare: le buste dei corsi finiti non ancora in
 // cassa (con contante dentro) e le appendici aperte. Le legge la cassa
 // contanti per la lista "Avvisi" e Contabilita' per il riquadro in cima
@@ -39618,13 +39635,19 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           // contava due volte ("3" in cima, "2" nell'elenco)
           const speseDaPagare = daPagare.length;
           const riquadri = [
-            { chiave: "riconciliare", etichetta: "Documenti da riconciliare", valore: daRiconciliare, colore: "#C67C2E", sfondo: "#FBEEE0", onClick: onApriRiconciliazione },
-            { chiave: "importare", etichetta: "Spese da importare", valore: daImportare, colore: "#B8860B", sfondo: "#FBF3E0", onClick: () => setTab("documenti") },
-            { chiave: "pagare", etichetta: "Spese da pagare", valore: speseDaPagare, colore: "#C0392B", sfondo: "#FBE4E1", onClick: () => setTab("passivo") },
-            { chiave: "notecredito", etichetta: "Note di credito da riconciliare", valore: ncDaRiconciliare, colore: "#8E44AD", sfondo: "#F3EAF6", onClick: onApriRiconciliazione },
+            // Sul mock del 16/09/2026: a sinistra il disco col medaglione e
+            // l'icona bianca, una riga verticale, a destra l'etichetta su
+            // due righe e il numero grande. Il disco e' grigio-blu dove non
+            // c'e' urgenza, oro per quello che aspetta, rosso per quello che
+            // costa a qualcun altro. I colori accesi si vedono anche a zero:
+            // il riquadro dice cos'e', il numero dice quanto
+            { chiave: "riconciliare", etichetta: "Documenti da riconciliare", valore: daRiconciliare, colore: "#6E7391", sfondo: "#fff", disco: "#6E7391", Icona: IconaAvvisoDocumento, onClick: onApriRiconciliazione },
+            { chiave: "importare", etichetta: "Spese da importare", valore: daImportare, colore: "#B8860B", sfondo: "#FBF3E0", disco: "#B8860B", Icona: IconaAvvisoMonete, onClick: () => setTab("documenti") },
+            { chiave: "pagare", etichetta: "Spese da pagare", valore: speseDaPagare, colore: "#C0392B", sfondo: "#FBE4E1", disco: "#C0392B", Icona: IconaAvvisoCarta, onClick: () => setTab("passivo") },
+            { chiave: "notecredito", etichetta: "Note di credito da riconciliare", valore: ncDaRiconciliare, colore: "#6E7391", sfondo: "#fff", disco: "#6E7391", Icona: IconaAvvisoDocumentoPiu, onClick: onApriRiconciliazione },
             // le buste dei corsi finiti e le appendici aperte: si approvano
             // dal Riepilogo della classe, la cassa contanti le elenca
-            { chiave: "daapprovare", etichetta: "Contabilità da approvare", valore: contabilitaDaApprovareConto, colore: "#8A6D1D", sfondo: "#FBF3E0", onClick: () => setTab("fondocassa") },
+            { chiave: "daapprovare", etichetta: "Contabilità da approvare", valore: contabilitaDaApprovareConto, colore: "#B8860B", sfondo: "#FBF3E0", disco: "#B8860B", Icona: IconaAvvisoSpunta, onClick: () => setTab("fondocassa") },
           ];
           // I quattro avvisi su una riga sola, sempre. Con auto-fit e un
           // minimo di 190px andavano a capo due e due appena lo spazio si
@@ -39636,13 +39659,14 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                 <button
                   key={r.chiave}
                   onClick={r.onClick}
-                  // testo e numero al centro; sul telefono i quattro restano
-                  // in riga e l'etichetta va su due righe, con lo spazio
-                  // gia' riservato cosi' i numeri stanno alla stessa altezza
-                  style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: r.valore > 0 ? r.sfondo : "#fff", border: `1px solid ${r.valore > 0 ? `${r.colore}44` : CREAM_BORDER}`, borderRadius: isMobile ? 10 : 14, padding: isMobile ? "8px 4px" : "12px 12px", minWidth: 0, cursor: "pointer" }}
+                  style={{ textAlign: "left", display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, background: r.sfondo, border: "none", borderRadius: isMobile ? 12 : 18, padding: isMobile ? "8px 6px" : "12px 14px", minWidth: 0, cursor: "pointer", boxShadow: "0 10px 22px -16px rgba(14,27,51,0.45), 0 1px 2px rgba(14,27,51,0.08)" }}
                 >
-                  <div style={{ ...fontBody, fontSize: isMobile ? 7.5 : 9.5, fontWeight: 700, color: r.valore > 0 ? r.colore : MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, marginBottom: isMobile ? 3 : 5, lineHeight: 1.2, minHeight: isMobile ? "2.4em" : undefined, display: "flex", alignItems: "center", justifyContent: "center", overflowWrap: "anywhere" }}>{r.etichetta}</div>
-                  <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 22, fontWeight: 700, color: r.valore > 0 ? NAVY : MUTED, lineHeight: 1 }}>{r.valore}</div>
+                  <DiscoMedaglione lato={isMobile ? 44 : 72} icona={isMobile ? 14 : 24} colore={r.disco} pozzettoColore={r.sfondo === "#fff" ? "#EDEDED" : "#F2EBDD"} Icona={r.Icona} attivo />
+                  <div style={{ width: 1, alignSelf: "stretch", background: `${r.colore}33`, flexShrink: 0 }} />
+                  <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 7.5 : 11, fontWeight: 700, color: r.colore, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.etichetta}</div>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 28, fontWeight: 700, color: NAVY, lineHeight: 1.05, marginTop: isMobile ? 2 : 4 }}>{r.valore}</div>
+                  </div>
                 </button>
               ))}
             </div>
