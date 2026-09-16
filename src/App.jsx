@@ -300,6 +300,10 @@ function useImpostazioneCondivisa(chiave, predefinito) {
 // Vive fra le impaginazioni condivise perche' e' esattamente quello: una
 // preferenza del programmatore, salvata una volta e valida ovunque.
 const CHIAVE_MANIGLIE = "maniglie_impaginazione";
+// Lo sfondo dell'app scelto da Aspetto dell'app: { desktop: url, mobile: url }.
+// Vuoto = le due foto di serie (sfondo-app-desktop.jpg / -mobile.jpg)
+const CHIAVE_SFONDO_APP = "sfondo_app";
+const SFONDI_APP_DI_SERIE = { desktop: "/sfondo-app-desktop.jpg", mobile: "/sfondo-app-mobile.jpg" };
 // i cerchietti "i" con le istruzioni dei tasti: un interruttore solo per
 // tutta l'app, in Aspetto dell'app. Vuoto = accesi
 const CHIAVE_AIUTI = "aiuti_visibili";
@@ -16205,6 +16209,35 @@ function PaginaAspettoApp() {
   const [maniglieAttive, salvaManiglieAttive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   // e i cerchietti "i" con le istruzioni dei tasti, stessa cosa
   const [aiutiVisibili, salvaAiutiVisibili] = useLayoutCondiviso(CHIAVE_AIUTI, true);
+  // Lo sfondo dell'app: una foto per il computer (16:9) e una per il
+  // telefono (verticale). Si caricano nel bucket "sfondi-app" e l'indirizzo
+  // si ricorda fra le impostazioni condivise; l'app le adatta da sola a
+  // ogni schermo (background-size: cover), come le due di serie
+  const [sfondoApp, salvaSfondoApp] = useImpostazioneCondivisa(CHIAVE_SFONDO_APP, {});
+  const [caricandoSfondo, setCaricandoSfondo] = useState(null); // "desktop" | "mobile"
+  const [msgSfondo, setMsgSfondo] = useState("");
+  async function caricaSfondo(tipo, file) {
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setMsgSfondo("Lo sfondo dev'essere un JPG, un PNG o un WEBP."); return; }
+    if (file.size > 8 * 1024 * 1024) { setMsgSfondo("Immagine troppo pesante: massimo 8 MB."); return; }
+    setCaricandoSfondo(tipo); setMsgSfondo("");
+    try {
+      const percorso = `${tipo}-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+      const { error } = await supabase.storage.from("sfondi-app").upload(percorso, file, { cacheControl: "31536000", upsert: false });
+      if (error) throw error;
+      const url = supabase.storage.from("sfondi-app").getPublicUrl(percorso).data.publicUrl;
+      salvaSfondoApp({ ...(sfondoApp || {}), [tipo]: url });
+      setMsgSfondo(tipo === "desktop" ? "Sfondo del computer aggiornato." : "Sfondo del telefono aggiornato.");
+    } catch (e) {
+      setMsgSfondo("Non caricato: " + testoErrore(e));
+    } finally {
+      setCaricandoSfondo(null);
+    }
+  }
+  function togliSfondo(tipo) {
+    salvaSfondoApp({ ...(sfondoApp || {}), [tipo]: null });
+    setMsgSfondo(tipo === "desktop" ? "Il computer torna allo sfondo di serie." : "Il telefono torna allo sfondo di serie.");
+  }
   // l'elemento selezionato si ricorda sul dispositivo: si esce, si torna,
   // e si riprende da dove si era
   const [quale, setQualeStato] = useState(() => { try { return localStorage.getItem("aspetto_app_quale") || "mobile"; } catch { return "mobile"; } });
@@ -16529,6 +16562,44 @@ function PaginaAspettoApp() {
         </div>
         </>
         )}
+      </div>
+
+      {/* lo sfondo dell'app: due foto, una per il computer e una per il
+          telefono. Qualunque formato: l'app la stira e la centra da sola,
+          come fa con quelle di serie */}
+      <div style={{ ...cardStyle, marginTop: 18 }}>
+        <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 8 }}>Sfondo dell'app</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+          Una foto per il computer (orizzontale, 16:9) e una per il telefono (verticale). L'app la adatta da sola a ogni schermo: la centra e la ritaglia ai bordi, come fa con quelle di serie. JPG, PNG o WEBP, massimo 8 MB. Vale per tutti.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
+          {[
+            { tipo: "desktop", titolo: "Computer (16:9)", rapporto: "16 / 9", larghezza: "100%" },
+            { tipo: "mobile", titolo: "Telefono (verticale)", rapporto: "9 / 16", larghezza: 180 },
+          ].map((b) => {
+            const scelto = sfondoApp?.[b.tipo] || null;
+            const src = scelto || SFONDI_APP_DI_SERIE[b.tipo];
+            return (
+              <div key={b.tipo} style={{ background: BG, borderRadius: 12, padding: 12 }}>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{b.titolo}</div>
+                <div style={{ width: b.larghezza, maxWidth: "100%", aspectRatio: b.rapporto, borderRadius: 10, overflow: "hidden", border: `1px solid ${CREAM_BORDER}`, background: "#F7F5EF", margin: b.tipo === "mobile" ? "0 auto" : 0 }}>
+                  <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                </div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>{scelto ? "Foto caricata da voi" : "Foto di serie"}</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                  <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 8, padding: "8px 12px", cursor: caricandoSfondo ? "wait" : "pointer", opacity: caricandoSfondo ? 0.6 : 1 }}>
+                    {caricandoSfondo === b.tipo ? "Carico…" : "Carica immagine"}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" disabled={!!caricandoSfondo} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; caricaSfondo(b.tipo, f); }} style={{ display: "none" }} />
+                  </label>
+                  {scelto && (
+                    <button onClick={() => togliSfondo(b.tipo)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 8, padding: "7px 10px", cursor: "pointer" }}>Torna a quello di serie</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {msgSfondo && <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgSfondo.startsWith("Non") || msgSfondo.startsWith("Lo sfondo") || msgSfondo.startsWith("Immagine") ? "#C0392B" : "#2E7D32", marginTop: 10 }}>{msgSfondo}</div>}
       </div>
     </div>
   );
@@ -64008,6 +64079,18 @@ function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, 
 }
 
 export default function App() {
+  // lo sfondo scelto in Aspetto dell'app: si scrive sul riquadro fisso di
+  // index.html (#sfondo-app), telefono o computer a seconda della
+  // larghezza, stessa soglia del CSS (700). Senza scelta resta quello di
+  // serie del CSS
+  const [sfondoAppScelto] = useImpostazioneCondivisa(CHIAVE_SFONDO_APP, {});
+  const sfondoPerTelefono = useIsMobile();
+  useEffect(() => {
+    const el = typeof document !== "undefined" ? document.getElementById("sfondo-app") : null;
+    if (!el) return;
+    const url = sfondoPerTelefono ? sfondoAppScelto?.mobile : sfondoAppScelto?.desktop;
+    el.style.backgroundImage = url ? `url("${url}")` : "";
+  }, [sfondoAppScelto, sfondoPerTelefono]);
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
   const paramMaster = new URLSearchParams(window.location.search).get("master");
