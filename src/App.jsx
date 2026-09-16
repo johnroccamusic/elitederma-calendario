@@ -6462,19 +6462,23 @@ function raggruppaUsiCodice(usi) {
     sconto: round2(p.usi.reduce((s, u) => s + (Number(u.sconto) || 0), 0)),
   }));
 }
+// quello che la pagina ha gia' letto resta in memoria: rientrando si
+// vede subito, e i dati si aggiornano in silenzio dietro
+let CACHE_ANALISI_CODICI = null;
 function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], master = [], onBack, titolo = "Analisi codici sconto" }) {
   const isMobile = useIsMobile();
-  const [usi, setUsi] = useState(null);
-  const [coupon, setCoupon] = useState([]);
+  const [usi, setUsi] = useState(() => CACHE_ANALISI_CODICI?.usi ?? null);
+  const [coupon, setCoupon] = useState(() => CACHE_ANALISI_CODICI?.coupon ?? []);
   const [ricerca, setRicerca] = useState("");
   const [anno, setAnno] = useState("tutti");
   const [aperto, setAperto] = useState({});
   // gli abbinamenti confermati a mano: periodo (codice + primo ordine) -> classe
-  const [conferme, setConferme] = useState([]);
+  const [conferme, setConferme] = useState(() => CACHE_ANALISI_CODICI?.conferme ?? []);
   const [msg, setMsg] = useState("");
   async function caricaConferme() {
     const { data } = await supabase.from("codici_periodi_corso").select("*");
     setConferme(data || []);
+    if (CACHE_ANALISI_CODICI) CACHE_ANALISI_CODICI.conferme = data || [];
   }
   useEffect(() => {
     let vivo = true;
@@ -6482,7 +6486,11 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
       supabase.from("woo_ordini_con_codice").select("*").order("data", { ascending: false }).limit(5000),
       supabase.from("coupon").select("codice, master_id, corsi_date_id, valido_da, valido_fino_a"),
       supabase.from("codici_periodi_corso").select("*"),
-    ]).then(([u, c, k]) => { if (!vivo) return; setUsi(u.data || []); setCoupon(c.data || []); setConferme(k.data || []); });
+    ]).then(([u, c, k]) => {
+      CACHE_ANALISI_CODICI = { usi: u.data || [], coupon: c.data || [], conferme: k.data || [] };
+      if (!vivo) return;
+      setUsi(u.data || []); setCoupon(c.data || []); setConferme(k.data || []);
+    });
     return () => { vivo = false; };
   }, []);
   const confermaDi = (codice, periodo) => conferme.find((k) => k.codice === codice && k.dal === periodo.dal) || null;
