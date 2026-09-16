@@ -46154,7 +46154,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+      {/* 1.900 e non 1.300 (16/09/2026): con le colonne Sicurezza e Quota
+          la tabella non ci stava piu' e andava fatta scorrere di lato */}
+      <div style={{ maxWidth: 1900, margin: "0 auto" }}>
         {/* il tasto dice sempre dove porta: tornando da una scheda aperta
             da un avviso porta all'elenco, non fuori dalla pagina */}
         {/* La testata: a sinistra dove sono e come si chiama la pagina, a
