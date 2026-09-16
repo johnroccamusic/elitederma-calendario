@@ -13728,69 +13728,70 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   // davvero non ci sta. Il nome invece non si tronca mai: se non basta lo
   // spazio va a capo su due righe, piuttosto che tagliare il nome
   // dell'allieva
+  // Come nel mock del 16/09/2026: il nome a sinistra, in maiuscolo, e a
+  // destra una pastiglia per ogni trattamento ancora scoperto
   const anteprimaAllievi = nomiAllievi.length > 0 && (
-    <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Modelle ancora da trovare</div>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: `minmax(70px, 1.4fr) repeat(${tipiPresenti.length}, minmax(0, 1fr))`,
-        columnGap: 6, rowGap: 8, alignItems: "center",
-      }}>
+    <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: "#6E7391", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>Modelle ancora da trovare</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {nomiAllievi.map((nome) => (
-          <React.Fragment key={nome}>
-            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{nome.toUpperCase()}</span>
-            {tipiPresenti.map((t) => (
-              <div key={t} style={{ minWidth: 0, textAlign: "center" }}>
-                {trattamentiPerAllievo.get(nome).includes(t) && <PallinoTipoModellaCompatto tipo={t} />}
-              </div>
-            ))}
-          </React.Fragment>
+          <div key={nome} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 15, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nome.toUpperCase()}</span>
+            <span style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {trattamentiPerAllievo.get(nome).map((t) => {
+                const { colore, sfondo } = coloreTipoModella(t);
+                return <span key={t} style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: colore, background: sfondo, borderRadius: 999, padding: isMobile ? "5px 10px" : "7px 14px", whiteSpace: "nowrap" }}>{t || "—"}</span>;
+              })}
+            </span>
+          </div>
         ))}
       </div>
     </div>
   );
 
+  // il riquadro data: colore del corso, rosso lampeggiante sotto i venti
+  // giorni; una luce in alto come sui tasti a cuscino
+  const riquadroData = (
+    <div
+      title={g < 0 ? "Corso in corso" : g === 0 ? "Comincia oggi" : g === 1 ? "Comincia domani" : `Comincia fra ${g} giorni`}
+      style={{
+        background: urgente ? "#C0392B" : coloreCorso, borderRadius: 16,
+        width: isMobile ? 64 : 84, height: isMobile ? 64 : 84, flexShrink: 0,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        padding: "4px 6px", boxSizing: "border-box", overflow: "hidden",
+        boxShadow: "inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -3px 0 rgba(0,0,0,0.12)",
+        ...(urgente ? { animation: "lampeggiaPrioritaModelle 1.1s ease-in-out infinite" } : null),
+      }}
+    >
+      <div style={{ ...fontDisplay, fontSize: numeroData.length > 9 ? 12 : numeroData.length > 5 ? 15 : 24, fontWeight: 800, color: "#fff", lineHeight: 1.05, textAlign: "center", overflowWrap: "anywhere" }}>{numeroData}</div>
+      {sottoData && <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 3 }}>{sottoData}</div>}
+    </div>
+  );
   return (
-    // fondo grigio chiaro invece del bianco: la pagina sotto e' bianca, e
-    // una scheda bianca su bianco si riconosce solo dal bordo colorato
-    <div onClick={onApri} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, background: "#F5F4F1", cursor: "pointer" }}>
+    // la stessa superficie a cuscino dei tasti (mock del 16/09/2026): niente
+    // piu' bordo nel colore del corso, che ora sta solo nel riquadro data
+    <div onClick={onApri} style={{ ...superficieCuscino("#FFFFFF"), borderRadius: 22, padding: isMobile ? 14 : 20, cursor: "pointer" }}>
       {urgente && <style>{`@keyframes lampeggiaPrioritaModelle { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>}
-      {/* i tre numeri accanto al corso, non sotto: quanto manca e' la
-          domanda che si fa guardando la scheda, e stava in fondo dopo la
-          data, il nome, la citta' e la master */}
-      {/* su telefono la riga non va a capo: i numeri devono restare accanto
-          al corso, non finire sotto */}
-      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: isMobile ? "nowrap" : "wrap" }}>
-        {/* Misura fissa per tutte: "26", "25-26" e "30 set - 2 ott" davano
-            tre riquadri di larghezza diversa, e in un elenco incolonnato la
-            differenza si vede piu' del contenuto. A stringersi e' il corpo
-            del testo quando la data e' lunga, non il riquadro. */}
-        <div
-          title={g < 0 ? "Corso in corso" : g === 0 ? "Comincia oggi" : g === 1 ? "Comincia domani" : `Comincia fra ${g} giorni`}
-          style={{
-            background: urgente ? "#C0392B" : coloreCorso, borderRadius: 12,
-            width: isMobile ? 64 : 82, height: isMobile ? 64 : 82, flexShrink: 0,
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "4px 6px", boxSizing: "border-box", overflow: "hidden",
-            ...(urgente ? { animation: "lampeggiaPrioritaModelle 1.1s ease-in-out infinite" } : null),
-          }}
-        >
-          <div style={{ ...fontDisplay, fontSize: numeroData.length > 9 ? 11 : numeroData.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", lineHeight: 1.1, textAlign: "center", overflowWrap: "anywhere" }}>{numeroData}</div>
-          {sottoData && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase", marginTop: 2 }}>{sottoData}</div>}
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 18, flexWrap: isMobile ? "nowrap" : "wrap" }}>
+        {riquadroData}
         <div style={{ flex: "1 1 0", minWidth: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{toTitleCase(edizione.corsoNome)}</div>
-          <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(edizione.cittaNome)}</div>
-          {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 22, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{toTitleCase(edizione.corsoNome)}</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, color: NAVY, lineHeight: 1.25, marginTop: 2 }}>{toTitleCase(edizione.cittaNome)}</div>
+          {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 14, color: "#6E7391", marginTop: 3 }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
         </div>
-        {/* Da telefono "richieste" non si mostra: e' la somma delle altre
-            due, e con nessuna assegnata resta scritto solo il numero da
-            trovare — che e' poi la cifra per cui si guarda questa scheda.
-            Due numeri stanno accanto al corso, tre lo mandavano a capo. */}
-        <div style={{ display: "flex", gap: isMobile ? 10 : 14, flexShrink: 0, paddingBottom: 8, borderBottom: `1px solid ${CREAM_BORDER}` }}>
-          {!isMobile && numero(edizione.richieste, NAVY, "richieste")}
-          {numero(edizione.assegnate, "#2E7D32", "assegnate")}
-          {numero(edizione.daTrovare, "#C0392B", "da trovare")}
+        {/* i tre numeri separati da righe sottili; da telefono "richieste"
+            non si mostra, e' la somma delle altre due */}
+        <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+          {[
+            ...(!isMobile ? [{ v: edizione.richieste, c: NAVY, lab: "richieste" }] : []),
+            { v: edizione.assegnate, c: "#2E7D32", lab: "assegnate" },
+            { v: edizione.daTrovare, c: "#C0392B", lab: "da trovare" },
+          ].map((x, i) => (
+            <div key={x.lab} style={{ textAlign: "center", padding: isMobile ? "0 8px" : "0 16px", borderLeft: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 28, fontWeight: 800, color: x.c, lineHeight: 1.1 }}>{x.v}</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 9.5 : 12.5, color: "#6E7391", whiteSpace: "nowrap", marginTop: 2 }}>{x.lab}</div>
+            </div>
+          ))}
         </div>
       </div>
       {anteprimaAllievi}
