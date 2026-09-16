@@ -40247,7 +40247,7 @@ function PaginaInserimentoCostiRicavi({
     const dataIscrizione = (i.ts || "").slice(0, 10) || null;
     const aggiungi = (chiave, fase, data, totale, metodo) => {
       if (!(totale > 0)) return;
-      entrateTutte.push({ id: `e_${i.id}_${chiave}`, tipo: "entrata", data: data || dataIscrizione, titolo: nome, corsoData: cd, fase, metodo: metodo || "—", importo: round2(totale), iscritto: i });
+      entrateTutte.push({ id: `e_${i.id}_${chiave}`, tipo: "entrata", data: data || dataIscrizione, registrato: i.updated_at || i.ts || "", titolo: nome, corsoData: cd, fase, metodo: metodo || "—", importo: round2(totale), iscritto: i });
     };
     if (i.acconto_pagato && i.acconto_metodo) aggiungi("acconto", "Acconto", i.acconto_pagato_il, totQuota(i, "acconto"), i.acconto_metodo);
     (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r, idx) => {
@@ -40264,7 +40264,7 @@ function PaginaInserimentoCostiRicavi({
     if (!(v.totale > 0) || !v.data_ordine) return;
     const pos = v.origine === "pos";
     entrateTutte.push({
-      id: `v_${v.id}`, tipo: "entrata", data: String(v.data_ordine).slice(0, 10),
+      id: `v_${v.id}`, tipo: "entrata", data: String(v.data_ordine).slice(0, 10), registrato: v.ts_ricevuto || v.data_ordine || "",
       titolo: v.cliente_nome || (pos ? "Vendita al banco" : "Ordine shop"), corsoData: v.corso_data_id ? corsiDateById[v.corso_data_id] || null : null,
       fase: pos ? "Vendita POS" : "Vendita shop", metodo: v.metodo_pagamento ? toTitleCase(v.metodo_pagamento) : "—", importo: round2(v.totale), vendita: v,
     });
@@ -40277,10 +40277,14 @@ function PaginaInserimentoCostiRicavi({
   const saldoPeriodo = round2(totaleEntrate - totaleSpese);
 
   // i movimenti da mostrare, entrate e uscite insieme, dal piu' recente
+  // Dal giorno piu' recente al piu' vecchio; dentro lo stesso giorno,
+  // l'ultima operazione registrata sta in cima. Prima le spese dello
+  // stesso giorno restavano nell'ordine di inserimento, e quella scritta
+  // la sera finiva in fondo alle altre di quel giorno
   const movimentiPN = [
     ...(vistaPN === "uscite" ? [] : entrateRicercate),
-    ...(vistaPN === "entrate" ? [] : righeUniteRicerca.map((r) => ({ ...r, tipo: "uscita", data: r.dataDocumento }))),
-  ].sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+    ...(vistaPN === "entrate" ? [] : righeUniteRicerca.map((r) => ({ ...r, tipo: "uscita", data: r.dataDocumento, registrato: r.spesaReale.created_at || "" }))),
+  ].sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")) || String(b.registrato || "").localeCompare(String(a.registrato || "")));
   const movimentiVisibili = mostraTutte ? movimentiPN : movimentiPN.slice(0, SPESE_PAGINA_INIZIALE);
 
   // confronto col periodo precedente, stessa granularità e durata
