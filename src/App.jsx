@@ -438,6 +438,11 @@ const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
 // e' un'impostazione, la dashboard non la applica ancora
 const CHIAVE_QUOTA_PUNTI_PER_MASTER = "puntiMaster_quotaPerMaster";
 const QUOTA_PUNTI_PER_MASTER_DEFAULT = 25;
+// Le tre colonne "Quota" di Dettaglio prodotti (16/09/2026): una
+// percentuale dei punti totali prodotto, in euro (un punto e' un euro).
+// Le percentuali si scrivono in cima alle colonne e restano per tutti
+const CHIAVE_QUOTE_COLONNE_PUNTI = "dettaglioProdotti_quoteColonnePunti";
+const QUOTE_COLONNE_PUNTI_DEFAULT = [25, 30, 50];
 // Lo schema dei punti: dal cedibile (il 100%) si accantona subito una
 // parte di sicurezza, quel che resta e' il massimo cedibile, e i punti
 // sono dieci per ogni euro di massimo cedibile — cosi' la conversione e'
@@ -44828,6 +44833,11 @@ const COLONNE_MAGAZZINO = [
   // "Punti totali prodotto" (dal 16/09/2026): il doppio dei punti del
   // pezzo, vedi il conto piu' sotto
   { label: "Punti totali prodotto", campo: "punti", direzioneIniziale: "desc", larghezza: 74 },
+  // tre quote dei punti totali in euro, con la percentuale scritta nel
+  // titolo della colonna (si cambia li')
+  { label: "Quota 1", campo: "quota1", direzioneIniziale: "desc", larghezza: 70, quotaIndice: 0 },
+  { label: "Quota 2", campo: "quota2", direzioneIniziale: "desc", larghezza: 70, quotaIndice: 1 },
+  { label: "Quota 3", campo: "quota3", direzioneIniziale: "desc", larghezza: 70, quotaIndice: 2 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
@@ -45331,6 +45341,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Punti totali prodotto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
+    ...Object.fromEntries([0, 1, 2].map((i) => [`Quota ${i + 1}`, (
+        <td key={`q${i}`} style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }} title={p.punti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.punti)} punti totali, in euro` : "Senza punti non c'e' quota"}>{p.punti != null ? fmtEuroErp2(euroQuota(p.punti, i)) : "—"}</td>
+    )])),
     "Venduto": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
     ),
@@ -45416,6 +45429,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Margine €": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
     "Cedibile carta/shop": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Cedibile in contanti: il ${numeroFascia(p.cedibileContantiPct)}% del prezzo al pubblico, per un margine sul lordo del ${fmtPctErp(p.margineContanti)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
+    ...Object.fromEntries([0, 1, 2].map((i) => [`Quota ${i + 1}`, <td key={`qc${i}`} style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.puntiContanti)} punti totali in contanti, in euro` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtEuroErp2(euroQuota(p.puntiContanti, i)) : "—"}</td>])),
   };
   const elencoColonne = colonne || COLONNE_MAGAZZINO;
   return (
@@ -45527,6 +45541,19 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // Gestione punti: le colonne dei punti la seguono
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
+  // le percentuali delle tre colonne "Quota": si scrivono in cima alla
+  // colonna e valgono per tutti
+  const [quoteColonneSalvate, salvaQuoteColonne] = useImpostazioneCondivisa(CHIAVE_QUOTE_COLONNE_PUNTI, QUOTE_COLONNE_PUNTI_DEFAULT);
+  const pctQuotaColonna = (i) => {
+    const n = Number(Array.isArray(quoteColonneSalvate) ? quoteColonneSalvate[i] : undefined);
+    return Number.isFinite(n) ? n : QUOTE_COLONNE_PUNTI_DEFAULT[i];
+  };
+  const cambiaPctQuotaColonna = (i, valore) => {
+    const n = Math.max(0, Math.min(100, Number(String(valore).replace(",", ".")) || 0));
+    const nuove = [0, 1, 2].map((k) => (k === i ? n : pctQuotaColonna(k)));
+    salvaQuoteColonne(nuove);
+  };
+  const euroQuota = (punti, i) => (punti != null ? round2((punti * pctQuotaColonna(i)) / 100) : null);
   // la tabella del cedibile puo' essere ridisegnata da Gestione punti:
   // basta ascoltarla, le righe qui sotto si ricalcolano a ogni disegno
   useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
@@ -45902,6 +45929,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     const contanti = cedibileContantiDi(p, costoEffettivo);
     const puntiContantiPezzo = inVenditaViaApp && contanti.euro != null ? puntiDaCedibile(contanti.euro, sicurezzaPunti) : null;
     const puntiContanti = puntiContantiPezzo != null ? round2(puntiContantiPezzo * 2) : null;
+    // le tre quote in euro dei punti totali, per ordinare e mostrare
+    const quota1 = euroQuota(punti, 0), quota2 = euroQuota(punti, 1), quota3 = euroQuota(punti, 2);
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
@@ -45918,6 +45947,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       cedibilePct,
       cedibileEuro,
       punti,
+      quota1, quota2, quota3,
       margineContanti: contanti.margine,
       cedibileContantiPct: contanti.pct,
       cedibileContantiEuro: contanti.euro,
@@ -46433,6 +46463,17 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         whiteSpace: "normal", overflowWrap: "break-word", lineHeight: 1.25, verticalAlign: "bottom", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative", opacity: colonnaTrascinata === col.label ? 0.45 : 1 }}
                     >
                       {etichettaColonna(col.label)}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
+                      {col.quotaIndice != null && (
+                        // la percentuale della quota si scrive qui, nel
+                        // titolo: click e trascinamento non devono
+                        // partire dal campo
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
+                          onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                          <input type="number" min="0" max="100" step="1" value={pctQuotaColonna(col.quotaIndice)} onChange={(e) => cambiaPctQuotaColonna(col.quotaIndice, e.target.value)} draggable={false}
+                            style={{ ...fontBody, width: 40, fontSize: 10.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+                          <span style={{ fontSize: 10, color: NAVY }}>%</span>
+                        </div>
+                      )}
                       {/* la maniglia sta tutta dentro la sua colonna:
                           sporgendo sulla colonna accanto meta' di essa
                           finiva coperta dall'intestazione successiva.
