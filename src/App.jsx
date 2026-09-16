@@ -14125,30 +14125,16 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
   return (
     <div>
 
-      {/* quattro colonne uguali, mai a capo: quattro quadrati in fila si
-          leggono come una riga sola di numeri */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: isMobile ? 6 : 14, marginBottom: 18 }}>
-        <CardStatisticaModelle compatto={isMobile}
-          etichetta="Modelle richieste" valore={totaleRichieste} sottotitolo={`su ${corsiDistinti} cors${corsiDistinti === 1 ? "o" : "i"}`}
-          icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>}
-        />
-        <CardStatisticaModelle compatto={isMobile}
-          // "in 15 gg" e basta: sopra c'e' un orologio e sotto il numero,
-          // "in scadenza entro" era una frase per dire quello che l'icona
-          // dice gia' — e su tre righe mangiava mezza casella
-          etichetta={`in ${scadenzaGiorni} gg`} valore={edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0)}
-          colore="#C0392B" sfondo="#FDF3D9"
-          icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
-        />
-        <CardStatisticaModelle compatto={isMobile}
-          etichetta="Già assegnate" valore={totaleAssegnate} colore="#2E7D32" onClick={() => setModaleAssegnate(true)}
-          icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-        />
-        <CardStatisticaModelle compatto={isMobile}
-          etichetta="Ancora da trovare" valore={totaleDaTrovare} colore="#C0392B" onClick={() => setModaleDaTrovare(true)}
-          icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>}
-        />
-      </div>
+      {/* i quattro tasti segnalatori (dal 16/09/2026, prima quattro quadrati
+          chiari): disco a sinistra, etichetta colorata e numero grande,
+          sempre su una riga sola */}
+      <RigaSegnalatoriInLinea isMobile={isMobile} style={{ marginBottom: 18 }} riquadri={[
+        { chiave: "richieste", etichetta: "Modelle richieste", valore: totaleRichieste, unita: `su ${corsiDistinti} cors${corsiDistinti === 1 ? "o" : "i"}`, colore: "#6E7391", disco: "#6E7391", sfondo: "#FFFFFF", Icona: IconaSegnalatorePersona },
+        // "in 15 gg" e basta: l'orologio dice il resto
+        { chiave: "scadenza", etichetta: `In ${scadenzaGiorni} gg`, valore: edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0), colore: "#C0392B", disco: "#C0392B", sfondo: "#FBE4E1", Icona: IconaSegnalatoreOrologio },
+        { chiave: "assegnate", etichetta: "Già assegnate", valore: totaleAssegnate, colore: "#2E7D32", disco: "#2E7D32", sfondo: "#EAF4EA", Icona: IconaAvvisoSpunta, onClick: () => setModaleAssegnate(true) },
+        { chiave: "datrovare", etichetta: "Ancora da trovare", valore: totaleDaTrovare, colore: "#C0392B", disco: "#C0392B", sfondo: "#FFFFFF", Icona: IconaSegnalatoreLente, onClick: () => setModaleDaTrovare(true) },
+      ]} />
 
       {/* La ricerca a parole ha la sua riga, e sotto i quattro filtri stanno
           tutti in linea: sono quattro tendine che si leggono insieme —
@@ -38393,6 +38379,16 @@ function RigaSegnalatoriInLinea({ isMobile, riquadri, gap = 12, style = {} }) {
   );
 }
 
+// le icone dei tasti segnalatori delle modelle (bianche nel disco)
+function IconaSegnalatorePersona({ size = 20, color = "#fff" }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>);
+}
+function IconaSegnalatoreOrologio({ size = 20, color = "#fff" }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9.5" /><polyline points="12 6.5 12 12 15.5 14" /></svg>);
+}
+function IconaSegnalatoreLente({ size = 20, color = "#fff" }) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7.5" /><path d="M21 21l-4.5-4.5" /></svg>);
+}
 // le icone dei cinque avvisi in cima a Contabilita' (bianche nel disco)
 function IconaAvvisoDocumento({ size = 20, color = "#fff" }) {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2.8h8.5L19 7.3v13.9H6z" /><path d="M14.5 2.8v4.5H19M9 12h6M9 15.5h6" /></svg>);
