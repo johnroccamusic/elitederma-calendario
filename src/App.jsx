@@ -14747,6 +14747,15 @@ function PaginaGestioneModelle({
     () => raccogliModelleDaSistemare({ corsiDate, corsi, location, iscritti, corsiGiorni }).length,
     [corsiDate, corsi, location, iscritti, corsiGiorni]
   );
+  // le cinque pillole in cima; "Da sistemare" porta il numero rosso: senza,
+  // nessuno aprirebbe mai una tab che di solito e' vuota
+  const pilloleGM = [
+    { chiave: "dashboard", testo: "Dashboard" },
+    { chiave: "richieste", testo: "Calendario corsi" },
+    { chiave: "archivio", testo: "Archivio corsi" },
+    { chiave: "crm", testo: "CRM modelle" },
+    { chiave: "dasistemare", testo: `Da sistemare${quantiDaSistemare > 0 ? ` (${quantiDaSistemare})` : ""}` },
+  ];
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -14763,24 +14772,25 @@ function PaginaGestioneModelle({
           {/* dal telefono le cinque pillole stanno su una riga sola sotto
               al titolo, da bordo a bordo, e si scorrono col dito (16/09/2026);
               sul computer restano accanto al titolo */}
-          <div style={isMobile
-            ? { flex: "1 1 100%", display: "flex", gap: 6, flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch", margin: "6px -16px 0 -96px", padding: "2px 16px 6px 16px", scrollbarWidth: "none" }
-            : { display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {[
-              { chiave: "dashboard", testo: "Dashboard" },
-              { chiave: "richieste", testo: "Calendario corsi" },
-              { chiave: "archivio", testo: "Archivio corsi" },
-              { chiave: "crm", testo: "CRM modelle" },
-              // il numero rosso dice subito se c'e' qualcosa di storto: senza,
-              // nessuno aprirebbe mai una tab che di solito e' vuota
-              { chiave: "dasistemare", testo: `Da sistemare${quantiDaSistemare > 0 ? ` (${quantiDaSistemare})` : ""}` },
-            ].map((t) => (
+          {!isMobile && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {pilloleGM.map((t) => <TabPillola key={t.chiave} attivo={tabGM === t.chiave} onClick={() => setTabGM(t.chiave)}>{t.testo}</TabPillola>)}
+            </div>
+          )}
+        </div>
+        {/* dal telefono le cinque pillole stanno su una riga sola SOTTO il
+            tasto rotondo e il titolo, da bordo a bordo dello schermo, e si
+            scorrono col dito (16/09/2026). E' una riga a se', fuori dal
+            blocco del titolo: dentro, si incollava al tasto e sbordava */}
+        {isMobile && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch", margin: "14px -16px 0", padding: "2px 16px 8px", scrollbarWidth: "none", boxSizing: "border-box", width: "calc(100% + 32px)" }}>
+            {pilloleGM.map((t) => (
               <span key={t.chiave} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
                 <TabPillola attivo={tabGM === t.chiave} onClick={() => setTabGM(t.chiave)}>{t.testo}</TabPillola>
               </span>
             ))}
           </div>
-        </div>
+        )}
         <div style={{ marginBottom: 20 }} />
 
         {tabGM === "dasistemare" ? (
