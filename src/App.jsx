@@ -42739,6 +42739,22 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               );
             })()}
           </div>
+          {/* dal 16/09/2026 la percentuale di sicurezza NON si regola piu'
+              da qui: si scrive nella colonna "Sicurezza" di Dettaglio
+              prodotti (nel titolo quella generale, accanto a ogni prodotto
+              la sua). Qui resta solo la lettura. Il modulo di prima e' sotto,
+              spento, per riaccenderlo il giorno che servira' */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Percentuale di sicurezza</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{sicurezzaPunti}%</span>
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>generale</span>
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+              Si imposta da Gestione magazzino → Dettaglio prodotti, nella colonna "Sicurezza": la percentuale nel titolo vale per tutti, quella accanto a ogni prodotto vale solo per lui.
+            </div>
+          </div>
+          {false && (
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Percentuale di sicurezza</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -42754,6 +42770,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               {msgRicalcolo || "Vale per tutte le master e per la colonna Punti di Dettaglio prodotti. Il ricalcolo aggiorna anche la classifica qui sotto."}
             </div>
           </div>
+          )}
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22, background: "#FDF8EC", borderColor: "#EBD9AE" }}>
