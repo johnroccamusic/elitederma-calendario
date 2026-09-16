@@ -3150,9 +3150,11 @@ function TileHome({
               {/* dalla reference: pozzetto al 60% del lato, disco al 45%
                   (blu #2C4573, non il blu notte del telefono), icona al 52%
                   del disco, pozzetto grigio chiarissimo */}
+              {/* lo scavo intero (pozzetto, disco, icona) al 15% in meno
+                  rispetto alla reference, per lasciare spazio ai testi */}
               <DiscoMedaglione
-                lato={Math.round(latoTessera * 0.75)}
-                icona={Math.round(latoTessera * 0.45 * 0.52)}
+                lato={Math.round(latoTessera * 0.75 * 0.85)}
+                icona={Math.round(latoTessera * 0.45 * 0.52 * 0.85)}
                 rapportoDisco={0.60} rapportoIcona={0.52}
                 colore="#2C4573"
                 pozzettoColore="#EBEBEB"
@@ -3167,7 +3169,7 @@ function TileHome({
               vicino no. Un titolo corto sta al centro del suo spazio. */}
           <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : Math.max(11, latoTessera * 0.065), fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : Math.round(latoTessera * 0.01), lineHeight: 1.15, ...(isMobile ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>{title}</div>
           {descrizione && (
-            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, latoTessera * 0.045), color: "#4A5068", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10 : Math.max(9.5, latoTessera * 0.045), color: "#4A5068", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
           )}
           {/* niente freccia in fondo: copriva la descrizione e non diceva
               niente che il tasto non dicesse gia'. Tolta il 15/09/2026 da
