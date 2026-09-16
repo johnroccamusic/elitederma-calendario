@@ -665,11 +665,37 @@ function leggiZoomSalvato() {
     return Number.isFinite(v) && v >= ZOOM_MIN && v <= ZOOM_MAX ? v : 1;
   } catch (e) { return 1; }
 }
+// Una schermata "come sul computer" anche dal telefono (chiesto il
+// 16/09/2026 per Gestione modelle): finche' e' aperta l'app crede di avere
+// la larghezza di un monitor (larghezzaUtile) e il corpo della pagina si
+// rimpicciolisce con "zoom" quanto basta perche' quella larghezza stia
+// nello schermo. Niente viewport, niente ricarica: si entra e si esce
+// dalla pagina come sempre. Sul computer e con la vista gia' forzata non
+// fa nulla
+let larghezzaSchermataDesktop = null;
+let zoomSchermataDesktop = 1;
+function scriviZoomCorpo() {
+  const z = zoomPagina * zoomSchermataDesktop;
+  if (document.body) document.body.style.zoom = Math.abs(z - 1) < 0.0005 ? "" : String(z);
+}
+function applicaSchermataComeDesktop(attiva) {
+  const vuole = attiva && dispositivoTouchPiccolo() && !vistaForzata;
+  if (vuole) {
+    const schermo = Math.min(window.innerWidth, (window.screen && window.screen.width) || window.innerWidth);
+    larghezzaSchermataDesktop = LARGHEZZA_VISTA_DESKTOP;
+    zoomSchermataDesktop = Math.min(1, schermo / LARGHEZZA_VISTA_DESKTOP);
+  } else {
+    larghezzaSchermataDesktop = null;
+    zoomSchermataDesktop = 1;
+  }
+  scriviZoomCorpo();
+  window.dispatchEvent(new Event("zoom-pagina"));
+}
 function applicaZoomPagina(z) {
   zoomPagina = z;
   // "zoom" e non "transform: scale": scale disegna piu' grande e basta,
   // zoom cambia davvero le misure e fa riimpaginare
-  if (document.body) document.body.style.zoom = z === 1 ? "" : String(z);
+  scriviZoomCorpo();
   try { window.localStorage.setItem(CHIAVE_ZOOM, String(z)); } catch (e) { /* navigazione privata */ }
   window.dispatchEvent(new Event("zoom-pagina"));
 }
@@ -679,6 +705,9 @@ function applicaZoomPagina(z) {
 // ritrovava di colpo l'app del telefono sul monitor: il layout lo decide
 // lo schermo, non quanto e' grande il testo.
 function larghezzaUtile() {
+  // una schermata che dal telefono si vede come sul computer (vedi
+  // applicaSchermataComeDesktop)
+  if (larghezzaSchermataDesktop) return larghezzaSchermataDesktop;
   // dal telefono, con la vista scrivania forzata, la larghezza e' quella
   // di un monitor: tutto l'impaginato risponde come su un computer
   if (vistaForzata === "desktop") return Math.max(window.innerWidth, LARGHEZZA_VISTA_DESKTOP);
@@ -14499,6 +14528,12 @@ function PaginaGestioneModelle({
   titolo = "Gestione modelle",
 }) {
   const isMobile = useIsMobile();
+  // dal telefono questa pagina si vede esattamente come sul computer,
+  // rimpicciolita per starci tutta (chiesto il 16/09/2026)
+  useEffect(() => {
+    applicaSchermataComeDesktop(true);
+    return () => applicaSchermataComeDesktop(false);
+  }, []);
   const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio | crm | dasistemare
   const quantiDaSistemare = useMemo(
     () => raccogliModelleDaSistemare({ corsiDate, corsi, location, iscritti, corsiGiorni }).length,
