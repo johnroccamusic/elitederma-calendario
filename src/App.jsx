@@ -6477,7 +6477,54 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
   const [aperto, setAperto] = useState({});
   // gli abbinamenti confermati a mano: periodo (codice + primo ordine) -> classe
   const [conferme, setConferme] = useState(() => CACHE_ANALISI_CODICI?.conferme ?? []);
+  // Le sezioni: un nome (di solito una master) e i codici che le
+  // appartengono. Si entra in una sezione dalle pillole in cima, si crea
+  // con "Nuova sezione", si assegna un codice con la tendina sulla sua
+  // scheda. I nomi nei codici ("tommasoelite", "mariannaelite") si
+  // riconoscono da soli e si propongono come sezioni da creare
+  const [sezioni, setSezioni] = useState(() => CACHE_ANALISI_CODICI?.sezioni ?? []);
+  const [assegnazioni, setAssegnazioni] = useState(() => CACHE_ANALISI_CODICI?.assegnazioni ?? []);
+  const [sezioneAttiva, setSezioneAttiva] = useState("tutte"); // "tutte" | "senza" | id
+  const [nuovaSezione, setNuovaSezione] = useState("");
   const [msg, setMsg] = useState("");
+  async function caricaSezioni() {
+    const [a, b] = await Promise.all([
+      supabase.from("codici_sezioni").select("*").order("nome"),
+      supabase.from("codici_sezione_assegnazioni").select("*"),
+    ]);
+    setSezioni(a.data || []); setAssegnazioni(b.data || []);
+    if (CACHE_ANALISI_CODICI) { CACHE_ANALISI_CODICI.sezioni = a.data || []; CACHE_ANALISI_CODICI.assegnazioni = b.data || []; }
+  }
+  const sezioneDiCodice = (codice) => assegnazioni.find((x) => x.codice === codice)?.sezione_id || null;
+  async function creaSezione(nome, codiciDaAssegnare = []) {
+    const pulito = String(nome || "").trim();
+    if (!pulito) return;
+    const { data, error } = await supabase.from("codici_sezioni").insert({ nome: pulito, master_id: (master || []).find((m) => String(m.nome || "").toLowerCase().split(/\s+/)[0] === pulito.toLowerCase())?.id || null }).select().single();
+    if (error) { setMsg("Sezione non creata: " + testoErrore(error)); return; }
+    if (codiciDaAssegnare.length > 0) {
+      await supabase.from("codici_sezione_assegnazioni").upsert(codiciDaAssegnare.map((c) => ({ codice: c, sezione_id: data.id })), { onConflict: "codice" });
+    }
+    setNuovaSezione(""); setMsg("");
+    await caricaSezioni();
+    setSezioneAttiva(data.id);
+  }
+  async function assegnaCodice(codice, sezioneId) {
+    if (!sezioneId) {
+      const { error } = await supabase.from("codici_sezione_assegnazioni").delete().eq("codice", codice);
+      if (error) { setMsg("Non salvato: " + testoErrore(error)); return; }
+    } else {
+      const { error } = await supabase.from("codici_sezione_assegnazioni").upsert({ codice, sezione_id: sezioneId }, { onConflict: "codice" });
+      if (error) { setMsg("Non salvato: " + testoErrore(error)); return; }
+    }
+    await caricaSezioni();
+  }
+  async function eliminaSezione(sz) {
+    if (!window.confirm(`Eliminare la sezione "${sz.nome}"? I suoi codici tornano senza sezione.`)) return;
+    const { error } = await supabase.from("codici_sezioni").delete().eq("id", sz.id);
+    if (error) { setMsg("Non eliminata: " + testoErrore(error)); return; }
+    setSezioneAttiva("tutte");
+    await caricaSezioni();
+  }
   async function caricaConferme() {
     const { data } = await supabase.from("codici_periodi_corso").select("*");
     setConferme(data || []);
@@ -6489,10 +6536,12 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
       supabase.from("woo_ordini_con_codice").select("*").order("data", { ascending: false }).limit(5000),
       supabase.from("coupon").select("codice, master_id, corsi_date_id, valido_da, valido_fino_a"),
       supabase.from("codici_periodi_corso").select("*"),
-    ]).then(([u, c, k]) => {
-      CACHE_ANALISI_CODICI = { usi: u.data || [], coupon: c.data || [], conferme: k.data || [] };
+      supabase.from("codici_sezioni").select("*").order("nome"),
+      supabase.from("codici_sezione_assegnazioni").select("*"),
+    ]).then(([u, c, k, sz, as]) => {
+      CACHE_ANALISI_CODICI = { usi: u.data || [], coupon: c.data || [], conferme: k.data || [], sezioni: sz.data || [], assegnazioni: as.data || [] };
       if (!vivo) return;
-      setUsi(u.data || []); setCoupon(c.data || []); setConferme(k.data || []);
+      setUsi(u.data || []); setCoupon(c.data || []); setConferme(k.data || []); setSezioni(sz.data || []); setAssegnazioni(as.data || []);
     });
     return () => { vivo = false; };
   }, []);
@@ -6549,8 +6598,23 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
         return { codice, ordini: lista.length, incasso: round2(lista.reduce((s, u) => s + (Number(u.totale) || 0), 0)), sconto: round2(lista.reduce((s, u) => s + (Number(u.sconto) || 0), 0)), periodi, coupon: couponPerCodice[codice] || null };
       })
       .filter((c) => !ricerca.trim() || c.codice.includes(ricerca.trim().toLowerCase()) || (c.coupon?.master_id && (masterById[c.coupon.master_id]?.nome || "").toLowerCase().includes(ricerca.trim().toLowerCase())))
+      .filter((c) => sezioneAttiva === "tutte" ? true : sezioneAttiva === "senza" ? !sezioneDiCodice(c.codice) : sezioneDiCodice(c.codice) === sezioneAttiva)
       .sort((a, b) => b.incasso - a.incasso);
-  }, [usi, anno, ricerca, couponPerCodice, masterById]);
+  }, [usi, anno, ricerca, couponPerCodice, masterById, sezioneAttiva, assegnazioni]);
+  // I nomi dentro i codici: quelli delle master in anagrafica e la forma
+  // "<nome>elite"; solo i nomi che non hanno ancora una sezione
+  const nomiProposti = useMemo(() => {
+    const tutti = [...new Set((usi || []).map((u) => u.codice || ""))];
+    const nomiMaster = [...new Set((master || []).map((m) => String(m.nome || "").toLowerCase().split(/\s+/)[0]).filter((n) => n.length >= 4))];
+    const trovati = new Map();
+    tutti.forEach((codice) => {
+      const m = /^([a-z]{4,})elite$/.exec(codice);
+      if (m) { const n = m[1]; if (!trovati.has(n)) trovati.set(n, new Set()); trovati.get(n).add(codice); return; }
+      nomiMaster.forEach((n) => { if (codice.includes(n)) { if (!trovati.has(n)) trovati.set(n, new Set()); trovati.get(n).add(codice); } });
+    });
+    const esistenti = new Set((sezioni || []).map((sz) => String(sz.nome || "").toLowerCase()));
+    return [...trovati.entries()].filter(([n]) => !esistenti.has(n)).map(([n, set]) => ({ nome: n.charAt(0).toUpperCase() + n.slice(1), codici: [...set] })).sort((a, b) => b.codici.length - a.codici.length);
+  }, [usi, master, sezioni]);
   const totOrdini = codici.reduce((s, c) => s + c.ordini, 0);
   const totIncasso = round2(codici.reduce((s, c) => s + c.incasso, 0));
   const totSconto = round2(codici.reduce((s, c) => s + c.sconto, 0));
@@ -6567,6 +6631,43 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
           <RiquadroSegnalatore etichetta="Codici usati" valore={codici.length} Icona={IconaAvvisoDocumento} disco="#6E7391" colore="#6E7391" />
           <RiquadroSegnalatore etichetta="Ordini con codice" valore={totOrdini} Icona={IconaAvvisoCarta} disco="#6E7391" colore="#6E7391" />
           <RiquadroSegnalatore etichetta="Incasso con codice" valore={fmtEuroErp(totIncasso)} unita={`sconti ${fmtEuroErp(totSconto)}`} Icona={IconaAvvisoMonete} disco="#B8860B" colore="#B8860B" sfondo="#FBF3E0" />
+        </div>
+
+        {/* le sezioni: si entra da qui, come nei mesi */}
+        <div style={{ ...cardStyle, padding: isMobile ? 12 : 16, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <TabPillola attivo={sezioneAttiva === "tutte"} onClick={() => setSezioneAttiva("tutte")}>Tutti i codici</TabPillola>
+            {sezioni.map((sz) => (
+              <TabPillola key={sz.id} attivo={sezioneAttiva === sz.id} onClick={() => setSezioneAttiva(sz.id)}>{sz.nome} ({assegnazioni.filter((a) => a.sezione_id === sz.id).length})</TabPillola>
+            ))}
+            <TabPillola attivo={sezioneAttiva === "senza"} onClick={() => setSezioneAttiva("senza")}>Senza sezione</TabPillola>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: "auto" }}>
+              <input value={nuovaSezione} onChange={(e) => setNuovaSezione(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") creaSezione(nuovaSezione); }} placeholder="Nuova sezione…" style={{ ...inputStyle, width: 150, padding: "7px 10px", fontSize: 12.5 }} />
+              <Button onClick={() => creaSezione(nuovaSezione)} disabled={!nuovaSezione.trim()}>Crea</Button>
+            </div>
+          </div>
+          {sezioneAttiva !== "tutte" && sezioneAttiva !== "senza" && (() => {
+            const sz = sezioni.find((x) => x.id === sezioneAttiva);
+            if (!sz) return null;
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, ...fontBody, fontSize: 12.5, color: MUTED }}>
+                Sezione <b style={{ color: NAVY }}>{sz.nome}</b>{sz.master_id && masterById[sz.master_id] ? ` · master ${toTitleCase(masterById[sz.master_id].nome || "")}` : ""}
+                <button onClick={() => eliminaSezione(sz)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Elimina sezione</button>
+              </div>
+            );
+          })()}
+          {nomiProposti.length > 0 && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Nomi trovati nei codici — crea la sezione e i suoi codici ci finiscono dentro</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {nomiProposti.map((n) => (
+                  <button key={n.nome} onClick={() => creaSezione(n.nome, n.codici)} title={n.codici.join(", ")} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#FBF3E0", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "6px 12px", cursor: "pointer" }}>
+                    + {n.nome} <span style={{ color: MUTED, fontWeight: 400 }}>({n.codici.length} codic{n.codici.length === 1 ? "e" : "i"})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
@@ -6594,6 +6695,11 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
                     {c.coupon?.valido_fino_a ? ` · valido fino al ${fmtData(c.coupon.valido_fino_a)}` : ""}
                   </div>
                 </div>
+                {/* la sezione di questo codice: una tendina, si sceglie e resta */}
+                <select value={sezioneDiCodice(c.codice) || ""} onChange={(e) => assegnaCodice(c.codice, e.target.value || null)} title="A quale sezione appartiene questo codice" style={{ ...inputStyle, width: "auto", padding: "7px 10px", fontSize: 12.5, fontWeight: 600 }}>
+                  <option value="">— senza sezione —</option>
+                  {sezioni.map((sz) => <option key={sz.id} value={sz.id}>{sz.nome}</option>)}
+                </select>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Incasso</div>
                   <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(c.incasso)}</div>
