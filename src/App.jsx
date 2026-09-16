@@ -6515,7 +6515,13 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
   // le regole dei punti di oggi, le stesse della dashboard: sicurezza,
   // quota del canale "al corso" e fasce del coupon d'aula per la riduzione
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
-  const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
+  const sicurezzaPuntiReale = sicurezzaPuntiDi(schemaPuntiSalvato);
+  // Il test chiesto il 16/09/2026: i punti col cedibile PIENO, senza
+  // togliere la percentuale di sicurezza. Vale solo qui dentro, per
+  // confrontare: le regole vere (Gestione punti, dashboard, POS) non
+  // cambiano. Si accende e si spegne con la pillola in alto
+  const [testCedibilePieno, setTestCedibilePieno] = useState(true);
+  const sicurezzaPunti = testCedibilePieno ? 0 : sicurezzaPuntiReale;
   const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
   const quotaCorso = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiSalvate || {}) }.corso;
   const fasceCorso = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
@@ -6689,10 +6695,16 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 6 }}>I codici sconto usati negli ordini del sito, raggruppati per codice e per periodo d'uso: ogni periodo è, quasi sempre, il corso di una master.</div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>
-          I punti sono una simulazione con le regole di oggi, sui prodotti che esistono ancora in anagrafica: "teorici" è quello che i prodotti venduti valgono (cedibile meno sicurezza {sicurezzaPunti}%); "alla master" è quello che resta dopo la riduzione per lo sconto davvero ottenuto dall'allievo su ogni riga (sconto % × valore di fascia) e la quota al corso ({quotaCorso}%). Con gli sconti del 20% dei codici di allora la riduzione supera il 100%, quindi alla master resta quasi nulla: è la regola, non un errore. Restano in questa pagina: non si sommano da nessun'altra parte.
+          I punti sono una simulazione con le regole di oggi, sui prodotti che esistono ancora in anagrafica: "teorici" è quello che i prodotti venduti valgono ({testCedibilePieno ? "TEST: cedibile pieno, senza togliere la sicurezza" : `cedibile meno sicurezza ${sicurezzaPunti}%`}); "alla master" è quello che resta dopo la riduzione per lo sconto davvero ottenuto dall'allievo su ogni riga (sconto % × valore di fascia) e la quota al corso ({quotaCorso}%). Con gli sconti del 20% dei codici di allora la riduzione supera il 100%, quindi alla master resta quasi nulla: è la regola, non un errore. Restano in questa pagina: non si sommano da nessun'altra parte.
           {totRigheSenzaProdotto > 0 ? ` Righe senza punti (prodotto sparito, o oggi senza costo o prezzo), non contate: ${totRigheSenzaProdotto}.` : ""}
         </div>
 
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cedibile per i punti:</span>
+          <TabPillola attivo={testCedibilePieno} onClick={() => setTestCedibilePieno(true)}>Test: cedibile pieno (senza il {sicurezzaPuntiReale}% di sicurezza)</TabPillola>
+          <TabPillola attivo={!testCedibilePieno} onClick={() => setTestCedibilePieno(false)}>Regole di oggi (meno {sicurezzaPuntiReale}% di sicurezza)</TabPillola>
+          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Vale solo in questa pagina.</span>
+        </div>
         <div style={stileRigaSegnalatori(isMobile, { marginBottom: 16 })}>
           <RiquadroSegnalatore etichetta="Codici usati" valore={codici.length} Icona={IconaAvvisoDocumento} disco="#6E7391" colore="#6E7391" />
           <RiquadroSegnalatore etichetta="Ordini con codice" valore={totOrdini} Icona={IconaAvvisoCarta} disco="#6E7391" colore="#6E7391" />
