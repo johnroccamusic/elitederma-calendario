@@ -6465,11 +6465,62 @@ function raggruppaUsiCodice(usi) {
     sconto: round2(p.usi.reduce((s, u) => s + (Number(u.sconto) || 0), 0)),
   }));
 }
+// I punti che un ordine storico del sito AVREBBE dato alla master, con
+// le regole di oggi: per ogni riga il prodotto di oggi (riconosciuto dal
+// codice del sito, dallo SKU o dal nome), i suoi punti per pezzo sulla
+// riga della carta (dal sito si versa l'IVA), la riduzione per lo sconto
+// che l'allievo ha ottenuto davvero su quella riga (prezzo pieno meno
+// prezzo pagato) col valore di fascia del coupon d'aula, e la quota del
+// canale "al corso". E' una simulazione: i prodotti che oggi non esistono
+// piu' non contano, e il numero resta in questa pagina, non si somma da
+// nessun'altra parte.
+function indiceProdottiPerOrdiniStorici(prodottiShop) {
+  const scarnifica = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const perWoo = {}, perVariazione = {}, perSku = {}, perNome = {};
+  (prodottiShop || []).forEach((p) => {
+    if (p.woo_product_id != null) perWoo[p.woo_product_id] = p;
+    if (p.woo_variation_id != null) perVariazione[p.woo_variation_id] = p;
+    if (p.sku) perSku[String(p.sku).trim().toLowerCase()] = p;
+    const n = scarnifica(p.nome);
+    // due prodotti con lo stesso nome: meglio non indovinare
+    if (n) perNome[n] = perNome[n] === undefined ? p : null;
+  });
+  return (riga) => {
+    if (riga?.woo_variation_id != null && perVariazione[riga.woo_variation_id]) return perVariazione[riga.woo_variation_id];
+    if (riga?.sku && perSku[String(riga.sku).trim().toLowerCase()]) return perSku[String(riga.sku).trim().toLowerCase()];
+    if (riga?.woo_variation_id == null && riga?.woo_product_id != null && perWoo[riga.woo_product_id]) return perWoo[riga.woo_product_id];
+    return perNome[scarnifica(riga?.nome)] || null;
+  };
+}
+function puntiOrdineStorico(ordine, trovaProdotto, sicurezzaPct, fasceCorso, quotaCorsoPct) {
+  let teorici = 0, effettivi = 0, righeSenzaProdotto = 0, righe = 0;
+  (Array.isArray(ordine?.righe) ? ordine.righe : []).forEach((r) => {
+    righe += 1;
+    const prodotto = trovaProdotto(r);
+    const pp = prodotto ? puntiProdotto(prodotto, sicurezzaPct, false) : null;
+    if (pp == null) { righeSenzaProdotto += 1; return; }
+    const t = pp * (Number(r.quantita) || 0);
+    teorici += t;
+    const pieno = Number(r.subtotale) || 0;
+    const scontoPct = pieno > 0 ? Math.max(0, ((pieno - (Number(r.totale) || 0)) / pieno) * 100) : 0;
+    effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceCorso));
+  });
+  return { teorici: round2(teorici), effettivi: round2(effettivi), maturati: round2((effettivi * (Number(quotaCorsoPct) || 0)) / 100), righe, righeSenzaProdotto };
+}
 // quello che la pagina ha gia' letto resta in memoria: rientrando si
 // vede subito, e i dati si aggiornano in silenzio dietro
 let CACHE_ANALISI_CODICI = null;
-function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], master = [], onBack, titolo = "Analisi codici sconto" }) {
+function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], master = [], prodottiShop = [], regoleReferralAutomatico = null, onBack, titolo = "Analisi codici sconto" }) {
   const isMobile = useIsMobile();
+  // le regole dei punti di oggi, le stesse della dashboard: sicurezza,
+  // quota del canale "al corso" e fasce del coupon d'aula per la riduzione
+  const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
+  const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
+  const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
+  const quotaCorso = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiSalvate || {}) }.corso;
+  const fasceCorso = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
+  const [tabellaCedibileSalvata] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
+  const trovaProdottoStorico = useMemo(() => indiceProdottiPerOrdiniStorici(prodottiShop), [prodottiShop]);
   const [usi, setUsi] = useState(() => CACHE_ANALISI_CODICI?.usi ?? null);
   const [coupon, setCoupon] = useState(() => CACHE_ANALISI_CODICI?.coupon ?? []);
   const [ricerca, setRicerca] = useState("");
@@ -6590,17 +6641,25 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
     (usi || []).forEach((u) => {
       if (anno !== "tutti" && String(u.data).slice(0, 4) !== anno) return;
       const k = u.codice || "—";
-      (perCodice[k] = perCodice[k] || []).push(u);
+      // i punti simulati dell'ordine, con le regole di oggi
+      (perCodice[k] = perCodice[k] || []).push({ ...u, punti: puntiOrdineStorico(u, trovaProdottoStorico, sicurezzaPunti, fasceCorso, quotaCorso) });
+    });
+    const sommaPunti = (lista) => ({
+      teorici: round2(lista.reduce((s, u) => s + (u.punti?.teorici || 0), 0)),
+      effettivi: round2(lista.reduce((s, u) => s + (u.punti?.effettivi || 0), 0)),
+      maturati: round2(lista.reduce((s, u) => s + (u.punti?.maturati || 0), 0)),
+      righeSenzaProdotto: lista.reduce((s, u) => s + (u.punti?.righeSenzaProdotto || 0), 0),
+      righe: lista.reduce((s, u) => s + (u.punti?.righe || 0), 0),
     });
     return Object.entries(perCodice)
       .map(([codice, lista]) => {
-        const periodi = raggruppaUsiCodice(lista);
-        return { codice, ordini: lista.length, incasso: round2(lista.reduce((s, u) => s + (Number(u.totale) || 0), 0)), sconto: round2(lista.reduce((s, u) => s + (Number(u.sconto) || 0), 0)), periodi, coupon: couponPerCodice[codice] || null };
+        const periodi = raggruppaUsiCodice(lista).map((p) => ({ ...p, punti: sommaPunti(p.usi) }));
+        return { codice, ordini: lista.length, incasso: round2(lista.reduce((s, u) => s + (Number(u.totale) || 0), 0)), sconto: round2(lista.reduce((s, u) => s + (Number(u.sconto) || 0), 0)), periodi, punti: sommaPunti(lista), coupon: couponPerCodice[codice] || null };
       })
       .filter((c) => !ricerca.trim() || c.codice.includes(ricerca.trim().toLowerCase()) || (c.coupon?.master_id && (masterById[c.coupon.master_id]?.nome || "").toLowerCase().includes(ricerca.trim().toLowerCase())))
       .filter((c) => sezioneAttiva === "tutte" ? true : sezioneAttiva === "senza" ? !sezioneDiCodice(c.codice) : sezioneDiCodice(c.codice) === sezioneAttiva)
       .sort((a, b) => b.incasso - a.incasso);
-  }, [usi, anno, ricerca, couponPerCodice, masterById, sezioneAttiva, assegnazioni]);
+  }, [usi, anno, ricerca, couponPerCodice, masterById, sezioneAttiva, assegnazioni, trovaProdottoStorico, sicurezzaPunti, fasceCorso, quotaCorso, tabellaCedibileSalvata]);
   // I nomi dentro i codici: quelli delle master in anagrafica e la forma
   // "<nome>elite"; solo i nomi che non hanno ancora una sezione
   const nomiProposti = useMemo(() => {
@@ -6618,6 +6677,9 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
   const totOrdini = codici.reduce((s, c) => s + c.ordini, 0);
   const totIncasso = round2(codici.reduce((s, c) => s + c.incasso, 0));
   const totSconto = round2(codici.reduce((s, c) => s + c.sconto, 0));
+  const totPunti = round2(codici.reduce((s, c) => s + (c.punti?.maturati || 0), 0));
+  const totPuntiTeorici = round2(codici.reduce((s, c) => s + (c.punti?.teorici || 0), 0));
+  const totRigheSenzaProdotto = codici.reduce((s, c) => s + (c.punti?.righeSenzaProdotto || 0), 0);
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -6625,12 +6687,17 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 18 }}>I codici sconto usati negli ordini del sito, raggruppati per codice e per periodo d'uso: ogni periodo è, quasi sempre, il corso di una master.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 6 }}>I codici sconto usati negli ordini del sito, raggruppati per codice e per periodo d'uso: ogni periodo è, quasi sempre, il corso di una master.</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>
+          I punti sono una simulazione con le regole di oggi, sui prodotti che esistono ancora in anagrafica: "teorici" è quello che i prodotti venduti valgono (cedibile meno sicurezza {sicurezzaPunti}%); "alla master" è quello che resta dopo la riduzione per lo sconto davvero ottenuto dall'allievo su ogni riga (sconto % × valore di fascia) e la quota al corso ({quotaCorso}%). Con gli sconti del 20% dei codici di allora la riduzione supera il 100%, quindi alla master resta quasi nulla: è la regola, non un errore. Restano in questa pagina: non si sommano da nessun'altra parte.
+          {totRigheSenzaProdotto > 0 ? ` Righe senza punti (prodotto sparito, o oggi senza costo o prezzo), non contate: ${totRigheSenzaProdotto}.` : ""}
+        </div>
 
         <div style={stileRigaSegnalatori(isMobile, { marginBottom: 16 })}>
           <RiquadroSegnalatore etichetta="Codici usati" valore={codici.length} Icona={IconaAvvisoDocumento} disco="#6E7391" colore="#6E7391" />
           <RiquadroSegnalatore etichetta="Ordini con codice" valore={totOrdini} Icona={IconaAvvisoCarta} disco="#6E7391" colore="#6E7391" />
           <RiquadroSegnalatore etichetta="Incasso con codice" valore={fmtEuroErp(totIncasso)} unita={`sconti ${fmtEuroErp(totSconto)}`} Icona={IconaAvvisoMonete} disco="#B8860B" colore="#B8860B" sfondo="#FBF3E0" />
+          <RiquadroSegnalatore etichetta="Punti teorici" valore={fmtPunti(totPuntiTeorici)} unita={`alla master dopo lo sconto ${fmtPunti(totPunti)}`} Icona={IconaAvvisoMonete} disco="#2E7D32" colore="#2E7D32" sfondo="#EAF4EA" />
         </div>
 
         {/* le sezioni: si entra da qui, come nei mesi */}
@@ -6714,6 +6781,13 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
                   <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(c.incasso)}</div>
                   <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>sconti {fmtEuroErp2(c.sconto)}</div>
                 </div>
+                {/* i punti simulati di tutto il codice: quelli alla master,
+                    e sotto i teorici prima dello sconto dell'allievo */}
+                <div style={{ textAlign: "right" }} title={`Teorici ${fmtPunti(c.punti.teorici)} · dopo lo sconto dell'allievo ${fmtPunti(c.punti.effettivi)} · alla master (quota ${quotaCorso}%) ${fmtPunti(c.punti.maturati)}${c.punti.righeSenzaProdotto ? ` · ${c.punti.righeSenzaProdotto} righe senza prodotto oggi` : ""}`}>
+                  <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Punti teorici</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: "#2E7D32" }}>{fmtPunti(c.punti.teorici)}</div>
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>alla master {fmtPunti(c.punti.maturati)}{c.periodi.length ? ` · ${fmtPunti(round2(c.punti.teorici / c.periodi.length))} teorici per periodo` : ""}</div>
+                </div>
               </div>
               <div style={{ marginTop: 12 }}>
                 {c.periodi.map((p, i) => {
@@ -6727,6 +6801,9 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
                         </div>
                         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{p.ordini} ordin{p.ordini === 1 ? "e" : "i"}</div>
                         <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginLeft: "auto", whiteSpace: "nowrap" }}>{fmtEuroErp2(p.incasso)}</div>
+                        <div title={`Teorici ${fmtPunti(p.punti.teorici)} · dopo lo sconto dell'allievo ${fmtPunti(p.punti.effettivi)} · alla master ${fmtPunti(p.punti.maturati)}${p.punti.righeSenzaProdotto ? ` · ${p.punti.righeSenzaProdotto} righe su ${p.punti.righe} senza punti (prodotto sparito, o senza costo/prezzo oggi)` : ""}`} style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>
+                          {fmtPunti(p.punti.teorici)} pt teorici <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: MUTED }}>· alla master {fmtPunti(p.punti.maturati)}</span>{p.punti.righeSenzaProdotto ? <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 600, color: "#B8860B", marginLeft: 4 }}>({p.punti.righeSenzaProdotto} righe senza punti)</span> : null}
+                        </div>
                         <button onClick={() => setAperto((prec) => ({ ...prec, [chiave]: !prec[chiave] }))} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "4px 10px", cursor: "pointer" }}>
                           {aperto[chiave] ? "Nascondi ordini" : "Ordini"}
                         </button>
@@ -6769,6 +6846,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
                               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.cliente || "—"}</span>
                               <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{fmtEuroErp2(Number(u.totale))}</span>
                               <span style={{ color: MUTED, whiteSpace: "nowrap" }}>−{fmtEuroErp2(Number(u.sconto))}</span>
+                              <span title={u.punti?.righeSenzaProdotto ? `${u.punti.righeSenzaProdotto} righe su ${u.punti.righe} senza punti (prodotto sparito, o senza costo/prezzo oggi)` : "punti teorici → alla master dopo lo sconto"} style={{ fontWeight: 700, color: u.punti?.righeSenzaProdotto ? "#B8860B" : "#2E7D32", whiteSpace: "nowrap", minWidth: 120, textAlign: "right" }}>{fmtPunti(u.punti?.teorici || 0)} → {fmtPunti(u.punti?.maturati || 0)} pt</span>
                             </div>
                           ))}
                         </div>
@@ -64221,6 +64299,9 @@ export default function App() {
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
     statvenditeshop: ["vendite_shop", "woo_coupon"],
+    // gli ordini con codice li legge la pagina da sola (vista); anagrafica
+    // e regole del coupon d'aula servono per simulare i punti
+    statanalisicodici: ["corsi", "location", "corsi_date", "master", "prodotti_shop", "regole_referral_automatico"],
     statvenditealbanco: ["vendite_shop"],
     statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno"],
@@ -65922,7 +66003,7 @@ export default function App() {
       )}
 
       {view === "statanalisicodici" && (
-        <PaginaAnalisiCodiciSconto corsi={corsi} location={location} corsiDate={corsiDate} master={master} onBack={() => setView("statistiche")} titolo={etichettaTasto("statistiche", "analisicodici", "Analisi codici sconto")} />
+        <PaginaAnalisiCodiciSconto corsi={corsi} location={location} corsiDate={corsiDate} master={master} prodottiShop={prodottiShop} regoleReferralAutomatico={regoleReferralAutomatico} onBack={() => setView("statistiche")} titolo={etichettaTasto("statistiche", "analisicodici", "Analisi codici sconto")} />
       )}
 
       {view === "statvenditeshop" && (
