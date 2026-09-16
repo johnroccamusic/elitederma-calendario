@@ -6444,6 +6444,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
 // (tabella coupon), poi un corso della stessa master, poi un corso in
 // calendario in quei giorni.
 const GIORNI_STACCO_CODICE = 7;
+// la misura dei riquadri segnalatori (RiquadroSegnalatore), fissa
+const LARGHEZZA_SEGNALATORE = 225;
+const ALTEZZA_SEGNALATORE = 95;
 function raggruppaUsiCodice(usi) {
   const ordinati = [...usi].sort((a, b) => String(a.data).localeCompare(String(b.data)));
   const periodi = [];
@@ -6560,7 +6563,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 18 }}>I codici sconto usati negli ordini del sito, raggruppati per codice e per periodo d'uso: ogni periodo è, quasi sempre, il corso di una master.</div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))", gap: isMobile ? 6 : 12, marginBottom: 16 }}>
+        <div style={stileRigaSegnalatori(isMobile, { marginBottom: 16 })}>
           <RiquadroSegnalatore etichetta="Codici usati" valore={codici.length} Icona={IconaAvvisoDocumento} disco="#6E7391" colore="#6E7391" />
           <RiquadroSegnalatore etichetta="Ordini con codice" valore={totOrdini} Icona={IconaAvvisoCarta} disco="#6E7391" colore="#6E7391" />
           <RiquadroSegnalatore etichetta="Incasso con codice" valore={fmtEuroErp(totIncasso)} unita={`sconti ${fmtEuroErp(totSconto)}`} Icona={IconaAvvisoMonete} disco="#B8860B" colore="#B8860B" sfondo="#FBF3E0" />
@@ -38010,6 +38013,13 @@ function RigaPagamentoAppendice({ spesa, onSalva, onElimina, bloccata }) {
 // a destra l'etichetta colorata su piu' righe e il numero grande; sotto,
 // se c'e', la nota. Lo usano gli avvisi di Contabilita', la riga della
 // cassa contanti e le caselle di Gestione magazzino.
+// la riga che li contiene: sul computer vanno a capo se non ci stanno,
+// sul telefono scorrono di lato, sempre a misura piena
+function stileRigaSegnalatori(isMobile, extra = {}) {
+  return isMobile
+    ? { display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, WebkitOverflowScrolling: "touch", ...extra }
+    : { display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", ...extra };
+}
 function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfondo = "#FFFFFF", colore, onClick, evidenziato = false, titolo }) {
   const rif = useRef(null);
   const [larghezza, setLarghezza] = useState(0);
@@ -38022,8 +38032,11 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
     oss.observe(el);
     return () => oss.disconnect();
   }, []);
-  const w = larghezza || 220;
-  const h = Math.round(w * 0.42);
+  // misura fissa, decisa il 16/09/2026: 225 di base per 95 di altezza,
+  // ovunque e su ogni schermo. La larghezza misurata non serve piu' alla
+  // misura, resta solo per rifare i calcoli quando cambia il contenitore
+  const w = LARGHEZZA_SEGNALATORE;
+  const h = ALTEZZA_SEGNALATORE;
   const lato = Math.round(h * 0.80);
   const spazio = Math.round(h * 0.09);
   // Se i testi non ci stanno nell'altezza, si riducono loro — a passi,
@@ -38054,7 +38067,7 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
       style={{
         // il 42% e' l'altezza, sempre: i riquadri di una pagina sono tutti
         // della stessa misura, e a stringersi sono i testi (vedi scala)
-        width: "100%", height: h, boxSizing: "border-box", minWidth: 0, textAlign: "left",
+        width: w, height: h, flex: "0 0 auto", boxSizing: "border-box", minWidth: 0, textAlign: "left",
         display: "flex", alignItems: "center", gap: spazio,
         padding: `${spazio}px ${Math.round(spazio * 1.3)}px`,
         borderRadius: Math.round(h * 0.2), cursor: onClick ? "pointer" : "default",
@@ -38373,9 +38386,9 @@ function PannelloCassaContanti({
           // d'occhio lo tolgono. Se lo spazio e' poco a stringersi sono il
           // corpo della cifra e le imbottiture, non il numero di caselle
           // visibili.
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, minmax(0, 1fr))`, gap: isMobile ? 4 : 10, marginBottom: 14 }}>
+          <div style={stileRigaSegnalatori(isMobile, { marginBottom: 14 })}>
             {celle.map((c) => (
-              <div key={c.etichetta} style={{ minWidth: 0 }}>
+              <div key={c.etichetta} style={{ flex: "0 0 auto" }}>
               {/* il riquadro segnalatore, alto il 42% della base: i cinque
                   hanno la stessa larghezza e quindi gli stessi corpi */}
               <RiquadroSegnalatore
@@ -39977,7 +39990,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           // stringeva, e quattro numeri che devono leggersi in un colpo
           // d'occhio diventavano due blocchi da scorrere.
           return (
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${riquadri.length}, minmax(0, 1fr))`, gap: isMobile ? 5 : 10, marginBottom: 18, alignItems: "stretch" }}>
+            <div style={stileRigaSegnalatori(isMobile, { marginBottom: 18 })}>
               {riquadri.map((r) => (
                 <RiquadroSegnalatore key={r.chiave} etichetta={r.etichetta} valore={r.valore} Icona={r.Icona} disco={r.disco} sfondo={r.sfondo === "#fff" ? "#FFFFFF" : r.sfondo} colore={r.colore} onClick={r.onClick} />
               ))}
@@ -45857,7 +45870,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             {/* da scrivania la griglia occupa meta' pagina, al centro: quattro
                 quadrati larghi un quarto dello schermo erano enormi, e i
                 testi dentro restano della loro misura */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: isMobile ? 5 : 12, alignItems: "stretch", width: isMobile ? "100%" : "72%", margin: "0 auto" }}>
+            <div style={stileRigaSegnalatori(isMobile)}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
                 { chiave: "fermi", Icona: IconaOrologioCard, tinta: MUTED, etichetta: "Fermi da oltre 90 giorni", valore: fermi.length, unita: "prodotti", filtro: true },
