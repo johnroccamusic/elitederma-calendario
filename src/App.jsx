@@ -23052,6 +23052,7 @@ function PopupEliminaData({ evento, corsoById, locById, onElimina, onChiudi }) {
 }
 
 function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData, fontScaleBarre = 1, scrollMarginTop = 54, spostabile = false }) {
+  const isMobile = useIsMobile();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -23189,7 +23190,9 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
       // contestuale del browser va soppresso, altrimenti su Windows compare
       // al rilascio e su Mac alla pressione, interrompendo il trascinamento
       onContextMenu={spostabile ? (e) => e.preventDefault() : undefined}
-      style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}
+      // sul telefono niente aria sopra: il titolo col tasto rotondo sta
+      // subito sotto quello che c'e' prima, senza uno spazio vuoto
+      style={{ maxWidth: 820, margin: "0 auto", padding: isMobile ? "0 12px 40px" : "40px 20px" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <TopBar title="Calendario" onBack={onBack} />
