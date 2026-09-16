@@ -2691,7 +2691,10 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
                   ...fontCondensato,
                   display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
-                  flex: "1 1 auto", minWidth: 0, fontSize: 10 * fontScaleBarre, lineHeight: 1.05,
+                  // stessa riduzione del ramo qui sopra: le barre su piu'
+                  // giorni restavano a 10 mentre quelle di un giorno erano
+                  // gia' scese
+                  flex: "1 1 auto", minWidth: 0, fontSize: (10 - RIDUZIONE_NOME_CORSO_CALENDARIO) * fontScaleBarre, lineHeight: 1.05,
                 }}
               >
                 {etichetta}
