@@ -14128,7 +14128,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
       {/* i quattro tasti segnalatori (dal 16/09/2026, prima quattro quadrati
           chiari): disco a sinistra, etichetta colorata e numero grande,
           sempre su una riga sola */}
-      <RigaSegnalatoriInLinea isMobile={isMobile} style={{ marginBottom: 18 }} riquadri={[
+      <RigaSegnalatoriInLinea isMobile={isMobile} style={{ marginBottom: isMobile ? 36 : 72 }} riquadri={[
         { chiave: "richieste", etichetta: "Modelle richieste", valore: totaleRichieste, unita: `su ${corsiDistinti} cors${corsiDistinti === 1 ? "o" : "i"}`, colore: "#6E7391", disco: "#6E7391", sfondo: "#FFFFFF", Icona: IconaSegnalatorePersona },
         // "in 15 gg" e basta: l'orologio dice il resto
         { chiave: "scadenza", etichetta: `In ${scadenzaGiorni} gg`, valore: edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0), colore: "#C0392B", disco: "#C0392B", sfondo: "#FBE4E1", Icona: IconaSegnalatoreOrologio },
