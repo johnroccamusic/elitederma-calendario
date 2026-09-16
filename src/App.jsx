@@ -3069,7 +3069,7 @@ function TileHome({
           {attivo && badge > 0 && (
             <>
               <style>{`@keyframes lampeggiaBadgeTasto { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }`}</style>
-              <span title={`${badge} avvis${badge === 1 ? "o" : "i"} da gestire`} style={{ position: "absolute", top: -4, right: -4, ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", background: "#C0392B", borderRadius: 20, minWidth: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite", boxShadow: "0 1px 3px rgba(14,27,51,0.3)" }}>{badge}</span>
+              <span title={`${badge} avvis${badge === 1 ? "o" : "i"} da gestire`} style={{ position: "absolute", top: -4, right: -4, ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", background: "#C0392B", borderRadius: 20, minWidth: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box", animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite", boxShadow: "0 1px 3px rgba(14,27,51,0.3)" }}>{badge}</span>
             </>
           )}
         </div>
@@ -3138,7 +3138,7 @@ function TileHome({
       {attivo && badge > 0 && (
         <>
           <style>{`@keyframes lampeggiaBadgeTasto { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }`}</style>
-          <span title={`${badge} avvis${badge === 1 ? "o" : "i"} da gestire`} style={{ position: "absolute", top: isMobile ? 6 : 14, right: isMobile ? 6 : 16, ...fontBody, fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "#fff", background: "#C0392B", borderRadius: 20, minWidth: isMobile ? 18 : 22, height: isMobile ? 18 : 22, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite" }}>{badge}</span>
+          <span title={`${badge} avvis${badge === 1 ? "o" : "i"} da gestire`} style={{ position: "absolute", top: isMobile ? 6 : 14, right: isMobile ? 6 : 16, ...fontBody, fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "#fff", background: "#C0392B", borderRadius: 20, minWidth: isMobile ? 18 : 22, height: isMobile ? 18 : 22, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box", animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite" }}>{badge}</span>
         </>
       )}
       {ricca ? (
@@ -17402,7 +17402,7 @@ function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungi
                   position: "absolute", top: -6, right: -6,
                   ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#fff", background: "#C0392B",
                   borderRadius: 20, minWidth: isMobile ? 20 : 22, height: isMobile ? 20 : 22,
-                  display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px",
+                  display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box",
                   animation: "lampeggiaBadgeTasto 1s steps(1, end) infinite",
                   boxShadow: "0 1px 3px rgba(14,27,51,0.3)",
                 }}
