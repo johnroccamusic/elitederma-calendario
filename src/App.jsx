@@ -2623,7 +2623,9 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
               ...fontCondensato,
               display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
-              fontSize: 10 * fontScaleBarre, lineHeight: 1.05,
+              // il nome del corso: 10 meno la riduzione in prova (16/09/2026),
+              // le frazioni dei giorni hanno la loro misura (fontSizeBadge)
+              fontSize: (10 - RIDUZIONE_NOME_CORSO_CALENDARIO) * fontScaleBarre, lineHeight: 1.05,
             }}
           >
             {etichetta}
@@ -22931,11 +22933,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       overflow: "hidden",
                       color: "#000",
-                      // il nome del corso due punti piu' piccolo (16/09/2026,
-                      // in prova): le frazioni dei giorni hanno la loro
-                      // misura e non cambiano. Per tornare indietro basta
-                      // azzerare RIDUZIONE_NOME_CORSO_CALENDARIO
-                      fontSize: ((isMobile ? 9 : 8) - RIDUZIONE_NOME_CORSO_CALENDARIO) * fontScaleBarre,
+                      fontSize: (isMobile ? 9 : 8) * fontScaleBarre,
                       fontWeight: 500,
                       ...fontBody,
                       cursor: evidenziata ? (onSpostaDaBarra ? "grabbing" : "grab") : "pointer",
