@@ -20,13 +20,20 @@
 // del ponte del menu).
 
 export async function svuotaCacheSito(opzioni: { prodottiWooIds?: (number | null | undefined)[]; tutto?: boolean }): Promise<string | null> {
+  return (await chiediSvuotaCache(opzioni)).avviso;
+}
+
+// la stessa chiamata, ma con anche quello che il sito racconta di se'
+// (versione di Breeze, Cloudflare attivo o no, passi eseguiti): serve al
+// tasto manuale per capire perche' una pagina resta vecchia
+export async function chiediSvuotaCache(opzioni: { prodottiWooIds?: (number | null | undefined)[]; tutto?: boolean }): Promise<{ avviso: string | null; dati: unknown }> {
   const siteUrl = Deno.env.get("WC_SITE_URL");
   const secret = Deno.env.get("WP_MENU_BRIDGE_SECRET");
   if (!siteUrl || !secret) {
-    return "La cache del sito non e' stata svuotata: manca la chiave del ponte WordPress (WP_MENU_BRIDGE_SECRET).";
+    return { avviso: "La cache del sito non e' stata svuotata: manca la chiave del ponte WordPress (WP_MENU_BRIDGE_SECRET).", dati: null };
   }
   const prodotti = (opzioni.prodottiWooIds || []).filter((id): id is number => typeof id === "number" && id > 0);
-  if (!opzioni.tutto && prodotti.length === 0) return null;
+  if (!opzioni.tutto && prodotti.length === 0) return { avviso: null, dati: null };
   try {
     const risposta = await fetch(`${siteUrl}/wp-json/elitederma/v1/svuota-cache`, {
       method: "POST",
@@ -34,18 +41,18 @@ export async function svuotaCacheSito(opzioni: { prodottiWooIds?: (number | null
       body: JSON.stringify({ prodotti, tutto: !!opzioni.tutto }),
     });
     if (risposta.status === 404) {
-      return "La cache del sito non e' stata svuotata: sul sito manca lo snippet \"Elitederma — Svuota cache dal gestionale\".";
+      return { avviso: "La cache del sito non e' stata svuotata: sul sito manca lo snippet \"Elitederma — Svuota cache dal gestionale\".", dati: null };
     }
     if (!risposta.ok) {
-      return `La cache del sito non e' stata svuotata: il sito ha risposto ${risposta.status}.`;
+      return { avviso: `La cache del sito non e' stata svuotata: il sito ha risposto ${risposta.status}.`, dati: null };
     }
     const dati = await risposta.json().catch(() => null);
     if (!dati?.ok) {
-      return "La cache del sito non e' stata svuotata: " + (dati?.errore || "risposta inattesa dal sito.");
+      return { avviso: "La cache del sito non e' stata svuotata: " + (dati?.errore || "risposta inattesa dal sito."), dati: dati?.dati ?? null };
     }
-    return null;
+    return { avviso: null, dati: dati?.dati ?? null };
   } catch (e) {
     console.error("svuotaCacheSito: sito non raggiunto", e instanceof Error ? e.message : String(e));
-    return "La cache del sito non e' stata svuotata: sito non raggiungibile.";
+    return { avviso: "La cache del sito non e' stata svuotata: sito non raggiungibile.", dati: null };
   }
 }

@@ -12,7 +12,7 @@
 //
 // Chiamata dall'app: supabase.functions.invoke('wp-svuota-cache')
 
-import { svuotaCacheSito } from "../_shared/cacheSito.ts";
+import { chiediSvuotaCache } from "../_shared/cacheSito.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,9 +26,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ errore: "Metodo non consentito" }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-  const avviso = await svuotaCacheSito({ tutto: true });
+  const { avviso, dati } = await chiediSvuotaCache({ tutto: true });
   if (avviso) {
-    return new Response(JSON.stringify({ errore: avviso }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: avviso, dati }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok: true, dati }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

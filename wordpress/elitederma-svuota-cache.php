@@ -32,12 +32,14 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
-// La chiave condivisa col gestionale (WP_MENU_BRIDGE_SECRET nelle
-// variabili delle edge function) e' la costante ELITEDERMA_BRIDGE_SECRET,
-// definita nello snippet del menu ("Claude access", riga 1). Qui non si
-// ridefinisce: due define della stessa costante farebbero scattare un
-// avviso PHP, e la si legge comunque solo a richiesta arrivata, quando
-// tutti gli snippet sono gia' caricati.
+// Svuota la cache del sito (Breeze + Cloudflare di Cloudways) su richiesta
+// del gestionale, dopo ogni modifica fatta dall'API di WooCommerce.
+// La chiave e' la costante ELITEDERMA_BRIDGE_SECRET, definita nello
+// snippet "Claude access" (riga 1). Qui non si ridefinisce.
+//
+// Le classi di Breeze si chiamano direttamente, non con i suoi ganci
+// (breeze_clear_all_cache, purge_post_cache): quei ganci li registra il
+// pannello di amministrazione, che in una chiamata REST non c'e'.
 
 add_action( 'rest_api_init', function () {
 	register_rest_route( 'elitederma/v1', '/svuota-cache', array(
@@ -57,41 +59,81 @@ function elitederma_svuota_cache_autorizzato( $richiesta ) {
 
 // Corpo atteso: { "prodotti": [699, 668], "tutto": false }
 //   prodotti — id WooCommerce dei prodotti toccati: si svuota la pagina di
-//              ognuno piu' le pagine di elenco (shop, categorie) che lo
-//              mostrano, come fa Breeze quando si salva dall'editor
-//   tutto    — true per svuotare l'intera cache del sito (riordino della
-//              vetrina, categorie rinominate, tasto manuale nel gestionale)
+//              ognuno piu' le pagine di elenco (shop, categorie)
+//   tutto    — true per svuotare l'intera cache del sito
 function elitederma_svuota_cache( $richiesta ) {
 	$corpo    = $richiesta->get_json_params();
 	$prodotti = isset( $corpo['prodotti'] ) && is_array( $corpo['prodotti'] ) ? array_map( 'intval', $corpo['prodotti'] ) : array();
 	$tutto    = ! empty( $corpo['tutto'] );
 
-	$breeze_presente = class_exists( 'Breeze_PurgeCache' );
-	if ( ! $breeze_presente ) {
-		return new WP_REST_Response( array(
-			'ok'      => false,
-			'errore'  => 'Breeze non risulta attivo su questo sito: cache non svuotata.',
-		), 200 );
+	$cf_classe = class_exists( 'Breeze_CloudFlare_Helper' );
+	$dati = array(
+		'breeze'            => defined( 'BREEZE_VERSION' ) ? BREEZE_VERSION : null,
+		'classe_cache'      => class_exists( 'Breeze_PurgeCache' ),
+		'classe_cloudflare' => $cf_classe,
+		'cloudflare_attivo' => $cf_classe && method_exists( 'Breeze_CloudFlare_Helper', 'is_cloudflare_enabled' ) ? (bool) Breeze_CloudFlare_Helper::is_cloudflare_enabled() : null,
+		'server_cloudways'  => $cf_classe && method_exists( 'Breeze_CloudFlare_Helper', 'is_cloudways_server' ) ? (bool) Breeze_CloudFlare_Helper::is_cloudways_server() : null,
+		'costanti_cdn'      => defined( 'CDN_SITE_ID' ) && defined( 'CDN_SITE_TOKEN' ),
+		'gancio_tutto'      => false !== has_action( 'breeze_clear_all_cache' ),
+		'gancio_prodotto'   => false !== has_action( 'purge_post_cache' ),
+		'passi'             => array(),
+	);
+
+	if ( ! class_exists( 'Breeze_PurgeCache' ) ) {
+		return new WP_REST_Response( array( 'ok' => false, 'errore' => 'Breeze non risulta attivo su questo sito: cache non svuotata.', 'dati' => $dati ), 200 );
 	}
 
-	$svuotati = array();
-	if ( $tutto ) {
-		// e' la stessa azione che Breeze lancia da solo quando cambia il
-		// menu o il tema: file locali, Varnish e Cloudflare insieme
-		do_action( 'breeze_clear_all_cache' );
-		$svuotati[] = 'tutto';
-	} else {
-		foreach ( $prodotti as $id ) {
-			if ( $id > 0 && get_post( $id ) ) {
-				do_action( 'purge_post_cache', $id );
+	try {
+		if ( $tutto ) {
+			if ( class_exists( 'Breeze_MinificationCache' ) && method_exists( 'Breeze_MinificationCache', 'clear_minification' ) ) {
+				Breeze_MinificationCache::clear_minification();
+				$dati['passi'][] = 'minificati';
+			}
+			Breeze_PurgeCache::breeze_cache_flush();
+			$dati['passi'][] = 'locale';
+			if ( class_exists( 'Breeze_PurgeVarnish' ) ) {
+				$varnish = new Breeze_PurgeVarnish();
+				if ( method_exists( $varnish, 'purge_cache' ) ) {
+					$varnish->purge_cache( home_url( '/' ) );
+					$dati['passi'][] = 'varnish';
+				}
+			}
+			if ( $cf_classe && method_exists( 'Breeze_CloudFlare_Helper', 'reset_all_cache' ) ) {
+				$esito = Breeze_CloudFlare_Helper::reset_all_cache();
+				$dati['passi'][] = 'cloudflare:' . ( false === $esito ? 'no' : 'si' );
+			}
+			if ( method_exists( 'Breeze_PurgeCache', '__flush_object_cache' ) ) {
+				Breeze_PurgeCache::__flush_object_cache();
+				$dati['passi'][] = 'oggetti';
+			}
+			$dati['svuotati'] = 'tutto';
+		} else {
+			$svuotati = array();
+			$purga    = method_exists( 'Breeze_PurgeCache', 'factory' ) ? Breeze_PurgeCache::factory() : new Breeze_PurgeCache();
+			foreach ( $prodotti as $id ) {
+				if ( $id <= 0 || ! get_post( $id ) ) {
+					continue;
+				}
+				if ( method_exists( $purga, 'purge_post_cache' ) ) {
+					// pagina del prodotto, shop e categorie che lo mostrano:
+					// locale, Varnish e Cloudflare insieme
+					$purga->purge_post_cache( $id );
+					$dati['passi'][] = 'prodotto:' . $id;
+				} else {
+					Breeze_PurgeCache::breeze_cache_flush();
+					$dati['passi'][] = 'locale';
+					if ( $cf_classe && method_exists( 'Breeze_CloudFlare_Helper', 'reset_all_cache' ) ) {
+						Breeze_CloudFlare_Helper::reset_all_cache();
+						$dati['passi'][] = 'cloudflare';
+					}
+				}
 				$svuotati[] = $id;
 			}
+			$dati['svuotati'] = $svuotati;
 		}
+	} catch ( Throwable $e ) {
+		return new WP_REST_Response( array( 'ok' => false, 'errore' => 'Breeze ha dato errore: ' . $e->getMessage(), 'dati' => $dati ), 200 );
 	}
 
-	return new WP_REST_Response( array(
-		'ok'       => true,
-		'svuotati' => $svuotati,
-		'breeze'   => defined( 'BREEZE_VERSION' ) ? BREEZE_VERSION : null,
-	), 200 );
+	return new WP_REST_Response( array( 'ok' => true, 'dati' => $dati ), 200 );
 }
