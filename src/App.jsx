@@ -45237,14 +45237,14 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   // quattro cifre al massimo: la casella larga mangiava spazio a tutta la
   // tabella, e il numero incollato a sinistra non si allineava con quello
   // della riga sopra. Stretta e allineata a destra, come si leggono i numeri
-  const cellInputStyle = { ...inputStyle, width: 46, padding: "4px 6px", fontSize: 11, textAlign: "right" };
+  const cellInputStyle = { ...inputStyle, width: 46, padding: "4px 6px", fontSize: 13, textAlign: "right" };
 
   // ogni cella con il nome della sua colonna: la riga si compone
   // seguendo l'ordine scelto nell'intestazione, che chi guarda puo'
   // cambiare trascinando i titoli
   const celle = {
     "Prodotto": (
-        <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdTesto, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
+        <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdTesto, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
           <span
             title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
             style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
@@ -45253,10 +45253,10 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         </td>
     ),
     "Fornitore": (
-        <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: p.nomeFornitore ? NAVY : MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeFornitore || "—"}</td>
+        <td style={{ ...tdTesto, ...fontBody, fontSize: 12.5, color: p.nomeFornitore ? NAVY : MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeFornitore || "—"}</td>
     ),
     "Categoria": (
-        <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
+        <td style={{ ...tdTesto, ...fontBody, fontSize: 12.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
     ),
     "Unità di misura": (
         <td style={tdStyle}>
@@ -45270,7 +45270,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
               onClick={p.isBundle || p.isVetrina ? () => onApriIspezione(p) : undefined}
               title={p.isBundle ? "Tocca per vedere da cosa dipende questa disponibilità" : p.isVetrina ? "Tocca per vedere le varianti collegate" : "Nessuna giacenza propria: non si conta"}
               style={{
-                ...fontBody, fontStyle: "italic", fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 3,
+                ...fontBody, fontStyle: "italic", fontSize: 13, color: MUTED, display: "flex", alignItems: "center", gap: 3,
                 cursor: p.isBundle || p.isVetrina ? "pointer" : "default", textDecoration: p.isBundle || p.isVetrina ? "underline dotted" : "none",
               }}
             >
@@ -45289,7 +45289,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
                 onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
               />
               {p.sfusoCollegato && (
-                <div title={`Pezzi singoli già aperti sull'altro scaffale (${p.sfusoCollegato.nome})`} style={{ ...fontBody, fontSize: 9.5, color: MUTED, whiteSpace: "nowrap", marginTop: 2 }}>
+                <div title={`Pezzi singoli già aperti sull'altro scaffale (${p.sfusoCollegato.nome})`} style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap", marginTop: 2 }}>
                   (+{p.sfusoCollegato.stock} sfusi)
                 </div>
               )}
@@ -45300,7 +45300,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Soglia riordino": (
         <td style={tdStyle}>
           {p.giacenza_propria === false ? (
-            <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
+            <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>
           ) : (
             <input style={cellInputStyle} inputMode="numeric" value={scortaMin} onChange={(e) => setScortaMin(e.target.value)} onBlur={salvaScortaMin} placeholder="—" />
           )}
@@ -45322,30 +45322,30 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Stato": (
         <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
           {p.conta_magazzino === false ? (
-            <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 8, padding: "2px 6px" }}>Illimitato</span>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 8, padding: "2px 6px" }}>Illimitato</span>
           ) : p.boxCollegato && (p.esaurito || p.sottoScorta) && p.boxCollegato.inMagazzino > 0 ? (
             // sfuso sotto soglia ma con pacchi sigillati disponibili: la mossa
             // giusta non è riordinare dal fornitore, è aprire un pacco
             <button
               onClick={() => onApriConfezione(p.boxCollegato.id)}
               title={`Sfusi sotto soglia, ma in magazzino ci sono ${p.boxCollegato.inMagazzino} pacchi sigillati di "${p.boxCollegato.nome}": aprine uno`}
-              style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#B8860B", background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
+              style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#B8860B", background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
             >
               Apri un pacco →
             </button>
           ) : p.boxCollegato && (p.esaurito || p.sottoScorta) ? (
-            <span title={`Sfusi sotto soglia e nessun pacco sigillato di "${p.boxCollegato.nome}" in magazzino: da riordinare`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
+            <span title={`Sfusi sotto soglia e nessun pacco sigillato di "${p.boxCollegato.nome}" in magazzino: da riordinare`} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
               Riordina dal fornitore
             </span>
           ) : p.bundle_con_giacenza_fisica && (p.esaurito || p.sottoScorta) ? (
             // il box sigillato ha una SUA soglia di riordino (Scorta min. sulla
             // riga): quando i pacchi scendono sotto, l'avviso è già di riordino
             // dal produttore — senza aspettare che finiscano del tutto
-            <span title={`Pacchi sigillati ${p.esaurito ? "esauriti" : "sotto la soglia di riordino"}: riordina dal produttore`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
+            <span title={`Pacchi sigillati ${p.esaurito ? "esauriti" : "sotto la soglia di riordino"}: riordina dal produttore`} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
               Riordina dal fornitore
             </span>
           ) : (
-            <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "2px 6px" }}>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "2px 6px" }}>
               {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
             </span>
           )}
@@ -45354,7 +45354,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
               <button
                 onClick={() => onApriConfezione(p.id)}
                 title="Apri una o più confezioni: i pezzi passano dallo scaffale dei sigillati a quello degli sfusi"
-                style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
+                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
               >
                 Apri confezione
               </button>
@@ -45364,47 +45364,47 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     ),
     "Prezzo vendita (IVA incl.)": (
         <td style={{ ...tdStyle }} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
-          <span style={{ ...fontBody, fontSize: 11, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <span style={{ ...fontBody, fontSize: 13, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
             {prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}
             {!p.iva_verificata && (
-              <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 12, lineHeight: 1 }}>⚠</span>
+              <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 14, lineHeight: 1 }}>⚠</span>
             )}
           </span>
         </td>
     ),
     "Prezzo netto vendita": (
         <td style={tdStyle} title="Prezzo di vendita senza IVA: e' questo che si confronta con il costo di acquisto, che e' netto anche lui">
-          <span style={{ ...fontBody, fontSize: 11, color: NAVY }}>
+          <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
             {p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}
           </span>
         </td>
     ),
     "Costo acquisto": (
         <td style={tdStyle} title={p.isBundle ? "Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" : "Si modifica solo dalla scheda prodotto (clic sul nome)"}>
-          <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 11, color: p.isBundle ? MUTED : NAVY }}>
+          <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 13, color: p.isBundle ? MUTED : NAVY }}>
             {p.costo_acquisto != null ? fmtEuroErp2(p.costo_acquisto) : "—"}
           </span>
         </td>
     ),
     "Margine %": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title="Quanto resta del prezzo netto, tolto il costo di acquisto">{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }} title="Quanto resta del prezzo netto, tolto il costo di acquisto">{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
     ),
     "Margine €": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title="Prezzo netto di vendita meno costo di acquisto: quanto si guadagna su un pezzo">{p.margineEuro != null ? fmtEuroErp2(p.margineEuro) : "N/D"}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }} title="Prezzo netto di vendita meno costo di acquisto: quanto si guadagna su un pezzo">{p.margineEuro != null ? fmtEuroErp2(p.margineEuro) : "N/D"}</td>
     ),
     "Cedibile carta/shop": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Pagamento con carta o dal sito: si versa l'IVA, quindi il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Pagamento con carta o dal sito: si versa l'IVA, quindi il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
     "Sicurezza": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: "#B8860B", whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile carta/shop (${fmtEuroErp2(p.cedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: "#B8860B", whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile carta/shop (${fmtEuroErp2(p.cedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
             <input type="number" min="0" max="100" step="1" value={sicurezzaBozza} placeholder={String(sicurezzaPunti)}
               onChange={(e) => setSicurezzaBozza(e.target.value)}
               onBlur={salvaSicurezzaProdotto}
               onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
               onClick={(e) => e.stopPropagation()}
-              style={{ ...fontBody, width: 38, fontSize: 10.5, fontWeight: 700, color: p.sicurezza_punti_pct != null ? NAVY : MUTED, textAlign: "center", padding: "2px 3px", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
-            <span style={{ fontSize: 10 }}>%</span>
+              style={{ ...fontBody, width: 38, fontSize: 12.5, fontWeight: 700, color: p.sicurezza_punti_pct != null ? NAVY : MUTED, textAlign: "center", padding: "2px 3px", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+            <span style={{ fontSize: 12 }}>%</span>
             <span>{p.sicurezzaEuro != null ? `−${fmtEuroErp2(p.sicurezzaEuro)}` : "—"}</span>
           </div>
         </td>
@@ -45413,24 +45413,24 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={{ ...tdStyle, whiteSpace: "nowrap", textAlign: "center" }}>
           <button onClick={(e) => { e.stopPropagation(); riallineaSicurezzaProdotto(); }} disabled={p.sicurezza_punti_pct == null}
             title={p.sicurezza_punti_pct != null ? `Torna alla percentuale generale (${sicurezzaPunti}%)` : "Segue gia' la percentuale generale"}
-            style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: p.sicurezza_punti_pct != null ? "#fff" : MUTED, background: p.sicurezza_punti_pct != null ? NAVY : "transparent", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 8, padding: "4px 7px", cursor: p.sicurezza_punti_pct != null ? "pointer" : "default", opacity: p.sicurezza_punti_pct != null ? 1 : 0.6 }}>
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: p.sicurezza_punti_pct != null ? "#fff" : MUTED, background: p.sicurezza_punti_pct != null ? NAVY : "transparent", border: `1px solid ${p.sicurezza_punti_pct != null ? NAVY : CREAM_BORDER}`, borderRadius: 8, padding: "4px 7px", cursor: p.sicurezza_punti_pct != null ? "pointer" : "default", opacity: p.sicurezza_punti_pct != null ? 1 : 0.6 }}>
             Riallinea %
           </button>
         </td>
     ),
     "Punti totali prodotto": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
     ...Object.fromEntries([0, 1, 2].map((i) => [`Quota ${i + 1}`, (
-        <td key={`q${i}`} style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }} title={p.punti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.punti)} punti totali, in euro` : "Senza punti non c'e' quota"}>{p.punti != null ? fmtEuroErp2(euroQuota(p.punti, i)) : "—"}</td>
+        <td key={`q${i}`} style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }} title={p.punti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.punti)} punti totali, in euro` : "Senza punti non c'e' quota"}>{p.punti != null ? fmtEuroErp2(euroQuota(p.punti, i)) : "—"}</td>
     )])),
     "Venduto": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
     ),
     "S/R": (
         <td style={{ ...tdStyle, textAlign: "center" }}>
           {p.giacenza_propria === false || p.conta_magazzino === false ? (
-            <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
+            <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>
           ) : (() => {
             const mancanoSR = [
               p.soglia_riordino == null ? "soglia di riordino" : null,
@@ -45452,7 +45452,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "": (
         <td style={{ ...tdStyle, textAlign: "center" }}>
           {(p.quantitaVenduta || 0) > 0 ? (
-            <span title={`Ha uno storico di vendite (${p.quantitaVenduta} pezzi): non si può cancellare`} style={{ ...fontBody, fontSize: 11, color: "#D8D3C6" }}>—</span>
+            <span title={`Ha uno storico di vendite (${p.quantitaVenduta} pezzi): non si può cancellare`} style={{ ...fontBody, fontSize: 13, color: "#D8D3C6" }}>—</span>
           ) : (
             <button
               onClick={() => onElimina(p)}
@@ -45475,14 +45475,14 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Ordina": (
         <td style={{ ...tdStyle, textAlign: "center" }}>
           {p.conta_magazzino === false ? (
-            <span style={{ ...fontBody, fontSize: 11, color: "#D8D3C6" }}>—</span>
+            <span style={{ ...fontBody, fontSize: 13, color: "#D8D3C6" }}>—</span>
           ) : ordineAperto ? (
-            <span title="Ordine gia' dichiarato: e' in attesa di ricezione" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 8, padding: "3px 7px", whiteSpace: "nowrap" }}>Ordinato</span>
+            <span title="Ordine gia' dichiarato: e' in attesa di ricezione" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 8, padding: "3px 7px", whiteSpace: "nowrap" }}>Ordinato</span>
           ) : (
             <button
               onClick={() => onOrdina?.(p)}
               title="Apri l'ordine di questo fornitore con questo prodotto gia' spuntato, e da li' dichiara l'ordine"
-              style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "5px 8px", cursor: "pointer", whiteSpace: "normal" }}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, lineHeight: 1.25, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "5px 8px", cursor: "pointer", whiteSpace: "normal" }}
             >
               Associa e ordina
             </button>
@@ -45495,13 +45495,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   // prezzo al pubblico (vedi cedibileContantiDi). Le altre celle restano
   // vuote, cosi' ogni numero sta sotto la colonna che gli da' il nome.
   // Si accende per tutti i prodotti insieme col tasto sopra la tabella.
-  const tdContanti = { padding: "3px 6px 7px", borderTop: "none", textAlign: "center", background: "#FBF7EE", ...fontBody, fontSize: 10.5, color: "#8A6A1B", whiteSpace: "nowrap" };
+  const tdContanti = { padding: "3px 6px 7px", borderTop: "none", textAlign: "center", background: "#FBF7EE", ...fontBody, fontSize: 12.5, color: "#8A6A1B", whiteSpace: "nowrap" };
   const lordo = prezzoAlPubblico(p);
   const margineContantiEuro = lordo != null && p.costo_acquisto != null ? round2(lordo - p.costo_acquisto) : null;
   const celleContanti = {
     "Prodotto": (
         <td style={{ ...tdContanti, textAlign: "left" }}>
-          <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", background: "#F3E7CB", borderRadius: 6, padding: "2px 6px" }}>Contanti</span>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", background: "#F3E7CB", borderRadius: 6, padding: "2px 6px" }}>Contanti</span>
         </td>
     ),
     "Prezzo netto vendita": <td style={tdContanti} title="In contanti si tiene tutto il prezzo al pubblico: e' questa la base del conto">{lordo != null ? fmtEuroErp2(lordo) : "—"}</td>,
@@ -46559,7 +46559,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                       onClick={() => ordinaPer(col.campo)}
                       onContextMenu={(e) => rinominaColonna(e, col.label)}
                       title={`${col.campo ? (ruoloUtente === "programmatore" ? "Clicca per ordinare · tasto destro per rinominare · " : "Clicca per ordinare · ") : ""}trascina il titolo per spostare la colonna`}
-                      style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, borderLeft: colonnaSopra === col.label ? `2px solid ${NAVY}` : "2px solid transparent",
+                      style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, borderLeft: colonnaSopra === col.label ? `2px solid ${NAVY}` : "2px solid transparent",
                         // i titoli vanno a capo: tagliati con i puntini
                         // ("PREZZO V…", "COSTO ACQ…") si leggevano solo
                         // allargando la colonna, e due colonne di prezzo
@@ -46573,7 +46573,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         return (
                           <div style={{ marginTop: 3 }} draggable={false} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                             <button onClick={riallineaSicurezzaTutti} disabled={conPropria === 0} title={conPropria ? `${conPropria} prodotti hanno una percentuale propria: riportali tutti al ${sicurezzaPunti}%` : "Nessun prodotto ha una percentuale propria"}
-                              style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: conPropria ? NAVY : MUTED, background: "#fff", border: `1px solid ${conPropria ? NAVY : CREAM_BORDER}`, borderRadius: 8, padding: "3px 6px", cursor: conPropria ? "pointer" : "default", textTransform: "none", letterSpacing: 0 }}>
+                              style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: conPropria ? NAVY : MUTED, background: "#fff", border: `1px solid ${conPropria ? NAVY : CREAM_BORDER}`, borderRadius: 8, padding: "3px 6px", cursor: conPropria ? "pointer" : "default", textTransform: "none", letterSpacing: 0 }}>
                               Tutti ({conPropria})
                             </button>
                           </div>
@@ -46585,8 +46585,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
                           onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                           <input type="number" min="0" max="100" step="1" value={sicurezzaPunti} onChange={(e) => cambiaSicurezzaPunti(e.target.value)} draggable={false} title="Percentuale di sicurezza tolta dal cedibile prima di calcolare i punti. Vale in tutta l'app, come in Gestione punti"
-                            style={{ ...fontBody, width: 40, fontSize: 10.5, fontWeight: 700, color: "#B8860B", textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
-                          <span style={{ fontSize: 10, color: NAVY }}>%</span>
+                            style={{ ...fontBody, width: 40, fontSize: 12.5, fontWeight: 700, color: "#B8860B", textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+                          <span style={{ fontSize: 12, color: NAVY }}>%</span>
                         </div>
                       )}
                       {col.quotaIndice != null && (
@@ -46596,8 +46596,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
                           onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                           <input type="number" min="0" max="100" step="1" value={pctQuotaColonna(col.quotaIndice)} onChange={(e) => cambiaPctQuotaColonna(col.quotaIndice, e.target.value)} draggable={false}
-                            style={{ ...fontBody, width: 40, fontSize: 10.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
-                          <span style={{ fontSize: 10, color: NAVY }}>%</span>
+                            style={{ ...fontBody, width: 40, fontSize: 12.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+                          <span style={{ fontSize: 12, color: NAVY }}>%</span>
                         </div>
                       )}
                       {/* la maniglia sta tutta dentro la sua colonna:
