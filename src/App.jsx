@@ -35460,49 +35460,85 @@ function CampoNumero({ valore, onCambia, min = 0, max = null, step = "any", styl
 // si leggono come quattro righe — quanto spendi, quanto ti sconto.
 function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = false }) {
   const g = gruppiFasceValidi(valore);
-  function cambiaGruppo(i, nuoveFasce) {
-    const gruppi = g.gruppi.slice();
-    gruppi[i] = fasceScontoValide(nuoveFasce);
+  function cambiaSoglia(i, n) {
+    const soglie = g.soglie.slice();
+    soglie[i] = n;
+    onCambia({ soglie: soglieSpesaValide(soglie), gruppi: g.gruppi });
+  }
+  function cambiaPercentuale(riga, colonna, n) {
+    const gruppi = g.gruppi.map((gr, i) => (i === riga ? gr.map((f, k) => (k === colonna ? { ...f, percentuale: n } : f)) : gr));
     onCambia({ soglie: g.soglie, gruppi });
   }
+  const cella = { padding: isMobile ? "4px 3px" : "5px 6px", textAlign: "center" };
+  const intestazione = { ...cella, ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.2, whiteSpace: "nowrap" };
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12, background: BG, borderRadius: 12, padding: "10px 12px" }}>
-        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie di spesa</span>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.45 }}>
+        {senzaWoo
+          ? <>Valgono solo al POS dell'app con <b style={{ color: NAVY }}>Contanti</b> o <b style={{ color: NAVY }}>Buono Amazon</b>. Percentuali sul lordo; un prodotto senza costo d'acquisto non ha margine noto e non si sconta.</>
+          : <>Quanto rende un prodotto decide quanto si sconta, e quanto si spende decide quale riga vale. Percentuali <b style={{ color: NAVY }}>sul lordo</b>, lo stesso numero al POS e sul sito; un prodotto senza costo d'acquisto non si sconta.</>}
+      </div>
+      {/* Tutto in una tabella sola: quattro righe di spesa per sei colonne
+          di margine. Prima ogni riga era una scheda dentro una scheda, con
+          la stessa spiegazione ripetuta quattro volte: ventiquattro numeri
+          occupavano due schermate, e per confrontarli bisognava ricordarli */}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: isMobile ? 560 : 0 }}>
+          <thead>
+            <tr>
+              <th style={{ ...intestazione, textAlign: "left", paddingLeft: 0 }}>Spesa \ margine</th>
+              {FASCE_MARGINE.map((f) => (
+                <th key={f.da} style={intestazione}>{numeroFascia(f.da)}–{numeroFascia(f.a)}%</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {g.gruppi.map((gruppo, i) => (
+              <tr key={i} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <td style={{ ...cella, textAlign: "left", paddingLeft: 0, ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#8A6A1B", whiteSpace: "nowrap" }}>
+                  {etichettaFasciaSpesa(i, g.soglie)}
+                </td>
+                {gruppo.map((f, k) => (
+                  <td key={f.da} style={cella}>
+                    <CampoNumero
+                      valore={f.percentuale} min={0} max={100}
+                      titolo={`Spesa ${etichettaFasciaSpesa(i, g.soglie).toLowerCase()}, margine ${numeroFascia(f.da)}–${numeroFascia(f.a)}%`}
+                      onCambia={(n) => cambiaPercentuale(i, k, n)}
+                      style={{ ...inputStyle, width: "100%", minWidth: isMobile ? 46 : 58, textAlign: "center", padding: isMobile ? "5px 2px" : "6px 4px", fontWeight: 700, fontSize: isMobile ? 12 : 13 }}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>Soglie</span>
         {g.soglie.map((v, i) => (
-          <label key={i} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: MUTED }}>
+          <label key={i} style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 12, color: MUTED }}>
             {i === 0 ? "prima a" : "poi a"}
             <CampoNumero
               valore={v} min={0}
               titolo="Scrivi la soglia e premi Invio, o esci dal campo"
-              onCambia={(n) => {
-                const soglie = g.soglie.slice();
-                soglie[i] = n;
-                onCambia({ soglie: soglieSpesaValide(soglie), gruppi: g.gruppi });
-              }}
-              style={{ ...inputStyle, width: 88, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
+              onCambia={(n) => cambiaSoglia(i, n)}
+              style={{ ...inputStyle, width: 74, textAlign: "center", padding: "5px 6px", fontWeight: 700, fontSize: 12.5 }}
             />
             <span style={{ fontWeight: 700, color: NAVY }}>€</span>
           </label>
         ))}
-        <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 200px", minWidth: 0 }}>
-          Decide la fascia il totale del carrello a listino, prima dello sconto. Scrivi il numero e premi Invio (o esci dal campo).
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, flex: "1 1 160px", minWidth: 0 }}>
+          Decide la riga il totale del carrello a listino, prima dello sconto.
         </span>
       </div>
-      {g.gruppi.map((gruppo, i) => (
-        <div key={i} style={{ marginBottom: i === 3 ? 0 : 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 14 }}>
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-            {etichettaFasciaSpesa(i, g.soglie)}
-          </div>
-          <SceltaRegolaSconto soloFasce senzaWoo={senzaWoo || i > 0} tipo="fasce" fasce={gruppo}
-            onCambiaTipo={() => {}} onCambiaFasce={(f) => cambiaGruppo(i, f)}
-            prodottiShop={prodottiShop} isMobile={isMobile} senzaSpiegazione={i > 0} />
-        </div>
-      ))}
+      {!senzaWoo && (
+        <SceltaRegolaSconto soloFasce soloStrumentiWoo tipo="fasce" fasce={g.gruppi[0]}
+          onCambiaTipo={() => {}} onCambiaFasce={() => {}} prodottiShop={prodottiShop} isMobile={isMobile} />
+      )}
     </div>
   );
 }
-function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile, soloFasce = false, senzaWoo = false, senzaSpiegazione = false }) {
+function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile, soloFasce = false, senzaWoo = false, senzaSpiegazione = false, soloStrumentiWoo = false }) {
   const elenco = fasceScontoValide(fasce);
   const aFasce = soloFasce || tipo === "fasce";
   // dentro le quattro fasce di spesa la spiegazione si ripeterebbe quattro
@@ -35538,8 +35574,8 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
       </div>
       )}
       {aFasce && (
-        <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? 12 : 16, background: "#fff" }}>
-          {!senzaSpiegazione && (
+        <div style={soloStrumentiWoo ? { marginTop: 10 } : { border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? 12 : 16, background: "#fff" }}>
+          {!senzaSpiegazione && !soloStrumentiWoo && (
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45, maxWidth: 640 }}>
             {senzaWoo ? (
               <>Valgono solo al POS dell'app quando si sceglie <b style={{ color: NAVY }}>Contanti</b> o <b style={{ color: NAVY }}>Buono Amazon</b>: il sito non le vede.
@@ -35552,6 +35588,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
             )}
           </div>
           )}
+          {!soloStrumentiWoo && (
           <div style={{ display: "flex", gap: isMobile ? 8 : 14, flexWrap: "wrap" }}>
             {elenco.map((f, i) => (
               <div key={f.da} style={{ flex: "1 1 110px", minWidth: 96 }}>
@@ -35565,6 +35602,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
               </div>
             ))}
           </div>
+          )}
           {/* Il sito sconta a fasce davvero, non a media, ma solo se sa
               quanto rende ogni prodotto: questo tasto glielo scrive. Da
               rifare quando cambiano costi o prezzi. Le fasce dei contanti
