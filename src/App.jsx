@@ -66437,8 +66437,11 @@ export default function App() {
       {!isMobile && (
         // riserva lo spazio occupato dalla barra fissa qui sopra, altrimenti
         // (essendo "position:fixed") coprirebbe l'inizio del contenuto di
-        // ogni schermata invece di limitarsi ad affiancarlo
-        <div style={{ height: 76 }} />
+        // ogni schermata invece di limitarsi ad affiancarlo.
+        // In home 60px in meno: la barra e' centrata, e a sinistra — dove
+        // c'e' ELITEDERMA — quello spazio resta vuoto e basta. Le altre
+        // schermate, che scrivono anche al centro, tengono i 76
+        <div style={{ height: view === "home" ? 16 : 76 }} />
       )}
       {view === "home" && (
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "12px 20px 16px" : "28px 32px 60px" }}>
