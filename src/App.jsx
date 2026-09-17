@@ -1493,21 +1493,28 @@ function IconaDataAccento({ size = 26, color = GOLD }) {
     </svg>
   );
 }
-function IconaMasterAccento({ size = 26, color = GOLD }) {
+// Le due icone della scheda Date/Master/Disponibilita' rifatta: il tocco
+// di laurea al posto della sagoma di persona, e il gruppo di tre al posto
+// dei due. Stessa gabbia 24 e stesso tratto delle altre icone dell'app
+function IconaToccoAccento({ size = 26, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c0-4.2 3.6-6.5 8-6.5s8 2.3 8 6.5" />
+      <path d="M2.4 9 12 4.4 21.6 9 12 13.6 2.4 9Z" />
+      <path d="M6.6 11.1v4.1c0 1.6 2.4 2.8 5.4 2.8s5.4-1.2 5.4-2.8v-4.1" />
+      <path d="M20.2 10.3v4.4" />
+      <circle cx="20.2" cy="16.4" r="1.35" fill={color} stroke="none" />
     </svg>
   );
 }
-function IconaDisponibilitaAccento({ size = 26, color = GOLD }) {
+function IconaTrePersoneAccento({ size = 26, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="9" cy="8.5" r="3.3" />
-      <path d="M2.5 20c0-3.6 2.9-5.6 6.5-5.6" />
-      <circle cx="16.5" cy="9.3" r="2.8" />
-      <path d="M13.3 14.7c2.9.2 6.2 1.8 6.2 5.3" />
+      <circle cx="12" cy="7.2" r="2.7" />
+      <circle cx="4.9" cy="9.2" r="2.1" />
+      <circle cx="19.1" cy="9.2" r="2.1" />
+      <path d="M7.9 19.3v-2.5c0-1.7 1.8-2.9 4.1-2.9s4.1 1.2 4.1 2.9v2.5" />
+      <path d="M1.7 18.2v-1.7c0-1.4 1.4-2.5 3.2-2.5h.7" />
+      <path d="M22.3 18.2v-1.7c0-1.4-1.4-2.5-3.2-2.5h-.7" />
     </svg>
   );
 }
@@ -2717,6 +2724,92 @@ function fmtDataLunga(dataStr) {
 // che si leggono in colonna. Su una riga sola "13–18 settembre 2026"
 // e' lungo il triplo del nome della master accanto, e le tre celle non si
 // incolonnano piu'.
+// La scheda Date / Master / Disponibilita' in cima alla classe. Una sola
+// per il telefono e per la scrivania: ogni misura e' una frazione della
+// larghezza VERA della scheda, misurata, quindi il disegno e' identico e
+// cambia solo di scala. Prima erano due disegni diversi — tre colonnine
+// dentro un riquadro crema da scrivania, tre schedine bianche affiancate
+// dal telefono — e andavano ritoccati a mano uno per uno.
+//
+// La scala si ferma in basso a 0,62: sotto, su un telefono stretto, le
+// etichette scenderebbero sotto i 9px e non si leggerebbero piu'. Meglio
+// una scheda un filo piu' alta in proporzione che una illeggibile.
+const LARGHEZZA_RIFERIMENTO_DATI_CLASSE = 720;
+function SchedaDatiClasse({ celle }) {
+  const rif = useRef(null);
+  const [larghezza, setLarghezza] = useState(null);
+  useLayoutEffect(() => {
+    const el = rif.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const misura = () => setLarghezza(el.clientWidth || null);
+    misura();
+    const osservatore = new ResizeObserver(misura);
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, []);
+  const k = Math.min(1.2, Math.max(0.62, (larghezza || LARGHEZZA_RIFERIMENTO_DATI_CLASSE) / LARGHEZZA_RIFERIMENTO_DATI_CLASSE));
+  // "quota": la misura disegnata sui 720px di riferimento, riportata alla
+  // larghezza vera. Mezzo pixel basta e avanza, i tondi netti fanno
+  // saltare le proporzioni sulle misure piccole
+  const q = (n) => Math.round(n * k * 2) / 2;
+  const pastiglia = q(76);
+  return (
+    <div
+      ref={rif}
+      style={{
+        position: "relative", boxSizing: "border-box",
+        borderRadius: q(26), padding: `${q(22)}px ${q(20)}px ${q(24)}px`,
+        background: "linear-gradient(145deg, #FCFBF9 0%, #F1ECE4 100%)",
+        border: "1px solid rgba(255,255,255,0.9)",
+        // in rilievo: luce da sopra a sinistra, ombra sotto a destra
+        boxShadow: `0 ${q(12)}px ${q(30)}px rgba(126,104,72,0.16), 0 ${q(2)}px ${q(5)}px rgba(126,104,72,0.08), inset 0 1px 0 rgba(255,255,255,0.95)`,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "stretch" }}>
+        {celle.map((cella, i) => (
+          <React.Fragment key={cella.chiave}>
+            {i > 0 && (
+              // il filo fra una colonna e l'altra non arriva ai bordi: parte
+              // all'altezza della pastiglia e si ferma prima del fondo
+              <div style={{ width: 1, flexShrink: 0, alignSelf: "stretch", background: "#E2D6BE", margin: `${q(8)}px 0 ${q(2)}px` }} />
+            )}
+            <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: `0 ${q(9)}px` }}>
+              <span
+                style={{
+                  width: pastiglia, height: pastiglia, borderRadius: "50%", flexShrink: 0,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  background: "linear-gradient(145deg, #F0EAE1 0%, #FDFCFA 100%)",
+                  // incavata: l'opposto della scheda, cosi' il tondo sembra
+                  // scavato dentro il rilievo invece di appoggiato sopra
+                  boxShadow: `inset ${q(3)}px ${q(3)}px ${q(7)}px rgba(150,127,96,0.22), inset -${q(3)}px -${q(3)}px ${q(7)}px rgba(255,255,255,0.95)`,
+                  marginBottom: q(14),
+                }}
+              >
+                <cella.Icona size={q(38)} color={NAVY} />
+              </span>
+              <div style={{ ...fontBody, fontSize: q(13.5), fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: q(2), lineHeight: 1.1, textAlign: "center", marginBottom: q(8), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
+                {cella.label}
+              </div>
+              {cella.righe.map((riga, j) => (
+                <div
+                  key={j}
+                  style={{
+                    ...fontDisplay, fontWeight: 800,
+                    fontSize: j === 0 && cella.primaGrande ? q(30) : q(24),
+                    color: cella.colore || NAVY, lineHeight: 1.16, textAlign: "center", overflowWrap: "anywhere",
+                  }}
+                >
+                  {riga}
+                </div>
+              ))}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function righeIntervalloData(inizio, fine) {
   if (!inizio) return ["—"];
   const [annoI, meseI, giornoI] = inizio.split("-").map(Number);
@@ -29192,111 +29285,37 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             </div>
             {manigliaSpazio("dopoTitolo")}
             {(() => {
-              // Ogni cella si legge in colonna: il dato che conta sulla
-              // prima riga, il resto sotto. Cosi' le tre celle si leggono
-              // anche in orizzontale — 13-18 / MARTINA / 4 posti — invece
-              // di essere tre frasi di lunghezza diversa che vanno a capo
-              // ognuna dove capita.
+              // Una sola scheda per telefono e scrivania (mock del
+              // 17/09/2026): tre colonne con la pastiglia tonda incavata,
+              // l'etichetta piccola in oro e il dato sotto. Il disegno e'
+              // lo stesso ovunque, cambia solo la scala — vedi
+              // SchedaDatiClasse.
               const nomeMaster = (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?";
               const parole = nomeMaster.split(/\s+/).filter(Boolean);
-              const celleIntestazione = [
+              const celle = [
                 {
-                  chiave: "date", Icona: IconaDataAccento, label: "Date",
+                  chiave: "date", Icona: IconaDataAccento, label: "Date", primaGrande: true,
                   righe: righeIntervalloData(corsoData.data_inizio, corsoData.data_fine),
                 },
                 corsoData.master_id && {
-                  chiave: "master", Icona: IconaMasterAccento, label: "Master",
+                  chiave: "master", Icona: IconaToccoAccento, label: "Master",
                   righe: parole.length > 1 ? [parole[0], parole.slice(1).join(" ")] : [nomeMaster],
                 },
                 {
-                  chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità",
+                  chiave: "disponibilita", Icona: IconaTrePersoneAccento, label: "Disponibilità",
+                  // classe piena: il numero si stacca in rosso. E' l'unica
+                  // cosa che cambia colore, ed e' quella che decide se si
+                  // puo' iscrivere ancora qualcuno
+                  colore: liberi === 0 ? "#C0392B" : NAVY,
                   righe: [`${liberi} post${liberi === 1 ? "o" : "i"}`, liberi === 1 ? "libero" : "liberi"],
                 },
               ].filter(Boolean);
-              if (isMobile) {
-                // Da telefono le tre celle non sono tre colonnine di testo
-                // centrato dentro un riquadro crema: sono tre voci con la
-                // loro icona, l'etichetta accanto e il dato sotto. Il
-                // riquadro sparisce — a incorniciare c'e' gia' la scheda —
-                // e i posti liberi si staccano su verde: e' il numero che
-                // decide se si puo' iscrivere qualcuno, e in mezzo agli
-                // altri due si leggeva come un dato qualunque.
-                const { numero: giorni, sotto: siglaMese } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
-                const anno = String(corsoData.data_inizio || "").slice(0, 4);
-                const VERDE_FONDO = "#EFF4EC";
-                const VERDE = "#5F7F4B";
-                // Mock del 16/09/2026: tre schede bianche affiancate, ognuna
-                // con l'icona grande in un quadrato a sinistra e, a destra,
-                // l'etichetta piccola, il dato grande e il resto sotto. La
-                // disponibilita' e' su verde, con l'icona verde
-                const cella = (chiave, Icona, label, contenuto) => {
-                  const disponibilita = chiave === "disponibilita";
-                  return (
-                    <div key={chiave} style={{
-                      flex: "1 1 0", minWidth: 0, display: "flex", alignItems: "flex-start", gap: 8,
-                      padding: "12px 10px 12px 10px", borderRadius: 18,
-                      background: disponibilita ? VERDE_FONDO : "#fff",
-                      boxShadow: "0 6px 16px rgba(14,27,51,0.08)", border: `1px solid ${disponibilita ? "#E1EAD9" : "#F1EDE4"}`,
-                    }}>
-                      <span style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: disponibilita ? "#E1EAD9" : "#F1ECDF", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                        <Icona size={24} color={disponibilita ? VERDE : GOLD} />
-                      </span>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1.2, lineHeight: 1, marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
-                        {contenuto}
-                      </div>
-                    </div>
-                  );
-                };
-                return (
-                  <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, marginBottom: spaziIscrizioni.dopoDateBox }}>
-                    {cella("date", IconaDataAccento, "Date", (
-                      <>
-                        <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: NAVY, lineHeight: 1.05, whiteSpace: "nowrap" }}>{String(giorni).replace("-", " - ")}</div>
-                        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#6E7391", lineHeight: 1.2, marginTop: 3, textTransform: "uppercase", letterSpacing: 0.6 }}>{[siglaMese, anno].filter(Boolean).join(" ")}</div>
-                      </>
-                    ))}
-                    {corsoData.master_id && cella("master", IconaMasterAccento, "Master", (
-                      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: NAVY, lineHeight: 1.2, textTransform: "uppercase", overflowWrap: "anywhere" }}>
-                        {(master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?"}
-                      </div>
-                    ))}
-                    {cella("disponibilita", IconaDisponibilitaAccento, "Disponibilità", (
-                      <>
-                        <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: liberi === 0 ? "#C0392B" : NAVY, lineHeight: 1.05 }}>{liberi}</div>
-                        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, lineHeight: 1.2, marginTop: 3, whiteSpace: "nowrap" }}>post{liberi === 1 ? "o" : "i"} liber{liberi === 1 ? "o" : "i"}</div>
-                      </>
-                    ))}
-                  </div>
-                );
-              }
               return (
-                <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: `${spaziIscrizioni.dateBoxPaddingV}px 14px`, marginBottom: spaziIscrizioni.dopoDateBox }}>
-                  {/* Tre celle affiancate a qualunque larghezza, come sul
-                      desktop. Su un telefono ognuna vale ~105px: prima ne
-                      restavano ~35 di testo e "MARIANNA SILVESTRI" andava a
-                      capo una lettera per riga. Lo spazio si recupera
-                      togliendo l'icona - 38px piu' 11 di stacco, meta'
-                      colonna spesa per ripetere quello che l'etichetta gia'
-                      dice - e abbassando i corpi: cosi' il nome va a capo
-                      fra le due parole, non fra le lettere. */}
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? `repeat(${celleIntestazione.length}, minmax(0, 1fr))` : `repeat(${celleIntestazione.length}, 1fr)`, gap: isMobile ? 6 : 10 }}>
-                    {celleIntestazione.map(({ chiave, label, righe }, idx) => (
-                      // il divisore è più scuro del bordo della card: separa tre
-                      // dati accostati, e un filo crema su fondo crema non li
-                      // teneva distinti
-                      <div key={chiave} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0, paddingLeft: idx > 0 ? (isMobile ? 7 : 14) : 0, borderLeft: idx > 0 ? `1px solid #D5C9AF` : "none" }}>
-                        <div style={{ ...fontBody, fontSize: isMobile ? 16 : 18, color: GOLD, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, lineHeight: 1.2, textAlign: "center" }}>{label}</div>
-                        {righe.map((riga, i) => (
-                          <div key={i} style={{ ...fontBody, fontSize: isMobile ? 17.5 : 21, fontWeight: 700, color: NAVY, lineHeight: 1.2, textAlign: "center", overflowWrap: "anywhere" }}>{riga}</div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
+                <div style={{ position: "relative", marginBottom: spaziIscrizioni.dopoDateBox }}>
+                  <SchedaDatiClasse celle={celle} />
                 </div>
               );
             })()}
-            {manigliaRidimensiona("dateBoxPaddingV", "y")}
             {manigliaSpazio("dopoDateBox")}
             {tornaSpeciale ? (
               isMobile ? (
