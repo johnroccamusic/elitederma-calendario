@@ -60378,7 +60378,10 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         )}
       </div>
 
-      <div style={labelStyle}>Consulenze</div>
+      {/* Nessun titolo sopra: il nome sta sul tasto, come nel blocco dei
+          prodotti extra kit qui sotto. Un'etichetta e un tasto che dicono
+          la stessa parola occupano due righe per dare un'informazione
+          sola. */}
       <div style={{ marginBottom: 20 }}>
         {/* Qui si spediscono pezzi interi: quanti barattoli partono, non
             quanto sono pieni. Il livello di riempimento e' un'altra cosa e
@@ -60422,7 +60425,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           </div>
         ) : (
           <button onClick={() => setPickerConsulenzaAperto(true)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", marginTop: consulenzeEdizione.length ? 8 : 0, width: "100%" }}>
-            + Aggiungi
+            + Aggiungi consulenze
           </button>
         )}
       </div>
