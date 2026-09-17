@@ -55883,6 +55883,24 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // sconti molto diversi. Si leggeva "−4,81%" su un carrello che ne stava
   // ricevendo l'8,55: il conto era giusto, il cartellino no.
   const percentualeErogata = subtotale > 0 ? round2((scontoApplicato / subtotale) * 100) : 0;
+  // Quanto manca alla fascia di spesa successiva. Si dice SOLO la cifra
+  // che manca, mai quanto sconto si otterrebbe: la percentuale media
+  // dipende da COSA si aggiunge, non da quanto si spende — un prodotto a
+  // basso margine supera la soglia e fa scendere la media, uno senza
+  // costo d'acquisto la supera e non prende nulla. Promettere un numero
+  // sarebbe promettere una cosa falsa.
+  const mancaAllaFascia = (() => {
+    if (!couponAFasce || subtotale <= 0) return null;
+    const g = gruppiFasceValidi(fasceCouponAttive);
+    const i = indiceFasciaSpesa(subtotale, g.soglie);
+    if (i >= 3) return null;
+    const soglia = g.soglie[i];
+    const manca = round2(soglia - subtotale);
+    if (!(manca > 0)) return null;
+    // se la fascia dopo non conviene su niente, non ha senso spingerci
+    const migliore = g.gruppi[i + 1].some((f, k) => f.percentuale > g.gruppi[i][k].percentuale);
+    return migliore ? manca : null;
+  })();
   const totaleNetto = round2(subtotale - scontoApplicato);
   // La spedizione si paga: 6,90 sul totale quando la vendita va spedita.
   // Entra nel conto come una riga a se', cosi' il totale e' sempre la
@@ -56473,6 +56491,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {scontoApplicato > 0 && (
         <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
           <span>Sconto applicato</span><span>− {fmtEuroErp2(scontoApplicato)}</span>
+        </div>
+      )}
+
+      {mancaAllaFascia && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: isMobile ? 12 : 12.5, fontWeight: 700, color: "#8A6A1B", background: "#FBF3E0", border: "1px solid #EAD9B0", borderRadius: 12, padding: isMobile ? "7px 10px" : "8px 12px", marginBottom: isMobile ? 6 : 10 }}>
+          <span style={{ flexShrink: 0 }}>↑</span>
+          <span>Mancano {fmtEuroErp2(mancaAllaFascia)} per la prossima fascia di sconto.</span>
         </div>
       )}
 
