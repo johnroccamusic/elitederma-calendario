@@ -37520,7 +37520,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
       data={dataDebito} titolo={fornitore || nome} corsoLabel={oggetto || corsoLabel}
       chips={[
         categoriaNome ? { Icona: IconaQiDocumento, testo: categoriaNome } : null,
-        fatturaAssociata ? `Fattura n. ${numeroDocumento || "—"}` : "In attesa di fattura",
+        fatturaAssociata ? `Fattura n. ${numeroDocumento || "—"}` : { testo: "In attesa di fattura", allerta: true },
         iban ? `IBAN ${iban}` : null,
       ]}
       importo={fmtEuroErp(totale)} piede={piede}
@@ -37730,9 +37730,14 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
               {chips.filter(Boolean).map((c, i) => {
                 const Icona = typeof c === "object" ? c.Icona : null;
                 const testo = typeof c === "object" ? c.testo : c;
+                // "allerta": la pastiglia si stacca in rosso. Serve a
+                // "In attesa di fattura", che non e' un'etichetta come le
+                // altre — e' la cosa che manca
+                const allerta = typeof c === "object" && c.allerta;
+                const colore = allerta ? "#C0392B" : NAVY;
                 return (
-                  <span key={i} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG_CHIARO, borderRadius: 12, padding: "7px 12px", display: "inline-flex", alignItems: "center", gap: 7 }}>
-                    {Icona && <Icona size={14} color={NAVY} />}{testo}
+                  <span key={i} style={{ ...fontBody, fontSize: 12, fontWeight: allerta ? 700 : 600, color: colore, background: allerta ? "#FBE4E1" : BG_CHIARO, borderRadius: 12, padding: "7px 12px", display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    {Icona && <Icona size={14} color={colore} />}{testo}
                   </span>
                 );
               })}
@@ -40945,6 +40950,22 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     setMsg("");
     const totaleDoc = Number(doc.totale) || 0;
     if (!(totaleDoc > 0)) { setMsg("La fattura non ha un importo."); return; }
+    // Questo tasto crea una spesa NUOVA. Se i costi di quel fornitore sono
+    // gia' in elenco — la sala, l'alloggio, il compenso — quello che serve
+    // e' "Associa a una spesa", che li unisce sotto la fattura. Premendo
+    // questo si finisce con gli stessi soldi contati due volte, ed e'
+    // successo davvero: meglio chiederlo prima che ripulire dopo.
+    const nomeFornitoreDoc = fornitoriById[doc.fornitore_id]?.nome || "";
+    const giaInElenco = nomeFornitoreDoc
+      ? daPagare.filter((r) => (r.fornitore || "").toLowerCase().includes(nomeFornitoreDoc.toLowerCase().slice(0, 12)))
+      : [];
+    if (giaInElenco.length > 0) {
+      const elenco = giaInElenco.slice(0, 5).map((r) => `· ${r.nome} — ${fmtEuroErp(r.totale)}`).join("\n");
+      const totaleGia = round2(giaInElenco.reduce((t, r) => t + (Number(r.totale) || 0), 0));
+      if (!window.confirm(
+        `${nomeFornitoreDoc} ha gia' ${giaInElenco.length} cost${giaInElenco.length === 1 ? "o" : "i"} da pagare nello Scadenzario, per ${fmtEuroErp(totaleGia)}:\n\n${elenco}\n\n"Crea scadenza di pagamento" ne aggiunge una NUOVA da ${fmtEuroErp(totaleDoc)}, e gli stessi soldi finirebbero contati due volte.\n\nSe questa fattura copre quei costi, annulla e usa "Associa a una spesa": li unisce in una riga sola.\n\nCreare lo stesso una spesa nuova?`
+      )) return;
+    }
     const precedente = (spese || [])
       .filter((sp) => sp.fornitore_id && sp.fornitore_id === doc.fornitore_id && sp.sottocategoria_id)
       .sort((a, b) => String(b.data_documento || "").localeCompare(String(a.data_documento || "")))[0] || null;
@@ -40972,9 +40993,12 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     await supabase.from("documento_fornitore")
       .update({ importo_allocato: allocato, stato: allocato >= totaleDoc - 0.01 ? "riconciliato" : doc.stato })
       .eq("id", doc.id);
+    // la data va detta: la scadenza puo' cadere in un mese diverso da
+    // quello che si sta guardando, e allora sembra che non sia nata
+    const scade = doc.data_scadenza_prevista || addGiorni(doc.data_documento || dataOggiStr(), 30);
     setMsg(precedente
-      ? `Scadenza creata: ${fmtEuroErp(totaleDoc)} a ${nomeFornitore}, categoria "${sottocat?.nome || "—"}" ereditata dall'ultima fattura sua. Quando la paghi va in prima nota gia' riconciliata.`
-      : `Scadenza creata: ${fmtEuroErp(totaleDoc)} a ${nomeFornitore}. Manca la categoria di spesa: aprila dallo Scadenzario e assegnala, poi si potra' pagare.`);
+      ? `Scadenza creata: ${fmtEuroErp(totaleDoc)} a ${nomeFornitore}, da pagare entro il ${fmtData(scade)} — la trovi nello Scadenzario Passivo di ${MESI[Number(scade.slice(5, 7)) - 1].toLowerCase()}. Categoria "${sottocat?.nome || "—"}" ereditata dall'ultima fattura sua. Quando la paghi va in prima nota gia' riconciliata.`
+      : `Scadenza creata: ${fmtEuroErp(totaleDoc)} a ${nomeFornitore}, da pagare entro il ${fmtData(scade)} — la trovi nello Scadenzario Passivo di ${MESI[Number(scade.slice(5, 7)) - 1].toLowerCase()}. Manca la categoria di spesa: aprila da li' e assegnala, poi si potra' pagare.`);
     ricarica(["spese", "documento_fornitore"]);
   }
   async function associaDocumentoASpesaPagata(doc, spese_) {
