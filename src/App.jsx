@@ -37452,28 +37452,28 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
 // riga piccola
 function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pannello, onPannello }) {
   const k = useContext(ScalaRigaContabilita);
-  const q = (n) => Math.round(n * k * 2) / 2;
+  const q = (n) => Math.round(n * k * 10) / 10;
   const isMobile = useIsMobile();
   return (
-    <div style={{ display: "flex", alignItems: "stretch", gap: q(8), minWidth: 0, flexWrap: "nowrap" }}>
+    <>
       <button
         onClick={() => onPannello(pannello === "documento" ? null : "documento")}
         disabled={salvando}
         title={fatturaAssociata ? `Fattura n. ${numeroDocumento || "—"} gia' associata` : "Aggancia questa riga a una fattura gia' arrivata dal fornitore"}
-        style={{ ...stileTastoCardChiaro(isMobile), flexShrink: 0, padding: `${q(10)}px ${q(16)}px`, fontSize: q(12.5), gap: q(6), borderRadius: q(14), justifyContent: "center", whiteSpace: "nowrap", lineHeight: 1.15, outline: pannello === "documento" ? `2px solid ${NAVY}` : "none" }}
+        style={{ ...stileTastoCardChiaro(isMobile), width: "100%", padding: `${q(9)}px ${q(12)}px`, fontSize: q(12.5), gap: q(6), borderRadius: q(12), justifyContent: "center", whiteSpace: "nowrap", lineHeight: 1.15, outline: pannello === "documento" ? `2px solid ${NAVY}` : "none" }}
       >
-        <IconaQiDocumento size={q(16)} color={NAVY} />
+        <IconaQiDocumento size={q(15)} color={NAVY} />
         <span>{fatturaAssociata ? "Cambia fattura" : "Associa fattura"}</span>
       </button>
       <button
         onClick={() => onPannello(pannello === "paga" ? null : "paga")}
         disabled={salvando}
         title="Apre la scheda della spesa: si conferma la classificazione, poi si sceglie come e quando e' stata pagata"
-        style={{ ...stileTastoCardNavy(isMobile, salvando), flexShrink: 0, padding: `${q(10)}px ${q(22)}px`, fontSize: q(12.5), gap: q(6), borderRadius: q(14), justifyContent: "center", whiteSpace: "nowrap", outline: pannello === "paga" ? `2px solid ${GOLD}` : "none" }}
+        style={{ ...stileTastoCardNavy(isMobile, salvando), width: "100%", padding: `${q(10)}px ${q(12)}px`, fontSize: q(13), gap: q(6), borderRadius: q(12), justifyContent: "center", whiteSpace: "nowrap", outline: pannello === "paga" ? `2px solid ${GOLD}` : "none" }}
       >
         <IconaQiPortafoglio size={q(17)} /><span>Paga</span>
       </button>
-    </div>
+    </>
   );
 }
 function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onCambiaScadenza, documentiFornitore, nomeFornitoreDi }) {
@@ -37736,7 +37736,10 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
     return () => osservatore.disconnect();
   }, []);
   const k = Math.min(1.15, Math.max(0.6, (larghezza || LARGHEZZA_RIFERIMENTO_RIGA) / LARGHEZZA_RIFERIMENTO_RIGA));
-  const q = (n) => Math.round(n * k * 2) / 2;
+  // al decimo di pixel, non al mezzo: su misure piccole — una pastiglia da
+  // 7px, un'icona da 9 — mezzo pixel di arrotondamento e' un quindicesimo
+  // della misura, e le proporzioni cominciano a scollarsi
+  const q = (n) => Math.round(n * k * 10) / 10;
   const [anno, mese, giorno] = (data || "").split("-").map(Number);
   const riquadro = { background: BG_CHIARO, borderRadius: q(14), padding: `${q(12)}px ${q(16)}px`, boxSizing: "border-box" };
   return (
@@ -37761,11 +37764,7 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
               <IconaQiDocumento size={q(16)} color={NAVY} /><span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{corsoLabel}</span>
             </div>
           )}
-          {/* le pastiglie e i tasti sulla STESSA riga: le pastiglie a
-              sinistra, i tasti spinti a destra. Prima i tasti stavano
-              sotto, dopo un filo divisore, e ogni riga dell'elenco era
-              alta il doppio del necessario */}
-          {(chips.filter(Boolean).length > 0 || piede) && (
+          {chips.filter(Boolean).length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: q(10), flexWrap: "wrap", marginTop: q(10) }}>
               {chips.filter(Boolean).length > 0 && (
                 <div style={{ display: "flex", gap: q(8), flexWrap: "wrap" }}>
@@ -37785,15 +37784,24 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
                   })}
                 </div>
               )}
-              {piede && <div style={{ display: "flex", alignItems: "center", gap: q(8), flexWrap: "wrap", marginLeft: "auto" }}>{piede}</div>}
             </div>
           )}
         </div>
         {importo != null && (
-          <div style={{ ...riquadro, flex: "0 0 auto", alignSelf: "flex-start", textAlign: "center", minWidth: q(120) }}>
+          <div style={{ ...riquadro, flex: "0 0 auto", alignSelf: "center", textAlign: "center", minWidth: q(130) }}>
             <div style={{ ...fontBody, fontSize: q(10.5), fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichettaImporto}</div>
             <div style={{ ...fontDisplay, fontSize: q(26), fontWeight: 700, color: coloreImporto || NAVY, marginTop: q(4), whiteSpace: "nowrap" }}>{importo}</div>
           </div>
+        )}
+        {/* la colonna delle azioni, staccata da un filo d'oro: cosa c'e'
+            da sapere a sinistra, cosa si puo' fare a destra. In colonna
+            perche' i tre riquadri hanno la stessa larghezza e si leggono
+            uno sotto l'altro senza cercare */}
+        {piede && (
+          <>
+            <div style={{ width: 1, alignSelf: "stretch", background: GOLD, opacity: 0.5, flexShrink: 0 }} />
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: q(7), flexShrink: 0, minWidth: q(168) }}>{piede}</div>
+          </>
         )}
       </div>
       {children}
@@ -37806,13 +37814,13 @@ function RiquadroDataCard({ etichetta = "Scadenza", data, corsivo = false, onCam
   // sue, altrimenti su un telefono resterebbe grande dentro una riga
   // piccola
   const k = useContext(ScalaRigaContabilita);
-  const q = (n) => Math.round(n * k * 2) / 2;
+  const q = (n) => Math.round(n * k * 10) / 10;
   const [inModifica, setInModifica] = useState(false);
   const [bozza, setBozza] = useState(data || dataOggiStr());
   useEffect(() => { setBozza(data || dataOggiStr()); }, [data]);
   if (onCambia && inModifica) {
     return (
-      <div style={{ background: BG_CHIARO, borderRadius: q(12), padding: `${q(6)}px ${q(9)}px`, boxSizing: "border-box", display: "flex", alignItems: "center", gap: q(8), flex: "0 0 auto" }}>
+      <div style={{ background: BG_CHIARO, borderRadius: q(12), padding: `${q(6)}px ${q(9)}px`, boxSizing: "border-box", display: "flex", alignItems: "center", gap: q(8), width: "100%" }}>
         <input type="date" value={bozza} onChange={(e) => setBozza(e.target.value)} style={{ ...inputStyle, width: "auto", padding: `${q(6)}px ${q(8)}px`, fontSize: q(12.5) }} />
         <button onClick={async () => { await onCambia(bozza); setInModifica(false); }} disabled={!bozza} style={{ ...fontBody, fontSize: q(12), fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: q(12), padding: `${q(7)}px ${q(10)}px`, cursor: "pointer" }}>Salva</button>
         <button onClick={() => { setBozza(data || dataOggiStr()); setInModifica(false); }} style={{ ...fontBody, fontSize: q(12), fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
@@ -37823,7 +37831,7 @@ function RiquadroDataCard({ etichetta = "Scadenza", data, corsivo = false, onCam
     <div
       onClick={onCambia ? () => setInModifica(true) : undefined}
       title={onCambia ? "Cambia la data di scadenza" : undefined}
-      style={{ background: BG_CHIARO, borderRadius: q(12), padding: `${q(7)}px ${q(12)}px`, boxSizing: "border-box", display: "flex", alignItems: "center", gap: q(8), flex: "0 0 auto", cursor: onCambia ? "pointer" : "default" }}
+      style={{ background: BG_CHIARO, borderRadius: q(12), padding: `${q(6)}px ${q(12)}px`, boxSizing: "border-box", display: "flex", alignItems: "center", gap: q(8), width: "100%", cursor: onCambia ? "pointer" : "default" }}
     >
       <IconaQiCalendario size={q(17)} color={NAVY} />
       <div>
