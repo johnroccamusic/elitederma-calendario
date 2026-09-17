@@ -36503,9 +36503,18 @@ const PAGINA_CATEGORIA_GRUPPO_PER_TIPO = {
 // in "Gestisci sede" entra comunque nel Quadro impegni (vedi il commento
 // dentro calcolaVociScadenziario).
 const GIORNI_ANTICIPO_IMPEGNO_SALA = 7;
-function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese , quoteVenditoriSplit}) {
+function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese , quoteVenditoriSplit, impegnoTabella}) {
   const oggiStr = dataOggiStr();
   const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
+  // Le righe rimandate a mano nel Quadro impegni con "Annulla e sposta in
+  // quadro impegni": un compenso master, una quota venditore o una
+  // commissione modelle che non si paga ancora perche' si aspetta la sua
+  // fattura. Sono righe vere della tabella impegno, riconoscibili dalla
+  // stessa chiave "<tipo>_<rigaId>" delle voci virtuali. Le "cash_" no:
+  // quelle sono le quote in contanti rinviate, e restano da pagare
+  const spostateInImpegni = new Set((impegnoTabella || [])
+    .filter((x) => x.chiave_origine && !String(x.chiave_origine).startsWith("cash_") && (x.stato === "aperto" || x.stato === "parzialmente_coperto"))
+    .map((x) => x.chiave_origine));
   const impegni = [];
   const daPagare = [];
   (corsiDate || []).forEach((cd) => {
@@ -36536,6 +36545,13 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, scadenzaSuggerita: r.scadenza || null, sottocategoriaId, fornitore: r.fornitore || null, iban: r.iban || null };
       if (conScadenza) {
         impegni.push(base);
+        return;
+      }
+      // spostata a mano nel Quadro impegni: da li' si registra la fattura,
+      // si paga dalla cassa o si rimette in Da pagare. Non aspetta piu' la
+      // fine del corso, perche' l'ha gia' decisa una persona
+      if (spostateInImpegni.has(chiave)) {
+        impegni.push({ ...base, spostata: true });
         return;
       }
       if (concluso) daPagare.push(base);
@@ -37312,7 +37328,7 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
 // location/alloggio/assistente/venditore/modelle) sia per le spese reali
 // già in tabella — l'unica differenza (insert vs update) resta nel
 // gestore passato da fuori
-function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, iban, totale, categoriaNome, disabilitato, motivoDisabilitato, onConferma }) {
+function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, iban, totale, categoriaNome, disabilitato, motivoDisabilitato, onConferma, onSpostaInImpegni, onRiconciliaDocumento, documentiFornitore, nomeFornitoreDi }) {
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
   const [salvando, setSalvando] = useState(false);
@@ -37332,18 +37348,54 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   // solo con Conferma, oppure si annulla. Prima il tasto scriveva subito
   // in prima nota e un tocco per sbaglio segnava pagato quello che non lo
   // era.
-  const [pannello, setPannello] = useState(null); // null | "cassa" | "bonifico"
-  const chiudiPannello = () => { setPannello(null); setFile(null); };
+  // null | "cassa" | "bonifico" | "documento"
+  const [pannello, setPannello] = useState(null);
+  const [docScelto, setDocScelto] = useState(null);
+  const [ricercaDoc, setRicercaDoc] = useState("");
+  const chiudiPannello = () => { setPannello(null); setFile(null); setDocScelto(null); setRicercaDoc(""); };
+  // I documenti che questa riga potrebbe saldare: prima quelli del
+  // fornitore giusto, poi quelli d'importo piu' vicino. Di fatture da
+  // riconciliare ce ne sono centinaia: senza un ordine e una ricerca la
+  // scelta sarebbe a occhio in mezzo a tutte
+  const candidatiDoc = useMemo(() => {
+    const cerca = ricercaDoc.trim().toLowerCase();
+    const nomeRiga = (fornitore || "").trim().toLowerCase();
+    return (documentiFornitore || [])
+      .filter((d) => d.tipo !== "nota_credito" && Number(d.importo_allocato || 0) < Number(d.totale || 0) - 0.01)
+      .map((d) => {
+        const nomeDoc = (nomeFornitoreDi ? nomeFornitoreDi(d.fornitore_id) : "") || "";
+        return { d, nomeDoc, stessoFornitore: !!nomeRiga && nomeDoc.toLowerCase().includes(nomeRiga) };
+      })
+      .filter(({ d, nomeDoc }) => !cerca || `${d.numero || ""} ${nomeDoc}`.toLowerCase().includes(cerca))
+      .sort((a, b) => (Number(b.stessoFornitore) - Number(a.stessoFornitore))
+        || (Math.abs(Number(a.d.totale || 0) - totale) - Math.abs(Number(b.d.totale || 0) - totale)))
+      .slice(0, 8);
+  }, [documentiFornitore, ricercaDoc, fornitore, totale, nomeFornitoreDi]);
+  const tastoSecondario = (etichetta, titolo, onClick, acceso) => (
+    <button
+      onClick={onClick}
+      disabled={salvando}
+      title={titolo}
+      style={{ ...stileTastoCardChiaro(isMobile), flex: isMobile ? "1 1 calc(50% - 3px)" : "1 1 0", minWidth: 0, padding: isMobile ? "9px 6px" : "10px 10px", fontSize: isMobile ? 11 : 12, gap: 5, justifyContent: "center", whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", outline: acceso ? `2px solid ${NAVY}` : "none" }}
+    >
+      {etichetta}
+    </button>
+  );
   const piede = disabilitato ? (
     <div style={{ ...fontBody, fontSize: 12, color: "#C0392B" }}>{motivoDisabilitato}</div>
   ) : (
     <>
       <RiquadroDataCard etichetta="Scadenza" data={scadenza} />
-      <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: "nowrap" }}>
-        <button onClick={() => setPannello(pannello === "cassa" ? null : "cassa")} disabled={salvando} title="Esce dalla cassa contanti: il saldo si aggiorna subito" style={{ ...stileTastoCardOro(isMobile, salvando), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", outline: pannello === "cassa" ? `2px solid #8A6D1D` : "none" }}>
+      {/* quattro tasti sulla stessa riga: dal telefono vanno due e due,
+          da scrivania stanno in fila. I due che pagano restano in oro e
+          blu, i due che spostano sono chiari: non muovono soldi */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 8, flex: "1 1 0", minWidth: 0, flexWrap: isMobile ? "wrap" : "nowrap" }}>
+        {onSpostaInImpegni && tastoSecondario("Annulla e sposta in quadro impegni", "Toglie la riga da Da pagare e la rimette nel Quadro impegni, in attesa della fattura", () => onSpostaInImpegni(), false)}
+        {onRiconciliaDocumento && tastoSecondario("Riconcilia", "Aggancia questa riga a una fattura gia' arrivata dal fornitore", () => setPannello(pannello === "documento" ? null : "documento"), pannello === "documento")}
+        <button onClick={() => setPannello(pannello === "cassa" ? null : "cassa")} disabled={salvando} title="Esce dalla cassa contanti: il saldo si aggiorna subito" style={{ ...stileTastoCardOro(isMobile, salvando), flex: isMobile ? "1 1 calc(50% - 3px)" : "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", outline: pannello === "cassa" ? `2px solid #8A6D1D` : "none" }}>
           {!isMobile && <IconaQiPortafoglio size={20} />}<span>Paga da cassa</span>
         </button>
-        <button onClick={() => setPannello(pannello === "bonifico" ? null : "bonifico")} disabled={salvando} title="Esce dal conto corrente" style={{ ...stileTastoCardNavy(isMobile, salvando), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", textAlign: "center", outline: pannello === "bonifico" ? `2px solid ${GOLD}` : "none" }}>
+        <button onClick={() => setPannello(pannello === "bonifico" ? null : "bonifico")} disabled={salvando} title="Esce dal conto corrente" style={{ ...stileTastoCardNavy(isMobile, salvando), flex: isMobile ? "1 1 calc(50% - 3px)" : "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", textAlign: "center", outline: pannello === "bonifico" ? `2px solid ${GOLD}` : "none" }}>
           {!isMobile && <IconaQiBanca size={20} />}<span style={{ lineHeight: 1.15, whiteSpace: "normal" }}>Paga da conto corrente</span>
         </button>
       </div>
@@ -37356,7 +37408,51 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
       chips={[categoriaNome ? { Icona: IconaQiDocumento, testo: categoriaNome } : null, iban ? `IBAN ${iban}` : null]}
       importo={fmtEuroErp(totale)} piede={piede}
     >
-      {pannello && !disabilitato && (
+      {pannello === "documento" && !disabilitato && (
+        <div style={{ marginTop: 12, padding: isMobile ? 14 : 16, background: "#fff", border: `1.5px solid ${NAVY}`, borderRadius: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Riconcilia con un documento del fornitore</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
+            La fattura e' gia' arrivata: scegliendola, questa riga diventa una spesa vera con il suo numero e la sua data, e resta da pagare. In cima ci sono i documenti del fornitore giusto e quelli d'importo piu' vicino a {fmtEuroErp(totale)}.
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <CampoRicerca value={ricercaDoc} onChange={(e) => setRicercaDoc(e.target.value)} placeholder="Cerca numero o fornitore…" />
+          </div>
+          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+            {candidatiDoc.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun documento da riconciliare.</div>}
+            {candidatiDoc.map(({ d, nomeDoc, stessoFornitore }) => {
+              const scelto = docScelto?.id === d.id;
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => setDocScelto(scelto ? null : d)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%", background: scelto ? "#F4F1E8" : "#fff", border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: "9px 11px", cursor: "pointer" }}
+                >
+                  <span style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ display: "block", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {nomeDoc || "Fornitore non in anagrafica"}{stessoFornitore ? " ·" : ""}
+                    </span>
+                    <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED }}>
+                      n. {d.numero || "—"} · {d.data_documento ? fmtData(d.data_documento) : "—"}
+                    </span>
+                  </span>
+                  <span style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{fmtEuroErp(Number(d.totale) || 0)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+            <button
+              onClick={async () => { setSalvando(true); await onRiconciliaDocumento(docScelto); setSalvando(false); chiudiPannello(); }}
+              disabled={salvando || !docScelto}
+              style={{ ...stileTastoCardNavy(isMobile, salvando || !docScelto), flex: "1 1 160px", justifyContent: "center", padding: "12px 16px" }}
+            >
+              {salvando ? "Salvo…" : docScelto ? `Riconcilia con la n. ${docScelto.numero || "—"}` : "Scegli un documento"}
+            </button>
+            <button onClick={chiudiPannello} disabled={salvando} style={{ ...stileTastoCardChiaro(isMobile), flex: "0 1 auto", padding: "12px 16px" }}>Annulla</button>
+          </div>
+        </div>
+      )}
+      {pannello && pannello !== "documento" && !disabilitato && (
         <div style={{ marginTop: 12, padding: isMobile ? 14 : 16, background: "#fff", border: `1.5px solid ${eCassa ? "#8A6D1D" : NAVY}`, borderRadius: 16 }}>
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{eCassa ? "Paga da cassa contanti" : "Paga da conto corrente"}</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
@@ -37570,7 +37666,7 @@ function giornoSettimanaAbbr(dataStr) {
   return isNaN(d) ? "" : GIORNI_SETTIMANA_ABBR[d.getDay()].toUpperCase();
 }
 
-function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura, onPagaDaCassa, onPagaBonificoAttesa }) {
+function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura, onPagaDaCassa, onPagaBonificoAttesa, onRimettiInDaPagare }) {
   const isMobile = useIsMobile();
   const [aperto, setAperto] = useState(false);
   // "Paga da cassa" apre una riga con la data invece di chiedere subito:
@@ -37632,7 +37728,15 @@ function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, ca
           telefono la riga va sotto la scadenza e i testi si stringono,
           ma non si spezzano mai su due file */}
       {!aperto && (
-        <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: isMobile ? "wrap" : "nowrap" }}>
+          {/* solo per le righe arrivate qui da "Annulla e sposta in quadro
+              impegni": se e' stato un errore, si torna indietro senza
+              dover registrare niente */}
+          {onRimettiInDaPagare && (
+            <button onClick={onRimettiInDaPagare} title="Rimette la riga nello Scadenziario Passivo, da pagare" style={{ ...stileTastoCardChiaro(isMobile), flex: isMobile ? "1 1 calc(50% - 3px)" : "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11 : 12, gap: 5, justifyContent: "center", whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
+              Rimetti in Da pagare
+            </button>
+          )}
           {onPagaDaCassa && (
             <button onClick={() => setCassaAperta((v) => !v)} disabled={pagandoCassa} style={{ ...tastoOro, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
               {!isMobile && <IconaQiPortafoglio size={20} />}<span>{pagandoCassa ? "Registro…" : "Paga da cassa"}</span>
@@ -40381,7 +40485,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     return s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "—";
   }
 
-  const { impegni, daPagareVirtuali } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
+  const { impegni, daPagareVirtuali } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella });
 
   // "Storico" di Quadro impegni: un impegno (alloggio/location) sparisce
   // da lì appena si registra la fattura — solo i due tipi che passano da
@@ -40635,6 +40739,83 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     setMsgImpegni(`"${item.nome}" pagato dalla cassa contanti: ora è in prima nota.`);
     ricarica(["spese"]);
   }
+  // "Annulla e sposta in quadro impegni": la riga esce da Da pagare e
+  // torna ad essere un impegno aperto, in attesa della fattura. Da li' si
+  // usa "Registra fattura" come per sale e alloggi. Il fornitore si
+  // risolve (o si crea) per nome, come fa "Sincronizza impegni": senza,
+  // il motore di riconciliazione non saprebbe a chi appartiene
+  async function spostaInQuadroImpegni(item) {
+    setMsg("");
+    let fornitoreId = item.fornitoreId || null;
+    const nomeFornitore = (item.fornitore || "").trim();
+    if (!fornitoreId && nomeFornitore) {
+      const gia = (fornitori || []).find((f) => f.nome.trim().toLowerCase() === nomeFornitore.toLowerCase());
+      if (gia) fornitoreId = gia.id;
+      else {
+        const { data, error } = await supabase.from("fornitori").insert({ nome: nomeFornitore, iban: item.iban || null }).select("id").single();
+        if (!error && data) fornitoreId = data.id;
+      }
+    }
+    const { error } = await supabase.from("impegno").upsert({
+      chiave_origine: item.chiave,
+      fornitore_id: fornitoreId || null,
+      descrizione: item.nome,
+      origine_tipo: "corso",
+      origine_id: item.rigaId || null,
+      categoria_id: item.sottocategoriaId || null,
+      importo_previsto: item.totale,
+      data_prevista: item.scadenza || item.corsoData?.data_fine || null,
+      stato: "aperto",
+    }, { onConflict: "chiave_origine" });
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(`"${item.nome}" e' nel Quadro impegni, in attesa di fattura.`);
+    ricarica(["impegno", "fornitori"]);
+  }
+  // il contrario: la riga torna in Da pagare com'era prima
+  async function rimettiInDaPagare(item) {
+    const { error } = await supabase.from("impegno").delete().eq("chiave_origine", item.chiave);
+    if (error) { setMsgImpegni("Errore: " + testoErrore(error)); return; }
+    setMsgImpegni(`"${item.nome}" e' tornato nello Scadenziario Passivo, da pagare.`);
+    ricarica(["impegno"]);
+  }
+  // "Riconcilia": la fattura del fornitore c'e' gia' (Registro documenti).
+  // La riga virtuale diventa la spesa vera con numero e data di quel
+  // documento e resta da pagare, e sul documento si segna quanto e' stato
+  // coperto: una fattura sola puo' coprire piu' righe, e va marcata
+  // riconciliata solo quando e' coperta tutta.
+  async function riconciliaConDocumento(item, doc) {
+    if (!doc) return;
+    setMsg("");
+    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
+    // l'IVA la detta il documento, non la percentuale di casa: se la
+    // fattura e' esente (i compensi delle master spesso lo sono) applicare
+    // il 22% scriverebbe un imponibile che non esiste
+    const totaleDoc = Number(doc.totale) || 0;
+    const imponibileDoc = Number(doc.imponibile) || 0;
+    const aliquota = totaleDoc > 0 && imponibileDoc > 0
+      ? round2((totaleDoc / imponibileDoc - 1) * 100)
+      : ALIQUOTA_IVA_RIEPILOGO_CLASSE;
+    const { error } = await supabase.from("spese").insert({
+      descrizione: item.nome,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: item.sottocategoriaId,
+      fornitore_id: doc.fornitore_id || null,
+      tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
+      imponibile: round2(item.totale / (1 + aliquota / 100)), iva_percentuale: aliquota, totale: round2(item.totale),
+      numero_documento: doc.numero || null, data_documento: doc.data_documento || null,
+      scadenza_pagamento: doc.data_scadenza_prevista || item.scadenza || doc.data_documento || null,
+      stato: "fatturata", metodo_pagamento: "Bonifico",
+      origine: "automatico", origine_scadenziario_chiave: item.chiave,
+    });
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    const allocato = round2(Number(doc.importo_allocato || 0) + Number(item.totale || 0));
+    const { error: errDoc } = await supabase.from("documento_fornitore")
+      .update({ importo_allocato: allocato, stato: allocato >= totaleDoc - 0.01 ? "riconciliato" : doc.stato })
+      .eq("id", doc.id);
+    if (errDoc) { setMsg("Spesa creata, ma il documento non si e' aggiornato: " + testoErrore(errDoc)); }
+    else setMsg(`"${item.nome}" agganciata alla fattura n. ${doc.numero || "—"}: ora e' una spesa da pagare.`);
+    ricarica(["spese", "documento_fornitore"]);
+  }
   async function segnaPagataVirtuale(item, { file, dataPagamento }) {
     setMsg("");
     let allegatoPath = null;
@@ -40883,6 +41064,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     onRegistraFattura={(dati, altriSelezionati) => registraFattura(item, dati, altriSelezionati)}
                     onPagaDaCassa={item.sottocategoriaId ? (dati) => pagaImpegnoDaCassa(item, dati) : null}
                     onPagaBonificoAttesa={item.sottocategoriaId ? (dati) => pagaBonificoInAttesaFattura(item, dati) : null}
+                    onRimettiInDaPagare={item.spostata ? () => rimettiInDaPagare(item) : null}
                   />
                 ))}
               </div>
@@ -41171,6 +41353,14 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     disabilitato={!item.sottocategoriaId}
                     motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     onConferma={(dati) => confermaPagato(item, dati)}
+                    // le spese gia' registrate a tabella e le quote in
+                    // contanti rinviate non tornano indietro nel Quadro
+                    // impegni: li' ci vanno le voci ancora virtuali, quelle
+                    // che una fattura non ce l'hanno ancora
+                    onSpostaInImpegni={item.tipo && item.tipo !== "reale" && item.tipo !== "cash_rinviato" && item.tipo !== "abbonamento" ? () => spostaInQuadroImpegni(item) : null}
+                    onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento(item, doc) : null}
+                    documentiFornitore={documentoFornitoreTabella}
+                    nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
                   />
                 ), dataDiPassivoDaPagare)}
               </div>
@@ -41558,7 +41748,7 @@ function PaginaInserimentoCostiRicavi({
   // conteggi per la riga di tasti verso le altre schede di Amministrazione
   // (vedi TabsAmministrazione) — stesse funzioni condivise usate lì, così
   // i numeri non possono mai divergere
-  const { impegni: impegniPerConteggio, daPagareVirtuali: daPagareVirtualiPerConteggio } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
+  const { impegni: impegniPerConteggio, daPagareVirtuali: daPagareVirtualiPerConteggio } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella });
   const oggiStrConteggio = dataOggiStr();
   const daPagareRealiPerConteggio = (spese || [])
     .filter((s) => s.stato !== "pagata")
