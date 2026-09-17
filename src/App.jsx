@@ -41919,7 +41919,36 @@ function PaginaInserimentoCostiRicavi({
         return (s.descrizione || "").toLowerCase().includes(q) || cat.toLowerCase().includes(q) || sott.toLowerCase().includes(q) || forn.toLowerCase().includes(q);
       })
     : speseRealiFiltrate;
-  const righeUniteRicerca = speseRealiRicercate.map(normalizzaRigaReale);
+  // In prima nota un bonifico e' UN movimento. Le spese coperte dalla
+  // stessa fattura sono uscite dal conto insieme, con una disposizione
+  // sola: in estratto conto c'e' una riga, e qui deve essercene una
+  // anche per poterla riconciliare con quella. Restano righe distinte nel
+  // database, ognuna col suo corso — qui si sommano solo per leggerle.
+  const righeUniteRicerca = (() => {
+    const gruppi = new Map();
+    const fuori = [];
+    speseRealiRicercate.forEach((sp) => {
+      const g = sp.gruppo_pagamento;
+      if (!g) { fuori.push(normalizzaRigaReale(sp)); return; }
+      if (!gruppi.has(g)) gruppi.set(g, []);
+      gruppi.get(g).push(sp);
+    });
+    const cumuli = [];
+    gruppi.forEach((membri, g) => {
+      if (membri.length === 1) { cumuli.push(normalizzaRigaReale(membri[0])); return; }
+      const capo = normalizzaRigaReale(membri[0]);
+      const totale = round2(membri.reduce((t, m) => t + (Number(m.totale) || 0), 0));
+      const fornitore = membri[0].fornitore_id ? fornitoriById[membri[0].fornitore_id] : null;
+      cumuli.push({
+        ...capo,
+        id: `gruppo_${g}`, gruppo: g, speseGruppo: membri,
+        descrizione: membri[0].numero_documento ? `${fornitore?.nome || "Fornitore"} — fattura n. ${membri[0].numero_documento}` : (fornitore?.nome || "Bonifico cumulativo"),
+        sottotitolo: `${membri.length} spese: ${membri.map((m) => m.descrizione || "—").join(" · ")}`,
+        importo: totale,
+      });
+    });
+    return [...fuori, ...cumuli].sort((a, b) => String(b.dataDocumento || "").localeCompare(String(a.dataDocumento || "")));
+  })();
   const righeVisibili = mostraTutte ? righeUniteRicerca : righeUniteRicerca.slice(0, SPESE_PAGINA_INIZIALE);
 
   const totaleSpese = round2(righeUniteRicerca.reduce((s, r) => s + (r.importo || 0), 0));
