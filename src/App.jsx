@@ -40165,6 +40165,85 @@ function PannelloCassaConsulenze() {
   );
 }
 
+// La finestra di "Associa a una spesa", aperta da una fattura del
+// Registro documenti. Due strade, come le due strade della vita di una
+// spesa: o la fattura appartiene a qualcosa che deve ancora essere
+// pagato (e allora quella riga prende numero, data e termine del
+// documento, e la sua scadenza smette di essere stimata), o appartiene a
+// qualcosa gia' pagato senza documento, che in prima nota aspettava
+// proprio questo per diventare riconciliata.
+function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagateSenzaDocumento, etichettaCorso, costiSottocategorie, onChiudi, onAssociaDaPagare, onAssociaPagata }) {
+  const isMobile = useIsMobile();
+  const [scheda, setScheda] = useState("dapagare");
+  const [ricerca, setRicerca] = useState("");
+  const [scelto, setScelto] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const totaleDoc = Number(documento.totale) || 0;
+  // vicino d'importo prima di tutto: una fattura si riconosce dalla cifra
+  const perVicinanza = (a, b) => Math.abs(a - totaleDoc) - Math.abs(b - totaleDoc);
+  const q = ricerca.trim().toLowerCase();
+  const candidatiDaPagare = (daPagare || [])
+    .filter((r) => !q || `${r.nome || ""} ${r.fornitore || ""}`.toLowerCase().includes(q))
+    .sort((a, b) => perVicinanza(Number(a.totale) || 0, Number(b.totale) || 0))
+    .slice(0, 10);
+  const candidatiPagate = (spesePagateSenzaDocumento || [])
+    .filter((sp) => !q || `${sp.descrizione || ""}`.toLowerCase().includes(q))
+    .sort((a, b) => perVicinanza(Number(a.totale) || 0, Number(b.totale) || 0))
+    .slice(0, 10);
+  const elenco = scheda === "dapagare" ? candidatiDaPagare : candidatiPagate;
+  async function conferma() {
+    if (!scelto) return;
+    setSalvando(true);
+    if (scheda === "dapagare") await onAssociaDaPagare(scelto);
+    else await onAssociaPagata(scelto);
+    setSalvando(false);
+  }
+  return (
+    <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: isMobile ? "16px 10px" : "40px 16px", overflowY: "auto", zIndex: 2400 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 620, background: "#fff", borderRadius: 18, padding: isMobile ? 16 : 22, boxShadow: "0 18px 50px rgba(14,27,51,0.35)" }}>
+        <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 800, color: NAVY }}>Associa la fattura n. {documento.numero || "—"}</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
+          {nomeFornitore || "Fornitore non in anagrafica"} · {documento.data_documento ? fmtData(documento.data_documento) : "—"} · {fmtEuroErp(totaleDoc)}
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 14, flexWrap: "wrap" }}>
+          {[{ k: "dapagare", l: `Da pagare (${candidatiDaPagare.length})` }, { k: "pagate", l: `Gia' pagate senza fattura (${candidatiPagate.length})` }].map((o) => (
+            <button key={o.k} onClick={() => { setScheda(o.k); setScelto(null); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: scheda === o.k ? "#fff" : NAVY, background: scheda === o.k ? NAVY : "#fff", border: `1px solid ${scheda === o.k ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>{o.l}</button>
+          ))}
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca descrizione o fornitore…" />
+        </div>
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, maxHeight: 340, overflowY: "auto" }}>
+          {elenco.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 0" }}>Niente da associare qui.</div>}
+          {elenco.map((r) => {
+            const id = scheda === "dapagare" ? r.key : r.id;
+            const attivo = scelto && (scheda === "dapagare" ? scelto.key === r.key : scelto.id === r.id);
+            const titolo = scheda === "dapagare" ? (r.fornitore || r.nome) : (r.descrizione || sottocategoriaCostoDi(costiSottocategorie, r.sottocategoria_id)?.nome || "Spesa");
+            const sotto = scheda === "dapagare"
+              ? (r.oggetto || (r.corsoData ? etichettaCorso(r.corsoData) : "—"))
+              : `Pagata il ${r.data_pagamento ? fmtData(r.data_pagamento) : "—"}`;
+            const importo = Number(r.totale) || 0;
+            return (
+              <button key={id} onClick={() => setScelto(attivo ? null : r)} style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%", background: attivo ? "#F4F1E8" : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <span style={{ display: "block", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{titolo}</span>
+                  <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sotto}</span>
+                </span>
+                <span style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: Math.abs(importo - totaleDoc) < 0.01 ? "#2E7D32" : NAVY, flexShrink: 0 }}>{fmtEuroErp(importo)}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+          <button onClick={conferma} disabled={salvando || !scelto} style={{ ...stileTastoCardNavy(isMobile, salvando || !scelto), flex: "1 1 200px", justifyContent: "center", padding: "12px 16px" }}>
+            {salvando ? "Salvo…" : scelto ? "Associa" : "Scegli una spesa"}
+          </button>
+          <button onClick={onChiudi} disabled={salvando} style={{ ...stileTastoCardChiaro(isMobile), flex: "0 1 auto", padding: "12px 16px" }}>Annulla</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriNuovaSpesaDaMovimentoBanca, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "passivo");
@@ -40546,6 +40625,29 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // pagare porta con se' categoria, corso d'origine e tutta la
   // classificazione gestionale. Il metodo e' quello scelto li': con i
   // contanti la cassa si scala, come per le quote rinviate.
+  // Dal lato fattura: "Associa a una spesa". La fattura arriva e si cerca
+  // a cosa appartiene — o a una riga ancora da pagare nello Scadenzario
+  // (che da quel momento ha la sua scadenza vera e non piu' stimata),
+  // oppure a una spesa gia' pagata senza documento, che in prima nota
+  // aspettava proprio questo per diventare riconciliata.
+  const [docDaAssociare, setDocDaAssociare] = useState(null);
+  async function associaDocumentoASpesaPagata(doc, spesa) {
+    setMsg("");
+    const totaleDoc = Number(doc.totale) || 0;
+    const { error } = await supabase.from("spese").update({
+      numero_documento: doc.numero || null,
+      data_documento: doc.data_documento || spesa.data_documento || null,
+      fornitore_id: spesa.fornitore_id || doc.fornitore_id || null,
+    }).eq("id", spesa.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    const allocato = round2(Number(doc.importo_allocato || 0) + Number(spesa.totale || 0));
+    await supabase.from("documento_fornitore")
+      .update({ importo_allocato: allocato, stato: allocato >= totaleDoc - 0.01 ? "riconciliato" : doc.stato })
+      .eq("id", doc.id);
+    setMsg(`Fattura n. ${doc.numero || "—"} agganciata alla spesa gia' pagata: ora e' riconciliata.`);
+    setDocDaAssociare(null);
+    ricarica(["spese", "documento_fornitore"]);
+  }
   async function segnaPagataVirtuale(item, { file, dataPagamento, metodo, classificazione }) {
     setMsg("");
     let allegatoPath = null;
@@ -40677,6 +40779,19 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      {docDaAssociare && (
+        <ModaleAssociaDocumento
+          documento={docDaAssociare}
+          nomeFornitore={fornitoriById[docDaAssociare.fornitore_id]?.nome || ""}
+          daPagare={daPagare}
+          spesePagateSenzaDocumento={(spese || []).filter((sp) => sp.stato === "pagata" && !sp.numero_documento)}
+          etichettaCorso={etichettaCorso}
+          costiSottocategorie={costiSottocategorie}
+          onChiudi={() => setDocDaAssociare(null)}
+          onAssociaDaPagare={(item) => riconciliaConDocumento(item, docDaAssociare)}
+          onAssociaPagata={(spesa) => associaDocumentoASpesaPagata(docDaAssociare, spesa)}
+        />
+      )}
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
@@ -40830,7 +40945,12 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                       return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#F1EEE4", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Scartata</span>;
                     }
                     if (df) {
-                      return <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>;
+                      return (
+                        <>
+                          <button onClick={() => setDocDaAssociare(df)} title="Aggancia questa fattura a una riga dello Scadenzario o a una spesa gia' pagata" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Associa a una spesa</button>
+                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>
+                        </>
+                      );
                     }
                     return <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>;
                   })()}
@@ -41281,6 +41401,11 @@ function PaginaInserimentoCostiRicavi({
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
   const [ricercaPN, setRicercaPN] = useState("");
+  // "Da riconciliare": le uscite pagate che non hanno ancora un documento
+  // del fornitore. E' l'area di lavoro per chiuderle una a una, associando
+  // la fattura quando arriva — in prima nota lo stato di riconciliazione
+  // dipende solo da quello, non dal pagamento
+  const [soloDaRiconciliarePN, setSoloDaRiconciliarePN] = useState(false);
   const [importCsvAperto, setImportCsvAperto] = useState(false);
   const [mostraTutte, setMostraTutte] = useState(false);
 
@@ -41321,9 +41446,12 @@ function PaginaInserimentoCostiRicavi({
   // (poche) righe storiche senza data_pagamento salvata.
   function dataCassaPN(s) { return s.data_pagamento || s.data_documento; }
   const spesePagate = (spese || []).filter((s) => s.stato === "pagata" && dataCassaPN(s));
+  const daRiconciliarePN = (s) => !s.numero_documento;
   const speseRealiFiltrate = spesePagate
     .filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine)
+    .filter((s) => !soloDaRiconciliarePN || daRiconciliarePN(s))
     .sort((a, b) => (dataCassaPN(b) || "").localeCompare(dataCassaPN(a) || ""));
+  const conteggioDaRiconciliarePN = spesePagate.filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine && daRiconciliarePN(s)).length;
   // la ricerca filtra le spese vere PRIMA di normalizzarle e prima di
   // calcolare le top categorie qui sotto, così tutto quello che si vede
   // (elenco, conteggio, totale, top categorie) resta coerente con
@@ -41520,6 +41648,13 @@ function PaginaInserimentoCostiRicavi({
           <button onClick={() => setPersonalizzatoPN((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: personalizzatoPN ? "#fff" : NAVY, background: personalizzatoPN ? NAVY : "#fff", border: `1px solid ${personalizzatoPN ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Data personalizzata</button>
           <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
             <CampoRicerca value={ricercaPN} onChange={(e) => setRicercaPN(e.target.value)} placeholder="Cerca allievo, spesa, fornitore, categoria…" />
+            <button
+              onClick={() => setSoloDaRiconciliarePN((v) => !v)}
+              title="Solo le uscite pagate che non hanno ancora la fattura del fornitore"
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: soloDaRiconciliarePN ? "#fff" : NAVY, background: soloDaRiconciliarePN ? NAVY : "#fff", border: `1px solid ${soloDaRiconciliarePN ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", marginTop: 8, flexShrink: 0 }}
+            >
+              Da riconciliare ({conteggioDaRiconciliarePN})
+            </button>
           </div>
         </div>
 
