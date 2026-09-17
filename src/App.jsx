@@ -40326,6 +40326,42 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
   // solo, e quindi nello Scadenzario deve trovarsi una riga sola.
   const [scelti, setScelti] = useState([]);
   const [salvando, setSalvando] = useState(false);
+  // L'elenco si allunga tirando il bordo di sotto, come una finestra. Con
+  // dieci candidati e un'altezza fissa si scorreva dentro un francobollo,
+  // e per confrontare gli importi bisognava andare su e giu'. L'altezza
+  // scelta resta per la prossima volta.
+  const ALTEZZA_ELENCO_MIN = 160;
+  const [altezzaElenco, setAltezzaElenco] = useState(() => {
+    try { const v = Number(window.localStorage.getItem("altezza_elenco_associa")); return v >= ALTEZZA_ELENCO_MIN ? v : 340; }
+    catch { return 340; }
+  });
+  const tiro = useRef(null);
+  function iniziaTiro(e) {
+    e.preventDefault();
+    tiro.current = { y: e.clientY ?? (e.touches && e.touches[0]?.clientY) ?? 0, da: altezzaElenco };
+    const muovi = (ev) => {
+      if (!tiro.current) return;
+      const y = ev.clientY ?? (ev.touches && ev.touches[0]?.clientY) ?? 0;
+      // il tetto e' l'altezza della finestra meno quello che sta sopra e
+      // sotto l'elenco: piu' in la' la finestra uscirebbe dallo schermo
+      const massimo = Math.max(ALTEZZA_ELENCO_MIN, (window.innerHeight || 800) - 380);
+      setAltezzaElenco(Math.min(massimo, Math.max(ALTEZZA_ELENCO_MIN, Math.round(tiro.current.da + (y - tiro.current.y)))));
+    };
+    const molla = () => {
+      tiro.current = null;
+      document.removeEventListener("mousemove", muovi);
+      document.removeEventListener("mouseup", molla);
+      document.removeEventListener("touchmove", muovi);
+      document.removeEventListener("touchend", molla);
+      document.body.style.userSelect = "";
+      setAltezzaElenco((h) => { try { window.localStorage.setItem("altezza_elenco_associa", String(h)); } catch { /* navigazione privata */ } return h; });
+    };
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", muovi);
+    document.addEventListener("mouseup", molla);
+    document.addEventListener("touchmove", muovi, { passive: false });
+    document.addEventListener("touchend", molla);
+  }
   const totaleDoc = Number(documento.totale) || 0;
   const idDi = (r) => (scheda === "dapagare" ? r.key : r.id);
   const eScelto = (r) => scelti.some((x) => idDi(x) === idDi(r));
@@ -40367,7 +40403,7 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
         <div style={{ marginTop: 12 }}>
           <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca descrizione o fornitore…" />
         </div>
-        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, maxHeight: 340, overflowY: "auto" }}>
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, maxHeight: altezzaElenco, overflowY: "auto" }}>
           {elenco.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 0" }}>Niente da associare qui.</div>}
           {elenco.map((r) => {
             const id = idDi(r);
@@ -40413,7 +40449,18 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
             )}
           </div>
         )}
-        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+        {/* il bordo di sotto si tira, come una finestra: la barretta e' il
+            punto per afferrarla, il cursore dice in che verso */}
+        <div
+          onMouseDown={iniziaTiro}
+          onTouchStart={iniziaTiro}
+          onDoubleClick={() => setAltezzaElenco(340)}
+          title="Tira per allungare l'elenco · doppio clic per rimetterlo com'era"
+          style={{ marginTop: 10, height: 14, display: "flex", alignItems: "center", justifyContent: "center", cursor: "ns-resize", touchAction: "none" }}
+        >
+          <span style={{ width: 54, height: 4, borderRadius: 3, background: CREAM_BORDER }} />
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
           <button onClick={conferma} disabled={salvando || scelti.length === 0} style={{ ...stileTastoCardNavy(isMobile, salvando || scelti.length === 0), flex: "1 1 200px", justifyContent: "center", padding: "12px 16px" }}>
             {salvando ? "Salvo…" : scelti.length === 0 ? "Scegli una o piu' spese" : scelti.length === 1 ? "Associa" : `Associa le ${scelti.length} spese`}
           </button>
