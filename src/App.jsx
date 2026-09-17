@@ -32646,6 +32646,13 @@ function fmtEuroErp(n) {
 function fmtEuroErp2(n) {
   return `${(n || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 }
+// percentuale con due decimali: uno sconto medio erogato non e' mai
+// tondo, e "4,8%" invece di "4,81%" fa sparire i centesimi proprio dove
+// si confrontano due carrelli
+function fmtPctErp2(n) {
+  if (n == null || !isFinite(n)) return "—";
+  return `${n.toFixed(2).replace(".", ",")}%`;
+}
 function fmtPctErp(n) {
   if (n == null || !isFinite(n)) return "—";
   return `${n.toFixed(1).replace(".", ",")}%`;
@@ -55661,6 +55668,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
   const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, (couponNum > 0 || couponAFasce) ? scontoCoupon : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
+  // La percentuale che si mostra e' quella DAVVERO erogata su questo
+  // carrello: sconto diviso subtotale. Il numero scritto sul coupon non
+  // dice la verita' quando lo sconto va a fasce — ogni prodotto ha la sua
+  // percentuale, e due carrelli con lo stesso codice possono ricevere
+  // sconti molto diversi. Si leggeva "−4,81%" su un carrello che ne stava
+  // ricevendo l'8,55: il conto era giusto, il cartellino no.
+  const percentualeErogata = subtotale > 0 ? round2((scontoApplicato / subtotale) * 100) : 0;
   const totaleNetto = round2(subtotale - scontoApplicato);
   // La spedizione si paga: 6,90 sul totale quando la vendita va spedita.
   // Entra nel conto come una riga a se', cosi' il totale e' sempre la
@@ -56089,7 +56103,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               saprebbe se e' quello giusto */}
           {corsoPosSel && couponAttivo && couponAttivo.corsi_date_id === corsoPosSel.id && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
-              Sconto del corso applicato: −{couponAttivo.valore}%
+              Sconto del corso applicato: −{fmtPctErp2(percentualeErogata)}
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
               {fasceContantiInUso && (
                 <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{couponPersonaleAttivo && metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
@@ -56202,7 +56216,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY, marginBottom: 0 }}>
                   <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
                   Applica sconto del corso
-                  {scontoCorsoAttivo && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 8px" }}>−{couponDellEdizione(corsoPosId).valore}%</span>}
+                  {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 8px" }}>−{fmtPctErp2(percentualeErogata)}</span>}
                 </label>
               )}
               </div>
@@ -56222,7 +56236,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
                 couponAttivo ? (
                   <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 4 }}>
-                    Codice valido: −{couponAttivo.valore}%
+                    Codice valido: −{fmtPctErp2(percentualeErogata)}
                     {/* quanto durera': un codice a uso singolo sparisce dopo
                         questo carrello, e saperlo prima evita di cercarlo
                         alla vendita dopo credendo che sia sparito per errore */}
