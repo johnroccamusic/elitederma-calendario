@@ -819,7 +819,18 @@ function stilePercorsoElemento(el) {
   return parti.join(" > ");
 }
 function stileTestoBreve(el) { return (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 60); }
-function stileTrovaElemento(voce) {
+// L'oggetto dipinto si porta addosso la sua chiave: e' il modo piu' solido
+// di ritrovarlo. Il percorso (tag e posizione) cambia sotto i piedi appena
+// React aggiunge o toglie un fratello da qualche parte piu' in su, e per un
+// oggetto senza testo non c'era nessun ripiego: non lo si ritrovava piu'.
+function stileTrovaElemento(voce, chiave) {
+  if (chiave) {
+    // confronto diretto invece di un selettore: la chiave contiene ">",
+    // "#", "|" e parentesi, e come valore di un attributo in un selettore
+    // non si fa trovare. Gli oggetti dipinti sono una manciata
+    const marcati = document.querySelectorAll("[data-stile-chiave]");
+    for (const m of marcati) if (m.dataset.stileChiave === chiave) return m;
+  }
   let el = null;
   try { el = document.querySelector(voce.percorso); } catch (e) { el = null; }
   if (el && (!voce.testo || stileTestoBreve(el) === voce.testo)) return el;
@@ -831,26 +842,52 @@ function stileTrovaElemento(voce) {
   return el;
 }
 function stileProprietaCss(proprieta) { return proprieta === "testo" ? "color" : proprieta === "bordo" ? "border-color" : "background-color"; }
-function stileApplicaVoce(el, voce) {
+const STILE_PROPRIETA_COLORE = ["background-color", "color", "border-color"];
+function stileApplicaVoce(el, voce, chiave) {
   const prop = stileProprietaCss(voce.proprieta);
+  // la chiave si scrive solo se cambia: riscriverla uguale sveglierebbe
+  // l'osservatore a ogni giro, e il giro non finirebbe piu'
+  if (chiave && el.dataset.stileChiave !== chiave) el.dataset.stileChiave = chiave;
   if (el.style.getPropertyValue(prop) === voce.colore && el.style.getPropertyPriority(prop) === "important") return;
+  // il colore scelto prima per un'altra proprieta' (era il testo, ora lo
+  // sfondo) non deve restare appiccicato addosso all'oggetto
+  STILE_PROPRIETA_COLORE.forEach((p) => { if (p !== prop && el.style.getPropertyPriority(p) === "important") el.style.removeProperty(p); });
   el.style.setProperty(prop, voce.colore, "important");
-  if (prop === "background-color") el.style.setProperty("background-image", "none", "important");
+  if (prop === "background-color") {
+    // il gradiente di un tasto in rilievo si mette da parte prima di
+    // spegnerlo: quando il colore si toglie, il rilievo torna com'era
+    if (el.dataset.stileSfondoPrima === undefined) el.dataset.stileSfondoPrima = el.style.getPropertyValue("background-image");
+    el.style.setProperty("background-image", "none", "important");
+  }
   el.dataset.stileOggetto = "1";
 }
-function stilePulisciTutto() {
-  if (typeof document === "undefined") return;
-  document.querySelectorAll("[data-stile-oggetto]").forEach((el) => {
-    ["background-color", "background-image", "color", "border-color"].forEach((prop) => { if (el.style.getPropertyPriority(prop) === "important") el.style.removeProperty(prop); });
-    delete el.dataset.stileOggetto;
-  });
+function stilePulisciElemento(el) {
+  STILE_PROPRIETA_COLORE.forEach((prop) => { if (el.style.getPropertyPriority(prop) === "important") el.style.removeProperty(prop); });
+  if (el.style.getPropertyPriority("background-image") === "important") {
+    el.style.removeProperty("background-image");
+    if (el.dataset.stileSfondoPrima) el.style.setProperty("background-image", el.dataset.stileSfondoPrima);
+  }
+  delete el.dataset.stileSfondoPrima;
+  delete el.dataset.stileOggetto;
+  delete el.dataset.stileChiave;
 }
 function stileApplicaTutto() {
   if (typeof document === "undefined" || !STILE_VISTA) return;
-  Object.values(STILE_MAPPA).forEach((voce) => {
+  const vive = new Set();
+  Object.entries(STILE_MAPPA || {}).forEach(([chiave, voce]) => {
     if (!voce || voce.vista !== STILE_VISTA) return;
-    const el = stileTrovaElemento(voce);
-    if (el) stileApplicaVoce(el, voce);
+    const el = stileTrovaElemento(voce, chiave);
+    // non trovato: gli si lascia il colore che ha addosso. Prima si
+    // ripuliva tutto e poi si ridipingeva, e un oggetto che nel frattempo
+    // aveva cambiato posizione nella pagina restava senza colore: e'
+    // questo che faceva "sparire" il colore invece di cambiarlo
+    if (!el) return;
+    vive.add(chiave);
+    stileApplicaVoce(el, voce, chiave);
+  });
+  // si spoglia solo chi non e' piu' in elenco, o e' di un'altra pagina
+  document.querySelectorAll("[data-stile-oggetto]").forEach((el) => {
+    if (!el.dataset.stileChiave || !vive.has(el.dataset.stileChiave)) stilePulisciElemento(el);
   });
 }
 // l'osservatore: a ogni cambiamento della pagina si riapplicano i colori
@@ -876,7 +913,8 @@ function PannelloStileOggetti({ vista, programmatore }) {
   useEffect(() => {
     STILE_MAPPA = mappa || {};
     STILE_VISTA = vista;
-    stilePulisciTutto();
+    // stileApplicaTutto si ripulisce da solo cio' che non e' piu' in
+    // elenco: non serve piu' spogliare tutto prima
     stileApplicaTutto();
     stileAvviaOsservatore();
   }, [mappa, vista]);
@@ -928,7 +966,7 @@ function PannelloStileOggetti({ vista, programmatore }) {
     if (!selezione) return;
     const voce = { ...selezione.voce, proprieta, colore };
     salvaMappa({ ...(mappa || {}), [selezione.chiave]: voce });
-    stileApplicaVoce(selezione.elemento, voce);
+    stileApplicaVoce(selezione.elemento, voce, selezione.chiave);
     setSelezione((sel) => (sel ? { ...sel, esistente: voce } : sel));
   }
   function togliColore() {
