@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "./supabase.js";
 import { regioneDaCitta } from "./comuni-regioni";
 // I mattoni condivisi vivono fuori di qui: li usa anche il modulo
 // "rientro materiali corso", e due copie degli stessi colori sarebbero
@@ -12,7 +12,8 @@ import {
   fontDisplay, stileTitoloPagina, fontBody, fontHero, fontCondensato,
   inputStyle, campoCompattoStyle, round2, numeroFascia,
 } from "./ui/stile.js";
-import { Button, Field, CampoNumero } from "./ui/base.jsx";
+import { Button, Field, CampoNumero, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
+import PaginaSpedizioniCorso from "./rientri/PaginaSpedizioniCorso.jsx";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -85,10 +86,6 @@ function getPdfLib() {
   return conRicaricaSeVecchia(_pdfLibPromise, () => { _pdfLibPromise = null; });
 }
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "";
 
@@ -3571,14 +3568,6 @@ function TileHome({
 }
 // stessa casetta usata nel bottone "Home" della barra in alto, riusata
 // nel breadcrumb di una cartella di tasti
-function IconaCasa({ size = 16, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  );
-}
 // n barre verticali, per il tasto "N tasti per riga" (solo programmatore)
 function IconaColonne({ n, size = 16, color = "currentColor" }) {
   const gap = 2.5;
@@ -3604,39 +3593,6 @@ function IconaColonne({ n, size = 16, color = "currentColor" }) {
 // lo stesso spazio, e un tasto "indietro" che sta sempre nello stesso
 // punto si preme senza cercarlo. Verso Home l'icona e' la casetta: e' il
 // posto che si riconosce prima di leggerne il nome.
-function TastoLivelloPrecedente({ titolo, onClick, soloIcona = false }) {
-  const versoHome = String(titolo || "").trim().toLowerCase() === "home";
-  const Icona = versoHome ? IconaCasa : IconaCartellaShop;
-  // "soloIcona": dove il tondo sta in fila col titolo il nome scritto
-  // dentro non serve — lo dice gia' il titolo della pagina accanto, e
-  // senza quelle tre righe minuscole il cerchio si stringe e si allinea
-  // al testo invece di sbordarci sotto. Il nome resta nel tooltip.
-  const lato = soloIcona ? 48 : 68;
-  return (
-    <button
-      onClick={onClick}
-      title={titolo}
-      style={{
-        width: lato, height: lato, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box",
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
-        background: "#fff", border: `1px solid ${CREAM_BORDER}`, padding: "0 6px", cursor: "pointer",
-        overflow: "hidden",
-      }}
-    >
-      <Icona size={soloIcona ? 20 : 16} color={NAVY} />
-      {/* il nome sta DENTRO il tondo e va a capo dove capita, anche in
-          mezzo a una parola: in un cerchio da 68 "Amministrazione" non ci
-          sta su una riga, e tagliarla con i puntini vorrebbe dire non
-          leggerla affatto */}
-      {!soloIcona && (
-        <span style={{
-          ...fontBody, fontSize: 8.5, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center",
-          overflowWrap: "anywhere", wordBreak: "break-word", maxWidth: "100%",
-        }}>{titolo}</span>
-      )}
-    </button>
-  );
-}
 // griglia di tasti riordinabile e, solo in Home, raggruppabile in
 // cartelle stile Windows — un solo componente riusato da Home,
 // Amministrazione, Gestione magazzino e shop, Statistiche:
@@ -43462,7 +43418,7 @@ function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, or
 // hub d'ingresso di "Logistica prodotti": le spedizioni dei kit ai corsi
 // da una parte, gli ordini dello shop online dall'altra — due mestieri
 // diversi che prima stavano nella stessa pagina
-function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArrivo, onApriAvvisi, quantiOrdiniDaSpedire, quantiAvvisi, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriSpedizioniRientro, onApriOrdiniInArrivo, onApriAvvisi, quantiOrdiniDaSpedire, quantiAvvisi, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -43476,6 +43432,7 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
           pagina="logisticaprodotti" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "spedizionicorsi", title: "Spedizioni corsi", descrizione: "Kit, bolle e pacchi verso le sedi dei corsi.", Icona: IconaTileLogistica, attivo: true, onClick: onApriSpedizioniCorsi },
+            { chiave: "spedizionirientro", title: "Spedizioni ai corsi", descrizione: "Cosa parte per ogni corso, kit di riserva compresi.", Icona: IconaScatolaErp, attivo: true, onClick: onApriSpedizioniRientro },
             { chiave: "ordiniinarrivo", title: "Ordini in arrivo", descrizione: "Gli ordini dello shop online da preparare e spedire.", Icona: IconaScatolaErp, attivo: true, onClick: onApriOrdiniInArrivo, badge: quantiOrdiniDaSpedire },
             { chiave: "avvisilogistica", title: "Advisor", descrizione: "Cosa sta finendo: pacchi da aprire e prodotti da riordinare.", Icona: IconaAvvisoTriangolo, attivo: true, onClick: onApriAvvisi, badge: quantiAvvisi },
           ]}
@@ -56820,13 +56777,6 @@ function ListaProdottiPiuVenduti({ titolo, righe, espanso, onToggleEspanso }) {
 // riesce riflette la modifica sui dati locali (vedi woo-gestisci-categoria
 // e woo-gestisci-prodotto): niente salvataggi "finti" in caso di errore.
 
-function IconaCartellaShop({ size = 16, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-    </svg>
-  );
-}
 function IconaPersonaSemplice({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -66939,10 +66889,21 @@ export default function App() {
         />
       )}
 
+      {view === "spedizionirientro" && (
+        <PaginaSpedizioniCorso
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
+          kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
+          prodottiShop={prodottiShop} logisticaKitEdizioni={logisticaKitEdizioni}
+          utenteLoggato={utenteLoggato} isMobile={isMobile}
+          onBack={() => setView("logisticaprodotti")}
+        />
+      )}
+
       {view === "logisticaprodotti" && (
         <PaginaLogisticaHub
           onBack={() => setView("home")}
           onApriSpedizioniCorsi={apriSpedizioniCorsi}
+          onApriSpedizioniRientro={() => setView("spedizionirientro")}
           onApriOrdiniInArrivo={apriOrdiniInArrivo}
           onApriAvvisi={apriAvvisiLogistica}
           quantiOrdiniDaSpedire={pacchiDaSpedire}

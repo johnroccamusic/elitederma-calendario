@@ -7,7 +7,7 @@
 // non e' questo il momento.
 
 import { useState } from "react";
-import { NAVY, MUTED, fontBody, round2, numeroFascia } from "./stile.js";
+import { NAVY, CREAM_BORDER, MUTED, fontBody, round2, numeroFascia } from "./stile.js";
 
 export function Button({ children, onClick, variant = "primary", style = {}, disabled }) {
   const base = {
@@ -69,5 +69,60 @@ export function CampoNumero({ valore, onCambia, min = 0, max = null, step = "any
       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
       style={style}
     />
+  );
+}
+
+
+// Il tondo che riporta al livello di sopra: sta SEMPRE a sinistra del
+// titolo, col titolo centrato sulla sua altezza. Vive qui perche' ogni
+// pagina nuova deve poter avere la stessa intestazione senza rifarsela.
+export function IconaCasa({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  );
+}
+
+export function IconaCartellaShop({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    </svg>
+  );
+}
+
+export function TastoLivelloPrecedente({ titolo, onClick, soloIcona = false }) {
+  const versoHome = String(titolo || "").trim().toLowerCase() === "home";
+  const Icona = versoHome ? IconaCasa : IconaCartellaShop;
+  // "soloIcona": dove il tondo sta in fila col titolo il nome scritto
+  // dentro non serve — lo dice gia' il titolo della pagina accanto, e
+  // senza quelle tre righe minuscole il cerchio si stringe e si allinea
+  // al testo invece di sbordarci sotto. Il nome resta nel tooltip.
+  const lato = soloIcona ? 48 : 68;
+  return (
+    <button
+      onClick={onClick}
+      title={titolo}
+      style={{
+        width: lato, height: lato, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+        background: "#fff", border: `1px solid ${CREAM_BORDER}`, padding: "0 6px", cursor: "pointer",
+        overflow: "hidden",
+      }}
+    >
+      <Icona size={soloIcona ? 20 : 16} color={NAVY} />
+      {/* il nome sta DENTRO il tondo e va a capo dove capita, anche in
+          mezzo a una parola: in un cerchio da 68 "Amministrazione" non ci
+          sta su una riga, e tagliarla con i puntini vorrebbe dire non
+          leggerla affatto */}
+      {!soloIcona && (
+        <span style={{
+          ...fontBody, fontSize: 8.5, fontWeight: 700, color: NAVY, lineHeight: 1.1, textAlign: "center",
+          overflowWrap: "anywhere", wordBreak: "break-word", maxWidth: "100%",
+        }}>{titolo}</span>
+      )}
+    </button>
   );
 }
