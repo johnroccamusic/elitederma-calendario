@@ -37481,8 +37481,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
       })
       .filter(({ d, nomeDoc }) => !cerca || `${d.numero || ""} ${nomeDoc}`.toLowerCase().includes(cerca))
       .sort((a, b) => (Number(b.stessoFornitore) - Number(a.stessoFornitore))
-        || (Math.abs(Number(a.d.totale || 0) - totale) - Math.abs(Number(b.d.totale || 0) - totale)))
-      .slice(0, 8);
+        || (Math.abs(Number(a.d.totale || 0) - totale) - Math.abs(Number(b.d.totale || 0) - totale)));
   }, [documentiFornitore, ricercaDoc, fornitore, totale, nomeFornitoreDi]);
   function cambiaClassificazione(campo, valore) { setClassificazione((c) => ({ ...c, [campo]: valore })); }
   // I due tasti non si bloccano a vicenda: si paga anche senza fattura
@@ -37529,12 +37528,12 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
         <div style={{ marginTop: 12, padding: isMobile ? 14 : 16, background: "#fff", border: `1.5px solid ${NAVY}`, borderRadius: 16 }}>
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Associa la fattura del fornitore</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
-            Scegliendola, questa riga prende numero, data e termine di pagamento del documento: la scadenza smette di essere stimata. In cima ci sono i documenti del fornitore giusto e quelli d'importo piu' vicino a {fmtEuroErp(totale)}.
+            Scegliendola, questa riga prende numero, data e termine di pagamento del documento: la scadenza smette di essere stimata. Ci sono <strong>tutti</strong> i documenti ancora scoperti ({candidatiDoc.length}), coi documenti del fornitore giusto e quelli d'importo piu' vicino a {fmtEuroErp(totale)} in cima.
           </div>
           <div style={{ marginTop: 12 }}>
             <CampoRicerca value={ricercaDoc} onChange={(e) => setRicercaDoc(e.target.value)} placeholder="Cerca numero o fornitore…" />
           </div>
-          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, maxHeight: 360, overflowY: "auto" }}>
             {candidatiDoc.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun documento da associare.</div>}
             {candidatiDoc.map(({ d, nomeDoc, stessoFornitore }) => {
               const scelto = docScelto?.id === d.id;
@@ -40342,10 +40341,10 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
     const muovi = (ev) => {
       if (!tiro.current) return;
       const y = ev.clientY ?? (ev.touches && ev.touches[0]?.clientY) ?? 0;
-      // il tetto e' l'altezza della finestra meno quello che sta sopra e
-      // sotto l'elenco: piu' in la' la finestra uscirebbe dallo schermo
-      const massimo = Math.max(ALTEZZA_ELENCO_MIN, (window.innerHeight || 800) - 380);
-      setAltezzaElenco(Math.min(massimo, Math.max(ALTEZZA_ELENCO_MIN, Math.round(tiro.current.da + (y - tiro.current.y)))));
+      // nessun tetto: si tira quanto si vuole. La finestra sta dentro uno
+      // sfondo che scorre, quindi anche allungata all'inverosimile i tasti
+      // di conferma si raggiungono scorrendo — non spariscono
+      setAltezzaElenco(Math.max(ALTEZZA_ELENCO_MIN, Math.round(tiro.current.da + (y - tiro.current.y))));
     };
     const molla = () => {
       tiro.current = null;
@@ -40369,17 +40368,21 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
   const aggiungi = (r) => setScelti((v) => [...v, r]);
   const totaleScelto = round2(scelti.reduce((t, r) => t + (Number(r.totale) || 0), 0));
   const differenza = round2(totaleScelto - totaleDoc);
-  // vicino d'importo prima di tutto: una fattura si riconosce dalla cifra
+  // L'elenco e' COMPLETO: nessun taglio. C'era un tetto di dieci voci, e
+  // la spesa da associare poteva semplicemente non esserci — senza che
+  // niente lo dicesse. Una lista che nasconde quello che cerchi e' peggio
+  // di una lista lunga: l'elenco si allunga tirando il bordo, e la
+  // ricerca c'e'.
+  // L'ordine mette davanti i costi d'importo piu' vicino alla fattura,
+  // perche' e' dalla cifra che una fattura si riconosce.
   const perVicinanza = (a, b) => Math.abs(a - totaleDoc) - Math.abs(b - totaleDoc);
   const q = ricerca.trim().toLowerCase();
   const candidatiDaPagare = (daPagare || [])
-    .filter((r) => !q || `${r.nome || ""} ${r.fornitore || ""}`.toLowerCase().includes(q))
-    .sort((a, b) => perVicinanza(Number(a.totale) || 0, Number(b.totale) || 0))
-    .slice(0, 10);
+    .filter((r) => !q || `${r.nome || ""} ${r.fornitore || ""} ${r.oggetto || ""}`.toLowerCase().includes(q))
+    .sort((a, b) => perVicinanza(Number(a.totale) || 0, Number(b.totale) || 0));
   const candidatiPagate = (spesePagateSenzaDocumento || [])
     .filter((sp) => !q || `${sp.descrizione || ""}`.toLowerCase().includes(q))
-    .sort((a, b) => perVicinanza(Number(a.totale) || 0, Number(b.totale) || 0))
-    .slice(0, 10);
+    .sort((a, b) => perVicinanza(Number(a.totale) || 0, Number(b.totale) || 0));
   const elenco = scheda === "dapagare" ? candidatiDaPagare : candidatiPagate;
   async function conferma() {
     if (scelti.length === 0) return;
@@ -40401,7 +40404,14 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
           ))}
         </div>
         <div style={{ marginTop: 12 }}>
-          <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca descrizione o fornitore…" />
+          <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca descrizione, fornitore o corso…" />
+        </div>
+        {/* il conto e' li' apposta: dice che l'elenco e' tutto, non una
+            cima. Prima ne mostrava dieci e non lo diceva a nessuno */}
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
+          {elenco.length === 0
+            ? (q ? "Nessuna corrispondenza per quello che hai cercato." : "Niente da associare qui.")
+            : `${elenco.length} voc${elenco.length === 1 ? "e" : "i"} in elenco${q ? " per questa ricerca" : ", tutte"} · le piu' vicine a ${fmtEuroErp(totaleDoc)} in cima · il bordo di sotto si tira per allungare`}
         </div>
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, maxHeight: altezzaElenco, overflowY: "auto" }}>
           {elenco.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 0" }}>Niente da associare qui.</div>}
