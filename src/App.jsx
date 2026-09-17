@@ -35465,6 +35465,18 @@ function CampoNumero({ valore, onCambia, min = 0, max = null, step = "any", styl
 // si leggono come quattro righe — quanto spendi, quanto ti sconto.
 function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = false }) {
   const g = gruppiFasceValidi(valore);
+  // Le quattro righe si scrivevano a mano una cifra per volta: ventiquattro
+  // numeri per tabella, e l'incremento tra una fascia e l'altra andava
+  // ricalcolato in testa colonna per colonna. Qui si dice di quanto deve
+  // crescere e le tre righe sotto la prima si riscrivono da sole.
+  const [passoFasce, setPassoFasce] = useState(0.5);
+  function applicaPasso() {
+    const base = g.gruppi[0];
+    const gruppi = g.gruppi.map((gr, i) =>
+      i === 0 ? gr : gr.map((f, k) => ({ ...f, percentuale: round2(Math.min(100, Math.max(0, (base[k]?.percentuale || 0) + passoFasce * i))) }))
+    );
+    onCambia({ soglie: g.soglie, gruppi });
+  }
   function cambiaSoglia(i, n) {
     const soglie = g.soglie.slice();
     soglie[i] = n;
@@ -35534,6 +35546,23 @@ function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = fal
         ))}
         <span style={{ ...fontBody, fontSize: 11, color: MUTED, flex: "1 1 160px", minWidth: 0 }}>
           Decide la riga il totale del carrello a listino, prima dello sconto.
+        </span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${CREAM_BORDER}` }}>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>Passo</span>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 12, color: MUTED }}>
+          ogni fascia
+          <CampoNumero
+            valore={passoFasce} min={0} max={100}
+            titolo="Di quanto cresce lo sconto passando alla fascia di spesa successiva"
+            onCambia={(n) => setPassoFasce(n)}
+            style={{ ...inputStyle, width: 64, textAlign: "center", padding: "5px 6px", fontWeight: 700, fontSize: 12.5 }}
+          />
+          <span style={{ fontWeight: 700, color: NAVY }}>punti in più</span>
+        </label>
+        <Button variant="ghost" onClick={applicaPasso}>Applica alla tabella</Button>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, flex: "1 1 160px", minWidth: 0 }}>
+          Tiene ferma la prima riga e riscrive le altre tre, colonna per colonna.
         </span>
       </div>
       {!senzaWoo && (
