@@ -36521,18 +36521,33 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
   const scadenzeSpostate = new Map((impegnoTabella || [])
     .filter((x) => x.chiave_origine && !String(x.chiave_origine).startsWith("cash_") && x.data_prevista && (x.stato === "aperto" || x.stato === "parzialmente_coperto"))
     .map((x) => [x.chiave_origine, x.data_prevista]));
+  // le classi che hanno gia' una spesa salvata: vanno ricalcolate comunque,
+  // anche fuori dalla soglia, perche' il Riepilogo puo' cambiare un costo
+  // mesi dopo e lo Scadenzario deve seguirlo
+  const classiConSpesa = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave && s.classe_id).map((s) => s.classe_id));
   const daPagare = [];
+  // chiave -> quanto vale OGGI la parte a bonifico di quel costo, secondo
+  // il Riepilogo della classe. Serve a correggere le spese gia' salvate e
+  // non ancora pagate: l'importo non si congela quando la riga nasce, e
+  // se in Riepilogo si sposta un costo da cash a bonifico o si cambia una
+  // tariffa, lo Scadenzario si aggiorna da solo.
+  const importiRicalcolati = new Map();
   (corsiDate || []).forEach((cd) => {
     // la soglia guarda l'inizio del corso: un corso gia' cominciato o
     // finito l'ha superata, e i suoi costi entrano tutti
     const entroLaSoglia = cd.data_inizio && cd.data_inizio <= addGiorni(oggiStr, GIORNI_ANTICIPO_SCADENZIARIO);
-    if (!entroLaSoglia) return;
+    if (!entroLaSoglia && !classiConSpesa.has(cd.id)) return;
     const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit });
     righeSpeseTutte.forEach((r) => {
+      const chiave = `${r.tipo}_${r.rigaId}`;
+      // il valore di oggi va registrato SEMPRE, anche quando e' zero: uno
+      // zero vuol dire che quel costo e' passato tutto in contanti, e
+      // dallo Scadenzario deve sparire
+      importiRicalcolati.set(chiave, round2(r.bonifico || 0));
       // solo quello che si paga con bonifico: la parte in contanti si
       // regola dalla busta della classe, non da qui
       if (!(r.bonifico > 0)) return;
-      const chiave = `${r.tipo}_${r.rigaId}`;
+      if (!entroLaSoglia) return;
       // gia' diventata una spesa vera (fattura associata o pagata): la
       // riga vera l'ha sostituita
       if (spesePerChiave.has(chiave)) return;
@@ -36559,7 +36574,7 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       });
     });
   });
-  return { daPagareVirtuali: daPagare };
+  return { daPagareVirtuali: daPagare, importiRicalcolati };
 }
 
 // Le quote in contanti che il Riepilogo di una classe ha mandato nello
@@ -40537,7 +40552,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     return s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "—";
   }
 
-  const { daPagareVirtuali } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella });
+  const { daPagareVirtuali, importiRicalcolati } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella });
 
   // una spesa nata da "Registra fattura" o da "+ Nuova spesa da pagare"
   // (stato diverso da "pagata") resta qui finché non viene segnata
@@ -40545,10 +40560,23 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // corso, a meno che non abbiano già una fattura/scadenza propria;
   // quelle di sede/corso/evento/generali (non legate a una classe)
   // compaiono da subito, non c'è un corso di cui aspettare la fine
+  // Quanto vale davvero, oggi, una spesa gia' salvata ma non ancora
+  // pagata e senza fattura: il Riepilogo della classe comanda ancora.
+  // Se li' si sposta un costo da cash a bonifico, si cambia una tariffa o
+  // si corregge un compenso — anche a corso finito — lo Scadenzario segue.
+  // Con una fattura attaccata no: li' comanda il documento, che e' quello
+  // che si paga davvero.
+  function importoVivoDiSpesa(sp) {
+    const base = bonificoDiSpesaReale(sp);
+    if (sp.numero_documento) return base;
+    const chiave = sp.origine_scadenziario_chiave;
+    if (!chiave || !importiRicalcolati.has(chiave)) return base;
+    return round2(importiRicalcolati.get(chiave) - (sp.importo_pagato_cash || 0));
+  }
   const speseDaPagareReali = (spese || [])
     .filter((s) => s.stato !== "pagata")
     .map((s) => ({ spesa: s, corsoData: s.classe_id ? (corsiDate || []).find((cd) => cd.id === s.classe_id) : null }))
-    .filter((x) => bonificoDiSpesaReale(x.spesa) > 0 && (!x.corsoData || x.spesa.origine_scadenziario_chiave || x.corsoData.data_fine <= oggiStr));
+    .filter((x) => importoVivoDiSpesa(x.spesa) > 0 && (!x.corsoData || x.spesa.origine_scadenziario_chiave || x.corsoData.data_fine <= oggiStr));
   // Le spese coperte dalla stessa fattura (stesso gruppo_pagamento) qui si
   // leggono come UNA riga: si paghera' con un bonifico solo, e vederne tre
   // da pagare quando i bonifici da fare sono uno confonde e basta. Sotto
@@ -40556,7 +40584,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   const rigaDaSpesaReale = (x) => ({
     key: `reale_${x.spesa.id}`, tipo: "reale", corsoData: x.corsoData, spesaReale: x.spesa,
     nome: x.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, x.spesa.sottocategoria_id)?.nome || "Spesa",
-    totale: bonificoDiSpesaReale(x.spesa), sottocategoriaId: x.spesa.sottocategoria_id,
+    totale: importoVivoDiSpesa(x.spesa), sottocategoriaId: x.spesa.sottocategoria_id,
     fornitore: fornitoriById[x.spesa.fornitore_id]?.nome || null,
     iban: fornitoriById[x.spesa.fornitore_id]?.iban || null,
     oggetto: oggettoDiSpesa(x.spesa, x.corsoData),
@@ -40574,7 +40602,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   gruppiSpese.forEach((membri, g) => {
     if (membri.length === 1) { righeReali.push(rigaDaSpesaReale(membri[0])); return; }
     const capo = membri[0];
-    const totale = round2(membri.reduce((t, m) => t + bonificoDiSpesaReale(m.spesa), 0));
+    const totale = round2(membri.reduce((t, m) => t + importoVivoDiSpesa(m.spesa), 0));
     righeReali.push({
       ...rigaDaSpesaReale(capo),
       key: `gruppo_${g}`, tipo: "reale", gruppo: g, speseGruppo: membri.map((m) => m.spesa),
@@ -41014,11 +41042,18 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     // vanno segnate tutte, ognuna col suo importo
     const membri = item.speseGruppo && item.speseGruppo.length > 1 ? item.speseGruppo : [item.spesaReale];
     for (const sp of membri) {
-      const suo = round2((sp.totale || 0) - (sp.importo_pagato_cash || 0));
+      const suo = round2(importoVivoDiSpesa(sp));
+      // se nel frattempo il Riepilogo ha cambiato il costo, si paga (e si
+      // registra) la cifra di adesso, non quella con cui la riga era nata
+      const cambiato = !sp.numero_documento && Math.abs(suo - bonificoDiSpesaReale(sp)) > 0.005;
       const { error } = await supabase.from("spese").update({
         stato: "pagata", data_pagamento: dataPagamento || null, allegato_path: allegatoPath,
         metodo_pagamento: dallaCassa ? "Cassa contanti" : (metodo || "Bonifico"),
         importo_pagato_cash: dallaCassa ? suo : (sp.importo_pagato_cash || 0),
+        ...(cambiato ? {
+          totale: round2(suo + (sp.importo_pagato_cash || 0)),
+          imponibile: round2((suo + (sp.importo_pagato_cash || 0)) / (1 + (Number(sp.iva_percentuale) || 0) / 100)),
+        } : {}),
         // la classificazione confermata nella scheda del pagamento sovrascrive
         // quella che la spesa aveva: e' l'ultima parola di chi ha pagato
         ...(classificazione ? classificazionePerPayload(classificazione) : {}),
