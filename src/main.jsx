@@ -26,7 +26,7 @@ import { avviaAggiornamentoAutomatico } from "./aggiornamento.js";
 // accesso": chiuderle mentre tutti sono fuori spegne l'app per tutti. E'
 // gia' successo il 15/08/2026, e fu annullato lo stesso giorno.
 // ---------------------------------------------------------------------------
-const CANCELLO_ACCESO = false;
+const CANCELLO_ACCESO = true;
 
 // caricato solo se serve: cosi' con il cancello spento non nasce un secondo
 // client Supabase accanto a quello di App.jsx
