@@ -37422,8 +37422,8 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
         {mese ? <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase" }}>{MESI_ABBR[mese - 1]}</div> : null}
         {anno ? <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{anno}</div> : null}
       </div>
-      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-        <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY }}>{titolo}</div>
+      <div style={{ flex: "1 1 140px", minWidth: 0 }}>
+        <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{titolo}</div>
         {sottotitolo ? <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>{sottotitolo}</div> : null}
         {chips && chips.length > 0 && (
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5 }}>
@@ -37432,7 +37432,11 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
         )}
       </div>
       <div style={{ flex: "0 0 100px", textAlign: "right", ...fontDisplay, fontSize: 15, fontWeight: 700, color: coloreImporto || NAVY }}>{importo}</div>
-      {children}
+      {/* i tasti stanno insieme e su una riga sola: erano elementi sciolti
+          della griglia, e quando erano tre l'ultimo andava a capo da solo
+          sotto la data, dove non c'entra niente. A cedere spazio e' il
+          titolo, che puo' accorciarsi coi puntini */}
+      {children ? <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", flexShrink: 0, marginLeft: "auto" }}>{children}</div> : null}
     </div>
   );
 }
@@ -41290,8 +41294,8 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     if (f.spesa_id) {
                       return (
                         <>
-                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Importata</span>
-                          <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
+                          <span style={{ ...fontBody, fontSize: 9.2, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 10, padding: "3px 8px", whiteSpace: "nowrap" }}>Importata</span>
+                          <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
                         </>
                       );
                     }
@@ -41299,27 +41303,27 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     if (df && df.stato === "riconciliato") {
                       return (
                         <>
-                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Riconciliata</span>
-                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi riconciliazione</button>
+                          <span style={{ ...fontBody, fontSize: 9.2, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 10, padding: "3px 8px", whiteSpace: "nowrap" }}>Riconciliata</span>
+                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Vedi riconciliazione</button>
                         </>
                       );
                     }
                     if (df && df.stato === "scartato") {
-                      return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#F1EEE4", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Scartata</span>;
+                      return <span style={{ ...fontBody, fontSize: 9.2, fontWeight: 700, color: MUTED, background: "#F1EEE4", borderRadius: 10, padding: "3px 8px", whiteSpace: "nowrap" }}>Scartata</span>;
                     }
                     if (df) {
                       return (
                         <>
-                          <button onClick={() => setDocDaAssociare(df)} title="Aggancia questa fattura a una riga dello Scadenzario o a una spesa gia' pagata" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Associa a una spesa</button>
+                          <button onClick={() => setDocDaAssociare(df)} title="Aggancia questa fattura a una riga dello Scadenzario o a una spesa gia' pagata" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Associa a una spesa</button>
                           {/* la fattura non corrisponde a nessun costo gia'
                               previsto: nasce una spesa nuova, da pagare,
                               con la fattura gia' attaccata */}
-                          <button onClick={() => creaScadenzaDaDocumento(df)} title="Crea una spesa da pagare nello Scadenzario Passivo, con questa fattura gia' associata" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Crea scadenza di pagamento</button>
-                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>
+                          <button onClick={() => creaScadenzaDaDocumento(df)} title="Crea una spesa da pagare nello Scadenzario Passivo, con questa fattura gia' associata" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Crea scadenza di pagamento</button>
+                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>
                         </>
                       );
                     }
-                    return <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>;
+                    return <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>;
                   })()}
                 </RigaAmministrazione>
               ), dataDiFic)}
@@ -41379,16 +41383,16 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     if (df && df.stato === "riconciliato") {
                       return (
                         <>
-                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Riconciliata</span>
-                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi riconciliazione</button>
+                          <span style={{ ...fontBody, fontSize: 9.2, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 10, padding: "3px 8px", whiteSpace: "nowrap" }}>Riconciliata</span>
+                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Vedi riconciliazione</button>
                         </>
                       );
                     }
                     if (df && df.stato === "scartato") {
-                      return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#F1EEE4", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Scartata</span>;
+                      return <span style={{ ...fontBody, fontSize: 9.2, fontWeight: 700, color: MUTED, background: "#F1EEE4", borderRadius: 10, padding: "3px 8px", whiteSpace: "nowrap" }}>Scartata</span>;
                     }
                     if (df) {
-                      return <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>;
+                      return <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>;
                     }
                     if (assegnazioneApertaFicId === f.fic_id) {
                       return (
@@ -41402,7 +41406,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                         </>
                       );
                     }
-                    return <button onClick={() => setAssegnazioneApertaFicId(f.fic_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Assegna fornitore</button>;
+                    return <button onClick={() => setAssegnazioneApertaFicId(f.fic_id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Assegna fornitore</button>;
                   })()}
                 </RigaAmministrazione>
               ), dataDiNoteCredito)}
@@ -41667,7 +41671,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     chips={[scaduto ? "Scaduto" : "Attivo", ab.data_fine ? `Fino al ${fmtData(ab.data_fine)}` : "Nessuna scadenza"]}
                     importo={tranche ? fmtEuroErp(tranche.totale) : "—"}
                   >
-                    <button onClick={() => onApriModificaAbbonamento(ab.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica</button>
+                    <button onClick={() => onApriModificaAbbonamento(ab.id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Modifica</button>
                   </RigaAmministrazione>
                 );
               })}
