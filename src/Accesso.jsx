@@ -144,11 +144,16 @@ export default function Accesso() {
           }}
         >
           <div style={{ height: 3, width: 44, background: GOLD, borderRadius: 2, marginBottom: 20 }} />
-          {/* +20% dal 16/09/2026 (era 21) */}
-          <h1 style={{ margin: "0 0 6px", fontSize: 25, color: NAVY, letterSpacing: "-.01em" }}>
-            Accademia Elitederma
+          {/* Il nome del prodotto e' GENYON, non quello dell'accademia: la
+              schermata di accesso deve dire la stessa cosa del cancello
+              interno e della home, stesso carattere compreso (17/09/2026) */}
+          <h1 style={{ margin: "0 0 4px", fontFamily: '"Zen Dots", cursive', fontWeight: 400, fontSize: 30, color: NAVY, letterSpacing: 0.5 }}>
+            GENYON
           </h1>
-          <p style={{ margin: "0 0 24px", fontSize: 13.5, color: "#8B8FA3" }}>
+          <p style={{ margin: "0 0 2px", fontSize: 13.5, color: NAVY, letterSpacing: 0.4 }}>
+            General Yield Organization Network
+          </p>
+          <p style={{ margin: "0 0 24px", fontSize: 12, color: "#8B8FA3" }}>
             Area riservata allo staff.
           </p>
 
