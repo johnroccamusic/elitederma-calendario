@@ -16943,6 +16943,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   // incassate o sul totale davvero incassato. Vedi il commento nella
   // scheda di iscrizione, dove il flag viene letto.
   const [modSaldoSuTotalePagato, setModSaldoSuTotalePagato] = useState(false);
+  const [modDermografiSicurezza, setModDermografiSicurezza] = useState(false);
   const [vistaCorsiModal, setVistaCorsiModal] = useState("griglia"); // griglia | nuovo | modifica
   const [ricercaCorsi, setRicercaCorsi] = useState("");
   const [tipiModellaSelCorso, setTipiModellaSelCorso] = useState([]);
@@ -17044,6 +17045,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     setModPostiCorso(String(c.posti_max));
     setModCategoriaCorso(c.categoria || "");
     setModSaldoSuTotalePagato(!!c.saldo_su_totale_pagato);
+    setModDermografiSicurezza(!!c.prevede_dermografi_sicurezza);
     const giorniEsistenti = (corsiGiorni || []).filter((g) => g.corso_id === c.id).sort((a, b) => a.numero_giorno - b.numero_giorno);
     setDurataCorsoModifica(giorniEsistenti.length > 0 ? String(giorniEsistenti.length) : "");
     setGiorniCorsoModifica(giorniEsistenti.map((g) => ({
@@ -17102,6 +17104,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       posti_max: Number(modPostiCorso) || 10,
       categoria: modCategoriaCorso.trim() || null,
       saldo_su_totale_pagato: modSaldoSuTotalePagato,
+      prevede_dermografi_sicurezza: modDermografiSicurezza,
     };
     const { error } = await supabase.from("corsi").update(payload).eq("id", id);
     if (error) { setMsg("Errore: " + testoErrore(error)); setSalvandoCorso(false); return; }
@@ -17459,6 +17462,25 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
                   </select>
                   <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>
                     Riguarda “Restano da pagare” nella scheda di iscrizione. Senza IVA è la regola normale, giusta dove il prezzo pattuito è netto; con IVA serve dove il pattuito è già lordo.
+                  </div>
+                </Field>
+                {/* I dermografi di riserva sono i pezzi piu' costosi del
+                    pacco: dove non c'entrano — laminazione, extension,
+                    henne — chiedere quanti mandarne e' solo rumore in una
+                    scheda che si compila di fretta. Lo dice il corso una
+                    volta, e la logistica si adegua. */}
+                <Field label="Dermografi extra di sicurezza">
+                  <div style={{ display: "inline-flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+                    {[{ v: true, l: "Sì" }, { v: false, l: "No" }].map((o) => (
+                      <button
+                        key={o.l} type="button" onClick={() => setModDermografiSicurezza(o.v)}
+                        style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "8px 22px", borderRadius: 16, border: "none", cursor: "pointer", background: modDermografiSicurezza === o.v ? NAVY : "transparent", color: modDermografiSicurezza === o.v ? "#fff" : NAVY }}
+                      >{o.l}</button>
+                    ))}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+                    Il corso manda dermografi in più, oltre a quelli comprati dagli allievi, per sostituirne uno che si guasta in aula.
+                    Con “Sì” in Logistica corsi compaiono le righe per dire quanti mandarne; con “No” non compaiono proprio.
                   </div>
                 </Field>
                 <SceltaTipiEDurata
@@ -60251,7 +60273,11 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
       {/* i dermografi degli allievi li conta la loro scheda; qui si
           aggiungono solo quelli di riserva, che nessun allievo ha
           comprato ma che partono lo stesso — e alla chiusura del corso
-          vanno guardati uno per uno, sono i pezzi più costosi del pacco */}
+          vanno guardati uno per uno, sono i pezzi più costosi del pacco.
+          Su un corso che non li manda (laminazione, extension, henne) le
+          righe non compaiono affatto: lo dice il corso, in Setting. */}
+      {corso?.prevede_dermografi_sicurezza && (
+      <>
       <div style={labelStyle}>Dermografi di riserva</div>
       <div style={{ marginBottom: 20 }}>
         {DERMOGRAFI.map((d) => (
@@ -60270,6 +60296,8 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           </div>
         ))}
       </div>
+      </>
+      )}
 
       {/* Una riga per iscritto con quello che lo distingue dagli altri
           mentre si prepara la sua scatola: il kit che ha scelto e la
