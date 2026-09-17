@@ -12,7 +12,7 @@ import {
   fontDisplay, stileTitoloPagina, fontBody, fontHero, fontCondensato,
   inputStyle, campoCompattoStyle, round2, numeroFascia,
 } from "./ui/stile.js";
-import { Button, Field, CampoNumero, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
+import { Button, Field, CampoNumero, ContatoreQuantita, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import DomandaProvenienza from "./rientri/DomandaProvenienza.jsx";
 import { caricaKitInAula, registraPrelieviDaVendita } from "./rientri/pos";
 import { registraPartenza } from "./rientri/dati";
@@ -60377,10 +60377,10 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
               <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
                 {nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}
               </span>
-              <input
-                type="number" min="0" style={{ ...inputStyle, width: 80, padding: "6px 8px" }}
-                value={statoEdizione.accessori_quantita?.[r.chiave] ?? (Number(r.quantita) || 0)} placeholder="0"
-                onChange={(e) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.chiave]: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) } })}
+              <ContatoreQuantita
+                valore={statoEdizione.accessori_quantita?.[r.chiave] ?? (Number(r.quantita) || 0)}
+                titolo="Quanti pezzi partono per il corso"
+                onCambia={(n) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.chiave]: n } })}
               />
             </div>
           ))}

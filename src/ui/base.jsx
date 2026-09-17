@@ -7,7 +7,7 @@
 // non e' questo il momento.
 
 import { useState } from "react";
-import { NAVY, CREAM_BORDER, MUTED, fontBody, round2, numeroFascia } from "./stile.js";
+import { NAVY, CREAM_BORDER, MUTED, fontBody, inputStyle, round2, numeroFascia } from "./stile.js";
 
 export function Button({ children, onClick, variant = "primary", style = {}, disabled }) {
   const base = {
@@ -124,5 +124,57 @@ export function TastoLivelloPrecedente({ titolo, onClick, soloIcona = false }) {
         }}>{titolo}</span>
       )}
     </button>
+  );
+}
+// Un contatore di pezzi: meno, il numero, piu'.
+//
+// Le frecce di un <input type="number"> sono due triangolini da sei pixel
+// che col dito non si prendono, e sul telefono in aula non ci sono
+// proprio. Qui i tasti sono quadrati veri, distanziati, e il numero resta
+// scrivibile: chi deve mandare quaranta dischetti li scrive, non clicca
+// quaranta volte.
+export function ContatoreQuantita({ valore, onCambia, min = 0, max = null, passo = 1, compatto = false, titolo }) {
+  const n = Number(valore) || 0;
+  const [bozza, setBozza] = useState(null);
+  const lato = compatto ? 34 : 44;
+  const limita = (v) => {
+    let x = Math.round(Number(v) || 0);
+    if (min != null) x = Math.max(min, x);
+    if (max != null) x = Math.min(max, x);
+    return x;
+  };
+  const tasto = (attivo) => ({
+    width: lato, height: lato, flexShrink: 0, borderRadius: 10,
+    border: `1px solid ${CREAM_BORDER}`, background: "#fff",
+    color: attivo ? NAVY : "#C9C4B8", cursor: attivo ? "pointer" : "default",
+    ...fontBody, fontSize: compatto ? 16 : 19, fontWeight: 700, lineHeight: 1,
+    display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+  });
+  const puoScendere = min == null || n > min;
+  const puoSalire = max == null || n < max;
+  function fissa() {
+    if (bozza == null) return;
+    const pulito = String(bozza).trim();
+    setBozza(null);
+    onCambia(limita(pulito === "" ? 0 : pulito.replace(",", ".")));
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} title={titolo}>
+      <button type="button" style={tasto(puoScendere)} onClick={() => puoScendere && onCambia(limita(n - passo))} aria-label="Uno in meno">−</button>
+      <input
+        type="text" inputMode="numeric"
+        value={bozza != null ? bozza : String(n)}
+        onChange={(e) => setBozza(e.target.value)}
+        onFocus={(e) => { setBozza(String(n)); e.target.select(); }}
+        onBlur={fissa}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        style={{
+          ...inputStyle, width: compatto ? 48 : 58, textAlign: "center",
+          padding: compatto ? "6px 2px" : "10px 2px", fontWeight: 700,
+          fontSize: compatto ? 13 : 15, height: lato, boxSizing: "border-box",
+        }}
+      />
+      <button type="button" style={tasto(puoSalire)} onClick={() => puoSalire && onCambia(limita(n + passo))} aria-label="Uno in piu'">+</button>
+    </div>
   );
 }
