@@ -40452,7 +40452,13 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   const [infoScadAttivoAperto, setInfoScadAttivoAperto] = useState(false);
   // stessa navigazione anno/mese/ricerca anche su Scadenziario Passivo
   const [annoScadPassivo, setAnnoScadPassivo] = useState(Number(oggiStr.slice(0, 4)));
-  const [meseScadPassivo, setMeseScadPassivo] = useState(Number(oggiStr.slice(5, 7)));
+  // Lo Scadenzario si apre su TUTTO L'ANNO, non sul mese di oggi. Una
+  // fattura arrivata oggi scade quasi sempre il mese prossimo: aprendo sul
+  // mese corrente la spesa appena creata non si vedeva, e sembrava non
+  // essere nata. Qui si guarda cosa c'e' da pagare, e non c'e' ragione di
+  // nascondere quello che scade fra tre settimane. Il mese si sceglie
+  // dalla fila, quando serve.
+  const [meseScadPassivo, setMeseScadPassivo] = useState(null);
   const [ricercaScadPassivo, setRicercaScadPassivo] = useState("");
   // tutte | attesa | pronte | scadute | future
   const [filtroStatoPassivo, setFiltroStatoPassivo] = useState("tutte");
