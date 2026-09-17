@@ -461,9 +461,18 @@ const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
 // c'e' una seconda serie, fra le impostazioni condivise. Vuota = uguale
 // a carta e shop.
 const CHIAVE_FASCE_CORSI_CONTANTI = "fasceSconto_corsi_contanti";
+// "c'e' una serie scritta?": vale per tutte e due le forme, l'elenco di
+// sei di prima e le quattro fasce di spesa di adesso
+function serieScontoScritta(v) {
+  if (Array.isArray(v)) return v.length > 0;
+  return !!(v && Array.isArray(v.gruppi) && v.gruppi.length > 0);
+}
+// Si restituisce la serie INTERA, non le sei percentuali: dentro ci sono
+// le quattro fasce di spesa, e chi calcola lo sconto sceglie la sua in
+// base a quanto vale il carrello
 function fasceCorsiPerPagamento(fasceCarta, fasceContantiSalvate, contanti) {
-  if (contanti && Array.isArray(fasceContantiSalvate) && fasceContantiSalvate.length) return fasceScontoValide(fasceContantiSalvate);
-  return fasceScontoValide(fasceCarta);
+  if (contanti && serieScontoScritta(fasceContantiSalvate)) return fasceContantiSalvate;
+  return fasceCarta;
 }
 // La stessa cosa per il referral personale delle master (dal 14/09/2026):
 // una serie per chi paga con carta o dal sito, una per chi paga in
@@ -471,8 +480,8 @@ function fasceCorsiPerPagamento(fasceCarta, fasceContantiSalvate, contanti) {
 // con i contanti, come per i punti. Vuota = uguale a carta e sito.
 const CHIAVE_FASCE_REFERRAL_CONTANTI = "fasceSconto_referral_contanti";
 function fasceReferralPerPagamento(fasceCarta, fasceContantiSalvate, contantiOBuono) {
-  if (contantiOBuono && Array.isArray(fasceContantiSalvate) && fasceContantiSalvate.length) return fasceScontoValide(fasceContantiSalvate);
-  return fasceScontoValide(fasceCarta);
+  if (contantiOBuono && serieScontoScritta(fasceContantiSalvate)) return fasceContantiSalvate;
+  return fasceCarta;
 }
 // Regola dei punti, riscritta il 13/09/2026 e valida in tutta l'app:
 //   punti = cedibile - percentuale di sicurezza, con due decimali.
@@ -4267,8 +4276,19 @@ function scontoPctRigaVenduta(riga, vendita, prodotto, fasceCanale) {
     const lordo = Number(riga.prezzo_listino) * (Number(riga.quantita) || 1);
     return lordo > 0 ? (Number(riga.sconto_riga) / lordo) * 100 : 0;
   }
-  if (vendita?.codice_coupon) return percentualeFasciaDi(prodotto, fasceCanale);
+  // la fascia di spesa e' quella di QUELLA vendita: il lordo delle sue
+  // righe, non il carrello di oggi
+  if (vendita?.codice_coupon) return percentualeFasciaDi(prodotto, fasceCanale, lordoVendita(vendita));
   return 0;
+}
+// quanto valeva il carrello di una vendita gia' fatta, a listino
+function lordoVendita(vendita) {
+  const righe = vendita?.righe || vendita?.payload_raw?.righe || [];
+  const somma = (Array.isArray(righe) ? righe : []).reduce((s, r) => {
+    const prezzo = Number(r.prezzo_listino ?? r.prezzo) || 0;
+    return s + prezzo * (Number(r.quantita) || 1);
+  }, 0);
+  return somma > 0 ? round2(somma) : round2(Number(vendita?.totale) || 0);
 }
 function percentualeCedibileDi(marginePct) {
   const tabella = tabellaCedibileAttiva();
@@ -4308,6 +4328,62 @@ function fasceScontoValide(fasce) {
     percentuale: Number(elenco[i]?.percentuale) || 0,
   }));
 }
+
+// ---------- Quanto si spende, non solo cosa si compra ----------
+// Le sei fasce di margine dicono QUANTO rende un prodotto. Da sole non
+// sanno niente di quanto sta spendendo chi compra, e un carrello da 700
+// euro riceveva lo stesso trattamento di uno da 30.
+//
+// Sopra le fasce di margine ci sono quindi quattro fasce di SPESA, con le
+// soglie decidibili: sotto la prima soglia vale la prima serie, fra la
+// prima e la seconda la seconda, e cosi' via. Ogni fascia di spesa ha le
+// sue sei percentuali di margine: quattro per sei fa ventiquattro numeri
+// per ogni modo di pagare.
+//
+// La spesa che conta e' il LORDO del carrello prima dello sconto: e'
+// quello che il cliente sta per tirare fuori, e non cambia mentre lo
+// sconto si calcola (altrimenti il conto si morderebbe la coda).
+const SOGLIE_SPESA_DEFAULT = [100, 300, 600];
+function soglieSpesaValide(soglie) {
+  const v = (Array.isArray(soglie) ? soglie : []).map((x) => Number(x)).filter((x) => isFinite(x) && x > 0);
+  const tre = [0, 1, 2].map((i) => (v[i] != null ? v[i] : SOGLIE_SPESA_DEFAULT[i]));
+  // crescenti per forza: due soglie invertite renderebbero una fascia
+  // irraggiungibile, e nessuno capirebbe perche' quello sconto non arriva
+  return tre.map((x, i) => (i === 0 ? x : Math.max(x, tre[i - 1] + 0.01))).map((x) => round2(x));
+}
+// Accetta tutte e due le forme: l'array di sei fasce di prima (e allora
+// le quattro fasce di spesa sono uguali fra loro, cioe' com'era) e la
+// forma nuova { soglie, gruppi }. Cosi' nessun coupon gia' scritto
+// smette di funzionare.
+function gruppiFasceValidi(fasce) {
+  if (fasce && !Array.isArray(fasce) && Array.isArray(fasce.gruppi)) {
+    return {
+      soglie: soglieSpesaValide(fasce.soglie),
+      gruppi: [0, 1, 2, 3].map((i) => fasceScontoValide(fasce.gruppi[i] || fasce.gruppi[0])),
+    };
+  }
+  const una = fasceScontoValide(fasce);
+  return { soglie: SOGLIE_SPESA_DEFAULT.slice(), gruppi: [una, una, una, una] };
+}
+function indiceFasciaSpesa(spesa, soglie) {
+  const s = soglieSpesaValide(soglie);
+  const v = Number(spesa) || 0;
+  if (v < s[0]) return 0;
+  if (v < s[1]) return 1;
+  if (v < s[2]) return 2;
+  return 3;
+}
+function etichettaFasciaSpesa(i, soglie) {
+  const s = soglieSpesaValide(soglie);
+  if (i === 0) return `Fino a ${fmtEuroErp2(s[0])}`;
+  if (i === 3) return `Oltre ${fmtEuroErp2(s[2])}`;
+  return `Da ${fmtEuroErp2(s[i - 1])} a ${fmtEuroErp2(s[i])}`;
+}
+// le sei percentuali che valgono per una spesa di quell'importo
+function fasceMargineDiSpesa(fasce, spesa) {
+  const g = gruppiFasceValidi(fasce);
+  return g.gruppi[indiceFasciaSpesa(spesa, g.soglie)];
+}
 // il margine di un prodotto in percentuale, o null se non si sa — senza
 // costo di acquisto non c'e' fascia e non c'e' sconto
 function marginePercentualeDi(prodotto) {
@@ -4316,18 +4392,23 @@ function marginePercentualeDi(prodotto) {
   if (!(netto > 0) || costo == null || costo === "") return null;
   return ((netto - Number(costo)) / netto) * 100;
 }
-function percentualeFasciaDi(prodotto, fasce) {
+// "spesa": quanto vale il carrello. Senza, si resta alla prima fascia di
+// spesa — che e' quella di chi compra poco, cioe' la piu' prudente
+function percentualeFasciaDi(prodotto, fasce, spesa = 0) {
   const m = marginePercentualeDi(prodotto);
   if (m == null) return 0;
-  const elenco = fasceScontoValide(fasce);
+  const elenco = fasceMargineDiSpesa(fasce, spesa);
   // la prima fascia che lo contiene; oltre l'ultimo confine resta
   // l'ultima, perche' un margine del 100% non deve cadere nel vuoto
   const i = FASCE_MARGINE.findIndex((f) => m <= f.a);
   return elenco[i === -1 ? elenco.length - 1 : i].percentuale;
 }
 function scontoAFasceCarrello(righe, prodottoPerId, fasce) {
+  // prima si somma quanto si spende, poi si sceglie la serie: la fascia
+  // di spesa la decide il carrello intero, non la singola riga
+  const spesa = round2((righe || []).reduce((s, r) => s + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
   return round2((righe || []).reduce((s, r) => {
-    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce);
+    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce, spesa);
     return s + (pct > 0 ? (r.prezzo * r.quantita * pct) / 100 : 0);
   }, 0));
 }
@@ -6891,6 +6972,8 @@ function indiceProdottiPerOrdiniStorici(prodottiShop) {
 }
 function puntiOrdineStorico(ordine, trovaProdotto, sicurezzaPct, fasceCorso, quotaCorsoPct) {
   let teorici = 0, effettivi = 0, righeSenzaProdotto = 0, righe = 0;
+  // la fascia di spesa di quell'ordine: il suo lordo, non zero
+  const spesaOrdine = round2((Array.isArray(ordine?.righe) ? ordine.righe : []).reduce((s, r) => s + (Number(r.subtotale) || 0), 0));
   (Array.isArray(ordine?.righe) ? ordine.righe : []).forEach((r) => {
     righe += 1;
     const prodotto = trovaProdotto(r);
@@ -6900,7 +6983,7 @@ function puntiOrdineStorico(ordine, trovaProdotto, sicurezzaPct, fasceCorso, quo
     teorici += t;
     const pieno = Number(r.subtotale) || 0;
     const scontoPct = pieno > 0 ? Math.max(0, ((pieno - (Number(r.totale) || 0)) / pieno) * 100) : 0;
-    effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceCorso));
+    effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceCorso, spesaOrdine));
   });
   return { teorici: round2(teorici), effettivi: round2(effettivi), maturati: round2((effettivi * (Number(quotaCorsoPct) || 0)) / 100), righe, righeSenzaProdotto };
 }
@@ -11768,7 +11851,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         puntiAccumulati += teorici;
         // poi la riduzione per lo sconto usato dall'allievo, con il valore
         // di fascia del prodotto letto dallo schema del canale
-        const effettivi = puntiDopoScontoAllievo(teorici, scontoPctRigaVenduta(r, v, prodotto, fasceCanale), percentualeFasciaDi(prodotto, fasceCanale));
+        const effettivi = puntiDopoScontoAllievo(teorici, scontoPctRigaVenduta(r, v, prodotto, fasceCanale), percentualeFasciaDi(prodotto, fasceCanale, lordoVendita(v)));
         if (alCorso) puntiCorsoLordi += effettivi; else puntiFuoriLordi += effettivi;
       });
       // l'importo non si ricalcola: e' quello congelato sulla vendita il
@@ -35338,9 +35421,55 @@ async function generaCodiceReferralUnivoco(nome) {
 // generano coupon. Una percentuale unica, oppure sei percentuali —
 // una per fascia di margine — che si applicano sempre sul lordo, cosi'
 // il numero e' lo stesso al POS e sul sito.
-function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile, soloFasce = false, senzaWoo = false }) {
+// Le quattro fasce di SPESA di una serie: le soglie in cima, e sotto una
+// tabella di sei percentuali per ognuna. Ventiquattro numeri in tutto, ma
+// si leggono come quattro righe — quanto spendi, quanto ti sconto.
+function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = false }) {
+  const g = gruppiFasceValidi(valore);
+  function cambiaSoglia(i, testo) {
+    const soglie = g.soglie.slice();
+    soglie[i] = Number(String(testo).replace(",", ".")) || 0;
+    onCambia({ soglie: soglieSpesaValide(soglie), gruppi: g.gruppi });
+  }
+  function cambiaGruppo(i, nuoveFasce) {
+    const gruppi = g.gruppi.slice();
+    gruppi[i] = fasceScontoValide(nuoveFasce);
+    onCambia({ soglie: g.soglie, gruppi });
+  }
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12, background: BG, borderRadius: 12, padding: "10px 12px" }}>
+        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie di spesa</span>
+        {g.soglie.map((v, i) => (
+          <label key={i} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: MUTED }}>
+            {i === 0 ? "prima a" : i === 1 ? "poi a" : "poi a"}
+            <input type="number" min="0" step="10" value={v} onChange={(e) => cambiaSoglia(i, e.target.value)}
+              style={{ ...inputStyle, width: 82, textAlign: "center", padding: "6px 8px", fontWeight: 700 }} />
+            <span style={{ fontWeight: 700, color: NAVY }}>€</span>
+          </label>
+        ))}
+        <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 200px", minWidth: 0 }}>
+          Decide la fascia il totale del carrello a listino, prima dello sconto.
+        </span>
+      </div>
+      {g.gruppi.map((gruppo, i) => (
+        <div key={i} style={{ marginBottom: i === 3 ? 0 : 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 14 }}>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
+            {etichettaFasciaSpesa(i, g.soglie)}
+          </div>
+          <SceltaRegolaSconto soloFasce senzaWoo={senzaWoo || i > 0} tipo="fasce" fasce={gruppo}
+            onCambiaTipo={() => {}} onCambiaFasce={(f) => cambiaGruppo(i, f)}
+            prodottiShop={prodottiShop} isMobile={isMobile} senzaSpiegazione={i > 0} />
+        </div>
+      ))}
+    </div>
+  );
+}
+function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodottiShop, isMobile, soloFasce = false, senzaWoo = false, senzaSpiegazione = false }) {
   const elenco = fasceScontoValide(fasce);
   const aFasce = soloFasce || tipo === "fasce";
+  // dentro le quattro fasce di spesa la spiegazione si ripeterebbe quattro
+  // volte identica: la si scrive sulla prima e basta
   const equivalenteWoo = aFasce ? percentualeWooDaFasce(prodottiShop, elenco) : null;
   // Perche' il sito possa scontare a fasce deve sapere quanto rende ogni
   // prodotto: glielo si scrive addosso, una volta, e vale per tutti i
@@ -35373,6 +35502,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
       )}
       {aFasce && (
         <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? 12 : 16, background: "#fff" }}>
+          {!senzaSpiegazione && (
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45, maxWidth: 640 }}>
             {senzaWoo ? (
               <>Valgono solo al POS dell'app quando si sceglie <b style={{ color: NAVY }}>Contanti</b> o <b style={{ color: NAVY }}>Buono Amazon</b>: il sito non le vede.
@@ -35384,6 +35514,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
               non cade in nessuna fascia e non si sconta.</>
             )}
           </div>
+          )}
           <div style={{ display: "flex", gap: isMobile ? 8 : 14, flexWrap: "wrap" }}>
             {elenco.map((f, i) => (
               <div key={f.da} style={{ flex: "1 1 110px", minWidth: 96 }}>
@@ -43450,7 +43581,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // appena la si tocca, come il referral personale. Vuota = come la carta
   const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const fasceContantiCorso = fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, true);
-  const contantiUgualiACarta = !(Array.isArray(fasceContantiSalvate) && fasceContantiSalvate.length);
+  const contantiUgualiACarta = !serieScontoScritta(fasceContantiSalvate);
   // e la seconda serie del referral personale, per contanti e buono Amazon
   const [fasceReferralContantiSalvate, salvaFasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const referralContantiUgualiACarta = !(Array.isArray(fasceReferralContantiSalvate) && fasceReferralContantiSalvate.length);
@@ -43539,7 +43670,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           if (pp == null) { pezziSenzaPunti += q; return; }
           const teorici = pp * q;
           puntiTeorici += teorici;
-          const effettivi = puntiDopoScontoAllievo(teorici, scontoPctRigaVenduta(r, v, prodotto, fasceCanale), percentualeFasciaDi(prodotto, fasceCanale));
+          const effettivi = puntiDopoScontoAllievo(teorici, scontoPctRigaVenduta(r, v, prodotto, fasceCanale), percentualeFasciaDi(prodotto, fasceCanale, lordoVendita(v)));
           if (alCorso) puntiCorso += effettivi; else puntiFuori += effettivi;
         });
       });
@@ -43650,13 +43781,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           ) : (
             <>
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop online</div>
-              <SceltaRegolaSconto soloFasce tipo="fasce" fasce={fasceCorso} onCambiaTipo={() => {}} onCambiaFasce={setFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
+              <FasceDiSpesa valore={fasceCorso} onCambia={setFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
                 <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
                 {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
               </div>
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
-              <SceltaRegolaSconto soloFasce senzaWoo tipo="fasce" fasce={fasceContantiCorso} onCambiaTipo={() => {}} onCambiaFasce={(f) => salvaFasceContanti(fasceScontoValide(f))} prodottiShop={prodottiShop} isMobile={isMobile} />
+              <FasceDiSpesa senzaWoo valore={fasceContantiCorso} onCambia={(v) => salvaFasceContanti(v)} prodottiShop={prodottiShop} isMobile={isMobile} />
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: contantiUgualiACarta ? MUTED : "#2E7D32" }}>
                   {contantiUgualiACarta ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo." : "Serie salvata: il POS la applica quando il pagamento è in contanti o con buono Amazon."}
@@ -55663,7 +55794,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
   const righeSenzaMargine = couponAFasce
-    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive) <= 0)
+    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale) <= 0)
     : couponNum > 0 && couponSulMargine
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
@@ -55722,11 +55853,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       const t = pp * (Number(r.quantita) || 0);
       teorici += t;
       const scontoPct = couponAFasce
-        ? percentualeFasciaDi(prodotto, fasceCouponAttive)
+        ? percentualeFasciaDi(prodotto, fasceCouponAttive, subtotale)
         : couponNum > 0 ? couponNum
         : scontoNum > 0 ? (scontoTipo === "percentuale" ? scontoNum : (subtotale > 0 ? (scontoNum / subtotale) * 100 : 0))
         : 0;
-      effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione));
+      effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione, subtotale));
     });
     const quota = corsoPosSel ? quote.corso : quote.fuoriCorso;
     return { teorici: round2(teorici), maturati: round2((effettivi * quota) / 100), quota };
@@ -55766,7 +55897,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     let scontiRiga = carrello.map((r, i) => {
       const lordoRiga = lordiRiga[i];
       if (omaggioAttivo || lordoRiga <= 0) return 0;
-      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive)) / 100);
+      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale)) / 100);
       if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
       if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
       return 0;
