@@ -32750,36 +32750,25 @@ function variazionePctErp(attuale, precedente) {
   return ((attuale - precedente) / Math.abs(precedente)) * 100;
 }
 
-// range di date [inizio, fine] per una granularità mese/trimestre/anno
-// di Prima nota cassa — stessa idea della barra anno/mese di
-// Scadenziario Attivo, qui su tre livelli invece di due
-function rangeGranularitaPrimaNota(anno, granularita, mese, trimestre) {
-  const ultimoGiornoMese = (a, m) => new Date(Date.UTC(a, m, 0)).getUTCDate();
-  if (granularita === "mese") {
-    const gg = ultimoGiornoMese(anno, mese);
-    return { inizio: `${anno}-${String(mese).padStart(2, "0")}-01`, fine: `${anno}-${String(mese).padStart(2, "0")}-${String(gg).padStart(2, "0")}` };
-  }
-  if (granularita === "trimestre") {
-    const meseInizio = (trimestre - 1) * 3 + 1;
-    const meseFine = meseInizio + 2;
-    const gg = ultimoGiornoMese(anno, meseFine);
-    return { inizio: `${anno}-${String(meseInizio).padStart(2, "0")}-01`, fine: `${anno}-${String(meseFine).padStart(2, "0")}-${String(gg).padStart(2, "0")}` };
-  }
-  return { inizio: `${anno}-01-01`, fine: `${anno}-12-31` };
+// Il periodo di Prima nota cassa: un mese dell'anno, oppure l'anno
+// intero quando non se ne sceglie nessuno. Il trimestre non c'e' piu':
+// era un terzo livello che nessuno usava, e per qualunque intervallo
+// diverso da un mese o da un anno c'e' "Dal… al…".
+function rangeGranularitaPrimaNota(anno, mese) {
+  if (!mese) return { inizio: `${anno}-01-01`, fine: `${anno}-12-31` };
+  const gg = new Date(Date.UTC(anno, mese, 0)).getUTCDate();
+  return { inizio: `${anno}-${String(mese).padStart(2, "0")}-01`, fine: `${anno}-${String(mese).padStart(2, "0")}-${String(gg).padStart(2, "0")}` };
 }
-// il periodo immediatamente precedente, stessa granularità e durata —
-// per il confronto "+18% vs luglio" sotto il totale
-function periodoPrecedentePrimaNota(anno, granularita, mese, trimestre) {
-  if (granularita === "mese") return mese === 1 ? { anno: anno - 1, mese: 12, trimestre } : { anno, mese: mese - 1, trimestre };
-  if (granularita === "trimestre") return trimestre === 1 ? { anno: anno - 1, mese, trimestre: 4 } : { anno, mese, trimestre: trimestre - 1 };
-  return { anno: anno - 1, mese, trimestre };
+// il periodo immediatamente precedente, stessa durata — per il confronto
+// "+18% vs luglio" sotto il totale
+function periodoPrecedentePrimaNota(anno, mese) {
+  if (!mese) return { anno: anno - 1, mese: null };
+  return mese === 1 ? { anno: anno - 1, mese: 12 } : { anno, mese: mese - 1 };
 }
 // etichetta leggibile di un periodo, per l'intestazione "Spese · ..." e
 // per il confronto "+N% vs ..."
-function etichettaPeriodoPrimaNota(anno, granularita, mese, trimestre) {
-  if (granularita === "mese") return `${MESI[mese - 1]} ${anno}`;
-  if (granularita === "trimestre") return `T${trimestre} ${anno}`;
-  return `${anno}`;
+function etichettaPeriodoPrimaNota(anno, mese) {
+  return mese ? `${MESI[mese - 1]} ${anno}` : `${anno}`;
 }
 // totale pagato per mese (chiave "yyyy-mm") su un elenco di spese reali
 // già filtrate per stato "pagata" — barra dei mesi di Prima nota cassa:
@@ -37176,6 +37165,8 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
 
 // la larghezza della fila di schede: fissa, non quella della pagina
 const LARGHEZZA_SCHEDE_CONTABILITA = 900;
+// lo stacco fra la fila delle tessere e la riga dei filtri sotto
+const SPAZIO_TASTI_FILTRI = 100;
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente, ordine, onSalvaOrdine }) {
   const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
@@ -37296,7 +37287,9 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
 function BarraPeriodoContabilita({
   filtri = [], filtroAttivo, onFiltro,
   anno, onAnno, mese, onMese,
-  conteggiMese = {}, mesiAllerta = null,
+  // "conto" = quante righe in quel mese, "euro" = quanto vale: lo
+  // scadenzario conta le scadenze, la prima nota somma i soldi
+  conteggiMese = {}, mesiAllerta = null, formatoMese = "conto",
   personalizzato = false, onPersonalizzato, da, a, onDa, onA,
   ricerca, onRicerca, placeholderRicerca = "Cerca…",
 }) {
@@ -37354,7 +37347,9 @@ function BarraPeriodoContabilita({
               <button key={m} onClick={() => onMese?.(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 56, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivo ? "#fff" : NAVY, background: attivo ? NAVY : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
                 {allerta && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: attivo ? "#fff" : "#C0392B" }} />}
                 <div>{abbr}</div>
-                <div style={{ fontSize: 10.5, fontWeight: 600, color: attivo ? "#fff" : MUTED, marginTop: 2 }}>{info ? (typeof info === "number" ? info : info.count) : "—"}</div>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: attivo ? "#fff" : MUTED, marginTop: 2 }}>
+                  {info == null ? "—" : formatoMese === "euro" ? fmtEuroErp(typeof info === "number" ? info : info.totale) : (typeof info === "number" ? info : info.count)}
+                </div>
               </button>
             );
           })}
@@ -39906,23 +39901,17 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
     setMovimenti((prec) => (prec || []).map((m) => (m.id === riga.id ? { ...m, stato } : m)));
   }
 
-  // Il periodo, come in Prima nota: mese, trimestre o anno, con le frecce
-  // che scorrono di un passo. I movimenti si leggono per data operazione
-  const [granularita, setGranularita] = useState("mese");
+  // Il periodo, come in Prima nota: un mese, oppure l'anno intero quando
+  // non se ne sceglie nessuno. Il trimestre non c'e' piu'. I movimenti si
+  // leggono per data operazione
   const [anno, setAnno] = useState(Number(dataOggiStr().slice(0, 4)));
   const [mese, setMese] = useState(Number(dataOggiStr().slice(5, 7)));
-  const [trimestre, setTrimestre] = useState(Math.ceil(Number(dataOggiStr().slice(5, 7)) / 3));
-  const range = rangeGranularitaPrimaNota(anno, granularita, mese, trimestre);
-  const periodoPrec = periodoPrecedentePrimaNota(anno, granularita, mese, trimestre);
-  const rangePrec = rangeGranularitaPrimaNota(periodoPrec.anno, granularita, periodoPrec.mese, periodoPrec.trimestre);
-  const etichettaPrec = granularita === "anno" ? String(periodoPrec.anno) : granularita === "trimestre" ? `T${periodoPrec.trimestre}` : MESI[periodoPrec.mese - 1].toLowerCase();
+  const range = rangeGranularitaPrimaNota(anno, mese);
+  const periodoPrec = periodoPrecedentePrimaNota(anno, mese);
+  const rangePrec = rangeGranularitaPrimaNota(periodoPrec.anno, periodoPrec.mese);
+  const etichettaPrec = periodoPrec.mese ? MESI[periodoPrec.mese - 1].toLowerCase() : String(periodoPrec.anno);
   function spostaPeriodo(verso) {
-    if (granularita === "anno") { setAnno((a) => a + verso); return; }
-    if (granularita === "trimestre") {
-      const t = trimestre + verso;
-      if (t < 1) { setTrimestre(4); setAnno((a) => a - 1); } else if (t > 4) { setTrimestre(1); setAnno((a) => a + 1); } else setTrimestre(t);
-      return;
-    }
+    if (!mese) { setAnno((a) => a + verso); return; }
     const m = mese + verso;
     if (m < 1) { setMese(12); setAnno((a) => a - 1); } else if (m > 12) { setMese(1); setAnno((a) => a + 1); } else setMese(m);
   }
@@ -40061,18 +40050,18 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
       <div style={{ ...cardStyle, padding: isMobile ? 16 : 26 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <button onClick={() => spostaPeriodo(-1)} title="Periodo precedente" style={freccia}>‹</button>
-          <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 36, color: NAVY, lineHeight: 1.1, flex: "1 1 auto", minWidth: 0, overflowWrap: "anywhere" }}>Banca · {etichettaPeriodoPrimaNota(anno, granularita, mese, trimestre)}</div>
+          <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 36, color: NAVY, lineHeight: 1.1, flex: "1 1 auto", minWidth: 0, overflowWrap: "anywhere" }}>Banca · {etichettaPeriodoPrimaNota(anno, mese)}</div>
           <button onClick={() => spostaPeriodo(1)} title="Periodo successivo" style={freccia}>›</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: isMobile ? 16 : 20 }}>
           <div style={{ ...fontBody, fontSize: isMobile ? 14 : 15, color: MUTED }}>{nelPeriodo.length} moviment{nelPeriodo.length === 1 ? "o" : "i"}</div>
-          <div style={{ display: "flex", gap: 2, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 3, marginLeft: "auto" }}>
-            {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((g) => (
-              <button key={g.v} onClick={() => setGranularita(g.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "7px 13px", borderRadius: 13, border: "none", background: granularita === g.v ? NAVY : "transparent", color: granularita === g.v ? "#fff" : NAVY, cursor: "pointer" }}>
-                {g.l}
-              </button>
-            ))}
-          </div>
+          {/* un mese o l'anno intero, niente trimestre */}
+          <button
+            onClick={() => setMese((m) => (m ? null : Number(dataOggiStr().slice(5, 7))))}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: !mese ? "#fff" : NAVY, background: !mese ? NAVY : "#fff", border: `1px solid ${!mese ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", marginLeft: "auto" }}
+          >
+            {mese ? "Tutto l'anno" : "Torna al mese"}
+          </button>
         </div>
 
         <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 22, padding: isMobile ? "18px 18px 16px" : "24px 28px 22px", marginBottom: isMobile ? 12 : 14 }}>
@@ -40408,6 +40397,10 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   const [ricercaScadPassivo, setRicercaScadPassivo] = useState("");
   // tutte | attesa | pronte | scadute | future
   const [filtroStatoPassivo, setFiltroStatoPassivo] = useState("tutte");
+  // "Dal… al…": un intervallo qualunque al posto di anno + mese
+  const [periodoPersonalizzatoPassivo, setPeriodoPersonalizzatoPassivo] = useState(false);
+  const [passivoDa, setPassivoDa] = useState(dataOggiStr());
+  const [passivoA, setPassivoA] = useState(dataOggiStr());
   const [sincronizzandoFic, setSincronizzandoFic] = useState(false);
   const [msgFic, setMsgFic] = useState("");
   const [msgImpegni, setMsgImpegni] = useState("");
@@ -40612,8 +40605,13 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   };
   const elencoPassivoStato = elencoPassivoBase.filter(passaFiltroStato);
   const senzaDataPassivo = elencoPassivoStato.filter((r) => !dataDiPassivoAttuale(r));
-  const elencoAnnoPassivo = elencoPassivoStato.filter((r) => { const d = dataDiPassivoAttuale(r); return d && d.slice(0, 4) === String(annoScadPassivo); });
-  const elencoMesePassivo = [...(meseScadPassivo ? elencoAnnoPassivo.filter((r) => Number(dataDiPassivoAttuale(r).slice(5, 7)) === meseScadPassivo) : elencoAnnoPassivo), ...senzaDataPassivo];
+  // col periodo personalizzato acceso comanda l'intervallo, non anno/mese
+  const elencoAnnoPassivo = periodoPersonalizzatoPassivo
+    ? elencoPassivoStato.filter((r) => { const d = dataDiPassivoAttuale(r); return d && d >= passivoDa && d <= passivoA; })
+    : elencoPassivoStato.filter((r) => { const d = dataDiPassivoAttuale(r); return d && d.slice(0, 4) === String(annoScadPassivo); });
+  const elencoMesePassivo = periodoPersonalizzatoPassivo
+    ? elencoAnnoPassivo
+    : [...(meseScadPassivo ? elencoAnnoPassivo.filter((r) => Number(dataDiPassivoAttuale(r).slice(5, 7)) === meseScadPassivo) : elencoAnnoPassivo), ...senzaDataPassivo];
   const elencoFiltratoPassivo = ricercaScadPassivo.trim()
     ? elencoMesePassivo.filter((r) => {
         const q = ricercaScadPassivo.trim().toLowerCase();
@@ -41056,7 +41054,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
         {/* i tasti sono la scelta, quello che c'e' sotto e' la risposta:
             una riga e lo spazio per farle respirare separano le due cose,
             che prima si toccavano e sembravano un unico blocco */}
-        <div style={{ height: 1, background: GOLD, opacity: 0.55, margin: isMobile ? "22px 0" : "26px 0" }} />
+        <div style={{ height: 1, background: GOLD, opacity: 0.55, margin: `${Math.round(SPAZIO_TASTI_FILTRI / 2)}px 0` }} />
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
 
@@ -41281,70 +41279,29 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
             </div>
             <div style={{ marginBottom: 12 }} />
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => setAnnoScadPassivo((a) => a - 1)} title="Anno precedente" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}><IconaFrecciaSinistra size={14} /></button>
-                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 44, textAlign: "center" }}>{annoScadPassivo}</div>
-                <button onClick={() => setAnnoScadPassivo((a) => a + 1)} title="Anno successivo" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: "rotate(180deg)" }}><IconaFrecciaSinistra size={14} /></button>
-              </div>
-              {subTabPassivo === "dapagare" && scaduteContoPassivo > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 16, padding: "6px 12px" }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C0392B", display: "inline-block", flexShrink: 0 }} />
-                  {scaduteContoPassivo} {scaduteContoPassivo === 1 ? "scaduta" : "scadute"} · {fmtEuroErp(scaduteTotalePassivo)}
-                </div>
-              )}
-              <button onClick={() => setMeseScadPassivo(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: meseScadPassivo === null ? "#fff" : NAVY, background: meseScadPassivo === null ? NAVY : "#fff", border: `1px solid ${meseScadPassivo === null ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Tutto l'anno</button>
-              <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
-                <CampoRicerca value={ricercaScadPassivo} onChange={(e) => setRicercaScadPassivo(e.target.value)} placeholder="Cerca fornitore, corso…" />
-              </div>
-            </div>
+            {/* la testata unica di tutte le sezioni: filtri di stato,
+                riga anno/tutto l'anno/periodo/ricerca, fila dei mesi */}
+            <BarraPeriodoContabilita
+              filtri={subTabPassivo !== "dapagare" ? [] : [
+                { chiave: "tutte", etichetta: "Tutte", conto: daPagare.length },
+                { chiave: "attesa", etichetta: "In attesa di fattura", conto: daPagare.filter((r) => !fatturaAssociataDi(r)).length },
+                { chiave: "pronte", etichetta: "Pronte da pagare", conto: daPagare.filter((r) => fatturaAssociataDi(r)).length },
+                { chiave: "scadute", etichetta: "Scadute", conto: daPagare.filter((r) => { const sc = scadenzaDi(r); return !!sc && sc < oggiStr; }).length },
+                { chiave: "future", etichetta: "Future", conto: daPagare.filter((r) => { const sc = scadenzaDi(r); return !!sc && sc > oggiStr; }).length },
+              ]}
+              filtroAttivo={filtroStatoPassivo}
+              onFiltro={setFiltroStatoPassivo}
+              anno={annoScadPassivo} onAnno={setAnnoScadPassivo}
+              mese={meseScadPassivo} onMese={setMeseScadPassivo}
+              conteggiMese={riepilogoMesePassivo}
+              mesiAllerta={new Set(Object.keys(riepilogoMeseDaPagarePassivo).filter((c) => subTabPassivo === "dapagare" && c < meseCorrenteStrPassivo))}
+              personalizzato={periodoPersonalizzatoPassivo}
+              onPersonalizzato={setPeriodoPersonalizzatoPassivo}
+              da={passivoDa} a={passivoA} onDa={setPassivoDa} onA={setPassivoA}
+              ricerca={ricercaScadPassivo} onRicerca={(e) => setRicercaScadPassivo(e.target.value)}
+              placeholderRicerca="Cerca fornitore, corso…"
+            />
 
-            <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
-              {MESI_ABBR.map((abbr, idx) => {
-                const m = idx + 1;
-                const chiave = `${annoScadPassivo}-${String(m).padStart(2, "0")}`;
-                const info = riepilogoMesePassivo[chiave];
-                const scaduto = subTabPassivo === "dapagare" && chiave < meseCorrenteStrPassivo && !!(riepilogoMeseDaPagarePassivo[chiave]);
-                const attivoMese = meseScadPassivo === m;
-                return (
-                  <button key={m} onClick={() => setMeseScadPassivo(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 56, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivoMese ? "#fff" : NAVY, background: attivoMese ? NAVY : "#fff", border: `1px solid ${attivoMese ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
-                    {scaduto && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: attivoMese ? "#fff" : "#C0392B" }} />}
-                    <div>{abbr}</div>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: attivoMese ? "#fff" : MUTED, marginTop: 2 }}>{info ? info.count : "—"}</div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {subTabPassivo === "dapagare" && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-                {[
-                  { k: "tutte", l: "Tutte" },
-                  { k: "attesa", l: "In attesa di fattura" },
-                  { k: "pronte", l: "Pronte da pagare" },
-                  { k: "scadute", l: "Scadute" },
-                  { k: "future", l: "Future" },
-                ].map((o) => {
-                  const quante = o.k === "tutte" ? daPagare.length : daPagare.filter((r) => {
-                    const sc = scadenzaDi(r);
-                    if (o.k === "attesa") return !fatturaAssociataDi(r);
-                    if (o.k === "pronte") return fatturaAssociataDi(r);
-                    if (o.k === "scadute") return !!sc && sc < oggiStr;
-                    return !!sc && sc > oggiStr;
-                  }).length;
-                  const attivo = filtroStatoPassivo === o.k;
-                  return (
-                    <button
-                      key={o.k}
-                      onClick={() => setFiltroStatoPassivo(o.k)}
-                      style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: attivo ? "#fff" : NAVY, background: attivo ? NAVY : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}
-                    >
-                      {o.l} ({quante})
-                    </button>
-                  );
-                })}
-              </div>
-            )}
             {subTabPassivo === "dapagare" && (
               <div style={{ ...cardStyle }}>
                 {elencoFiltratoPassivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
@@ -41590,10 +41547,8 @@ function PaginaInserimentoCostiRicavi({
   // invece dei vecchi 5 pulsanti fissi "ultimo mese/trimestre/anno
   // accademico" — "personalizzato" resta un'opzione a sé, con le date
   // libere di sempre
-  const [granularitaPN, setGranularitaPN] = useState("mese");
   const [annoPN, setAnnoPN] = useState(Number(dataOggiStr().slice(0, 4)));
   const [mesePN, setMesePN] = useState(Number(dataOggiStr().slice(5, 7)));
-  const [trimestrePN, setTrimestrePN] = useState(Math.ceil(Number(dataOggiStr().slice(5, 7)) / 3));
   const [personalizzatoPN, setPersonalizzatoPN] = useState(false);
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
@@ -41602,11 +41557,13 @@ function PaginaInserimentoCostiRicavi({
   // del fornitore. E' l'area di lavoro per chiuderle una a una, associando
   // la fattura quando arriva — in prima nota lo stato di riconciliazione
   // dipende solo da quello, non dal pagamento
-  const [soloDaRiconciliarePN, setSoloDaRiconciliarePN] = useState(false);
+  // tutte | dariconciliare | riconciliate — lo stato della fattura, che in
+  // prima nota e' l'unica cosa che decide se una riga e' chiusa o no
+  const [filtroStatoPN, setFiltroStatoPN] = useState("tutte");
   const [importCsvAperto, setImportCsvAperto] = useState(false);
   const [mostraTutte, setMostraTutte] = useState(false);
 
-  const range = personalizzatoPN ? { inizio: customDa, fine: customA } : rangeGranularitaPrimaNota(annoPN, granularitaPN, mesePN, trimestrePN);
+  const range = personalizzatoPN ? { inizio: customDa, fine: customA } : rangeGranularitaPrimaNota(annoPN, mesePN);
 
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
   const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
@@ -41646,7 +41603,7 @@ function PaginaInserimentoCostiRicavi({
   const daRiconciliarePN = (s) => !s.numero_documento;
   const speseRealiFiltrate = spesePagate
     .filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine)
-    .filter((s) => !soloDaRiconciliarePN || daRiconciliarePN(s))
+    .filter((s) => filtroStatoPN === "tutte" || (filtroStatoPN === "dariconciliare" ? daRiconciliarePN(s) : !daRiconciliarePN(s)))
     .sort((a, b) => (dataCassaPN(b) || "").localeCompare(dataCassaPN(a) || ""));
   const conteggioDaRiconciliarePN = spesePagate.filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine && daRiconciliarePN(s)).length;
   // la ricerca filtra le spese vere PRIMA di normalizzarle e prima di
@@ -41725,14 +41682,14 @@ function PaginaInserimentoCostiRicavi({
   const movimentiVisibili = mostraTutte ? movimentiPN : movimentiPN.slice(0, SPESE_PAGINA_INIZIALE);
 
   // confronto col periodo precedente, stessa granularità e durata
-  const periodoPrecPN = periodoPrecedentePrimaNota(annoPN, granularitaPN, mesePN, trimestrePN);
-  const rangePrecPN = rangeGranularitaPrimaNota(periodoPrecPN.anno, granularitaPN, periodoPrecPN.mese, periodoPrecPN.trimestre);
+  const periodoPrecPN = periodoPrecedentePrimaNota(annoPN, mesePN);
+  const rangePrecPN = rangeGranularitaPrimaNota(periodoPrecPN.anno, periodoPrecPN.mese);
   const totalePrecedentePN = round2(spesePagate.filter((s) => dataCassaPN(s) >= rangePrecPN.inizio && dataCassaPN(s) <= rangePrecPN.fine).reduce((s, r) => s + (r.totale || 0), 0));
   const variazionePctPN = personalizzatoPN ? null : variazionePctErp(totaleSpese, totalePrecedentePN);
   const entratePrecedentiPN = round2(entrateTutte.filter((e) => e.data && e.data >= rangePrecPN.inizio && e.data <= rangePrecPN.fine).reduce((s, e) => s + e.importo, 0));
   const variazioneEntratePN = personalizzatoPN ? null : variazionePctErp(totaleEntrate, entratePrecedentiPN);
   const saldoPrecedentePN = round2(entratePrecedentiPN - totalePrecedentePN);
-  const etichettaPeriodoPrecPN = granularitaPN === "anno" ? String(periodoPrecPN.anno) : granularitaPN === "trimestre" ? `T${periodoPrecPN.trimestre}` : MESI[periodoPrecPN.mese - 1].toLowerCase();
+  const etichettaPeriodoPrecPN = periodoPrecPN.mese ? MESI[periodoPrecPN.mese - 1].toLowerCase() : String(periodoPrecPN.anno);
 
   // "N non pagate": spese non ancora pagate con data nel periodo in
   // vista — solo un avviso incrociato verso Scadenziario Passivo, mai
@@ -41809,87 +41766,34 @@ function PaginaInserimentoCostiRicavi({
           ruoloUtente={ruoloUtente}
         />
 
-        {/* 15px d'aria fra l'ultima etichetta delle schede e i filtri
-            sotto: senza, "Abbonamenti e contratti (3)" toccava le frecce */}
-        <div style={{ height: 15 }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-          {!personalizzatoPN && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button onClick={() => setAnnoPN((a) => a - 1)} title="Anno precedente" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}><IconaFrecciaSinistra size={14} /></button>
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 44, textAlign: "center" }}>{annoPN}</div>
-              <button onClick={() => setAnnoPN((a) => a + 1)} title="Anno successivo" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: "rotate(180deg)" }}><IconaFrecciaSinistra size={14} /></button>
-            </div>
-          )}
-          {!personalizzatoPN && (
-            <div style={{ display: "flex", gap: 2, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 3 }}>
-              {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((g) => (
-                <button key={g.v} onClick={() => setGranularitaPN(g.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "7px 13px", borderRadius: 13, border: "none", background: granularitaPN === g.v ? NAVY : "transparent", color: granularitaPN === g.v ? "#fff" : NAVY, cursor: "pointer" }}>
-                  {g.l}
-                </button>
-              ))}
-            </div>
-          )}
-          {nonPagateContoPN > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 16, padding: "6px 12px" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C0392B", display: "inline-block", flexShrink: 0 }} />
-              {nonPagateContoPN} {nonPagateContoPN === 1 ? "non pagata" : "non pagate"} · {fmtEuroErp(nonPagateTotalePN)}
-            </div>
-          )}
-          <button onClick={() => setPersonalizzatoPN((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: personalizzatoPN ? "#fff" : NAVY, background: personalizzatoPN ? NAVY : "#fff", border: `1px solid ${personalizzatoPN ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Data personalizzata</button>
-          <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
-            <CampoRicerca value={ricercaPN} onChange={(e) => setRicercaPN(e.target.value)} placeholder="Cerca allievo, spesa, fornitore, categoria…" />
-            <button
-              onClick={() => setSoloDaRiconciliarePN((v) => !v)}
-              title="Solo le uscite pagate che non hanno ancora la fattura del fornitore"
-              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: soloDaRiconciliarePN ? "#fff" : NAVY, background: soloDaRiconciliarePN ? NAVY : "#fff", border: `1px solid ${soloDaRiconciliarePN ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", marginTop: 8, flexShrink: 0 }}
-            >
-              Da riconciliare ({conteggioDaRiconciliarePN})
-            </button>
-          </div>
-        </div>
-
-        {personalizzatoPN ? (
-          <div style={{ ...cardStyle, padding: 16, marginBottom: 18, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <Field label="Dal"><input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} /></Field>
-            <Field label="Al"><input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} /></Field>
-          </div>
-        ) : granularitaPN === "mese" ? (
-          <div style={{ display: "flex", gap: 6, marginBottom: 18, overflowX: "auto", paddingBottom: 4 }}>
-            {MESI_ABBR.map((abbr, idx) => {
-              const m = idx + 1;
-              const chiave = `${annoPN}-${String(m).padStart(2, "0")}`;
-              const totaleMese = riepilogoMesePN[chiave] || 0;
-              const nonPagatoMese = (riepilogoNonPagatePerMese[chiave] || 0) > 0;
-              const attivoBtn = mesePN === m;
-              return (
-                <button key={m} onClick={() => setMesePN(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 74, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivoBtn ? "#fff" : NAVY, background: attivoBtn ? NAVY : "#fff", border: `1px solid ${attivoBtn ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 8px 10px", cursor: "pointer", textAlign: "center" }}>
-                  {nonPagatoMese && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: attivoBtn ? "#fff" : "#C0392B" }} />}
-                  <div>{abbr}</div>
-                  <div style={{ fontSize: 10.5, fontWeight: 600, color: attivoBtn ? "#fff" : MUTED, marginTop: 2 }}>{totaleMese ? fmtEuroErp(totaleMese) : "—"}</div>
-                  <div style={{ height: 3, borderRadius: 2, marginTop: 6, background: attivoBtn ? "rgba(255,255,255,0.35)" : BG_CHIARO, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.max(4, Math.round((totaleMese / maxMensilePN) * 100))}%`, background: attivoBtn ? "#fff" : GOLD, borderRadius: 2 }} />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ) : granularitaPN === "trimestre" ? (
-          <div style={{ display: "flex", gap: 6, marginBottom: 18, overflowX: "auto", paddingBottom: 4 }}>
-            {[1, 2, 3, 4].map((t) => {
-              const mesiTrim = [(t - 1) * 3 + 1, (t - 1) * 3 + 2, (t - 1) * 3 + 3];
-              const totaleTrim = mesiTrim.reduce((s, m) => s + (riepilogoMesePN[`${annoPN}-${String(m).padStart(2, "0")}`] || 0), 0);
-              const nonPagatoTrim = mesiTrim.some((m) => (riepilogoNonPagatePerMese[`${annoPN}-${String(m).padStart(2, "0")}`] || 0) > 0);
-              const attivoBtn = trimestrePN === t;
-              return (
-                <button key={t} onClick={() => setTrimestrePN(t)} style={{ position: "relative", flex: "0 0 auto", minWidth: 100, ...fontBody, fontSize: 12.5, fontWeight: 700, color: attivoBtn ? "#fff" : NAVY, background: attivoBtn ? NAVY : "#fff", border: `1px solid ${attivoBtn ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "9px 10px", cursor: "pointer", textAlign: "center" }}>
-                  {nonPagatoTrim && <span style={{ position: "absolute", top: 6, right: 8, width: 6, height: 6, borderRadius: "50%", background: attivoBtn ? "#fff" : "#C0392B" }} />}
-                  <div>T{t}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: attivoBtn ? "#fff" : MUTED, marginTop: 2 }}>{totaleTrim ? fmtEuroErp(totaleTrim) : "—"}</div>
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+        {/* 100px di stacco fra la fila delle tessere e quella dei filtri:
+            sono due cose diverse — dove si va, e cosa si guarda una volta
+            arrivati — e attaccate sembravano un unico blocco di comandi */}
+        <div style={{ height: SPAZIO_TASTI_FILTRI }} />
+        {/* la stessa testata di tutte le sezioni della contabilita' */}
+        <BarraPeriodoContabilita
+          filtri={[
+            { chiave: "tutte", etichetta: "Tutte", conto: spesePagate.filter((sp) => dataCassaPN(sp) >= range.inizio && dataCassaPN(sp) <= range.fine).length },
+            { chiave: "dariconciliare", etichetta: "Da riconciliare", conto: conteggioDaRiconciliarePN },
+            { chiave: "riconciliate", etichetta: "Riconciliate", conto: spesePagate.filter((sp) => dataCassaPN(sp) >= range.inizio && dataCassaPN(sp) <= range.fine && !daRiconciliarePN(sp)).length },
+            ...(nonPagateContoPN > 0 ? [{ chiave: "nonpagate", etichetta: `Non pagate · ${fmtEuroErp(nonPagateTotalePN)}`, conto: nonPagateContoPN }] : []),
+          ]}
+          filtroAttivo={filtroStatoPN}
+          onFiltro={(k) => {
+            // "non pagate" non e' roba di prima nota: sta nello Scadenzario,
+            // qui il numero serve solo da richiamo
+            if (k === "nonpagate") { onApriAmministrazioneTab?.("passivo"); return; }
+            setFiltroStatoPN(k);
+          }}
+          anno={annoPN} onAnno={setAnnoPN}
+          mese={mesePN} onMese={setMesePN}
+          conteggiMese={riepilogoMesePN} formatoMese="euro"
+          mesiAllerta={new Set(Object.keys(riepilogoNonPagatePerMese).filter((c) => (riepilogoNonPagatePerMese[c] || 0) > 0))}
+          personalizzato={personalizzatoPN} onPersonalizzato={setPersonalizzatoPN}
+          da={customDa} a={customA} onDa={setCustomDa} onA={setCustomA}
+          ricerca={ricercaPN} onRicerca={(e) => setRicercaPN(e.target.value)}
+          placeholderRicerca="Cerca allievo, spesa, fornitore, categoria…"
+        />
 
         <div style={{ ...cardStyle, marginBottom: 0, padding: isMobile ? 16 : 26 }}>
           {/* Il libro cassa: titolo col periodo, sotto quante entrate e
@@ -41899,7 +41803,7 @@ function PaginaInserimentoCostiRicavi({
               tutti insieme. Disegnato sul mock del 15/09/2026, allargato
               alle entrate il 16/09/2026. */}
           <div style={{ marginBottom: isMobile ? 16 : 20 }}>
-            <div style={{ ...fontHero, fontSize: isMobile ? 32 : 40, color: NAVY, lineHeight: 1.1, overflowWrap: "anywhere" }}>Prima nota · {personalizzatoPN ? `${fmtData(customDa)} – ${fmtData(customA)}` : etichettaPeriodoPrimaNota(annoPN, granularitaPN, mesePN, trimestrePN)}</div>
+            <div style={{ ...fontHero, fontSize: isMobile ? 32 : 40, color: NAVY, lineHeight: 1.1, overflowWrap: "anywhere" }}>Prima nota · {personalizzatoPN ? `${fmtData(customDa)} – ${fmtData(customA)}` : etichettaPeriodoPrimaNota(annoPN, mesePN)}</div>
             <div style={{ ...fontBody, fontSize: isMobile ? 14 : 15, color: MUTED, marginTop: 6 }}>{entrateRicercate.length} entrat{entrateRicercate.length === 1 ? "a" : "e"} · {righeUniteRicerca.length} uscit{righeUniteRicerca.length === 1 ? "a" : "e"}</div>
           </div>
 
@@ -42231,6 +42135,7 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
             {qualcheStima ? " · ≈ stimato sul listino di oggi: questa vendita non aveva lo sconto scritto riga per riga" : null}
           </div>
         )}
+
       </div>
 
       <div style={{ background: BG, borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
