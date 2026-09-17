@@ -13,7 +13,9 @@ import {
   inputStyle, campoCompattoStyle, round2, numeroFascia,
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
-import PaginaSpedizioniCorso from "./rientri/PaginaSpedizioniCorso.jsx";
+import DomandaProvenienza from "./rientri/DomandaProvenienza.jsx";
+import { caricaKitInAula, registraPrelieviDaVendita } from "./rientri/pos";
+import { registraPartenza } from "./rientri/dati";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -43418,7 +43420,7 @@ function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, or
 // hub d'ingresso di "Logistica prodotti": le spedizioni dei kit ai corsi
 // da una parte, gli ordini dello shop online dall'altra — due mestieri
 // diversi che prima stavano nella stessa pagina
-function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriSpedizioniRientro, onApriOrdiniInArrivo, onApriAvvisi, quantiOrdiniDaSpedire, quantiAvvisi, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArrivo, onApriAvvisi, quantiOrdiniDaSpedire, quantiAvvisi, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -43432,7 +43434,6 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriSpedizioniRie
           pagina="logisticaprodotti" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "spedizionicorsi", title: "Spedizioni corsi", descrizione: "Kit, bolle e pacchi verso le sedi dei corsi.", Icona: IconaTileLogistica, attivo: true, onClick: onApriSpedizioniCorsi },
-            { chiave: "spedizionirientro", title: "Spedizioni ai corsi", descrizione: "Cosa parte per ogni corso, kit di riserva compresi.", Icona: IconaScatolaErp, attivo: true, onClick: onApriSpedizioniRientro },
             { chiave: "ordiniinarrivo", title: "Ordini in arrivo", descrizione: "Gli ordini dello shop online da preparare e spedire.", Icona: IconaScatolaErp, attivo: true, onClick: onApriOrdiniInArrivo, badge: quantiOrdiniDaSpedire },
             { chiave: "avvisilogistica", title: "Advisor", descrizione: "Cosa sta finendo: pacchi da aprire e prodotti da riordinare.", Icona: IconaAvvisoTriangolo, attivo: true, onClick: onApriAvvisi, badge: quantiAvvisi },
           ]}
@@ -54456,6 +54457,26 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
 
+  // ---- i kit di riserva che stanno in quell'aula ----------------------
+  // Se per questo corso non e' partito niente, kitInAula resta null e il
+  // POS si comporta esattamente come prima: nessuna domanda, nessuna
+  // differenza. La domanda nasce solo dai pezzi che ci sono davvero.
+  const [kitInAula, setKitInAula] = useState(null);
+  const [domandaKit, setDomandaKit] = useState(null);
+  // prodotto -> id del kit da cui esce. Vale per il carrello in corso e si
+  // azzera con la vendita: e' una scelta su questi pezzi, non una regola
+  const [dalKitPerProdotto, setDalKitPerProdotto] = useState({});
+  useEffect(() => {
+    let vivo = true;
+    setDalKitPerProdotto({});
+    caricaKitInAula(corsoPosSel?.id || null).then((k) => { if (vivo) setKitInAula(k); });
+    return () => { vivo = false; };
+  }, [corsoPosSel?.id]);
+  // il magazzino centrale sta a Roma: da li' il pezzo lo si va a prendere,
+  // da qualunque altra sede lo si spedisce
+  const inSedeCentrale = String(locById[corsoPosSel?.location_id]?.nome || "").trim().toUpperCase() === "ROMA";
+  const disponibileNeiKit = (prodottoId) => kitInAula?.perProdotto?.[prodottoId] || null;
+
   // omaggio: azzera l'incasso ma scarica comunque il magazzino — la nota
   // diventa obbligatoria (motivo del regalo), niente da nascondere su
   // perché un prodotto è uscito senza essere venduto
@@ -54742,6 +54763,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const base = bundleVirtuale(p) ? disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerId) : (p.quantita || 0);
     return Math.max(0, base - riservatiAltrove(prodottoId));
   }
+  // Quanto se ne puo' vendere QUI: la giacenza di centrale piu' i pezzi
+  // che stanno nei kit di riserva in aula. Un prodotto esaurito in
+  // centrale ma presente in una scatola li' accanto e' vendibile — e
+  // prima non lo era: il POS lo dava per esaurito e non si riusciva
+  // nemmeno a selezionarlo, quindi la domanda sulla provenienza non
+  // sarebbe mai comparsa proprio nel caso in cui serve di piu'.
+  function disponibiliQui(prodottoId) {
+    return disponibiliDi(prodottoId) + (disponibileNeiKit(prodottoId)?.residuo || 0);
+  }
   // i pezzi dentro gli ALTRI carrelli sospesi sono promessi: non si
   // rivendono. Quello aperto adesso non conta, sono i pezzi che si stanno
   // guardando
@@ -54753,6 +54783,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
 
   function aggiungiAlCarrello(p) {
+    // il pezzo e' anche in un kit che sta qui in aula, e non si e' ancora
+    // detto da dove esce: si chiede una volta sola, per prodotto
+    const inAula = disponibileNeiKit(p.id);
+    if (inAula && inAula.residuo > 0 && dalKitPerProdotto[p.id] === undefined) {
+      setDomandaKit({ prodotto: p, disponibilita: inAula });
+      return;
+    }
     const disponibili = disponibiliDi(p.id);
     if (disponibili <= 0) return;
     setCarrello((prev) => {
@@ -54765,6 +54802,39 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // netto (l'IVA sta in anagrafica), e metterlo qui faceva vendere
       // tutto il 22% sotto listino — con l'IVA scorporata per giunta da un
       // importo che era già netto
+      return [...prev, { prodottoId: p.id, nome: p.nome, prezzo: prezzoAlPubblico(p), sku: p.sku || "", quantita: 1 }];
+    });
+  }
+  // "dal kit": il pezzo non tocca il magazzino centrale. Si segna da quale
+  // kit esce e lo si mette nel carrello; il resto (prelievo scritto, kit
+  // aperto, foto aggiornata) succede quando la vendita e' registrata.
+  function rispondiDalKit(istanza) {
+    const p = domandaKit?.prodotto;
+    setDomandaKit(null);
+    if (!p || !istanza) return;
+    setDalKitPerProdotto((prev) => ({ ...prev, [p.id]: istanza.id }));
+    aggiungiAlCarrelloDiretto(p);
+  }
+  function rispondiDaMagazzino() {
+    const p = domandaKit?.prodotto;
+    setDomandaKit(null);
+    if (!p) return;
+    setDalKitPerProdotto((prev) => ({ ...prev, [p.id]: null }));
+    // da centrale valgono le regole di sempre: se non c'e', non si vende
+    if (disponibiliDi(p.id) <= 0) { setMsg(`"${p.nome}" non è disponibile in magazzino.`); return; }
+    aggiungiAlCarrelloDiretto(p);
+  }
+  function aggiungiAlCarrelloDiretto(p) {
+    const disponibili = disponibiliDi(p.id);
+    setCarrello((prev) => {
+      const esistente = prev.find((r) => r.prodottoId === p.id);
+      if (esistente) {
+        // dal kit la disponibilita' di centrale non c'entra: il tetto e'
+        // quanto c'e' nella scatola
+        const tetto = dalKitPerProdotto[p.id] ? Infinity : disponibili;
+        if (esistente.quantita >= tetto) return prev;
+        return prev.map((r) => (r.prodottoId === p.id ? { ...r, quantita: r.quantita + 1 } : r));
+      }
       return [...prev, { prodottoId: p.id, nome: p.nome, prezzo: prezzoAlPubblico(p), sku: p.sku || "", quantita: 1 }];
     });
   }
@@ -54915,6 +54985,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   function nuovaVendita() {
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
+    // la provenienza vale per i pezzi di quel carrello, non e' una regola
+    // che resta accesa: il carrello dopo ripone la sua domanda
+    setDalKitPerProdotto({});
     // Il coupon fra una vendita e l'altra: dura quanto e' stato pensato
     // per durare, non quanto resta aperta la pagina.
     //
@@ -55097,7 +55170,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // preparaScarichi), solo dopo si scrive. Un bundle virtuale non ha
     // giacenza propria e si risolve nei suoi componenti; un box con
     // giacenza fisica scarica il proprio stock come un prodotto normale
-    const righeVendita = carrello.flatMap((r) => righeScarico(trovaProdotto(r.prodottoId), r.quantita, bundleComponenti, prodottiPerId));
+    // i pezzi presi da un kit che sta in aula non si scaricano da centrale:
+    // ne sono usciti giorni fa, col pacco del corso. Il resto del carrello
+    // si scarica come sempre, riga per riga
+    const righeVendita = carrello
+      .filter((r) => !dalKitPerProdotto[r.prodottoId])
+      .flatMap((r) => righeScarico(trovaProdotto(r.prodottoId), r.quantita, bundleComponenti, prodottiPerId));
     // merce presa dai kit in aula: non si verifica la disponibilità in
     // centrale e non si scarica — quei pezzi sono usciti dal magazzino
     // giorni fa, con il pacco del corso
@@ -55194,6 +55272,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
       richiede_fattura: fattAttiva,
     };
+    // da fotografare adesso come tutto il resto: fra un attimo il carrello
+    // e' vuoto e non si saprebbe piu' da quale kit e' uscito cosa
+    const scelteDalKit = carrello
+      .filter((r) => dalKitPerProdotto[r.prodottoId])
+      .map((r) => ({ prodottoId: r.prodottoId, kitRiservaId: dalKitPerProdotto[r.prodottoId], quantita: r.quantita }));
+    const spedizioneKitId = kitInAula?.spedizioneId || null;
+
     const datiSpedizione = spedizioneAttiva ? {
       simulazione: puoSimulare && simulazione,
       corso_data_id: corsoPosSel?.id || null,
@@ -55282,6 +55367,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         window.alert("Attenzione: magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message);
         ricarica(["prodotti_shop", "vendite_shop"]);
         return;
+      }
+      // i pezzi usciti dai kit: una riga di prelievo ciascuno, il kit
+      // diventa "aperto" e la fotografia del contenuto si aggiorna. E' da
+      // qui che la scheda di fine corso nascera' gia' compilata.
+      if (scelteDalKit.length > 0 && spedizioneKitId && venditaCreata) {
+        const errorePrelievi = await registraPrelieviDaVendita({
+          venditaId: venditaCreata.id, spedizioneId: spedizioneKitId, scelte: scelteDalKit,
+        });
+        if (errorePrelievi) window.alert("La vendita è registrata, ma il prelievo dai kit non è stato scritto: " + errorePrelievi);
+        caricaKitInAula(corsoPosSel?.id || null).then(setKitInAula);
       }
       if (datiSpedizione) {
         const { error: erroreSped } = await supabase.from("spedizioni_pos").insert({ ...datiSpedizione, vendita_id: venditaCreata.id });
@@ -55469,7 +55564,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               Questa classe non ha ancora un codice sconto: lo sconto va messo a mano.
             </div>
           )}
-          {corsoPosSel && (
+          {/* La casella vale per tutto il carrello e la si deve ricordare:
+              dove il modulo dei rientri sa cosa c'e' in aula, la domanda
+              per prodotto fa lo stesso lavoro meglio, e questa sparisce.
+              Sui corsi senza spedizione registrata resta l'unico modo. */}
+          {corsoPosSel && !kitInAula && (
             <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginTop: -6, marginBottom: 12 }}>
               <input type="checkbox" checked={prelevatoDaiKit} onChange={(e) => setPrelevatoDaiKit(e.target.checked)} style={{ marginTop: 3 }} />
               <span>
@@ -55941,7 +56040,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const elencoProdotti = isMobile ? (
     <div>
       {prodottiPagina.map((p) => {
-        const disponibili = disponibiliDi(p.id);
+        const disponibili = disponibiliQui(p.id);
         const esaurito = disponibili <= 0;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
@@ -55975,7 +56074,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   ) : (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${colonneProdottiPos}, minmax(0, 1fr))`, gap: 12 }}>
       {prodottiPagina.map((p) => {
-        const disponibili = disponibiliDi(p.id);
+        const disponibili = disponibiliQui(p.id);
         const esaurito = disponibili <= 0;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
@@ -56335,6 +56434,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         </div>
       </div>
+
+      {domandaKit && (
+        <DomandaProvenienza
+          prodotto={domandaKit.prodotto}
+          disponibilita={domandaKit.disponibilita}
+          inSedeCentrale={inSedeCentrale}
+          isMobile={isMobile}
+          onDalKit={rispondiDalKit}
+          onDaMagazzino={rispondiDaMagazzino}
+          onAnnulla={() => setDomandaKit(null)}
+        />
+      )}
     </div>
   );
 }
@@ -60657,6 +60768,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         materiale_preparato_ts: new Date().toISOString(),
         spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString(),
       });
+      await registraPartenzaDelPacco(corsoData, foto);
       return;
     }
     if (!(await chiediConferma("Tornando indietro il materiale rientra tutto in magazzino. Confermi?"))) return;
@@ -60733,9 +60845,26 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       await salvaCampiEdizione(corsoData.id, {
         fase, spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString(),
       });
+      await registraPartenzaDelPacco(corsoData, foto);
       return;
     }
     await salvaCampiEdizione(corsoData.id, { fase });
+  }
+  // Da qui in poi i kit di riserva di questa edizione esistono uno per
+  // uno, con la fotografia di cosa c'e' dentro: e' cio' che permette al
+  // POS di chiedere "lo prelevi dal kit?" e alla scheda di fine corso di
+  // nascere gia' compilata. Si attacca al gesto che c'e' gia' — pacco
+  // preparato — perche' quello e' il momento della partenza; una seconda
+  // pagina per dire la stessa cosa sarebbe stato un doppione.
+  async function registraPartenzaDelPacco(corsoData, foto) {
+    const errore = await registraPartenza({
+      corsoDataId: corsoData.id,
+      masterId: corsoData.master_id || null,
+      foto,
+      corsiKitProdotti: corsiKitProdotti || [],
+      creataDa: utenteLoggato?.nome || null,
+    });
+    if (errore) window.alert("Il pacco è registrato, ma i kit di riserva non sono stati numerati: " + errore);
   }
   async function tornaIndietroFaseLogistica(corsoData, faseTarget) {
     // il ritiro del corriere e' il punto di non ritorno: la scatola non e'
@@ -66889,21 +67018,10 @@ export default function App() {
         />
       )}
 
-      {view === "spedizionirientro" && (
-        <PaginaSpedizioniCorso
-          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
-          kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
-          prodottiShop={prodottiShop} logisticaKitEdizioni={logisticaKitEdizioni}
-          utenteLoggato={utenteLoggato} isMobile={isMobile}
-          onBack={() => setView("logisticaprodotti")}
-        />
-      )}
-
       {view === "logisticaprodotti" && (
         <PaginaLogisticaHub
           onBack={() => setView("home")}
           onApriSpedizioniCorsi={apriSpedizioniCorsi}
-          onApriSpedizioniRientro={() => setView("spedizionirientro")}
           onApriOrdiniInArrivo={apriOrdiniInArrivo}
           onApriAvvisi={apriAvvisiLogistica}
           quantiOrdiniDaSpedire={pacchiDaSpedire}
