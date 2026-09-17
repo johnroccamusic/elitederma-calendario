@@ -35426,10 +35426,24 @@ async function generaCodiceReferralUnivoco(nome) {
 // si leggono come quattro righe — quanto spendi, quanto ti sconto.
 function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = false }) {
   const g = gruppiFasceValidi(valore);
-  function cambiaSoglia(i, testo) {
-    const soglie = g.soglie.slice();
-    soglie[i] = Number(String(testo).replace(",", ".")) || 0;
-    onCambia({ soglie: soglieSpesaValide(soglie), gruppi: g.gruppi });
+  // Le soglie si scrivono a mano, e mentre si scrivono passano da stati
+  // che non hanno senso: cancellando "100" per scrivere "150" il campo
+  // resta un attimo vuoto, e vuoto vorrebbe dire zero. Normalizzando a
+  // ogni tasto il numero rimbalzava indietro e la soglia non si riusciva
+  // proprio a cambiare. Quindi: mentre si digita comanda il testo, e il
+  // riordino delle soglie scatta quando si esce dal campo.
+  const [bozzaSoglie, setBozzaSoglie] = useState(null);
+  const soglieMostrate = bozzaSoglie || g.soglie.map((x) => String(x));
+  function digitaSoglia(i, testo) {
+    const bozza = soglieMostrate.slice();
+    bozza[i] = testo;
+    setBozzaSoglie(bozza);
+  }
+  function fissaSoglie() {
+    if (!bozzaSoglie) return;
+    const numeri = bozzaSoglie.map((t) => Number(String(t).replace(",", ".")));
+    onCambia({ soglie: soglieSpesaValide(numeri), gruppi: g.gruppi });
+    setBozzaSoglie(null);
   }
   function cambiaGruppo(i, nuoveFasce) {
     const gruppi = g.gruppi.slice();
@@ -35440,16 +35454,21 @@ function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = fal
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12, background: BG, borderRadius: 12, padding: "10px 12px" }}>
         <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie di spesa</span>
-        {g.soglie.map((v, i) => (
+        {soglieMostrate.map((v, i) => (
           <label key={i} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: MUTED }}>
-            {i === 0 ? "prima a" : i === 1 ? "poi a" : "poi a"}
-            <input type="number" min="0" step="10" value={v} onChange={(e) => cambiaSoglia(i, e.target.value)}
-              style={{ ...inputStyle, width: 82, textAlign: "center", padding: "6px 8px", fontWeight: 700 }} />
+            {i === 0 ? "prima a" : "poi a"}
+            <input
+              type="number" min="0" step="10" value={v}
+              onChange={(e) => digitaSoglia(i, e.target.value)}
+              onBlur={fissaSoglie}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              style={{ ...inputStyle, width: 88, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
+            />
             <span style={{ fontWeight: 700, color: NAVY }}>€</span>
           </label>
         ))}
         <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 200px", minWidth: 0 }}>
-          Decide la fascia il totale del carrello a listino, prima dello sconto.
+          Decide la fascia il totale del carrello a listino, prima dello sconto. Scrivi il numero e premi Invio (o esci dal campo).
         </span>
       </div>
       {g.gruppi.map((gruppo, i) => (
