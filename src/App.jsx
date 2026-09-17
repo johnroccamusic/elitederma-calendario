@@ -37341,10 +37341,10 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
       <RiquadroDataCard etichetta="Scadenza" data={scadenza} />
       <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: "nowrap" }}>
         <button onClick={() => setPannello(pannello === "cassa" ? null : "cassa")} disabled={salvando} title="Esce dalla cassa contanti: il saldo si aggiorna subito" style={{ ...stileTastoCardOro(isMobile, salvando), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", outline: pannello === "cassa" ? `2px solid #8A6D1D` : "none" }}>
-          {!isMobile && <IconaQiPortafoglio size={20} />}<span>Pagato da cassa</span>
+          {!isMobile && <IconaQiPortafoglio size={20} />}<span>Paga da cassa</span>
         </button>
         <button onClick={() => setPannello(pannello === "bonifico" ? null : "bonifico")} disabled={salvando} title="Esce dal conto corrente" style={{ ...stileTastoCardNavy(isMobile, salvando), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", textAlign: "center", outline: pannello === "bonifico" ? `2px solid ${GOLD}` : "none" }}>
-          {!isMobile && <IconaQiBanca size={20} />}<span style={{ lineHeight: 1.15, whiteSpace: "normal" }}>Pagato da conto corrente</span>
+          {!isMobile && <IconaQiBanca size={20} />}<span style={{ lineHeight: 1.15, whiteSpace: "normal" }}>Paga da conto corrente</span>
         </button>
       </div>
     </>
@@ -37358,7 +37358,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
     >
       {pannello && !disabilitato && (
         <div style={{ marginTop: 12, padding: isMobile ? 14 : 16, background: "#fff", border: `1.5px solid ${eCassa ? "#8A6D1D" : NAVY}`, borderRadius: 16 }}>
-          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{eCassa ? "Pagato da cassa contanti" : "Pagato da conto corrente"}</div>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{eCassa ? "Paga da cassa contanti" : "Paga da conto corrente"}</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
             {eCassa
               ? `${fmtEuroErp(totale)} escono dalla cassa contanti e vanno in prima nota con la data qui sotto.`
@@ -37573,7 +37573,7 @@ function giornoSettimanaAbbr(dataStr) {
 function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura, onPagaDaCassa, onPagaBonificoAttesa }) {
   const isMobile = useIsMobile();
   const [aperto, setAperto] = useState(false);
-  // "Pagato da cassa" apre una riga con la data invece di chiedere subito:
+  // "Paga da cassa" apre una riga con la data invece di chiedere subito:
   // il giorno in cui i contanti sono usciti va scelto, non dato per oggi
   const [cassaAperta, setCassaAperta] = useState(false);
   // Un impegno ha due sbocchi, non uno: o arriva la fattura e si va in
@@ -37635,7 +37635,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, sede, tipo, fornitore, totale, ca
         <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: "nowrap" }}>
           {onPagaDaCassa && (
             <button onClick={() => setCassaAperta((v) => !v)} disabled={pagandoCassa} style={{ ...tastoOro, flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" }}>
-              {!isMobile && <IconaQiPortafoglio size={20} />}<span>{pagandoCassa ? "Registro…" : "Pagato da cassa"}</span>
+              {!isMobile && <IconaQiPortafoglio size={20} />}<span>{pagandoCassa ? "Registro…" : "Paga da cassa"}</span>
             </button>
           )}
           {onPagaBonificoAttesa && (
