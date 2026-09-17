@@ -7369,7 +7369,7 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
                 <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
                 <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
                 <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap", borderRight: "none" }}>
-                  {i.totale_pattuito != null ? `${i.totale_pattuito} €` : "—"}
+                  {i.totale_pattuito != null ? fmtEuroErp2(i.totale_pattuito) : "—"}
                 </td>
               </tr>
             );
@@ -25878,7 +25878,9 @@ function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evide
     portafoglioPiccolo: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M16 14.5h2" /></svg>,
     giu: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B7952B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 8v8M8.5 12.5L12 16l3.5-3.5" /></svg>,
   };
-  const cifra = `€ ${Number(valore || 0).toLocaleString("it-IT", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  // due decimali sempre, anche sulle cifre tonde: due riquadri accostati
+  // con "€ 300" e "€ 299,50" non si leggono come due numeri confrontabili
+  const cifra = `€ ${Number(valore || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
     <div style={{ flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0, boxSizing: "border-box", padding: isMobile ? "12px 10px" : "16px 14px", borderRadius: 16, background: evidenziata ? "#F6EFE1" : "#fff", border: `1px solid ${evidenziata ? "#D9C48F" : CREAM_BORDER}`, boxShadow: "var(--ombra-aree, none)", display: "flex", flexDirection: "column" }}>
       <div style={{ width: isMobile ? 34 : 40, height: isMobile ? 34 : 40, borderRadius: "50%", background: evidenziata ? "#EFE3C8" : "#EEEDEA", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: isMobile ? 8 : 12 }}>{icone[icona]}</div>
@@ -26122,7 +26124,7 @@ function PannelloRiepilogoAmministrativo({
       ? "Pagamento spostato. L'importo resta quello pattuito: senza notti e tariffa a notte non c'è un conto da rifare."
       : totalePronto != null
         ? `Alloggio ${tipo === "cash" ? "in contanti" : "a bonifico"}: ${euroRiepilogo(rifatto)}, somma delle ${r.nottiPrenotate ?? "—"} notti a listino.`
-        : `Alloggio ${tipo === "cash" ? "in contanti" : "a bonifico"}: ${r.nottiPrenotate} nott${r.nottiPrenotate === 1 ? "e" : "i"} × € ${aNotte} = € ${rifatto}.`);
+        : `Alloggio ${tipo === "cash" ? "in contanti" : "a bonifico"}: ${r.nottiPrenotate} nott${r.nottiPrenotate === 1 ? "e" : "i"} × ${fmtEuroErp2(aNotte)} = ${fmtEuroErp2(rifatto)}.`);
     ricarica([r.tabella]);
   }
 
@@ -27080,17 +27082,17 @@ function PannelloRiepilogoAmministrativo({
                         dalla busta, quanto e' stato rinviato allo scadenziario,
                         e quanto resta in busta. L'ultima si muove solo quando
                         i pagamenti sono stati disposti davvero. */}
-                    <CasellaRiepilogoCash isMobile={isMobile} icona="mano" etichetta="Cash incassato al corso" valore={contantiClasse} nota={daIncassareAncoraClasse > 0 ? `€ ${daIncassareAncoraClasse} ancora da incassare` : null} notaIcona="orologio" />
+                    <CasellaRiepilogoCash isMobile={isMobile} icona="mano" etichetta="Cash incassato al corso" valore={contantiClasse} nota={daIncassareAncoraClasse > 0 ? `${fmtEuroErp2(daIncassareAncoraClasse)} ancora da incassare` : null} notaIcona="orologio" />
                     <CasellaRiepilogoCash isMobile={isMobile} icona="documento" etichetta="Totale cash da pagare" valore={totaleCashDaPagareClasse} nota="dalla busta o rinviato" notaIcona="orologio" />
-                    <CasellaRiepilogoCash isMobile={isMobile} icona="portafoglio" etichetta="Pagamenti cash presi dalla busta" valore={cashRegistratoBustaClasse} nota={cashDaDisporreClasse > 0 ? `€ ${cashDaDisporreClasse} da disporre` : null} notaIcona="portafoglioPiccolo" />
+                    <CasellaRiepilogoCash isMobile={isMobile} icona="portafoglio" etichetta="Pagamenti cash presi dalla busta" valore={cashRegistratoBustaClasse} nota={cashDaDisporreClasse > 0 ? `${fmtEuroErp2(cashDaDisporreClasse)} da disporre` : null} notaIcona="portafoglioPiccolo" />
                     <CasellaRiepilogoCash isMobile={isMobile} icona="ritorno" etichetta="Pagamenti cash rinviati" valore={cashRinviatiClasse} nota={cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null} notaIcona="ritorno" />
                     <CasellaRiepilogoCash
                       isMobile={isMobile} evidenziata icona="scintilla" etichetta="Cash pulito in busta" valore={cassaContantiClasse}
                       nota={cashMancanteClasse > 0
-                        ? `€ ${cashMancanteClasse} messi da fuori`
+                        ? `${fmtEuroErp2(cashMancanteClasse)} messi da fuori`
                         : cashDaDisporreClasse > 0
-                          ? `Scende a € ${Math.max(0, round2(cassaContantiClasse - cashDaDisporreClasse))} dopo Disponi pagamenti`
-                          : venditeAlCorsoContanti > 0 && cassaContantiClasse > 0 ? `di cui € ${venditeAlCorsoContanti} di vendite` : null}
+                          ? `Scende a ${fmtEuroErp2(Math.max(0, round2(cassaContantiClasse - cashDaDisporreClasse)))} dopo Disponi pagamenti`
+                          : venditeAlCorsoContanti > 0 && cassaContantiClasse > 0 ? `di cui ${fmtEuroErp2(venditeAlCorsoContanti)} di vendite` : null}
                       notaIcona="giu"
                     />
                   </div>
@@ -31130,13 +31132,13 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{idx + 1}. {i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
                   {i.tutor && <div>Tutor: {i.tutor}</div>}
                   {i.telefono && <div>Telefono: {i.telefono}</div>}
-                  {i.acconto_totale != null && <div>Acconto: {i.acconto_imponibile} € imp. → {totQuota(i, "acconto")} € tot. ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
-                  {i.precorso_totale != null && <div>Pre corso: {i.precorso_imponibile} € imp. → {totQuota(i, "precorso")} € tot. ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
-                  {i.saldo_totale != null && <div>Da avere al corso: {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
+                  {i.acconto_totale != null && <div>Acconto: {fmtEuroErp2(i.acconto_imponibile)} imp. → {fmtEuroErp2(totQuota(i, "acconto"))} tot. ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${fmtEuroErp2(i.acconto_interessi)}` : ""})</div>}
+                  {i.precorso_totale != null && <div>Pre corso: {fmtEuroErp2(i.precorso_imponibile)} imp. → {fmtEuroErp2(totQuota(i, "precorso"))} tot. ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${fmtEuroErp2(i.precorso_interessi)}` : ""})</div>}
+                  {i.saldo_totale != null && <div>Da avere al corso: {fmtEuroErp2(i.saldo_imponibile)} imp. → {fmtEuroErp2(i.saldo_totale)} tot. ({i.saldo_metodo || "?"})</div>}
                   {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (() => {
                     const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
                     const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
-                    return <div style={{ fontWeight: 700 }}>Totale pagato: {netto} €{conRate !== netto && ` — con rate: ${conRate} €`}</div>;
+                    return <div style={{ fontWeight: 700 }}>Totale pagato: {fmtEuroErp2(netto)}{conRate !== netto && ` — con rate: ${fmtEuroErp2(conRate)}`}</div>;
                   })()}
                   {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
                   {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {euroScheda(modelleTotaleDi(i))}{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>}
@@ -50903,7 +50905,7 @@ const REGIMI_FISCALI_MASTER = [
 // usata sia nel riepilogo sia nella tendina "Importa compensi"
 function etichettaFasciaCompenso(f) {
   const range = f.a != null ? `${f.da}-${f.a}` : `${f.da}+`;
-  return `${range}: ${f.compenso ?? "—"}€`;
+  return `${range}: ${f.compenso == null ? "—" : fmtEuroErp2(f.compenso)}`;
 }
 
 function EditorFasceCompenso({ fasce, onCambia, opzioniImporta }) {
