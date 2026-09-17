@@ -461,6 +461,15 @@ const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
 // c'e' una seconda serie, fra le impostazioni condivise. Vuota = uguale
 // a carta e shop.
 const CHIAVE_FASCE_CORSI_CONTANTI = "fasceSconto_corsi_contanti";
+// E la tabella intera dei codici d'aula per carta e shop: quattro righe
+// di spesa e tre soglie. Sta qui e non su regole_referral_automatico
+// perche' quel campo lo leggono anche il frammento del sito e il cron
+// che genera i codici la mattina del corso, e tutti e due sanno leggere
+// solo l'elenco di sei scaglioni: scrivendoci l'oggetto intero
+// prenderebbero zero. Sulla regola continua ad andare la sola riga di
+// base, che e' quello che al sito serve davvero — il carrello, mentre
+// il coupon nasce, non esiste ancora.
+const CHIAVE_FASCE_CORSI_CARTA = "fasceSconto_corsi_carta";
 // "c'e' una serie scritta?": vale per tutte e due le forme, l'elenco di
 // sei di prima e le quattro fasce di spesa di adesso
 function serieScontoScritta(v) {
@@ -11737,7 +11746,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // le fasce di sconto dei due canali: servono per la riduzione dei punti
   // quando l'allievo ha usato un codice
   const [regolaReferralMasterDash] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
-  const fasceCorsoDash = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
+  const [fasceCartaDash] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+  const fasceCorsoDash = serieScontoScritta(fasceCartaDash) ? fasceCartaDash : fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
   const fasceReferralDash = fasceScontoValide(regolaReferralMasterDash?.fasce);
   const [fasceContantiDash] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const [fasceReferralContantiDash] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
@@ -35146,6 +35156,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
 
   // ---------- tab "Generazione automatica" ----------
   const [regoleForm, setRegoleForm] = useState(null);
+  // la tabella e' la stessa di Punti master — stessa impostazione
+  // condivisa, non una copia: la schermata a riga sola che c'era qui
+  // riscriveva la regola e cancellava le fasce di spesa scritte di la'
+  const [fasceCorsiGen, salvaFasceCorsiGen] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
   const [salvandoRegole, setSalvandoRegole] = useState(false);
   const [generandoOggi, setGenerandoOggi] = useState(false);
   useEffect(() => {
@@ -35161,6 +35175,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       // e' piu' un'opzione, e salvando si scrive "fasce" qualunque cosa ci
       // fosse prima
       tipo_regola_sconto: "fasce",
+      // la sola riga di base, come l'hanno sempre letta il sito e il cron
       fasce_sconto: fasceScontoValide(regoleForm.fasce_sconto),
       giorni_validita_dopo_corso: Number(regoleForm.giorni_validita_dopo_corso) || 0,
       valido_durante_corso: !!regoleForm.valido_durante_corso,
@@ -35412,11 +35427,16 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               <div style={{ ...cardStyle }}>
                 {/* solo a fasce, come per il referral personale: la
                     percentuale unica sul corso non si sceglie piu' */}
-                <SceltaRegolaSconto
-                  soloFasce
-                  tipo="fasce" fasce={regoleForm.fasce_sconto}
-                  onCambiaTipo={() => {}}
-                  onCambiaFasce={(f) => setRegoleForm({ ...regoleForm, fasce_sconto: f })}
+                {/* la stessa tabella di Punti master: scrivono sullo
+                    stesso campo, e quella a riga sola cancellava le
+                    fasce di spesa scritte dall'altra parte */}
+                <FasceDiSpesa
+                  valore={serieScontoScritta(fasceCorsiGen) ? fasceCorsiGen : regoleForm.fasce_sconto}
+                  onCambia={(f) => {
+                    const tabella = gruppiFasceValidi(f);
+                    salvaFasceCorsiGen(tabella);
+                    setRegoleForm({ ...regoleForm, fasce_sconto: fasceScontoValide(tabella.gruppi[0]) });
+                  }}
                   prodottiShop={prodottiShop} isMobile={isMobile}
                 />
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -42892,10 +42912,15 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // e' della master. Sono le stesse regole che stanno in Genera coupon —
   // i codici d'aula su regole_referral_automatico, il referral personale
   // fra le impostazioni condivise — lette e scritte negli stessi posti.
-  const [fasceCorso, setFasceCorso] = useState(null);
-  useEffect(() => {
-    if (regoleReferralAutomatico && fasceCorso == null) setFasceCorso(fasceScontoValide(regoleReferralAutomatico.fasce_sconto));
-  }, [regoleReferralAutomatico, fasceCorso]);
+  // La tabella della carta, derivata a ogni render come quella dei
+  // contanti — non tenuta in uno stato locale riempito una volta sola.
+  // Era quello il "reset": usciti dalla pagina lo stato ripartiva da
+  // zero e si rileggeva la regola con fasceScontoValide, che tiene i sei
+  // scaglioni e butta via le quattro righe di spesa e le tre soglie.
+  const [fasceCartaSalvate, salvaFasceCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+  const fasceCorso = serieScontoScritta(fasceCartaSalvate)
+    ? fasceCartaSalvate
+    : (regoleReferralAutomatico ? gruppiFasceValidi(regoleReferralAutomatico.fasce_sconto) : null);
   // la seconda serie, per chi paga in contanti al POS dell'app: si salva
   // appena la si tocca, come il referral personale. Vuota = come la carta
   const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
@@ -42906,12 +42931,21 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   const referralContantiUgualiACarta = !(Array.isArray(fasceReferralContantiSalvate) && fasceReferralContantiSalvate.length);
   const [salvandoFasceCorso, setSalvandoFasceCorso] = useState(false);
   const [msgFasceCorso, setMsgFasceCorso] = useState("");
+  // ogni numero che cambia si scrive subito, senza aspettare il tasto:
+  // e' il motivo per cui la tabella dei contanti non ha mai perso niente
+  async function cambiaFasceCorso(v) {
+    const tabella = gruppiFasceValidi(v);
+    salvaFasceCarta(tabella);
+    if (!regoleReferralAutomatico?.id) return null;
+    const { error } = await supabase.from("regole_referral_automatico")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasceScontoValide(tabella.gruppi[0]), aggiornato_ts: new Date().toISOString() })
+      .eq("id", regoleReferralAutomatico.id);
+    return error || null;
+  }
   async function salvaFasceCorso() {
     if (!regoleReferralAutomatico?.id) return;
     setSalvandoFasceCorso(true); setMsgFasceCorso("");
-    const { error } = await supabase.from("regole_referral_automatico")
-      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasceScontoValide(fasceCorso), aggiornato_ts: new Date().toISOString() })
-      .eq("id", regoleReferralAutomatico.id);
+    const error = await cambiaFasceCorso(fasceCorso);
     setSalvandoFasceCorso(false);
     if (error) { setMsgFasceCorso("Errore: " + testoErrore(error)); return; }
     setMsgFasceCorso("Fasce dei codici d'aula salvate: valgono dai prossimi codici generati.");
@@ -43100,7 +43134,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           ) : (
             <>
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop online</div>
-              <FasceDiSpesa valore={fasceCorso} onCambia={setFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
+              <FasceDiSpesa valore={fasceCorso} onCambia={cambiaFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
                 <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
                 {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
@@ -54768,6 +54802,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   // la seconda serie di fasce dei codici d'aula, per chi paga in contanti
   const [fasceContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  // e la tabella della carta: sul coupon e' congelata la sola riga di
+  // base, le quattro righe di spesa stanno qui
+  const [fasceCorsiCartaPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
   // per i punti che questo carrello fa maturare alla master
   const [schemaPuntiPos] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const [quotePuntiPos] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
@@ -55101,7 +55138,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const fasceCouponAttive = couponAFasce
     ? (couponPersonaleAttivo
       ? fasceReferralPerPagamento(couponAttivo.fasce_sconto, fasceContantiReferralPos, pagamentoContaComeContanti(metodoPagamento))
-      : fasceCorsiPerPagamento(couponAttivo.fasce_sconto, fasceContantiCorsiPos, !!couponAttivo.corsi_date_id && pagamentoContaComeContanti(metodoPagamento)))
+      : fasceCorsiPerPagamento(
+          !!couponAttivo.corsi_date_id && serieScontoScritta(fasceCorsiCartaPos) ? fasceCorsiCartaPos : couponAttivo.fasce_sconto,
+          fasceContantiCorsiPos,
+          !!couponAttivo.corsi_date_id && pagamentoContaComeContanti(metodoPagamento)))
     : null;
   const fasceContantiInUso = couponAFasce && (couponPersonaleAttivo
     ? (pagamentoContaComeContanti(metodoPagamento) && Array.isArray(fasceContantiReferralPos) && fasceContantiReferralPos.length > 0)
