@@ -40894,7 +40894,36 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     // stesso gruppo_pagamento e nello Scadenzario si leggono come una riga
     // sola, che si salda con un bonifico solo.
     const gruppo = elenco.length > 1 ? (crypto?.randomUUID ? crypto.randomUUID() : null) : null;
-    const righe = elenco.map((item) => {
+    // Una voce dell'elenco puo' essere gia' una spesa salvata (le e' stata
+    // spostata la scadenza, o e' nata da un'altra fattura). In quel caso si
+    // AGGIORNA quella, non se ne scrive un'altra: creando una riga nuova la
+    // vecchia restava li' accanto, e la stessa spesa compariva due volte —
+    // una nel cumulo e una da sola. Succedeva davvero.
+    const daAggiornare = [];
+    const daCreare = [];
+    elenco.forEach((item) => {
+      const membri = item.speseGruppo && item.speseGruppo.length > 0
+        ? item.speseGruppo
+        : (item.spesaReale ? [item.spesaReale] : null);
+      if (membri) membri.forEach((sp) => daAggiornare.push({ sp, item }));
+      else daCreare.push(item);
+    });
+    for (const { sp, item } of daAggiornare) {
+      const vivo = round2(importoVivoDiSpesa(sp) + (sp.importo_pagato_cash || 0));
+      const { error } = await supabase.from("spese").update({
+        numero_documento: doc.numero || null,
+        data_documento: doc.data_documento || sp.data_documento || null,
+        scadenza_pagamento: doc.data_scadenza_prevista || sp.scadenza_pagamento || doc.data_documento || null,
+        fornitore_id: sp.fornitore_id || doc.fornitore_id || null,
+        stato: "fatturata",
+        gruppo_pagamento: gruppo,
+        totale: vivo,
+        imponibile: round2(vivo / (1 + aliquota / 100)),
+        iva_percentuale: aliquota,
+      }).eq("id", sp.id);
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    }
+    const righe = daCreare.map((item) => {
       const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
       return {
         descrizione: item.nome,
@@ -40910,16 +40939,18 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
         gruppo_pagamento: gruppo,
       };
     });
-    const { error } = await supabase.from("spese").insert(righe);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    const sommaRighe = round2(righe.reduce((t, r) => t + (Number(r.totale) || 0), 0));
+    if (righe.length > 0) {
+      const { error } = await supabase.from("spese").insert(righe);
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    }
+    const sommaRighe = round2(elenco.reduce((t, it) => t + (Number(it.totale) || 0), 0));
     const allocato = round2(Number(doc.importo_allocato || 0) + sommaRighe);
     const { error: errDoc } = await supabase.from("documento_fornitore")
       .update({ importo_allocato: allocato, stato: allocato >= totaleDoc - 0.01 ? "riconciliato" : doc.stato })
       .eq("id", doc.id);
     if (errDoc) { setMsg("Spese create, ma il documento non si e' aggiornato: " + testoErrore(errDoc)); }
-    else if (righe.length === 1) setMsg(`"${elenco[0].nome}" agganciata alla fattura n. ${doc.numero || "—"}: ora e' una spesa da pagare.`);
-    else setMsg(`${righe.length} spese agganciate alla fattura n. ${doc.numero || "—"} per ${fmtEuroErp(sommaRighe)}: nello Scadenzario sono una riga sola, da pagare con un bonifico solo.`);
+    else if (elenco.length === 1) setMsg(`"${elenco[0].nome}" agganciata alla fattura n. ${doc.numero || "—"}: ora e' una spesa da pagare.`);
+    else setMsg(`${elenco.length} spese agganciate alla fattura n. ${doc.numero || "—"} per ${fmtEuroErp(sommaRighe)}: nello Scadenzario sono una riga sola, da pagare con un bonifico solo.`);
     setDocDaAssociare(null);
     ricarica(["spese", "documento_fornitore"]);
   }
