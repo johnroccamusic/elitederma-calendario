@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { regioneDaCitta } from "./comuni-regioni";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -37447,6 +37447,35 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
 // location/alloggio/assistente/venditore/modelle) sia per le spese reali
 // già in tabella — l'unica differenza (insert vs update) resta nel
 // gestore passato da fuori
+// i due tasti del piede: leggono la scala dalla card che li contiene,
+// cosi' si rimpiccioliscono con lei invece di restare grandi dentro una
+// riga piccola
+function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pannello, onPannello }) {
+  const k = useContext(ScalaRigaContabilita);
+  const q = (n) => Math.round(n * k * 2) / 2;
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ display: "flex", alignItems: "stretch", gap: q(8), minWidth: 0, flexWrap: "nowrap" }}>
+      <button
+        onClick={() => onPannello(pannello === "documento" ? null : "documento")}
+        disabled={salvando}
+        title={fatturaAssociata ? `Fattura n. ${numeroDocumento || "—"} gia' associata` : "Aggancia questa riga a una fattura gia' arrivata dal fornitore"}
+        style={{ ...stileTastoCardChiaro(isMobile), flexShrink: 0, padding: `${q(10)}px ${q(16)}px`, fontSize: q(12.5), gap: q(6), borderRadius: q(14), justifyContent: "center", whiteSpace: "nowrap", lineHeight: 1.15, outline: pannello === "documento" ? `2px solid ${NAVY}` : "none" }}
+      >
+        <IconaQiDocumento size={q(16)} color={NAVY} />
+        <span>{fatturaAssociata ? "Cambia fattura" : "Associa fattura"}</span>
+      </button>
+      <button
+        onClick={() => onPannello(pannello === "paga" ? null : "paga")}
+        disabled={salvando}
+        title="Apre la scheda della spesa: si conferma la classificazione, poi si sceglie come e quando e' stata pagata"
+        style={{ ...stileTastoCardNavy(isMobile, salvando), flexShrink: 0, padding: `${q(10)}px ${q(22)}px`, fontSize: q(12.5), gap: q(6), borderRadius: q(14), justifyContent: "center", whiteSpace: "nowrap", outline: pannello === "paga" ? `2px solid ${GOLD}` : "none" }}
+      >
+        <IconaQiPortafoglio size={q(17)} /><span>Paga</span>
+      </button>
+    </div>
+  );
+}
 function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onCambiaScadenza, documentiFornitore, nomeFornitoreDi }) {
   const isMobile = useIsMobile();
   const [file, setFile] = useState(null);
@@ -37493,25 +37522,10 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   ) : (
     <>
       <RiquadroDataCard etichetta={scadenzaStimata ? "Scadenza stimata" : "Scadenza"} data={scadenza} corsivo={!!scadenzaStimata} onCambia={onCambiaScadenza} />
-      <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: "nowrap" }}>
-        <button
-          onClick={() => setPannello(pannello === "documento" ? null : "documento")}
-          disabled={salvando}
-          title={fatturaAssociata ? `Fattura n. ${numeroDocumento || "—"} gia' associata` : "Aggancia questa riga a una fattura gia' arrivata dal fornitore"}
-          style={{ ...stileTastoCardChiaro(isMobile), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", outline: pannello === "documento" ? `2px solid ${NAVY}` : "none" }}
-        >
-          {!isMobile && <IconaQiDocumento size={18} color={NAVY} />}
-          <span>{fatturaAssociata ? "Cambia fattura" : "Associa fattura"}</span>
-        </button>
-        <button
-          onClick={() => setPannello(pannello === "paga" ? null : "paga")}
-          disabled={salvando}
-          title="Apre la scheda della spesa: si conferma la classificazione, poi si sceglie come e quando e' stata pagata"
-          style={{ ...stileTastoCardNavy(isMobile, salvando), flex: "1 1 0", minWidth: 0, padding: isMobile ? "10px 6px" : "11px 12px", fontSize: isMobile ? 11.5 : 13, gap: 6, justifyContent: "center", textAlign: "center", outline: pannello === "paga" ? `2px solid ${GOLD}` : "none" }}
-        >
-          {!isMobile && <IconaQiPortafoglio size={20} />}<span>Paga</span>
-        </button>
-      </div>
+      <TastiPiedeScadenzario
+        fatturaAssociata={fatturaAssociata} numeroDocumento={numeroDocumento} salvando={salvando}
+        pannello={pannello} onPannello={setPannello}
+      />
     </>
   );
   return (
@@ -37699,101 +37713,127 @@ function IconaQiBanca({ size = 20, color = "#fff" }) {
 // le etichette, a destra l'importo; sotto la riga con i tasti ("piede") e
 // dopo quello che si apre (children). Disegnata sul mock del 15/09/2026.
 // Le etichette sono testi o { Icona, testo }.
+// La riga delle liste di contabilita'. Un disegno solo, telefono e
+// scrivania: ogni misura e' una frazione della larghezza VERA della riga,
+// misurata, quindi le proporzioni restano quelle e cambia solo la scala.
+// Prima c'erano due misure per ogni cosa, una per il telefono e una per
+// il computer, e le due non si somigliavano granche'.
+//
+// La scala si ferma in basso a 0,60: sotto, su un telefono stretto, la
+// data del giorno scenderebbe sotto i 20px e le pastiglie sotto i 7.
+const LARGHEZZA_RIFERIMENTO_RIGA = 860;
+const ScalaRigaContabilita = React.createContext(1);
 function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children }) {
-  const isMobile = useIsMobile();
+  const rif = useRef(null);
+  const [larghezza, setLarghezza] = useState(null);
+  useLayoutEffect(() => {
+    const el = rif.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const misura = () => setLarghezza(el.clientWidth || null);
+    misura();
+    const osservatore = new ResizeObserver(misura);
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, []);
+  const k = Math.min(1.15, Math.max(0.6, (larghezza || LARGHEZZA_RIFERIMENTO_RIGA) / LARGHEZZA_RIFERIMENTO_RIGA));
+  const q = (n) => Math.round(n * k * 2) / 2;
   const [anno, mese, giorno] = (data || "").split("-").map(Number);
-  const riquadro = { background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 16px", boxSizing: "border-box" };
+  const riquadro = { background: BG_CHIARO, borderRadius: q(14), padding: `${q(12)}px ${q(16)}px`, boxSizing: "border-box" };
   return (
-    // la stessa superficie a cuscino delle schede di Gestione modelle
-    // (16/09/2026): spessore in basso e luce in alto, al posto del bordo
-    <div style={{ ...superficieCuscino("#FFFFFF"), borderRadius: 22, padding: isMobile ? 14 : 18, marginBottom: 14 }}>
-      <div style={{ display: "flex", gap: isMobile ? 12 : 16, alignItems: "stretch" }}>
-        <div style={{ ...riquadro, flex: "0 0 auto", minWidth: isMobile ? 64 : 76, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: isMobile ? "10px 8px" : "12px 10px" }}>
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 30 : 34, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{giorno ? String(giorno).padStart(2, "0") : "—"}</div>
-          {mese ? <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", marginTop: 4 }}>{MESI_ABBR[mese - 1]}</div> : null}
-          {anno ? <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{anno}</div> : null}
-          {data ? <div style={{ ...fontBody, fontSize: 10, color: MUTED, marginTop: 8, paddingTop: 6, borderTop: `1px solid ${CREAM_BORDER}`, width: "100%", textAlign: "center", letterSpacing: 0.4 }}>{giornoSettimanaAbbr(data)}</div> : null}
+    <ScalaRigaContabilita.Provider value={k}>
+    {/* la stessa superficie a cuscino delle schede di Gestione modelle
+        (16/09/2026): spessore in basso e luce in alto, al posto del bordo */}
+    <div ref={rif} style={{ ...superficieCuscino("#FFFFFF"), borderRadius: q(22), padding: q(18), marginBottom: q(14), boxSizing: "border-box" }}>
+      <div style={{ display: "flex", gap: q(16), alignItems: "stretch" }}>
+        <div style={{ ...riquadro, flex: "0 0 auto", minWidth: q(76), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: `${q(10)}px ${q(10)}px` }}>
+          <div style={{ ...fontDisplay, fontSize: q(34), fontWeight: 700, color: NAVY, lineHeight: 1 }}>{giorno ? String(giorno).padStart(2, "0") : "—"}</div>
+          {mese ? <div style={{ ...fontBody, fontSize: q(13), fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", marginTop: q(4) }}>{MESI_ABBR[mese - 1]}</div> : null}
+          {anno ? <div style={{ ...fontBody, fontSize: q(12), color: MUTED, marginTop: q(2) }}>{anno}</div> : null}
+          {data ? <div style={{ ...fontBody, fontSize: q(10), color: MUTED, marginTop: q(8), paddingTop: q(6), borderTop: `1px solid ${CREAM_BORDER}`, width: "100%", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5 }}>{giornoSettimanaAbbr(data)}</div> : null}
         </div>
         <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 16.5 : 19, fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{titolo}</div>
+          <div style={{ ...fontDisplay, fontSize: q(19), fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{titolo}</div>
           {/* la riga della sede da sola non c'e' piu': la classe qui sotto
               dice gia' corso, citta' e data, e ripetere la citta' sopra
               era una riga in piu' senza niente dentro */}
           {corsoLabel && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, ...fontBody, fontSize: 15, color: NAVY, minWidth: 0 }}>
-              <IconaQiDocumento size={16} color={NAVY} /><span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{corsoLabel}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: q(8), marginTop: q(8), ...fontBody, fontSize: q(15), color: NAVY, minWidth: 0 }}>
+              <IconaQiDocumento size={q(16)} color={NAVY} /><span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{corsoLabel}</span>
             </div>
           )}
-          {chips.filter(Boolean).length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-              {chips.filter(Boolean).map((c, i) => {
-                const Icona = typeof c === "object" ? c.Icona : null;
-                const testo = typeof c === "object" ? c.testo : c;
-                // "allerta": la pastiglia si stacca in rosso. Serve a
-                // "In attesa di fattura", che non e' un'etichetta come le
-                // altre — e' la cosa che manca
-                const allerta = typeof c === "object" && c.allerta;
-                const colore = allerta ? "#C0392B" : NAVY;
-                return (
-                  <span key={i} style={{ ...fontBody, fontSize: 12, fontWeight: allerta ? 700 : 600, color: colore, background: allerta ? "#FBE4E1" : BG_CHIARO, borderRadius: 12, padding: "7px 12px", display: "inline-flex", alignItems: "center", gap: 7 }}>
-                    {Icona && <Icona size={14} color={colore} />}{testo}
-                  </span>
-                );
-              })}
+          {/* le pastiglie e i tasti sulla STESSA riga: le pastiglie a
+              sinistra, i tasti spinti a destra. Prima i tasti stavano
+              sotto, dopo un filo divisore, e ogni riga dell'elenco era
+              alta il doppio del necessario */}
+          {(chips.filter(Boolean).length > 0 || piede) && (
+            <div style={{ display: "flex", alignItems: "center", gap: q(10), flexWrap: "wrap", marginTop: q(10) }}>
+              {chips.filter(Boolean).length > 0 && (
+                <div style={{ display: "flex", gap: q(8), flexWrap: "wrap" }}>
+                  {chips.filter(Boolean).map((c, i) => {
+                    const Icona = typeof c === "object" ? c.Icona : null;
+                    const testo = typeof c === "object" ? c.testo : c;
+                    // "allerta": la pastiglia si stacca in rosso. Serve a
+                    // "In attesa di fattura", che non e' un'etichetta come
+                    // le altre — e' la cosa che manca
+                    const allerta = typeof c === "object" && c.allerta;
+                    const colore = allerta ? "#C0392B" : NAVY;
+                    return (
+                      <span key={i} style={{ ...fontBody, fontSize: q(12), fontWeight: allerta ? 700 : 600, color: colore, background: allerta ? "#FBE4E1" : BG_CHIARO, borderRadius: q(12), padding: `${q(7)}px ${q(12)}px`, display: "inline-flex", alignItems: "center", gap: q(6) }}>
+                        {Icona && <Icona size={q(14)} color={colore} />}{testo}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {piede && <div style={{ display: "flex", alignItems: "center", gap: q(8), flexWrap: "wrap", marginLeft: "auto" }}>{piede}</div>}
             </div>
           )}
         </div>
         {importo != null && (
-          <div style={{ ...riquadro, flex: "0 0 auto", alignSelf: "flex-start", textAlign: "center", minWidth: isMobile ? 90 : 120 }}>
-            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichettaImporto}</div>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: coloreImporto || NAVY, marginTop: 4, whiteSpace: "nowrap" }}>{importo}</div>
+          <div style={{ ...riquadro, flex: "0 0 auto", alignSelf: "flex-start", textAlign: "center", minWidth: q(120) }}>
+            <div style={{ ...fontBody, fontSize: q(10.5), fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichettaImporto}</div>
+            <div style={{ ...fontDisplay, fontSize: q(26), fontWeight: 700, color: coloreImporto || NAVY, marginTop: q(4), whiteSpace: "nowrap" }}>{importo}</div>
           </div>
         )}
       </div>
-      {piede && (
-        <>
-          <div style={{ height: 1, background: CREAM_BORDER, margin: isMobile ? "14px 0" : "16px 0" }} />
-          <div style={{ display: "flex", alignItems: "stretch", gap: 10, flexWrap: "wrap" }}>{piede}</div>
-        </>
-      )}
       {children}
     </div>
+    </ScalaRigaContabilita.Provider>
   );
 }
-// la casella "Scadenza" (o altra data) del piede della card
-// "corsivo": la data e' stimata (la fine del corso), non un termine
-// scritto su una fattura. Si vede a colpo d'occhio quali scadenze sono
-// ancora un'ipotesi e quali no
 function RiquadroDataCard({ etichetta = "Scadenza", data, corsivo = false, onCambia = null }) {
-  const isMobile = useIsMobile();
+  // la stessa scala della riga che la contiene: il riquadro non ha misure
+  // sue, altrimenti su un telefono resterebbe grande dentro una riga
+  // piccola
+  const k = useContext(ScalaRigaContabilita);
+  const q = (n) => Math.round(n * k * 2) / 2;
   const [inModifica, setInModifica] = useState(false);
   const [bozza, setBozza] = useState(data || dataOggiStr());
   useEffect(() => { setBozza(data || dataOggiStr()); }, [data]);
   if (onCambia && inModifica) {
     return (
-      <div style={{ background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "8px 10px" : "10px 12px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
-        <input type="date" value={bozza} onChange={(e) => setBozza(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }} />
-        <button onClick={async () => { await onCambia(bozza); setInModifica(false); }} disabled={!bozza} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 12, padding: "7px 10px", cursor: "pointer" }}>Salva</button>
-        <button onClick={() => { setBozza(data || dataOggiStr()); setInModifica(false); }} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+      <div style={{ background: BG_CHIARO, borderRadius: q(12), padding: `${q(6)}px ${q(9)}px`, boxSizing: "border-box", display: "flex", alignItems: "center", gap: q(8), flex: "0 0 auto" }}>
+        <input type="date" value={bozza} onChange={(e) => setBozza(e.target.value)} style={{ ...inputStyle, width: "auto", padding: `${q(6)}px ${q(8)}px`, fontSize: q(12.5) }} />
+        <button onClick={async () => { await onCambia(bozza); setInModifica(false); }} disabled={!bozza} style={{ ...fontBody, fontSize: q(12), fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: q(12), padding: `${q(7)}px ${q(10)}px`, cursor: "pointer" }}>Salva</button>
+        <button onClick={() => { setBozza(data || dataOggiStr()); setInModifica(false); }} style={{ ...fontBody, fontSize: q(12), fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
       </div>
     );
   }
   return (
-    // sul telefono sta in riga con i tasti: niente icona, imbottitura
-    // stretta e la data su una riga sola
     <div
       onClick={onCambia ? () => setInModifica(true) : undefined}
       title={onCambia ? "Cambia la data di scadenza" : undefined}
-      style={{ background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "8px 10px" : "12px 16px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto", cursor: onCambia ? "pointer" : "default" }}
+      style={{ background: BG_CHIARO, borderRadius: q(12), padding: `${q(7)}px ${q(12)}px`, boxSizing: "border-box", display: "flex", alignItems: "center", gap: q(8), flex: "0 0 auto", cursor: onCambia ? "pointer" : "default" }}
     >
-      {!isMobile && <IconaQiCalendario size={22} color={NAVY} />}
+      <IconaQiCalendario size={q(17)} color={NAVY} />
       <div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichetta}</div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: corsivo ? 600 : 700, fontStyle: corsivo ? "italic" : "normal", color: corsivo ? GRAFITE : NAVY, marginTop: 2, whiteSpace: "nowrap" }}>{data ? fmtData(data) : "—"}</div>
+        <div style={{ ...fontBody, fontSize: q(9), fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.1 }}>{etichetta}</div>
+        <div style={{ ...fontDisplay, fontSize: q(13.5), fontWeight: corsivo ? 600 : 700, fontStyle: corsivo ? "italic" : "normal", color: corsivo ? GRAFITE : NAVY, marginTop: q(1), whiteSpace: "nowrap" }}>{data ? fmtData(data) : "—"}</div>
       </div>
     </div>
   );
 }
+
 // i due tasti del piede: oro col contorno (contanti) e blu pieno (conto)
 function stileTastoCardOro(isMobile, spento) {
   return { ...fontBody, fontSize: isMobile ? 13 : 13.5, fontWeight: 700, color: "#8A6D1D", background: "#fff", border: "1.5px solid #8A6D1D", borderRadius: 14, padding: isMobile ? "12px 14px" : "13px 18px", cursor: spento ? "default" : "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, whiteSpace: "nowrap", opacity: spento ? 0.6 : 1 };
