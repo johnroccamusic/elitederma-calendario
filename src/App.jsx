@@ -37280,6 +37280,90 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
   );
 }
 
+// La testata unica di tutte le sezioni della contabilita'. Prima ogni
+// sezione si era fatta la sua: chi aveva le frecce dell'anno, chi anche
+// mese/trimestre/anno, chi la ricerca a destra e chi a sinistra, e i
+// filtri di stato ("da riconciliare", "riconciliate", "non pagate")
+// stavano sparsi dentro le liste. Passando da una sezione all'altra si
+// cercava ogni volta dove fossero finiti i comandi.
+//
+// Adesso sono sempre gli stessi tre pezzi, in quest'ordine:
+//   1. la striscia dei filtri di stato, col conto di ciascuno
+//   2. una riga pulita: anno, mese, periodo personalizzato, ricerca
+//   3. la fila dei dodici mesi
+// Niente trimestre e niente "anno intero" come granularita': l'anno lo
+// dicono le frecce, e per qualunque altro intervallo c'e' "Dal… al…".
+function BarraPeriodoContabilita({
+  filtri = [], filtroAttivo, onFiltro,
+  anno, onAnno, mese, onMese,
+  conteggiMese = {}, mesiAllerta = null,
+  personalizzato = false, onPersonalizzato, da, a, onDa, onA,
+  ricerca, onRicerca, placeholderRicerca = "Cerca…",
+}) {
+  const isMobile = useIsMobile();
+  const tondo = (titolo, onClick, ruotato) => (
+    <button onClick={onClick} title={titolo} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: ruotato ? "rotate(180deg)" : "none", flexShrink: 0 }}>
+      <IconaFrecciaSinistra size={14} />
+    </button>
+  );
+  const pillola = (attivo, etichetta, onClick, chiave) => (
+    <button key={chiave} onClick={onClick} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: attivo ? "#fff" : NAVY, background: attivo ? NAVY : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>
+      {etichetta}
+    </button>
+  );
+  return (
+    <>
+      {filtri.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {filtri.map((f) => pillola(filtroAttivo === f.chiave, f.conto == null ? f.etichetta : `${f.etichetta} (${f.conto})`, () => onFiltro?.(f.chiave), f.chiave))}
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        {!personalizzato && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {tondo("Anno precedente", () => onAnno?.(anno - 1), false)}
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 44, textAlign: "center" }}>{anno}</div>
+            {tondo("Anno successivo", () => onAnno?.(anno + 1), true)}
+          </div>
+        )}
+        {!personalizzato && pillola(mese === null, "Tutto l'anno", () => onMese?.(null), "tuttoanno")}
+        {onPersonalizzato && pillola(personalizzato, personalizzato && da && a ? `${fmtData(da)} – ${fmtData(a)}` : "Dal… al…", () => onPersonalizzato(!personalizzato), "custom")}
+        {personalizzato && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <label style={{ ...fontBody, fontSize: 12, color: NAVY, display: "flex", alignItems: "center", gap: 6 }}>Dal
+              <input type="date" value={da || ""} onChange={(e) => onDa?.(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "7px 9px", fontSize: 12.5 }} />
+            </label>
+            <label style={{ ...fontBody, fontSize: 12, color: NAVY, display: "flex", alignItems: "center", gap: 6 }}>al
+              <input type="date" value={a || ""} onChange={(e) => onA?.(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "7px 9px", fontSize: 12.5 }} />
+            </label>
+          </div>
+        )}
+        <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
+          <CampoRicerca value={ricerca} onChange={onRicerca} placeholder={placeholderRicerca} />
+        </div>
+      </div>
+      {!personalizzato && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+          {MESI_ABBR.map((abbr, idx) => {
+            const m = idx + 1;
+            const chiave = `${anno}-${String(m).padStart(2, "0")}`;
+            const info = conteggiMese[chiave];
+            const attivo = mese === m;
+            const allerta = mesiAllerta ? mesiAllerta.has(chiave) : false;
+            return (
+              <button key={m} onClick={() => onMese?.(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 56, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivo ? "#fff" : NAVY, background: attivo ? NAVY : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
+                {allerta && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: attivo ? "#fff" : "#C0392B" }} />}
+                <div>{abbr}</div>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: attivo ? "#fff" : MUTED, marginTop: 2 }}>{info ? (typeof info === "number" ? info : info.count) : "—"}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
 // intestazione di mese, centrata, ripetuta ogni volta che cambia il mese
 // scorrendo una delle lunghe liste di Amministrazione — le spezza in
 // blocchi leggibili invece di un unico elenco indistinto
@@ -41667,18 +41751,6 @@ function PaginaInserimentoCostiRicavi({
   );
   const maxMensilePN = Math.max(1, ...Object.values(riepilogoMesePN));
 
-  // top 4 sotto-categorie per spesa nel periodo in vista — dove sono
-  // finiti i soldi, senza scorrere l'intero elenco
-  const totaliSottocategoriaPN = {};
-  speseRealiRicercate.forEach((s) => {
-    const chiave = s.sottocategoria_id || "__altro";
-    totaliSottocategoriaPN[chiave] = (totaliSottocategoriaPN[chiave] || 0) + (s.totale || 0);
-  });
-  const topCategoriePN = Object.entries(totaliSottocategoriaPN)
-    .map(([id, totale]) => ({ nome: costiSottocategorieById[id]?.nome || "Altro", totale }))
-    .sort((a, b) => b.totale - a.totale)
-    .slice(0, 4);
-
   // conteggi per la riga di tasti verso le altre schede di Amministrazione
   // (vedi TabsAmministrazione) — stesse funzioni condivise usate lì, così
   // i numeri non possono mai divergere
@@ -41876,21 +41948,7 @@ function PaginaInserimentoCostiRicavi({
             );
           })()}
 
-          {/* le categorie piu' pesanti come tasti segnalatori (16/09/2026):
-              disco con l'icona, nome in oro e importo grande; quella scelta
-              come filtro e' evidenziata. Sul telefono due per riga */}
-          {topCategoriePN.length > 0 && vistaPN !== "entrate" && (
-            <RigaSegnalatoriInLinea isMobile={isMobile} perRigaTelefono={2} style={{ marginBottom: isMobile ? 18 : 22 }} riquadri={topCategoriePN.map((c) => {
-              const attiva = ricercaPN.trim().toLowerCase() === c.nome.toLowerCase();
-              return {
-                chiave: c.nome, etichetta: c.nome, valore: fmtEuroErp(c.totale),
-                Icona: iconaPerCategoriaSpesa(c.nome), disco: attiva ? NAVY : "#B8860B", colore: "#8A6D1D", sfondo: attiva ? "#FBF3E0" : "#FFFFFF",
-                evidenziato: attiva, titolo: attiva ? "Togli il filtro" : `Mostra solo le spese di ${c.nome}`,
-                onClick: () => setRicercaPN(attiva ? "" : c.nome),
-              };
-            })} />
-          )}
-
+          
           <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
             {[{ v: "tutto", l: "Tutti i movimenti" }, { v: "entrate", l: `Entrate (${entrateRicercate.length})` }, { v: "uscite", l: `Uscite (${righeUniteRicerca.length})` }].map((o) => (
               <TabPillola key={o.v} attivo={vistaPN === o.v} onClick={() => setVistaPN(o.v)}>{o.l}</TabPillola>
