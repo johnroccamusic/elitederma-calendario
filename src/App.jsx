@@ -66464,8 +66464,10 @@ export default function App() {
               qui il titolo l'ha gia' letto chi e' entrato, servono a dire
               di chi e' la cosa, non ad annunciarla */}
           <div style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, color: GRAFITE, letterSpacing: 0.3, marginBottom: isMobile ? 1 : 2 }}>General Yield Organization Network</div>
-          <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>Sviluppato da Gianluca Rocca</div>
-          <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
+          {/* lo spazio prima dei tasti e' quello che teneva la riga
+              "Scegli l'area da gestire", tolta: la firma si stacca dalla
+              griglia come prima, non le finisce addosso */}
+          <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, color: MUTED, marginBottom: isMobile ? 20 : 40 }}>Sviluppato da Gianluca Rocca</div>
 
           <GrigliaTasti
             pagina="home"
