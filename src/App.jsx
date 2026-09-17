@@ -21261,6 +21261,10 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
     </div>
   );
 }
+// Il lordo del carrello parcheggiato, a listino. Lo sconto NON si
+// congela qui: dipende da quanto vale il carrello e dalle fasce di oggi,
+// e si rifa' da solo quando il carrello si riapre. Scriverlo scontato
+// vorrebbe dire mostrare un numero calcolato con le regole di ieri.
 function totaleCarrelloSospeso(c) {
   return (c?.carrello || []).reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0);
 }
@@ -21341,6 +21345,7 @@ function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, on
                       </div>
                     </div>
                     <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(totaleCarrelloSospeso(c))}</div>
+                    <div style={{ ...fontBody, fontSize: 9.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, textAlign: "right" }}>a listino</div>
                     <button onClick={(e) => { e.stopPropagation(); onElimina(c); }} data-niente-ombra title="Elimina il carrello sospeso" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "inline-flex" }}>
                       <IconaCestino size={15} color="#C0392B" />
                     </button>
