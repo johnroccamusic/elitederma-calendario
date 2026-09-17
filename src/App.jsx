@@ -41536,6 +41536,11 @@ function PaginaInserimentoCostiRicavi({
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
   abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, venditeShop = [],
+  // l'ordine delle tessere e' lo stesso di Contabilita': e' una barra di
+  // navigazione, e una barra che si riordina da sola quando ci entri
+  // dentro non e' piu' un punto di riferimento. Senza questa, qui le
+  // tessere ricadevano nell'ordine in cui sono scritte nel codice
+  ordineSchedeContabilita,
   ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab,
 }) {
   const isMobile = useIsMobile();
@@ -41759,6 +41764,7 @@ function PaginaInserimentoCostiRicavi({
           schedaAttiva="primanota"
           onApriPrimaNotaCassa={() => {}}
           onApriScheda={onApriAmministrazioneTab}
+          ordine={ordineSchedeContabilita}
           documentiCount={documentiFornitorePerConteggio}
           passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio + vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi }).length}
           attivoCount={scadenziarioAttivoPerConteggio}
@@ -66954,6 +66960,7 @@ export default function App() {
       {view === "inserimentocostiricavi" && (
         <PaginaInserimentoCostiRicavi
           quoteVenditoriSplit={quoteVenditoriSplit} impegnoTabella={impegnoTabella}
+          ordineSchedeContabilita={layoutTasti["contabilitaschede"]?.ordine}
           ruoloUtente={ruoloUtente}
           spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
