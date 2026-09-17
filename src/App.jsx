@@ -36442,6 +36442,10 @@ const PAGINA_CATEGORIA_GRUPPO_PER_TIPO = {
 //   sua scadenza) e nel Registro documenti fornitore.
 // - Master/Quota venditore/Commissione modelle: invariato, nessun
 //   concetto di "impegno" — dritti "da pagare" solo a corso concluso.
+// Quanti giorni prima dell'inizio del corso una sala non ancora confermata
+// in "Gestisci sede" entra comunque nel Quadro impegni (vedi il commento
+// dentro calcolaVociScadenziario).
+const GIORNI_ANTICIPO_IMPEGNO_SALA = 7;
 function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese , quoteVenditoriSplit}) {
   const oggiStr = dataOggiStr();
   const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
@@ -36458,8 +36462,16 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       // un alloggio/location non ancora gestito in Assegnazione Master
       // (mai aperto "Gestisci alloggio"/"Gestisci sede") non è confermato:
       // non deve comparire nemmeno come impegno, solo come costo previsto
-      // nel Riepilogo del corso
-      if (conScadenza && !r.gestita) return;
+      // nel Riepilogo del corso.
+      // Le SALE fanno eccezione quando il corso è vicino: a una settimana
+      // dall'inizio l'aula è prenotata e il bonifico va fatto comunque, che
+      // qualcuno sia passato o no da "Gestisci sede". Aspettare la conferma
+      // voleva dire tenere fuori dal Quadro impegni bonifici reali e già
+      // dovuti — il Riepilogo della classe li mostrava in colonna Bonifico
+      // e qui non arrivavano mai. L'importo è quello della tariffa della
+      // sede (Impostazioni → Location), la stessa che il Riepilogo usa.
+      const salaImminente = r.tipo === "location" && cd.data_inizio && cd.data_inizio <= addGiorni(oggiStr, GIORNI_ANTICIPO_IMPEGNO_SALA);
+      if (conScadenza && !r.gestita && !salaImminente) return;
       // la location ha una categoria di spesa propria per sede (non più
       // un'unica categoria condivisa da tutte, come invece restano
       // master/alloggio/assistente/venditore)
