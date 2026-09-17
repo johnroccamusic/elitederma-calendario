@@ -36509,9 +36509,18 @@ const PAGINA_CATEGORIA_GRUPPO_PER_TIPO = {
 // Appena si associa la fattura o si paga nasce la spesa vera e da quel
 // momento comanda quella.
 const GIORNI_ANTICIPO_SCADENZIARIO = 7;
-function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese , quoteVenditoriSplit}) {
+function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese , quoteVenditoriSplit, impegnoTabella}) {
   const oggiStr = dataOggiStr();
   const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
+  // Le scadenze spostate a mano su una voce ancora aperta. Stanno nella
+  // tabella impegno e non nelle spese apposta: una voce non e' confermata
+  // finche' il corso non finisce, e scriverla come spesa vera vorrebbe
+  // dire congelarne l'importo — che fino all'ultimo giorno puo' ancora
+  // cambiare, perche' il compenso della master segue le iscrizioni. Qui
+  // si salva la data e basta, l'importo resta vivo.
+  const scadenzeSpostate = new Map((impegnoTabella || [])
+    .filter((x) => x.chiave_origine && !String(x.chiave_origine).startsWith("cash_") && x.data_prevista && (x.stato === "aperto" || x.stato === "parzialmente_coperto"))
+    .map((x) => [x.chiave_origine, x.data_prevista]));
   const daPagare = [];
   (corsiDate || []).forEach((cd) => {
     // la soglia guarda l'inizio del corso: un corso gia' cominciato o
@@ -36539,11 +36548,12 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
         // (master, sede, hotel, assistente): la scheda del pagamento si
         // apre con quella dentro, non vuota
         anagrafica: r.anagrafica || null,
-        // la scadenza scritta in Assegnazione Master vale come data vera;
-        // senza, si stima la fine del corso — e la riga lo dichiara
-        scadenza: r.scadenza || cd.data_fine || null,
+        // la data decisa a mano vince su tutto; poi quella scritta in
+        // Assegnazione Master; senza nessuna delle due si stima la fine
+        // del corso — e la riga lo dichiara
+        scadenza: scadenzeSpostate.get(chiave) || r.scadenza || cd.data_fine || null,
         scadenzaSuggerita: r.scadenza || null,
-        scadenzaStimata: !r.scadenza,
+        scadenzaStimata: !scadenzeSpostate.has(chiave) && !r.scadenza,
         statoFattura: "in_attesa",
         statoPagamento: "da_pagare",
       });
@@ -40394,7 +40404,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     return s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "—";
   }
 
-  const { daPagareVirtuali } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
+  const { daPagareVirtuali } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella });
 
   // una spesa nata da "Registra fattura" o da "+ Nuova spesa da pagare"
   // (stato diverso da "pagata") resta qui finché non viene segnata
@@ -40668,6 +40678,30 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
       return;
     }
     if (item.tipo === "abbonamento") { setMsg("La scadenza di un abbonamento si cambia dal contratto."); return; }
+    // Corso non ancora finito: una voce non e' confermata finche' il corso
+    // non termina, quindi si salva SOLO la data e l'importo resta vivo —
+    // il compenso della master segue le iscrizioni fino all'ultimo giorno,
+    // e scrivere qui una spesa vera vorrebbe dire congelare una cifra che
+    // puo' ancora cambiare. La data va nella tabella impegno, che esiste
+    // apposta per le cose prese ma non ancora chiuse.
+    const corsoFinito = !!item.corsoData?.data_fine && item.corsoData.data_fine <= oggiStr;
+    if (!corsoFinito) {
+      const { error } = await supabase.from("impegno").upsert({
+        chiave_origine: item.chiave,
+        fornitore_id: item.fornitoreId || null,
+        descrizione: item.nome,
+        origine_tipo: "corso",
+        origine_id: item.rigaId || null,
+        categoria_id: item.sottocategoriaId || null,
+        importo_previsto: item.totale,
+        data_prevista: nuovaData,
+        stato: "aperto",
+      }, { onConflict: "chiave_origine" });
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      setMsg(`"${item.nome}" scade il ${fmtData(nuovaData)}. L'importo resta quello calcolato finche' il corso non finisce.`);
+      ricarica(["impegno"]);
+      return;
+    }
     const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
     const { error } = await supabase.from("spese").insert({
       descrizione: item.nome,
@@ -40685,7 +40719,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
       ...(item.anagrafica ? classificazionePerPayload(classificazioneDaRecord(item.anagrafica)) : {}),
     });
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    setMsg(`"${item.nome}" scade il ${fmtData(nuovaData)}. Da adesso l'importo non segue piu' il calcolo del corso.`);
+    setMsg(`"${item.nome}" scade il ${fmtData(nuovaData)}. Il corso e' finito, quindi l'importo e' quello definitivo.`);
     ricarica(["spese"]);
   }
   async function associaDocumentoASpesaPagata(doc, spesa) {
@@ -41627,7 +41661,7 @@ function PaginaInserimentoCostiRicavi({
   // conteggi per la riga di tasti verso le altre schede di Amministrazione
   // (vedi TabsAmministrazione) — stesse funzioni condivise usate lì, così
   // i numeri non possono mai divergere
-  const { daPagareVirtuali: daPagareVirtualiPerConteggio } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
+  const { daPagareVirtuali: daPagareVirtualiPerConteggio } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella });
   const oggiStrConteggio = dataOggiStr();
   const daPagareRealiPerConteggio = (spese || [])
     .filter((s) => s.stato !== "pagata")
