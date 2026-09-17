@@ -16,6 +16,7 @@ import { Button, Field, CampoNumero, TastoLivelloPrecedente, IconaCasa, IconaCar
 import DomandaProvenienza from "./rientri/DomandaProvenienza.jsx";
 import { caricaKitInAula, registraPrelieviDaVendita } from "./rientri/pos";
 import { registraPartenza } from "./rientri/dati";
+import { accessoriDaElencare } from "./rientri/composizione";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -59597,7 +59598,8 @@ function dermografiRichiestiEdizione(iscrittiEdizione) {
 // spedito. Alla chiusura del corso si legge quella fotografia — e solo se
 // manca, per un'edizione partita prima che questo esistesse, la si
 // ricompone dal vivo, sapendo che è una ricostruzione.
-function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId, corsiKitProdotti }) {
+function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId, corsiKitProdotti, dataInizio = null }) {
+  const oggiStr = dataOggiStr();
   const perIscritti = kitRichiestiEdizione(iscrittiEdizione || [], kitDefinizioni || [], corsoId);
   const riserva = stato?.riserva_per_kit || {};
   const kit = {};
@@ -59625,8 +59627,10 @@ function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId, c
   // logistica. Prima, se la casella restava vuota, l'accessorio non
   // risultava spedito: non compariva nella bolla di rientro, e la master
   // non aveva dove segnare quanti pezzi rimandava indietro.
-  (corsiKitProdotti || [])
-    .filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corsoId || null))
+  // ...ma solo per le edizioni che devono ancora cominciare: un accessorio
+  // aggiunto al corso oggi non deve comparire nel pacco di un corso gia'
+  // fatto (vedi accessoriDaElencare)
+  accessoriDaElencare({ corsiKitProdotti, corsoId, accessoriQuantita: quantitaScritte, dataInizio, oggi: oggiStr })
     .forEach((r) => {
       if (quantitaScritte[`accessorio::${r.prodotto_id}`] != null) return;
       const q = Number(r.quantita) || 0;
@@ -59967,6 +59971,7 @@ function ModaleInventarioSede({ corsoData, corso, inviatiPerProdotto, prodottiSh
   );
 }
 function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
+  const oggiStr = dataOggiStr();
   // stessa intestazione (data/corso/città nel colore del corso) della
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
@@ -60034,9 +60039,13 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   // accessori didattica: non appartengono a un kit specifico ma a tutto
   // il corso (Setting > Tipologie di kit > "Accessori didattica"), quindi
   // si scaricano insieme a QUALUNQUE kit/pacchetto scelto per l'edizione
-  const tuttiAccessori = corsiKitProdotti
-    .filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null))
-    .map((r) => ({ ...r, chiave: `accessorio::${r.prodotto_id}` }));
+  const tuttiAccessori = accessoriDaElencare({
+    corsiKitProdotti,
+    corsoId: corso?.id || null,
+    accessoriQuantita: statoEdizione.accessori_quantita,
+    dataInizio: corsoData?.data_inizio,
+    oggi: oggiStr,
+  }).map((r) => ({ ...r, chiave: `accessorio::${r.prodotto_id}` }));
 
   // "Prodotti extra kit": pescati a mano dall'intero magazzino per
   // questa singola edizione (non un accessorio del corso, non il
@@ -60763,6 +60772,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         stato: statoDi(corsoData.id),
         iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === corsoData.id),
         kitDefinizioni, corsoId: corsoData.corso_id, corsiKitProdotti,
+        dataInizio: corsoData.data_inizio,
       });
       await salvaCampiEdizione(corsoData.id, {
         materiale_preparato_ts: new Date().toISOString(),
@@ -60841,6 +60851,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         stato: statoDi(corsoData.id),
         iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === corsoData.id),
         kitDefinizioni, corsoId: corsoData.corso_id, corsiKitProdotti,
+        dataInizio: corsoData.data_inizio,
       });
       await salvaCampiEdizione(corsoData.id, {
         fase, spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString(),
@@ -61072,6 +61083,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                     stato: statoDi(edizioneSel.id),
                     iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === edizioneSel.id),
                     kitDefinizioni, corsoId: edizioneSel.corso_id, corsiKitProdotti,
+                    dataInizio: edizioneSel.data_inizio,
                   });
                   await salvaCampiEdizione(edizioneSel.id, { spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString() });
                 }}
