@@ -1,6 +1,18 @@
 import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { regioneDaCitta } from "./comuni-regioni";
+// I mattoni condivisi vivono fuori di qui: li usa anche il modulo
+// "rientro materiali corso", e due copie degli stessi colori sarebbero
+// due verita' sullo stesso blu. Modal e' rimasto in questo file perche'
+// dipende da useIsMobile, che legge la vista forzata (variabile mutabile
+// di questo modulo): portarlo via voleva dire rifare quella macchina.
+import {
+  NAVY, CREAM_BORDER, BG, BG_CHIARO, MUTED, GRAFITE, GOLD, GRIGIO_TENDINA_MODELLA,
+  GIALLO_MATTINA, ARANCIO_POMERIGGIO, VERDE_TROVATA, ROSSO_DA_TROVARE,
+  fontDisplay, stileTitoloPagina, fontBody, fontHero, fontCondensato,
+  inputStyle, campoCompattoStyle, round2, numeroFascia,
+} from "./ui/stile.js";
+import { Button, Field, CampoNumero } from "./ui/base.jsx";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -80,44 +92,6 @@ const supabase = createClient(
 
 const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "";
 
-// colori condivisi del tema, usati in tutta l'app
-const NAVY = "#0E1B33";
-const CREAM_BORDER = "#E8E3D6";
-const BG = "#EFE9DC";
-const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle schede
-const MUTED = "#8B8FA3";
-const GRAFITE = "#54585F";
-const GOLD = "#C9A26D"; // accento per icone/badge (es. intestazione Contabilità classe)
-// grigio freddo delle due tendine sotto nome e telefono in "Assegna
-// modelle": stanno sotto due campi bianchi, e un fondo crema le faceva
-// sembrare parte dell'intestazione invece che due caselle da compilare
-const GRIGIO_TENDINA_MODELLA = "#DCDFE6";
-// i due turni in "Assegna modelle" da telefono: il giallo e' la mattina,
-// l'arancio il pomeriggio. Due colori diversi si riconoscono con la coda
-// dell'occhio scorrendo venti allievi, due rettangoli blu uguali no
-const GIALLO_MATTINA = "#F5C542";
-const ARANCIO_POMERIGGIO = "#E8873A";
-// verde chiaro quando la modella c'e', rosso chiaro finche' manca
-const VERDE_TROVATA = "#E9F6EC";
-const ROSSO_DA_TROVARE = "#FDECEC";
-
-const fontDisplay = { fontFamily: "'Figtree',sans-serif", fontWeight: 500 };
-// Il titolo di una pagina, sempre lo stesso: Figtree 700, 24 fissi,
-// maiuscolo. Erano 19, 20, 21, 22, 24, 26, 28, 30, 32 — alcuni che si
-// rimpicciolivano da telefono e altri no — e passando da una pagina
-// all'altra il titolo cambiava taglia a ogni porta.
-const stileTitoloPagina = { fontFamily: "'Figtree',sans-serif", fontSize: 24, fontWeight: 700, textTransform: "uppercase", lineHeight: 1.15 };
-const fontBody = { fontFamily: "'Roboto',sans-serif" };
-// serif elegante per il titolo del corso nell'intestazione scura
-// (Contabilità classe / schede di inserimento allievo): unico punto dove
-// si usa questo font, per dargli un peso più "editoriale" rispetto al
-// sans-serif del resto dell'app
-const fontHero = { fontFamily: "'Playfair Display',serif", fontWeight: 700 };
-// "Google Sans" non è distribuito su Google Fonts (è un font interno di
-// Google, non licenziato per il web pubblico): Inter è la sostituzione più
-// vicina, usata qui in grassetto bianco per i nomi dei corsi sulle barre
-// del calendario
-const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, color: "#fff" };
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
@@ -3870,56 +3844,8 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
   );
 }
 
-function Button({ children, onClick, variant = "primary", style = {}, disabled }) {
-  const base = {
-    ...fontBody,
-    fontSize: 14,
-    padding: "10px 18px",
-    borderRadius: 10,
-    cursor: disabled ? "default" : "pointer",
-    border: "1px solid " + NAVY,
-    opacity: disabled ? 0.5 : 1,
-  };
-  const variants = {
-    primary: { background: NAVY, color: "#fff" },
-    ghost: { background: "transparent", color: NAVY },
-    danger: { background: "#fff", color: "#C0392B", border: "1px solid #C0392B" },
-  };
-  return (
-    <button disabled={disabled} onClick={onClick} style={{ ...base, ...variants[variant], ...style }}>
-      {children}
-    </button>
-  );
-}
 
-// minLabelHeight: quando più Field stanno affiancati in una riga e le
-// etichette hanno lunghezze diverse (una va a capo su due righe, un'altra
-// no), i campi sotto risultano sfalsati; passandola, tutte le etichette
-// della riga riservano la stessa altezza e i campi tornano allineati
-// "compatto": etichetta e margini ridotti, per le file di filtri che da
-// mobile devono stare tutte su una riga
-function Field({ label, children, minLabelHeight, compatto = false, etichettaFontSize = null }) {
-  return (
-    <div style={{ marginBottom: compatto ? 8 : 14 }}>
-      <div style={{ ...fontBody, fontSize: etichettaFontSize ?? (compatto ? 8.5 : 12), color: MUTED, marginBottom: compatto ? 3 : 5, textTransform: "uppercase", letterSpacing: compatto ? 0.2 : 0.5, lineHeight: 1.15, minHeight: minLabelHeight, display: minLabelHeight ? "flex" : undefined, alignItems: minLabelHeight ? "flex-end" : undefined }}>{label}</div>
-      {children}
-    </div>
-  );
-}
 
-const inputStyle = {
-  ...fontBody,
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "10px 12px",
-  borderRadius: 8,
-  border: `1px solid ${CREAM_BORDER}`,
-  fontSize: 14,
-};
-// campi piccoli per liste fitte di righe con numeri corti (Riepilogo
-// amministrativo → Costi della classe): inputStyle è pensato per form
-// con pochi campi, troppo alto per una tabella di più righe
-const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 };
 // Le aree della scheda iscritto — totale pattuito, quote, fatturazione e
 // qualunque blocco si aggiunga in futuro — hanno tutte lo stesso vestito:
 // fondo azzurro tenue e bordo intonato, così ognuna si stacca dal bianco
@@ -4097,9 +4023,6 @@ function ThOrdina({ campo, ordine, onOrdina, style, children, title }) {
       {attiva && <span style={{ marginLeft: 4 }}>{ordine.direzione === "asc" ? "▲" : "▼"}</span>}
     </th>
   );
-}
-function round2(n) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 function parseNum(v) {
   const n = parseFloat(String(v).replace(",", "."));
@@ -4327,7 +4250,6 @@ const FASCE_MARGINE = [
   { da: 82.5, a: 100 },
 ];
 // "16,5" e non "16.5": i numeri con la virgola si leggono in italiano
-function numeroFascia(n) { return String(n).replace(".", ","); }
 const FASCE_SCONTO_DEFAULT = FASCE_MARGINE.map((f) => ({ ...f, percentuale: 0 }));
 function fasceScontoValide(fasce) {
   const elenco = Array.isArray(fasce) ? fasce : [];
@@ -34656,31 +34578,6 @@ async function generaCodiceReferralUnivoco(nome) {
 // Qui mentre il campo e' in mano tua comanda il testo che ci batti; il
 // numero si legge quando esci dal campo o premi Invio. Fuori fuoco torna
 // a mostrare il valore vero, formattato all'italiana.
-function CampoNumero({ valore, onCambia, min = 0, max = null, step = "any", style, titolo }) {
-  const [bozza, setBozza] = useState(null);
-  const testo = bozza != null ? bozza : (valore == null ? "" : numeroFascia(valore));
-  function fissa() {
-    if (bozza == null) return;
-    const pulito = String(bozza).trim().replace(",", ".");
-    let n = pulito === "" ? 0 : Number(pulito);
-    if (!isFinite(n)) n = Number(valore) || 0;
-    if (min != null) n = Math.max(min, n);
-    if (max != null) n = Math.min(max, n);
-    setBozza(null);
-    onCambia(round2(n));
-  }
-  return (
-    <input
-      type="text" inputMode="decimal" title={titolo}
-      value={testo}
-      onChange={(e) => setBozza(e.target.value)}
-      onFocus={(e) => { setBozza(testo); e.target.select(); }}
-      onBlur={fissa}
-      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-      style={style}
-    />
-  );
-}
 // Le quattro fasce di SPESA di una serie: le soglie in cima, e sotto una
 // tabella di sei percentuali per ognuna. Ventiquattro numeri in tutto, ma
 // si leggono come quattro righe — quanto spendi, quanto ti sconto.

@@ -1,0 +1,69 @@
+// I mattoni condivisi dell'interfaccia: colori, font, misure e le due
+// funzioncine sui numeri che servono ai campi.
+//
+// Stanno qui e non dentro App.jsx perche' da oggi li usa anche il modulo
+// "rientro materiali corso", che vive in src/rientri/. Due copie degli
+// stessi colori sarebbero due verita' sullo stesso blu, e prima o poi una
+// delle due cambierebbe da sola.
+
+// colori condivisi del tema, usati in tutta l'app
+export const NAVY = "#0E1B33";
+export const CREAM_BORDER = "#E8E3D6";
+export const BG = "#EFE9DC";
+export const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle schede
+export const MUTED = "#8B8FA3";
+export const GRAFITE = "#54585F";
+export const GOLD = "#C9A26D"; // accento per icone/badge (es. intestazione Contabilità classe)
+// grigio freddo delle due tendine sotto nome e telefono in "Assegna
+// modelle": stanno sotto due campi bianchi, e un fondo crema le faceva
+// sembrare parte dell'intestazione invece che due caselle da compilare
+export const GRIGIO_TENDINA_MODELLA = "#DCDFE6";
+// i due turni in "Assegna modelle" da telefono: il giallo e' la mattina,
+// l'arancio il pomeriggio. Due colori diversi si riconoscono con la coda
+// dell'occhio scorrendo venti allievi, due rettangoli blu uguali no
+export const GIALLO_MATTINA = "#F5C542";
+export const ARANCIO_POMERIGGIO = "#E8873A";
+// verde chiaro quando la modella c'e', rosso chiaro finche' manca
+export const VERDE_TROVATA = "#E9F6EC";
+export const ROSSO_DA_TROVARE = "#FDECEC";
+
+export const fontDisplay = { fontFamily: "'Figtree',sans-serif", fontWeight: 500 };
+// Il titolo di una pagina, sempre lo stesso: Figtree 700, 24 fissi,
+// maiuscolo. Erano 19, 20, 21, 22, 24, 26, 28, 30, 32 — alcuni che si
+// rimpicciolivano da telefono e altri no — e passando da una pagina
+// all'altra il titolo cambiava taglia a ogni porta.
+export const stileTitoloPagina = { fontFamily: "'Figtree',sans-serif", fontSize: 24, fontWeight: 700, textTransform: "uppercase", lineHeight: 1.15 };
+export const fontBody = { fontFamily: "'Roboto',sans-serif" };
+// serif elegante per il titolo del corso nell'intestazione scura
+// (Contabilità classe / schede di inserimento allievo): unico punto dove
+// si usa questo font, per dargli un peso più "editoriale" rispetto al
+// sans-serif del resto dell'app
+export const fontHero = { fontFamily: "'Playfair Display',serif", fontWeight: 700 };
+// "Google Sans" non è distribuito su Google Fonts (è un font interno di
+// Google, non licenziato per il web pubblico): Inter è la sostituzione più
+// vicina, usata qui in grassetto bianco per i nomi dei corsi sulle barre
+// del calendario
+export const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, color: "#fff" };
+
+export const inputStyle = {
+  ...fontBody,
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "10px 12px",
+  borderRadius: 8,
+  border: `1px solid ${CREAM_BORDER}`,
+  fontSize: 14,
+};
+// campi piccoli per liste fitte di righe con numeri corti (Riepilogo
+// amministrativo → Costi della classe): inputStyle è pensato per form
+// con pochi campi, troppo alto per una tabella di più righe
+export const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 };
+
+// arrotondamento a due decimali: in questa app gli importi hanno
+// sempre due cifre dopo la virgola, mai una di piu'.
+export function round2(n) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+// il separatore decimale come lo scrive e lo legge chi usa l'app
+export function numeroFascia(n) { return String(n).replace(".", ","); }
