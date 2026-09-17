@@ -60039,6 +60039,32 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   // accessori didattica: non appartengono a un kit specifico ma a tutto
   // il corso (Setting > Tipologie di kit > "Accessori didattica"), quindi
   // si scaricano insieme a QUALUNQUE kit/pacchetto scelto per l'edizione
+  // Quante magliette partono, e di che taglia. Chi prepara la scatola
+  // conta le persone una per volta; chi prende le magliette dallo
+  // scaffale ha bisogno del totale per taglia, e finora se lo faceva a
+  // mano scorrendo l'elenco.
+  //
+  // "NO DIVISA" non e' una taglia: e' una persona che la maglietta non la
+  // riceve, e sommarla al totale farebbe partire un pezzo di troppo. Chi
+  // la taglia non ce l'ha ancora si conta a parte, perche' e' una cosa da
+  // sistemare prima che il pacco chiuda, non un dato da ignorare.
+  const riepilogoTaglie = (() => {
+    const ordine = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+    const per = {};
+    let senzaTaglia = 0;
+    let senzaDivisa = 0;
+    (iscrittiEdizione || []).forEach((i) => {
+      const t = (i.taglia_divisa || "").trim();
+      if (!t) { senzaTaglia += 1; return; }
+      if (t.toUpperCase() === "NO DIVISA") { senzaDivisa += 1; return; }
+      per[t] = (per[t] || 0) + 1;
+    });
+    const righe = ordine.filter((t) => per[t]).map((t) => ({ taglia: t, quante: per[t] }));
+    // una taglia scritta a mano che non sta nell'elenco non si perde
+    Object.keys(per).filter((t) => !ordine.includes(t)).sort().forEach((t) => righe.push({ taglia: t, quante: per[t] }));
+    return { righe, totale: righe.reduce((n, r) => n + r.quante, 0), senzaTaglia, senzaDivisa };
+  })();
+
   const tuttiAccessori = accessoriDaElencare({
     corsiKitProdotti,
     corsoId: corso?.id || null,
@@ -60273,6 +60299,32 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
             </div>
           </div>
         ))}
+        {iscrittiEdizione.length > 0 && (riepilogoTaglie.totale > 0 || riepilogoTaglie.senzaTaglia > 0) && (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                Magliette totali
+              </span>
+              <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{riepilogoTaglie.totale}</span>
+            </div>
+            {riepilogoTaglie.righe.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                {riepilogoTaglie.righe.map((r) => (
+                  <span key={r.taglia} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#FBF6EA", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "4px 9px", whiteSpace: "nowrap" }}>
+                    {r.quante} taglia {r.taglia}
+                  </span>
+                ))}
+              </div>
+            )}
+            {(riepilogoTaglie.senzaTaglia > 0 || riepilogoTaglie.senzaDivisa > 0) && (
+              <div style={{ ...fontBody, fontSize: 11.5, color: riepilogoTaglie.senzaTaglia > 0 ? "#C0392B" : MUTED, marginTop: 6, lineHeight: 1.4 }}>
+                {riepilogoTaglie.senzaTaglia > 0 && `${riepilogoTaglie.senzaTaglia} ${riepilogoTaglie.senzaTaglia === 1 ? "iscritto è" : "iscritti sono"} senza taglia: ${riepilogoTaglie.senzaTaglia === 1 ? "la sua maglietta non è" : "le loro magliette non sono"} nel conto.`}
+                {riepilogoTaglie.senzaTaglia > 0 && riepilogoTaglie.senzaDivisa > 0 && " "}
+                {riepilogoTaglie.senzaDivisa > 0 && `${riepilogoTaglie.senzaDivisa} senza divisa.`}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={labelStyle}>Consulenze</div>
