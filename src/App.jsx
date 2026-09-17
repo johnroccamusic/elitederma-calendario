@@ -60039,6 +60039,14 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   // accessori didattica: non appartengono a un kit specifico ma a tutto
   // il corso (Setting > Tipologie di kit > "Accessori didattica"), quindi
   // si scaricano insieme a QUALUNQUE kit/pacchetto scelto per l'edizione
+  // Le specifiche sono una riga per iscritto: con dodici allievi sono
+  // dodici righe che stanno fra chi prepara e tutto il resto della
+  // pagina. Si aprono quando servono — al momento di mettere nella
+  // scatola la maglietta giusta per la persona giusta — e restano chiuse
+  // il resto del tempo. Il totale delle magliette no: quello serve
+  // sempre, ed e' l'unica cosa che si guarda dallo scaffale.
+  const [specificheAperte, setSpecificheAperte] = useState(false);
+
   // Quante magliette partono, e di che taglia. Chi prepara la scatola
   // conta le persone una per volta; chi prende le magliette dallo
   // scaffale ha bisogno del totale per taglia, e finora se lo faceva a
@@ -60271,11 +60279,24 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           La taglia si autocompila da quella scelta nel modulo di
           iscrizione (iscritti.taglia_divisa): qui solo la possibilita' di
           correggerla. */}
-      <div style={labelStyle}>Specifiche</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div style={labelStyle}>Specifiche</div>
+        {iscrittiEdizione.length > 0 && (
+          <button
+            onClick={() => setSpecificheAperte((v) => !v)}
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: "1px solid " + CREAM_BORDER, borderRadius: 16, padding: "7px 13px", cursor: "pointer", marginBottom: 6, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+          >
+            {specificheAperte ? "Chiudi specifiche" : "Espandi specifiche"}
+            <span style={{ color: MUTED, fontWeight: 400 }}>
+              {specificheAperte ? "▴" : iscrittiEdizione.length + " ▾"}
+            </span>
+          </button>
+        )}
+      </div>
       <div style={{ marginBottom: 20 }}>
         {iscrittiEdizione.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 0" }}>Nessun iscritto ancora.</div>
-        ) : iscrittiEdizione.map((i) => (
+        ) : !specificheAperte ? null : iscrittiEdizione.map((i) => (
           <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
               <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{toTitleCase(i.nome)} {toTitleCase(i.cognome)}</span>
@@ -60300,7 +60321,9 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           </div>
         ))}
         {iscrittiEdizione.length > 0 && (riepilogoTaglie.totale > 0 || riepilogoTaglie.senzaTaglia > 0) && (
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <div style={specificheAperte
+            ? { marginTop: 10, paddingTop: 10, borderTop: "1px solid " + CREAM_BORDER }
+            : { marginTop: 2 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
               <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
                 Magliette totali
