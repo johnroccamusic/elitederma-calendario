@@ -12278,8 +12278,8 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
   // e lo si dice — è una ricostruzione, non un documento
   const fotografata = !!stato?.spedizione_snapshot;
   const spedito = useMemo(
-    () => stato?.spedizione_snapshot || componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId: corso?.id || null }),
-    [stato, iscrittiEdizione, kitDefinizioni, corso]
+    () => stato?.spedizione_snapshot || componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId: corso?.id || null, corsiKitProdotti }),
+    [stato, iscrittiEdizione, kitDefinizioni, corso, corsiKitProdotti]
   );
 
   useEffect(() => { caricaTutto(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [corsoData?.id]);
@@ -60263,7 +60263,7 @@ function dermografiRichiestiEdizione(iscrittiEdizione) {
 // spedito. Alla chiusura del corso si legge quella fotografia — e solo se
 // manca, per un'edizione partita prima che questo esistesse, la si
 // ricompone dal vivo, sapendo che è una ricostruzione.
-function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId }) {
+function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId, corsiKitProdotti }) {
   const perIscritti = kitRichiestiEdizione(iscrittiEdizione || [], kitDefinizioni || [], corsoId);
   const riserva = stato?.riserva_per_kit || {};
   const kit = {};
@@ -60279,12 +60279,25 @@ function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId })
   const daVendita = stato?.extra_da_vendita || {};
   const accessori = {};
   const merceVendita = {};
-  Object.entries(stato?.accessori_quantita || {}).forEach(([chiave, q]) => {
+  const quantitaScritte = stato?.accessori_quantita || {};
+  Object.entries(quantitaScritte).forEach(([chiave, q]) => {
     const prodottoId = chiave.split("::")[1];
     if (!prodottoId || !q) return;
     const destinazione = chiave.startsWith("extra::") && daVendita[prodottoId] ? merceVendita : accessori;
     destinazione[prodottoId] = (destinazione[prodottoId] || 0) + Number(q);
   });
+  // Gli accessori didattica del corso partono con la quantita' scritta
+  // nella loro scheda, senza bisogno che qualcuno la ridigiti in
+  // logistica. Prima, se la casella restava vuota, l'accessorio non
+  // risultava spedito: non compariva nella bolla di rientro, e la master
+  // non aveva dove segnare quanti pezzi rimandava indietro.
+  (corsiKitProdotti || [])
+    .filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corsoId || null))
+    .forEach((r) => {
+      if (quantitaScritte[`accessorio::${r.prodotto_id}`] != null) return;
+      const q = Number(r.quantita) || 0;
+      if (q > 0) accessori[r.prodotto_id] = (accessori[r.prodotto_id] || 0) + q;
+    });
   return {
     ts: new Date().toISOString(),
     kit,
@@ -61175,7 +61188,10 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 
       {tuttiAccessori.length > 0 && (
         <div style={{ marginTop: 20 }}>
-          <div style={labelStyle}>Altri accessori inviati</div>
+          <div style={labelStyle}>Accessori didattica del corso</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+            Gia' in elenco, con la quantita' scritta nella scheda dell'accessorio: si cambia solo il numero di pezzi da spedire. La master ritrovera' la stessa lista nell'inventario di fine corso, per dire quanti ne rimanda indietro.
+          </div>
           {tuttiAccessori.map((r) => (
             <div key={r.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0" }}>
               <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
@@ -61183,7 +61199,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
               </span>
               <input
                 type="number" min="0" style={{ ...inputStyle, width: 80, padding: "6px 8px" }}
-                value={statoEdizione.accessori_quantita?.[r.chiave] ?? ""} placeholder="0"
+                value={statoEdizione.accessori_quantita?.[r.chiave] ?? (Number(r.quantita) || 0)} placeholder="0"
                 onChange={(e) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.chiave]: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) } })}
               />
             </div>
@@ -61580,7 +61596,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const foto = componiSpedizione({
         stato: statoDi(corsoData.id),
         iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === corsoData.id),
-        kitDefinizioni, corsoId: corsoData.corso_id,
+        kitDefinizioni, corsoId: corsoData.corso_id, corsiKitProdotti,
       });
       await salvaCampiEdizione(corsoData.id, {
         materiale_preparato_ts: new Date().toISOString(),
@@ -61657,7 +61673,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const foto = componiSpedizione({
         stato: statoDi(corsoData.id),
         iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === corsoData.id),
-        kitDefinizioni, corsoId: corsoData.corso_id,
+        kitDefinizioni, corsoId: corsoData.corso_id, corsiKitProdotti,
       });
       await salvaCampiEdizione(corsoData.id, {
         fase, spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString(),
@@ -61871,7 +61887,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                   const foto = componiSpedizione({
                     stato: statoDi(edizioneSel.id),
                     iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === edizioneSel.id),
-                    kitDefinizioni, corsoId: edizioneSel.corso_id,
+                    kitDefinizioni, corsoId: edizioneSel.corso_id, corsiKitProdotti,
                   });
                   await salvaCampiEdizione(edizioneSel.id, { spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString() });
                 }}
