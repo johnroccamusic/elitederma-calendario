@@ -35421,30 +35421,45 @@ async function generaCodiceReferralUnivoco(nome) {
 // generano coupon. Una percentuale unica, oppure sei percentuali —
 // una per fascia di margine — che si applicano sempre sul lordo, cosi'
 // il numero e' lo stesso al POS e sul sito.
+// Un campo numerico che si lascia scrivere. Con value legato a un numero
+// il campo non si puo' svuotare — cancellando tutto ricompare uno zero —
+// e allora la cifra non si sostituisce: si finisce per scalarla coi
+// tastini o per scrivere accanto a quello che c'era. Con le virgole e'
+// peggio, perche' "1," non e' un numero e sparisce mentre lo scrivi.
+//
+// Qui mentre il campo e' in mano tua comanda il testo che ci batti; il
+// numero si legge quando esci dal campo o premi Invio. Fuori fuoco torna
+// a mostrare il valore vero, formattato all'italiana.
+function CampoNumero({ valore, onCambia, min = 0, max = null, step = "any", style, titolo }) {
+  const [bozza, setBozza] = useState(null);
+  const testo = bozza != null ? bozza : (valore == null ? "" : numeroFascia(valore));
+  function fissa() {
+    if (bozza == null) return;
+    const pulito = String(bozza).trim().replace(",", ".");
+    let n = pulito === "" ? 0 : Number(pulito);
+    if (!isFinite(n)) n = Number(valore) || 0;
+    if (min != null) n = Math.max(min, n);
+    if (max != null) n = Math.min(max, n);
+    setBozza(null);
+    onCambia(round2(n));
+  }
+  return (
+    <input
+      type="text" inputMode="decimal" title={titolo}
+      value={testo}
+      onChange={(e) => setBozza(e.target.value)}
+      onFocus={(e) => { setBozza(testo); e.target.select(); }}
+      onBlur={fissa}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      style={style}
+    />
+  );
+}
 // Le quattro fasce di SPESA di una serie: le soglie in cima, e sotto una
 // tabella di sei percentuali per ognuna. Ventiquattro numeri in tutto, ma
 // si leggono come quattro righe — quanto spendi, quanto ti sconto.
 function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = false }) {
   const g = gruppiFasceValidi(valore);
-  // Le soglie si scrivono a mano, e mentre si scrivono passano da stati
-  // che non hanno senso: cancellando "100" per scrivere "150" il campo
-  // resta un attimo vuoto, e vuoto vorrebbe dire zero. Normalizzando a
-  // ogni tasto il numero rimbalzava indietro e la soglia non si riusciva
-  // proprio a cambiare. Quindi: mentre si digita comanda il testo, e il
-  // riordino delle soglie scatta quando si esce dal campo.
-  const [bozzaSoglie, setBozzaSoglie] = useState(null);
-  const soglieMostrate = bozzaSoglie || g.soglie.map((x) => String(x));
-  function digitaSoglia(i, testo) {
-    const bozza = soglieMostrate.slice();
-    bozza[i] = testo;
-    setBozzaSoglie(bozza);
-  }
-  function fissaSoglie() {
-    if (!bozzaSoglie) return;
-    const numeri = bozzaSoglie.map((t) => Number(String(t).replace(",", ".")));
-    onCambia({ soglie: soglieSpesaValide(numeri), gruppi: g.gruppi });
-    setBozzaSoglie(null);
-  }
   function cambiaGruppo(i, nuoveFasce) {
     const gruppi = g.gruppi.slice();
     gruppi[i] = fasceScontoValide(nuoveFasce);
@@ -35454,14 +35469,17 @@ function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = fal
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12, background: BG, borderRadius: 12, padding: "10px 12px" }}>
         <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie di spesa</span>
-        {soglieMostrate.map((v, i) => (
+        {g.soglie.map((v, i) => (
           <label key={i} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: MUTED }}>
             {i === 0 ? "prima a" : "poi a"}
-            <input
-              type="number" min="0" step="10" value={v}
-              onChange={(e) => digitaSoglia(i, e.target.value)}
-              onBlur={fissaSoglie}
-              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+            <CampoNumero
+              valore={v} min={0}
+              titolo="Scrivi la soglia e premi Invio, o esci dal campo"
+              onCambia={(n) => {
+                const soglie = g.soglie.slice();
+                soglie[i] = n;
+                onCambia({ soglie: soglieSpesaValide(soglie), gruppi: g.gruppi });
+              }}
               style={{ ...inputStyle, width: 88, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
             />
             <span style={{ fontWeight: 700, color: NAVY }}>€</span>
@@ -35538,13 +35556,10 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
             {elenco.map((f, i) => (
               <div key={f.da} style={{ flex: "1 1 110px", minWidth: 96 }}>
                 <Field label={`Margine ${numeroFascia(f.da)}–${numeroFascia(f.a)}%`}>
-                  <input
-                    type="number" min="0" max="100" step="0.01" style={inputStyle}
-                    value={f.percentuale}
-                    onChange={(e) => {
-                      const nuove = elenco.map((x, k) => (k === i ? { ...x, percentuale: e.target.value === "" ? 0 : parseNum(e.target.value) } : x));
-                      onCambiaFasce(nuove);
-                    }}
+                  <CampoNumero
+                    valore={f.percentuale} min={0} max={100} style={inputStyle}
+                    titolo="Scrivi la percentuale e premi Invio, o esci dal campo"
+                    onCambia={(n) => onCambiaFasce(elenco.map((x, k) => (k === i ? { ...x, percentuale: n } : x)))}
                   />
                 </Field>
               </div>
