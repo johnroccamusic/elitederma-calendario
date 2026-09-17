@@ -24928,10 +24928,12 @@ function AllegatiIscritto({ i, inLinea = false }) {
 // numero cosi' come esce dal database — con il punto al posto della
 // virgola e uno zero mancante — e su una scheda che si legge in aula
 // davanti all'allievo e' la prima cosa che fa sembrare il conto sbagliato.
+// due cifre sempre, anche sulle cifre tonde: "200 €" e "200,00 €" nella
+// stessa colonna non si incolonnano, e a leggerli di fretta sembrano due
+// numeri scritti da due persone diverse
 function euroScheda(n) {
   const v = Number(n) || 0;
-  const decimali = Math.round(v * 100) % 100 === 0 ? 0 : 2;
-  return `${v.toLocaleString("it-IT", { minimumFractionDigits: decimali, maximumFractionDigits: decimali })} €`;
+  return `${v.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 }
 
 // Un interruttore vero al posto di due pallini.
@@ -32629,11 +32631,15 @@ function ModaleNuovoProgetto({ incaricabili, onClose, onCreato }) {
 function costoClasseErp(cd) {
   return Array.isArray(cd.costi_extra) ? cd.costi_extra.reduce((s, c) => s + (Number(c.valore) || 0), 0) : 0;
 }
+// I soldi si scrivono con i centesimi, sempre: scadenzari, prima nota,
+// riepiloghi, totali. Prima questa arrotondava all'euro intero e la
+// stessa cifra si leggeva diversa da una pagina all'altra — 1.098 € qui
+// e 1.098,00 € la' — con la differenza che spariva proprio dove serve
+// che torni, cioe' quando si confrontano due colonne.
 function fmtEuroErp(n) {
-  return `${Math.round(n || 0).toLocaleString("it-IT")} €`;
+  return fmtEuroErp2(n);
 }
-// prezzi di prodotti/POS/shop: sempre due cifre dopo la virgola (mai
-// arrotondati all'euro intero come i totali aggregati di fmtEuroErp)
+// prezzi di prodotti/POS/shop: sempre due cifre dopo la virgola
 function fmtEuroErp2(n) {
   return `${(n || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 }
