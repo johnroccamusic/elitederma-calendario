@@ -37318,7 +37318,7 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
 // location/alloggio/assistente/venditore/modelle) sia per le spese reali
 // già in tabella — l'unica differenza (insert vs update) resta nel
 // gestore passato da fuori
-function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, documentiFornitore, nomeFornitoreDi }) {
+function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onCambiaScadenza, documentiFornitore, nomeFornitoreDi }) {
   const isMobile = useIsMobile();
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
@@ -37364,7 +37364,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
     <div style={{ ...fontBody, fontSize: 12, color: "#C0392B" }}>{motivoDisabilitato}</div>
   ) : (
     <>
-      <RiquadroDataCard etichetta={scadenzaStimata ? "Scadenza stimata" : "Scadenza"} data={scadenza} corsivo={!!scadenzaStimata} />
+      <RiquadroDataCard etichetta={scadenzaStimata ? "Scadenza stimata" : "Scadenza"} data={scadenza} corsivo={!!scadenzaStimata} onCambia={onCambiaScadenza} />
       <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 10, flex: "1 1 0", minWidth: 0, flexWrap: "nowrap" }}>
         <button
           onClick={() => setPannello(pannello === "documento" ? null : "documento")}
@@ -37631,12 +37631,28 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
 // "corsivo": la data e' stimata (la fine del corso), non un termine
 // scritto su una fattura. Si vede a colpo d'occhio quali scadenze sono
 // ancora un'ipotesi e quali no
-function RiquadroDataCard({ etichetta = "Scadenza", data, corsivo = false }) {
+function RiquadroDataCard({ etichetta = "Scadenza", data, corsivo = false, onCambia = null }) {
   const isMobile = useIsMobile();
+  const [inModifica, setInModifica] = useState(false);
+  const [bozza, setBozza] = useState(data || dataOggiStr());
+  useEffect(() => { setBozza(data || dataOggiStr()); }, [data]);
+  if (onCambia && inModifica) {
+    return (
+      <div style={{ background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "8px 10px" : "10px 12px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
+        <input type="date" value={bozza} onChange={(e) => setBozza(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }} />
+        <button onClick={async () => { await onCambia(bozza); setInModifica(false); }} disabled={!bozza} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 12, padding: "7px 10px", cursor: "pointer" }}>Salva</button>
+        <button onClick={() => { setBozza(data || dataOggiStr()); setInModifica(false); }} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+      </div>
+    );
+  }
   return (
     // sul telefono sta in riga con i tasti: niente icona, imbottitura
     // stretta e la data su una riga sola
-    <div style={{ background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "8px 10px" : "12px 16px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
+    <div
+      onClick={onCambia ? () => setInModifica(true) : undefined}
+      title={onCambia ? "Cambia la data di scadenza" : undefined}
+      style={{ background: BG_CHIARO, borderRadius: 14, padding: isMobile ? "8px 10px" : "12px 16px", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto", cursor: onCambia ? "pointer" : "default" }}
+    >
       {!isMobile && <IconaQiCalendario size={22} color={NAVY} />}
       <div>
         <div style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichetta}</div>
@@ -40631,6 +40647,47 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // oppure a una spesa gia' pagata senza documento, che in prima nota
   // aspettava proprio questo per diventare riconciliata.
   const [docDaAssociare, setDocDaAssociare] = useState(null);
+  // Cambiare la scadenza a mano FISSA la riga: da voce ancora calcolata
+  // diventa una spesa vera, in attesa di pagamento, con la data decisa da
+  // una persona. Da quel momento l'importo non insegue piu' il calcolo
+  // del corso — comanda quello che c'e' scritto qui, ed e' giusto cosi':
+  // chi l'ha toccata sapeva cosa stava facendo.
+  async function cambiaScadenza(item, nuovaData) {
+    setMsg("");
+    if (!nuovaData) return;
+    if (item.tipo === "reale") {
+      const { error } = await supabase.from("spese").update({ scadenza_pagamento: nuovaData }).eq("id", item.spesaReale.id);
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      ricarica(["spese"]);
+      return;
+    }
+    if (item.tipo === "cash_rinviato") {
+      const { error } = await supabase.from("impegno").update({ data_prevista: nuovaData, updated_at: new Date().toISOString() }).eq("id", item.impegno.id);
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      ricarica(["impegno"]);
+      return;
+    }
+    if (item.tipo === "abbonamento") { setMsg("La scadenza di un abbonamento si cambia dal contratto."); return; }
+    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
+    const { error } = await supabase.from("spese").insert({
+      descrizione: item.nome,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: item.sottocategoriaId,
+      fornitore_id: item.fornitoreId || null,
+      tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
+      imponibile: round2(item.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100)), iva_percentuale: ALIQUOTA_IVA_RIEPILOGO_CLASSE, totale: round2(item.totale),
+      data_documento: item.corsoData?.data_fine || null,
+      scadenza_pagamento: nuovaData,
+      // "impegnata": c'e', si deve pagare, ma non e' ancora ne' fatturata
+      // ne' pagata
+      stato: "impegnata", metodo_pagamento: "Bonifico",
+      origine: "automatico", origine_scadenziario_chiave: item.chiave,
+      ...(item.anagrafica ? classificazionePerPayload(classificazioneDaRecord(item.anagrafica)) : {}),
+    });
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(`"${item.nome}" scade il ${fmtData(nuovaData)}. Da adesso l'importo non segue piu' il calcolo del corso.`);
+    ricarica(["spese"]);
+  }
   async function associaDocumentoASpesaPagata(doc, spesa) {
     setMsg("");
     const totaleDoc = Number(doc.totale) || 0;
@@ -41172,6 +41229,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     onConferma={(dati) => confermaPagato(item, dati)}
                     onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento(item, doc) : null}
+                    onCambiaScadenza={item.tipo === "abbonamento" ? null : (nuova) => cambiaScadenza(item, nuova)}
                     documentiFornitore={documentoFornitoreTabella}
                     nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
                   />
