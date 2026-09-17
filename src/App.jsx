@@ -11868,21 +11868,22 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+        {/* il tondo a sinistra, il titolo accanto e centrato con lui */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>
+            {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
+          </div>
           {masterSel && (
             <button
               onClick={() => corsiEleggibiliInventario.length > 0 && setMostraListaInventario(true)}
               disabled={corsiEleggibiliInventario.length === 0}
               title={corsiEleggibiliInventario.length > 0 ? "" : "Attivo durante il corso e fino a circa una settimana dopo la fine"}
-              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: corsiEleggibiliInventario.length > 0 ? NAVY : "#C9C4B8", background: "#fff", border: `1px solid ${corsiEleggibiliInventario.length > 0 ? CREAM_BORDER : "#EDEAE0"}`, borderRadius: 16, padding: "9px 14px", cursor: corsiEleggibiliInventario.length > 0 ? "pointer" : "default", flexShrink: 0 }}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: corsiEleggibiliInventario.length > 0 ? NAVY : "#C9C4B8", background: "#fff", border: `1px solid ${corsiEleggibiliInventario.length > 0 ? CREAM_BORDER : "#EDEAE0"}`, borderRadius: 16, padding: "9px 14px", cursor: corsiEleggibiliInventario.length > 0 ? "pointer" : "default", flexShrink: 0 , marginLeft: "auto" }}
             >
               Inventario corso corrente
             </button>
           )}
-        </div>
-        <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 4 }}>
-          {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
         </div>
         {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 10 }}>Area master</div>}
         {masterSel && <LoghiMasterPubblicati masterId={masterSel.id} />}
@@ -35050,15 +35051,17 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificaz
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        <div style={{ marginBottom: 6 }}>
+        {/* il tondo a sinistra e il titolo accanto, centrato con lui: con
+            un cliente aperto il titolo lo mette la sua scheda */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo={clienteAperto ? "CRM Shop Online" : "CRM"} onClick={clienteAperto ? () => setChiaveAperta(null) : onBack} />
+          {!clienteAperto && <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>}
         </div>
 
         {clienteAperto ? (
           <DettaglioClienteShop cliente={clienteAperto} />
         ) : (
           <>
-            <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 4 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Clienti dello shop online, raggruppati per account (o per email quando non c'è un account).</div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
@@ -41702,9 +41705,15 @@ function PaginaInserimentoCostiRicavi({
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 32px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+        {/* il tondo del livello precedente sta a SINISTRA del titolo, sulla
+            stessa riga e centrato con lui: e' la regola di tutte le pagine
+            dell'app. Qui il titolo stava sotto, e il tondo sembrava
+            appoggiato per caso in un angolo. I tasti d'azione vanno in
+            fondo alla stessa riga */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>Prima nota cassa</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginLeft: "auto" }}>
             <button onClick={() => setImportCsvAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Importa CSV</button>
             <button onClick={() => esportaCsvSpese(speseRealiFiltrate.map((s) => ({ spesa: s, importo: s.totale })), costiCategorieById, costiSottocategorieById)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta CSV</button>
             <button onClick={() => window.print()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta PDF</button>
@@ -41715,7 +41724,6 @@ function PaginaInserimentoCostiRicavi({
         {importCsvAperto && (
           <PannelloImportCsv costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} onClose={() => setImportCsvAperto(false)} ricarica={ricarica} />
         )}
-        <div style={{ ...stileTitoloPagina, color: NAVY, marginBottom: 6 }}>Prima nota cassa</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Il libro cassa: tutte le entrate e tutte le uscite nel giorno in cui i soldi si sono mossi davvero.</div>
 
         <TabsAmministrazione
@@ -53992,7 +54000,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
         <div style={{ position: "relative", height: 0, zIndex: 2 }}>
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         </div>
-        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+        <div style={{ paddingLeft: 80, display: "flex", minHeight: 68, justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
             <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>Tutti gli allievi che hanno acquistato almeno un corso.</div>
@@ -54476,7 +54484,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
         <div style={{ position: "relative", height: 0, zIndex: 2 }}>
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         </div>
-        <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+        <div style={{ paddingLeft: 80, display: "flex", minHeight: 68, justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
             <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>
