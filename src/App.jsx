@@ -15516,6 +15516,147 @@ async function permessoATuttaLaColonna({ chiave, etichetta, righe, leggiPermessi
   await ricarica([tabella]);
 }
 
+// ---------------------------------------------------------------------------
+// L'EMAIL DI ACCESSO
+//
+// Il filo che lega le due identita' di ogni persona: quella del cancello
+// (email e password di Supabase, chiesti all'apertura dell'app) e quella
+// interna (la riga qui in tabella, con i suoi permessi). Finche' non sono
+// legate, l'app sa che sei entrato ma non sa chi sei, e per capirlo deve
+// chiederti anche la password interna.
+//
+// Scritta l'email qui, il giorno in cui il cancello interno si spegnera'
+// l'app riconoscera' la persona dal suo accesso e le caricherà i suoi
+// permessi da sola.
+//
+// Le utenze non si creano a mano nella dashboard di Supabase: il tasto qui
+// sotto chiama la funzione "crea-accesso", che le crea gia' confermate (non
+// arriva nessuna email di conferma da cliccare) con la password decisa in
+// questo momento, da consegnare a voce o a messaggio.
+// ---------------------------------------------------------------------------
+function CellaAccesso({ tabella, riga, nome, ricarica, compatto = false }) {
+  const [aperto, setAperto] = useState(false);
+  const email = riga?.email_accesso || "";
+  // una riga non ancora salvata sul database (le tre di sistema di
+  // Gestione utenti, finche' nessuno le ha toccate) non ha un id a cui
+  // legare l'accesso: prima va salvata, e basta scriverci dentro qualcosa
+  const senzaId = !riga?.id;
+  return (
+    <>
+      <button
+        onClick={() => { if (senzaId) { window.alert("Prima salva questa riga: cambia il nome o la password e clicca fuori dal campo."); return; } setAperto(true); }}
+        title={email ? `Entra con ${email}` : "Nessun accesso collegato"}
+        style={{
+          ...fontBody, fontSize: compatto ? 11 : 11.5, fontWeight: 700, cursor: "pointer",
+          color: email ? "#1E7A4B" : MUTED,
+          background: email ? "#EAF7F0" : "#fff",
+          border: `1px solid ${email ? "#BDE3CE" : CREAM_BORDER}`,
+          borderRadius: 8, padding: "6px 9px", maxWidth: "100%",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          display: "block", textAlign: "left",
+        }}
+      >
+        {email || "— collega —"}
+      </button>
+      {aperto && (
+        <ModaleAccesso tabella={tabella} riga={riga} nome={nome} ricarica={ricarica} onClose={() => setAperto(false)} />
+      )}
+    </>
+  );
+}
+
+function ModaleAccesso({ tabella, riga, nome, ricarica, onClose }) {
+  const gia = riga?.email_accesso || "";
+  const [email, setEmail] = useState(gia);
+  const [password, setPassword] = useState("");
+  const [lavoro, setLavoro] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [fatto, setFatto] = useState("");
+
+  async function conferma() {
+    const pulita = email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(pulita)) { setMsg("Scrivi un'email valida."); return; }
+    if (!gia && !password) { setMsg("Serve anche una password: e' quella che consegnerai alla persona."); return; }
+    if (password && password.length < 8) { setMsg("La password deve avere almeno 8 caratteri."); return; }
+    setLavoro(true); setMsg(""); setFatto("");
+    const { data, error } = await supabase.functions.invoke("crea-accesso", {
+      body: { tabella, id: riga.id, email: pulita, password: password || undefined },
+    });
+    setLavoro(false);
+    // l'errore della funzione arriva dentro la risposta, non come
+    // eccezione: senza leggerlo si vedeva "fatto" anche quando non lo era
+    const testo = data?.errore || (error ? await testoErroreFunzione(error) : "");
+    if (testo) { setMsg(testo); return; }
+    setFatto(data?.creata ? "Utenza creata e collegata." : data?.passwordAggiornata ? "Collegata, e password cambiata." : "Collegata.");
+    setPassword("");
+    await ricarica([tabella]);
+  }
+
+  async function scollega() {
+    if (!window.confirm(`Togliere l'accesso ${gia} da ${nome}?\n\nL'utenza resta su Supabase e la persona continua a poter entrare: si stacca solo il collegamento con questi permessi.`)) return;
+    setLavoro(true); setMsg("");
+    const { error } = await supabase.from(tabella).update({ email_accesso: null }).eq("id", riga.id);
+    setLavoro(false);
+    if (error) { setMsg(testoErrore(error)); return; }
+    await ricarica([tabella]);
+    onClose();
+  }
+
+  return (
+    <Modal title={`Accesso di ${nome}`} onClose={onClose} maxWidth={440}>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5, marginBottom: 14 }}>
+        Questa e' l'email con cui la persona entra nell'app, prima della password interna.
+        Collegandola qui, i permessi di questa riga diventano i suoi.
+      </div>
+      <Field label="Email di accesso">
+        <input style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@esempio.it" autoFocus />
+      </Field>
+      {riga?.email && riga.email.toLowerCase() !== email.trim().toLowerCase() && (
+        <button
+          onClick={() => setEmail(riga.email)}
+          style={{ ...fontBody, fontSize: 11.5, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, marginTop: -8, marginBottom: 10 }}
+        >
+          usa quella dell'anagrafica ({riga.email})
+        </button>
+      )}
+      <Field label={gia ? "Nuova password (lascia vuoto per non cambiarla)" : "Password da consegnare"}>
+        <input style={inputStyle} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="almeno 8 caratteri" />
+      </Field>
+      <button
+        onClick={() => setPassword(Math.random().toString(36).slice(2, 6) + "-" + Math.random().toString(36).slice(2, 6))}
+        style={{ ...fontBody, fontSize: 11.5, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, marginTop: -8, marginBottom: 12 }}
+      >
+        propone una password
+      </button>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      {fatto && <div style={{ ...fontBody, fontSize: 12.5, color: "#1E7A4B", fontWeight: 700, marginBottom: 10 }}>{fatto}</div>}
+      <Button onClick={conferma} disabled={lavoro} style={{ width: "100%" }}>
+        {lavoro ? "Un momento…" : gia ? "Salva" : "Crea accesso"}
+      </Button>
+      {gia && (
+        <button
+          onClick={scollega}
+          disabled={lavoro}
+          style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "9px 12px", cursor: "pointer", width: "100%", marginTop: 10 }}
+        >
+          Scollega
+        </button>
+      )}
+    </Modal>
+  );
+}
+
+// gli errori delle edge function arrivano con il messaggio vero dentro il
+// corpo della risposta, non nel messaggio dell'eccezione ("Edge Function
+// returned a non-2xx status code" e basta)
+async function testoErroreFunzione(error) {
+  try {
+    const corpo = await error?.context?.json?.();
+    if (corpo?.errore) return corpo.errore;
+  } catch { /* la risposta poteva non essere JSON */ }
+  return error?.message || "Non riuscito.";
+}
+
 // una riga della tabella "Gestione utenti": nome + password (si salvano
 // da soli appena si clicca fuori dal campo, come la password Master) e un
 // quadratino per ogni tasto della home (TASTI_HOME) — spuntarlo/togliere
@@ -15646,6 +15787,10 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, flex: 1 }} />
         </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Email di accesso</div>
+          <CellaAccesso tabella="utenti_app" riga={utente} nome={utente.nome} ricarica={ricarica} />
+        </div>
         {!sistema && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Venditore collegato (stessa persona)</div>
@@ -15728,6 +15873,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
       <td style={tdStyle}>
         <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 11, textAlign: "center" }} />
       </td>
+      <td style={tdStyle}><CellaAccesso tabella="utenti_app" riga={utente} nome={utente.nome} ricarica={ricarica} /></td>
       <td style={tdStyle}>{!sistema && selVenditoreCollegato}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkAmministratore}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkSoloCalendario}</td>
@@ -15824,7 +15970,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
   // della casella, con un minimo perche' l'intestazione ci stia comunque
   const larghezzaColonnaNome = Math.max(92, Math.min(210, Math.ceil(6.4 * Math.max(...righe.map((u) => (u.nome || "").length), 8)) + 38));
   const colonneUtenti = [
-    { chiave: "nome", larghezza: larghezzaColonnaNome }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
+    { chiave: "nome", larghezza: larghezzaColonnaNome }, { chiave: "password", larghezza: 84 }, { chiave: "accesso", larghezza: 170 }, { chiave: "venditore", larghezza: 130 },
     { chiave: "amministratore", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "solocalendario", larghezza: LARGHEZZA_COLONNA_SPUNTA },
     { chiave: "modificamodelle", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "omaggipos", larghezza: LARGHEZZA_COLONNA_SPUNTA },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
@@ -15869,6 +16015,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
               <tr>
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome utente{maniglia("nome", larghezzaDi("nome", 120))}</ThOrdina>
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 84))}</th>
+                <th style={thStyle}>Accesso{maniglia("accesso", larghezzaDi("accesso", 170))}</th>
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
                 <th style={{ ...thStyle, textAlign: "center" }}><IntestazioneVerticale>Amministratore</IntestazioneVerticale>{maniglia("amministratore", larghezzaDi("amministratore", LARGHEZZA_COLONNA_SPUNTA))}</th>
                 <th style={{ ...thStyle, textAlign: "center" }}><IntestazioneVerticale>Solo calendario</IntestazioneVerticale>{maniglia("solocalendario", larghezzaDi("solocalendario", LARGHEZZA_COLONNA_SPUNTA))}</th>
@@ -15997,6 +16144,10 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
           style={{ ...inputStyle, width: "100%", marginBottom: 12 }}
         />
         <div style={{ marginBottom: 12 }}>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Email di accesso</div>
+          <CellaAccesso tabella="master" riga={masterRec} nome={masterRec.nome} ricarica={ricarica} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Venditore collegato (stessa persona)</div>
           {selVenditoreCollegato}
         </div>
@@ -16029,6 +16180,7 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
           style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 11, textAlign: "center" }}
         />
       </td>
+      <td style={tdStyle}><CellaAccesso tabella="master" riga={masterRec} nome={masterRec.nome} ricarica={ricarica} /></td>
       <td style={tdStyle}>{selVenditoreCollegato}</td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
@@ -16060,7 +16212,7 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
   const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, whiteSpace: "normal", lineHeight: 1.2, verticalAlign: "bottom", position: "relative" };
   const { larghezzaDi, maniglia } = useColonneRidimensionabili("passwordMaster_larghezzeColonne");
   const colonneMaster = [
-    { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
+    { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 84 }, { chiave: "accesso", larghezza: 170 }, { chiave: "venditore", larghezza: 130 },
     // "Dashboard master" c'e' come tutte le altre. Prima era esclusa
     // perche' una master la sua dashboard ce l'ha per definizione, e una
     // casella sempre accesa e' solo un modo per sbagliarsi spegnendola. Ma
@@ -16097,6 +16249,7 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
               <tr>
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome master{maniglia("nome", larghezzaDi("nome", 140))}</ThOrdina>
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 84))}</th>
+                <th style={thStyle}>Accesso{maniglia("accesso", larghezzaDi("accesso", 170))}</th>
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
                 {TASTI_HOME.map((t) => (
                   <th key={t.chiave} onDoubleClick={() => colonnaPerTutti(t.chiave, t.etichetta)} title="Doppio clic: dà o toglie questo permesso a tutte" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
@@ -16177,6 +16330,10 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
       <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
         <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{venditore.nome.toUpperCase()}</div>
         <div style={{ marginBottom: 12 }}>{campoPassword}</div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Email di accesso</div>
+          <CellaAccesso tabella="venditori" riga={venditore} nome={venditore.nome} ricarica={ricarica} />
+        </div>
         {TASTI_HOME.map((t) => (
           <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
             <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{t.etichetta}</span>
@@ -16199,6 +16356,7 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
       <td style={tdStyle}>
         {campoPassword}
       </td>
+      <td style={tdStyle}><CellaAccesso tabella="venditori" riga={venditore} nome={venditore.nome} ricarica={ricarica} /></td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
@@ -16226,7 +16384,7 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
   const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, whiteSpace: "normal", lineHeight: 1.2, verticalAlign: "bottom", position: "relative" };
   const { larghezzaDi, maniglia } = useColonneRidimensionabili("passwordVenditori_larghezzeColonne");
   const colonneVenditori = [
-    { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 140 },
+    { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 140 }, { chiave: "accesso", larghezza: 170 },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
      ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
   ];
@@ -16258,6 +16416,7 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
               <tr>
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome venditore{maniglia("nome", larghezzaDi("nome", 140))}</ThOrdina>
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 140))}</th>
+                <th style={thStyle}>Accesso{maniglia("accesso", larghezzaDi("accesso", 170))}</th>
                 {TASTI_HOME.map((t) => (
                   <th key={t.chiave} onDoubleClick={() => colonnaPerTutti(t.chiave, t.etichetta)} title="Doppio clic: dà o toglie questo permesso a tutti" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
                     <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
@@ -64704,7 +64863,7 @@ export default function App() {
     // con le sole colonne sempre presenti e riempio le opzionali con i
     // valori di default, così i venditori restano visibili e utilizzabili.
     venditori: async () => {
-      const ve = await supabase.from("venditori").select("id, nome, ts, permessi, password").order("nome");
+      const ve = await supabase.from("venditori").select("id, nome, ts, permessi, password, email, email_accesso").order("nome");
       let venditoriData = ve.data;
       if (ve.error) {
         let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
