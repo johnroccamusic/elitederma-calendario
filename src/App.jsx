@@ -37171,6 +37171,8 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
 // schede, con il bordo d'oro a dire quale e' scelta: il testo resta scuro
 // e leggibile, e la scheda sembra premuta invece che spenta.
 
+// la larghezza della fila di schede: fissa, non quella della pagina
+const LARGHEZZA_SCHEDE_CONTABILITA = 900;
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente, ordine, onSalvaOrdine }) {
   const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
@@ -37217,6 +37219,13 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
   }
 
   return (
+    // La fila di schede e' la stessa barra di navigazione in ogni pagina
+    // della contabilita', e deve stare ferma: stessa larghezza e stesse
+    // posizioni entrando in una sezione o in un'altra. Prima seguiva il
+    // contenitore della pagina che la ospitava — 900px in Contabilita',
+    // 1100 in Prima nota cassa — e passando dall'una all'altra le tessere
+    // si allargavano di un quinto e si spostavano tutte.
+    <div style={{ maxWidth: LARGHEZZA_SCHEDE_CONTABILITA, width: "100%", margin: "0 auto" }}>
     <div style={{
       display: "grid",
       // cinque per fila anche sul telefono: dieci schede fanno due file
@@ -37263,6 +37272,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
           </div>
         );
       })}
+    </div>
     </div>
   );
 }
@@ -41690,7 +41700,7 @@ function PaginaInserimentoCostiRicavi({
   }
 
   return (
-    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 32px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
