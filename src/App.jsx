@@ -40296,9 +40296,19 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
   const isMobile = useIsMobile();
   const [scheda, setScheda] = useState("dapagare");
   const [ricerca, setRicerca] = useState("");
-  const [scelto, setScelto] = useState(null);
+  // Si sceglie PIU' di una spesa: una fattura puo' coprirne quante se ne
+  // vuole — sala, alloggio e compenso della stessa classe, o costi di
+  // classi diverse dello stesso fornitore. Chi paga fara' un bonifico
+  // solo, e quindi nello Scadenzario deve trovarsi una riga sola.
+  const [scelti, setScelti] = useState([]);
   const [salvando, setSalvando] = useState(false);
   const totaleDoc = Number(documento.totale) || 0;
+  const idDi = (r) => (scheda === "dapagare" ? r.key : r.id);
+  const eScelto = (r) => scelti.some((x) => idDi(x) === idDi(r));
+  const togli = (r) => setScelti((v) => v.filter((x) => idDi(x) !== idDi(r)));
+  const aggiungi = (r) => setScelti((v) => [...v, r]);
+  const totaleScelto = round2(scelti.reduce((t, r) => t + (Number(r.totale) || 0), 0));
+  const differenza = round2(totaleScelto - totaleDoc);
   // vicino d'importo prima di tutto: una fattura si riconosce dalla cifra
   const perVicinanza = (a, b) => Math.abs(a - totaleDoc) - Math.abs(b - totaleDoc);
   const q = ricerca.trim().toLowerCase();
@@ -40312,10 +40322,10 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
     .slice(0, 10);
   const elenco = scheda === "dapagare" ? candidatiDaPagare : candidatiPagate;
   async function conferma() {
-    if (!scelto) return;
+    if (scelti.length === 0) return;
     setSalvando(true);
-    if (scheda === "dapagare") await onAssociaDaPagare(scelto);
-    else await onAssociaPagata(scelto);
+    if (scheda === "dapagare") await onAssociaDaPagare(scelti);
+    else await onAssociaPagata(scelti);
     setSalvando(false);
   }
   return (
@@ -40327,7 +40337,7 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
         </div>
         <div style={{ display: "flex", gap: 6, marginTop: 14, flexWrap: "wrap" }}>
           {[{ k: "dapagare", l: `Da pagare (${candidatiDaPagare.length})` }, { k: "pagate", l: `Gia' pagate senza fattura (${candidatiPagate.length})` }].map((o) => (
-            <button key={o.k} onClick={() => { setScheda(o.k); setScelto(null); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: scheda === o.k ? "#fff" : NAVY, background: scheda === o.k ? NAVY : "#fff", border: `1px solid ${scheda === o.k ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>{o.l}</button>
+            <button key={o.k} onClick={() => { setScheda(o.k); setScelti([]); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: scheda === o.k ? "#fff" : NAVY, background: scheda === o.k ? NAVY : "#fff", border: `1px solid ${scheda === o.k ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>{o.l}</button>
           ))}
         </div>
         <div style={{ marginTop: 12 }}>
@@ -40336,15 +40346,18 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, maxHeight: 340, overflowY: "auto" }}>
           {elenco.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 0" }}>Niente da associare qui.</div>}
           {elenco.map((r) => {
-            const id = scheda === "dapagare" ? r.key : r.id;
-            const attivo = scelto && (scheda === "dapagare" ? scelto.key === r.key : scelto.id === r.id);
+            const id = idDi(r);
+            const attivo = eScelto(r);
             const titolo = scheda === "dapagare" ? (r.fornitore || r.nome) : (r.descrizione || sottocategoriaCostoDi(costiSottocategorie, r.sottocategoria_id)?.nome || "Spesa");
             const sotto = scheda === "dapagare"
               ? (r.oggetto || (r.corsoData ? etichettaCorso(r.corsoData) : "—"))
               : `Pagata il ${r.data_pagamento ? fmtData(r.data_pagamento) : "—"}`;
             const importo = Number(r.totale) || 0;
             return (
-              <button key={id} onClick={() => setScelto(attivo ? null : r)} style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%", background: attivo ? "#F4F1E8" : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
+              <button key={id} onClick={() => (attivo ? togli(r) : aggiungi(r))} style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%", background: attivo ? "#F4F1E8" : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
+                {/* la casella dice che se ne possono prendere piu' di una:
+                    con un semplice evidenziato sembrava una scelta sola */}
+                <span aria-hidden style={{ width: 18, height: 18, flexShrink: 0, borderRadius: 5, border: `1.5px solid ${attivo ? NAVY : CREAM_BORDER}`, background: attivo ? NAVY : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, lineHeight: 1 }}>{attivo ? "✓" : ""}</span>
                 <span style={{ minWidth: 0, flex: 1 }}>
                   <span style={{ display: "block", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{titolo}</span>
                   <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sotto}</span>
@@ -40354,9 +40367,31 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
             );
           })}
         </div>
+        {/* il totale di quello che si e' scelto, confrontato con la
+            fattura: e' l'unico modo per accorgersi di averne dimenticata
+            una prima di fare il bonifico */}
+        {scelti.length > 0 && (
+          <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 12, background: Math.abs(differenza) < 0.01 ? "#EFF4EC" : BG_CHIARO, border: `1px solid ${Math.abs(differenza) < 0.01 ? "#CFE0C4" : CREAM_BORDER}` }}>
+            <div style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>
+              <strong>{scelti.length}</strong> spes{scelti.length === 1 ? "a" : "e"} scelt{scelti.length === 1 ? "a" : "e"} · {fmtEuroErp(totaleScelto)} su {fmtEuroErp(totaleDoc)} di fattura
+            </div>
+            <div style={{ ...fontBody, fontSize: 12, color: Math.abs(differenza) < 0.01 ? "#2E7D32" : MUTED, marginTop: 3 }}>
+              {Math.abs(differenza) < 0.01
+                ? "Tornano esatte."
+                : differenza < 0
+                  ? `Mancano ${fmtEuroErp(Math.abs(differenza))} per arrivare al totale della fattura.`
+                  : `Superano la fattura di ${fmtEuroErp(differenza)}.`}
+            </div>
+            {scheda === "dapagare" && scelti.length > 1 && (
+              <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginTop: 6 }}>
+                Diventano una riga sola da pagare, con un bonifico solo. Ogni corso continua a sapere quanto gli e' costato.
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-          <button onClick={conferma} disabled={salvando || !scelto} style={{ ...stileTastoCardNavy(isMobile, salvando || !scelto), flex: "1 1 200px", justifyContent: "center", padding: "12px 16px" }}>
-            {salvando ? "Salvo…" : scelto ? "Associa" : "Scegli una spesa"}
+          <button onClick={conferma} disabled={salvando || scelti.length === 0} style={{ ...stileTastoCardNavy(isMobile, salvando || scelti.length === 0), flex: "1 1 200px", justifyContent: "center", padding: "12px 16px" }}>
+            {salvando ? "Salvo…" : scelti.length === 0 ? "Scegli una o piu' spese" : scelti.length === 1 ? "Associa" : `Associa le ${scelti.length} spese`}
           </button>
           <button onClick={onChiudi} disabled={salvando} style={{ ...stileTastoCardChiaro(isMobile), flex: "0 1 auto", padding: "12px 16px" }}>Annulla</button>
         </div>
@@ -40510,20 +40545,44 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // corso, a meno che non abbiano già una fattura/scadenza propria;
   // quelle di sede/corso/evento/generali (non legate a una classe)
   // compaiono da subito, non c'è un corso di cui aspettare la fine
-  const righeReali = (spese || [])
+  const speseDaPagareReali = (spese || [])
     .filter((s) => s.stato !== "pagata")
     .map((s) => ({ spesa: s, corsoData: s.classe_id ? (corsiDate || []).find((cd) => cd.id === s.classe_id) : null }))
-    .filter((x) => bonificoDiSpesaReale(x.spesa) > 0 && (!x.corsoData || x.spesa.origine_scadenziario_chiave || x.corsoData.data_fine <= oggiStr))
-    .map((x) => ({
-      key: `reale_${x.spesa.id}`, tipo: "reale", corsoData: x.corsoData, spesaReale: x.spesa,
-      nome: x.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, x.spesa.sottocategoria_id)?.nome || "Spesa",
-      totale: bonificoDiSpesaReale(x.spesa), sottocategoriaId: x.spesa.sottocategoria_id,
-      fornitore: fornitoriById[x.spesa.fornitore_id]?.nome || null,
-      iban: fornitoriById[x.spesa.fornitore_id]?.iban || null,
-      oggetto: oggettoDiSpesa(x.spesa, x.corsoData),
-      dataDebito: x.spesa.data_documento || null,
-      scadenza: x.spesa.scadenza_pagamento || null,
-    }));
+    .filter((x) => bonificoDiSpesaReale(x.spesa) > 0 && (!x.corsoData || x.spesa.origine_scadenziario_chiave || x.corsoData.data_fine <= oggiStr));
+  // Le spese coperte dalla stessa fattura (stesso gruppo_pagamento) qui si
+  // leggono come UNA riga: si paghera' con un bonifico solo, e vederne tre
+  // da pagare quando i bonifici da fare sono uno confonde e basta. Sotto
+  // restano righe distinte, ognuna attaccata al suo corso.
+  const rigaDaSpesaReale = (x) => ({
+    key: `reale_${x.spesa.id}`, tipo: "reale", corsoData: x.corsoData, spesaReale: x.spesa,
+    nome: x.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, x.spesa.sottocategoria_id)?.nome || "Spesa",
+    totale: bonificoDiSpesaReale(x.spesa), sottocategoriaId: x.spesa.sottocategoria_id,
+    fornitore: fornitoriById[x.spesa.fornitore_id]?.nome || null,
+    iban: fornitoriById[x.spesa.fornitore_id]?.iban || null,
+    oggetto: oggettoDiSpesa(x.spesa, x.corsoData),
+    dataDebito: x.spesa.data_documento || null,
+    scadenza: x.spesa.scadenza_pagamento || null,
+  });
+  const gruppiSpese = new Map();
+  const righeReali = [];
+  speseDaPagareReali.forEach((x) => {
+    const g = x.spesa.gruppo_pagamento;
+    if (!g) { righeReali.push(rigaDaSpesaReale(x)); return; }
+    if (!gruppiSpese.has(g)) gruppiSpese.set(g, []);
+    gruppiSpese.get(g).push(x);
+  });
+  gruppiSpese.forEach((membri, g) => {
+    if (membri.length === 1) { righeReali.push(rigaDaSpesaReale(membri[0])); return; }
+    const capo = membri[0];
+    const totale = round2(membri.reduce((t, m) => t + bonificoDiSpesaReale(m.spesa), 0));
+    righeReali.push({
+      ...rigaDaSpesaReale(capo),
+      key: `gruppo_${g}`, tipo: "reale", gruppo: g, speseGruppo: membri.map((m) => m.spesa),
+      totale,
+      nome: capo.spesa.numero_documento ? `Fattura n. ${capo.spesa.numero_documento}` : "Bonifico cumulativo",
+      oggetto: `${membri.length} spese: ${membri.map((m) => m.spesa.descrizione || "—").join(" · ")}`,
+    });
+  });
 
   // occorrenze "da pagare" degli Abbonamenti e contratti: stessa logica
   // delle altre righe virtuali, una per scadenza di periodicità già
@@ -40716,10 +40775,11 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // documento e resta da pagare, e sul documento si segna quanto e' stato
   // coperto: una fattura sola puo' coprire piu' righe, e va marcata
   // riconciliata solo quando e' coperta tutta.
-  async function riconciliaConDocumento(item, doc) {
+  async function riconciliaConDocumento(voci, doc) {
     if (!doc) return;
+    const elenco = Array.isArray(voci) ? voci : [voci];
+    if (elenco.length === 0) return;
     setMsg("");
-    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
     // l'IVA la detta il documento, non la percentuale di casa: se la
     // fattura e' esente (i compensi delle master spesso lo sono) applicare
     // il 22% scriverebbe un imponibile che non esiste
@@ -40728,25 +40788,39 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     const aliquota = totaleDoc > 0 && imponibileDoc > 0
       ? round2((totaleDoc / imponibileDoc - 1) * 100)
       : ALIQUOTA_IVA_RIEPILOGO_CLASSE;
-    const { error } = await supabase.from("spese").insert({
-      descrizione: item.nome,
-      categoria_id: sottocat?.categoria_id || null,
-      sottocategoria_id: item.sottocategoriaId,
-      fornitore_id: doc.fornitore_id || null,
-      tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
-      imponibile: round2(item.totale / (1 + aliquota / 100)), iva_percentuale: aliquota, totale: round2(item.totale),
-      numero_documento: doc.numero || null, data_documento: doc.data_documento || null,
-      scadenza_pagamento: doc.data_scadenza_prevista || item.scadenza || doc.data_documento || null,
-      stato: "fatturata", metodo_pagamento: "Bonifico",
-      origine: "automatico", origine_scadenziario_chiave: item.chiave,
+    // Una riga di spesa per ogni costo, perche' ogni classe deve continuare
+    // a sapere quanto le e' costata la sua sala e il suo hotel. Quello che
+    // si unisce e' il pagamento: con piu' di una spesa tutte prendono lo
+    // stesso gruppo_pagamento e nello Scadenzario si leggono come una riga
+    // sola, che si salda con un bonifico solo.
+    const gruppo = elenco.length > 1 ? (crypto?.randomUUID ? crypto.randomUUID() : null) : null;
+    const righe = elenco.map((item) => {
+      const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
+      return {
+        descrizione: item.nome,
+        categoria_id: sottocat?.categoria_id || null,
+        sottocategoria_id: item.sottocategoriaId,
+        fornitore_id: doc.fornitore_id || null,
+        tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
+        imponibile: round2(item.totale / (1 + aliquota / 100)), iva_percentuale: aliquota, totale: round2(item.totale),
+        numero_documento: doc.numero || null, data_documento: doc.data_documento || null,
+        scadenza_pagamento: doc.data_scadenza_prevista || item.scadenza || doc.data_documento || null,
+        stato: "fatturata", metodo_pagamento: "Bonifico",
+        origine: "automatico", origine_scadenziario_chiave: item.chiave,
+        gruppo_pagamento: gruppo,
+      };
     });
+    const { error } = await supabase.from("spese").insert(righe);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    const allocato = round2(Number(doc.importo_allocato || 0) + Number(item.totale || 0));
+    const sommaRighe = round2(righe.reduce((t, r) => t + (Number(r.totale) || 0), 0));
+    const allocato = round2(Number(doc.importo_allocato || 0) + sommaRighe);
     const { error: errDoc } = await supabase.from("documento_fornitore")
       .update({ importo_allocato: allocato, stato: allocato >= totaleDoc - 0.01 ? "riconciliato" : doc.stato })
       .eq("id", doc.id);
-    if (errDoc) { setMsg("Spesa creata, ma il documento non si e' aggiornato: " + testoErrore(errDoc)); }
-    else setMsg(`"${item.nome}" agganciata alla fattura n. ${doc.numero || "—"}: ora e' una spesa da pagare.`);
+    if (errDoc) { setMsg("Spese create, ma il documento non si e' aggiornato: " + testoErrore(errDoc)); }
+    else if (righe.length === 1) setMsg(`"${elenco[0].nome}" agganciata alla fattura n. ${doc.numero || "—"}: ora e' una spesa da pagare.`);
+    else setMsg(`${righe.length} spese agganciate alla fattura n. ${doc.numero || "—"} per ${fmtEuroErp(sommaRighe)}: nello Scadenzario sono una riga sola, da pagare con un bonifico solo.`);
+    setDocDaAssociare(null);
     ricarica(["spese", "documento_fornitore"]);
   }
   // Il pagamento di una riga ancora virtuale: qui nasce la spesa vera, e
@@ -40825,20 +40899,73 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     setMsg(`"${item.nome}" scade il ${fmtData(nuovaData)}. Il corso e' finito, quindi l'importo e' quello definitivo.`);
     ricarica(["spese"]);
   }
-  async function associaDocumentoASpesaPagata(doc, spesa) {
+  // "Crea scadenza di pagamento": la fattura e' arrivata e non corrisponde
+  // a nessun costo gia' previsto — una spesa nuova, che nasce dal
+  // documento. Diventa una riga dello Scadenzario con la fattura gia'
+  // associata e la scadenza del documento: quando si paga va in prima
+  // nota gia' riconciliata, perche' il numero del documento ce l'ha da
+  // subito.
+  //
+  // La categoria la si eredita dall'ultima spesa dello stesso fornitore:
+  // un fornitore finisce quasi sempre nella stessa voce, e senza
+  // categoria la riga nascerebbe con il tasto Paga spento.
+  async function creaScadenzaDaDocumento(doc) {
     setMsg("");
     const totaleDoc = Number(doc.totale) || 0;
-    const { error } = await supabase.from("spese").update({
+    if (!(totaleDoc > 0)) { setMsg("La fattura non ha un importo."); return; }
+    const precedente = (spese || [])
+      .filter((sp) => sp.fornitore_id && sp.fornitore_id === doc.fornitore_id && sp.sottocategoria_id)
+      .sort((a, b) => String(b.data_documento || "").localeCompare(String(a.data_documento || "")))[0] || null;
+    const sottocat = precedente ? sottocategoriaCostoDi(costiSottocategorie, precedente.sottocategoria_id) : null;
+    const imponibileDoc = Number(doc.imponibile) || 0;
+    const aliquota = totaleDoc > 0 && imponibileDoc > 0 ? round2((totaleDoc / imponibileDoc - 1) * 100) : ALIQUOTA_IVA_RIEPILOGO_CLASSE;
+    const nomeFornitore = fornitoriById[doc.fornitore_id]?.nome || "Fornitore";
+    const { error } = await supabase.from("spese").insert({
+      descrizione: `${nomeFornitore} — fattura n. ${doc.numero || "—"}`,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: precedente?.sottocategoria_id || null,
+      fornitore_id: doc.fornitore_id || null,
+      tipo_ambito: "generale",
+      imponibile: imponibileDoc || round2(totaleDoc / (1 + aliquota / 100)),
+      iva_percentuale: aliquota,
+      totale: round2(totaleDoc),
       numero_documento: doc.numero || null,
-      data_documento: doc.data_documento || spesa.data_documento || null,
-      fornitore_id: spesa.fornitore_id || doc.fornitore_id || null,
-    }).eq("id", spesa.id);
+      data_documento: doc.data_documento || null,
+      scadenza_pagamento: doc.data_scadenza_prevista || addGiorni(doc.data_documento || dataOggiStr(), 30),
+      stato: "fatturata", metodo_pagamento: "Bonifico",
+      origine: "automatico",
+    });
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    const allocato = round2(Number(doc.importo_allocato || 0) + Number(spesa.totale || 0));
+    const allocato = round2(Number(doc.importo_allocato || 0) + totaleDoc);
     await supabase.from("documento_fornitore")
       .update({ importo_allocato: allocato, stato: allocato >= totaleDoc - 0.01 ? "riconciliato" : doc.stato })
       .eq("id", doc.id);
-    setMsg(`Fattura n. ${doc.numero || "—"} agganciata alla spesa gia' pagata: ora e' riconciliata.`);
+    setMsg(precedente
+      ? `Scadenza creata: ${fmtEuroErp(totaleDoc)} a ${nomeFornitore}, categoria "${sottocat?.nome || "—"}" ereditata dall'ultima fattura sua. Quando la paghi va in prima nota gia' riconciliata.`
+      : `Scadenza creata: ${fmtEuroErp(totaleDoc)} a ${nomeFornitore}. Manca la categoria di spesa: aprila dallo Scadenzario e assegnala, poi si potra' pagare.`);
+    ricarica(["spese", "documento_fornitore"]);
+  }
+  async function associaDocumentoASpesaPagata(doc, spese_) {
+    setMsg("");
+    const elenco = Array.isArray(spese_) ? spese_ : [spese_];
+    if (elenco.length === 0) return;
+    const totaleDoc = Number(doc.totale) || 0;
+    for (const spesa of elenco) {
+      const { error } = await supabase.from("spese").update({
+        numero_documento: doc.numero || null,
+        data_documento: doc.data_documento || spesa.data_documento || null,
+        fornitore_id: spesa.fornitore_id || doc.fornitore_id || null,
+      }).eq("id", spesa.id);
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    }
+    const somma = round2(elenco.reduce((t, sp) => t + (Number(sp.totale) || 0), 0));
+    const allocato = round2(Number(doc.importo_allocato || 0) + somma);
+    await supabase.from("documento_fornitore")
+      .update({ importo_allocato: allocato, stato: allocato >= totaleDoc - 0.01 ? "riconciliato" : doc.stato })
+      .eq("id", doc.id);
+    setMsg(elenco.length === 1
+      ? `Fattura n. ${doc.numero || "—"} agganciata alla spesa gia' pagata: ora e' riconciliata.`
+      : `Fattura n. ${doc.numero || "—"} agganciata a ${elenco.length} spese gia' pagate per ${fmtEuroErp(somma)}: ora sono riconciliate.`);
     setDocDaAssociare(null);
     ricarica(["spese", "documento_fornitore"]);
   }
@@ -40883,15 +41010,22 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
       allegatoPath = url;
     }
     const dallaCassa = METODI_SPESA_DALLA_CASSA.has(metodo || "");
-    const { error } = await supabase.from("spese").update({
-      stato: "pagata", data_pagamento: dataPagamento || null, allegato_path: allegatoPath,
-      metodo_pagamento: dallaCassa ? "Cassa contanti" : (metodo || "Bonifico"),
-      importo_pagato_cash: dallaCassa ? round2(item.totale) : (item.spesaReale.importo_pagato_cash || 0),
-      // la classificazione confermata nella scheda del pagamento sovrascrive
-      // quella che la spesa aveva: e' l'ultima parola di chi ha pagato
-      ...(classificazione ? classificazionePerPayload(classificazione) : {}),
-    }).eq("id", item.spesaReale.id);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    // una riga cumulativa copre piu' spese: il bonifico e' uno, ma pagate
+    // vanno segnate tutte, ognuna col suo importo
+    const membri = item.speseGruppo && item.speseGruppo.length > 1 ? item.speseGruppo : [item.spesaReale];
+    for (const sp of membri) {
+      const suo = round2((sp.totale || 0) - (sp.importo_pagato_cash || 0));
+      const { error } = await supabase.from("spese").update({
+        stato: "pagata", data_pagamento: dataPagamento || null, allegato_path: allegatoPath,
+        metodo_pagamento: dallaCassa ? "Cassa contanti" : (metodo || "Bonifico"),
+        importo_pagato_cash: dallaCassa ? suo : (sp.importo_pagato_cash || 0),
+        // la classificazione confermata nella scheda del pagamento sovrascrive
+        // quella che la spesa aveva: e' l'ultima parola di chi ha pagato
+        ...(classificazione ? classificazionePerPayload(classificazione) : {}),
+      }).eq("id", sp.id);
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    }
+    if (membri.length > 1) setMsg(`${membri.length} spese saldate con un bonifico solo di ${fmtEuroErp(item.totale)}.`);
     ricarica(["spese"]);
   }
   // conferma il pagamento di una occorrenza di Abbonamenti e contratti:
@@ -40982,8 +41116,8 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           etichettaCorso={etichettaCorso}
           costiSottocategorie={costiSottocategorie}
           onChiudi={() => setDocDaAssociare(null)}
-          onAssociaDaPagare={(item) => riconciliaConDocumento(item, docDaAssociare)}
-          onAssociaPagata={(spesa) => associaDocumentoASpesaPagata(docDaAssociare, spesa)}
+          onAssociaDaPagare={(voci) => riconciliaConDocumento(voci, docDaAssociare)}
+          onAssociaPagata={(voci) => associaDocumentoASpesaPagata(docDaAssociare, voci)}
         />
       )}
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
@@ -41142,6 +41276,10 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                       return (
                         <>
                           <button onClick={() => setDocDaAssociare(df)} title="Aggancia questa fattura a una riga dello Scadenzario o a una spesa gia' pagata" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Associa a una spesa</button>
+                          {/* la fattura non corrisponde a nessun costo gia'
+                              previsto: nasce una spesa nuova, da pagare,
+                              con la fattura gia' attaccata */}
+                          <button onClick={() => creaScadenzaDaDocumento(df)} title="Crea una spesa da pagare nello Scadenzario Passivo, con questa fattura gia' associata" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Crea scadenza di pagamento</button>
                           <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>
                         </>
                       );
@@ -41324,7 +41462,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     disabilitato={!item.sottocategoriaId}
                     motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     onConferma={(dati) => confermaPagato(item, dati)}
-                    onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento(item, doc) : null}
+                    onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento([item], doc) : null}
                     onCambiaScadenza={item.tipo === "abbonamento" ? null : (nuova) => cambiaScadenza(item, nuova)}
                     documentiFornitore={documentoFornitoreTabella}
                     nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
