@@ -17780,7 +17780,7 @@ const ALIQUOTA_IVA_RIEPILOGO_CLASSE = 22;
 // griglia con la stessa impronta di quella della tabella sopra (2fr per la
 // voce, 1fr per ogni importo, una colonna fissa in fondo), cosi' le due
 // tabelle restano incolonnate fra loro.
-const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 62px 104px 52px";
+const GRIGLIA_COSTI_MOBILE = "minmax(104px, 1fr) 58px 58px 58px 66px 88px 46px";
 // Sei colonne: voce, i tre importi, il cestino, la modalita'.
 //
 // Le tre degli importi sono a larghezza fissa e stretta - una cifra di
@@ -17799,11 +17799,18 @@ const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minma
 // "3gg" con le sue due freccette — sulle righe automatiche che ne hanno.
 // Sta in tutte e due anche quando una la lascia vuota, come gia' il
 // cestino: e' quello che le tiene incolonnate fra loro.
-const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 92px 92px 92px 92px 132px 58px";
+// La prima colonna ha un MINIMO suo, e le altre stanno strette.
+//
+// Con "minmax(0, 1fr)" la voce era la sola che poteva cedere: quando la
+// somma delle fisse superava il pannello si schiacciava a zero e il nome
+// della spesa spariva — restava l'icona e basta. Adesso sotto i 150
+// pixel non scende: a mancare lo spazio e' la tabella intera, che lo
+// dice scorrendo invece di mangiarsi una colonna.
+const GRIGLIA_COSTI_DESKTOP = "minmax(150px, 1fr) 72px 72px 72px 76px 96px 54px";
 // Vendite al corso: prodotto, quanti, quanto. Tre colonne e basta, ma la
 // stessa regola dei costi — la cifra a destra, sempre nello stesso punto,
 // riga dopo riga fino al totale.
-const GRIGLIA_VENDITE_CORSO = "minmax(0, 1fr) 90px 120px";
+const GRIGLIA_VENDITE_CORSO = "minmax(150px, 1fr) 80px 104px";
 
 // L'icona che apre ogni riga dei costi: dice di che natura e' la voce
 // prima ancora di leggerla. Le righe libere — una spesa aggiunta a mano —
@@ -17837,8 +17844,14 @@ function SegmentoModalita({ valori = ["B", "C", "1/2"], attivo, onSceglie, titol
             onClick={() => !bloccato && onSceglie?.(chiave)}
             disabled={bloccato}
             style={{
-              ...fontBody, fontSize: 11, fontWeight: 700, lineHeight: 1,
-              minWidth: 30, padding: "7px 6px", borderRadius: 8,
+              // ventitre' pixel per lato, non uno di piu': in una riga alta
+              // trentacinque, tre tasti piu' grandi di cosi' diventano il
+              // pezzo che si vede per primo, mentre come si paga si guarda
+              // una volta sola. Il testo scende con la scatola — "1/2" sono
+              // tre caratteri e ci devono stare dentro senza toccare i bordi.
+              ...fontBody, fontSize: 9, fontWeight: 700, lineHeight: 1,
+              width: 23, height: 23, minWidth: 23, flexShrink: 0, padding: 0, borderRadius: 7,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
               border: `1px solid ${acceso ? NAVY : CREAM_BORDER}`,
               background: acceso ? NAVY : "#fff",
               color: acceso ? "#fff" : (bloccato ? "#C9C4B8" : MUTED),
@@ -17870,6 +17883,18 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
   const campoQui = isMobile
     ? { ...campoCompattoStyle, padding: "5px 4px", fontSize: 10.5 }
     : { ...campoCompattoStyle, padding: "5px 5px", fontSize: 11.5 };
+  // le stesse cifre delle righe automatiche: numeri a destra, e dove si
+  // scrive un campo pulito con la riga sotto
+  const cifraLibera = {
+    ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED,
+    textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 3 : 4,
+  };
+  const campoCifraLibera = {
+    ...cifraLibera, color: NAVY, fontWeight: 700, width: "100%", boxSizing: "border-box",
+    border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, borderRadius: 0,
+    background: "transparent", padding: isMobile ? "2px 3px 2px 0" : "2px 4px 2px 0",
+    outlineOffset: 2,
+  };
   const [totale, setTotale] = useState(spesa.totale != null ? String(spesa.totale) : "");
   const [cash, setCash] = useState(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
   // l'appunto sotto la riga: chi ce l'ha lo vede subito, gli altri hanno
@@ -17925,10 +17950,19 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
 
   return (
     <>
-    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 3 }}>
-      <div style={{ minWidth: 0 }}>
+    {/* Una spesa aggiunta a mano e' una riga come tutte le altre: stessa
+        altezza, stessa griglia, stesso vestito. Prima aveva le caselle
+        col fondo grigio, il cestino in un tondo e le tre lettere sopra
+        le spunte — sembrava capitata li' da un'altra pagina. */}
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: 35, padding: isMobile ? "0 6px" : "0 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ display: "flex", flexShrink: 0, opacity: 0.85 }}><IconaCatDocumento size={isMobile ? 13 : 15} color={NAVY} /></span>
         <select
-          style={campoQui}
+          style={{
+            ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 600, color: NAVY,
+            flex: 1, minWidth: 0, background: "transparent", border: "none",
+            padding: 0, cursor: "pointer", appearance: "none", outlineOffset: 2,
+          }}
           value={titoloCorrisponde ? spesa.sottocategoria_id || "" : "__altro__"}
           onChange={(e) => {
             const scelta = vociTitolo.find((c) => c.sottocategoriaId === e.target.value);
@@ -17944,53 +17978,49 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
         </select>
       </div>
       <div style={{ minWidth: 0 }}>
-        <input style={{ ...campoQui, textAlign: "right" }} inputMode="decimal" value={totale} onChange={(e) => setTotale(e.target.value)} onBlur={commitTotale} />
+        <input style={campoCifraLibera} inputMode="decimal" value={totale} onChange={(e) => setTotale(e.target.value)} onBlur={commitTotale} />
       </div>
+      <div style={{ minWidth: 0, ...cifraLibera }}>€ {bonifico}</div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ ...campoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ {bonifico}</div>
+        {cashBloccato
+          ? <div title="Tutto a bonifico: non c'è cash da scrivere" style={cifraLibera}>€ 0</div>
+          : <input style={campoCifraLibera} inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} onBlur={commitCash} />}
       </div>
-      <div style={{ minWidth: 0 }}>
-        {cashBloccato ? (
-          <div title="Tutto a bonifico: non c'è cash da scrivere" style={{ ...campoQui, background: "#EFEFEF", color: MUTED, textAlign: "right" }}>€ 0</div>
-        ) : (
-          <input style={{ ...campoQui, textAlign: "right" }} inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} onBlur={commitCash} />
-        )}
+      {/* al posto della pastiglia "Busta" delle righe automatiche, qui c'e'
+          il cestino: una voce scritta a mano si toglie, una calcolata no */}
+      <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button
+          onClick={onElimina}
+          title="Elimina voce"
+          style={{ width: 23, height: 23, borderRadius: 7, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6" /><path d="M14 11v6" />
+          </svg>
+        </button>
       </div>
-      <button
-        onClick={onElimina}
-        title="Elimina voce"
-        style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", justifySelf: "center", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-          <path d="M10 11v6" /><path d="M14 11v6" />
-        </svg>
-      </button>
-      <div style={{ minWidth: 0, display: "flex", gap: isMobile ? 4 : 6, justifyContent: "center" }}>
-        {["B", "C", "1/2"].map((chiave) => (
-          <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà e metà"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, cursor: "pointer" }}>
-            <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalitaSpesa === chiave ? NAVY : MUTED }}>{chiave}</span>
-            <input
-              type="checkbox"
-              checked={modalitaSpesa === chiave}
-              onChange={() => impostaModalitaSpesa(chiave)}
-              style={{ width: 12, height: 12, cursor: "pointer", margin: 0 }}
-            />
-          </label>
-        ))}
+      <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <SegmentoModalita
+          attivo={modalitaSpesa}
+          titoli={{ B: "Tutto a bonifico", C: "Tutto cash", "1/2": "Metà e metà" }}
+          onSceglie={impostaModalitaSpesa}
+        />
       </div>
       {/* il "+" apre l'appunto. Piccolo e in fondo: una riga di costi si
           legge per numeri, e un tasto grosso in mezzo li disturberebbe
           anche a chi una nota non la scrive mai */}
-      <button
-        type="button"
-        onClick={() => setNotaAperta((v) => !v)}
-        title={notaAperta ? "Chiudi la nota" : "Aggiungi una nota a questa voce"}
-        style={{ ...fontBody, fontSize: 14, fontWeight: 700, lineHeight: 1, color: nota.trim() ? GOLD : MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", justifySelf: "center" }}
-      >
-        {notaAperta ? "−" : "+"}
-      </button>
+      <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          onClick={() => setNotaAperta((v) => !v)}
+          title={notaAperta ? "Chiudi la nota" : "Aggiungi una nota a questa voce"}
+          style={{ ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1, color: nota.trim() ? GOLD : MUTED, background: "none", border: "none", padding: 4, cursor: "pointer" }}
+        >
+          {notaAperta ? "−" : "+"}
+        </button>
+      </div>
     </div>
     {notaAperta && (
       // Corpo 10.5: e' un appunto, non una voce. Scritto grande quanto la
@@ -25156,19 +25186,24 @@ function PannelloRiepilogoAmministrativo({
   // una cifra della tabella costi: testo allineato a destra, col rientro
   // che la incolonna con l'intestazione e con la banda dei totali
   const intestazioneVendite = {
-    ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED,
-    textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, minWidth: 0,
+    ...fontBody, fontSize: 8.5, fontWeight: 700, color: MUTED,
+    textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, minWidth: 0,
   };
   const cifraRiga = {
-    ...fontBody, fontSize: isMobile ? 11.5 : 13.5, color: MUTED,
-    textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 4 : 5,
+    ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED,
+    textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 3 : 4,
   };
+  // Trentacinque pixel per riga, dovunque: la tabella dei costi, il
+  // dettaglio dei venditori, le vendite al corso. Righe di altezze
+  // diverse una sopra l'altra fanno sembrare la pagina montata a pezzi,
+  // e con otto voci la differenza si somma fino a spostare il totale.
+  const ALTEZZA_RIGA = 35;
   // e una cifra che si puo' scrivere: stesso posto, stessa misura, ma con
   // la riga sotto che dice "qui si tocca"
   const campoCifra = {
     ...cifraRiga, color: NAVY, fontWeight: 700, width: "100%", boxSizing: "border-box",
     border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, borderRadius: 0,
-    background: "transparent", padding: isMobile ? "4px 4px 3px 0" : "4px 5px 3px 0",
+    background: "transparent", padding: isMobile ? "2px 3px 2px 0" : "2px 4px 2px 0",
     outlineOffset: 2,
   };
 
@@ -25934,15 +25969,24 @@ function PannelloRiepilogoAmministrativo({
                     )}
                   </div>
                 </div>
-                {righeSpeseTutte.length > 0 && (
-                  <div style={{ marginBottom: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+                {/* Una cornice sola per tutta la tabella: intestazione,
+                    righe automatiche e righe scritte a mano. Le colonne le
+                    calcola una volta per tutti, e non c'e' modo che una
+                    lista cada in un punto e l'altra in un altro.
+
+                    E se il pannello si stringe, a cedere e' la finestra:
+                    la tabella scorre di lato e resta intera. Prima la prima
+                    colonna si schiacciava e il nome della spesa spariva —
+                    restava l'icona, e una riga senza nome non dice niente. */}
+                {(righeSpeseTutte.length > 0 || speseClasseLibere.length > 0) && (
+                  <div style={{ marginBottom: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflowX: "auto" }}>
                     {/* La banda dei titoli: grigia e attaccata alle righe,
                         cosi' si legge come l'intestazione di una tabella e
                         non come tre parole sciolte sopra dei numeri. Le tre
                         cifre sono allineate a DESTRA, qui come nelle righe e
                         come nella banda dei totali: e' l'unico modo perche'
                         le unita' cadano una sotto l'altra. */}
-                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, padding: isMobile ? "8px 6px" : "10px 10px", marginBottom: 0 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 6, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: ALTEZZA_RIGA, alignItems: "center", padding: isMobile ? "0 6px" : "0 10px", marginBottom: 0 }}>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Voce</div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>Totale</div>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>Bonifico</div>
@@ -25978,10 +26022,10 @@ function PannelloRiepilogoAmministrativo({
                       const [campoBonifico, campoCash] = campiSplitDi(r.tipo);
                       return (
                         <React.Fragment key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash}>
-                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", padding: isMobile ? "8px 6px" : "10px 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                          <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ display: "flex", flexShrink: 0, opacity: 0.85 }}><IconaDiRigaCosto tipo={r.tipo} size={isMobile ? 15 : 17} /></span>
-                            <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13.5, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</span>
+                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA, padding: isMobile ? "0 6px" : "0 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                          <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ display: "flex", flexShrink: 0, opacity: 0.85 }}><IconaDiRigaCosto tipo={r.tipo} size={isMobile ? 13 : 15} /></span>
+                            <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</span>
                             {r.tipo === "alloggio" && r.pagato && (
                               <span title="Hotel pagato" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
                             )}
@@ -26082,9 +26126,9 @@ function PannelloRiepilogoAmministrativo({
                           <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
                             {r.giorni != null && (
                               <>
-                                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, whiteSpace: "nowrap" }}>{r.giorni}gg</span>
+                                <span style={{ ...fontBody, fontSize: 8.5, color: MUTED, whiteSpace: "nowrap" }}>{r.giorni}gg</span>
                                 <FrecceSuGiu
-                                  altezza={22} larghezza={16} raggio={6}
+                                  altezza={20} larghezza={14} raggio={5}
                                   puoScendere={r.giorni > 0}
                                   onSu={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)}
                                   onGiu={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))}
@@ -26104,10 +26148,10 @@ function PannelloRiepilogoAmministrativo({
                           // della tabella
                           <div style={{ marginBottom: 8, padding: isMobile ? "4px 0 6px 10px" : "6px 0 8px 18px", background: "#FAFAFB", borderRadius: 10 }}>
                             {quoteVenditoreDettaglio.map((v) => (
-                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, alignItems: "center", marginBottom: 4, minHeight: 20 }}>
-                                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 4 : 5 }}>
+                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA }}>
+                                <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 14 : 24 }}>
                                   {v.nome}
-                                  <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
+                                  <span style={{ ...fontBody, fontSize: isMobile ? 8 : 9, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
                                 </span>
                                 {/* stesso rientro interno della casella del
                                     totale qui sopra: senza, le cifre cadono
@@ -26181,12 +26225,11 @@ function PannelloRiepilogoAmministrativo({
                         </React.Fragment>
                       );
                     })}
-                  </div>
-                )}
-                {speseClasseLibere.length === 0 ? (
-                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Nessuna spesa registrata per questa classe.</div>
-                ) : (
-                  <div style={{ marginBottom: 12 }}>
+                    {/* le spese scritte a mano stanno nella STESSA cornice e
+                        nella stessa griglia delle righe automatiche: erano
+                        un elenco a parte, con un contenitore suo largo due
+                        pixel di meno, e bastava quello a far cadere le
+                        colonne in un altro punto */}
                     {speseClasseLibere.map((spesa) => (
                       <RigaCostoClasse
                         key={spesa.id}
@@ -26198,6 +26241,9 @@ function PannelloRiepilogoAmministrativo({
                       />
                     ))}
                   </div>
+                )}
+                {righeSpeseTutte.length === 0 && speseClasseLibere.length === 0 && (
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 12 }}>Nessuna spesa registrata per questa classe.</div>
                 )}
 
                 {/* La banda dei totali.
@@ -26219,19 +26265,19 @@ function PannelloRiepilogoAmministrativo({
                   const cash = round2(sommaAuto("cash") + cashLibere);
                   const bonifico = round2(totale - cash);
                   if (!(totale || cash || bonifico)) return null;
-                  const cifra = { ...fontBody, fontSize: isMobile ? 12.5 : 15, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 4 : 5, minWidth: 0 };
+                  const cifra = { ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 3 : 4, minWidth: 0 };
                   return (
                     <div style={{
                       display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP,
                       gap: isMobile ? 4 : 8, alignItems: "center",
-                      background: "#F4F4F6", borderRadius: 12, padding: isMobile ? "12px 6px" : "14px 10px",
+                      background: "#F4F4F6", borderRadius: 12, minHeight: 45, padding: isMobile ? "0 6px" : "0 10px",
                       marginTop: 6, marginBottom: 20,
                     }}>
-                      <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: isMobile ? 8 : 12 }}>
-                        <span style={{ width: isMobile ? 28 : 34, height: isMobile ? 28 : 34, borderRadius: 9, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0 }}>
-                          <IconaAvvisoMonete size={isMobile ? 15 : 18} color={NAVY} />
+                      <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: isMobile ? 6 : 9, overflow: "hidden" }}>
+                        <span style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0 }}>
+                          <IconaAvvisoMonete size={14} color={NAVY} />
                         </span>
-                        <span style={{ ...fontBody, fontSize: isMobile ? 11 : 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>Totale costi</span>
+                        <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Totale costi</span>
                       </div>
                       <div style={cifra}>€ {totale}</div>
                       <div style={cifra}>€ {bonifico}</div>
@@ -26291,31 +26337,31 @@ function PannelloRiepilogoAmministrativo({
                         allineata a destra come nella tabella dei costi —
                         e' l'unico modo perche' le unita' si incolonnino. */}
                     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 8 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: GRIGLIA_VENDITE_CORSO, gap: isMobile ? 6 : 10, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, padding: isMobile ? "8px 10px" : "10px 14px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: GRIGLIA_VENDITE_CORSO, gap: isMobile ? 6 : 10, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: ALTEZZA_RIGA, alignItems: "center", padding: isMobile ? "0 10px" : "0 14px" }}>
                         <div style={intestazioneVendite}>Prodotto</div>
                         <div style={{ ...intestazioneVendite, textAlign: "center" }}>Quantità</div>
                         <div style={{ ...intestazioneVendite, textAlign: "right" }}>Totale</div>
                       </div>
                       {righeVenditeAlCorso.map((r) => (
-                        <div key={r.chiave} style={{ display: "grid", gridTemplateColumns: GRIGLIA_VENDITE_CORSO, gap: isMobile ? 6 : 10, alignItems: "center", padding: isMobile ? "9px 10px" : "11px 14px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                          <span style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.nome}>{r.nome}</span>
-                          <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: MUTED, textAlign: "center", whiteSpace: "nowrap" }}>× {r.quantita}</span>
-                          <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 14, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>€ {r.totale}</span>
+                        <div key={r.chiave} style={{ display: "grid", gridTemplateColumns: GRIGLIA_VENDITE_CORSO, gap: isMobile ? 6 : 10, alignItems: "center", minHeight: ALTEZZA_RIGA, padding: isMobile ? "0 10px" : "0 14px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                          <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.nome}>{r.nome}</span>
+                          <span style={{ ...fontBody, fontSize: isMobile ? 9 : 9.5, color: MUTED, textAlign: "center", whiteSpace: "nowrap" }}>× {r.quantita}</span>
+                          <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>€ {r.totale}</span>
                         </div>
                       ))}
                     </div>
 
                     {/* La banda del totale, sulla stessa griglia delle righe:
                         la cifra cade sotto la colonna che somma. */}
-                    <div style={{ display: "grid", gridTemplateColumns: GRIGLIA_VENDITE_CORSO, gap: isMobile ? 6 : 10, alignItems: "center", background: "#F4F4F6", borderRadius: 12, padding: isMobile ? "12px 10px" : "14px 14px" }}>
-                      <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: isMobile ? 8 : 12 }}>
-                        <span style={{ width: isMobile ? 28 : 34, height: isMobile ? 28 : 34, borderRadius: 9, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <IconaCarrelloPos size={isMobile ? 15 : 18} color={NAVY} />
+                    <div style={{ display: "grid", gridTemplateColumns: GRIGLIA_VENDITE_CORSO, gap: isMobile ? 6 : 10, alignItems: "center", background: "#F4F4F6", borderRadius: 12, minHeight: 45, padding: isMobile ? "0 10px" : "0 14px" }}>
+                      <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: isMobile ? 6 : 9, overflow: "hidden" }}>
+                        <span style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <IconaCarrelloPos size={14} color={NAVY} />
                         </span>
-                        <span style={{ ...fontBody, fontSize: isMobile ? 11 : 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>Totale vendite</span>
+                        <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Totale vendite</span>
                       </div>
                       <div />
-                      <div style={{ ...fontBody, fontSize: isMobile ? 14 : 17, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>€ {venditeAlCorsoTotale}</div>
+                      <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>€ {venditeAlCorsoTotale}</div>
                     </div>
 
                     {/* contanti e POS non spariscono: sono due numeri piccoli
@@ -36802,8 +36848,13 @@ function BarraPeriodoContabilita({
   );
   return (
     <>
+      {/* La fila dei filtri tiene un'altezza sua, sempre la stessa.
+          Ogni sezione della contabilita' ha i suoi filtri, e passando da
+          una all'altra il numero di pastiglie cambia: senza un'altezza
+          fissa il pannello sotto saliva e scendeva a ogni cambio di
+          pagina, e l'occhio doveva ritrovare ogni volta dove comincia. */}
       {filtri.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", minHeight: 38, marginBottom: 12 }}>
           {filtri.map((f) => pillola(filtroAttivo === f.chiave, f.conto == null ? f.etichetta : `${f.etichetta} (${f.conto})`, () => onFiltro?.(f.chiave), f.chiave))}
         </div>
       )}
@@ -42246,7 +42297,17 @@ function PaginaInserimentoCostiRicavi({
             { chiave: "tutte", etichetta: "Tutte", conto: spesePagate.filter((sp) => dataCassaPN(sp) >= range.inizio && dataCassaPN(sp) <= range.fine).length },
             { chiave: "dariconciliare", etichetta: "Da riconciliare", conto: conteggioDaRiconciliarePN },
             { chiave: "riconciliate", etichetta: "Riconciliate", conto: spesePagate.filter((sp) => dataCassaPN(sp) >= range.inizio && dataCassaPN(sp) <= range.fine && !daRiconciliarePN(sp)).length },
-            ...(nonPagateContoPN > 0 ? [{ chiave: "nonpagate", etichetta: `Non pagate · ${fmtEuroErp(nonPagateTotalePN)}`, conto: nonPagateContoPN }] : []),
+            // La quarta pastiglia c'e' SEMPRE, anche a zero. Comparendo e
+            // sparendo col mese spostava le altre tre e faceva ballare
+            // tutta la fila: quattro temi fissi, e il numero dentro che
+            // cambia. A zero resta spenta, perche' non c'e' niente da
+            // andare a vedere.
+            {
+              chiave: "nonpagate",
+              etichetta: nonPagateContoPN > 0 ? `Non pagate · ${fmtEuroErp(nonPagateTotalePN)}` : "Non pagate",
+              conto: nonPagateContoPN,
+              spenta: nonPagateContoPN === 0,
+            },
           ]}
           filtroAttivo={filtroStatoPN}
           onFiltro={(k) => {
