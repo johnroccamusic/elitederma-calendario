@@ -20349,8 +20349,66 @@ function stessoOperatore(a, b) {
 // dimenticato e' materiale sottratto al magazzino: per questo chi
 // amministra ha, in Magazzino e shop, l'elenco completo con chi, quando
 // (data e ora di creazione) e quanto
-function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, isMobile }) {
+// Un numero col suo nome sopra: i riquadrini in cima a ogni carrello
+// sospeso. Piccoli, in fila, e vanno a capo da soli su uno schermo stretto.
+function Riquadrino({ etichetta, valore, colore = NAVY, forte = false }) {
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, background: forte ? "#FBF6EA" : "#fff", borderRadius: 10, padding: "5px 10px", minWidth: 0 }}>
+      <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>{etichetta}</div>
+      <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>{valore}</div>
+    </div>
+  );
+}
+function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, isMobile, prodottiShop = [], coupon = [] }) {
+  // Un carrello fermo non e' solo una lista della spesa: e' materiale che
+  // nessuno puo' vendere, e per decidere se sollecitarlo o buttarlo serve
+  // sapere quanto vale davvero — quanto sconto sta promettendo, con che
+  // margini, e quanti punti maturerebbe la master. Tutto ricalcolato con
+  // le regole di OGGI: il carrello non congela lo sconto (vedi
+  // totaleCarrelloSospeso), quindi congelarlo qui direbbe una bugia.
+  const [fasceContantiAmm] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const [fasceCartaAmm] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+  const [regolaReferralAmm] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  const [schemaPuntiAmm] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
+  const [quotePuntiAmm] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
+  const prodottoPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((x) => [x.id, x])), [prodottiShop]);
+  const [aperti, setAperti] = useState({});
   const ordinati = [...lista].sort((a, b) => String(b.creato || "").localeCompare(String(a.creato || "")));
+  function contoDi(c) {
+    const righe = Array.isArray(c.carrello) ? c.carrello : [];
+    const subtotale = round2(righe.reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
+    const contanti = pagamentoContaComeContanti(c.metodoPagamento);
+    const couponEdizione = c.corsoPosId ? (coupon || []).find((x) => x.corsi_date_id === c.corsoPosId) : null;
+    const aFasce = c.scontoCorsoAttivo !== false && !c.omaggioAttivo && couponEdizione?.tipo_regola_sconto === "fasce";
+    const fasce = aFasce
+      ? fasceCorsiPerPagamento(serieScontoScritta(fasceCartaAmm) ? fasceCartaAmm : couponEdizione.fasce_sconto, fasceContantiAmm, contanti)
+      : null;
+    const sicurezza = sicurezzaPuntiDi(schemaPuntiAmm);
+    const quote = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiAmm || {}) };
+    const fasceRiduzione = aFasce ? fasce : (regolaReferralAmm?.fasce || []);
+    const dettaglio = righe.map((r) => {
+      const prodotto = prodottoPerId[r.prodottoId] || null;
+      const lordo = round2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0));
+      const margine = marginePercentualeDi(prodotto);
+      const scontoPct = aFasce ? percentualeFasciaDi(prodotto, fasce, subtotale) : 0;
+      const sconto = round2((lordo * scontoPct) / 100);
+      const pp = puntiProdotto(prodotto, sicurezza, contanti);
+      const teorici = pp == null ? null : round2(pp * (Number(r.quantita) || 0));
+      const punti = teorici == null ? null
+        : round2((puntiDopoScontoAllievo(teorici, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione, subtotale)) * (c.corsoPosId ? quote.corso : quote.fuoriCorso)) / 100);
+      return { ...r, prodotto, lordo, margine, scontoPct, sconto, teorici, punti };
+    });
+    const sconto = round2(dettaglio.reduce((t, d) => t + d.sconto, 0));
+    const teorici = round2(dettaglio.reduce((t, d) => t + (d.teorici || 0), 0));
+    const punti = round2(dettaglio.reduce((t, d) => t + (d.punti || 0), 0));
+    return {
+      dettaglio, subtotale, sconto, teorici, punti, contanti, aFasce,
+      codice: couponEdizione?.codice || null,
+      pctMedia: subtotale > 0 ? round2((sconto / subtotale) * 100) : 0,
+      daIncassare: round2(subtotale - sconto),
+      senzaMargine: dettaglio.filter((d) => d.margine == null).length,
+    };
+  }
   const quando = (iso) => (iso ? new Date(iso).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
   const pezziTotali = ordinati.reduce((t, c) => t + (c.carrello || []).reduce((s2, r) => s2 + (Number(r.quantita) || 0), 0), 0);
   return (
@@ -20380,15 +20438,81 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
                   <button onClick={() => onElimina(c)} data-niente-ombra style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}>Elimina</button>
                 </div>
               </div>
-              <div style={{ marginTop: 8, borderTop: `1px dashed ${CREAM_BORDER}`, paddingTop: 6 }}>
-                {(c.carrello || []).map((r, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 12.5, color: NAVY, padding: "2px 0" }}>
-                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.quantita} × {r.nome}{r.sku ? <span style={{ color: MUTED }}> · {r.sku}</span> : null}</span>
-                    <span style={{ whiteSpace: "nowrap" }}>{fmtEuroErp2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0))}</span>
+              {(() => {
+                const conto = contoDi(c);
+                const aperto = !!aperti[c.id];
+                const cella = { ...fontBody, fontSize: 11.5, color: NAVY, padding: "4px 0", whiteSpace: "nowrap" };
+                const intest = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, padding: "0 0 4px", whiteSpace: "nowrap" };
+                return (
+                  <div style={{ marginTop: 8, borderTop: `1px dashed ${CREAM_BORDER}`, paddingTop: 8 }}>
+                    {/* il riassunto si vede sempre: e' quello che dice se il
+                        carrello vale la pena di essere inseguito */}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: aperto ? 10 : 0 }}>
+                      <Riquadrino etichetta="A listino" valore={fmtEuroErp2(conto.subtotale)} />
+                      {conto.sconto > 0 && <Riquadrino etichetta={`Sconto medio ${fmtPctErp2(conto.pctMedia)}`} valore={"− " + fmtEuroErp2(conto.sconto)} colore="#C0392B" />}
+                      <Riquadrino etichetta="Da incassare" valore={fmtEuroErp2(conto.daIncassare)} forte />
+                      {conto.punti > 0 && <Riquadrino etichetta={`Punti · teorici ${fmtPunti(conto.teorici)}`} valore={fmtPunti(conto.punti)} colore={GOLD} />}
+                      <Riquadrino etichetta="Pagamento" valore={etichettaMetodoVendita(c.metodoPagamento)} />
+                      {conto.codice && <Riquadrino etichetta="Codice" valore={String(conto.codice).toUpperCase()} />}
+                    </div>
+                    <button
+                      onClick={() => setAperti((prev) => ({ ...prev, [c.id]: !prev[c.id] }))}
+                      style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0" }}
+                    >
+                      {aperto ? "Nascondi il dettaglio" : `Vedi il dettaglio · ${conto.dettaglio.length} righe`} {aperto ? "▴" : "▾"}
+                    </button>
+                    {aperto && (
+                      <div style={{ overflowX: "auto", marginTop: 4 }}>
+                        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 460 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ ...intest, textAlign: "left" }}>Prodotto</th>
+                              <th style={{ ...intest, textAlign: "right" }}>Qtà</th>
+                              <th style={{ ...intest, textAlign: "right" }}>A listino</th>
+                              <th style={{ ...intest, textAlign: "right" }}>Margine</th>
+                              <th style={{ ...intest, textAlign: "right" }}>Sconto</th>
+                              <th style={{ ...intest, textAlign: "right" }}>Punti</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {conto.dettaglio.map((d, i) => (
+                              <tr key={i} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+                                <td style={{ ...cella, whiteSpace: "normal", paddingRight: 8 }}>
+                                  {d.nome}
+                                  {d.sku ? <span style={{ color: MUTED }}> · {d.sku}</span> : null}
+                                </td>
+                                <td style={{ ...cella, textAlign: "right" }}>{d.quantita}</td>
+                                <td style={{ ...cella, textAlign: "right" }}>{fmtEuroErp2(d.lordo)}</td>
+                                <td style={{ ...cella, textAlign: "right", color: d.margine == null ? "#C0392B" : MUTED }}>
+                                  {d.margine == null ? "sconosciuto" : fmtPctErp2(d.margine)}
+                                </td>
+                                <td style={{ ...cella, textAlign: "right", color: d.sconto > 0 ? "#C0392B" : MUTED }}>
+                                  {d.sconto > 0 ? `− ${fmtEuroErp2(d.sconto)}` : "—"}
+                                  {d.scontoPct > 0 && <span style={{ color: MUTED }}> · {fmtPctErp2(d.scontoPct)}</span>}
+                                </td>
+                                <td style={{ ...cella, textAlign: "right", color: d.punti ? GOLD : MUTED, fontWeight: d.punti ? 700 : 400 }}>
+                                  {d.punti == null ? "—" : fmtPunti(d.punti)}
+                                  {d.teorici != null && d.teorici !== d.punti && <span style={{ color: MUTED, fontWeight: 400 }}> / {fmtPunti(d.teorici)}</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {conto.senzaMargine > 0 && (
+                          <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", marginTop: 6, lineHeight: 1.4 }}>
+                            {conto.senzaMargine === 1 ? "Un prodotto non ha" : `${conto.senzaMargine} prodotti non hanno`} il costo d'acquisto in anagrafica:
+                            senza margine non prend{conto.senzaMargine === 1 ? "e" : "ono"} sconto e non fa{conto.senzaMargine === 1 ? "" : "nno"} punti.
+                          </div>
+                        )}
+                        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 6, lineHeight: 1.4 }}>
+                          Sconto e punti sono ricalcolati adesso, con le regole di oggi: il carrello parcheggiato non li congela.
+                        </div>
+                      </div>
+                    )}
+                    {c.note && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>Note: {c.note}</div>}
                   </div>
-                ))}
-                {c.note && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>Note: {c.note}</div>}
-              </div>
+                );
+              })()}
             </div>
           ))}
         </div>
@@ -33732,7 +33856,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS, per chi amministra:
   // un carrello dimenticato tiene fermo materiale che nessuno puo'
@@ -33749,7 +33873,7 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
       {mostraSospesi && puoVedereSospesi && (
-        <PannelloCarrelliSospesiAmministrazione lista={sospesiTutti} isMobile={isMobile} onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso} />
+        <PannelloCarrelliSospesiAmministrazione lista={sospesiTutti} isMobile={isMobile} prodottiShop={prodottiShop} coupon={coupon} onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso} />
       )}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
@@ -66740,6 +66864,7 @@ export default function App() {
 
       {view === "magazzinoshop" && (
         <PaginaMagazzinoShop
+          prodottiShop={prodottiShop} coupon={coupon}
           onBack={() => setView("home")}
           onApriMagazzino={apriMagazzino}
           onApriGestioneShop={apriGestioneShop}
