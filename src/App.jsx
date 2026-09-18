@@ -4117,7 +4117,7 @@ function puntiDaCedibile(cedibileEuro, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAUL
 // tolgono qui: stanno dentro la percentuale di sicurezza, come per la
 // carta. Il costo si puo' passare a parte (i bundle lo ricavano dai
 // componenti), altrimenti e' quello dell'anagrafica.
-function cedibileContantiDi(p, costoAcquisto = p?.costo_acquisto) {
+function cedibileContantiDi(p, costoAcquisto = costoAcquistoDi(p)) {
   const lordo = prezzoAlPubblico(p);
   if (lordo == null || !(lordo > 0) || costoAcquisto == null || costoAcquisto === "") return { pct: null, euro: null, margine: null };
   const margine = round1Erp(((lordo - Number(costoAcquisto)) / lordo) * 100);
@@ -4169,7 +4169,7 @@ function puntiProdottoScontato(p, sicurezzaGenerale, contanti, scontoPct) {
   const sicurezzaPct = sicurezzaDelProdotto(p, sicurezzaGenerale);
   const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
   if (!inVenditaViaApp) return null;
-  const costo = p.costo_acquisto;
+  const costo = costoAcquistoDi(p);
   if (costo == null || costo === "") return null;
   const sconto = Math.min(100, Math.max(0, Number(scontoPct) || 0));
   // col contante si tiene tutto il prezzo al pubblico (l'IVA resta in
@@ -4302,9 +4302,54 @@ function fasceMargineDiSpesa(fasce, spesa) {
 }
 // il margine di un prodotto in percentuale, o null se non si sa — senza
 // costo di acquisto non c'e' fascia e non c'e' sconto
+// Quanto costa davvero un prodotto.
+//
+// Un bundle virtuale non ha un costo suo: e' la somma dei netti dei suoi
+// componenti, per le quantita' della distinta. Quel numero si calcola una
+// volta sola, all'avvio, e viaggia sul prodotto come
+// costo_acquisto_effettivo — non si scrive mai nel database, cosi' se
+// domani cambia il costo di un componente il kit si riprezza da solo.
+//
+// Prima chi chiedeva il margine di un kit leggeva costo_acquisto e
+// trovava vuoto: "margine sconosciuto", quindi niente sconto a fasce e
+// niente punti. Succedeva sui vassoi minitray e sulla pelle sintetica,
+// che un costo ce l'hanno eccome.
+function costoAcquistoDi(prodotto) {
+  const effettivo = prodotto?.costo_acquisto_effettivo;
+  if (effettivo != null && effettivo !== "") return effettivo;
+  const proprio = prodotto?.costo_acquisto;
+  return proprio == null || proprio === "" ? null : proprio;
+}
+// Il costo di un bundle dalla sua distinta. Se manca il costo anche di un
+// solo componente il bundle resta senza costo: meglio dire "non lo so"
+// che un numero per difetto, che farebbe sembrare il margine piu' grasso
+// di quello che e' e regalerebbe sconto e punti su un margine inventato.
+function costoBundleDaDistinta(bundle, bundleComponenti, prodottiPerId) {
+  const righe = (bundleComponenti || []).filter((bc) => bc.bundle_id === bundle.id);
+  if (righe.length === 0) return null;
+  let totale = 0;
+  for (const bc of righe) {
+    const comp = prodottiPerId[bc.componente_id];
+    if (comp?.costo_acquisto == null || comp.costo_acquisto === "") return null;
+    totale += Number(comp.costo_acquisto) * (Number(bc.quantita_per_bundle) || 0);
+  }
+  return round2(totale);
+}
+// I prodotti con addosso il costo dei bundle gia' risolto: si fa una
+// volta in App e da li' in poi ogni pagina vede la stessa cifra.
+function conCostoDeiBundle(prodottiShop, bundleComponenti) {
+  if (!Array.isArray(prodottiShop) || prodottiShop.length === 0) return prodottiShop || [];
+  if (!Array.isArray(bundleComponenti) || bundleComponenti.length === 0) return prodottiShop;
+  const perId = Object.fromEntries(prodottiShop.map((p) => [p.id, p]));
+  return prodottiShop.map((p) => {
+    if (!bundleVirtuale(p) || (p.costo_acquisto != null && p.costo_acquisto !== "")) return p;
+    const costo = costoBundleDaDistinta(p, bundleComponenti, perId);
+    return costo == null ? p : { ...p, costo_acquisto_effettivo: costo };
+  });
+}
 function marginePercentualeDi(prodotto) {
   const netto = Number(prodotto?.prezzo_vendita);
-  const costo = prodotto?.costo_acquisto;
+  const costo = costoAcquistoDi(prodotto);
   if (!(netto > 0) || costo == null || costo === "") return null;
   return ((netto - Number(costo)) / netto) * 100;
 }
@@ -64992,9 +65037,13 @@ export default function App() {
   const [venditeShopCrm, setVenditeShopCrm] = useState([]);
   // catalogo prodotti WooCommerce (sincronizzato da woo-sync-catalogo)
   const [categorieProdotti, setCategorieProdotti] = useState([]);
-  const [prodottiShop, setProdottiShop] = useState([]);
+  const [prodottiShopGrezzi, setProdottiShop] = useState([]);
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   const [bundleComponenti, setBundleComponenti] = useState([]);
+  // Da qui in poi "prodottiShop" sono i prodotti col costo dei bundle gia'
+  // risolto dalla distinta: ogni pagina che chiede un margine ottiene la
+  // stessa risposta, senza doversi ricordare di risolverlo da sola.
+  const prodottiShop = useMemo(() => conCostoDeiBundle(prodottiShopGrezzi, bundleComponenti), [prodottiShopGrezzi, bundleComponenti]);
   const [impostazioniIva, setImpostazioniIva] = useState(null);
   const [intestazioneSocieta, setIntestazioneSocieta] = useState(null);
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
