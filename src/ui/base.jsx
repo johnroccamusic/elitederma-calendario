@@ -158,6 +158,28 @@ function Freccetta({ verso = "su", attiva, onClick }) {
   );
 }
 
+/**
+ * Le due freccette impilate, da appoggiare a un numero.
+ *
+ * Stanno in una colonnina stretta col suo bordo: sopra si sale, sotto si
+ * scende. E' la forma dei campi numerici di sempre, e si usa dove i
+ * numeri sono tanti e vicini — una lista di accessori, una tabella di
+ * costi — perche' due tasti grandi per riga diventano un muro.
+ */
+export function FrecceSuGiu({ altezza = 30, larghezza = 20, raggio = 8, puoSalire = true, puoScendere = true, onSu, onGiu }) {
+  return (
+    <span style={{
+      display: "flex", flexDirection: "column", width: larghezza, height: altezza,
+      border: `1px solid ${CREAM_BORDER}`, borderRadius: raggio,
+      overflow: "hidden", background: "#fff", flexShrink: 0,
+    }}>
+      <Freccetta verso="su" attiva={puoSalire} onClick={onSu} />
+      <span style={{ height: 1, background: CREAM_BORDER, flexShrink: 0 }} />
+      <Freccetta verso="giu" attiva={puoScendere} onClick={onGiu} />
+    </span>
+  );
+}
+
 export function ContatoreQuantita({ valore, onCambia, min = 0, max = null, passo = 1, compatto = false, frecce = false, titolo }) {
   const n = Number(valore) || 0;
   const [bozza, setBozza] = useState(null);
@@ -215,20 +237,17 @@ export function ContatoreQuantita({ valore, onCambia, min = 0, max = null, passo
           borderTopRightRadius: 0, borderBottomRightRadius: 0,
           padding: "4px 2px", fontSize: compatto ? 13 : 14,
         })}
-        <span style={{
-          display: "flex", flexDirection: "column", width: 20, height: altezza,
-          border: `1px solid ${CREAM_BORDER}`, borderTopRightRadius: 8, borderBottomRightRadius: 8,
-          overflow: "hidden", background: "#fff", flexShrink: 0,
-          // la colonna scavalca di un pixel il bordo del campo: fra i due
-          // resta una riga sola invece di due appiccicate. Si fa cosi' e
-          // non togliendo il bordo destro al campo perche' quello e' un
-          // bordo che arriva da inputStyle, e disfarlo da qui vorrebbe
-          // dire ricordarsi di rifarlo ogni volta che inputStyle cambia
-          marginLeft: -1,
-        }}>
-          <Freccetta verso="su" attiva={puoSalire} onClick={() => onCambia(limita(n + passo))} />
-          <span style={{ height: 1, background: CREAM_BORDER, flexShrink: 0 }} />
-          <Freccetta verso="giu" attiva={puoScendere} onClick={() => onCambia(limita(n - passo))} />
+        {/* la colonna scavalca di un pixel il bordo del campo: fra i due
+            resta una riga sola invece di due appiccicate. Si fa cosi' e
+            non togliendo il bordo destro al campo perche' quello e' un
+            bordo che arriva da inputStyle, e disfarlo da qui vorrebbe
+            dire ricordarsi di rifarlo ogni volta che inputStyle cambia */}
+        <span style={{ display: "flex", marginLeft: -1 }}>
+          <FrecceSuGiu
+            altezza={altezza} raggio="0 8px 8px 0" puoSalire={puoSalire} puoScendere={puoScendere}
+            onSu={() => onCambia(limita(n + passo))}
+            onGiu={() => onCambia(limita(n - passo))}
+          />
         </span>
       </div>
     );

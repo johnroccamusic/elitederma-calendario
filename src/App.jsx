@@ -12,7 +12,7 @@ import {
   fontDisplay, stileTitoloPagina, fontBody, fontHero, fontCondensato,
   inputStyle, campoCompattoStyle, round2, numeroFascia, corpoTestoInFila,
 } from "./ui/stile.js";
-import { Button, Field, CampoNumero, ContatoreQuantita, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
+import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import { caricaKitInAula, kitDaAprireAutomaticamente, registraPrelieviDaVendita } from "./rientri/pos";
 import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
 import SchedaRientro from "./rientri/SchedaRientro.jsx";
@@ -25891,13 +25891,6 @@ function PannelloRiepilogoAmministrativo({
                             )}
                           </div>
                           <div style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                            {r.giorni != null && (
-                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>−</button>
-                                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, minWidth: 26, textAlign: "center", whiteSpace: "nowrap" }}>{r.giorni}gg</span>
-                                <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>+</button>
-                              </div>
-                            )}
                             {r.tipo === "location" && (() => {
                               const modalita = modalitaSplitMaster(r);
                               return (
@@ -25955,6 +25948,25 @@ function PannelloRiepilogoAmministrativo({
                                 </div>
                               );
                             })()}
+                            {/* I giorni stanno DOPO le spunte: B/C/1/2 dicono
+                                come si paga, ed e' la prima cosa che si
+                                guarda; i giorni sono una correzione, e
+                                stavano sopra a farsi leggere per primi.
+                                Le due freccette al posto del meno e del
+                                piu': in una tabella di righe fitte due
+                                tasti quadrati per riga erano il pezzo piu'
+                                pesante di tutta la colonna. */}
+                            {r.giorni != null && (
+                              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, minWidth: 26, textAlign: "right", whiteSpace: "nowrap" }}>{r.giorni}gg</span>
+                                <FrecceSuGiu
+                                  altezza={22} larghezza={16} raggio={6}
+                                  puoScendere={r.giorni > 0}
+                                  onSu={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)}
+                                  onGiu={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))}
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                         {/* sotto la riga "Quota venditore", chi quella quota
