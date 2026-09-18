@@ -39721,28 +39721,35 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
           </button>
         </div>
 
-        <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 22, padding: isMobile ? "18px 18px 16px" : "24px 28px 22px", marginBottom: isMobile ? 12 : 14 }}>
-          <div style={{ position: "absolute", right: isMobile ? -10 : 10, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
-            <IconaQiBanca size={isMobile ? 130 : 170} color="#8A6D1D" />
+        {/* I tre numeri del periodo su una riga sola, da telefono come da
+            computer: si leggono insieme o non si leggono, e messi uno
+            sopra l'altro il saldo mangiava mezzo schermo prima che si
+            vedessero entrate e uscite. Il saldo tiene la colonna piu'
+            larga perche' e' quello che si guarda per primo; la riga di
+            dettaglio sta sotto a tutta la fascia, perche' dentro una
+            colonna stretta diventava una colonna di parole. */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: isMobile ? 7 : 12, marginBottom: isMobile ? 6 : 8, alignItems: "stretch" }}>
+          <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 18, padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0 }}>
+            <div style={{ position: "absolute", right: -16, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
+              <IconaQiBanca size={isMobile ? 62 : 104} color="#8A6D1D" />
+            </div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, position: "relative", lineHeight: 1.2 }}>Saldo del periodo</div>
+            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 20 : 34, color: saldoPeriodo >= 0 ? NAVY : "#C0392B", lineHeight: 1.1, marginTop: 4, position: "relative", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{saldoPeriodo < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
           </div>
-          <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 2 }}>Saldo del periodo</div>
-          <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 44 : 56, color: saldoPeriodo >= 0 ? NAVY : "#C0392B", lineHeight: 1.05, marginTop: 6, position: "relative" }}>{saldoPeriodo < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
-          <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, marginTop: 6, position: "relative" }}>
-            entrate meno uscite, senza gli ignorati · {etichettaPrec}: {saldoPrec < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPrec))}
-            {ultimoConSaldo ? ` · saldo conto al ${fmtData(ultimoConSaldo.data_operazione)}: ${fmtEuroErp2(Number(ultimoConSaldo.saldo))}` : ""}
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12, marginBottom: isMobile ? 14 : 18 }}>
-          <div style={{ background: "#EEF7F0", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 1.2 }}>Entrate</div>
-            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 32, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(entrate)}</div>
+          <div style={{ background: "#EEF7F0", borderRadius: 18, padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, lineHeight: 1.2 }}>Entrate</div>
+            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 15 : 26, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(entrate)}</div>
             {confronto(entrate, entratePrec, false)}
           </div>
-          <div style={{ background: "#FBEEEC", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 1.2 }}>Uscite</div>
-            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 32, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(uscite)}</div>
+          <div style={{ background: "#FBEEEC", borderRadius: 18, padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, lineHeight: 1.2 }}>Uscite</div>
+            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 15 : 26, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(uscite)}</div>
             {confronto(uscite, uscitePrec, true)}
           </div>
+        </div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 11 : 13, color: MUTED, marginBottom: isMobile ? 14 : 18, lineHeight: 1.45 }}>
+          entrate meno uscite, senza gli ignorati · {etichettaPrec}: {saldoPrec < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPrec))}
+          {ultimoConSaldo ? ` · saldo conto al ${fmtData(ultimoConSaldo.data_operazione)}: ${fmtEuroErp2(Number(ultimoConSaldo.saldo))}` : ""}
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
@@ -41792,25 +41799,29 @@ function PaginaInserimentoCostiRicavi({
             const saldoPositivo = saldoPeriodo >= 0;
             return (
               <>
-                <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 22, padding: isMobile ? "18px 18px 16px" : "24px 28px 22px", marginBottom: isMobile ? 12 : 14 }}>
-                  <div style={{ position: "absolute", right: isMobile ? -10 : 10, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
-                    <IconaQiPortafoglio size={isMobile ? 130 : 170} color="#8A6D1D" />
+                {/* Stessa fascia della Riconciliazione banca: i tre numeri
+                    su una riga sola, da telefono come da computer. */}
+                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: isMobile ? 7 : 12, marginBottom: isMobile ? 6 : 8, alignItems: "stretch" }}>
+                  <div style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 18, padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0 }}>
+                    <div style={{ position: "absolute", right: -16, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
+                      <IconaQiPortafoglio size={isMobile ? 62 : 104} color="#8A6D1D" />
+                    </div>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, position: "relative", lineHeight: 1.2 }}>Saldo del periodo</div>
+                    <div style={{ ...fontHero, fontSize: isMobile ? 20 : 34, color: saldoPositivo ? NAVY : "#C0392B", lineHeight: 1.1, marginTop: 4, position: "relative", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{saldoPositivo ? "" : "−"}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
                   </div>
-                  <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 2 }}>Saldo del periodo</div>
-                  <div style={{ ...fontHero, fontSize: isMobile ? 44 : 56, color: saldoPositivo ? NAVY : "#C0392B", lineHeight: 1.05, marginTop: 6, position: "relative" }}>{saldoPositivo ? "" : "−"}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
-                  <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, marginTop: 6, position: "relative" }}>entrate meno uscite del periodo{!personalizzatoPN ? ` · ${etichettaPeriodoPrecPN}: ${saldoPrecedentePN < 0 ? "−" : ""}${fmtEuroErp(Math.abs(saldoPrecedentePN))}` : ""}</div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12, marginBottom: isMobile ? 14 : 18 }}>
-                  <div style={{ background: "#EEF7F0", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 1.2 }}>Entrate</div>
-                    <div style={{ ...fontHero, fontSize: isMobile ? 26 : 32, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(totaleEntrate)}</div>
+                  <div style={{ background: "#EEF7F0", borderRadius: 18, padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, lineHeight: 1.2 }}>Entrate</div>
+                    <div style={{ ...fontHero, fontSize: isMobile ? 15 : 26, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(totaleEntrate)}</div>
                     {confronto(totaleEntrate, entratePrecedentiPN, variazioneEntratePN, false)}
                   </div>
-                  <div style={{ background: "#FBEEEC", borderRadius: 18, padding: isMobile ? "14px 14px" : "18px 20px", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 1.2 }}>Uscite</div>
-                    <div style={{ ...fontHero, fontSize: isMobile ? 26 : 32, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(totaleSpese)}</div>
+                  <div style={{ background: "#FBEEEC", borderRadius: 18, padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, lineHeight: 1.2 }}>Uscite</div>
+                    <div style={{ ...fontHero, fontSize: isMobile ? 15 : 26, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(totaleSpese)}</div>
                     {confronto(totaleSpese, totalePrecedentePN, variazionePctPN, true)}
                   </div>
+                </div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 11 : 13, color: MUTED, marginBottom: isMobile ? 14 : 18, lineHeight: 1.45 }}>
+                  entrate meno uscite del periodo{!personalizzatoPN ? ` · ${etichettaPeriodoPrecPN}: ${saldoPrecedentePN < 0 ? "−" : ""}${fmtEuroErp(Math.abs(saldoPrecedentePN))}` : ""}
                 </div>
               </>
             );
