@@ -60267,7 +60267,7 @@ function ModaleInventarioSede({ corsoData, corso, inviatiPerProdotto, prodottiSh
     </Modal>
   );
 }
-function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
+function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, prodottiImmagini = [], inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
   const oggiStr = dataOggiStr();
   // stessa intestazione (data/corso/città nel colore del corso) della
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
@@ -60381,6 +60381,35 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
     Object.keys(per).filter((t) => !ordine.includes(t)).sort().forEach((t) => righe.push({ taglia: t, quante: per[t] }));
     return { righe, totale: righe.reduce((n, r) => n + r.quante, 0), senzaTaglia, senzaDivisa };
   })();
+
+  // La foto del prodotto accanto al nome.
+  //
+  // Chi prepara la scatola ha in mano un oggetto e sulla pagina un nome:
+  // "Grip Wrap nero - 1 pezzo" non dice che aspetto abbia, e fra due
+  // pigmenti dello stesso colore il nome non basta. La foto e' la prima
+  // immagine del prodotto, quella che si vede anche a magazzino e al POS.
+  //
+  // Verticale per intero su fondo bianco, non ritagliata al quadrato: le
+  // foto dei prodotti sono quasi tutte alte e strette — un pennello, una
+  // fiala — e il quadrato ne mostrerebbe solo il manico.
+  const immaginePerProdotto = useMemo(() => {
+    const mappa = {};
+    [...(prodottiImmagini || [])]
+      .sort((a, b) => (a.ordine || 0) - (b.ordine || 0))
+      .forEach((im) => { if (!mappa[im.prodotto_id]) mappa[im.prodotto_id] = im.url; });
+    return mappa;
+  }, [prodottiImmagini]);
+
+  function FotoProdotto({ prodottoId, lato = 34 }) {
+    const url = immaginePerProdotto[prodottoId];
+    return (
+      <span style={{ width: lato, height: lato, borderRadius: 9, background: url ? "#fff" : BG, border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, padding: url ? 2 : 0 }}>
+        {url
+          ? <img src={url} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+          : <IconaScatolaErp size={Math.round(lato * 0.42)} color={MUTED} />}
+      </span>
+    );
+  }
 
   const tuttiAccessori = accessoriDaElencare({
     corsiKitProdotti,
@@ -60729,7 +60758,10 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           return gruppi;
         }, {})).map((g) => (
           <div key={g.prodottoId} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nomeProdotto(g.prodottoId)}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+              <FotoProdotto prodottoId={g.prodottoId} />
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 0, overflowWrap: "anywhere" }}>{nomeProdotto(g.prodottoId)}</span>
+            </span>
             {/* "Da vendere" sta qui e non piu' sui prodotti extra kit:
                 una consulenza che parte per essere venduta e' un caso
                 che si pone davvero, un rotolo lettino no. */}
@@ -60774,7 +60806,10 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
       <div style={{ marginTop: 12 }}>
         {prodottiExtraIds.map((prodottoId) => (
           <div key={prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 140px", minWidth: 0, overflowWrap: "anywhere" }}>{nomeProdotto(prodottoId)}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 140px", minWidth: 0 }}>
+              <FotoProdotto prodottoId={prodottoId} />
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, overflowWrap: "anywhere" }}>{nomeProdotto(prodottoId)}</span>
+            </span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {/* Qui la spunta "Da vendere" non c'e' piu'. Questa lista e'
                   quella dei consumabili del corso — olio, guanti, rotolo
@@ -60817,7 +60852,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           </div>
         ) : (
           <button onClick={() => setPickerExtraAperto(true)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", marginTop: prodottiExtraIds.length ? 8 : 0, width: "100%" }}>
-            + Aggiungi prodotti extra kit
+            + Aggiungi prodotti extra o da vendita
           </button>
         )}
       </div>
@@ -60831,10 +60866,14 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           </div>
           {tuttiAccessori.map((r) => (
             <div key={r.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0" }}>
-              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
-                {nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}
+              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <FotoProdotto prodottoId={r.prodotto_id} />
+                <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>
+                  {nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}
+                </span>
               </span>
               <ContatoreQuantita
+                frecce
                 valore={statoEdizione.accessori_quantita?.[r.chiave] ?? (Number(r.quantita) || 0)}
                 titolo="Quanti pezzi partono per il corso"
                 onCambia={(n) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.chiave]: n } })}
@@ -60852,7 +60891,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, bundleComponenti, inventarioSede, prodottiApertiMagazzino, utenteLoggato, ruoloUtente, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, prodottiImmagini = [], bundleComponenti, inventarioSede, prodottiApertiMagazzino, utenteLoggato, ruoloUtente, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
   // Chi programma non viene mai chiuso fuori. Le fasi servono a impedire
   // che qualcuno cambi per distrazione una scatola gia' partita, non a
   // impedire di rimediare a un errore: quando il dato in app e la realta'
@@ -61580,6 +61619,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 kitDefinizioni={kitDefinizioni}
                 corsiKitProdotti={corsiKitProdotti}
                 prodottiShop={prodottiShop}
+                prodottiImmagini={prodottiImmagini}
                 inventarioSede={inventarioSede}
                 prodottiApertiMagazzino={prodottiApertiMagazzino}
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === edizioneSel.id)}
@@ -65485,7 +65525,7 @@ export default function App() {
     compensipremi: [],
     gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
-    spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
+    spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
     spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location"],
@@ -67659,6 +67699,7 @@ export default function App() {
         <PaginaLogisticaProdotti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} inventarioSede={inventarioSede}
+          prodottiImmagini={prodottiImmagini}
           prodottiApertiMagazzino={prodottiApertiMagazzino}
           utenteLoggato={utenteLoggato}
           ruoloUtente={ruoloUtente}

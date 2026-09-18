@@ -133,7 +133,32 @@ export function TastoLivelloPrecedente({ titolo, onClick, soloIcona = false }) {
 // proprio. Qui i tasti sono quadrati veri, distanziati, e il numero resta
 // scrivibile: chi deve mandare quaranta dischetti li scrive, non clicca
 // quaranta volte.
-export function ContatoreQuantita({ valore, onCambia, min = 0, max = null, passo = 1, compatto = false, titolo }) {
+// Due freccette appoggiate al campo, una sopra l'altra: la forma di
+// sempre dei campi numerici, quella che il browser disegna da solo. Si
+// usa dove le righe sono tante e vicine — una lista di accessori — e
+// due quadrati da 44 per riga diventano un muro di piu' e meno che
+// copre quello che si sta leggendo.
+function Freccetta({ verso = "su", attiva, onClick }) {
+  return (
+    <button
+      type="button" onClick={() => attiva && onClick()} aria-label={verso === "su" ? "Uno in piu'" : "Uno in meno"}
+      style={{
+        flex: 1, width: "100%", padding: 0, border: "none", background: "transparent",
+        cursor: attiva ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center",
+        color: attiva ? NAVY : "#C9C4B8", minHeight: 0,
+      }}
+    >
+      <svg width="9" height="6" viewBox="0 0 9 6" fill="none" aria-hidden="true">
+        <path
+          d={verso === "su" ? "M1 5L4.5 1.5L8 5" : "M1 1L4.5 4.5L8 1"}
+          stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+}
+
+export function ContatoreQuantita({ valore, onCambia, min = 0, max = null, passo = 1, compatto = false, frecce = false, titolo }) {
   const n = Number(valore) || 0;
   const [bozza, setBozza] = useState(null);
   const lato = compatto ? 34 : 44;
@@ -158,6 +183,57 @@ export function ContatoreQuantita({ valore, onCambia, min = 0, max = null, passo
     setBozza(null);
     onCambia(limita(pulito === "" ? 0 : pulito.replace(",", ".")));
   }
+  const campo = (stileExtra = {}) => (
+    <input
+      type="text" inputMode="numeric"
+      value={bozza != null ? bozza : String(n)}
+      onChange={(e) => setBozza(e.target.value)}
+      onFocus={(e) => { setBozza(String(n)); e.target.select(); }}
+      onBlur={fissa}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.currentTarget.blur(); return; }
+        // le frecce della tastiera fanno quello che fanno le freccette
+        // disegnate: chi scrive col tastierino non deve prendere il mouse
+        if (e.key === "ArrowUp" && puoSalire) { e.preventDefault(); setBozza(null); onCambia(limita(n + passo)); }
+        if (e.key === "ArrowDown" && puoScendere) { e.preventDefault(); setBozza(null); onCambia(limita(n - passo)); }
+      }}
+      style={{
+        ...inputStyle, width: compatto ? 48 : 58, textAlign: "center",
+        padding: compatto ? "6px 2px" : "10px 2px", fontWeight: 700,
+        fontSize: compatto ? 13 : 15, height: lato, boxSizing: "border-box",
+        ...stileExtra,
+      }}
+    />
+  );
+
+  if (frecce) {
+    const altezza = compatto ? 30 : 34;
+    return (
+      <div style={{ display: "inline-flex", alignItems: "stretch", flexShrink: 0 }} title={titolo}>
+        {campo({
+          width: compatto ? 42 : 48, height: altezza,
+          borderTopRightRadius: 0, borderBottomRightRadius: 0,
+          padding: "4px 2px", fontSize: compatto ? 13 : 14,
+        })}
+        <span style={{
+          display: "flex", flexDirection: "column", width: 20, height: altezza,
+          border: `1px solid ${CREAM_BORDER}`, borderTopRightRadius: 8, borderBottomRightRadius: 8,
+          overflow: "hidden", background: "#fff", flexShrink: 0,
+          // la colonna scavalca di un pixel il bordo del campo: fra i due
+          // resta una riga sola invece di due appiccicate. Si fa cosi' e
+          // non togliendo il bordo destro al campo perche' quello e' un
+          // bordo che arriva da inputStyle, e disfarlo da qui vorrebbe
+          // dire ricordarsi di rifarlo ogni volta che inputStyle cambia
+          marginLeft: -1,
+        }}>
+          <Freccetta verso="su" attiva={puoSalire} onClick={() => onCambia(limita(n + passo))} />
+          <span style={{ height: 1, background: CREAM_BORDER, flexShrink: 0 }} />
+          <Freccetta verso="giu" attiva={puoScendere} onClick={() => onCambia(limita(n - passo))} />
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} title={titolo}>
       <button type="button" style={tasto(puoScendere)} onClick={() => puoScendere && onCambia(limita(n - passo))} aria-label="Uno in meno">−</button>
