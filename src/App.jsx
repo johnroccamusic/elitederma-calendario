@@ -11757,7 +11757,13 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     });
     const premi = premiVolumeRaggiunti(pezzi);
     const gruppi = Object.values(perGruppo).map((g) => ({ ...g, euro: round2(g.euro) })).sort((a, b) => b.euro - a.euro);
-    const puntiMaturati = round2((puntiCorsoLordi * quotePunti.corso) / 100 + (puntiFuoriLordi * quotePunti.fuoriCorso) / 100);
+    // I punti che la master vede sono INTERI: quelli che il carrello ha
+    // generato, non la sua fetta. Quanto gliene spetta — 25, 20, 40% a
+    // seconda del ranking — lo decide chi amministra, dopo, guardando
+    // questo numero. Mostrarle gia' la quota significherebbe farle vedere
+    // un traguardo che si sposta quando cambia il suo ranking, e nascondere
+    // quanto ha prodotto davvero.
+    const puntiMaturati = round2(puntiCorsoLordi + puntiFuoriLordi);
     return {
       venditeTotale, venditeCorso, venditeReferral, puntiAccumulati, puntiMaturati,
       euroCorso: round2(euroCorso), euroReferral: round2(euroReferral),
@@ -11893,9 +11899,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               </div>
               <div style={cardPunti}>
                 <div style={lblPunti}>Punti<br />accumulati</div>
-                {/* i punti maturati davvero: quelli dei prodotti venduti,
-                    ridotti con le quote per canale di Gestione punti (e, in
-                    futuro, dello sconto usato dagli allievi) */}
+                {/* i punti INTERI generati dai carrelli: il cedibile dei
+                    prodotti venduti meno la sicurezza, ridotto dello sconto
+                    che l'allieva ha ottenuto. Non e' la fetta che spetta a
+                    lei — quella si decide sul ranking, guardando questo
+                    numero */}
                 <div style={{ ...numPunti, color: NAVY }}>{fmtPunti(provvigioniMaster.puntiMaturati)}</div>
               </div>
               {/* Punti bonus: tutti i punti dei prodotti venduti, interi,
@@ -20370,7 +20378,6 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
   const [fasceCartaAmm] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
   const [regolaReferralAmm] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   const [schemaPuntiAmm] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
-  const [quotePuntiAmm] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
   const prodottoPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((x) => [x.id, x])), [prodottiShop]);
   const [aperti, setAperti] = useState({});
   const ordinati = [...lista].sort((a, b) => String(b.creato || "").localeCompare(String(a.creato || "")));
@@ -20384,7 +20391,6 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
       ? fasceCorsiPerPagamento(serieScontoScritta(fasceCartaAmm) ? fasceCartaAmm : couponEdizione.fasce_sconto, fasceContantiAmm, contanti)
       : null;
     const sicurezza = sicurezzaPuntiDi(schemaPuntiAmm);
-    const quote = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiAmm || {}) };
     const fasceRiduzione = aFasce ? fasce : (regolaReferralAmm?.fasce || []);
     const dettaglio = righe.map((r) => {
       const prodotto = prodottoPerId[r.prodottoId] || null;
@@ -20395,7 +20401,7 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
       const pp = puntiProdotto(prodotto, sicurezza, contanti);
       const teorici = pp == null ? null : round2(pp * (Number(r.quantita) || 0));
       const punti = teorici == null ? null
-        : round2((puntiDopoScontoAllievo(teorici, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione, subtotale)) * (c.corsoPosId ? quote.corso : quote.fuoriCorso)) / 100);
+        : round2(puntiDopoScontoAllievo(teorici, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione, subtotale)));
       return { ...r, prodotto, lordo, margine, scontoPct, sconto, teorici, punti };
     });
     const sconto = round2(dettaglio.reduce((t, d) => t + d.sconto, 0));
@@ -55311,8 +55317,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // regola della dashboard: per ogni prodotto il cedibile (sul netto con
   // carta, sul lordo con contanti o buono Amazon) meno la sicurezza, per
   // la quantita'; poi la riduzione per lo sconto dato all'allieva (sconto
-  // % x valore di fascia) e la quota del canale, al corso o fuori. La
-  // spedizione non fa punti
+  // % x valore di fascia). Sono punti INTERI: la quota che spetta alla
+  // master — 25, 20, 40% secondo il ranking — la decide chi amministra,
+  // dopo. La spedizione non fa punti
   const puntiCarrello = (() => {
     if (operatore?.tipo !== "master" || omaggioAttivo || carrello.length === 0) return null;
     const sicurezza = sicurezzaPuntiDi(schemaPuntiPos);
@@ -55335,8 +55342,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         : 0;
       effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione, subtotale));
     });
+    // interi, non la quota della master: vedi la dashboard
     const quota = corsoPosSel ? quote.corso : quote.fuoriCorso;
-    return { teorici: round2(teorici), maturati: round2((effettivi * quota) / 100), quota };
+    return { teorici: round2(teorici), maturati: round2(effettivi), quota };
   })();
 
   async function confermaVendita() {
@@ -55953,7 +55961,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
             </div>
             {puntiCarrello && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 6 }} title={`Punti teorici ${fmtPunti(puntiCarrello.teorici)}, quota del canale ${puntiCarrello.quota}%: cedibile meno sicurezza, ridotti dello sconto dato all'allieva`}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 6 }} title={`Punti teorici ${fmtPunti(puntiCarrello.teorici)}: cedibile meno sicurezza, ridotti dello sconto dato all'allieva. Sono punti interi, non la quota della master`}>
                 <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Punti maturati con questo carrello</span>
                 <span style={{ ...fontBody, fontSize: 15, fontWeight: 800, color: GOLD }}>{fmtPunti(puntiCarrello.maturati)}</span>
               </div>
