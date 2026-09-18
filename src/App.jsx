@@ -26162,6 +26162,47 @@ function PannelloRiepilogoAmministrativo({
                   </div>
                 )}
 
+                {/* La banda dei totali.
+                    
+                    Sta sulla STESSA griglia delle righe, non su una riga
+                    sua: e' l'unico modo perche' i tre totali cadano
+                    esattamente sotto le tre colonne che sommano. Una
+                    somma scritta poco piu' a destra della colonna che
+                    somma costringe a rileggere due volte per capire a
+                    cosa si riferisce.
+                    
+                    Somma tutto quello che la tabella mostra: le righe
+                    automatiche e le spese libere scritte a mano. */}
+                {(() => {
+                  const sommaAuto = (campo) => righeSpeseTutte.reduce((n, r) => n + (Number(r[campo]) || 0), 0);
+                  const totaleLibere = (speseClasseLibere || []).reduce((n, x) => n + (Number(x.totale) || 0), 0);
+                  const cashLibere = (speseClasseLibere || []).reduce((n, x) => n + (Number(x.importo_pagato_cash) || 0), 0);
+                  const totale = round2(sommaAuto("totale") + totaleLibere);
+                  const cash = round2(sommaAuto("cash") + cashLibere);
+                  const bonifico = round2(totale - cash);
+                  if (!(totale || cash || bonifico)) return null;
+                  const cifra = { ...fontBody, fontSize: isMobile ? 12.5 : 15, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 4 : 5, minWidth: 0 };
+                  return (
+                    <div style={{
+                      display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP,
+                      gap: isMobile ? 4 : 8, alignItems: "center",
+                      background: "#F4F4F6", borderRadius: 12, padding: isMobile ? "12px 6px" : "14px 10px",
+                      marginTop: 6, marginBottom: 20,
+                    }}>
+                      <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: isMobile ? 8 : 12 }}>
+                        <span style={{ width: isMobile ? 28 : 34, height: isMobile ? 28 : 34, borderRadius: 9, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0 }}>
+                          <IconaAvvisoMonete size={isMobile ? 15 : 18} color={NAVY} />
+                        </span>
+                        <span style={{ ...fontBody, fontSize: isMobile ? 11 : 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>Totale costi</span>
+                      </div>
+                      <div style={cifra}>€ {totale}</div>
+                      <div style={cifra}>€ {bonifico}</div>
+                      <div style={cifra}>€ {cash}</div>
+                      <div /><div /><div />
+                    </div>
+                  );
+                })()}
+
                 {costiExtra.map((voce, idx) => (
                   <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
                     <div style={{ flex: "2 1 140px", minWidth: 0 }}>
