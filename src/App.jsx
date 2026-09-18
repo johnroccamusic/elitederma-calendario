@@ -10983,10 +10983,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       const gap = isMobile ? 6 : 12;
       const paddingOrizzontale = (isMobile ? 6 : 16) * 2 + 2; // padding dei due lati + bordo
       const quantiTotali = tastiRiga.length + (couponVisibile ? 1 : 0);
+      // da telefono tre punti in meno: 9 invece di 12. Su schermo largo
+      // la misura resta quella di sempre
       const misura = (quanti) => corpoTestoInFila({
         larghezzaRiga: larghezzaTasti,
         quanti, gap, paddingOrizzontale, parolaPiuLunga: piuLunga,
-        massimo: isMobile ? 12 : 15,
+        massimo: isMobile ? 9 : 15,
       });
 
       // Sotto una certa misura rimpicciolire non e' piu' adattarsi.
@@ -11002,6 +11004,13 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       // che e' quello che alla proporzione serviva fin dall'inizio. Con
       // tre tasti non succede mai; con cinque succede sui telefoni
       // stretti, dove una riga sola era gia' una finzione.
+      // La soglia NON scende col corpo, resta 9.
+      //
+      // Abbassandola a 7 il testo sarebbe rimasto su una riga sola anche
+      // dove prima andava a capo, e su un telefono da 390 con cinque
+      // scatole sarebbe sceso a 7,2px: piu' piccolo di prima, non solo
+      // di tre punti. Cosi' invece cambia una cosa sola — il corpo
+      // massimo — e dove la riga andava a capo continua ad andarci.
       const SOGLIA_LEGGIBILE = 9;
       const corpoUnaFila = misura(quantiTotali);
       const aCapo = isMobile && quantiTotali > 2 && corpoUnaFila < SOGLIA_LEGGIBILE;
