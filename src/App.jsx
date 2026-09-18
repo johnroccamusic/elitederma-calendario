@@ -15701,6 +15701,15 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
   const [permessiLocali, setPermessiLocali] = useState(venditore.permessi || []);
   useEffect(() => { setPermessiLocali(venditore.permessi || []); }, [venditore.permessi]);
   const [password, setPassword] = useState(venditore.password || "");
+  const [cognome, setCognome] = useState(venditore.cognome || "");
+  useEffect(() => { setCognome(venditore.cognome || ""); }, [venditore.cognome]);
+  // si salva uscendo dal campo, come la password qui accanto
+  async function salvaCognome() {
+    if ((venditore.cognome || "") === cognome.trim()) return;
+    const { error } = await supabase.from("venditori").update({ cognome: cognome.trim() || null }).eq("id", venditore.id);
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    ricarica(["venditori"]);
+  }
   async function toggleTasto(chiave, checked) {
     const attuali = permessiLocali;
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
@@ -15742,10 +15751,26 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
       onBlur={salvaPassword}
     />
   );
+  const campoCognome = (
+    <input
+      style={{ ...inputStyle, padding: "7px 9px", fontSize: 12 }}
+      value={cognome}
+      placeholder="—"
+      title="Il nome accanto non si tocca: e' l'aggancio con cui gli iscritti trovano il loro venditore"
+      onChange={(e) => setCognome(e.target.value)}
+      onBlur={salvaCognome}
+    />
+  );
   if (isMobile) {
     return (
       <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
-        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{venditore.nome.toUpperCase()}</div>
+        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>
+          {venditore.nome.toUpperCase()}{venditore.cognome ? ` ${venditore.cognome.toUpperCase()}` : ""}
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Cognome</div>
+          {campoCognome}
+        </div>
         <div style={{ marginBottom: 12 }}>{campoPassword}</div>
         <div style={{ marginBottom: 12 }}>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Email di accesso</div>
@@ -15770,6 +15795,7 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
   return (
     <tr>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY }}>{venditore.nome.toUpperCase()}</td>
+      <td style={tdStyle}>{campoCognome}</td>
       <td style={tdStyle}>
         {campoPassword}
       </td>
@@ -15801,7 +15827,7 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
   const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, whiteSpace: "normal", lineHeight: 1.2, verticalAlign: "bottom", position: "relative" };
   const { larghezzaDi, maniglia } = useColonneRidimensionabili("passwordVenditori_larghezzeColonne");
   const colonneVenditori = [
-    { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 140 }, { chiave: "accesso", larghezza: 170 },
+    { chiave: "nome", larghezza: 140 }, { chiave: "cognome", larghezza: 150 }, { chiave: "password", larghezza: 140 }, { chiave: "accesso", larghezza: 170 },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
      ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
   ];
@@ -15832,6 +15858,10 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
             <thead>
               <tr>
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome venditore{maniglia("nome", larghezzaDi("nome", 140))}</ThOrdina>
+                {/* il cognome sta in una colonna sua e NON dentro il nome:
+                    il nome e' la chiave con cui gli iscritti trovano il
+                    loro venditore, e allungarlo li scollegherebbe tutti */}
+                <th style={thStyle} title="Il nome resta com'e': e' l'aggancio con cui gli iscritti trovano il loro venditore">Cognome{maniglia("cognome", larghezzaDi("cognome", 150))}</th>
                 <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 140))}</th>
                 <th style={thStyle}>Accesso{maniglia("accesso", larghezzaDi("accesso", 170))}</th>
                 {TASTI_HOME.map((t) => (
@@ -32676,7 +32706,7 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   // prima. Il nome NON si usa per unirli: gli iscritti sono agganciati al
   // venditore proprio per nome, e allinearlo gli cancellerebbe le
   // iscrizioni dalla scheda.
-  (venditori || []).forEach((v) => aggiungi("venditori", v.id, v.nome, "venditore",
+  (venditori || []).forEach((v) => aggiungi("venditori", v.id, [v.nome, v.cognome].filter(Boolean).join(" "), "venditore",
     { citta: v.citta, indirizzo: v.indirizzo, partitaIva: v.partita_iva, iban: v.iban, telefono: v.telefono, email: v.email },
     categoriaNomePer(categoriaGruppoPer("venditore", categorieGruppi), costiSottocategorie),
     (v.fornitore_id && chiavePerFornitoreId.get(v.fornitore_id)) || `venditore_${v.id}`));
@@ -65763,7 +65793,7 @@ export default function App() {
     // con le sole colonne sempre presenti e riempio le opzionali con i
     // valori di default, così i venditori restano visibili e utilizzabili.
     venditori: async () => {
-      const ve = await supabase.from("venditori").select("id, nome, ts, permessi, password, email, email_accesso, fornitore_id").order("nome");
+      const ve = await supabase.from("venditori").select("id, nome, cognome, ts, permessi, password, email, email_accesso, fornitore_id").order("nome");
       let venditoriData = ve.data;
       if (ve.error) {
         let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
