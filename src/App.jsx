@@ -42090,6 +42090,30 @@ function PaginaInserimentoCostiRicavi({
     ricarica(["spese"]);
   }
 
+  // Una riga di prima nota non e' sempre una spesa: quando piu' spese
+  // sono state pagate con lo stesso bonifico diventano una riga sola,
+  // col suo id "gruppo_<x>". Aprirla o cancellarla con quell'id non
+  // trova niente — e il modulo, non trovando niente, si apriva vuoto.
+  // Da qui in giu' si lavora sempre su spese vere.
+  function apriModificaDiRiga(m) {
+    const ids = idSpeseDiRiga(m);
+    if (ids.length === 0) { window.alert("Questa riga non corrisponde a nessuna spesa registrata."); return; }
+    // di un gruppo si apre la prima: sono spese distinte e si correggono
+    // una per volta, ed e' meglio che aprire una scheda che non esiste
+    onApriModificaSpesa(ids[0]);
+  }
+  async function eliminaRiga(m) {
+    const ids = idSpeseDiRiga(m);
+    if (ids.length === 0) { window.alert("Questa riga non corrisponde a nessuna spesa registrata."); return; }
+    const domanda = ids.length === 1
+      ? "Eliminare questa spesa?"
+      : `Questa riga raggruppa ${ids.length} spese pagate insieme. Eliminarle tutte?`;
+    if (!window.confirm(domanda)) return;
+    const { error } = await supabase.from("spese").delete().in("id", ids);
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    ricarica(["spese"]);
+  }
+
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 32px 60px" }}>
       {spesaDaAssociare && (
@@ -42261,8 +42285,19 @@ function PaginaInserimentoCostiRicavi({
                             <AzioneTesto onClick={() => setSpesaDaAssociare(m)} colore="#B8860B">da associare</AzioneTesto>
                           );
                         })()}
-                        <AzioneTesto onClick={() => onApriModificaSpesa(m.id)}>Modifica</AzioneTesto>
-                        <AzioneTesto onClick={() => eliminaSpesa(m.id)} colore="#C0392B">Elimina</AzioneTesto>
+                        {/* Modifica ed Elimina vogliono l'id di una spesa
+                            VERA. Una riga che raggruppa piu' spese ha per id
+                            "gruppo_<x>", che nella tabella spese non esiste:
+                            il modulo non trovava niente e si apriva VUOTO,
+                            pronto a salvare una spesa nuova al posto di
+                            quelle che si volevano correggere. */}
+                        <AzioneTesto
+                          onClick={() => apriModificaDiRiga(m)}
+                          title={m.speseGruppo?.length > 1 ? `Questa riga raggruppa ${m.speseGruppo.length} spese: si aprono una per volta` : undefined}
+                        >
+                          Modifica{m.speseGruppo?.length > 1 ? ` (${m.speseGruppo.length})` : ""}
+                        </AzioneTesto>
+                        <AzioneTesto onClick={() => eliminaRiga(m)} colore="#C0392B">Elimina</AzioneTesto>
                       </>
                     )}
                   />
@@ -64370,6 +64405,12 @@ function renderaFatturaElettronicaHtml(xmlTesto) {
 // allegato). Pagina intera (non modale) vista la quantità di campi
 function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi, fornitori, costiCategorie, costiSottocategorie, spese, speseAttribuzioni, ricarica, onBack, titoloPrecedente }) {
   const spesaEsistente = spesaId ? spese.find((s) => s.id === spesaId) : null;
+  // Chiedere di modificare una spesa che non c'e' e ritrovarsi un modulo
+  // VUOTO e' il peggiore dei modi di sbagliare: sembra la scheda giusta
+  // appena svuotata, e salvandola si crea una spesa nuova al posto di
+  // quella che si voleva correggere. Se l'id c'e' ma la spesa no, qui non
+  // si apre niente.
+  const spesaSparita = !!spesaId && !spesaEsistente;
   const attribuzioniEsistenti = spesaId ? speseAttribuzioni.filter((a) => a.spesa_id === spesaId) : [];
   // aperta da una casella del Riepilogo amministrativo di una classe:
   // categoria/sotto-categoria/ambito sono fissi e non modificabili, per
@@ -64590,6 +64631,27 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     setSalvando(false);
     ricarica(prefill?.fatturaFicId ? ["fornitori", "spese", "spese_attribuzioni", "fatture_ricevute_fic"] : ["fornitori", "spese", "spese_attribuzioni"]);
     onBack();
+  }
+
+  if (spesaSparita) {
+    return (
+      <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+            <TastoLivelloPrecedente titolo={titoloPrecedente || "Prima nota cassa"} onClick={onBack} />
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>Spesa non trovata</div>
+          </div>
+          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 20, ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.55 }}>
+            Questa spesa non risulta più registrata: può essere stata eliminata da un altro dispositivo,
+            oppure la riga da cui sei arrivato ne raggruppava più di una.
+            <div style={{ color: MUTED, marginTop: 8 }}>
+              Il modulo non si apre vuoto apposta: salvarlo creerebbe una spesa nuova al posto di quella che volevi correggere.
+            </div>
+            <Button onClick={onBack} style={{ marginTop: 16 }}>Torna indietro</Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
