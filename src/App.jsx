@@ -36573,7 +36573,7 @@ function IntestazioneGiornoScadenzeAttivo({ data }) {
 // combina le due intestazioni sopra su un elenco di scadenze già
 // ordinato per data — stesso principio di elencoConIntestazioniMese,
 // qui su due livelli invece di uno
-function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga, dataDi = (r) => r.scadenza) {
+function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga, dataDi = (r) => r.scadenza, righeConData = false) {
   let meseAttuale = null;
   let giornoAttuale = null;
   const elementi = [];
@@ -36593,7 +36593,10 @@ function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga, data
       meseAttuale = chiaveMese;
       giornoAttuale = null;
     }
-    if (data && data !== giornoAttuale) {
+    // l'intestazione del giorno si scrive solo se le righe non portano
+    // gia' la loro data: in un registro il giorno scritto due volte, una
+    // sopra e una dentro la riga, e' rumore
+    if (data && data !== giornoAttuale && !righeConData) {
       elementi.push(<IntestazioneGiornoScadenzeAttivo key={`giorno-${data}-${idx}`} data={data} />);
       giornoAttuale = data;
     }
@@ -37080,7 +37083,92 @@ function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pa
     </>
   );
 }
-function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onCambiaScadenza, documentiFornitore, nomeFornitoreDi }) {
+// A cosa e a quando si attribuisce questa spesa.
+//
+// E' la prima domanda che si fa a una spesa e finora, pagando dallo
+// scadenziario, non gliela faceva nessuno: l'ambito veniva forzato al
+// corso d'origine e la competenza restava vuota. Su una fattura di
+// telefonia intestata alla struttura centrale quell'attribuzione e'
+// sbagliata, e la si scopre mesi dopo guardando i costi di una classe.
+//
+// Sta qui e non dentro una pagina sola perche' la scheda della spesa
+// deve essere la stessa ovunque la si compili: dal modulo completo, dal
+// pagamento di un impegno, da una riconciliazione.
+// Da quello che si e' scelto nella scheda ai campi della spesa. Se
+// l'ambito e' rimasto quello proposto dalla riga non si tocca niente: il
+// predefinito e' gia' giusto nella stragrande maggioranza dei casi, e
+// riscriverlo uguale servirebbe solo a poterlo sbagliare.
+function ambitoPerPayload(ambito, predefinito) {
+  if (!ambito || !ambito.tipoAmbito) return predefinito;
+  // le colonne vere si chiamano competenza_da / competenza_a: sono le
+  // stesse che scrive il modulo completo della spesa, non due nuove
+  const competenza = {
+    ...(ambito.competenzaDal ? { competenza_da: ambito.competenzaDal } : {}),
+    ...(ambito.competenzaAl ? { competenza_a: ambito.competenzaAl } : {}),
+  };
+  if (ambito.tipoAmbito === "classe" && ambito.classeId) {
+    return { tipo_ambito: "classe", classe_id: ambito.classeId, sede_id: predefinito?.sede_id || null, corso_id: predefinito?.corso_id || null, evento_id: null, ...competenza };
+  }
+  if (ambito.tipoAmbito === "sede") return { tipo_ambito: "sede", sede_id: ambito.sedeId || null, corso_id: null, classe_id: null, evento_id: null, ...competenza };
+  if (ambito.tipoAmbito === "corso") return { tipo_ambito: "corso", corso_id: ambito.corsoId || null, sede_id: null, classe_id: null, evento_id: null, ...competenza };
+  if (ambito.tipoAmbito === "evento") return { tipo_ambito: "evento", evento_id: ambito.eventoId || null, sede_id: null, corso_id: null, classe_id: null, ...competenza };
+  if (ambito.tipoAmbito === "generale" || ambito.tipoAmbito === "struttura_centrale") {
+    return { tipo_ambito: ambito.tipoAmbito, sede_id: null, corso_id: null, classe_id: null, evento_id: null, ...competenza };
+  }
+  return { ...(predefinito || {}), ...competenza };
+}
+function PannelloAmbitoSpesa({ valori, onChange, corsi = [], location = [], corsiDate = [], eventi = [], isMobile = false }) {
+  const v = valori || {};
+  const cambia = (campo, valore) => onChange({ ...v, [campo]: valore });
+  const opzioni =
+    v.tipoAmbito === "sede" ? (location || []).map((l) => ({ id: l.id, nome: String(l.nome || "").toUpperCase() }))
+    : v.tipoAmbito === "corso" ? (corsi || []).map((c) => ({ id: c.id, nome: String(c.nome || "").toUpperCase() }))
+    : v.tipoAmbito === "classe" ? (corsiDate || []).map((cd) => ({ id: cd.id, nome: `${fmtData(cd.data_inizio)} — ${(corsi || []).find((c) => c.id === cd.corso_id)?.nome || ""}`.toUpperCase() }))
+    : v.tipoAmbito === "evento" ? (eventi || []).map((e) => ({ id: e.id, nome: String(e.nome || "").toUpperCase() }))
+    : null;
+  const campoId =
+    v.tipoAmbito === "sede" ? "sedeId"
+    : v.tipoAmbito === "corso" ? "corsoId"
+    : v.tipoAmbito === "classe" ? "classeId"
+    : v.tipoAmbito === "evento" ? "eventoId"
+    : null;
+  return (
+    <div style={{ marginTop: 12, padding: 12, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>
+        Attribuzione e competenza
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "0 14px" }}>
+        <Field label="Ambito">
+          <select style={inputStyle} value={v.tipoAmbito || "generale"} onChange={(e) => onChange({ ...v, tipoAmbito: e.target.value, sedeId: "", corsoId: "", classeId: "", eventoId: "" })}>
+            {AMBITI_SPESA.map((a) => <option key={a.chiave} value={a.chiave}>{a.etichetta}</option>)}
+          </select>
+        </Field>
+        {opzioni && campoId && (
+          <Field label={AMBITI_SPESA.find((a) => a.chiave === v.tipoAmbito)?.etichetta || "Selezione"}>
+            <select style={inputStyle} value={v[campoId] || ""} onChange={(e) => cambia(campoId, e.target.value)}>
+              <option value="">— scegli —</option>
+              {opzioni.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
+            </select>
+          </Field>
+        )}
+        {/* Il periodo a cui la spesa SI RIFERISCE, che non e' la data in
+            cui e' stata pagata: un canone di ottobre pagato a dicembre
+            pesa su ottobre, e senza questi due campi finirebbe sul mese
+            sbagliato in ogni confronto. */}
+        <Field label="Competenza dal">
+          <input type="date" style={inputStyle} value={v.competenzaDal || ""} onChange={(e) => cambia("competenzaDal", e.target.value)} />
+        </Field>
+        <Field label="Competenza al">
+          <input type="date" style={inputStyle} value={v.competenzaAl || ""} onChange={(e) => cambia("competenzaAl", e.target.value)} />
+        </Field>
+      </div>
+      <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.45 }}>
+        Lasciando la competenza vuota vale la data del documento.
+      </div>
+    </div>
+  );
+}
+function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [] }) {
   const isMobile = useIsMobile();
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
@@ -37090,6 +37178,19 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   const [pannello, setPannello] = useState(null);
   const [docScelto, setDocScelto] = useState(null);
   const [ricercaDoc, setRicercaDoc] = useState("");
+  // l'attribuzione arriva gia' compilata con quello che la riga sa — di
+  // solito la classe del corso da cui nasce — ma si puo' cambiare: una
+  // fattura di telefonia intestata alla struttura centrale non e' un
+  // costo di quella classe, e finora non c'era modo di dirlo
+  const [ambito, setAmbito] = useState(() => ({
+    tipoAmbito: ambitoIniziale?.tipoAmbito || "generale",
+    sedeId: ambitoIniziale?.sedeId || "",
+    corsoId: ambitoIniziale?.corsoId || "",
+    classeId: ambitoIniziale?.classeId || "",
+    eventoId: ambitoIniziale?.eventoId || "",
+    competenzaDal: "",
+    competenzaAl: "",
+  }));
   // La scheda si apre COL DENTRO GIA' SCRITTO: la classificazione e' quella
   // dell'anagrafica che genera il costo (la master, la sede, l'hotel,
   // l'assistente), non un modulo vuoto. Aprirla vuota sarebbe il modo piu'
@@ -37121,21 +37222,21 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   // (finira' in prima nota fra le spese da riconciliare) e si associa la
   // fattura anche a cosa e' gia' pagato. Sono due fatti diversi della
   // stessa spesa, e aspettare l'uno per fare l'altro non serve a niente.
+  // la scadenza non si ripete nel piede: e' gia' la data a sinistra, che
+  // e' anche quella che ordina la lista, e si cambia cliccandola
   const piede = disabilitato ? (
     <div style={{ ...fontBody, fontSize: 12, color: "#C0392B" }}>{motivoDisabilitato}</div>
   ) : (
-    <>
-      <RiquadroDataCard etichetta={scadenzaStimata ? "Scadenza stimata" : "Scadenza"} data={scadenza} corsivo={!!scadenzaStimata} onCambia={onCambiaScadenza} />
-      <TastiPiedeScadenzario
-        fatturaAssociata={fatturaAssociata} numeroDocumento={numeroDocumento} salvando={salvando}
-        pannello={pannello} onPannello={setPannello}
-      />
-    </>
+    <TastiPiedeScadenzario
+      fatturaAssociata={fatturaAssociata} numeroDocumento={numeroDocumento} salvando={salvando}
+      pannello={pannello} onPannello={setPannello}
+    />
   );
   return (
     <CardAmministrazione
       sobrio
-      data={dataDebito} titolo={fornitore || nome} corsoLabel={oggetto || corsoLabel}
+      data={scadenza || dataDebito} onCambiaData={onCambiaScadenza} dataStimata={!!scadenzaStimata}
+      titolo={fornitore || nome} corsoLabel={oggetto || corsoLabel}
       chips={[
         categoriaNome ? { Icona: IconaQiDocumento, testo: categoriaNome } : null,
         fatturaAssociata ? `Fattura n. ${numeroDocumento || "—"}` : { testo: "In attesa di fattura", allerta: true },
@@ -37212,6 +37313,11 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
               </div>
             ))}
           </div>
+          <PannelloAmbitoSpesa
+            valori={ambito} onChange={setAmbito}
+            corsi={corsi} location={location} corsiDate={corsiDate} eventi={eventi}
+            isMobile={isMobile}
+          />
           <div style={{ marginTop: 12 }}>
             <PannelloClassificazioneGestionale valori={classificazione} onChange={cambiaClassificazione} />
           </div>
@@ -37238,7 +37344,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
             <button
               onClick={async () => {
                 setSalvando(true);
-                await onConferma({ file, dataPagamento, metodo, classificazione });
+                await onConferma({ file, dataPagamento, metodo, classificazione, ambito });
                 setSalvando(false);
                 chiudiPannello();
               }}
@@ -37354,9 +37460,12 @@ function AzioneTesto({ onClick, colore = NAVY, children, title }) {
 // testi sottolineati. Niente riquadri, niente pastiglie, niente cuscino:
 // la prima nota e' un registro, non una vetrina, e venti righe di schede
 // colorate una sotto l'altra non si leggono come un elenco di conti.
-function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children, sobrio = false }) {
+function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children, sobrio = false, onCambiaData = null, dataStimata = false }) {
   const rif = useRef(null);
   const [larghezza, setLarghezza] = useState(null);
+  const [dataInModifica, setDataInModifica] = useState(false);
+  const [bozzaData, setBozzaData] = useState(data || "");
+  useEffect(() => { setBozzaData(data || ""); }, [data]);
   useLayoutEffect(() => {
     const el = rif.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -37380,9 +37489,25 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
       <RigaSobria.Provider value={true}>
         <div ref={rif} style={{ padding: `${q(12)}px 0`, borderBottom: `1px solid ${CREAM_BORDER}`, boxSizing: "border-box" }}>
           <div style={{ display: "flex", gap: q(16), alignItems: "flex-start" }}>
-            <div style={{ flex: `0 0 ${q(88)}px`, minWidth: 0 }}>
-              <div style={{ ...fontBody, fontSize: q(14), fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{data ? fmtData(data) : "—"}</div>
+            <div style={{ flex: `0 0 ${q(92)}px`, minWidth: 0 }}>
+              <div
+                onClick={onCambiaData ? () => setDataInModifica(true) : undefined}
+                title={onCambiaData ? "Cambia la data" : undefined}
+                style={{
+                  ...fontBody, fontSize: q(14), fontWeight: 700, color: NAVY, whiteSpace: "nowrap",
+                  cursor: onCambiaData ? "pointer" : "default",
+                  textDecoration: onCambiaData ? "underline" : "none", textUnderlineOffset: 3,
+                  fontStyle: dataStimata ? "italic" : "normal",
+                }}
+              >{data ? fmtData(data) : "—"}</div>
               {data && <div style={{ ...fontBody, fontSize: q(11), color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginTop: q(1) }}>{giornoSettimanaAbbr(data)}</div>}
+              {dataInModifica && onCambiaData && (
+                <div style={{ display: "flex", alignItems: "center", gap: q(6), marginTop: q(6), flexWrap: "wrap" }}>
+                  <input type="date" value={bozzaData} onChange={(e) => setBozzaData(e.target.value)} style={{ ...inputStyle, width: "auto", padding: `${q(5)}px ${q(7)}px`, fontSize: q(12) }} />
+                  <AzioneTesto onClick={async () => { await onCambiaData(bozzaData); setDataInModifica(false); }}>Salva</AzioneTesto>
+                  <AzioneTesto onClick={() => { setBozzaData(data || ""); setDataInModifica(false); }} colore={MUTED}>Annulla</AzioneTesto>
+                </div>
+              )}
             </div>
             <div style={{ flex: "1 1 auto", minWidth: 0 }}>
               <div style={{ ...fontBody, fontSize: q(15), fontWeight: 700, color: NAVY, lineHeight: 1.3, overflowWrap: "anywhere" }}>{titolo}</div>
@@ -40957,7 +41082,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     setDocDaAssociare(null);
     ricarica(["spese", "documento_fornitore"]);
   }
-  async function segnaPagataVirtuale(item, { file, dataPagamento, metodo, classificazione }) {
+  async function segnaPagataVirtuale(item, { file, dataPagamento, metodo, classificazione, ambito }) {
     setMsg("");
     let allegatoPath = null;
     if (file) {
@@ -40972,7 +41097,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
       categoria_id: sottocat?.categoria_id || null,
       sottocategoria_id: item.sottocategoriaId,
       fornitore_id: item.fornitoreId || null,
-      tipo_ambito: "classe", classe_id: item.corsoData.id, sede_id: item.corsoData.location_id, corso_id: item.corsoData.corso_id,
+      ...ambitoPerPayload(ambito, { tipo_ambito: "classe", classe_id: item.corsoData.id, sede_id: item.corsoData.location_id, corso_id: item.corsoData.corso_id }),
       imponibile: round2(item.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100)), iva_percentuale: ALIQUOTA_IVA_RIEPILOGO_CLASSE, totale: item.totale,
       importo_pagato_cash: dallaCassa ? round2(item.totale) : 0,
       data_documento: item.corsoData.data_fine,
@@ -41066,7 +41191,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // il Riepilogo della classe la riconosce e NON la toglie dal cash pulito
   // in busta, perche' quei soldi non sono usciti dalla busta. L'impegno si
   // chiude e sparisce da qui.
-  async function segnaPagataCashRinviato(item, { file, dataPagamento, metodo, classificazione }) {
+  async function segnaPagataCashRinviato(item, { file, dataPagamento, metodo, classificazione, ambito }) {
     setMsg("");
     let allegatoPath = null;
     if (file) {
@@ -41080,7 +41205,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
       descrizione: item.nome,
       categoria_id: sottocat?.categoria_id || null,
       sottocategoria_id: item.sottocategoriaId,
-      tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
+      ...ambitoPerPayload(ambito, { tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null }),
       imponibile: round2(item.totale), iva_percentuale: 0, totale: round2(item.totale),
       importo_pagato_cash: dallaCassa ? round2(item.totale) : 0,
       data_documento: item.dataDebito || dataPagamento || null,
@@ -41461,8 +41586,10 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     onCambiaScadenza={item.tipo === "abbonamento" ? null : (nuova) => cambiaScadenza(item, nuova)}
                     documentiFornitore={documentoFornitoreTabella}
                     nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
+                    corsi={corsi} location={location} corsiDate={corsiDate}
+                    ambitoIniziale={item.corsoData ? { tipoAmbito: "classe", classeId: item.corsoData.id, sedeId: item.corsoData.location_id, corsoId: item.corsoData.corso_id } : { tipoAmbito: "generale" }}
                   />
-                ), dataDiPassivoDaPagare)}
+                ), dataDiPassivoDaPagare, true)}
               </div>
             )}
             {subTabPassivo === "evase" && (
