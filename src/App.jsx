@@ -24885,7 +24885,17 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
       // "grande" (la riga della cassa contanti) ha il vestito degli avvisi
       // di Contabilita' (16/09/2026): bianco morbido con l'ombra, senza
       // bordo, e il disco col medaglione al posto del tondo chiaro
-      ...(grande ? superficieCuscino("#FFFFFF") : { background: "#FCFBF8", border: `1px solid ${CREAM_BORDER}` }), borderRadius: compatta ? 10 : grande ? 18 : 14,
+      // Il cuscino, lo stesso degli avvisi di Contabilita': luce sul
+      // bordo alto, spessore in basso, ombra corta sotto. Prima queste
+      // celle erano un rettangolo piatto con un filo intorno — in mezzo a
+      // una pagina dove tutto il resto ha uno spessore sembravano
+      // stampate sul foglio invece che appoggiate sopra.
+      //
+      // Le "compatte" restano piatte: stanno dentro le tabelle dei costi,
+      // fitte una sull'altra, e li' il rilievo diventerebbe rumore.
+      ...(compatta
+        ? { background: "#FCFBF8", border: `1px solid ${CREAM_BORDER}` }
+        : superficieCuscino(grande ? "#FFFFFF" : "#FCFBF8")), borderRadius: compatta ? 10 : grande ? 18 : 14,
       padding: compatta ? "8px 6px" : grande ? "12px 14px" : colonna ? "8px 5px" : (isMobile ? "10px 10px" : "12px 14px"),
       overflow: "hidden",
     }}>
@@ -25097,7 +25107,9 @@ function PannelloRiepilogoAmministrativo({
   // (non le quote di iscrizione), scelti dal magazzino — ognuno con
   // quantità, importo e metodo (contribuisce a Contanti o Pos)
   const [venditaAperta, setVenditaAperta] = useState(null);
-  const [incassiExtra, setIncassiExtra] = useState(
+  // di sola lettura da quando il blocco per scriverle a mano non c'e'
+  // piu': si legge dalla classe, entra nei totali e si risalva com'e'
+  const [incassiExtra] = useState(
     Array.isArray(corsoData.incassi_extra) ? corsoData.incassi_extra.map((c) => ({ prodotto_id: c.prodotto_id || "", quantita: c.quantita != null ? String(c.quantita) : "1", valore: c.valore != null ? String(c.valore) : "", metodo: c.metodo || "Contanti" })) : []
   );
 
@@ -25457,26 +25469,11 @@ function PannelloRiepilogoAmministrativo({
   function rimuoviVoceCosto(idx) {
     setCostiExtra((prev) => prev.filter((_, i) => i !== idx));
   }
-  // "Altri incassi": ogni riga parte dal prodotto scelto — l'importo si
-  // pre-compila dal prezzo del prodotto (per quantità 1) ma resta libero,
-  // per gestire sconti o prezzi diversi da quello di listino
-  function aggiungiVoceIncasso() {
-    setIncassiExtra((prev) => [...prev, { prodotto_id: "", quantita: "1", valore: "", metodo: "Contanti" }]);
-  }
-  function modificaVoceIncasso(idx, campo, valore) {
-    setIncassiExtra((prev) => prev.map((c, i) => {
-      if (i !== idx) return c;
-      const aggiornata = { ...c, [campo]: valore };
-      if (campo === "prodotto_id" || campo === "quantita") {
-        const prodotto = (prodottiShop || []).find((p) => p.id === aggiornata.prodotto_id);
-        if (prodotto && prodotto.prezzo_vendita != null) aggiornata.valore = String(round2(prodotto.prezzo_vendita * (parseNum(aggiornata.quantita) || 1)));
-      }
-      return aggiornata;
-    }));
-  }
-  function rimuoviVoceIncasso(idx) {
-    setIncassiExtra((prev) => prev.filter((_, i) => i !== idx));
-  }
+  // Le tre funzioni che aggiungevano, modificavano e toglievano una riga
+  // di "Altri incassi" sono sparite col blocco che le chiamava: senza
+  // nessuno che le premesse erano codice che nessuno poteva eseguire.
+  // incassiExtra resta di sola lettura — si legge dalla classe e si
+  // risalva com'e', vedi il salvataggio piu' in basso.
   // Segna la busta come rientrata (o annulla). All'ingresso si congela
   // l'importo: da quel momento la cassa contanti somma quel numero, non
   // ricalcola la classe.
@@ -25741,65 +25738,18 @@ function PannelloRiepilogoAmministrativo({
                   </>
                 )}
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, whiteSpace: "nowrap" }}>Altri incassi al corso</div>
-                  <div style={{ flex: 1, height: 1, background: GOLD, opacity: 0.45 }} />
-                  <button
-                    type="button" onClick={aggiungiVoceIncasso}
-                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
-                  >
-                    + Aggiungi
-                  </button>
-                </div>
+                {/* Qui stava "Altri incassi al corso": un blocco per
+                    scrivere a mano i prodotti venduti in piu' durante il
+                    corso. Tolto il 18/09/2026 perche' non lo usava
+                    nessuno — zero righe su centoundici classi — e perche'
+                    quelle vendite passano dal POS e arrivano da sole nel
+                    blocco "Vendite al corso" qui sotto, dove hanno anche
+                    il loro scarico di magazzino.
 
-                {/* le vendite fatte col POS e legate alla classe stanno solo
-                    nel blocco "Vendite al corso" qui sotto: qui restano le
-                    righe scritte a mano, per quello che dal POS non passa */}
-                {incassiExtra.length === 0 ? (
-                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Prodotti venduti in più durante il corso, oltre alle quote di iscrizione.</div>
-                ) : (
-                  <div style={{ marginBottom: 12 }}>
-                    {incassiExtra.map((voce, idx) => (
-                      <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
-                        <div style={{ flex: "2 1 160px", minWidth: 0 }}>
-                          <Field label="Prodotto">
-                            <select style={inputStyle} value={voce.prodotto_id} onChange={(e) => modificaVoceIncasso(idx, "prodotto_id", e.target.value)}>
-                              <option value="">— scegli dal magazzino —</option>
-                              {(prodottiShop || []).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                            </select>
-                          </Field>
-                        </div>
-                        <div style={{ flex: "0 1 80px", minWidth: 0 }}>
-                          <Field label="Qtà"><input type="number" min="1" style={inputStyle} value={voce.quantita} onChange={(e) => modificaVoceIncasso(idx, "quantita", e.target.value)} /></Field>
-                        </div>
-                        <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-                          <Field label="Importo"><input style={inputStyle} inputMode="decimal" value={voce.valore} onChange={(e) => modificaVoceIncasso(idx, "valore", e.target.value)} /></Field>
-                        </div>
-                        <div style={{ flex: "1 1 130px", minWidth: 0, display: "flex", gap: 12, alignItems: "center", ...fontBody, fontSize: 13, color: NAVY, paddingBottom: 10 }}>
-                          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                            <input type="radio" name={`incasso-metodo-${idx}`} checked={voce.metodo === "Contanti"} onChange={() => modificaVoceIncasso(idx, "metodo", "Contanti")} />
-                            Contanti
-                          </label>
-                          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                            <input type="radio" name={`incasso-metodo-${idx}`} checked={voce.metodo === "Pos"} onChange={() => modificaVoceIncasso(idx, "metodo", "Pos")} />
-                            Pos
-                          </label>
-                        </div>
-                        <button
-                          onClick={() => rimuoviVoceIncasso(idx)}
-                          title="Rimuovi voce"
-                          style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                            <path d="M10 11v6" /><path d="M14 11v6" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                    Il calcolo resta: incassi_extra continua a essere
+                    letto e sommato ai totali, cosi' se un domani una
+                    classe ne avesse una il numero non sparisce. E'
+                    sparito il modo di scriverne di nuove a mano. */}
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
                   <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, whiteSpace: "nowrap" }}>Costi della classe</div>
