@@ -32669,10 +32669,17 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   // collegato a una master converge nella stessa chiave `venditore_<id>`
   // usata sopra per la master, indipendentemente dall'ordine con cui le
   // due liste vengono lette
+  // Un venditore puo' essere la stessa persona di un soggetto gia' in
+  // elenco — tipicamente un dipendente che vende anche. Collegato
+  // (venditori.fornitore_id) finisce nel suo gruppo e in Anagrafiche
+  // compare una riga sola con due ruoli; scollegato resta a se', come
+  // prima. Il nome NON si usa per unirli: gli iscritti sono agganciati al
+  // venditore proprio per nome, e allinearlo gli cancellerebbe le
+  // iscrizioni dalla scheda.
   (venditori || []).forEach((v) => aggiungi("venditori", v.id, v.nome, "venditore",
     { citta: v.citta, indirizzo: v.indirizzo, partitaIva: v.partita_iva, iban: v.iban, telefono: v.telefono, email: v.email },
     categoriaNomePer(categoriaGruppoPer("venditore", categorieGruppi), costiSottocategorie),
-    `venditore_${v.id}`));
+    (v.fornitore_id && chiavePerFornitoreId.get(v.fornitore_id)) || `venditore_${v.id}`));
 
   const ordinePriorita = ["fornitori", "master", "assistente", "hotel", "venditori", "location"];
   return Array.from(gruppi.values()).map((g) => {
@@ -65756,7 +65763,7 @@ export default function App() {
     // con le sole colonne sempre presenti e riempio le opzionali con i
     // valori di default, così i venditori restano visibili e utilizzabili.
     venditori: async () => {
-      const ve = await supabase.from("venditori").select("id, nome, ts, permessi, password, email, email_accesso").order("nome");
+      const ve = await supabase.from("venditori").select("id, nome, ts, permessi, password, email, email_accesso, fornitore_id").order("nome");
       let venditoriData = ve.data;
       if (ve.error) {
         let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
