@@ -16,6 +16,7 @@ import { Button, Field, CampoNumero, ContatoreQuantita, TastoLivelloPrecedente, 
 import DomandaProvenienza from "./rientri/DomandaProvenienza.jsx";
 import { caricaKitInAula, registraPrelieviDaVendita } from "./rientri/pos";
 import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
+import SchedaRientro from "./rientri/SchedaRientro.jsx";
 import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
@@ -10616,7 +10617,7 @@ function TitoloColonnaMaster({ Icona, testo, children }) {
   );
 }
 
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriCambi, conScorte = false, codiceReferral, onApriContabilita }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita }) {
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
@@ -10876,6 +10877,10 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           // compare solo dove c'e' davvero una scorta da cui prendere:
           // senza un pacco partito il quadro non avrebbe niente dentro
           conScorte && onApriCambi && { testo: "Cambi e integrazioni", onClick: () => onApriCambi(corsoData.id) },
+          // l'inventario si compila a corso finito, o poco prima: prima non
+          // c'e' niente da contare, e dopo una settimana il pacco e' gia'
+          // partito da un pezzo
+          conScorte && inFinestraInventario && onApriInventario && { testo: "Inventario fine corso", onClick: () => onApriInventario(corsoData.id) },
         ].filter(Boolean).map((t) => (
           <button
             key={t.testo}
@@ -11646,7 +11651,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, onApriInventarioSede, onApriCambi, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
   // le edizioni per cui un pacco e' davvero partito: il tasto "Cambi e
   // integrazioni" compare solo li', perche' altrove non c'e' una scorta
   // da cui prendere e il quadro sarebbe vuoto
@@ -12001,6 +12006,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
                 onApriClasse={onApriClasse} onApriModelle={onApriModelle}
                 onApriCambi={onApriCambi} conScorte={edizioniConScorte.has(cd.id)}
+                onApriInventario={onApriInventarioFineCorso}
+                inFinestraInventario={oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 7)}
                 codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
                 onApriContabilita={(riga) => { window.scrollTo(0, 0); setContabilitaClasse({ token: riga.token_master, nome: corsoById[riga.corso_id]?.nome || "" }); }}
               />
@@ -65918,6 +65925,7 @@ export default function App() {
   // "Cambi e integrazioni": il quadro delle scorte in aula, dove la master
   // dichiara cosa ha preso e perche' mentre il corso e' in corso
   function apriCambiIntegrazioni(corsoDataId) { scrollAppInCima(); setInventarioSedeCorsoDataId(corsoDataId); setView("cambiintegrazioni"); }
+  function apriInventarioFineCorso(corsoDataId) { scrollAppInCima(); setInventarioSedeCorsoDataId(corsoDataId); setView("inventariofinecorso"); }
   function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(false); setModelleDallaScheda(false); setView("classemaster"); }
   // Le modelle aperte dal tasto sulla scheda, senza passare dalla classe.
   // Ci si arriva anche da dentro la classe: la differenza la ricorda
@@ -67197,6 +67205,7 @@ export default function App() {
           puntiMasterImpostazioni={puntiMasterImpostazioni} regoleReferralAutomatico={regoleReferralAutomatico}
           onApriInventarioSede={apriInventarioSede}
           onApriCambi={apriCambiIntegrazioni}
+          onApriInventarioFineCorso={apriInventarioFineCorso}
           onApriClasse={apriClasseMaster}
           onApriModelle={apriModelleMaster}
           onBack={() => setView("home")}
@@ -67241,6 +67250,17 @@ export default function App() {
           />
         );
       })()}
+
+      {view === "inventariofinecorso" && (
+        <SchedaRientro
+          corsoData={corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId) || null}
+          corso={corsi.find((c) => c.id === corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId)?.corso_id)}
+          location={location} iscritti={iscritti} prodottiShop={prodottiShop}
+          kitDefinizioni={kitDefinizioni} masterLoggataId={utenteLoggato?.masterId || null}
+          isMobile={isMobile}
+          onBack={() => setView("dashboardmaster")}
+        />
+      )}
 
       {view === "cambiintegrazioni" && (
         <QuadroSostituzioni
