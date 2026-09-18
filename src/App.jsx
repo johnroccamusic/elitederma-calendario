@@ -4147,16 +4147,38 @@ function puntiProdotto(p, sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accant
   if (margine == null) return null;
   return puntiDaCedibile(round2((Number(p.prezzo_vendita) * percentualeCedibileDi(margine)) / 100), sicurezzaPct);
 }
-// La riduzione per lo sconto usato dall'allievo. Non cambia come nascono
-// i punti: prima si calcolano i punti TEORICI del prodotto (cedibile ->
-// sicurezza -> due decimali), poi si riducono di una percentuale pari a
-// (sconto % ottenuto dall'allievo) x (valore della fascia di margine del
-// prodotto nello schema). Esempio: 180 punti teorici, fascia 5, sconto
-// 10% -> riduzione 50% -> 4,50 punti alla master. I valori delle fasce non
-// sono fissi: si leggono dalla configurazione ogni volta.
-function puntiDopoScontoAllievo(puntiTeorici, scontoPct, valoreFascia) {
-  const riduzione = Math.min(100, Math.max(0, (Number(scontoPct) || 0) * (Number(valoreFascia) || 0)));
-  return round2((Number(puntiTeorici) || 0) * (1 - riduzione / 100));
+// I punti di un pezzo venduto SCONTATO: quelli che quella vendita ha
+// davvero generato.
+//
+// Lo sconto esce tutto dal margine, quindi non serve nessun
+// moltiplicatore: si rifa' lo stesso conto di puntiProdotto sul prezzo
+// pagato e sul margine che resta. Un pezzo venduto a prezzo pieno rende
+// i suoi punti interi; scontato ne rende meno, in proporzione a quanto
+// margine se n'e' andato. E' la regola decisa il 18/09/2026: chi agevola
+// l'allieva con lo sconto prende meno punti, chi vende a listino ne
+// prende di piu'.
+//
+// Sotto il costo non ci sono punti: la tabella del cedibile parte dal 5%
+// di margine e sotto restituisce zero, che e' giusto — si sta vendendo
+// in perdita.
+function puntiProdottoScontato(p, sicurezzaGenerale, contanti, scontoPct) {
+  if (!p) return null;
+  const sicurezzaPct = sicurezzaDelProdotto(p, sicurezzaGenerale);
+  const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
+  if (!inVenditaViaApp) return null;
+  const costo = p.costo_acquisto;
+  if (costo == null || costo === "") return null;
+  const sconto = Math.min(100, Math.max(0, Number(scontoPct) || 0));
+  // col contante si tiene tutto il prezzo al pubblico (l'IVA resta in
+  // cassa), con la carta e dal sito si ragiona sul netto: la stessa
+  // differenza che fa puntiProdotto
+  const base = contanti ? prezzoAlPubblico(p) : Number(p.prezzo_vendita);
+  if (!(base > 0)) return null;
+  const pagato = round2(base * (1 - sconto / 100));
+  if (!(pagato > 0)) return null;
+  const margineGrezzo = ((pagato - Number(costo)) / pagato) * 100;
+  const margine = contanti ? round1Erp(margineGrezzo) : margineGrezzo;
+  return puntiDaCedibile(round2((pagato * percentualeCedibileDi(margine)) / 100), sicurezzaPct);
 }
 // Lo sconto % che l'allievo ha ottenuto su una riga venduta. Dal 12/09/2026
 // il POS lo scrive sulla riga; prima c'era solo il totale scontato, e se
@@ -6870,11 +6892,12 @@ function puntiOrdineStorico(ordine, trovaProdotto, sicurezzaPct, fasceCorso, quo
     const prodotto = trovaProdotto(r);
     const pp = prodotto ? puntiProdotto(prodotto, sicurezzaPct, false) : null;
     if (pp == null) { righeSenzaProdotto += 1; return; }
-    const t = pp * (Number(r.quantita) || 0);
-    teorici += t;
+    const quantita = Number(r.quantita) || 0;
+    teorici += pp * quantita;
     const pieno = Number(r.subtotale) || 0;
     const scontoPct = pieno > 0 ? Math.max(0, ((pieno - (Number(r.totale) || 0)) / pieno) * 100) : 0;
-    effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceCorso, spesaOrdine));
+    const scontati = puntiProdottoScontato(prodotto, sicurezzaPct, false, scontoPct);
+    effettivi += (scontati == null ? 0 : scontati) * quantita;
   });
   return { teorici: round2(teorici), effettivi: round2(effettivi), maturati: round2((effettivi * (Number(quotaCorsoPct) || 0)) / 100), righe, righeSenzaProdotto };
 }
@@ -7066,7 +7089,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 6 }}>I codici sconto usati negli ordini del sito, raggruppati per codice e per periodo d'uso: ogni periodo è, quasi sempre, il corso di una master.</div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>
-          I punti sono una simulazione con le regole di oggi, sui prodotti che esistono ancora in anagrafica: "teorici" è quello che i prodotti venduti valgono ({testCedibilePieno ? "TEST: cedibile pieno, senza togliere la sicurezza" : `cedibile meno sicurezza ${sicurezzaPunti}%`}); "alla master" è quello che resta dopo la riduzione per lo sconto davvero ottenuto dall'allievo su ogni riga (sconto % × valore di fascia) e la quota al corso ({quotaCorso}%). Con gli sconti del 20% dei codici di allora la riduzione supera il 100%, quindi alla master resta quasi nulla: è la regola, non un errore. Restano in questa pagina: non si sommano da nessun'altra parte.
+          I punti sono una simulazione con le regole di oggi, sui prodotti che esistono ancora in anagrafica: "teorici" è quello che i prodotti venduti valgono ({testCedibilePieno ? "TEST: cedibile pieno, senza togliere la sicurezza" : `cedibile meno sicurezza ${sicurezzaPunti}%`}); "alla master" è lo stesso conto rifatto sul prezzo davvero pagato su ogni riga — lo sconto esce dal margine, quindi un pezzo scontato rende meno — e poi la quota al corso ({quotaCorso}%). Restano in questa pagina: non si sommano da nessun'altra parte.
           {totRigheSenzaProdotto > 0 ? ` Righe senza punti (prodotto sparito, o oggi senza costo o prezzo), non contate: ${totRigheSenzaProdotto}.` : ""}
         </div>
 
@@ -11734,12 +11757,14 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         // carta o sito -> l'altra
         const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento));
         if (puntiPezzo == null) return;
-        // i punti teorici della riga, interi: sono i bonus
-        const teorici = puntiPezzo * (Number(r.quantita) || 0);
+        // i punti teorici della riga, a prezzo pieno: sono i bonus
+        const quantita = Number(r.quantita) || 0;
+        const teorici = puntiPezzo * quantita;
         puntiAccumulati += teorici;
-        // poi la riduzione per lo sconto usato dall'allievo, con il valore
-        // di fascia del prodotto letto dallo schema del canale
-        const effettivi = puntiDopoScontoAllievo(teorici, scontoPctRigaVenduta(r, v, prodotto, fasceCanale), percentualeFasciaDi(prodotto, fasceCanale, lordoVendita(v)));
+        // e poi quelli veri: lo stesso conto rifatto sul prezzo davvero
+        // pagato, cioe' sul margine che resta dopo lo sconto dell'allieva
+        const scontati = puntiProdottoScontato(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento), scontoPctRigaVenduta(r, v, prodotto, fasceCanale));
+        const effettivi = (scontati == null ? 0 : scontati) * quantita;
         if (alCorso) puntiCorsoLordi += effettivi; else puntiFuoriLordi += effettivi;
       });
       // l'importo non si ricalcola: e' quello congelato sulla vendita il
@@ -20391,7 +20416,6 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
       ? fasceCorsiPerPagamento(serieScontoScritta(fasceCartaAmm) ? fasceCartaAmm : couponEdizione.fasce_sconto, fasceContantiAmm, contanti)
       : null;
     const sicurezza = sicurezzaPuntiDi(schemaPuntiAmm);
-    const fasceRiduzione = aFasce ? fasce : (regolaReferralAmm?.fasce || []);
     const dettaglio = righe.map((r) => {
       const prodotto = prodottoPerId[r.prodottoId] || null;
       const lordo = round2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0));
@@ -20400,8 +20424,8 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
       const sconto = round2((lordo * scontoPct) / 100);
       const pp = puntiProdotto(prodotto, sicurezza, contanti);
       const teorici = pp == null ? null : round2(pp * (Number(r.quantita) || 0));
-      const punti = teorici == null ? null
-        : round2(puntiDopoScontoAllievo(teorici, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione, subtotale)));
+      const scontati = puntiProdottoScontato(prodotto, sicurezza, contanti, scontoPct);
+      const punti = teorici == null ? null : round2((scontati == null ? 0 : scontati) * (Number(r.quantita) || 0));
       return { ...r, prodotto, lordo, margine, scontoPct, sconto, teorici, punti };
     });
     const sconto = round2(dettaglio.reduce((t, d) => t + d.sconto, 0));
@@ -43063,7 +43087,8 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           if (pp == null) { pezziSenzaPunti += q; return; }
           const teorici = pp * q;
           puntiTeorici += teorici;
-          const effettivi = puntiDopoScontoAllievo(teorici, scontoPctRigaVenduta(r, v, prodotto, fasceCanale), percentualeFasciaDi(prodotto, fasceCanale, lordoVendita(v)));
+          const scontati = puntiProdottoScontato(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento), scontoPctRigaVenduta(r, v, prodotto, fasceCanale));
+          const effettivi = (scontati == null ? 0 : scontati) * q;
           if (alCorso) puntiCorso += effettivi; else puntiFuori += effettivi;
         });
       });
@@ -43339,20 +43364,27 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               <li>Si calcola il Cedibile € del prodotto.</li>
               <li>Si sottrae la percentuale di sicurezza configurata, oggi il {schema.accantonamentoPct}%.</li>
               <li>Il risultato, con due decimali, sono i <b>punti teorici</b> della master, i "Punti bonus" della sua dashboard: un punto è un euro.</li>
-              <li>Se l'allievo usa il coupon e riceve uno sconto, i punti si riducono in base alla <b>fascia di margine</b> del prodotto e al valore configurato nello schema: riduzione % = sconto % dell'allievo × valore della fascia.</li>
-              <li>I valori delle fasce non sono fissi: si leggono dalla configurazione qui sopra, e cambiarli cambia il conto.</li>
+              <li>Se l'allievo usa il coupon e riceve uno sconto, lo stesso conto si <b>rifà sul prezzo davvero pagato</b>: lo sconto esce tutto dal margine, quindi il pezzo scontato ha un margine più basso, cade in un gradino più basso della tabella del cedibile, e rende meno punti.</li>
+              <li>Non c'è nessun moltiplicatore da configurare: chi vende a listino prende i punti pieni, chi sconta ne prende meno in proporzione al margine che ha lasciato sul tavolo.</li>
             </ol>
             {(() => {
-              const cedibile = 10, sconto = 10, fascia = 5;
-              const residuo = round2(cedibile * (1 - schema.accantonamentoPct / 100));
-              const teorici = round2(residuo * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
-              const effettivi = puntiDopoScontoAllievo(teorici, sconto, fascia);
+              // un prodotto vero: 39,90 al pubblico, 10 di costo, pagato
+              // in contanti — e lo stesso prodotto con uno sconto del 10%
+              const esempio = { prezzo_vendita: 32.7, costo_acquisto: 10, prezzo_lordo_forzato: 39.9, aliquota_iva_vendita: 22, stato: "publish" };
+              const sconto = 10;
+              const lordo = prezzoAlPubblico(esempio);
+              const pagato = round2(lordo * (1 - sconto / 100));
+              const marginePieno = round1Erp(((lordo - esempio.costo_acquisto) / lordo) * 100);
+              const margineScontato = round1Erp(((pagato - esempio.costo_acquisto) / pagato) * 100);
+              const teorici = puntiProdotto(esempio, schema.accantonamentoPct, true);
+              const effettivi = puntiProdottoScontato(esempio, schema.accantonamentoPct, true, sconto);
               return (
                 <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
                   <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Esempio completo</div>
-                  Cedibile {fmtEuroErp2(cedibile)}, sicurezza {schema.accantonamentoPct}%: {fmtEuroErp2(cedibile)} → {fmtEuroErp2(residuo)} → <b>{fmtPunti(teorici)} punti teorici</b>.<br />
-                  Il prodotto sta nella fascia con valore {fascia}; l'allievo usa uno sconto del {sconto}%: {sconto} × {fascia}% = {sconto * fascia}% di riduzione.<br />
-                  {fmtPunti(teorici)} − {sconto * fascia}% = <b>{fmtPunti(effettivi)} punti</b> accreditati alla master. Nei Punti bonus restano {fmtPunti(teorici)}.
+                  Un prodotto da {fmtEuroErp2(lordo)} al pubblico che costa {fmtEuroErp2(esempio.costo_acquisto)}, venduto in contanti.<br />
+                  <b>A prezzo pieno:</b> margine {fmtPctErp2(marginePieno)} → cedibile {fmtPctErp2(percentualeCedibileDi(marginePieno))} = {fmtEuroErp2((lordo * percentualeCedibileDi(marginePieno)) / 100)}, meno la sicurezza {schema.accantonamentoPct}% → <b>{fmtPunti(teorici)} punti</b>.<br />
+                  <b>Con uno sconto del {sconto}%:</b> incassa {fmtEuroErp2(pagato)}, il margine scende a {fmtPctErp2(margineScontato)} → <b>{fmtPunti(effettivi)} punti</b>.<br />
+                  Nei Punti bonus restano {fmtPunti(teorici)}: quelli dicono quanto vale il prodotto, non quanto ha reso quella vendita.
                 </div>
               );
             })()}
@@ -55316,8 +55348,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // I punti che la master matura con questo carrello, con la stessa
   // regola della dashboard: per ogni prodotto il cedibile (sul netto con
   // carta, sul lordo con contanti o buono Amazon) meno la sicurezza, per
-  // la quantita'; poi la riduzione per lo sconto dato all'allieva (sconto
-  // % x valore di fascia). Sono punti INTERI: la quota che spetta alla
+  // la quantita'. Se c'e' uno sconto, il conto si rifa' sul prezzo
+  // pagato: lo sconto esce dal margine, e chi sconta prende meno punti.
+  // Sono punti INTERI: la quota che spetta alla
   // master — 25, 20, 40% secondo il ranking — la decide chi amministra,
   // dopo. La spedizione non fa punti
   const puntiCarrello = (() => {
@@ -55325,22 +55358,20 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const sicurezza = sicurezzaPuntiDi(schemaPuntiPos);
     const quote = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiPos || {}) };
     const contantiPerPunti = pagamentoContaComeContanti(metodoPagamento);
-    const fasceRiduzione = couponAFasce
-      ? fasceCouponAttive
-      : ((corsoPosId ? couponDellEdizione(corsoPosId)?.fasce_sconto : couponReferralPersonale?.fasce_sconto) || []);
     let teorici = 0, effettivi = 0;
     carrello.forEach((r) => {
       const prodotto = prodottiPerId[r.prodottoId];
       const pp = puntiProdotto(prodotto, sicurezza, contantiPerPunti);
       if (pp == null) return;
-      const t = pp * (Number(r.quantita) || 0);
-      teorici += t;
+      const quantita = Number(r.quantita) || 0;
+      teorici += pp * quantita;
       const scontoPct = couponAFasce
         ? percentualeFasciaDi(prodotto, fasceCouponAttive, subtotale)
         : couponNum > 0 ? couponNum
         : scontoNum > 0 ? (scontoTipo === "percentuale" ? scontoNum : (subtotale > 0 ? (scontoNum / subtotale) * 100 : 0))
         : 0;
-      effettivi += puntiDopoScontoAllievo(t, scontoPct, percentualeFasciaDi(prodotto, fasceRiduzione, subtotale));
+      const scontati = puntiProdottoScontato(prodotto, sicurezza, contantiPerPunti, scontoPct);
+      effettivi += (scontati == null ? 0 : scontati) * quantita;
     });
     // interi, non la quota della master: vedi la dashboard
     const quota = corsoPosSel ? quote.corso : quote.fuoriCorso;
