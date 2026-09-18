@@ -15,6 +15,8 @@ import {
 import { Button, Field, CampoNumero, ContatoreQuantita, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import DomandaProvenienza from "./rientri/DomandaProvenienza.jsx";
 import { caricaKitInAula, registraPrelieviDaVendita } from "./rientri/pos";
+import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
+import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -10591,7 +10593,7 @@ function TitoloColonnaMaster({ Icona, testo, children }) {
   );
 }
 
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, codiceReferral, onApriContabilita }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriCambi, conScorte = false, codiceReferral, onApriContabilita }) {
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
@@ -10848,6 +10850,9 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
         {[
           onApriClasse && { testo: "Dettagli corso", onClick: () => onApriClasse(corsoData.id) },
           onApriModelle && { testo: "Dettagli modelle", onClick: () => onApriModelle(corsoData.id) },
+          // compare solo dove c'e' davvero una scorta da cui prendere:
+          // senza un pacco partito il quadro non avrebbe niente dentro
+          conScorte && onApriCambi && { testo: "Cambi e integrazioni", onClick: () => onApriCambi(corsoData.id) },
         ].filter(Boolean).map((t) => (
           <button
             key={t.testo}
@@ -11618,7 +11623,12 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, onApriInventarioSede, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, onApriInventarioSede, onApriCambi, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+  // le edizioni per cui un pacco e' davvero partito: il tasto "Cambi e
+  // integrazioni" compare solo li', perche' altrove non c'e' una scorta
+  // da cui prendere e il quadro sarebbe vuoto
+  const [edizioniConScorte, setEdizioniConScorte] = useState(new Set());
+  useEffect(() => { edizioniConSpedizione().then(setEdizioniConScorte); }, []);
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
   const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
@@ -11956,7 +11966,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
-onApriClasse={onApriClasse} onApriModelle={onApriModelle}
+                onApriClasse={onApriClasse} onApriModelle={onApriModelle}
+                onApriCambi={onApriCambi} conScorte={edizioniConScorte.has(cd.id)}
                 codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
                 onApriContabilita={(riga) => { window.scrollTo(0, 0); setContabilitaClasse({ token: riga.token_master, nome: corsoById[riga.corso_id]?.nome || "" }); }}
               />
@@ -41973,21 +41984,37 @@ function CellaTotale({ etichetta, valore, forte = false, primo = false }) {
 // nel browser di chi la mette (tabella righe_preparate_spedizione): un
 // pacco lo può finire un'altra persona, o si riprende il giorno dopo
 function RigaProdottoDaPreparare({ riga, preso, onSegna, mostraPrezzo = false }) {
+  // Il pezzo uscito da un kit che stava in aula l'allieva ce l'ha gia' in
+  // mano: se finisce nel pacco glielo si manda due volte. La riga resta
+  // in elenco — fa parte della vendita — ma dice a chiare lettere che
+  // dallo scaffale non va preso.
+  const giaConsegnato = !!riga?.dal_kit;
   return (
     <label
       style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: giaConsegnato ? "default" : "pointer",
         borderTop: `1px solid ${CREAM_BORDER}`,
-        background: preso ? "#E3F3E5" : "transparent",
+        background: giaConsegnato ? "#F7EEDE" : preso ? "#E3F3E5" : "transparent",
       }}
     >
-      <input
-        type="checkbox"
-        checked={preso}
-        onChange={(e) => onSegna(e.target.checked)}
-        style={{ width: 17, height: 17, flexShrink: 0, accentColor: "#2E7D32", cursor: "pointer" }}
-      />
-      <span style={{ ...fontBody, fontSize: 13, color: preso ? "#2E7D32" : NAVY, fontWeight: preso ? 700 : 400, flex: 1, minWidth: 0 }}>{riga?.nome || "—"}</span>
+      {giaConsegnato ? (
+        <span style={{ width: 17, flexShrink: 0, textAlign: "center", color: "#8A6A1B", fontSize: 13, fontWeight: 700 }}>✓</span>
+      ) : (
+        <input
+          type="checkbox"
+          checked={preso}
+          onChange={(e) => onSegna(e.target.checked)}
+          style={{ width: 17, height: 17, flexShrink: 0, accentColor: "#2E7D32", cursor: "pointer" }}
+        />
+      )}
+      <span style={{ ...fontBody, fontSize: 13, color: giaConsegnato ? "#8A6A1B" : preso ? "#2E7D32" : NAVY, fontWeight: giaConsegnato || preso ? 700 : 400, flex: 1, minWidth: 0 }}>
+        {riga?.nome || "—"}
+        {giaConsegnato && (
+          <span style={{ display: "block", ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.3, marginTop: 1 }}>
+            Già consegnato in aula · preso da un kit
+          </span>
+        )}
+      </span>
       <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: preso ? "#2E7D32" : NAVY, whiteSpace: "nowrap", width: 34, textAlign: "right" }}>×{riga?.quantita ?? 1}</span>
       {mostraPrezzo && (
         <span style={{ ...fontBody, fontSize: 12.5, color: preso ? "#2E7D32" : MUTED, whiteSpace: "nowrap", width: 66, textAlign: "right" }}>
@@ -42052,7 +42079,10 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
 // tasti di stato, che scrivono sul sito.
 function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, presi = {}, onSegnaRiga }) {
   const righe = Array.isArray(vendita?.prodotti) ? vendita.prodotti : [];
-  const quantiPresi = righe.filter((_, i) => presi[i]).length;
+  // le righe gia' consegnate in aula non si prendono dallo scaffale: fuori
+  // dal conteggio, altrimenti "tutto preso" non arriverebbe mai
+  const daPrendere = righe.filter((r) => !r?.dal_kit);
+  const quantiPresi = righe.filter((r, i) => !r?.dal_kit && presi[i]).length;
   const fatturazione = grezzo?.billing || null;
   const spedizione = grezzo?.shipping || null;
   const speseSpedizione = grezzo?.shipping_total != null ? parseNum(grezzo.shipping_total) : null;
@@ -42106,8 +42136,8 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
               Prodotti {righe.length > 0 ? `(${righe.length})` : ""}
             </span>
             {righe.length > 0 && (
-              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: quantiPresi === righe.length ? "#2E7D32" : MUTED }}>
-                {quantiPresi === righe.length ? "tutto preso" : `${quantiPresi} di ${righe.length} presi`}
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: quantiPresi === daPrendere.length ? "#2E7D32" : MUTED }}>
+                {quantiPresi === daPrendere.length ? "tutto preso" : `${quantiPresi} di ${daPrendere.length} presi`}
               </span>
             )}
           </div>
@@ -42162,7 +42192,10 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
 // c'è solo da dire se il pacco è partito
 function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, onButtaProva, occupato, isMobile, presi = {}, onSegnaRiga }) {
   const righe = Array.isArray(spedizione?.prodotti) ? spedizione.prodotti : [];
-  const quantiPresi = righe.filter((_, i) => presi[i]).length;
+  // le righe gia' consegnate in aula non si prendono dallo scaffale: fuori
+  // dal conteggio, altrimenti "tutto preso" non arriverebbe mai
+  const daPrendere = righe.filter((r) => !r?.dal_kit);
+  const quantiPresi = righe.filter((r, i) => !r?.dal_kit && presi[i]).length;
   const spedita = spedizione?.stato === "spedito";
   const righeIndirizzo = [
     spedizione?.destinatario_nome,
@@ -42214,8 +42247,8 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
               Prodotti {righe.length > 0 ? `(${righe.length})` : ""}
             </span>
             {righe.length > 0 && (
-              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: quantiPresi === righe.length ? "#2E7D32" : MUTED }}>
-                {quantiPresi === righe.length ? "tutto preso" : `${quantiPresi} di ${righe.length} presi`}
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: quantiPresi === daPrendere.length ? "#2E7D32" : MUTED }}>
+                {quantiPresi === daPrendere.length ? "tutto preso" : `${quantiPresi} di ${daPrendere.length} presi`}
               </span>
             )}
           </div>
@@ -55247,6 +55280,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       return {
         prodotto_id: r.prodottoId, nome: r.nome, quantita: r.quantita,
         prezzo_listino: r.prezzo,
+        // il pezzo uscito da un kit che sta in aula l'allieva ce l'ha gia'
+        // in mano: chi compone il pacco non deve rispedirglielo
+        ...(dalKitPerProdotto[r.prodottoId] ? { dal_kit: true } : {}),
         sconto_riga: sconto,
         sconto_pct: lordiRiga[i] > 0 ? Math.round((sconto / lordiRiga[i]) * 1000) / 10 : 0,
         totale_riga: omaggioAttivo ? 0 : round2(lordiRiga[i] - sconto),
@@ -65702,6 +65738,9 @@ export default function App() {
   function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
+  // "Cambi e integrazioni": il quadro delle scorte in aula, dove la master
+  // dichiara cosa ha preso e perche' mentre il corso e' in corso
+  function apriCambiIntegrazioni(corsoDataId) { scrollAppInCima(); setInventarioSedeCorsoDataId(corsoDataId); setView("cambiintegrazioni"); }
   function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(false); setModelleDallaScheda(false); setView("classemaster"); }
   // Le modelle aperte dal tasto sulla scheda, senza passare dalla classe.
   // Ci si arriva anche da dentro la classe: la differenza la ricorda
@@ -66979,6 +67018,7 @@ export default function App() {
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           puntiMasterImpostazioni={puntiMasterImpostazioni} regoleReferralAutomatico={regoleReferralAutomatico}
           onApriInventarioSede={apriInventarioSede}
+          onApriCambi={apriCambiIntegrazioni}
           onApriClasse={apriClasseMaster}
           onApriModelle={apriModelleMaster}
           onBack={() => setView("home")}
@@ -67023,6 +67063,16 @@ export default function App() {
           />
         );
       })()}
+
+      {view === "cambiintegrazioni" && (
+        <QuadroSostituzioni
+          corsoData={corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId) || null}
+          corso={corsi.find((c) => c.id === corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId)?.corso_id)}
+          location={location} iscritti={iscritti} prodottiShop={prodottiShop}
+          venditeShop={venditeShop} kitDefinizioni={kitDefinizioni} isMobile={isMobile}
+          onBack={() => setView("dashboardmaster")}
+        />
+      )}
 
       {view === "inventariosede" && (
         <PaginaInventarioSede
