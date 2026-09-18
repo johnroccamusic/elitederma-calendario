@@ -41720,11 +41720,15 @@ const SPESE_PAGINA_INIZIALE = 10;
  * e' arrivati. L'importo esatto resta segnalato dov'e', in verde: e' un
  * aiuto a riconoscerla, non una ragione per spostarla.
  */
-function ModaleAssociaFattura({ spesa, fatture, onChiudi, onAssociata }) {
+function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAssociata }) {
   const [ricerca, setRicerca] = useState("");
   const [salvando, setSalvando] = useState(null);
   const [errore, setErrore] = useState("");
-  const importoSpesa = Number(spesa?.totale || 0);
+  // l'importo della RIGA, non di una sua parte: una riga che copre due
+  // spese vale quanto il bonifico che le ha pagate, ed e' quello il
+  // numero che deve combaciare con la fattura
+  const importoSpesa = Number(riga?.importo ?? riga?.totale ?? 0);
+  const quanteSpese = riga?.speseGruppo?.length || 1;
 
   const elenco = useMemo(() => {
     const parole = ricerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -41745,7 +41749,7 @@ function ModaleAssociaFattura({ spesa, fatture, onChiudi, onAssociata }) {
     setErrore("");
     setSalvando(f.id);
     const { data, error } = await supabase
-      .from("fatture_ricevute_fic").update({ spesa_id: spesa.id }).eq("id", f.id).select("id, spesa_id");
+      .from("fatture_ricevute_fic").update({ spesa_id: idSpesaDaLegare }).eq("id", f.id).select("id, spesa_id");
     setSalvando(null);
     if (error) { setErrore(error.message); return; }
     // Un update che non tocca NESSUNA riga non e' un errore per il
@@ -41767,8 +41771,8 @@ function ModaleAssociaFattura({ spesa, fatture, onChiudi, onAssociata }) {
         <div style={{ padding: "14px 18px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
           <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Associa una fattura</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3, lineHeight: 1.45 }}>
-            {spesa?.descrizione || "Spesa"} · <b style={{ color: NAVY }}>{fmtEuroErp2(importoSpesa)}</b> usciti dal conto.
-            Scegli la fattura che corrisponde.
+            {riga?.descrizione || "Spesa"} · <b style={{ color: NAVY }}>{fmtEuroErp2(importoSpesa)}</b> usciti dal conto.
+            {quanteSpese > 1 ? ` Questa riga copre ${quanteSpese} spese: la fattura vale per tutte.` : ""} Scegli la fattura che corrisponde.
           </div>
         </div>
         <div style={{ padding: 14 }}>
@@ -42060,7 +42064,22 @@ function PaginaInserimentoCostiRicavi({
     (fattureRicevuteFic || []).forEach((f) => { if (f.spesa_id && !mappa[f.spesa_id]) mappa[f.spesa_id] = f; });
     return mappa;
   }, [fattureRicevuteFic]);
-  const fatturaDiSpesa = (idSpesa) => fatturePerSpesa[idSpesa] || associateAdesso[idSpesa] || null;
+  // Una riga di prima nota puo' coprire piu' spese: un bonifico solo che
+  // paga due Costo Location diventa una riga sola, "2 spese: ...". La
+  // fattura pero' si attacca a UNA spesa — spesa_id ne tiene una — e
+  // cercarla con l'id della riga, che per un gruppo e' "gruppo_<id>",
+  // non la trovava mai: la fattura spariva dalle libere e la riga
+  // continuava a dire "da associare".
+  const idSpeseDiRiga = (m) => (
+    m?.speseGruppo?.length ? m.speseGruppo.map((x) => x.id) : [m?.spesaReale?.id || m?.id].filter(Boolean)
+  );
+  const fatturaDiRiga = (m) => {
+    if (associateAdesso[m?.id]) return associateAdesso[m.id];
+    for (const id of idSpeseDiRiga(m)) {
+      if (fatturePerSpesa[id]) return fatturePerSpesa[id];
+    }
+    return null;
+  };
   const scadenziarioAttivoPerConteggio = calcolaScadenziarioAttivo({ iscritti, corsiDate }).length;
   const occorrenzeAbbonamentiPerConteggio = calcolaOccorrenzeAbbonamenti({ abbonamentiContratti, abbonamentiImporti, spese }).length;
 
@@ -42075,7 +42094,8 @@ function PaginaInserimentoCostiRicavi({
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 32px 60px" }}>
       {spesaDaAssociare && (
         <ModaleAssociaFattura
-          spesa={spesaDaAssociare}
+          riga={spesaDaAssociare}
+          idSpesaDaLegare={idSpeseDiRiga(spesaDaAssociare)[0]}
           fatture={fattureRicevuteFic}
           onChiudi={() => setSpesaDaAssociare(null)}
           onAssociata={(fattura) => {
@@ -42228,18 +42248,19 @@ function PaginaInserimentoCostiRicavi({
                             ? `Pagata ${spesaPagataInCash(m.spesaReale) ? "cash" : "conto"}`
                             : etichettaOpzione(STATI_SPESA, m.spesaReale.stato)}
                         </span>
-                        {m.spesaReale.stato === "pagata" && !spesaPagataInCash(m.spesaReale) && (
-                          fatturaDiSpesa(m.id) ? (
+                        {m.spesaReale.stato === "pagata" && !spesaPagataInCash(m.spesaReale) && (() => {
+                          const fattura = fatturaDiRiga(m);
+                          return fattura ? (
                             <span
-                              title={`Associata a ${fatturaDiSpesa(m.id).fornitore_nome || "fornitore"} — ${fatturaDiSpesa(m.id).numero_documento || "senza numero"}`}
+                              title={`Associata a ${fattura.fornitore_nome || "fornitore"} — ${fattura.numero_documento || "senza numero"}`}
                               style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap" }}
                             >
                               Riconciliata
                             </span>
                           ) : (
-                            <AzioneTesto onClick={() => setSpesaDaAssociare(m.spesaReale)} colore="#B8860B">da associare</AzioneTesto>
-                          )
-                        )}
+                            <AzioneTesto onClick={() => setSpesaDaAssociare(m)} colore="#B8860B">da associare</AzioneTesto>
+                          );
+                        })()}
                         <AzioneTesto onClick={() => onApriModificaSpesa(m.id)}>Modifica</AzioneTesto>
                         <AzioneTesto onClick={() => eliminaSpesa(m.id)} colore="#C0392B">Elimina</AzioneTesto>
                       </>
