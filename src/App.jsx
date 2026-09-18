@@ -41741,10 +41741,19 @@ function ModaleAssociaFattura({ spesa, fatture, onChiudi, onAssociata }) {
   async function associa(f) {
     setErrore("");
     setSalvando(f.id);
-    const { error } = await supabase.from("fatture_ricevute_fic").update({ spesa_id: spesa.id }).eq("id", f.id);
+    const { data, error } = await supabase
+      .from("fatture_ricevute_fic").update({ spesa_id: spesa.id }).eq("id", f.id).select("id, spesa_id");
     setSalvando(null);
     if (error) { setErrore(error.message); return; }
-    onAssociata?.();
+    // Un update che non tocca NESSUNA riga non e' un errore per il
+    // database: e' il modo in cui le regole di accesso dicono di no, e lo
+    // dicono in silenzio. Senza questo controllo si chiudeva il quadro
+    // dicendo "fatto" e non era stato fatto niente.
+    if (!data || data.length === 0) {
+      setErrore("Il database non ha aggiornato nessuna riga: l'associazione non e' passata.");
+      return;
+    }
+    onAssociata?.(f);
   }
 
   const quando = (g) => { if (!g) return "—"; const [a, m, d] = String(g).split("-"); return d ? `${d}/${m}/${a}` : g; };
@@ -42034,12 +42043,21 @@ function PaginaInserimentoCostiRicavi({
   // settecento fatture, per una lista di quaranta uscite, sono
   // ventottomila giri per una domanda che ne vale uno.
   const [spesaDaAssociare, setSpesaDaAssociare] = useState(null);
+  // Le associazioni appena fatte, tenute qui finche' il ricarico non le
+  // riporta da solo.
+  //
+  // Senza, la riga restava "da associare" anche a legame scritto: il
+  // ricarico di fatture_ricevute_fic e' una richiesta che va e torna, e
+  // nel frattempo chi ha appena cliccato guarda una schermata che gli
+  // dice che non e' successo niente. Il database resta la verita': questa
+  // e' solo la verita' che arriva prima.
+  const [associateAdesso, setAssociateAdesso] = useState({});
   const fatturePerSpesa = useMemo(() => {
     const mappa = {};
     (fattureRicevuteFic || []).forEach((f) => { if (f.spesa_id && !mappa[f.spesa_id]) mappa[f.spesa_id] = f; });
     return mappa;
   }, [fattureRicevuteFic]);
-  const fatturaDiSpesa = (idSpesa) => fatturePerSpesa[idSpesa] || null;
+  const fatturaDiSpesa = (idSpesa) => fatturePerSpesa[idSpesa] || associateAdesso[idSpesa] || null;
   const scadenziarioAttivoPerConteggio = calcolaScadenziarioAttivo({ iscritti, corsiDate }).length;
   const occorrenzeAbbonamentiPerConteggio = calcolaOccorrenzeAbbonamenti({ abbonamentiContratti, abbonamentiImporti, spese }).length;
 
@@ -42057,7 +42075,11 @@ function PaginaInserimentoCostiRicavi({
           spesa={spesaDaAssociare}
           fatture={fattureRicevuteFic}
           onChiudi={() => setSpesaDaAssociare(null)}
-          onAssociata={() => { setSpesaDaAssociare(null); ricarica(["fatture_ricevute_fic"]); }}
+          onAssociata={(fattura) => {
+            setAssociateAdesso((prec) => ({ ...prec, [spesaDaAssociare.id]: fattura }));
+            setSpesaDaAssociare(null);
+            ricarica(["fatture_ricevute_fic"]);
+          }}
         />
       )}
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
