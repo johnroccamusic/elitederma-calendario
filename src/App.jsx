@@ -39786,6 +39786,51 @@ function FasciaPeriodoContabile({
     </div>
   );
 }
+// L'ultima spesa che ha riguardato un fornitore: e' li' dentro che sta
+// il modo in cui quel costo e' stato catalogato l'ultima volta che
+// qualcuno ci ha ragionato sopra.
+function ultimaSpesaDelFornitore(spese, fornitoreId) {
+  if (!fornitoreId) return null;
+  return [...(spese || [])]
+    .filter((sp) => sp.fornitore_id === fornitoreId)
+    .sort((a, b) => String(b.data_documento || b.ts || "").localeCompare(String(a.data_documento || a.ts || "")))[0] || null;
+}
+// Cosa si eredita da quella spesa, e cosa no.
+//
+// Si eredita tutto quello che descrive CHE TIPO di costo e': categoria,
+// imputazione, natura, le classificazioni. Sono risposte che per lo
+// stesso fornitore non cambiano quasi mai, e ridarle ogni volta e' il
+// lavoro noioso che fa sbagliare.
+//
+// NON si ereditano le date ne' gli importi: quelli li dice il movimento,
+// e sono l'unica cosa che cambia davvero da una volta all'altra.
+//
+// E NON si eredita la classe. Una spesa ripetuta dello stesso fornitore
+// quasi mai riguarda di nuovo la stessa edizione: imputarla a quella
+// vecchia sporcherebbe il riepilogo di un corso magari gia' chiuso, e in
+// silenzio.
+function catalogazioneEreditata(ultima) {
+  if (!ultima) return {};
+  return {
+    categoriaId: ultima.categoria_id || "",
+    sottocategoriaId: ultima.sottocategoria_id || "",
+    tipoAmbito: ultima.tipo_ambito || "generale",
+    sedeId: ultima.sede_id || "",
+    corsoId: ultima.corso_id || "",
+    eventoId: ultima.evento_id || "",
+    direttoIndiretto: ultima.diretto_indiretto || "",
+    fissoVariabile: ultima.fisso_variabile || "",
+    ricorrenteOccasionale: ultima.ricorrente_occasionale || "",
+    natura: ultima.natura || "operativo",
+    beneDurevole: !!ultima.bene_durevole,
+    controllabilita: ultima.controllabilita || "",
+    riducibilita: ultima.riducibilita || "",
+    essenzialita: ultima.essenzialita || "",
+    responsabileCosto: ultima.responsabile_costo || "",
+    ricorrenza: ultima.ricorrenza || "nessuna",
+    ereditataDa: ultima.id,
+  };
+}
 function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [], costiSottocategorie = [], ricarica, onContabilizza }) {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
@@ -64255,11 +64300,11 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   const [regolaTesto, setRegolaTesto] = useState(prefill?.movimentoControparte || "");
   const [note, setNote] = useState(spesaEsistente?.note || "");
 
-  const [tipoAmbito, setTipoAmbito] = useState(prefill?.classeId ? "classe" : spesaEsistente?.tipo_ambito || "generale");
-  const [sedeId, setSedeId] = useState(spesaEsistente?.sede_id || "");
-  const [corsoId, setCorsoId] = useState(spesaEsistente?.corso_id || "");
+  const [tipoAmbito, setTipoAmbito] = useState(prefill?.classeId ? "classe" : spesaEsistente?.tipo_ambito || prefill?.tipoAmbito || "generale");
+  const [sedeId, setSedeId] = useState(spesaEsistente?.sede_id || prefill?.sedeId || "");
+  const [corsoId, setCorsoId] = useState(spesaEsistente?.corso_id || prefill?.corsoId || "");
   const [classeId, setClasseId] = useState(prefill?.classeId || spesaEsistente?.classe_id || "");
-  const [eventoId, setEventoId] = useState(spesaEsistente?.evento_id || "");
+  const [eventoId, setEventoId] = useState(spesaEsistente?.evento_id || prefill?.eventoId || "");
   const [ripartisci, setRipartisci] = useState(attribuzioniEsistenti.length > 0);
   const [righeRipartizione, setRigheRipartizione] = useState(
     attribuzioniEsistenti.length > 0
@@ -64267,21 +64312,21 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       : [{ tipoAmbito: "sede", sedeId: "", corsoId: "", classeId: "", eventoId: "", percentuale: "100" }]
   );
 
-  const [direttoIndiretto, setDirettoIndiretto] = useState(spesaEsistente?.diretto_indiretto || "");
-  const [fissoVariabile, setFissoVariabile] = useState(spesaEsistente?.fisso_variabile || "");
-  const [ricorrenteOccasionale, setRicorrenteOccasionale] = useState(spesaEsistente?.ricorrente_occasionale || "");
-  const [natura, setNatura] = useState(spesaEsistente?.natura || "operativo");
-  const [beneDurevole, setBeneDurevole] = useState(spesaEsistente?.bene_durevole || false);
-  const [controllabilita, setControllabilita] = useState(spesaEsistente?.controllabilita || "");
-  const [riducibilita, setRiducibilita] = useState(spesaEsistente?.riducibilita || "");
-  const [essenzialita, setEssenzialita] = useState(spesaEsistente?.essenzialita || "");
+  const [direttoIndiretto, setDirettoIndiretto] = useState(spesaEsistente?.diretto_indiretto || prefill?.direttoIndiretto || "");
+  const [fissoVariabile, setFissoVariabile] = useState(spesaEsistente?.fisso_variabile || prefill?.fissoVariabile || "");
+  const [ricorrenteOccasionale, setRicorrenteOccasionale] = useState(spesaEsistente?.ricorrente_occasionale || prefill?.ricorrenteOccasionale || "");
+  const [natura, setNatura] = useState(spesaEsistente?.natura || prefill?.natura || "operativo");
+  const [beneDurevole, setBeneDurevole] = useState(spesaEsistente?.bene_durevole ?? prefill?.beneDurevole ?? false);
+  const [controllabilita, setControllabilita] = useState(spesaEsistente?.controllabilita || prefill?.controllabilita || "");
+  const [riducibilita, setRiducibilita] = useState(spesaEsistente?.riducibilita || prefill?.riducibilita || "");
+  const [essenzialita, setEssenzialita] = useState(spesaEsistente?.essenzialita || prefill?.essenzialita || "");
   const [origine, setOrigine] = useState(spesaEsistente?.origine || "manuale");
   const [includiAnalisiCosti, setIncludiAnalisiCosti] = useState(spesaEsistente?.includi_analisi_costi !== false);
-  const [ricorrenza, setRicorrenza] = useState(spesaEsistente?.ricorrenza || "nessuna");
+  const [ricorrenza, setRicorrenza] = useState(spesaEsistente?.ricorrenza || prefill?.ricorrenza || "nessuna");
 
   const [budgetPrevisto, setBudgetPrevisto] = useState(spesaEsistente?.budget_previsto != null ? String(spesaEsistente.budget_previsto) : "");
   const [sogliaPersonalizzata, setSogliaPersonalizzata] = useState(spesaEsistente?.soglia_allerta_personalizzata != null ? String(spesaEsistente.soglia_allerta_personalizzata) : "");
-  const [responsabileCosto, setResponsabileCosto] = useState(spesaEsistente?.responsabile_costo || "");
+  const [responsabileCosto, setResponsabileCosto] = useState(spesaEsistente?.responsabile_costo || prefill?.responsabileCosto || "");
 
   const [piattaformaPagamento, setPiattaformaPagamento] = useState(spesaEsistente?.piattaforma_pagamento || "");
   const [numeroTransazioni, setNumeroTransazioni] = useState(spesaEsistente?.numero_transazioni != null ? String(spesaEsistente.numero_transazioni) : "");
@@ -66595,18 +66640,46 @@ export default function App() {
   // "Contabilizza" su un movimento banca: il modulo della spesa gia'
   // compilato con data, importo, intestazione e da che tasca e' uscito;
   // si torna a Contabilita' sulla scheda della banca
-  function apriNuovaSpesaDaMovimentoBanca(m) {
+  // "Contabilizza" su un movimento di banca: apre il modulo della spesa
+  // gia' compilato il piu' possibile.
+  //
+  // Due cose che prima non faceva, e sono quelle che fanno risparmiare i
+  // minuti veri:
+  //
+  // 1. IL FORNITORE SI CREA DA SOLO. La controparte del movimento c'e'
+  //    gia' scritta nell'estratto conto: chiedere all'utente di
+  //    ricopiarla a mano in anagrafica per poi selezionarla e' lavoro che
+  //    puo' fare la macchina.
+  // 2. SE QUEL FORNITORE L'HAI GIA' TRATTATO, torna la catalogazione che
+  //    avevi usato l'ultima volta — categoria, imputazione, natura, tutte
+  //    le classificazioni — gia' pronta da confermare. Non le date e non
+  //    gli importi: quelli li dice il movimento, e sono l'unica cosa che
+  //    cambia davvero da una volta all'altra.
+  async function apriNuovaSpesaDaMovimentoBanca(m) {
     const controparte = controparteBanca(m.descrizione, m.causale);
-    const fornitoreEsistente = (fornitori || []).find((ft) => ft.nome && controparte && ft.nome.trim().toLowerCase() === controparte.trim().toLowerCase());
+    let fornitore = (fornitori || []).find((ft) => ft.nome && controparte && ft.nome.trim().toLowerCase() === controparte.trim().toLowerCase()) || null;
+    if (!fornitore && controparte) {
+      const { data } = await supabase.from("fornitori").insert({ nome: controparte }).select().single();
+      if (data) { fornitore = data; fetchDati(["fornitori"]); }
+    }
+    // l'ultima spesa che ha riguardato questo fornitore: e' il modo in cui
+    // quella spesa e' stata catalogata l'ultima volta che qualcuno ci ha
+    // ragionato sopra
+    const ultima = ultimaSpesaDelFornitore(spese, fornitore?.id);
     setSpesaInModifica(null);
     setSpesaPrefill({
-      descrizione: controparte,
-      fornitoreId: fornitoreEsistente?.id || null,
-      nomeFornitore: fornitoreEsistente ? null : null,
+      descrizione: ultima?.descrizione || controparte,
+      fornitoreId: fornitore?.id || null,
+      nomeFornitore: null,
+      // le date e l'importo li dice il movimento, sempre: sono l'unica
+      // cosa che cambia davvero fra una spesa e l'altra dello stesso
+      // fornitore, ed ereditarle sarebbe un errore silenzioso
       dataDocumento: m.data_operazione, dataPagamento: m.data_operazione,
-      totale: round2(Math.abs(Number(m.importo) || 0)), ivaPercentuale: 0,
+      totale: round2(Math.abs(Number(m.importo) || 0)),
       statoIniziale: "pagata", metodoPagamento: metodoDaMovimentoBanca(m),
       movimentoBancaId: m.id, movimentoDescrizione: m.descrizione, movimentoControparte: controparte,
+      ivaPercentuale: ultima ? (ultima.iva_percentuale ?? 0) : 0,
+      ...catalogazioneEreditata(ultima),
     });
     setAmministrazioneTabIniziale("banca");
     setSpesaRitornoView("amministrazione");
