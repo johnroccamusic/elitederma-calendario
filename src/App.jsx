@@ -36707,6 +36707,10 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
 
 // la larghezza della fila di schede: fissa, non quella della pagina
 const LARGHEZZA_SCHEDE_CONTABILITA = 900;
+// Quanto in basso comincia la fila delle schede di Contabilita', misurata
+// dal bordo di sopra della pagina. Un numero solo, per tutte: e' quello
+// che tiene ferma la pagina quando si passa da una scheda all'altra.
+const TOP_SCHEDE_CONTABILITA = 475;
 // lo stacco fra la fila delle tessere e la riga dei filtri sotto
 const SPAZIO_TASTI_FILTRI = 100;
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente, ordine, onSalvaOrdine }) {
@@ -41272,6 +41276,20 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
         />
       )}
       <div style={{ maxWidth: LARGHEZZA_SCHEDE_CONTABILITA, margin: "0 auto" }}>
+        {/* La fila delle schede parte SEMPRE alla stessa distanza dal
+            bordo di sopra, qualunque cosa ci sia prima.
+
+            Sopra le schede ogni pagina mette il suo: una ha cinque
+            riquadri d'avviso e un filo, l'altra il titolo coi tasti e una
+            riga di spiegazione. Sono alti diversi, e passando dall'una
+            all'altra le schede — e tutto quello che le segue — salivano e
+            scendevano: l'occhio doveva ritrovare ogni volta dove
+            comincia la pagina. Fissando questo blocco a un'altezza sola,
+            le schede cadono al pixel nello stesso punto.
+
+            Solo da monitor: sul telefono quattrocentosettantacinque pixel
+            di testata sarebbero mezzo schermo di vuoto. */}
+        <div style={{ minHeight: isMobile ? undefined : TOP_SCHEDE_CONTABILITA - 32 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
@@ -41322,6 +41340,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
             respirare invece di far sembrare le due file un unico blocco. */}
         <div style={{ height: 1, background: "#D5C9AF", margin: isMobile ? "14px 0" : "20px 0" }} />
 
+        </div>
         <TabsAmministrazione
           schedaAttiva={tab}
           onApriPrimaNotaCassa={onApriPrimaNotaCassa}
@@ -42253,6 +42272,20 @@ function PaginaInserimentoCostiRicavi({
             sembrare che una sia zoomata. Il numero sta in un posto solo
             (LARGHEZZA_SCHEDE_CONTABILITA) perche' due numeri uguali
             scritti due volte prima o poi diventano diversi. */}
+        {/* La fila delle schede parte SEMPRE alla stessa distanza dal
+            bordo di sopra, qualunque cosa ci sia prima.
+
+            Sopra le schede ogni pagina mette il suo: una ha cinque
+            riquadri d'avviso e un filo, l'altra il titolo coi tasti e una
+            riga di spiegazione. Sono alti diversi, e passando dall'una
+            all'altra le schede — e tutto quello che le segue — salivano e
+            scendevano: l'occhio doveva ritrovare ogni volta dove
+            comincia la pagina. Fissando questo blocco a un'altezza sola,
+            le schede cadono al pixel nello stesso punto.
+
+            Solo da monitor: sul telefono quattrocentosettantacinque pixel
+            di testata sarebbero mezzo schermo di vuoto. */}
+        <div style={{ minHeight: isMobile ? undefined : TOP_SCHEDE_CONTABILITA - 32 }}>
       <div style={{ maxWidth: LARGHEZZA_SCHEDE_CONTABILITA, margin: "0 auto" }}>
         {/* il tondo del livello precedente sta a SINISTRA del titolo, sulla
             stessa riga e centrato con lui: e' la regola di tutte le pagine
@@ -42275,6 +42308,7 @@ function PaginaInserimentoCostiRicavi({
         )}
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Il libro cassa: tutte le entrate e tutte le uscite nel giorno in cui i soldi si sono mossi davvero.</div>
 
+        </div>
         <TabsAmministrazione
           schedaAttiva="primanota"
           onApriPrimaNotaCassa={() => {}}
