@@ -24834,6 +24834,48 @@ function useCorpoImportoNecessario(testo, corpoBase, corpoMin = 8) {
 // una riga sola quando ci sta, cifra a corpo pieno. Le tre celle del
 // Riepilogo amministrativo restano quelle di prima — li' le colonne sono
 // tre e larghe, e non c'era niente da stringere.
+/**
+ * Una fila di celle che si mettono d'accordo prima di disegnarsi.
+ *
+ * Due cose vanno decise dalla riga, non dalla singola cella:
+ *
+ *  - l'altezza del titolo. "IVA" e' una parola, "Lordo (iva incl.)" ne
+ *    prende due righe: senza un accordo, il numero della prima casella
+ *    sta una riga piu' in alto degli altri due e la fila sembra storta.
+ *    Vince il titolo piu' alto, e tutti gli altri gli si adeguano.
+ *
+ *  - il corpo della cifra. Cifre affiancate si leggono insieme, e una
+ *    scritta piu' piccola dell'altra sembra valere meno. Vince la piu'
+ *    piccola fra le misure che servono, cosi' ci stanno tutte.
+ *
+ * La cella sapeva gia' ricevere questi due numeri (altezzaEtichettaImposta
+ * e corpoImposto) ma nessuno glieli dava mai: qui c'e' chi li raccoglie.
+ */
+function RigaCelleRiepilogo({ children, style }) {
+  const [altezze, setAltezze] = useState({});
+  const [corpi, setCorpi] = useState({});
+  const raccogli = (imposta) => (i) => (valore) => imposta((prec) => (prec[i] === valore ? prec : { ...prec, [i]: valore }));
+  const raccogliAltezza = raccogli(setAltezze);
+  const raccogliCorpo = raccogli(setCorpi);
+  const valori = (o) => Object.values(o).filter((v) => v > 0);
+  const altezzaMassima = valori(altezze).length ? Math.max(...valori(altezze)) : 0;
+  const corpoMinimo = valori(corpi).length ? Math.min(...valori(corpi)) : 0;
+  return (
+    <div style={style}>
+      {React.Children.map(children, (figlio, i) => (
+        React.isValidElement(figlio)
+          ? React.cloneElement(figlio, {
+            altezzaEtichettaImposta: altezzaMassima || undefined,
+            onAltezzaEtichetta: raccogliAltezza(i),
+            corpoImposto: corpoMinimo || undefined,
+            onCorpoNecessario: raccogliCorpo(i),
+          })
+          : figlio
+      ))}
+    </div>
+  );
+}
+
 function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, nota, compatta = false, grande = false, corpoImposto, onCorpoNecessario, altezzaEtichettaImposta, onAltezzaEtichetta }) {
   // Da telefono, fuori dai due vestiti speciali, la cella diventa un
   // quadrato con l'icona sopra: affiancate, icona e testo si dividevano
@@ -25732,17 +25774,22 @@ function PannelloRiepilogoAmministrativo({
                 ) : (
                   <>
                     <TitoloSezioneRiepilogo>Incassi</TitoloSezioneRiepilogo>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 14 }}>
+                    <RigaCelleRiepilogo style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 14 }}>
                       <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaPortafoglio} label="Lordo (iva incl.)" valore={euroRiepilogo(incassoLordoClasse)} />
                       <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Netto (iva escl.)" valore={euroRiepilogo(incassoNettoClasse)} />
                       <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaLibroContabile} label="IVA" valore={euroRiepilogo(ivaClasse)} />
-                    </div>
+                    </RigaCelleRiepilogo>
                     <TitoloSezioneRiepilogo>Di cui</TitoloSezioneRiepilogo>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 22 }}>
+                    <RigaCelleRiepilogo style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 22 }}>
                       <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaCartaPos} label="Conto corrente" valore={euroRiepilogo(contoCorrenteClasse)} />
-                      <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Cash al corso" valore={euroRiepilogo(contantiClasse)} />
+                      {/* "Cash al corso" ci starebbe su una riga, e da sola le altre due —
+                          "Conto corrente" e "Cash prima del corso" — ne prendono
+                          due: il suo numero restava una riga piu' in alto degli
+                          altri. Mandata a capo a mano, le tre cifre cadono sulla
+                          stessa linea. */}
+                      <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label={<>Cash al<br />corso</>} valore={euroRiepilogo(contantiClasse)} />
                       <CellaImportoRiepilogo isMobile={isMobile} Icona={IconaBanconota} label="Cash prima del corso" valore={euroRiepilogo(cashPrimaDelCorsoClasse)} />
-                    </div>
+                    </RigaCelleRiepilogo>
                   </>
                 )}
 
@@ -25898,7 +25945,10 @@ function PannelloRiepilogoAmministrativo({
                               <span title="Contante già registrato come spesa pagata" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>pagato</span>
                             )}
                           </div>
-                          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                          {/* spunte e giorni uno accanto all'altro, non uno
+                              sotto l'altro: B/C/1/2 a sinistra, i giorni con
+                              le loro freccette a destra */}
+                          <div style={{ minWidth: 0, display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
                             {r.tipo === "location" && (() => {
                               const modalita = modalitaSplitMaster(r);
                               return (
