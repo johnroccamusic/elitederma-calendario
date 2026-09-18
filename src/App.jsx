@@ -65215,7 +65215,7 @@ export default function App() {
   // tabelle già caricate non vengono richieste di nuovo, quindi nel caso
   // normale non costa niente.
   function assicuraTabelle(elenco) {
-    const mancanti = (elenco || []).filter((nome) => CARICATORI_TABELLA[nome] && !tabelleCaricate.has(nome));
+    const mancanti = conLaDistinta(elenco || []).filter((nome) => CARICATORI_TABELLA[nome] && !tabelleCaricate.has(nome));
     if (!mancanti.length) return;
     fetchDati(mancanti).then(() => setTabelleCaricate((prev) => new Set([...prev, ...mancanti])));
   }
@@ -65388,9 +65388,25 @@ export default function App() {
   // questa sessione — le riaperture successive sono istantanee perché la
   // tabella resta in memoria finché qualcosa non la modifica (ricarica
   // mirata, vedi CARICATORI_TABELLA)
+  // prodotti_shop e bundle_componenti sono una cosa sola.
+  //
+  // Il costo di acquisto di un bundle non sta sulla sua riga: sta nella
+  // sua distinta, e lo ricava conCostoDeiBundle. Una schermata che chiede
+  // i prodotti senza la distinta non vede un errore — vede dei bundle
+  // "senza costo di acquisto", e allora niente margine, niente sconto,
+  // niente punti. E' successo davvero sui carrelli sospesi, dove due
+  // prodotti su sedici erano bundle e restavano fuori dallo sconto.
+  //
+  // Sono 96 righe: chiederle sempre insieme costa niente, e toglie di
+  // mezzo una classe intera di bugie silenziose.
+  function conLaDistinta(elenco) {
+    return elenco.includes("prodotti_shop") && !elenco.includes("bundle_componenti")
+      ? [...elenco, "bundle_componenti"] : elenco;
+  }
+
   useEffect(() => {
     if (!ok || loading) return;
-    const richieste = TABELLE_PER_VIEW[view] || [];
+    const richieste = conLaDistinta(TABELLE_PER_VIEW[view] || []);
     const mancanti = richieste.filter((t) => !tabelleCaricate.has(t));
     // niente da caricare: l'attesa va comunque chiusa. Se un'altra parte
     // dell'app (assicuraTabelle) carica la stessa tabella mentre questo
