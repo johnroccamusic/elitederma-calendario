@@ -349,8 +349,8 @@ const LARGHEZZA_COLONNA_SPUNTA = 34;
 
 // L'intestazione di una colonna di spunte, scritta dal basso verso l'alto.
 //
-// Le colonne dei permessi sono decine — una per ogni tasto della home,
-// piu' una per ogni agenda — e scritte per lungo ognuna si portava via
+// Le colonne dei permessi sono decine — una per ogni tasto della home —
+// e scritte per lungo ognuna si portava via
 // ottantaquattro pixel per una parola sola. La tabella scorreva in
 // orizzontale piu' di quanto si riuscisse a seguirla, e per capire su
 // quale colonna si stava spuntando bisognava risalire con lo sguardo
@@ -609,7 +609,6 @@ function leggiSlugData(testo) {
 }
 const GIORNI = ["L","M","M","G","V","S","D"];
 const GIORNI_ABBR = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"]; // solo per l'intestazione del Calendario mensile
-const GIORNI_ABBR_LUNGHI = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"]; // intestazione delle carte dell'Agenda
 const COLORE_SABATO = "#F4F9FD"; // celeste tenuissimo, indice 5 = S
 const COLORE_DOMENICA = "#F2F2F2"; // grigio molto chiaro, indice 6 = D
 
@@ -2161,14 +2160,6 @@ function IconaTileStatistiche({ size = 44, color = NAVY }) {
 }
 // Le versioni "da tasto" di tre icone condivise: stesso disegno, ma
 // tratto a 1,8 e colore passato, come tutte le altre della home
-function IconaTileAgenda({ size = 44, color = NAVY }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1.6" y="3.91" width="20.8" height="18.49" rx="2.31" />
-      <path d="M7.38 1.6v4.62M16.62 1.6v4.62M1.6 9.69h20.8" />
-    </svg>
-  );
-}
 function IconaTileLoghi({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -12423,586 +12414,6 @@ function RigaConsulenza({ nome, livello, onCambiaLivello, onRimuovi, disponibili
     </div>
   );
 }
-// tasto "+ Nuova agenda" (solo Programmatore): crea subito una riga col
-// nome scelto — appare all'istante come nuova colonna-checkbox in
-// Gestione utenti/Password Master (chiave permesso "agenda_<id>")
-function BottoneNuovaAgenda({ ricarica }) {
-  const [salvando, setSalvando] = useState(false);
-  async function crea() {
-    const nome = window.prompt("Nome della nuova agenda:");
-    if (!nome || !nome.trim()) return;
-    setSalvando(true);
-    const { error } = await supabase.from("agende").insert({ nome: nome.trim() });
-    setSalvando(false);
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    ricarica(["agende"]);
-  }
-  return (
-    <button
-      onClick={crea} disabled={salvando}
-      style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "10px 16px", cursor: salvando ? "default" : "pointer", flexShrink: 0 }}
-    >
-      {salvando ? "Creo…" : "+ Nuova agenda"}
-    </button>
-  );
-}
-// una voce dell'agenda: data, titolo, nota libera — eliminabile
-// popup "Nuovo appuntamento": si apre cliccando un giorno vuoto del
-// calendario, con la data già fissata da quel giorno (stesso schema di
-// PopupNuovaData nel Calendario corsi)
-function PopupNuovaVoceAgenda({ dataClic, orarioIniziale, onSalva, onChiudi }) {
-  const [titolo, setTitolo] = useState("");
-  const [orario, setOrario] = useState(orarioIniziale || "");
-  const [nota, setNota] = useState("");
-  return (
-    <Modal title={`Nuovo evento — ${fmtData(dataClic)}`} onClose={onChiudi}>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 2 }}>
-          <Field label="Nome">
-            <input style={inputStyle} value={titolo} onChange={(e) => setTitolo(e.target.value)} autoFocus />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Orario">
-            <input type="time" style={inputStyle} value={orario} onChange={(e) => setOrario(e.target.value)} />
-          </Field>
-        </div>
-      </div>
-      <Field label="Nota (facoltativa)">
-        <textarea style={{ ...inputStyle, minHeight: 70, resize: "vertical" }} value={nota} onChange={(e) => setNota(e.target.value)} />
-      </Field>
-      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <Button disabled={!titolo.trim()} onClick={() => onSalva({ titolo: titolo.trim(), orario: orario || null, nota: nota.trim() || null })}>Salva</Button>
-        <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
-      </div>
-    </Modal>
-  );
-}
-// popup di un evento esistente (click sulla sua etichetta nel
-// calendario): modificabile o eliminabile
-function PopupVoceAgenda({ voce, onSalva, onElimina, onChiudi }) {
-  const [titolo, setTitolo] = useState(voce.titolo);
-  const [orario, setOrario] = useState(voce.orario ? voce.orario.slice(0, 5) : "");
-  const [nota, setNota] = useState(voce.nota || "");
-  return (
-    <Modal title={fmtData(voce.data)} onClose={onChiudi}>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 2 }}>
-          <Field label="Nome">
-            <input style={inputStyle} value={titolo} onChange={(e) => setTitolo(e.target.value)} />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Orario">
-            <input type="time" style={inputStyle} value={orario} onChange={(e) => setOrario(e.target.value)} />
-          </Field>
-        </div>
-      </div>
-      <Field label="Nota (facoltativa)">
-        <textarea style={{ ...inputStyle, minHeight: 70, resize: "vertical" }} value={nota} onChange={(e) => setNota(e.target.value)} />
-      </Field>
-      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <Button disabled={!titolo.trim()} onClick={() => onSalva({ titolo: titolo.trim(), orario: orario || null, nota: nota.trim() || null })}>Salva</Button>
-        <Button variant="danger" onClick={onElimina}>Elimina</Button>
-        <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
-      </div>
-    </Modal>
-  );
-}
-// una singola "pagina" di taccuino: quella di un giorno (con gli
-// appuntamenti) o quella note della settimana (ottava carta della riga)
-// carattere per le intestazioni delle carte: serif, diverso di proposito
-// dal resto dell'app (Figtree/Roboto) per dare l'aria di un vero taccuino
-const fontQuaderno = { fontFamily: "Georgia, 'Times New Roman', serif" };
-// tavolozza alternata per mese: un mese la carta ha i toni caldi di
-// sempre, il successivo un celeste chiaro "carta da zucchero" — così,
-// senza più un titolo/divisore di mese, resta comunque visibile a colpo
-// d'occhio dove finisce un mese e comincia il prossimo
-const PALETTE_MESE_A = { sfondo: "#FFFDF7", sfondoOggi: "#FBF3E4", riga: "#E9E3D4", retro: "#EDE6D6" };
-const PALETTE_MESE_B = { sfondo: "#EEF6FB", sfondoOggi: "#FBF3E4", riga: "#D8E8F0", retro: "#DCEAF1" };
-function paletteMese(anno, mese) { return (anno * 12 + mese) % 2 === 0 ? PALETTE_MESE_A : PALETTE_MESE_B; }
-// colore dell'ottava carta (le note): quello della domenica, l'ultimo
-// giorno della settimana — è la carta a cui sta visivamente accanto nella
-// griglia, quindi deve combaciare con quella, non con un calcolo astratto
-// di "mese prevalente" che in una settimana a cavallo di due mesi può
-// finire scollegato dal colore del giorno appena precedente
-function paletteSettimanaNota(giorni) {
-  const domenica = giorni[giorni.length - 1];
-  return paletteMese(domenica.getFullYear(), domenica.getMonth());
-}
-// una "pagina" del taccuino (un giorno con i suoi appuntamenti, o l'ottava
-// carta delle note): rilegatura a spirale sul bordo sinistro, margine
-// rosso, righe orizzontali, e una seconda pagina leggermente sfalsata
-// dietro per dare l'effetto di un blocco di fogli impilati. Cliccare la
-// data (non il resto della carta) apre la vista dettagliata del giorno.
-// Un "+" leggerissimo nell'angolo in basso a destra (solo sui giorni, non
-// sulla carta Note) apre subito l'inserimento di un nuovo appuntamento,
-// senza dover prima passare dalla vista dettagliata del giorno
-function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClick, onNuovo, children }) {
-  const isMobile = useIsMobile();
-  const p = palette || PALETTE_MESE_A;
-  return (
-    <div style={{ position: "relative" }}>
-      <div style={{ position: "absolute", top: 5, left: 5, right: -5, bottom: -5, background: p.retro, borderRadius: 9, border: `1px solid ${CREAM_BORDER}` }} />
-      <div
-        onClick={onClick}
-        style={{
-          position: "relative", cursor: onClick ? "pointer" : "default",
-          background: evidenziata ? p.sfondoOggi : p.sfondo,
-          backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent 22px, ${p.riga} 23px)`,
-          backgroundPosition: "0 40px",
-          border: `1px solid ${CREAM_BORDER}`, borderRadius: 9,
-          boxShadow: "0 10px 18px -12px rgba(14,27,51,0.4)",
-          minHeight: isMobile ? 190 : 330, overflow: "hidden", paddingLeft: isMobile ? 11 : 16,
-        }}
-      >
-        {/* rilegatura a spirale: striscia di anelli lungo il bordo sinistro */}
-        <div style={{
-          position: "absolute", top: 0, bottom: 0, left: 0, width: isMobile ? 11 : 16,
-          backgroundImage: "radial-gradient(circle, #fff 2px, #C9C2AE 2.5px)",
-          backgroundSize: "100% 14px", backgroundPosition: "center 6px", backgroundRepeat: "repeat-y",
-        }} />
-        <div style={{ position: "absolute", top: 0, bottom: 0, left: isMobile ? 18 : 26, width: 1, background: "#E4A79B" }} />
-        <div style={{ ...fontQuaderno, fontSize: isMobile ? 10.5 : 13.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: isMobile ? "8px 4px 6px" : "12px 8px 10px", position: "relative", zIndex: 1 }}>
-          {intestazione}
-        </div>
-        <div style={{ padding: isMobile ? "0 5px 6px 7px" : "0 10px 10px 12px", position: "relative", zIndex: 1 }}>
-          {children}
-        </div>
-        {onNuovo && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onNuovo(); }}
-            title="Nuovo evento"
-            style={{
-              position: "absolute", bottom: 6, right: 6, width: isMobile ? 26 : 30, height: isMobile ? 26 : 30,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: "rgba(14,27,51,0.09)", border: "none", borderRadius: "50%", cursor: "pointer",
-              color: NAVY, fontSize: isMobile ? 17 : 19, fontWeight: 700, lineHeight: 1, zIndex: 2,
-            }}
-          >+</button>
-        )}
-      </div>
-    </div>
-  );
-}
-// una settimana (sempre da lunedì, mai spezzata a un confine di mese):
-// griglia fissa a 4 colonne, anche da cellulare — 7 carte-giorno + l'ottava
-// carta delle note, sempre disposte su 2 righe da 4. Ogni carta calcola da
-// sé mese/colore/intestazione dalla propria data, quindi una settimana a
-// cavallo di due mesi mostra correttamente carte di entrambi i colori
-function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onClickVoce, onNuovoEvento, nota, onSalvaNota }) {
-  const isMobile = useIsMobile();
-  const oggiStr = dataOggiStr();
-  const [testoNota, setTestoNota] = useState(nota?.testo || "");
-  useEffect(() => { setTestoNota(nota?.testo || ""); }, [nota?.testo]);
-  const settimanaInizio = fmtDataIso(giorni[0]);
-
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: isMobile ? 6 : 18, marginBottom: isMobile ? 14 : 26 }}>
-      {giorni.map((d) => {
-        const ds = fmtDataIso(d);
-        const vociGiorno = voci.filter((v) => v.data === ds).slice().sort((a, b) => {
-          if (!a.orario && !b.orario) return 0;
-          if (!a.orario) return 1;
-          if (!b.orario) return -1;
-          return a.orario.localeCompare(b.orario);
-        });
-        const corsiDelGiorno = corsiGiorno(ds);
-        const isOggi = ds === oggiStr;
-        const idxLunedi = (d.getDay() + 6) % 7; // lunedì=0, come GIORNI_ABBR_LUNGHI
-        const intestazione = `${GIORNI_ABBR_LUNGHI[idxLunedi]} ${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}`;
-        const dueColonne = vociGiorno.length > 5;
-        return (
-          <CartaAgendaQuaderno
-            key={ds} evidenziata={isOggi} palette={paletteMese(d.getFullYear(), d.getMonth())}
-            onClick={() => onClickGiorno(ds)} onNuovo={() => onNuovoEvento(ds)}
-            intestazione={intestazione}
-          >
-            {corsiDelGiorno.map((c) => (
-              <div
-                key={c.id}
-                title={`${c.corsoNome} · ${c.locNome}${c.giorniTotali > 1 ? ` · ${c.indice}/${c.giorniTotali}` : ""}`}
-                style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 5, padding: isMobile ? "2px 4px" : "3px 8px", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-              >
-                🎓 {c.corsoNome}{!isMobile && ` · ${c.sigla}`}{c.giorniTotali > 1 && ` ${c.indice}/${c.giorniTotali}`}
-              </div>
-            ))}
-            {/* eventi personali: testo semplice "orario titolo" sulla riga
-            (niente più pillola colorata, riservata solo ai corsi), su due
-            colonne quando sono tanti — sempre sotto le barre dei corsi */}
-            <div style={{ display: dueColonne ? "grid" : "block", gridTemplateColumns: dueColonne ? "1fr 1fr" : undefined, columnGap: 10 }}>
-              {vociGiorno.map((v) => (
-                <div
-                  key={v.id}
-                  onClick={(e) => { e.stopPropagation(); onClickVoce(v); }}
-                  style={{ ...fontBody, fontSize: isMobile ? 9.5 : 12, fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: isMobile ? "16px" : "22px" }}
-                >
-                  {v.orario ? `${v.orario.slice(0, 5)} ` : ""}{v.titolo}
-                </div>
-              ))}
-            </div>
-          </CartaAgendaQuaderno>
-        );
-      })}
-      <CartaAgendaQuaderno intestazione="Note" palette={paletteSettimanaNota(giorni)}>
-        <textarea
-          value={testoNota}
-          onChange={(e) => setTestoNota(e.target.value)}
-          onBlur={() => { if (testoNota !== (nota?.testo || "")) onSalvaNota(settimanaInizio, testoNota); }}
-          placeholder="Appunti della settimana…"
-          style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: isMobile ? 140 : 270, lineHeight: isMobile ? "16px" : "22px", padding: 0 }}
-        />
-      </CartaAgendaQuaderno>
-    </div>
-  );
-}
-// griglia oraria della vista giorno espansa: mezz'ora per riga, dalle 8
-// alle 20 (fascia oraria dei corsi/appuntamenti in accademia)
-const ORE_GRIGLIA_GIORNO = (() => {
-  const arr = [];
-  for (let h = 8; h <= 20; h++) {
-    arr.push(`${String(h).padStart(2, "0")}:00`);
-    if (h < 20) arr.push(`${String(h).padStart(2, "0")}:30`);
-  }
-  return arr;
-})();
-function slotMezzoraDi(orario) {
-  const [h, m] = orario.slice(0, 5).split(":").map(Number);
-  return `${String(h).padStart(2, "0")}:${m < 30 ? "00" : "30"}`;
-}
-// vista dettagliata di un singolo giorno (si apre cliccando una carta
-// dell'agenda): a sinistra la griglia oraria con gli appuntamenti
-// personali del giorno, a destra i corsi già programmati. Cliccare un
-// orario della griglia (o il "+" in basso a destra) apre subito
-// l'inserimento di un nuovo appuntamento, con l'orario già precompilato
-// quando si clicca una riga precisa
-function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onNuovoEvento, onChiudi }) {
-  const isMobile = useIsMobile();
-  const d = new Date(`${data}T00:00:00`);
-  const idxLunedi = (d.getDay() + 6) % 7;
-  const titolo = `${GIORNI_ABBR_LUNGHI[idxLunedi]} ${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}`;
-  const corsiDelGiorno = corsiGiorno(data);
-  const vociGiorno = voci.filter((v) => v.data === data);
-  const vociConOrario = vociGiorno.filter((v) => v.orario);
-  const vociSenzaOrario = vociGiorno.filter((v) => !v.orario);
-  return (
-    <Modal title={titolo} onClose={onChiudi} maxWidth={840}>
-      <div style={{ display: "flex", gap: 18, flexDirection: isMobile ? "column" : "row" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {ORE_GRIGLIA_GIORNO.map((ora) => {
-            const eventiSlot = vociConOrario.filter((v) => slotMezzoraDi(v.orario) === ora);
-            const oraPiena = ora.endsWith(":00");
-            return (
-              // l'etichetta dell'ora sta appoggiata esattamente sulla riga
-              // (a cavallo del bordo, come in un'agenda vera), non sospesa
-              // a metà di uno spazio vuoto; le ore intere hanno una riga
-              // più marcata delle mezzore, per orientarsi scorrendo veloce.
-              // Cliccare la riga apre un nuovo appuntamento già con
-              // quell'orario precompilato
-              <div
-                key={ora} onClick={() => onNuovoEvento(data, ora)} title={`Nuovo appuntamento alle ${ora}`}
-                style={{ position: "relative", borderTop: oraPiena ? `1.5px solid #C9C2AE` : `1px solid ${CREAM_BORDER}`, minHeight: 30, cursor: "pointer" }}
-              >
-                <div style={{ position: "absolute", top: 0, left: 0, transform: "translateY(-50%)", background: "#fff", paddingRight: 6, ...fontBody, fontSize: 11, fontWeight: oraPiena ? 700 : 400, color: MUTED }}>
-                  {ora}
-                </div>
-                <div style={{ paddingLeft: 46, paddingTop: 7, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 3 }}>
-                  {eventiSlot.map((v) => (
-                    <div key={v.id} onClick={(e) => { e.stopPropagation(); onClickVoce(v); }} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer" }}>
-                      {v.titolo}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          {vociSenzaOrario.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Senza orario</div>
-              {vociSenzaOrario.map((v) => (
-                <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", marginBottom: 4 }}>
-                  {v.titolo}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div style={{ width: isMobile ? "100%" : 190, flexShrink: 0, display: "flex", flexDirection: isMobile ? "row" : "column", flexWrap: "wrap", gap: 8 }}>
-          {corsiDelGiorno.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun corso</div>
-          ) : corsiDelGiorno.map((c) => (
-            <div key={c.id} title={`${c.corsoNome} · ${c.locNome}${c.giorniTotali > 1 ? ` · ${c.indice}/${c.giorniTotali}` : ""}`} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 8, padding: "10px 10px", textAlign: "center" }}>
-              🎓 {c.corsoNome}<br />{c.locNome}{c.giorniTotali > 1 && ` · ${c.indice}/${c.giorniTotali}`}
-            </div>
-          ))}
-        </div>
-      </div>
-    </Modal>
-  );
-}
-// pagina "Agenda": chi ha una sola agenda tra i propri permessi (utente
-// nominale o master) la trova già aperta, senza scegliere nulla (stesso
-// spirito di Dashboard master). Chi ne ha più di una vede prima un elenco
-// di tasti fra cui scegliere quale aprire. Solo il Programmatore può
-// crearne/eliminarle (e vede sempre tutte); chiunque acceda a un'agenda
-// può aggiungere/togliere le sue voci
-function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, location, corsiDate, ruoloUtente, utenteLoggato, ricarica, onBack, titolo = "Agenda" }) {
-  const isMobile = useIsMobile();
-  const isProgrammatore = ruoloUtente === "programmatore";
-  const isStaff = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
-  const mieId = (utenteLoggato?.permessi || []).filter((p) => p.startsWith("agenda_")).map((p) => p.slice(7));
-  const agendeVisibili = isStaff ? agende : agende.filter((a) => mieId.includes(a.id));
-  const [agendaApertaId, setAgendaApertaId] = useState(agendeVisibili.length === 1 ? agendeVisibili[0].id : null);
-  const agendaAperta = agende.find((a) => a.id === agendaApertaId) || null;
-  const [popupNuovo, setPopupNuovo] = useState(null); // { data, orario } della voce da creare, o null
-  const [popupVoce, setPopupVoce] = useState(null); // voce cliccata, o null
-  const [giornoEspanso, setGiornoEspanso] = useState(null); // data "yyyy-mm-dd" della vista dettagliata, o null
-  const [ricercaNote, setRicercaNote] = useState("");
-
-  async function eliminaAgenda(a) {
-    if (!window.confirm(`Eliminare l'agenda "${a.nome}"? Elimina anche tutti i suoi appuntamenti.`)) return;
-    const { error } = await supabase.from("agende").delete().eq("id", a.id);
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    if (agendaApertaId === a.id) setAgendaApertaId(null);
-    ricarica(["agende"]);
-  }
-  async function salvaNuovaVoce(campi) {
-    const { error } = await supabase.from("agenda_voci").insert({ agenda_id: agendaAperta.id, data: popupNuovo.data, ...campi });
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    setPopupNuovo(null);
-    ricarica(["agenda_voci"]);
-  }
-  async function salvaModificaVoce(campi) {
-    const { error } = await supabase.from("agenda_voci").update(campi).eq("id", popupVoce.id);
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    setPopupVoce(null);
-    ricarica(["agenda_voci"]);
-  }
-  async function eliminaVoce() {
-    if (!window.confirm("Eliminare questo appuntamento?")) return;
-    const { error } = await supabase.from("agenda_voci").delete().eq("id", popupVoce.id);
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    setPopupVoce(null);
-    ricarica(["agenda_voci"]);
-  }
-  // ottava carta della settimana: upsert su (agenda_id, settimana_inizio),
-  // così il testo resta legato alla settimana anche dopo un refresh
-  async function salvaNotaSettimana(settimanaInizio, testo) {
-    const { error } = await supabase
-      .from("agenda_note_settimanali")
-      .upsert({ agenda_id: agendaAperta.id, settimana_inizio: settimanaInizio, testo }, { onConflict: "agenda_id,settimana_inizio" });
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
-    ricarica(["agenda_note_settimanali"]);
-  }
-
-  // vista a calendario, identica nello spirito al Calendario corsi: elenco
-  // continuo di settimane (da 6 mesi fa a 12 avanti) su cui scorrere invece
-  // di usare frecce avanti/indietro. Le settimane sono continue (sempre da
-  // lunedì a domenica, mai spezzate a un confine di mese: una settimana a
-  // cavallo tra due mesi resta una riga sola), più un selettore per saltare
-  // a un mese preciso e un tasto per tornare subito a oggi
-  const oggi = new Date();
-  const oggiStr = dataOggiStr();
-  const mesi = useMemo(() => {
-    const arr = [];
-    for (let i = -6; i <= 12; i++) {
-      const d = new Date(oggi.getFullYear(), oggi.getMonth() + i, 1);
-      arr.push({ anno: d.getFullYear(), mese: d.getMonth() });
-    }
-    return arr;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const settimane = useMemo(() => {
-    const inizioRange = new Date(oggi.getFullYear(), oggi.getMonth() - 6, 1);
-    const fineRange = new Date(oggi.getFullYear(), oggi.getMonth() + 13, 0);
-    const primoLunedi = new Date(inizioRange);
-    primoLunedi.setDate(primoLunedi.getDate() - ((primoLunedi.getDay() + 6) % 7));
-    const arr = [];
-    const cursore = new Date(primoLunedi);
-    while (cursore <= fineRange) {
-      const giorni = [];
-      for (let i = 0; i < 7; i++) giorni.push(new Date(cursore.getFullYear(), cursore.getMonth(), cursore.getDate() + i));
-      arr.push(giorni);
-      cursore.setDate(cursore.getDate() + 7);
-    }
-    return arr;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const refPerSettimana = useRef({});
-  function vaiASettimanaDi(trova, comportamento = "smooth") {
-    const sett = settimane.find(trova);
-    if (sett) refPerSettimana.current[fmtDataIso(sett[0])]?.scrollIntoView({ block: "start", behavior: comportamento });
-  }
-  function vaiAMese(anno, mese) {
-    vaiASettimanaDi((giorni) => giorni.some((d) => d.getFullYear() === anno && d.getMonth() === mese));
-  }
-  function vaiAOggi(comportamento) {
-    vaiASettimanaDi((giorni) => giorni.some((d) => fmtDataIso(d) === oggiStr), comportamento);
-  }
-  useEffect(() => {
-    if (!agendaAperta) return;
-    // due frame di ritardo: assicura che la griglia (alta, con tutte le
-    // settimane già montate) abbia finito il layout prima di scrollare,
-    // altrimenti su dispositivi più lenti lo scroll può atterrare nel
-    // posto sbagliato mentre il contenuto sta ancora assestandosi.
-    // Niente scroll animato qui: aprendo l'agenda deve comparire subito
-    // sulla settimana di oggi, non scorrere in vista partendo dall'alto
-    requestAnimationFrame(() => requestAnimationFrame(() => { vaiAOggi("auto"); }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agendaAperta?.id]);
-
-  const vociAgendaAperta = agendaAperta ? agendaVoci.filter((v) => v.agenda_id === agendaAperta.id) : [];
-  const noteBySettimana = useMemo(
-    () => Object.fromEntries((agendaNoteSettimanali || []).filter((n) => n.agenda_id === agendaApertaId).map((n) => [n.settimana_inizio, n])),
-    [agendaNoteSettimanali, agendaApertaId]
-  );
-  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
-  const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
-  // stesso numero di frazione "giorno/totale" del Calendario corsi (es.
-  // 1/2, 2/2): un corso di più giorni deve mostrarlo anche qui
-  function corsiGiorno(ds) {
-    return (corsiDate || [])
-      .filter((cd) => cd.data_inizio <= ds && cd.data_fine >= ds)
-      .map((cd) => ({
-        id: cd.id,
-        corsoNome: toTitleCase(corsoById[cd.corso_id]?.nome || "?"),
-        locNome: toTitleCase(locById[cd.location_id]?.nome || "?"),
-        sigla: siglaCitta(locById[cd.location_id]?.nome),
-        colore: corsoById[cd.corso_id]?.colore,
-        indice: differenzaGiorni(cd.data_inizio, ds) + 1,
-        giorniTotali: differenzaGiorni(cd.data_inizio, cd.data_fine) + 1,
-      }));
-  }
-  // ricerca testuale nelle note libere della settimana (l'ottava carta):
-  // ogni risultato porta la data in cui è stata creata la nota (il campo
-  // "ts", che l'upsert di salvaNotaSettimana non tocca più dopo la prima
-  // volta, quindi resta la data di creazione anche dopo le modifiche)
-  const risultatiRicercaNote = ricercaNote.trim()
-    ? (agendaNoteSettimanali || [])
-        .filter((n) => n.agenda_id === agendaApertaId && n.testo && n.testo.toLowerCase().includes(ricercaNote.trim().toLowerCase()))
-        .sort((a, b) => b.settimana_inizio.localeCompare(a.settimana_inizio))
-        .slice(0, 8)
-    : [];
-
-  return (
-    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: agendaAperta ? 1320 : 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <TastoLivelloPrecedente
-              titolo={agendaAperta && agendeVisibili.length > 1 ? "Agenda" : "Home"}
-              onClick={() => (agendaAperta && agendeVisibili.length > 1 ? setAgendaApertaId(null) : onBack())}
-            />
-            <div style={{ ...stileTitoloPagina, color: NAVY }}>{agendaAperta ? agendaAperta.nome : titolo}</div>
-          </div>
-          {agendaAperta && (
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <select
-                value=""
-                onChange={(e) => { if (!e.target.value) return; const [a, m] = e.target.value.split("-").map(Number); vaiAMese(a, m); }}
-                style={{ ...inputStyle, width: "auto" }}
-              >
-                <option value="">Vai al mese…</option>
-                {mesi.map(({ anno, mese }) => <option key={`${anno}-${mese}`} value={`${anno}-${mese}`}>{MESI[mese]} {anno}</option>)}
-              </select>
-              <Button variant="ghost" onClick={vaiAOggi}>Oggi</Button>
-            </div>
-          )}
-        </div>
-
-        {agendaAperta && (
-          <div style={{ position: "relative", marginBottom: 14 }}>
-            <input
-              type="text"
-              value={ricercaNote}
-              onChange={(e) => setRicercaNote(e.target.value)}
-              placeholder="Cerca una parola nelle note delle settimane…"
-              style={{ ...inputStyle, width: "100%" }}
-            />
-            {risultatiRicercaNote.length > 0 && (
-              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 12px 24px -8px rgba(14,27,51,0.28)", zIndex: 50, overflow: "hidden" }}>
-                {risultatiRicercaNote.map((n) => (
-                  <div
-                    key={n.id}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => { vaiASettimanaDi((giorni) => fmtDataIso(giorni[0]) === n.settimana_inizio); setRicercaNote(""); }}
-                    style={{ padding: "8px 14px", cursor: "pointer", borderBottom: `1px solid ${CREAM_BORDER}` }}
-                  >
-                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED }}>{fmtData(n.ts.slice(0, 10))}</div>
-                    <div style={{ ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.testo}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {agendaAperta && (
-          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
-            Scorri verso il basso per vedere le altre settimane e i mesi successivi, la settimana riparte sempre da lunedì. Clicca una carta per aprire la vista dettagliata del giorno: da lì clicca un orario o il tasto + per aggiungere un appuntamento, clicca un appuntamento per modificarlo o eliminarlo. L'ottava carta di ogni settimana è per gli appunti liberi.
-          </div>
-        )}
-
-        {!agendaAperta ? (
-          <>
-            {isProgrammatore && <div style={{ marginBottom: 18 }}><BottoneNuovaAgenda ricarica={ricarica} /></div>}
-            {agendeVisibili.length === 0 ? (
-              <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna agenda assegnata.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {agendeVisibili.map((a) => (
-                  <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <button
-                      onClick={() => setAgendaApertaId(a.id)}
-                      style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "16px 18px", cursor: "pointer", flex: 1, textAlign: "left" }}
-                    >
-                      {a.nome}
-                    </button>
-                    {isProgrammatore && (
-                      <button onClick={() => eliminaAgenda(a)} title="Elimina agenda" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#C0392B", padding: 8, flexShrink: 0 }}>✕</button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          settimane.map((giorni) => {
-            const chiave = fmtDataIso(giorni[0]);
-            return (
-              <div key={chiave} style={{ scrollMarginTop: 54 }} ref={(el) => { refPerSettimana.current[chiave] = el; }}>
-                <SettimanaAgendaQuaderno
-                  giorni={giorni} voci={vociAgendaAperta} corsiGiorno={corsiGiorno}
-                  onClickGiorno={(ds) => setGiornoEspanso(ds)}
-                  onClickVoce={(v) => setPopupVoce(v)}
-                  onNuovoEvento={(ds) => setPopupNuovo({ data: ds, orario: null })}
-                  nota={noteBySettimana[chiave]}
-                  onSalvaNota={salvaNotaSettimana}
-                />
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {giornoEspanso && (
-        <VistaGiornoEspanso
-          data={giornoEspanso} voci={vociAgendaAperta} corsiGiorno={corsiGiorno}
-          onClickVoce={(v) => setPopupVoce(v)}
-          onNuovoEvento={(ds, orario) => setPopupNuovo({ data: ds, orario })}
-          onChiudi={() => setGiornoEspanso(null)}
-        />
-      )}
-      {popupNuovo && (
-        <PopupNuovaVoceAgenda dataClic={popupNuovo.data} orarioIniziale={popupNuovo.orario} onSalva={salvaNuovaVoce} onChiudi={() => setPopupNuovo(null)} />
-      )}
-      {popupVoce && (
-        <PopupVoceAgenda voce={popupVoce} onSalva={salvaModificaVoce} onElimina={eliminaVoce} onChiudi={() => setPopupVoce(null)} />
-      )}
-    </div>
-  );
-}
-
 // colore in continuo per il punteggio Performance, centrato su 100 (in
 // linea con la media team): rosso sotto 85, transizione verso il navy
 // intorno a 100, verde sopra 120 — niente fasce fisse alta/media/bassa
@@ -15083,7 +14494,7 @@ async function testoErroreFunzione(error) {
 // piuttosto che uscire dal campo). Le 3 righe di sistema non ancora
 // salvate (id nullo, mostrate coi valori di sempre) vengono create al
 // primo salvataggio
-const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, agende, venditori, ricarica }, ref) {
+const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, venditori, ricarica }, ref) {
   const isMobile = useIsMobile();
   const [nome, setNome] = useState(utente.nome);
   const [password, setPassword] = useState(utente.password);
@@ -15186,8 +14597,8 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
     <input type="checkbox" checked={!!utente.solo_calendario} onChange={(e) => salvaSoloCalendario(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Entra dritto su Gestione corsi, sola lettura del calendario e dei filtri: niente Home, Indietro, Avanti, aggiunta/modifica/eliminazione corsi" />
   );
 
-  // da cellulare una riga larga quanto tutte le colonne (TASTI_HOME +
-  // agende) costringerebbe a scorrere lateralmente con il dito: qui sotto
+  // da cellulare una riga larga quanto tutte le colonne dei permessi
+  // costringerebbe a scorrere lateralmente con il dito: qui sotto
   // ogni utente diventa una card, con un tasto per riga invece che una
   // colonna per riga — solo scorrimento verticale, mai orizzontale
   if (isMobile) {
@@ -15239,12 +14650,6 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
             <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
               <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{t.etichetta}</span>
               <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
-            </label>
-          ))}
-          {agende.map((a) => (
-            <label key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Agenda: {a.nome}</span>
-              <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
             </label>
           ))}
         </div>
@@ -15301,11 +14706,6 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
         </td>
       ))}
-      {agende.map((a) => (
-        <td key={a.id} style={{ ...tdStyle, textAlign: "center" }}>
-          <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
-        </td>
-      ))}
       <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
         {!sistema && (
           <button
@@ -15350,7 +14750,7 @@ function BottoneGeneraUtente({ utentiApp, ricarica }) {
 // e una colonna per ogni tasto della home (TASTI_HOME): un tasto non
 // spuntato per una riga resta disattivato e non cliccabile in home per
 // chi entra con quella password, senza dover chiedere nessuna password
-function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
+function TabellaGestioneUtenti({ utentiApp, venditori, ricarica }) {
   const isMobile = useIsMobile();
   const righeSistema = RIGHE_SISTEMA_DEFAULT.map((def) => {
     const esistente = utentiApp.find((u) => u.chiave_sistema === def.chiave);
@@ -15391,7 +14791,6 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
     { chiave: "amministratore", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "solocalendario", larghezza: LARGHEZZA_COLONNA_SPUNTA },
     { chiave: "modificamodelle", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "omaggipos", larghezza: LARGHEZZA_COLONNA_SPUNTA },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
-     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
     { chiave: "azioni", larghezza: 44 },
   ];
   const larghezzaTabellaUtenti = colonneUtenti.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
@@ -15419,7 +14818,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
       {isMobile ? (
         <div style={{ marginTop: 14 }}>
           {righe.map((u) => (
-            <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} agende={agende} venditori={venditori} ricarica={ricarica} />
+            <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} venditori={venditori} ricarica={ricarica} />
           ))}
         </div>
       ) : (
@@ -15448,22 +14847,12 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                     <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
-                {agende.map((a) => (
-                  <th
-                    key={a.id}
-                    onDoubleClick={() => colonnaPerTutti(`agenda_${a.id}`, `Agenda: ${a.nome}`)}
-                    title="Doppio clic: dà o toglie questo permesso a tutti"
-                    style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}
-                  >
-                    <IntestazioneVerticale>Agenda: {a.nome}</IntestazioneVerticale>{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, LARGHEZZA_COLONNA_SPUNTA))}
-                  </th>
-                ))}
                 <th style={thStyle}></th>
               </tr>
             </thead>
             <tbody>
               {righe.map((u) => (
-                <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} agende={agende} venditori={venditori} ricarica={ricarica} />
+                <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} venditori={venditori} ricarica={ricarica} />
               ))}
             </tbody>
           </table>
@@ -15493,9 +14882,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
 // una riga di "Password Master": nome (di sola lettura, si aggiorna da
 // solo in base a Setting > Definisci Master) + password (si salva da sola
 // appena si esce dalla casella, niente tasto Salva) + una casella per
-// ogni agenda creata (stesso schema di assegnazione di Gestione utenti):
-// una master può anche lei avere una o più agende abbinate
-function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
+function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
   const isMobile = useIsMobile();
   const [password, setPassword] = useState(masterRec.password || "");
   const [permessiLocali, setPermessiLocali] = useState(masterRec.permessi || []);
@@ -15574,12 +14961,6 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
             <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
           </label>
         ))}
-        {agende.map((a) => (
-          <label key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Agenda: {a.nome}</span>
-            <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
-          </label>
-        ))}
       </div>
     );
   }
@@ -15604,11 +14985,6 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
         </td>
       ))}
-      {agende.map((a) => (
-        <td key={a.id} style={{ ...tdStyle, textAlign: "center" }}>
-          <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
-        </td>
-      ))}
     </tr>
   );
 }
@@ -15617,8 +14993,7 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
 // creazione/eliminazione qui: si aggiungono/tolgono master da Setting).
 // Chi entra con la password di una master trova già la sua Dashboard
 // master aperta sulla propria scheda, senza scegliere nulla; se ha anche
-// un'agenda abbinata, la trova tra le agende del tasto "Agenda"
-function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
+function TabellaPasswordMaster({ master, venditori, ricarica }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
   const nomeVenditore = (id) => (venditori || []).find((v) => v.id === id)?.nome || "";
@@ -15636,7 +15011,6 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
     // proprio quello serve: poterla spegnere per qualche giorno — durante
     // dei lavori, o a chi in quel periodo non deve entrare.
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
-     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
   ];
   const larghezzaTabellaMaster = colonneMaster.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   function colonnaPerTutti(chiave, etichetta) {
@@ -15656,7 +15030,7 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master definita in Setting.</div>
       ) : isMobile ? (
         <div>
-          {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} agende={agende} venditori={venditori} ricarica={ricarica} />)}
+          {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} venditori={venditori} ricarica={ricarica} />)}
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
@@ -15673,15 +15047,10 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
                     <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
-                {agende.map((a) => (
-                  <th key={a.id} onDoubleClick={() => colonnaPerTutti(`agenda_${a.id}`, `Agenda: ${a.nome}`)} title="Doppio clic: dà o toglie questo permesso a tutte" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
-                    <IntestazioneVerticale>Agenda: {a.nome}</IntestazioneVerticale>{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, LARGHEZZA_COLONNA_SPUNTA))}
-                  </th>
-                ))}
               </tr>
             </thead>
             <tbody>
-              {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} agende={agende} venditori={venditori} ricarica={ricarica} />)}
+              {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} venditori={venditori} ricarica={ricarica} />)}
             </tbody>
           </table>
         </div>
@@ -15696,7 +15065,7 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
 // venditori, unica fonte per crearli/rinominarli/eliminarli) e la
 // password non si legge mai in chiaro: digitarne una nuova e premere
 // "Imposta password" la sostituisce via la Edge Function dedicata
-function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) {
+function RigaTabellaVenditore({ venditore, masterCollegata, ricarica }) {
   const isMobile = useIsMobile();
   const [permessiLocali, setPermessiLocali] = useState(venditore.permessi || []);
   useEffect(() => { setPermessiLocali(venditore.permessi || []); }, [venditore.permessi]);
@@ -15782,12 +15151,6 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
             <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
           </label>
         ))}
-        {agende.map((a) => (
-          <label key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Agenda: {a.nome}</span>
-            <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
-          </label>
-        ))}
       </div>
     );
   }
@@ -15805,11 +15168,6 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
         </td>
       ))}
-      {agende.map((a) => (
-        <td key={a.id} style={{ ...tdStyle, textAlign: "center" }}>
-          <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
-        </td>
-      ))}
     </tr>
   );
 }
@@ -15820,7 +15178,7 @@ function RigaTabellaVenditore({ venditore, masterCollegata, agende, ricarica }) 
 // (dal tasto "Dashboard venditori" in home) trova subito la sua Dashboard
 // venditori, senza dover scegliere o inserire altro, e vede in home solo
 // i tasti qui spuntati — esattamente come un utente nominale
-function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
+function TabellaPasswordVenditori({ venditori, master, ricarica }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
   const venditoriOrdinati = ordina(venditori, { nome: (v) => v.nome || "" });
@@ -15829,7 +15187,6 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
   const colonneVenditori = [
     { chiave: "nome", larghezza: 140 }, { chiave: "cognome", larghezza: 150 }, { chiave: "password", larghezza: 140 }, { chiave: "accesso", larghezza: 170 },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
-     ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
   ];
   const larghezzaTabellaVenditori = colonneVenditori.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   function colonnaPerTutti(chiave, etichetta) {
@@ -15849,7 +15206,7 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun venditore definito in Impostazioni.</div>
       ) : isMobile ? (
         <div>
-          {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} agende={agende} ricarica={ricarica} />)}
+          {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} ricarica={ricarica} />)}
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
@@ -15869,15 +15226,10 @@ function TabellaPasswordVenditori({ venditori, master, agende, ricarica }) {
                     <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
-                {agende.map((a) => (
-                  <th key={a.id} onDoubleClick={() => colonnaPerTutti(`agenda_${a.id}`, `Agenda: ${a.nome}`)} title="Doppio clic: dà o toglie questo permesso a tutti" style={{ ...thStyle, textAlign: "center", cursor: "pointer", userSelect: "none" }}>
-                    <IntestazioneVerticale>Agenda: {a.nome}</IntestazioneVerticale>{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, LARGHEZZA_COLONNA_SPUNTA))}
-                  </th>
-                ))}
               </tr>
             </thead>
             <tbody>
-              {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} agende={agende} ricarica={ricarica} />)}
+              {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} ricarica={ricarica} />)}
             </tbody>
           </table>
         </div>
@@ -16481,7 +15833,7 @@ function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti
     </div>
   );
 }
-function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori, ricarica, onBack, senzaIntestazione = false }) {
+function PaginaPasswordMenu({ passwordMenu, utentiApp, master, venditori, ricarica, onBack, senzaIntestazione = false }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
@@ -16501,12 +15853,12 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
         )}
 
         <div style={{ marginBottom: 28 }}>
-          <TabellaGestioneUtenti utentiApp={utentiApp} agende={agende} venditori={venditori} ricarica={ricarica} />
+          <TabellaGestioneUtenti utentiApp={utentiApp} venditori={venditori} ricarica={ricarica} />
         </div>
 
-        <TabellaPasswordMaster master={master} agende={agende} venditori={venditori} ricarica={ricarica} />
+        <TabellaPasswordMaster master={master} venditori={venditori} ricarica={ricarica} />
 
-        <TabellaPasswordVenditori venditori={venditori} master={master} agende={agende} ricarica={ricarica} />
+        <TabellaPasswordVenditori venditori={venditori} master={master} ricarica={ricarica} />
 
         <div style={{ maxWidth: 400 }}>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password di questa rotellina</div>
@@ -65608,13 +64960,6 @@ export default function App() {
   // checklist, quantità accessori inviati, se già scaricato dal magazzino
   const [corsiKitProdotti, setCorsiKitProdotti] = useState([]);
   const [kitDefinizioni, setKitDefinizioni] = useState([]);
-  // "Agenda": create dal Programmatore, ciascuna con un nome che compare
-  // anche come colonna-checkbox in Gestione utenti (chiave permesso
-  // "agenda_<id>") — un utente con un'unica agenda tra i permessi la
-  // trova già aperta cliccando il tasto home, senza scegliere nulla
-  const [agende, setAgende] = useState([]);
-  const [agendaVoci, setAgendaVoci] = useState([]);
-  const [agendaNoteSettimanali, setAgendaNoteSettimanali] = useState([]);
   const [accontiDaVerificare, setAccontiDaVerificare] = useState([]);
   // cosa è già presente in ciascuna sede (prodotti/attrezzature), come
   // dichiarato dalla master dalla sua Dashboard ("Inventario corso
@@ -65807,12 +65152,9 @@ export default function App() {
     corsi_kit_prodotti: async () => setCorsiKitProdotti((await supabase.from("corsi_kit_prodotti").select("*")).data || []),
     logistica_kit_edizioni: async () => setLogisticaKitEdizioni((await supabase.from("logistica_kit_edizioni").select("*")).data || []),
     kit_definizioni: async () => setKitDefinizioni((await supabase.from("kit_definizioni").select("*").order("nome")).data || []),
-    agende: async () => setAgende((await supabase.from("agende").select("*").order("nome")).data || []),
-    agenda_voci: async () => setAgendaVoci((await supabase.from("agenda_voci").select("*")).data || []),
     inventario_sede: async () => setInventarioSede((await supabase.from("inventario_sede").select("*")).data || []),
     prodotti_aperti_magazzino: async () => setProdottiApertiMagazzino((await supabase.from("prodotti_aperti_magazzino").select("*")).data || []),
     segnalazioni_magazzino: async () => setSegnalazioniMagazzino((await supabase.from("segnalazioni_magazzino").select("*").order("ts", { ascending: false })).data || []),
-    agenda_note_settimanali: async () => setAgendaNoteSettimanali((await supabase.from("agenda_note_settimanali").select("*")).data || []),
     acconti_da_verificare: async () => setAccontiDaVerificare((await supabase.from("acconti_da_verificare").select("*").order("ts", { ascending: false })).data || []),
     target_vendite_prodotti: async () => setTargetVenditeProdotti((await supabase.from("target_vendite_prodotti").select("*").order("data_inizio", { ascending: false })).data || []),
     magazzino_locale_consumabili: async () => setMagazzinoLocaleConsumabili((await supabase.from("magazzino_locale_consumabili").select("*")).data || []),
@@ -65964,9 +65306,9 @@ export default function App() {
     magazzinoshop: ["prodotti_shop", "riordini_in_corso", "coupon"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
-    // "agende" e "password_menu"/"utenti_app" (queste ultime gia' fra le
-    // essenziali) servono all'area "Utenti", che da ora vive qui dentro
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali", "agende"],
+    // "password_menu"/"utenti_app" (gia' fra le essenziali) servono
+    // all'area "Utenti", che da ora vive qui dentro
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare", "impegno"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
@@ -66010,7 +65352,6 @@ export default function App() {
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
     dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
-    agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
@@ -66638,19 +65979,6 @@ export default function App() {
   // partiti — alla dashboard se si e' arrivati dal tasto, alla classe se
   // si e' arrivati da li'.
   function apriModelleMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(true); setModelleDallaScheda(true); setView("classemaster"); }
-  // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
-  // permesso unico "agenda" da spuntare, ma una casella per ciascuna
-  // agenda creata dal Programmatore (chiave "agenda_<id>", sia per gli
-  // utenti nominali sia per le master) — il tasto è attivo per chi ne ha
-  // almeno una tra i permessi, oltre che sempre per Programmatore/Amministratore
-  function haAccessoAgenda() {
-    if (ruoloUtente === "programmatore" || ruoloUtente === "amministratore") return true;
-    return (utenteLoggato?.permessi || []).some((p) => p.startsWith("agenda_"));
-  }
-  function apriAgenda() {
-    if (!haAccessoAgenda()) return;
-    setView("agenda");
-  }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriAmministrazione() { apriViewProtetta("amministrazione"); }
@@ -66867,7 +66195,6 @@ export default function App() {
     { chiave: "gestionedate", titolo: etichettaTasto("home", "gestionedate", "Gestione corsi"), apri: apriGestioneDate, figli: [] },
     { chiave: "dashboardvenditori", titolo: etichettaTasto("home", "dashboardvenditori", "Dashboard venditori"), apri: apriLoginVenditore, figli: [] },
     { chiave: "dashboardmaster", titolo: etichettaTasto("home", "dashboardmaster", "Dashboard master"), apri: apriDashboardMaster, figli: [] },
-    { chiave: "agenda", titolo: etichettaTasto("home", "agenda", "Agenda"), apri: apriAgenda, figli: [] },
     { chiave: "erp", titolo: etichettaTasto("home", "erp", "Amministrazione"), apri: apriErp, figli: [
       { chiave: "contabilita", titolo: etichettaTasto("amministrazione", "contabilita", "Contabilità"), apri: apriAmministrazione },
       { chiave: "categoriespesa", titolo: etichettaTasto("amministrazione", "categoriespesa", "Categorie di spesa"), apri: apriCatalogoCategorieCosti },
@@ -67435,7 +66762,6 @@ export default function App() {
               { chiave: "gestionedate", title: "Gestione corsi", descrizione: "Crea, modifica e organizza tutti i corsi e le sedi", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionedate"), onClick: apriGestioneDate },
               { chiave: "dashboardvenditori", title: "Dashboard venditori", descrizione: "Monitora vendite, performance e obiettivi del team", Icona: IconaTileVenditori, attivo: tastoAbilitato("dashboardvenditori"), onClick: apriLoginVenditore },
               { chiave: "dashboardmaster", title: "Dashboard master", descrizione: "Gestisci master, specializzazioni e valutazioni", Icona: IconaTileMaster, attivo: tastoAbilitato("dashboardmaster"), onClick: apriDashboardMaster },
-              { chiave: "agenda", title: "Agenda", descrizione: "Visualizza calendario, impegni e promemoria", Icona: IconaTileAgenda, attivo: haAccessoAgenda(), onClick: apriAgenda },
               { chiave: "erp", title: "Amministrazione", descrizione: "Finanziaria e organizzativa", Icona: IconaTileCostiRicavi, attivo: tastoAbilitato("erp"), onClick: apriErp },
               { chiave: "magazzinoshop", title: "Gestione magazzino e shop", descrizione: "Prodotti, scorte, shop online e relative vendite", Icona: IconaTileGestioneMagazzino, attivo: tastoAbilitato("magazzinoshop"), onClick: apriMagazzinoShop },
               { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos, badge: numeroCarrelliSospesi },
@@ -67481,7 +66807,7 @@ export default function App() {
           areaIniziale={areaImpostazioni}
           onChiediAccessoUtenti={chiediAccessoUtenti}
           onBack={() => setView("home")}
-          propsUtenti={{ passwordMenu, utentiApp, master, agende, venditori, ricarica: fetchDati, onBack: () => setView("home") }}
+          propsUtenti={{ passwordMenu, utentiApp, master, venditori, ricarica: fetchDati, onBack: () => setView("home") }}
           propsSetting={{
             ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
             venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi,
@@ -68040,16 +67366,6 @@ export default function App() {
           magazzinoLocaleConsumabili={magazzinoLocaleConsumabili}
           segnalazioniMagazzino={segnalazioniMagazzino}
           ricarica={fetchDati} onBack={() => setView("dashboardmaster")}
-        />
-      )}
-
-      {view === "agenda" && (
-        <PaginaAgenda
-          agende={agende} agendaVoci={agendaVoci} agendaNoteSettimanali={agendaNoteSettimanali}
-          corsi={corsi} location={location} corsiDate={corsiDate}
-          ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
-          ricarica={fetchDati} onBack={() => setView("home")}
-          titolo={etichettaTasto("home", "agenda", "Agenda")}
         />
       )}
 
