@@ -3253,6 +3253,14 @@ function sfondoMedaglione(colore = "#FFFFFF") {
 // gli spessori del cuscino, da soli: per i riquadri colorati che non
 // passano da Aspetto dell'app
 const SPESSORE_CUSCINO = "inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -5px 0 rgba(120,126,138,0.28), inset 0 -6px 8px rgba(14,27,51,0.06), inset 0 0 0 1px rgba(14,27,51,0.06), 0 0 0 1px rgba(120,126,138,0.22), 0 12px 22px -12px rgba(14,27,51,0.40), 0 2px 4px rgba(14,27,51,0.08)";
+// Lo stesso cuscino, ma con la fascia grigia in basso spessa la meta'.
+//
+// Cinque pixel di grigio sotto una cella alta settanta si vedono come
+// uno zoccolo: bene su un pulsante che si preme, troppo su un riquadro
+// che sta li' a dire un numero. Cambia solo quella fascia e l'ombra
+// morbida che la segue — luce in alto, filo intorno e ombra sotto
+// restano identiche, cosi' il rilievo resta lo stesso, solo piu' sottile.
+const SPESSORE_CUSCINO_META = "inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -2.5px 0 rgba(120,126,138,0.28), inset 0 -3px 5px rgba(14,27,51,0.06), inset 0 0 0 1px rgba(14,27,51,0.06), 0 0 0 1px rgba(120,126,138,0.22), 0 12px 22px -12px rgba(14,27,51,0.40), 0 2px 4px rgba(14,27,51,0.08)";
 // lo spessore LEGGERO dei tasti dei filtri (16/09/2026): restano bianchi,
 // ma con una luce in alto, un bordo basso appena piu' scuro e un'ombra
 // corta, come tutti gli elementi nuovi. Al posto del bordo di un pixel
@@ -3261,8 +3269,8 @@ const SPESSORE_LEGGERO = "inset 0 1px 0 rgba(255,255,255,1), inset 0 -3px 0 rgba
 // tasti dei filtri ma al contrario, come se il campo fosse scavato nella
 // pagina: ombra dentro in alto, luce sul bordo basso
 const INCAVO_LEGGERO = "inset 0 3px 5px rgba(14,27,51,0.16), inset 0 1px 0 rgba(120,126,138,0.28), inset 0 -1px 0 rgba(255,255,255,0.95), 0 0 0 1px rgba(120,126,138,0.18), 0 1px 0 rgba(255,255,255,0.7)";
-function superficieCuscino(colore = "#FFFFFF") {
-  return { background: sfondoMedaglione(colore), boxShadow: SPESSORE_CUSCINO, border: "none" };
+function superficieCuscino(colore = "#FFFFFF", spessore = SPESSORE_CUSCINO) {
+  return { background: sfondoMedaglione(colore), boxShadow: spessore, border: "none" };
 }
 // l'ombra del cuscino: gli spessori fissi piu' l'ombra scelta dai comandi
 function ombraMedaglione(ombra) {
@@ -24895,7 +24903,7 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
       // fitte una sull'altra, e li' il rilievo diventerebbe rumore.
       ...(compatta
         ? { background: "#FCFBF8", border: `1px solid ${CREAM_BORDER}` }
-        : superficieCuscino(grande ? "#FFFFFF" : "#FCFBF8")), borderRadius: compatta ? 10 : grande ? 18 : 14,
+        : superficieCuscino(grande ? "#FFFFFF" : "#FCFBF8", grande ? SPESSORE_CUSCINO : SPESSORE_CUSCINO_META)), borderRadius: compatta ? 10 : grande ? 18 : 14,
       padding: compatta ? "8px 6px" : grande ? "12px 14px" : colonna ? "8px 5px" : (isMobile ? "10px 10px" : "12px 14px"),
       overflow: "hidden",
     }}>
