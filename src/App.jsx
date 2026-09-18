@@ -17807,6 +17807,73 @@ const GRIGLIA_COSTI_MOBILE = "minmax(104px, 1fr) 58px 58px 58px 66px 88px 46px";
 // pixel non scende: a mancare lo spazio e' la tabella intera, che lo
 // dice scorrendo invece di mangiarsi una colonna.
 const GRIGLIA_COSTI_DESKTOP = "minmax(150px, 1fr) 72px 72px 72px 76px 96px 54px";
+
+// Le larghezze delle sei colonne fisse della tabella costi, nell'ordine
+// in cui stanno: totale, bonifico, cash, busta, modalita', giorni. La
+// prima — la voce — non e' qui: si prende quello che resta.
+//
+// Si possono tirare a mano dalle maniglie sull'intestazione (visibili
+// solo con l'interruttore delle maniglie acceso), e quello che si tira
+// resta salvato. Quando la misura e' quella giusta si scrive qui e le
+// maniglie tornano a essere un attrezzo, non un'impostazione.
+const CHIAVE_LARGHEZZE_COSTI = "larghezze_colonne_costi";
+const LARGHEZZE_COSTI_DEFAULT = [72, 72, 72, 76, 96, 54];
+const LARGHEZZE_COSTI_MOBILE = [58, 58, 58, 66, 88, 46];
+const MINIMO_COLONNA_COSTI = 34;
+function grigliaCostiDa(larghezze, isMobile) {
+  const l = Array.isArray(larghezze) && larghezze.length === 6
+    ? larghezze
+    : (isMobile ? LARGHEZZE_COSTI_MOBILE : LARGHEZZE_COSTI_DEFAULT);
+  return `minmax(${isMobile ? 104 : 150}px, 1fr) ${l.map((x) => `${Math.max(MINIMO_COLONNA_COSTI, Math.round(x))}px`).join(" ")}`;
+}
+
+/**
+ * La maniglia fra una colonna e l'altra: si prende e si tira.
+ *
+ * Sta appoggiata al bordo destro della sua intestazione, larga sei pixel
+ * — abbastanza da prenderla, poco da non finirci sopra per sbaglio.
+ * Mentre si tira mostra quanti pixel e' larga la colonna, che e' il
+ * numero che poi si scrive nel codice.
+ */
+function ManigliaColonnaCosti({ larghezza, onTira, onFine }) {
+  const [tirando, setTirando] = useState(false);
+  const partenza = useRef(null);
+  function giu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    partenza.current = { x: e.clientX, larghezza };
+    setTirando(true);
+  }
+  function muovi(e) {
+    if (!partenza.current) return;
+    onTira(Math.max(MINIMO_COLONNA_COSTI, Math.round(partenza.current.larghezza + (e.clientX - partenza.current.x))));
+  }
+  function su() {
+    if (!partenza.current) return;
+    partenza.current = null;
+    setTirando(false);
+    onFine?.();
+  }
+  return (
+    <span
+      onPointerDown={giu} onPointerMove={muovi} onPointerUp={su} onPointerCancel={su}
+      title="Tira per allargare o stringere la colonna"
+      style={{
+        position: "absolute", top: 0, bottom: 0, right: -3, width: 6, cursor: "col-resize",
+        touchAction: "none", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <span style={{ width: 2, height: "60%", borderRadius: 2, background: tirando ? NAVY : "#C9C4B8" }} />
+      {tirando && (
+        <span style={{
+          position: "absolute", top: -22, ...fontBody, fontSize: 10, fontWeight: 700,
+          color: "#fff", background: NAVY, borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap",
+        }}>{Math.round(larghezza)}</span>
+      )}
+    </span>
+  );
+}
 // Vendite al corso: prodotto, quanti, quanto. Tre colonne e basta, ma la
 // stessa regola dei costi — la cifra a destra, sempre nello stesso punto,
 // riga dopo riga fino al totale.
@@ -17870,15 +17937,19 @@ function SegmentoModalita({ valori = ["B", "C", "1/2"], attivo, onSceglie, titol
 function PastigliaPagamento({ testo, colore = MUTED, sfondo = "#EFEFEF", titolo }) {
   return (
     <span title={titolo} style={{
-      ...fontBody, fontSize: 10.5, fontWeight: 700, color: colore, background: sfondo,
-      borderRadius: 20, padding: "5px 10px", whiteSpace: "nowrap", display: "inline-block",
+      // venti pixel di altezza: in una riga da trentacinque una pastiglia
+      // piu' alta tocca i bordi e la riga sembra piena anche quando dentro
+      // c'e' una parola sola
+      ...fontBody, fontSize: 9.5, fontWeight: 700, color: colore, background: sfondo,
+      borderRadius: 20, height: 20, padding: "0 9px", whiteSpace: "nowrap",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
     }}>
       {testo}
     </span>
   );
 }
 
-function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie }) {
+function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie, griglia }) {
   const isMobile = useIsMobile();
   const campoQui = isMobile
     ? { ...campoCompattoStyle, padding: "5px 4px", fontSize: 10.5 }
@@ -17954,7 +18025,7 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
         altezza, stessa griglia, stesso vestito. Prima aveva le caselle
         col fondo grigio, il cestino in un tondo e le tre lettere sopra
         le spunte — sembrava capitata li' da un'altra pagina. */}
-    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: 35, padding: isMobile ? "0 6px" : "0 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+    <div style={{ display: "grid", gridTemplateColumns: griglia || (isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP), gap: isMobile ? 4 : 6, alignItems: "center", minHeight: 35, padding: isMobile ? "0 6px" : "0 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
       <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ display: "flex", flexShrink: 0, opacity: 0.85 }}><IconaCatDocumento size={isMobile ? 13 : 15} color={NAVY} /></span>
         <select
@@ -25198,6 +25269,23 @@ function PannelloRiepilogoAmministrativo({
   // diverse una sopra l'altra fanno sembrare la pagina montata a pezzi,
   // e con otto voci la differenza si somma fino a spostare il totale.
   const ALTEZZA_RIGA = 35;
+  // Le larghezze delle colonne, tirabili dalle maniglie sull'intestazione
+  // e salvate dove le vedono tutti. Finche' non si tocca niente valgono
+  // quelle scritte nel codice.
+  const maniglieAttive = useManiglieAttive();
+  const [larghezzeSalvate, salvaLarghezzeColonne] = useImpostazioneCondivisa(CHIAVE_LARGHEZZE_COSTI, null);
+  const [larghezzeVive, setLarghezzeVive] = useState(null);
+  const larghezzeColonne = larghezzeVive
+    || (Array.isArray(larghezzeSalvate) && larghezzeSalvate.length === 6 ? larghezzeSalvate : null)
+    || (isMobile ? LARGHEZZE_COSTI_MOBILE : LARGHEZZE_COSTI_DEFAULT);
+  const grigliaCosti = grigliaCostiDa(larghezzeColonne, isMobile);
+  function tiraColonna(indice, nuova) {
+    setLarghezzeVive(larghezzeColonne.map((l, i) => (i === indice ? nuova : l)));
+  }
+  function fissaColonne() {
+    if (!larghezzeVive) return;
+    salvaLarghezzeColonne(larghezzeVive);
+  }
   // e una cifra che si puo' scrivere: stesso posto, stessa misura, ma con
   // la riga sotto che dice "qui si tocca"
   const campoCifra = {
@@ -25986,22 +26074,49 @@ function PannelloRiepilogoAmministrativo({
                         cifre sono allineate a DESTRA, qui come nelle righe e
                         come nella banda dei totali: e' l'unico modo perche'
                         le unita' cadano una sotto l'altra. */}
-                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 6, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: ALTEZZA_RIGA, alignItems: "center", padding: isMobile ? "0 6px" : "0 10px", marginBottom: 0 }}>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Voce</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>Totale</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>Bonifico</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>Cash</div>
-                      {/* Dove finisce la parte in contanti della riga: nella
-                          busta di questo corso (esce subito e va in prima
-                          nota) o nello scadenziario passivo, il Quadro
-                          impegni, dove si decide poi se pagarla dalla cassa
-                          contanti o con un bonifico. La modalita' si
-                          chiamava "Giorni", ma i giorni li ha solo chi ha un
-                          assistente e se li porta scritti dietro ("3gg"):
-                          quella colonna dice come si paga la riga, non quanti
-                          giorni dura. */}
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }} title="Dove va la parte in contanti della riga: nella busta di questo corso o nello scadenziario passivo">Busta</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, textAlign: "center" }}>Modalità</div>
+                    <div style={{ display: "grid", gridTemplateColumns: grigliaCosti, gap: isMobile ? 4 : 6, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: ALTEZZA_RIGA, alignItems: "center", padding: isMobile ? "0 6px" : "0 10px", marginBottom: 0 }}>
+                      {/* Sette titoli, e fra l'uno e l'altro una maniglia:
+                          si prende e si tira, e la colonna si allarga o si
+                          stringe. Quello che si tira resta salvato dove lo
+                          vedono tutti, cosi' la misura trovata a mano non
+                          va persa e si puo' poi scriverla nel codice.
+
+                          Le maniglie si vedono solo con l'interruttore
+                          delle maniglie acceso: sono un attrezzo per
+                          sistemare la pagina, non un comando per chi la
+                          usa. La prima colonna non ne ha — si prende
+                          quello che resta, e tirarla vorrebbe dire tirare
+                          tutte le altre. */}
+                      {[
+                        { testo: "Voce", allinea: "left" },
+                        { testo: "Totale", allinea: "right" },
+                        { testo: "Bonifico", allinea: "right" },
+                        { testo: "Cash", allinea: "right" },
+                        { testo: "Busta", allinea: "center", titolo: "Dove va la parte in contanti della riga: nella busta di questo corso o nello scadenziario passivo" },
+                        { testo: "Modalità", allinea: "center", titolo: "Come si paga la riga: tutto a bonifico, tutto cash, o metà e metà" },
+                        { testo: "Giorni", allinea: "right", titolo: "I giorni di presenza, dove la voce ne ha" },
+                      ].map((c, i) => (
+                        <div
+                          key={c.testo} title={c.titolo}
+                          style={{
+                            minWidth: 0, position: "relative",
+                            ...fontBody, fontSize: isMobile ? 8 : 9, fontWeight: 700, color: MUTED,
+                            textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4,
+                            textAlign: c.allinea,
+                            paddingRight: c.allinea === "right" ? (isMobile ? 3 : 4) : 0,
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          }}
+                        >
+                          {c.testo}
+                          {maniglieAttive && i > 0 && (
+                            <ManigliaColonnaCosti
+                              larghezza={larghezzeColonne[i - 1]}
+                              onTira={(nuova) => tiraColonna(i - 1, nuova)}
+                              onFine={fissaColonne}
+                            />
+                          )}
+                        </div>
+                      ))}
                     </div>
                     {righeSpeseTutte.map((r) => {
                       // "location" e "alloggio" non hanno più uno split libero: seguono
@@ -26022,7 +26137,7 @@ function PannelloRiepilogoAmministrativo({
                       const [campoBonifico, campoCash] = campiSplitDi(r.tipo);
                       return (
                         <React.Fragment key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash}>
-                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA, padding: isMobile ? "0 6px" : "0 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                        <div style={{ display: "grid", gridTemplateColumns: grigliaCosti, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA, padding: isMobile ? "0 6px" : "0 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
                           <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                             <span style={{ display: "flex", flexShrink: 0, opacity: 0.85 }}><IconaDiRigaCosto tipo={r.tipo} size={isMobile ? 13 : 15} /></span>
                             <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</span>
@@ -26148,7 +26263,7 @@ function PannelloRiepilogoAmministrativo({
                           // della tabella
                           <div style={{ marginBottom: 8, padding: isMobile ? "4px 0 6px 10px" : "6px 0 8px 18px", background: "#FAFAFB", borderRadius: 10 }}>
                             {quoteVenditoreDettaglio.map((v) => (
-                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA }}>
+                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: grigliaCosti, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA }}>
                                 <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 14 : 24 }}>
                                   {v.nome}
                                   <span style={{ ...fontBody, fontSize: isMobile ? 8 : 9, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
@@ -26238,6 +26353,7 @@ function PannelloRiepilogoAmministrativo({
                         onElimina={() => rimuoviRigaCostoClasse(spesa.id)}
                         costiCategorie={costiCategorie}
                         costiSottocategorie={costiSottocategorie}
+                        griglia={grigliaCosti}
                       />
                     ))}
                   </div>
@@ -26268,7 +26384,7 @@ function PannelloRiepilogoAmministrativo({
                   const cifra = { ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 3 : 4, minWidth: 0 };
                   return (
                     <div style={{
-                      display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP,
+                      display: "grid", gridTemplateColumns: grigliaCosti,
                       gap: isMobile ? 4 : 8, alignItems: "center",
                       background: "#F4F4F6", borderRadius: 12, minHeight: 45, padding: isMobile ? "0 6px" : "0 10px",
                       marginTop: 6, marginBottom: 20,
