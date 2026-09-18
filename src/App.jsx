@@ -32641,8 +32641,11 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   // sull'ultima spesa registrata (comportamento di prima, per i
   // fornitori che non hanno ancora una categoria propria impostata)
   (fornitori || []).forEach((f) => {
-    const chiave = aggiungi("fornitori", f.id, f.nome, "fornitore",
-      { citta: f.citta, indirizzo: f.indirizzo, partitaIva: f.partita_iva, codiceFiscale: f.codice_fiscale, iban: f.iban, telefono: f.telefono, email: f.email, categoriaId: f.categoria_id, sottocategoriaId: f.sottocategoria_id },
+    // un dipendente sta nella stessa tabella ma non e' un fornitore: gli
+    // stipendi sono un'altra cosa nei conti, e mescolarlo agli altri
+    // duecento fornitori vuol dire non ritrovarlo piu'
+    const chiave = aggiungi("fornitori", f.id, f.nome, f.e_dipendente ? "dipendente" : "fornitore",
+      { citta: f.citta, indirizzo: f.indirizzo, partitaIva: f.partita_iva, codiceFiscale: f.codice_fiscale, iban: f.iban, telefono: f.telefono, email: f.email, categoriaId: f.categoria_id, sottocategoriaId: f.sottocategoria_id, eDipendente: !!f.e_dipendente },
       categoriaNomePer(f.sottocategoria_id, costiSottocategorie) || ultimaCategoriaSpesaDiFornitore(f.id, spese, costiSottocategorie));
     if (chiave) chiavePerFornitoreId.set(f.id, chiave);
   });
@@ -32676,7 +32679,10 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
     const vociOrdinate = [...g.voci].sort((a, b) => ordinePriorita.indexOf(a.tabella) - ordinePriorita.indexOf(b.tabella));
     const ruoli = [];
     vociOrdinate.forEach((v) => { if (!ruoli.includes(v.ruolo)) ruoli.push(v.ruolo); });
-    if (!ruoli.includes("fornitore") && vociOrdinate.some((v) => v.contatti.partitaIva)) ruoli.push("fornitore");
+    // chi ha una partita IVA e' un fornitore anche se non e' registrato
+    // come tale — ma un dipendente no: la partita IVA ce l'hanno anche
+    // certi collaboratori, e promuoverlo lo farebbe sparire dai dipendenti
+    if (!ruoli.includes("fornitore") && !ruoli.includes("dipendente") && vociOrdinate.some((v) => v.contatti.partitaIva)) ruoli.push("fornitore");
     const primo = (campo) => vociOrdinate.map((v) => v.contatti[campo]).find(Boolean) || null;
     const categoria = vociOrdinate.map((v) => v.categoria).find(Boolean) || null;
     const rigaModifica = vociOrdinate.find((v) => v.tabella !== "location") || vociOrdinate[0];
@@ -32686,6 +32692,7 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
       citta: primo("citta"), indirizzo: primo("indirizzo"), partitaIva: primo("partitaIva"),
       codiceFiscale: primo("codiceFiscale"), iban: primo("iban"), telefono: primo("telefono"), email: primo("email"),
       categoriaId: primo("categoriaId"), sottocategoriaId: primo("sottocategoriaId"),
+      eDipendente: vociOrdinate.some((v) => v.contatti.eDipendente),
       tabella: rigaModifica.tabella, recordId: rigaModifica.recordId,
     };
   }).sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
@@ -32734,6 +32741,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
       indirizzo: soggetto.indirizzo || "", citta: soggetto.citta || "",
       partitaIva: soggetto.partitaIva || "", codiceFiscale: soggetto.codiceFiscale || "",
       iban: soggetto.iban || "", categoriaId: soggetto.categoriaId || "", sottocategoriaId: soggetto.sottocategoriaId || "",
+      eDipendente: !!soggetto.eDipendente,
     });
   }
 
@@ -32752,6 +32760,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
       // nel form spesa), restano comunque modificabili spesa per spesa
       campi.categoria_id = formModifica.categoriaId || null;
       campi.sottocategoria_id = formModifica.sottocategoriaId || null;
+      campi.e_dipendente = !!formModifica.eDipendente;
     }
     const { error } = await supabase.from(s.tabella).update(campi).eq("id", s.recordId);
     setSalvando(false);
@@ -32960,6 +32969,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
           <TabPillola attivo={filtro === "tutti"} onClick={() => setFiltro("tutti")}>Tutti ({soggetti.length})</TabPillola>
           <TabPillola attivo={filtro === "fornitore"} onClick={() => setFiltro("fornitore")}>Fornitori ({conta("fornitore")})</TabPillola>
+          <TabPillola attivo={filtro === "dipendente"} onClick={() => setFiltro("dipendente")}>Dipendenti ({conta("dipendente")})</TabPillola>
           <TabPillola attivo={filtro === "master"} onClick={() => setFiltro("master")}>Master ({conta("master")})</TabPillola>
           <TabPillola attivo={filtro === "assistente"} onClick={() => setFiltro("assistente")}>Assistenti ({conta("assistente")})</TabPillola>
           <TabPillola attivo={filtro === "location"} onClick={() => setFiltro("location")}>Strutture ({conta("location")})</TabPillola>
@@ -33034,6 +33044,21 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
                 </div>
                 {modificaAperta.tabella === "fornitori" && (
                   <Field label="Codice fiscale"><input style={inputStyle} value={formModifica.codiceFiscale} onChange={(e) => setFormModifica((f) => ({ ...f, codiceFiscale: e.target.value }))} /></Field>
+                )}
+                {/* nei conti uno stipendio non e' un acquisto: chi lo riceve
+                    va tenuto separato dai fornitori, altrimenti per imputarlo
+                    bisogna registrare una persona come azienda */}
+                {modificaAperta.tabella === "fornitori" && (
+                  <Field label="Che rapporto abbiamo">
+                    <div style={{ display: "inline-flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+                      {[{ v: false, l: "Fornitore" }, { v: true, l: "Dipendente" }].map((o) => (
+                        <button
+                          key={o.l} type="button" onClick={() => setFormModifica((f) => ({ ...f, eDipendente: o.v }))}
+                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "8px 18px", borderRadius: 16, border: "none", cursor: "pointer", background: !!formModifica.eDipendente === o.v ? NAVY : "transparent", color: !!formModifica.eDipendente === o.v ? "#fff" : NAVY }}
+                        >{o.l}</button>
+                      ))}
+                    </div>
+                  </Field>
                 )}
                 <Field label="IBAN"><input style={inputStyle} value={formModifica.iban} onChange={(e) => setFormModifica((f) => ({ ...f, iban: e.target.value }))} /></Field>
                 {modificaAperta.tabella === "fornitori" && (
