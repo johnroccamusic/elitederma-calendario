@@ -39415,6 +39415,116 @@ async function applicaRegoleBanca(movimentiNuovi, regole) {
   return fatti;
 }
 
+// ---------- La fascia dei tre numeri del periodo ----------
+// Saldo, entrate e uscite: una riga sola, la stessa da telefono e da
+// computer. Non due disegni diversi scelti da isMobile, ma UN disegno
+// che si rimpicciolisce: si misura quanto e' larga davvero la fascia e
+// tutte le misure — testi, riquadri, spazi, il tondo della freccia —
+// scendono insieme nella stessa proporzione.
+//
+// Le misure sono scritte sui 980px del computer e riportate alla
+// larghezza vera. Sotto una certa taglia pero' le etichette scenderebbero
+// sotto i 9px, e un'etichetta che non si legge non e' piu' un'etichetta:
+// da li' in giu' i caratteri piccoli si fermano. E' l'unico punto in cui
+// la proporzione cede, e cede per un motivo.
+//
+// Cliccare un riquadro filtra l'elenco sotto: e' la domanda che viene
+// guardando quel numero.
+const LARGHEZZA_RIFERIMENTO_FASCIA = 980;
+function FasciaPeriodoContabile({
+  Icona, saldo, entrate, uscite, entratePrec, uscitePrec, etichettaPrec,
+  mostraConfronto = true, dettaglio = null, attivo = "tutte", onScegli,
+}) {
+  const rif = useRef(null);
+  const [larghezza, setLarghezza] = useState(null);
+  useLayoutEffect(() => {
+    const el = rif.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const misura = () => setLarghezza(el.clientWidth || null);
+    misura();
+    const osservatore = new ResizeObserver(misura);
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, []);
+  const k = Math.min(1.15, Math.max(0.3, (larghezza || LARGHEZZA_RIFERIMENTO_FASCIA) / LARGHEZZA_RIFERIMENTO_FASCIA));
+  const q = (n) => Math.round(n * k * 2) / 2;
+  // la misura scalata, ma mai sotto il minimo leggibile
+  const qMin = (n, minimo) => Math.max(minimo, q(n));
+
+  // Non un rettangolo piatto con un'ombra sotto, ma una superficie con
+  // spessore: luce sul bordo alto, una fascia piu' scura sotto e l'ombra
+  // corta. E' lo stesso cuscino dei tasti dei filtri e delle tessere —
+  // la tridimensionalita' dell'app non e' l'ombra, e' il bordo.
+  const riquadro = (chiave, colore, sfondo) => ({
+    ...superficieCuscino(sfondo),
+    boxSizing: "border-box", minWidth: 0, position: "relative", overflow: "hidden",
+    borderRadius: qMin(18, 10),
+    padding: `${qMin(18, 9)}px ${qMin(20, 9)}px`,
+    cursor: onScegli ? "pointer" : "default",
+    outline: attivo === chiave ? `${Math.max(1.5, q(2))}px solid ${colore}` : "none",
+    outlineOffset: -Math.max(1.5, q(2)),
+  });
+  const etichetta = (colore) => ({
+    ...fontBody, fontSize: qMin(12, 8), fontWeight: 700, color: colore,
+    textTransform: "uppercase", letterSpacing: qMin(1.2, 0.4), lineHeight: 1.2, position: "relative",
+  });
+  const cifra = (dimensione, colore) => ({
+    ...fontDisplay, fontWeight: 700, fontSize: dimensione, color: colore,
+    marginTop: qMin(4, 2), lineHeight: 1.1, position: "relative",
+    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+  });
+
+  const confronto = (attuale, precedente, invertito) => {
+    if (!mostraConfronto) return null;
+    const pct = variazionePctErp(attuale, precedente);
+    if (pct === null || pct === undefined) return null;
+    const sale = attuale >= precedente;
+    const bene = invertito ? !sale : sale;
+    const colore = bene ? "#2E7D32" : "#C0392B";
+    const tondo = qMin(28, 16);
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: qMin(8, 4), marginTop: qMin(10, 5), flexWrap: "wrap", position: "relative" }}>
+        <span style={{ width: tondo, height: tondo, borderRadius: "50%", background: bene ? "#E3F3EA" : "#FBE4E1", color: colore, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width={qMin(14, 8)} height={qMin(14, 8)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sale ? "none" : "scaleY(-1)" }}><path d="M7 17 17 7M9 7h8v8" /></svg>
+        </span>
+        <span style={{ ...fontBody, fontSize: qMin(14, 9.5), color: colore, minWidth: 0 }}>
+          <b>{pct >= 0 ? "+" : ""}{Math.round(pct)}%</b> vs {etichettaPrec} ({fmtEuroErp(precedente)})
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <div ref={rif}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: qMin(12, 6), marginBottom: qMin(8, 5), alignItems: "stretch" }}>
+        <div onClick={() => onScegli && onScegli("tutte")} title="Rimetti tutte le operazioni" style={riquadro("tutte", "#8A6D1D", "#F3EDE1")}>
+          {Icona && (
+            <div style={{ position: "absolute", right: -q(16), top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
+              <Icona size={qMin(104, 44)} color="#8A6D1D" />
+            </div>
+          )}
+          <div style={etichetta("#8A6D1D")}>Saldo del periodo</div>
+          <div style={cifra(qMin(34, 15), saldo >= 0 ? NAVY : "#C0392B")}>{saldo < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldo))}</div>
+        </div>
+        <div onClick={() => onScegli && onScegli(attivo === "entrate" ? "tutte" : "entrate")} title="Mostra solo le entrate" style={riquadro("entrate", "#2E7D32", "#EEF7F0")}>
+          <div style={etichetta("#2E7D32")}>Entrate</div>
+          <div style={cifra(qMin(26, 13), "#2E7D32")}>{fmtEuroErp(entrate)}</div>
+          {confronto(entrate, entratePrec, false)}
+        </div>
+        <div onClick={() => onScegli && onScegli(attivo === "uscite" ? "tutte" : "uscite")} title="Mostra solo le uscite" style={riquadro("uscite", "#C0392B", "#FBEEEC")}>
+          <div style={etichetta("#C0392B")}>Uscite</div>
+          <div style={cifra(qMin(26, 13), "#C0392B")}>{fmtEuroErp(uscite)}</div>
+          {confronto(uscite, uscitePrec, true)}
+        </div>
+      </div>
+      {dettaglio && (
+        <div style={{ ...fontBody, fontSize: qMin(13, 10), color: MUTED, marginBottom: qMin(18, 12), lineHeight: 1.45 }}>
+          {dettaglio}
+        </div>
+      )}
+    </div>
+  );
+}
 function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [], costiSottocategorie = [], ricarica, onContabilizza }) {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
@@ -39727,45 +39837,16 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
           </button>
         </div>
 
-        {/* I tre numeri del periodo su una riga sola, da telefono come da
-            computer: si leggono insieme o non si leggono, e messi uno
-            sopra l'altro il saldo mangiava mezzo schermo prima che si
-            vedessero entrate e uscite. Il saldo tiene la colonna piu'
-            larga perche' e' quello che si guarda per primo; la riga di
-            dettaglio sta sotto a tutta la fascia, perche' dentro una
-            colonna stretta diventava una colonna di parole. */}
-        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: isMobile ? 7 : 12, marginBottom: isMobile ? 6 : 8, alignItems: "stretch" }}>
-          <div
-            onClick={() => setDirezione("tutte")} title="Rimetti tutte le operazioni"
-            style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0, cursor: "pointer", outline: direzione === "tutte" ? `2px solid #8A6D1D` : "none", outlineOffset: -2 }}
-          >
-            <div style={{ position: "absolute", right: -16, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
-              <IconaQiBanca size={isMobile ? 62 : 104} color="#8A6D1D" />
-            </div>
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, position: "relative", lineHeight: 1.2 }}>Saldo del periodo</div>
-            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 20 : 34, color: saldoPeriodo >= 0 ? NAVY : "#C0392B", lineHeight: 1.1, marginTop: 4, position: "relative", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{saldoPeriodo < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
-          </div>
-          <div
-            onClick={() => setDirezione((v) => (v === "entrate" ? "tutte" : "entrate"))} title="Mostra solo le entrate"
-            style={{ background: "#EEF7F0", borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0, cursor: "pointer", outline: direzione === "entrate" ? "2px solid #2E7D32" : "none", outlineOffset: -2 }}
-          >
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, lineHeight: 1.2 }}>Entrate</div>
-            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 15 : 26, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(entrate)}</div>
-            {confronto(entrate, entratePrec, false)}
-          </div>
-          <div
-            onClick={() => setDirezione((v) => (v === "uscite" ? "tutte" : "uscite"))} title="Mostra solo le uscite"
-            style={{ background: "#FBEEEC", borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0, cursor: "pointer", outline: direzione === "uscite" ? "2px solid #C0392B" : "none", outlineOffset: -2 }}
-          >
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, lineHeight: 1.2 }}>Uscite</div>
-            <div style={{ ...fontDisplay, fontWeight: 700, fontSize: isMobile ? 15 : 26, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(uscite)}</div>
-            {confronto(uscite, uscitePrec, true)}
-          </div>
-        </div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 11 : 13, color: MUTED, marginBottom: isMobile ? 14 : 18, lineHeight: 1.45 }}>
-          entrate meno uscite, senza gli ignorati · {etichettaPrec}: {saldoPrec < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPrec))}
-          {ultimoConSaldo ? ` · saldo conto al ${fmtData(ultimoConSaldo.data_operazione)}: ${fmtEuroErp2(Number(ultimoConSaldo.saldo))}` : ""}
-        </div>
+        <FasciaPeriodoContabile
+          Icona={IconaQiBanca}
+          saldo={saldoPeriodo} entrate={entrate} uscite={uscite}
+          entratePrec={entratePrec} uscitePrec={uscitePrec} etichettaPrec={etichettaPrec}
+          attivo={direzione} onScegli={setDirezione}
+          dettaglio={<>
+            entrate meno uscite, senza gli ignorati · {etichettaPrec}: {saldoPrec < 0 ? "−" : ""}{fmtEuroErp(Math.abs(saldoPrec))}
+            {ultimoConSaldo ? ` · saldo conto al ${fmtData(ultimoConSaldo.data_operazione)}: ${fmtEuroErp2(Number(ultimoConSaldo.saldo))}` : ""}
+          </>}
+        />
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
           <TabPillola attivo={filtro === "nuovo"} onClick={() => setFiltro("nuovo")}>Da sistemare ({nelPeriodo.filter((m) => m.stato === "nuovo").length})</TabPillola>
@@ -41794,65 +41875,19 @@ function PaginaInserimentoCostiRicavi({
           </div>
 
           {(() => {
-            const confronto = (attuale, precedente, pct, invertito) => {
-              if (personalizzatoPN || pct === null || pct === undefined) return null;
-              const sale = attuale >= precedente;
-              // per le uscite salire e' male, per entrate e saldo e' bene
-              const bene = invertito ? !sale : sale;
-              const colore = bene ? "#2E7D32" : "#C0392B";
-              return (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, position: "relative", flexWrap: "wrap" }}>
-                  <span style={{ width: 28, height: 28, borderRadius: "50%", background: bene ? "#E3F3EA" : "#FBE4E1", color: colore, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sale ? "none" : "scaleY(-1)" }}><path d="M7 17 17 7M9 7h8v8" /></svg>
-                  </span>
-                  <span style={{ ...fontBody, fontSize: isMobile ? 13 : 14, color: colore }}>
-                    <b>{pct >= 0 ? "+" : ""}{Math.round(pct)}%</b> vs {etichettaPeriodoPrecPN} ({fmtEuroErp(precedente)})
-                  </span>
-                </div>
-              );
-            };
-            const saldoPositivo = saldoPeriodo >= 0;
             return (
-              <>
-                {/* Stessa fascia della Riconciliazione banca: i tre numeri
-                    su una riga sola, da telefono come da computer. */}
-                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: isMobile ? 7 : 12, marginBottom: isMobile ? 6 : 8, alignItems: "stretch" }}>
-                  {/* cliccare un riquadro filtra l'elenco sotto: e' la
-                      domanda che ci si fa guardando quel numero, e la
-                      risposta era a due tasti di distanza. Comandano le
-                      stesse pillole che stanno gia' sotto, non un secondo
-                      filtro parallelo che si disallinea. */}
-                  <div
-                    onClick={() => setVistaPN("tutto")} title="Rimetti tutte le operazioni"
-                    style={{ position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${BG_CHIARO} 0%, #F6F1E7 100%)`, borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0, cursor: "pointer", outline: vistaPN === "tutto" ? "2px solid #8A6D1D" : "none", outlineOffset: -2 }}
-                  >
-                    <div style={{ position: "absolute", right: -16, top: "50%", transform: "translateY(-50%)", opacity: 0.12, pointerEvents: "none" }}>
-                      <IconaQiPortafoglio size={isMobile ? 62 : 104} color="#8A6D1D" />
-                    </div>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, position: "relative", lineHeight: 1.2 }}>Saldo del periodo</div>
-                    <div style={{ ...fontHero, fontSize: isMobile ? 20 : 34, color: saldoPositivo ? NAVY : "#C0392B", lineHeight: 1.1, marginTop: 4, position: "relative", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{saldoPositivo ? "" : "−"}{fmtEuroErp(Math.abs(saldoPeriodo))}</div>
-                  </div>
-                  <div
-                    onClick={() => setVistaPN((v) => (v === "entrate" ? "tutto" : "entrate"))} title="Mostra solo le entrate"
-                    style={{ background: "#EEF7F0", borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0, cursor: "pointer", outline: vistaPN === "entrate" ? "2px solid #2E7D32" : "none", outlineOffset: -2 }}
-                  >
-                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, lineHeight: 1.2 }}>Entrate</div>
-                    <div style={{ ...fontHero, fontSize: isMobile ? 15 : 26, color: "#2E7D32", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(totaleEntrate)}</div>
-                    {confronto(totaleEntrate, entratePrecedentiPN, variazioneEntratePN, false)}
-                  </div>
-                  <div
-                    onClick={() => setVistaPN((v) => (v === "uscite" ? "tutto" : "uscite"))} title="Mostra solo le uscite"
-                    style={{ background: "#FBEEEC", borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? "11px 11px" : "18px 20px", minWidth: 0, cursor: "pointer", outline: vistaPN === "uscite" ? "2px solid #C0392B" : "none", outlineOffset: -2 }}
-                  >
-                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: isMobile ? 0.5 : 1.2, lineHeight: 1.2 }}>Uscite</div>
-                    <div style={{ ...fontHero, fontSize: isMobile ? 15 : 26, color: "#C0392B", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtEuroErp(totaleSpese)}</div>
-                    {confronto(totaleSpese, totalePrecedentePN, variazionePctPN, true)}
-                  </div>
-                </div>
-                <div style={{ ...fontBody, fontSize: isMobile ? 11 : 13, color: MUTED, marginBottom: isMobile ? 14 : 18, lineHeight: 1.45 }}>
+              <FasciaPeriodoContabile
+                Icona={IconaQiPortafoglio}
+                saldo={saldoPeriodo} entrate={totaleEntrate} uscite={totaleSpese}
+                entratePrec={entratePrecedentiPN} uscitePrec={totalePrecedentePN}
+                etichettaPrec={etichettaPeriodoPrecPN}
+                mostraConfronto={!personalizzatoPN}
+                attivo={vistaPN === "tutto" ? "tutte" : vistaPN}
+                onScegli={(v) => setVistaPN(v === "tutte" ? "tutto" : v)}
+                dettaglio={<>
                   entrate meno uscite del periodo{!personalizzatoPN ? ` · ${etichettaPeriodoPrecPN}: ${saldoPrecedentePN < 0 ? "−" : ""}${fmtEuroErp(Math.abs(saldoPrecedentePN))}` : ""}
-                </div>
-              </>
+                </>}
+              />
             );
           })()}
 
