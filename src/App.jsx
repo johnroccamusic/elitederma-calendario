@@ -36967,6 +36967,11 @@ function BarraPeriodoContabilita({
   conteggiMese = {}, mesiAllerta = null, formatoMese = "conto",
   personalizzato = false, onPersonalizzato, da, a, onDa, onA,
   ricerca, onRicerca, placeholderRicerca = "Cerca…",
+  // il tasto che crea qualcosa in questa sezione, appoggiato in fondo
+  // alla fila dei filtri. Sta li' e non in una barra sua perche' una
+  // barra bianca per un tasto solo e' una riga in piu' da saltare con
+  // l'occhio prima di arrivare alla lista
+  azione = null,
 }) {
   const isMobile = useIsMobile();
   const tondo = (titolo, onClick, ruotato) => (
@@ -36986,9 +36991,10 @@ function BarraPeriodoContabilita({
           una all'altra il numero di pastiglie cambia: senza un'altezza
           fissa il pannello sotto saliva e scendeva a ogni cambio di
           pagina, e l'occhio doveva ritrovare ogni volta dove comincia. */}
-      {filtri.length > 0 && (
+      {(filtri.length > 0 || azione) && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", minHeight: 38, marginBottom: 12 }}>
           {filtri.map((f) => pillola(filtroAttivo === f.chiave, f.conto == null ? f.etichetta : `${f.etichetta} (${f.conto})`, () => onFiltro?.(f.chiave), f.chiave))}
+          {azione && <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>{azione}</div>}
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
@@ -41709,60 +41715,39 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
 
         {tab === "passivo" && (
           <div>
-            <div style={{ ...cardStyle, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 0, padding: 14 }}>
-              <button
-                onClick={() => setSubTabPassivo("dapagare")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 14, cursor: "pointer", textAlign: "left",
-                  border: `1px solid ${daPagare.length > 0 ? "#E7B3AC" : "#BFDFC4"}`, background: daPagare.length > 0 ? "#FBEAE8" : "#EAF6EC",
-                  outline: subTabPassivo === "dapagare" ? `2px solid ${NAVY}` : "none", outlineOffset: 1,
-                }}
-              >
-                <span style={{ width: 32, height: 32, borderRadius: "50%", background: daPagare.length > 0 ? "#C0392B" : "#2E7D32", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontDisplay, fontSize: 16, fontWeight: 700 }}>
-                  {daPagare.length > 0 ? "!" : ""}
-                </span>
-                <div>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: daPagare.length > 0 ? "#C0392B" : "#2E7D32" }}>Da pagare</div>
-                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: daPagare.length > 0 ? "#C0392B" : "#2E7D32" }}>{daPagare.length}</div>
-                </div>
-              </button>
-              <button
-                onClick={() => setSubTabPassivo("evase")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 14, cursor: "pointer", textAlign: "left",
-                  border: `1px solid #EAD9B0`, background: "#FBF3E0",
-                  outline: subTabPassivo === "evase" ? `2px solid ${NAVY}` : "none", outlineOffset: 1,
-                }}
-              >
-                <span style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaClessidraErp size={16} />
-                </span>
-                <div>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY }}>Evase</div>
-                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY }}>{speseEvase.length}</div>
-                </div>
-              </button>
-              <button onClick={onApriNuovaSpesaDaPagare} style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "10px 18px", cursor: "pointer", marginLeft: "auto" }}>
-                <span style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, lineHeight: 1, flexShrink: 0 }}>+</span>
-                Nuova spesa da pagare
-              </button>
-            </div>
-            {/* la barra dei segnalatori e i filtri sotto sono due cose
-                diverse: attaccate si leggevano come un blocco solo */}
-            <div style={{ height: 60 }} />
-
+            {/* Niente barra bianca con "Da pagare" ed "Evase": era una
+                riga sola con due tessere e un tasto, e faceva saltare
+                l'occhio due volte prima di arrivare alla lista. Le due
+                liste sono diventate due pastiglie in fondo ai filtri —
+                perche' e' quello che sono, due modi di guardare lo stesso
+                scadenziario — e il tasto sta appoggiato a destra sulla
+                stessa riga. */}
             {/* la testata unica di tutte le sezioni: filtri di stato,
                 riga anno/tutto l'anno/periodo/ricerca, fila dei mesi */}
             <BarraPeriodoContabilita
-              filtri={subTabPassivo !== "dapagare" ? [] : [
+              filtri={[
                 { chiave: "tutte", etichetta: "Tutte", conto: daPagare.length },
                 { chiave: "attesa", etichetta: "In attesa di fattura", conto: daPagare.filter((r) => !fatturaAssociataDi(r)).length },
                 { chiave: "pronte", etichetta: "Pronte da pagare", conto: daPagare.filter((r) => fatturaAssociataDi(r)).length },
                 { chiave: "scadute", etichetta: "Scadute", conto: daPagare.filter((r) => { const sc = scadenzaDi(r); return !!sc && sc < oggiStr; }).length },
                 { chiave: "future", etichetta: "Future", conto: daPagare.filter((r) => { const sc = scadenzaDi(r); return !!sc && sc > oggiStr; }).length },
+                // l'ultima pastiglia cambia lista, non filtro: le spese
+                // gia' pagate sono l'altra faccia dello scadenziario, e
+                // toccarla riporta le altre cinque su "Tutte"
+                { chiave: "evase", etichetta: "Evase", conto: speseEvase.length },
               ]}
-              filtroAttivo={filtroStatoPassivo}
-              onFiltro={setFiltroStatoPassivo}
+              filtroAttivo={subTabPassivo === "evase" ? "evase" : filtroStatoPassivo}
+              onFiltro={(chiave) => {
+                if (chiave === "evase") { setSubTabPassivo("evase"); return; }
+                setSubTabPassivo("dapagare");
+                setFiltroStatoPassivo(chiave);
+              }}
+              azione={(
+                <button onClick={onApriNuovaSpesaDaPagare} style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 16px", cursor: "pointer" }}>
+                  <span style={{ width: 17, height: 17, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, lineHeight: 1, flexShrink: 0 }}>+</span>
+                  Nuova spesa da pagare
+                </button>
+              )}
               anno={annoScadPassivo} onAnno={setAnnoScadPassivo}
               mese={meseScadPassivo} onMese={setMeseScadPassivo}
               conteggiMese={riepilogoMesePassivo}
