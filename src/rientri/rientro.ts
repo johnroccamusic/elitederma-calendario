@@ -180,13 +180,12 @@ export function dermografiNonQuadrano(righe: DichiarazioneRiga[]): Dichiarazione
  * il pacco, che e' l'unico che puo' verificarle allo scaffale.
  */
 export async function chiudiRientro({
-  spedizioneId, masterId, righe, venditeDichiarate, venditeTrovate,
+  spedizioneId, corsoDataId, masterId, righe,
 }: {
   spedizioneId: string;
+  corsoDataId: string;
   masterId: string | null;
   righe: DichiarazioneRiga[];
-  venditeDichiarate: number;
-  venditeTrovate: number;
 }): Promise<{ errore?: string; anomalie?: number }> {
   const bloccanti = dermografiNonQuadrano(righe);
   if (bloccanti.length > 0) {
@@ -199,14 +198,8 @@ export async function chiudiRientro({
     .select().single();
   if (error || !rientro) return { errore: error?.message || "non riesco ad aprire la scheda" };
 
-  const note: { tipo: string; testo: string; dichiarato?: number; trovato?: number }[] = [];
-  if (venditeDichiarate !== venditeTrovate) {
-    note.push({
-      tipo: venditeDichiarate > venditeTrovate ? "vendite_non_riscontrate" : "vendite_non_dichiarate",
-      dichiarato: venditeDichiarate, trovato: venditeTrovate,
-      testo: `Dichiarate ${venditeDichiarate} vendite dalle scorte, trovate ${venditeTrovate} operazioni al POS.`,
-    });
-  }
+  const riconciliazione = await riconciliaVendite(spedizioneId, corsoDataId);
+  const note = [...riconciliazione.note];
   righe.forEach((r) => {
     const consumato = r.spediti - r.rientrata - r.guasta - r.venduti - r.consegnata;
     if (consumato < 0) {
@@ -434,4 +427,89 @@ export async function calcolaRipristino(
   });
 
   return { perProdotto, perModello, guastiProdotto, guastiModello };
+}
+
+/**
+ * La riconciliazione vera: i pezzi usciti dai kit per una vendita, contro
+ * le vendite che risultano battute al POS su quel corso.
+ *
+ * Non e' un controllo formale. Un pezzo che manca da una scatola e non ha
+ * una vendita dietro e' materiale sparito; una vendita battuta "dal kit"
+ * senza il pezzo che manca e' un prelievo che nessuno ha registrato. Sono
+ * due cose diverse e vanno dette in modo diverso.
+ *
+ * Non blocca niente: la scheda si chiude lo stesso e la differenza viaggia
+ * verso chi ricevera' il pacco, l'unico che puo' verificarla allo scaffale.
+ */
+export async function riconciliaVendite(spedizioneId: string, corsoDataId: string): Promise<{
+  prelevatiPerVendita: number;
+  conRiscontroPos: number;
+  venditePos: number;
+  note: { tipo: string; testo: string; dichiarato?: number; trovato?: number }[];
+}> {
+  const [{ data: istanze }, { data: righe }, { data: vendite }] = await Promise.all([
+    supabase.from("kit_riserva_istanze").select("id").eq("spedizione_id", spedizioneId),
+    supabase.from("spedizione_righe").select("id").eq("spedizione_id", spedizioneId),
+    supabase.from("vendite_shop").select("id, prodotti, tipo_movimento")
+      .eq("corso_data_id", corsoDataId).eq("provenienza", "kit_riserva"),
+  ]);
+  const idIstanze = new Set((istanze || []).map((i) => i.id));
+  const idRighe = new Set((righe || []).map((r) => r.id));
+
+  const { data: prelievi } = await supabase
+    .from("prelievi_kit_riserva").select("*").eq("motivo", "vendita");
+  const miei = (prelievi || []).filter(
+    (p) => (p.kit_riserva_id && idIstanze.has(p.kit_riserva_id)) || (p.spedizione_riga_id && idRighe.has(p.spedizione_riga_id)),
+  );
+  const prelevatiPerVendita = miei.reduce((n, p) => n + (p.quantita || 0), 0);
+  const conRiscontroPos = miei.filter((p) => p.vendita_id).reduce((n, p) => n + (p.quantita || 0), 0);
+
+  const venditePos = (vendite || [])
+    .filter((v) => v.tipo_movimento !== "annullamento")
+    .reduce((n, v) => n + (Array.isArray(v.prodotti) ? v.prodotti : []).reduce((m, r: any) => m + (r?.dal_kit ? (r.quantita || 0) : 0), 0), 0);
+
+  const note: { tipo: string; testo: string; dichiarato?: number; trovato?: number }[] = [];
+  const senzaRiscontro = prelevatiPerVendita - conRiscontroPos;
+  if (senzaRiscontro > 0) {
+    note.push({
+      tipo: "vendite_non_riscontrate",
+      dichiarato: prelevatiPerVendita, trovato: conRiscontroPos,
+      testo: `${senzaRiscontro} ${senzaRiscontro === 1 ? "pezzo e' uscito" : "pezzi sono usciti"} dalle scorte come vendita, senza un'operazione al POS che lo confermi.`,
+    });
+  }
+  if (venditePos > prelevatiPerVendita) {
+    const differenza = venditePos - prelevatiPerVendita;
+    note.push({
+      tipo: "vendite_non_dichiarate",
+      dichiarato: prelevatiPerVendita, trovato: venditePos,
+      testo: `Al POS risultano ${differenza} ${differenza === 1 ? "pezzo venduto" : "pezzi venduti"} dalle scorte in piu' di quelli usciti dalle scatole.`,
+    });
+  }
+  return { prelevatiPerVendita, conRiscontroPos, venditePos, note };
+}
+
+/** Le schede chiuse con differenze, per chi deve verificarle. */
+export async function leggiAnomalie(): Promise<{
+  rientroId: string;
+  corsoDataId: string;
+  chiusoIl: string | null;
+  note: { testo: string }[];
+}[]> {
+  const { data: rientri } = await supabase
+    .from("rientri").select("*").eq("ha_anomalie", true).order("chiuso_ts", { ascending: false });
+  if (!rientri || rientri.length === 0) return [];
+  const { data: spedizioni } = await supabase
+    .from("spedizioni_corso").select("id, corso_data_id").in("id", rientri.map((r) => r.spedizione_id));
+  const perId = Object.fromEntries((spedizioni || []).map((s) => [s.id, s.corso_data_id]));
+  return rientri.map((r) => ({
+    rientroId: r.id,
+    corsoDataId: perId[r.spedizione_id],
+    chiusoIl: r.chiuso_ts || null,
+    note: Array.isArray(r.note_anomalie) ? r.note_anomalie : [],
+  }));
+}
+
+export async function segnaAnomaliaRisolta(rientroId: string): Promise<string | null> {
+  const { error } = await supabase.from("rientri").update({ ha_anomalie: false }).eq("id", rientroId);
+  return error ? error.message : null;
 }

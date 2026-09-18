@@ -79,15 +79,20 @@ export async function caricaKitInAula(corsoDataId: string | null): Promise<KitIn
   return { spedizioneId: spedizione.id, perProdotto };
 }
 
-/** Il kit da cui prendere, senza chiedere niente: quello gia' aperto, se
- *  c'e'. Null quando la scelta e' fra piu' kit ancora sigillati e tocca
- *  alla master dire quale aprire. */
+/**
+ * Il kit da cui prendere. Prima quello gia' aperto: aprirne un secondo
+ * quando uno e' gia' rotto vuol dire avere due scatole rotte invece di
+ * una. Se sono tutti sigillati si apre il primo, in ordine di numero.
+ *
+ * Non si chiede quale: al banco c'e' gente che aspetta, e fra due scatole
+ * identiche non c'e' una risposta giusta — conta che il pezzo esca da una
+ * sola, e che resti scritto da quale.
+ */
 export function kitDaAprireAutomaticamente(d: DisponibilitaProdotto | undefined): IstanzaConResiduo | null {
   if (!d || d.istanze.length === 0) return null;
   const aperto = d.istanze.find((i) => i.stato === "aperto" && i.residuo > 0);
   if (aperto) return aperto;
-  const disponibili = d.istanze.filter((i) => i.residuo > 0);
-  return disponibili.length === 1 ? disponibili[0] : null;
+  return d.istanze.find((i) => i.residuo > 0) || null;
 }
 
 export interface SceltaDalKit {

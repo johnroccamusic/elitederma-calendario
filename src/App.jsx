@@ -13,12 +13,13 @@ import {
   inputStyle, campoCompattoStyle, round2, numeroFascia,
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, ContatoreQuantita, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
-import DomandaProvenienza from "./rientri/DomandaProvenienza.jsx";
-import { caricaKitInAula, registraPrelieviDaVendita } from "./rientri/pos";
+import { caricaKitInAula, kitDaAprireAutomaticamente, registraPrelieviDaVendita } from "./rientri/pos";
 import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
 import SchedaRientro from "./rientri/SchedaRientro.jsx";
 import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
 import MagazzinoGuasti from "./rientri/MagazzinoGuasti.jsx";
+import AnalisiConsumi from "./rientri/AnalisiConsumi.jsx";
+import AnomalieRientri from "./rientri/AnomalieRientri.jsx";
 import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
@@ -33952,7 +33953,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS, per chi amministra:
   // un carrello dimenticato tiene fermo materiale che nessuno puo'
@@ -33990,6 +33991,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMag
             { chiave: "prodottiusatikit", title: "Prodotti usati per i kit", descrizione: "Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiUsatiKit },
             { chiave: "omaggi", title: "Omaggi", descrizione: "Prodotti usciti dal POS senza essere venduti, regalati.", Icona: IconaTileOmaggio, attivo: true, onClick: onApriOmaggi },
             { chiave: "magazzinoguasti", title: "Magazzino guasti", descrizione: "Quello che torna rotto dai corsi: fuori giacenza, e quali prodotti si rompono più spesso.", Icona: IconaAvvisoTriangolo, attivo: true, onClick: onApriMagazzinoGuasti },
+            { chiave: "analisiconsumi", title: "Consumi ai corsi", descrizione: "Quanto si consuma per allievo, chi si discosta dalla media e quali corsi vanno fuori riga.", Icona: IconaElencoRighe, attivo: true, onClick: onApriAnalisiConsumi },
             // i carrelli sospesi come tasto vero, con icona e disco, al posto
             // del tastino accanto al titolo (16/09/2026); solo per chi amministra
             ...(puoVedereSospesi ? [{ chiave: "carrellisospesi", title: "Carrelli sospesi", descrizione: "I carrelli salvati e non pagati di tutti gli operatori: materiale fermo che nessuno può vendere.", Icona: IconaCarrelloPos, attivo: true, onClick: () => setMostraSospesi(true), badge: sospesiTutti.length || undefined }] : []),
@@ -44008,7 +44010,7 @@ function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, or
 // hub d'ingresso di "Logistica prodotti": le spedizioni dei kit ai corsi
 // da una parte, gli ordini dello shop online dall'altra — due mestieri
 // diversi che prima stavano nella stessa pagina
-function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArrivo, onApriAvvisi, quantiOrdiniDaSpedire, quantiAvvisi, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArrivo, onApriAvvisi, onApriAnomalie, quantiOrdiniDaSpedire, quantiAvvisi, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -44024,6 +44026,7 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
             { chiave: "spedizionicorsi", title: "Spedizioni corsi", descrizione: "Kit, bolle e pacchi verso le sedi dei corsi.", Icona: IconaTileLogistica, attivo: true, onClick: onApriSpedizioniCorsi },
             { chiave: "ordiniinarrivo", title: "Ordini in arrivo", descrizione: "Gli ordini dello shop online da preparare e spedire.", Icona: IconaScatolaErp, attivo: true, onClick: onApriOrdiniInArrivo, badge: quantiOrdiniDaSpedire },
             { chiave: "avvisilogistica", title: "Advisor", descrizione: "Cosa sta finendo: pacchi da aprire e prodotti da riordinare.", Icona: IconaAvvisoTriangolo, attivo: true, onClick: onApriAvvisi, badge: quantiAvvisi },
+            { chiave: "rientridaverificare", title: "Rientri da verificare", descrizione: "Inventari di fine corso chiusi con qualcosa che non tornava.", Icona: IconaRicevutaErp, attivo: true, onClick: onApriAnomalie },
           ]}
         />
       </div>
@@ -55050,19 +55053,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // POS si comporta esattamente come prima: nessuna domanda, nessuna
   // differenza. La domanda nasce solo dai pezzi che ci sono davvero.
   const [kitInAula, setKitInAula] = useState(null);
-  const [domandaKit, setDomandaKit] = useState(null);
   // prodotto -> id del kit da cui esce. Vale per il carrello in corso e si
   // azzera con la vendita: e' una scelta su questi pezzi, non una regola
   const [dalKitPerProdotto, setDalKitPerProdotto] = useState({});
+  // Il magazzino centrale sta a Roma. In un corso a Roma la domanda non
+  // ha oggetto: il magazzino e' li' a fianco, non c'e' nessuna scelta da
+  // fare fra "prendo dal kit" e "lo spedisco". Si chiede solo fuori sede,
+  // dove il pezzo o ce l'hai in aula o deve viaggiare.
+  const inSedeCentrale = String(locById[corsoPosSel?.location_id]?.nome || "").trim().toUpperCase() === "ROMA";
   useEffect(() => {
     let vivo = true;
     setDalKitPerProdotto({});
+    if (inSedeCentrale) { setKitInAula(null); return () => { vivo = false; }; }
     caricaKitInAula(corsoPosSel?.id || null).then((k) => { if (vivo) setKitInAula(k); });
     return () => { vivo = false; };
-  }, [corsoPosSel?.id]);
-  // il magazzino centrale sta a Roma: da li' il pezzo lo si va a prendere,
-  // da qualunque altra sede lo si spedisce
-  const inSedeCentrale = String(locById[corsoPosSel?.location_id]?.nome || "").trim().toUpperCase() === "ROMA";
+  }, [corsoPosSel?.id, inSedeCentrale]);
   const disponibileNeiKit = (prodottoId) => kitInAula?.perProdotto?.[prodottoId] || null;
 
   // omaggio: azzera l'incasso ma scarica comunque il magazzino — la nota
@@ -55371,14 +55376,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
 
   function aggiungiAlCarrello(p) {
-    // il pezzo e' anche in un kit che sta qui in aula, e non si e' ancora
-    // detto da dove esce: si chiede una volta sola, per prodotto
-    const inAula = disponibileNeiKit(p.id);
-    if (inAula && inAula.residuo > 0 && dalKitPerProdotto[p.id] === undefined) {
-      setDomandaKit({ prodotto: p, disponibilita: inAula });
-      return;
-    }
-    const disponibili = disponibiliDi(p.id);
+    const disponibili = disponibiliQui(p.id);
     if (disponibili <= 0) return;
     setCarrello((prev) => {
       const esistente = prev.find((r) => r.prodottoId === p.id);
@@ -55393,38 +55391,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       return [...prev, { prodottoId: p.id, nome: p.nome, prezzo: prezzoAlPubblico(p), sku: p.sku || "", quantita: 1 }];
     });
   }
-  // "dal kit": il pezzo non tocca il magazzino centrale. Si segna da quale
-  // kit esce e lo si mette nel carrello; il resto (prelievo scritto, kit
-  // aperto, foto aggiornata) succede quando la vendita e' registrata.
-  function rispondiDalKit(istanza) {
-    const p = domandaKit?.prodotto;
-    setDomandaKit(null);
-    if (!p || !istanza) return;
-    setDalKitPerProdotto((prev) => ({ ...prev, [p.id]: istanza.id }));
-    aggiungiAlCarrelloDiretto(p);
-  }
-  function rispondiDaMagazzino() {
-    const p = domandaKit?.prodotto;
-    setDomandaKit(null);
-    if (!p) return;
-    setDalKitPerProdotto((prev) => ({ ...prev, [p.id]: null }));
-    // da centrale valgono le regole di sempre: se non c'e', non si vende
-    if (disponibiliDi(p.id) <= 0) { setMsg(`"${p.nome}" non è disponibile in magazzino.`); return; }
-    aggiungiAlCarrelloDiretto(p);
-  }
-  function aggiungiAlCarrelloDiretto(p) {
-    const disponibili = disponibiliDi(p.id);
-    setCarrello((prev) => {
-      const esistente = prev.find((r) => r.prodottoId === p.id);
-      if (esistente) {
-        // dal kit la disponibilita' di centrale non c'entra: il tetto e'
-        // quanto c'e' nella scatola
-        const tetto = dalKitPerProdotto[p.id] ? Infinity : disponibili;
-        if (esistente.quantita >= tetto) return prev;
-        return prev.map((r) => (r.prodottoId === p.id ? { ...r, quantita: r.quantita + 1 } : r));
-      }
-      return [...prev, { prodottoId: p.id, nome: p.nome, prezzo: prezzoAlPubblico(p), sku: p.sku || "", quantita: 1 }];
-    });
+  // La scelta fatta sulla riga del carrello. "Dal kit" pesca da solo la
+  // scatola giusta: quella gia' aperta se c'e', perche' aprirne una
+  // seconda vuol dire avere due scatole rotte invece di una.
+  function scegliProvenienza(prodottoId, dove) {
+    if (dove === "magazzino") {
+      setDalKitPerProdotto((prev) => ({ ...prev, [prodottoId]: null }));
+      return;
+    }
+    const istanza = kitDaAprireAutomaticamente(disponibileNeiKit(prodottoId));
+    if (!istanza) { setMsg("Di questo pezzo non ne resta nei kit."); return; }
+    setDalKitPerProdotto((prev) => ({ ...prev, [prodottoId]: istanza.id }));
   }
   function incrementaRiga(prodottoId) {
     const disponibili = disponibiliDi(prodottoId);
@@ -55754,6 +55731,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     if (omaggioAttivo && !note.trim()) { setMsg("Scrivi una nota per motivare l'omaggio: è obbligatoria."); return; }
     if (campiFatturaMancanti.length > 0) { setMsg(`Per la fattura manca: ${campiFatturaMancanti.join(", ")}.`); return; }
     if (campiClienteMancanti.length > 0) { setMsg(`Completare i dati cliente: ${campiClienteMancanti.join(", ")}.`); return; }
+    // Un pezzo che sta anche in un kit in aula non si incassa senza aver
+    // detto da dove esce: dopo non si puo' piu' sapere, e il magazzino
+    // resterebbe sbagliato in un senso o nell'altro.
+    const senzaProvenienza = carrello.filter((r) => disponibileNeiKit(r.prodottoId)?.residuo > 0 && dalKitPerProdotto[r.prodottoId] === undefined);
+    if (senzaProvenienza.length > 0) {
+      setMsg(`Di ${senzaProvenienza.map((r) => `"${r.nome}"`).join(", ")} manca da dove esce: dal kit che hai lì o lo spediamo.`);
+      return;
+    }
     // scarico in due tempi: prima si verifica TUTTO il carrello (magazzino
     // fisico, poi shop online fino alla scorta minima — vedi
     // preparaScarichi), solo dopo si scrive. Un bundle virtuale non ha
@@ -56188,7 +56173,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       ) : (
         <div style={{ marginBottom: isMobile ? 8 : 16 }}>
           {carrello.map((r) => (
-            <div key={r.prodottoId} style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 10, padding: isMobile ? "6px 0" : "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <div key={r.prodottoId} style={{ borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 10, padding: isMobile ? "6px 0" : "10px 0" }}>
               {isMobile && (
                 <div style={{ width: 32, height: 32, borderRadius: 6, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {immagineUrlPerProdotto[r.prodottoId] ? <img src={immagineUrlPerProdotto[r.prodottoId]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={13} color={MUTED} />}
@@ -56205,6 +56191,41 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </div>
               <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, width: isMobile ? 52 : 62, textAlign: "right" }}>{fmtEuroErp2(round2(r.prezzo * r.quantita))}</div>
               <button onClick={() => rimuoviRiga(r.prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: isMobile ? 13 : 15, padding: 2 }}>✕</button>
+            </div>
+            {/* La provenienza sta QUI, sulla riga del pezzo a cui si
+                riferisce, e solo per i pezzi che in quell'aula ci sono
+                davvero. Fuori sede o si prende da un kit che e' li' o il
+                pezzo deve viaggiare: sono due cose diverse per il
+                magazzino, e chiederlo dopo non si puo' piu'. */}
+            {disponibileNeiKit(r.prodottoId)?.residuo > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", padding: isMobile ? "0 0 7px" : "0 0 10px" }}>
+                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Da dove esce</span>
+                {[
+                  { v: "kit", testo: "Dal kit qui", colore: "#2E7D32", sfondo: "#E9F6EC" },
+                  { v: "magazzino", testo: "Lo spediamo", colore: NAVY, sfondo: "#fff" },
+                ].map((o) => {
+                  const scelto = o.v === "kit" ? !!dalKitPerProdotto[r.prodottoId] : dalKitPerProdotto[r.prodottoId] === null;
+                  return (
+                    <button
+                      key={o.v}
+                      onClick={() => scegliProvenienza(r.prodottoId, o.v)}
+                      style={{
+                        ...fontBody, fontSize: isMobile ? 11 : 11.5, fontWeight: 700,
+                        color: scelto ? "#fff" : o.colore, background: scelto ? o.colore : o.sfondo,
+                        border: `1px solid ${scelto ? o.colore : CREAM_BORDER}`, borderRadius: 999,
+                        padding: isMobile ? "4px 10px" : "5px 12px", cursor: "pointer", whiteSpace: "nowrap",
+                      }}
+                    >{o.testo}</button>
+                  );
+                })}
+                {dalKitPerProdotto[r.prodottoId] === undefined && (
+                  <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: "#C0392B" }}>da dire prima di incassare</span>
+                )}
+                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, color: MUTED }}>
+                  ne {disponibileNeiKit(r.prodottoId).residuo === 1 ? "resta 1" : `restano ${disponibileNeiKit(r.prodottoId).residuo}`} nei kit
+                </span>
+              </div>
+            )}
             </div>
           ))}
         </div>
@@ -57027,17 +57048,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       </div>
 
-      {domandaKit && (
-        <DomandaProvenienza
-          prodotto={domandaKit.prodotto}
-          disponibilita={domandaKit.disponibilita}
-          inSedeCentrale={inSedeCentrale}
-          isMobile={isMobile}
-          onDalKit={rispondiDalKit}
-          onDaMagazzino={rispondiDaMagazzino}
-          onAnnulla={() => setDomandaKit(null)}
-        />
-      )}
     </div>
   );
 }
@@ -67389,6 +67399,20 @@ export default function App() {
         />
       )}
 
+      {view === "rientridaverificare" && (
+        <AnomalieRientri
+          corsi={corsi} corsiDate={corsiDate} location={location} master={master}
+          isMobile={isMobile} onBack={() => setView("logisticaprodotti")}
+        />
+      )}
+
+      {view === "analisiconsumi" && (
+        <AnalisiConsumi
+          prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} master={master} location={location}
+          isMobile={isMobile} onBack={() => setView("magazzinoshop")}
+        />
+      )}
+
       {view === "magazzinoguasti" && (
         <MagazzinoGuasti
           prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} location={location}
@@ -67407,6 +67431,7 @@ export default function App() {
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
           onApriOmaggi={apriOmaggi}
           onApriMagazzinoGuasti={() => setView("magazzinoguasti")}
+          onApriAnalisiConsumi={() => setView("analisiconsumi")}
           onApriClassificazioneVoci={apriClassificazioneVoci}
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriMagazziniEsterni={apriMagazziniEsterni}
@@ -67862,6 +67887,7 @@ export default function App() {
         <PaginaLogisticaHub
           onBack={() => setView("home")}
           onApriSpedizioniCorsi={apriSpedizioniCorsi}
+          onApriAnomalie={() => setView("rientridaverificare")}
           onApriOrdiniInArrivo={apriOrdiniInArrivo}
           onApriAvvisi={apriAvvisiLogistica}
           quantiOrdiniDaSpedire={pacchiDaSpedire}

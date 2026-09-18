@@ -110,15 +110,13 @@ export default function SchedaRientro({
 
   async function chiudi() {
     if (!dati) return;
-    const venditeDichiarate = dichiarazioni.reduce((n, r) => n + (r.venduti || 0), 0);
     if (!window.confirm("Chiudi l'inventario? Da qui in poi la scheda la vede chi riceve il pacco.")) return;
     setSalvando(true);
     const esito = await chiudiRientro({
       spedizioneId: dati.spedizioneId,
+      corsoDataId: corsoData.id,
       masterId: masterLoggataId || null,
       righe: dichiarazioni,
-      venditeDichiarate,
-      venditeTrovate: venditeDichiarate,
     });
     setSalvando(false);
     if (esito.errore) { setMessaggio(esito.errore); return; }
