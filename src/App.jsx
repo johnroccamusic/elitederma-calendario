@@ -17655,6 +17655,16 @@ function categoriaCostoDi(costiCategorie, id) {
 function sottocategoriaCostoDi(costiSottocategorie, id) {
   return (costiSottocategorie || []).find((v) => v.id === id) || null;
 }
+// La categoria di una spesa, partendo da quello che la riga sa: a volte
+// porta la categoria, piu' spesso solo la sottocategoria — che pero' sa
+// da quale categoria dipende. Serve per leggere gli attributi
+// predefiniti, che stanno sulla categoria e non sulla sottocategoria.
+function categoriaDiSottocategoria(costiCategorie, costiSottocategorie, sottocategoriaId, categoriaId = null) {
+  const diretta = categoriaCostoDi(costiCategorie, categoriaId);
+  if (diretta) return diretta;
+  const sotto = sottocategoriaCostoDi(costiSottocategorie, sottocategoriaId);
+  return sotto ? categoriaCostoDi(costiCategorie, sotto.categoria_id) : null;
+}
 function sottocategorieDiCategoria(costiSottocategorie, categoriaId) {
   return (costiSottocategorie || [])
     .filter((v) => v.categoria_id === categoriaId && v.attiva !== false)
@@ -18177,6 +18187,87 @@ function classificazioneDaRecord(r) {
     sogliaPersonalizzata: r?.soglia_allerta_personalizzata != null ? String(r.soglia_allerta_personalizzata) : "",
     responsabileCosto: r?.responsabile_costo || "",
   };
+}
+// I campi che si possono ereditare da una spesa precedente dello stesso
+// fornitore. Sono le sei tendine che descrivono CHE TIPO di costo e' —
+// piu' il responsabile. Natura, origine e ricorrenza restano fuori: non
+// sono mai vuote, hanno un valore di serie, e "operativo" ereditato da
+// un'altra spesa sarebbe indistinguibile da "operativo" scelto apposta.
+const CAMPI_CLASSIFICAZIONE_EREDITABILI = [
+  "direttoIndiretto", "fissoVariabile", "ricorrenteOccasionale",
+  "controllabilita", "riducibilita", "essenzialita", "responsabileCosto",
+];
+/**
+ * La classificazione con cui si apre la scheda di una spesa da pagare.
+ *
+ * Prima quella scritta sul record — l'anagrafica che genera il costo, o
+ * la spesa stessa quando e' gia' nel database. Quello che li' manca lo
+ * si va a prendere dall'ultima volta che qualcuno ha catalogato una
+ * spesa di QUESTO fornitore: sono risposte che per lo stesso fornitore
+ * non cambiano quasi mai, e ridarle ogni volta e' il lavoro noioso che
+ * fa sbagliare. E' la stessa regola con cui si apre una spesa nata da un
+ * movimento bancario (catalogazioneEreditata).
+ *
+ * Campo per campo, e a ritroso: la spesa piu' recente del fornitore puo'
+ * essere arrivata a sua volta vuota da Fatture in Cloud, e fermarsi li'
+ * vorrebbe dire ereditare il niente da chi il lavoro non l'ha fatto.
+ *
+ * Non si sovrascrive mai quello che e' gia' scritto: se su questa spesa
+ * qualcuno ha deciso qualcosa, ha ragione lui.
+ */
+// Dal nome della colonna sul database al campo della scheda. Serve per
+// gli attributi predefiniti delle categorie di spesa, che sul database
+// stanno scritti in snake_case come le colonne vere.
+const CAMPO_CLASSIFICAZIONE_DA_COLONNA = {
+  diretto_indiretto: "direttoIndiretto",
+  fisso_variabile: "fissoVariabile",
+  ricorrente_occasionale: "ricorrenteOccasionale",
+  controllabilita: "controllabilita",
+  riducibilita: "riducibilita",
+  essenzialita: "essenzialita",
+  responsabile_costo: "responsabileCosto",
+};
+function classificazioneConEredita(record, spese, fornitoreId, categoria = null) {
+  const base = classificazioneDaRecord(record);
+  const pieno = { ...base };
+  const manca = () => CAMPI_CLASSIFICAZIONE_EREDITABILI.some((c) => !pieno[c]);
+
+  // 1. l'ultima volta che qualcuno ha catalogato una spesa di questo
+  //    fornitore. E' la risposta piu' precisa che esista: la si e' data
+  //    guardando proprio quel tipo di fattura.
+  if (fornitoreId && manca()) {
+    const precedenti = [...(spese || [])]
+      .filter((sp) => sp.fornitore_id === fornitoreId && sp.id !== record?.id)
+      .sort((a, b) => String(b.data_documento || b.ts || "").localeCompare(String(a.data_documento || a.ts || "")));
+    for (const sp of precedenti) {
+      const c = classificazioneDaRecord(sp);
+      for (const campo of CAMPI_CLASSIFICAZIONE_EREDITABILI) if (!pieno[campo] && c[campo]) pieno[campo] = c[campo];
+      if (!manca()) break;
+    }
+  }
+
+  // 2. gli attributi predefiniti della categoria di spesa. Sono scritti
+  //    sul database da quando esiste l'analisi dei costi
+  //    (costi_categorie.attributi_predefiniti: "Alloggi per i corsi" e'
+  //    diretto e variabile, "Struttura centrale" e' indiretto) e nessuno
+  //    li aveva mai letti. Rispondono per categoria, non per fornitore:
+  //    meno precisi, ma ci sono sempre — ed e' il motivo per cui una
+  //    fattura appena arrivata da Fatture in Cloud non si apriva piu'
+  //    vuota di come era entrata.
+  const predefiniti = categoria?.attributi_predefiniti;
+  if (predefiniti && typeof predefiniti === "object") {
+    for (const [colonna, valore] of Object.entries(predefiniti)) {
+      const campo = CAMPO_CLASSIFICAZIONE_DA_COLONNA[colonna];
+      if (campo && !pieno[campo] && valore) pieno[campo] = valore;
+    }
+    // La natura non e' mai vuota — vale "operativo" finche' non si dice
+    // altro — quindi non si puo' chiedere "manca?". Si guarda il record:
+    // se li' non c'e' scritto niente, allora "operativo" e' il valore di
+    // serie e la categoria (es. Attrezzature: investimento) ha qualcosa
+    // di piu' preciso da dire.
+    if (!record?.natura && predefiniti.natura) pieno.natura = predefiniti.natura;
+  }
+  return pieno;
 }
 function classificazionePerPayload(v) {
   return {
@@ -37263,7 +37354,7 @@ function PannelloAmbitoSpesa({ valori, onChange, corsi = [], location = [], cors
     </div>
   );
 }
-function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [] }) {
+function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [], spese = [], fornitoreId = null, categoriaSpesa = null }) {
   const isMobile = useIsMobile();
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
@@ -37291,8 +37382,14 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   // l'assistente), non un modulo vuoto. Aprirla vuota sarebbe il modo piu'
   // rapido per riattribuire una spesa all'area sbagliata: chi paga
   // conferma o corregge, non reinserisce.
-  const [classificazione, setClassificazione] = useState(() => classificazioneDaRecord(anagrafica));
-  useEffect(() => { setClassificazione(classificazioneDaRecord(anagrafica)); }, [anagrafica]);
+  //
+  // E quello che l'anagrafica non sa — una fattura di un professionista
+  // non ha un'anagrafica dietro — lo si prende dall'ultima spesa dello
+  // stesso fornitore gia' catalogata. Arrivavano da Fatture in Cloud con
+  // le sei tendine a "—", e restavano cosi': una spesa senza
+  // classificazione non entra in nessuna analisi dei costi.
+  const [classificazione, setClassificazione] = useState(() => classificazioneConEredita(anagrafica, spese, fornitoreId, categoriaSpesa));
+  useEffect(() => { setClassificazione(classificazioneConEredita(anagrafica, spese, fornitoreId, categoriaSpesa)); }, [anagrafica, fornitoreId, categoriaSpesa]);
   const chiudiPannello = () => { setPannello(null); setFile(null); setDocScelto(null); setRicercaDoc(""); };
   const fatturaAssociata = statoFattura === "associata";
   // I documenti che questa riga potrebbe saldare: prima quelli del
@@ -41785,6 +41882,8 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     onCambiaScadenza={item.tipo === "abbonamento" ? null : (nuova) => cambiaScadenza(item, nuova)}
                     documentiFornitore={documentoFornitoreTabella}
                     nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
+                    spese={spese} fornitoreId={item.spesaReale?.fornitore_id || item.fornitoreId || null}
+                    categoriaSpesa={categoriaDiSottocategoria(costiCategorie, costiSottocategorie, item.sottocategoriaId, item.categoriaId)}
                     corsi={corsi} location={location} corsiDate={corsiDate}
                     ambitoIniziale={item.corsoData ? { tipoAmbito: "classe", classeId: item.corsoData.id, sedeId: item.corsoData.location_id, corsoId: item.corsoData.corso_id } : { tipoAmbito: "generale" }}
                   />
