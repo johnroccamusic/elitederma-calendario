@@ -10292,23 +10292,29 @@ function TastoApriLinkSlide({ corso }) {
     try { await navigator.clipboard.writeText(url); setCopiato(true); setTimeout(() => setCopiato(false), 1800); }
     catch { window.prompt("Copia il link:", url); }
   }
+  // Un terzo in meno di tutto: testi, spaziature, raggi e icone. Le
+  // misure restano scritte com'erano e passano di qui, cosi' la
+  // proporzione fra loro e' identica a prima e non c'e' nessun numero
+  // limato a mano che domani nessuno sa piu' da dove viene. Vale uguale
+  // da desktop e da telefono, perche' erano gia' due scale separate.
+  const q = (n) => Math.round(n * (2 / 3) * 2) / 2;
   const stileTasto = (pieno) => ({
-    ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: pieno ? "#fff" : NAVY, background: pieno ? NAVY : "#fff",
-    border: `1px solid ${pieno ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: isMobile ? "6px 9px" : "7px 12px", cursor: "pointer",
-    display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+    ...fontBody, fontSize: isMobile ? q(11) : q(12.5), fontWeight: 700, color: pieno ? "#fff" : NAVY, background: pieno ? NAVY : "#fff",
+    border: `1px solid ${pieno ? NAVY : CREAM_BORDER}`, borderRadius: q(12), padding: isMobile ? `${q(6)}px ${q(9)}px` : `${q(7)}px ${q(12)}px`, cursor: "pointer",
+    display: "inline-flex", alignItems: "center", gap: q(5), whiteSpace: "nowrap",
   });
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: 14, padding: isMobile ? "5px 8px" : "6px 10px" }}>
-      <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.1, textAlign: "center" }}>Slide<br />corso</span>
+    <div onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: q(8), flexWrap: "wrap", background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: q(14), padding: isMobile ? `${q(5)}px ${q(8)}px` : `${q(6)}px ${q(10)}px` }}>
+      <span style={{ ...fontBody, fontSize: isMobile ? q(9.5) : q(10.5), fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.1, textAlign: "center" }}>Slide<br />corso</span>
       <button onClick={apri} style={stileTasto(true)}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14 21 3M15 3h6v6M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
+        <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14 21 3M15 3h6v6M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
         Apri link
       </button>
       <button onClick={copia} style={stileTasto(false)} title="Copia l'indirizzo, per incollarlo in un browser a parte">
         {copiato ? (
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+          <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
         ) : (
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></svg>
+          <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></svg>
         )}
         {copiato ? "Copiato" : "Copia link"}
       </button>
