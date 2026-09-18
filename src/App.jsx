@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "./supabase.js";
+import { supabase, leggiTutte } from "./supabase.js";
 import { regioneDaCitta } from "./comuni-regioni";
 // I mattoni condivisi vivono fuori di qui: li usa anche il modulo
 // "rientro materiali corso", e due copie degli stessi colori sarebbero
@@ -65089,9 +65089,9 @@ export default function App() {
     abbonamenti_contratti: async () => setAbbonamentiContratti((await supabase.from("abbonamenti_contratti").select("*").order("data_inizio", { ascending: false })).data || []),
     abbonamenti_importi: async () => setAbbonamentiImporti((await supabase.from("abbonamenti_importi").select("*").order("valido_da")).data || []),
     abbonamenti_attribuzioni: async () => setAbbonamentiAttribuzioni((await supabase.from("abbonamenti_attribuzioni").select("*")).data || []),
-    fatture_ricevute_fic: async () => setFattureRicevuteFic((await supabase.from("fatture_ricevute_fic").select("*").order("data_documento", { ascending: false })).data || []),
+    fatture_ricevute_fic: async () => setFattureRicevuteFic(await leggiTutte(() => supabase.from("fatture_ricevute_fic").select("*").order("data_documento", { ascending: false }).order("id"))),
     note_credito_fic: async () => setNoteCreditoFic((await supabase.from("fic_documenti").select("*").eq("direzione", "ricevuto").eq("tipo", "passive_credit_note").order("data", { ascending: false })).data || []),
-    documento_fornitore: async () => setDocumentoFornitoreTabella((await supabase.from("documento_fornitore").select("*").order("data_documento", { ascending: false })).data || []),
+    documento_fornitore: async () => setDocumentoFornitoreTabella(await leggiTutte(() => supabase.from("documento_fornitore").select("*").order("data_documento", { ascending: false }).order("id"))),
     impegno: async () => setImpegnoTabella((await supabase.from("impegno").select("*")).data || []),
     riconciliazione: async () => setRiconciliazioneTabella((await supabase.from("riconciliazione").select("*")).data || []),
     scadenza_passiva: async () => setScadenzaPassivaTabella((await supabase.from("scadenza_passiva").select("*")).data || []),
@@ -65111,11 +65111,13 @@ export default function App() {
     // la Dashboard master somma provvigione_master e raggruppa per
     // codice_coupon, e senza queste colonne vedeva zero euro e "senza
     // referral" su tutto — le vendite c'erano, i soldi no
-    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi, busta_numero").eq("simulazione", false).order("data_ordine", { ascending: false })).data || []),
+    // oltre 4000 righe: senza leggiTutte ne arriverebbero mille, e le
+    // vendite piu' vecchie sparirebbero da totali, provvigioni e buste
+    vendite_shop: async () => setVenditeShop(await leggiTutte(() => supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi, busta_numero").eq("simulazione", false).order("data_ordine", { ascending: false }).order("id"))),
     // le prove, a parte: servono solo a Logistica, per mostrarle e per
     // poterle buttare
     vendite_simulate: async () => setVenditeSimulate((await supabase.from("vendite_shop").select("*").eq("simulazione", true).order("data_ordine", { ascending: false })).data || []),
-    vendite_shop_crm: async () => setVenditeShopCrm((await supabase.from("vendite_shop").select("id, payload_raw")).data || []),
+    vendite_shop_crm: async () => setVenditeShopCrm(await leggiTutte(() => supabase.from("vendite_shop").select("id, payload_raw").order("id"))),
     categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
     bundle_componenti: async () => setBundleComponenti((await supabase.from("bundle_componenti").select("*")).data || []),
     impostazioni_iva: async () => setImpostazioniIva((await supabase.from("impostazioni_iva").select("*").maybeSingle()).data || { aliquota_default: 22 }),
@@ -65149,7 +65151,9 @@ export default function App() {
     },
     password_menu: async () => setPasswordMenu((await supabase.from("password_menu").select("*")).data || []),
     utenti_app: async () => setUtentiApp((await supabase.from("utenti_app").select("*").order("nome")).data || []),
-    corsi_kit_prodotti: async () => setCorsiKitProdotti((await supabase.from("corsi_kit_prodotti").select("*")).data || []),
+    // quasi 1300 righe: e' la tabella che aveva fatto sparire gli
+    // accessori appena aggiunti a un corso — erano oltre la millesima
+    corsi_kit_prodotti: async () => setCorsiKitProdotti(await leggiTutte(() => supabase.from("corsi_kit_prodotti").select("*").order("id"))),
     logistica_kit_edizioni: async () => setLogisticaKitEdizioni((await supabase.from("logistica_kit_edizioni").select("*")).data || []),
     kit_definizioni: async () => setKitDefinizioni((await supabase.from("kit_definizioni").select("*").order("nome")).data || []),
     inventario_sede: async () => setInventarioSede((await supabase.from("inventario_sede").select("*")).data || []),
@@ -65161,21 +65165,8 @@ export default function App() {
     spedizioni_pos: async () => setSpedizioniPos((await supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false })).data || []),
     master_corsi: async () => setMasterCorsi((await supabase.from("master_corsi").select("*")).data || []),
     allievi_crm: async () => setAllieviCrm((await supabase.from("allievi_crm").select("*")).data || []),
-    // oltre 2800 righe: il limite di default di 1000 righe per richiesta
-    // (Supabase/PostgREST) troncherebbe la tabella a meta' senza avviso,
-    // quindi si pagina con .range() finche' una pagina non torna vuota
-    storico_allievi: async () => {
-      let tutti = [];
-      let da = 0;
-      const PAGINA = 1000;
-      for (;;) {
-        const { data, error } = await supabase.from("storico_allievi").select("*").range(da, da + PAGINA - 1);
-        if (error || !data || data.length === 0) break;
-        tutti = tutti.concat(data);
-        da += data.length;
-      }
-      setStoricoAllievi(tutti);
-    },
+    // oltre 2800 righe
+    storico_allievi: async () => setStoricoAllievi(await leggiTutte(() => supabase.from("storico_allievi").select("*").order("id"))),
     assistente_corsi: async () => setAssistenteCorsi((await supabase.from("assistente_corsi").select("*")).data || []),
     corsi_date_docenti: async () => setCorsiDateDocenti((await supabase.from("corsi_date_docenti").select("*")).data || []),
     quote_venditori_split: async () => setQuoteVenditoriSplit((await supabase.from("quote_venditori_split").select("*")).data || []),
