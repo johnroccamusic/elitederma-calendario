@@ -30987,6 +30987,20 @@ function PaginaProssimeContabilita({
 // lavora sopra in tempo reale con le sue correzioni ottimistiche: le
 // formule stanno qui, i valori li porta chi chiama.
 const METODI_CASH_RIEPILOGO = new Set(["Contanti", "Cash no iva"]);
+// In prima nota "pagata" da sola non basta: una spesa uscita dai
+// contanti e una uscita dal conto sono due fatti diversi. Quella dal
+// conto ha una fattura che le corrisponde e va associata; quella cash
+// no, e' finita e basta.
+//
+// Il metodo scritto sulla spesa decide. Le spese di classe — costo
+// master, quota venditore, assistente — il metodo non ce l'hanno: li'
+// lo dice l'importo in contanti, che e' l'unico modo in cui sono state
+// registrate.
+function spesaPagataInCash(spesa) {
+  const metodo = String(spesa?.metodo_pagamento || "").trim().toLowerCase();
+  if (metodo) return metodo === "contanti" || metodo === "cash no iva" || metodo === "cash";
+  return Number(spesa?.importo_pagato_cash || 0) > 0;
+}
 function quotePagateDiIscritto(i) {
   const quote = [];
   ["acconto", "precorso", "saldo"].forEach((prefisso) => {
@@ -41692,6 +41706,105 @@ function ChipSpesa({ children }) {
   );
 }
 const SPESE_PAGINA_INIZIALE = 10;
+/**
+ * Le fatture arrivate, per attaccarne una a una spesa pagata dal conto.
+ *
+ * Si vedono solo quelle libere: una fattura gia' attaccata a un'altra
+ * spesa comparirebbe qui come scelta possibile e, scegliendola, la si
+ * staccherebbe da dove sta senza che nessuno se ne accorga.
+ *
+ * In cima quelle dell'importo giusto. Non e' un filtro — un pagamento
+ * puo' coprire una fattura in parte o due insieme — ma nove volte su
+ * dieci la fattura che si cerca vale esattamente quello che e' uscito,
+ * e averla per prima toglie la ricerca.
+ */
+function ModaleAssociaFattura({ spesa, fatture, onChiudi, onAssociata }) {
+  const [ricerca, setRicerca] = useState("");
+  const [salvando, setSalvando] = useState(null);
+  const [errore, setErrore] = useState("");
+  const importoSpesa = Number(spesa?.totale || 0);
+
+  const elenco = useMemo(() => {
+    const parole = ricerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const libere = (fatture || []).filter((f) => !f.spesa_id);
+    const filtrate = parole.length === 0 ? libere : libere.filter((f) => {
+      const dentro = [f.fornitore_nome, f.numero_documento, f.descrizione, f.categoria].filter(Boolean).join(" ").toLowerCase();
+      return parole.every((p) => dentro.includes(p));
+    });
+    const stessoImporto = (f) => Math.abs(Number(f.totale || 0) - importoSpesa) < 0.02;
+    return [...filtrate].sort((a, b) => {
+      if (stessoImporto(a) !== stessoImporto(b)) return stessoImporto(a) ? -1 : 1;
+      return String(b.data_documento || "").localeCompare(String(a.data_documento || ""));
+    });
+  }, [fatture, ricerca, importoSpesa]);
+
+  async function associa(f) {
+    setErrore("");
+    setSalvando(f.id);
+    const { error } = await supabase.from("fatture_ricevute_fic").update({ spesa_id: spesa.id }).eq("id", f.id);
+    setSalvando(null);
+    if (error) { setErrore(error.message); return; }
+    onAssociata?.();
+  }
+
+  const quando = (g) => { if (!g) return "—"; const [a, m, d] = String(g).split("-"); return d ? `${d}/${m}/${a}` : g; };
+
+  return (
+    <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: "rgba(20,20,30,0.45)", zIndex: 2500, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(720px, 100%)", background: "#fff", borderRadius: 16, boxShadow: "0 12px 40px rgba(0,0,0,0.25)", overflow: "hidden" }}>
+        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Associa una fattura</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3, lineHeight: 1.45 }}>
+            {spesa?.descrizione || "Spesa"} · <b style={{ color: NAVY }}>{fmtEuroErp2(importoSpesa)}</b> usciti dal conto.
+            Scegli la fattura che corrisponde.
+          </div>
+        </div>
+        <div style={{ padding: 14 }}>
+          <input
+            autoFocus value={ricerca} onChange={(e) => setRicerca(e.target.value)}
+            placeholder="Cerca fornitore, numero, descrizione…"
+            style={{ ...inputStyle, marginBottom: 10 }}
+          />
+          {errore && (
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDECEC", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>{errore}</div>
+          )}
+          <div style={{ maxHeight: "56vh", overflowY: "auto" }}>
+            {elenco.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: 16, textAlign: "center" }}>
+                {ricerca.trim() ? "Nessuna fattura con queste parole." : "Non ci sono fatture libere: sono tutte gia' associate a una spesa."}
+              </div>
+            ) : elenco.map((f) => {
+              const uguale = Math.abs(Number(f.totale || 0) - importoSpesa) < 0.02;
+              return (
+                <button
+                  key={f.id} onClick={() => associa(f)} disabled={salvando === f.id}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%", textAlign: "left",
+                    background: uguale ? "#F3F8F3" : "#fff", border: `1px solid ${uguale ? "#BFDFC4" : CREAM_BORDER}`,
+                    borderRadius: 12, padding: "10px 12px", marginBottom: 8, cursor: salvando ? "default" : "pointer",
+                  }}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: "block", ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {f.fornitore_nome || "Fornitore sconosciuto"}
+                    </span>
+                    <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                      {f.numero_documento || "senza numero"} · {quando(f.data_documento)}{f.categoria ? ` · ${f.categoria}` : ""}
+                    </span>
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: uguale ? "#2E7D32" : NAVY, whiteSpace: "nowrap" }}>
+                    {salvando === f.id ? "Associo…" : fmtEuroErp2(Number(f.totale || 0))}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PaginaInserimentoCostiRicavi({
   ruoloUtente, quoteVenditoriSplit, impegnoTabella = [],
   spese, costiCategorie, costiSottocategorie, fornitori,
@@ -41916,6 +42029,17 @@ function PaginaInserimentoCostiRicavi({
       return bonifico > 0 && (!corsoDataSpesa || s.origine_scadenziario_chiave || corsoDataSpesa.data_fine <= oggiStrConteggio);
     }).length;
   const documentiFornitorePerConteggio = (fattureRicevuteFic || []).length;
+  // Chi sta cercando una fattura da attaccare a una spesa, e chi ce
+  // l'ha gia'. La mappa si fa una volta: cercare a ogni riga dentro
+  // settecento fatture, per una lista di quaranta uscite, sono
+  // ventottomila giri per una domanda che ne vale uno.
+  const [spesaDaAssociare, setSpesaDaAssociare] = useState(null);
+  const fatturePerSpesa = useMemo(() => {
+    const mappa = {};
+    (fattureRicevuteFic || []).forEach((f) => { if (f.spesa_id && !mappa[f.spesa_id]) mappa[f.spesa_id] = f; });
+    return mappa;
+  }, [fattureRicevuteFic]);
+  const fatturaDiSpesa = (idSpesa) => fatturePerSpesa[idSpesa] || null;
   const scadenziarioAttivoPerConteggio = calcolaScadenziarioAttivo({ iscritti, corsiDate }).length;
   const occorrenzeAbbonamentiPerConteggio = calcolaOccorrenzeAbbonamenti({ abbonamentiContratti, abbonamentiImporti, spese }).length;
 
@@ -41928,6 +42052,14 @@ function PaginaInserimentoCostiRicavi({
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 32px 60px" }}>
+      {spesaDaAssociare && (
+        <ModaleAssociaFattura
+          spesa={spesaDaAssociare}
+          fatture={fattureRicevuteFic}
+          onChiudi={() => setSpesaDaAssociare(null)}
+          onAssociata={() => { setSpesaDaAssociare(null); ricarica(["fatture_ricevute_fic"]); }}
+        />
+      )}
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         {/* il tondo del livello precedente sta a SINISTRA del titolo, sulla
             stessa riga e centrato con lui: e' la regola di tutte le pagine
@@ -42059,10 +42191,30 @@ function PaginaInserimentoCostiRicavi({
                       <>
                         {/* lo stato non e' un'azione: resta scritto, nel suo
                             colore, senza il riquadro che lo faceva sembrare
-                            un tasto da premere */}
+                            un tasto da premere.
+                            
+                            Pagata non basta: dice che i soldi sono usciti,
+                            non da dove. "Pagata cash" e' finita li'; "Pagata
+                            conto" ha una fattura che le corrisponde, e
+                            finche' non le si attacca resta un pezzo di
+                            contabilita' a meta'. */}
                         <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: stato.colore, whiteSpace: "nowrap" }}>
-                          {etichettaOpzione(STATI_SPESA, m.spesaReale.stato)}
+                          {m.spesaReale.stato === "pagata"
+                            ? `Pagata ${spesaPagataInCash(m.spesaReale) ? "cash" : "conto"}`
+                            : etichettaOpzione(STATI_SPESA, m.spesaReale.stato)}
                         </span>
+                        {m.spesaReale.stato === "pagata" && !spesaPagataInCash(m.spesaReale) && (
+                          fatturaDiSpesa(m.id) ? (
+                            <span
+                              title={`Associata a ${fatturaDiSpesa(m.id).fornitore_nome || "fornitore"} — ${fatturaDiSpesa(m.id).numero_documento || "senza numero"}`}
+                              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap" }}
+                            >
+                              Riconciliata
+                            </span>
+                          ) : (
+                            <AzioneTesto onClick={() => setSpesaDaAssociare(m.spesaReale)} colore="#B8860B">da associare</AzioneTesto>
+                          )
+                        )}
                         <AzioneTesto onClick={() => onApriModificaSpesa(m.id)}>Modifica</AzioneTesto>
                         <AzioneTesto onClick={() => eliminaSpesa(m.id)} colore="#C0392B">Elimina</AzioneTesto>
                       </>
