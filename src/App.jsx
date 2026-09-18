@@ -17812,8 +17812,8 @@ const GRIGLIA_COSTI_DESKTOP = "minmax(150px, 1fr) 72px 72px 72px 76px 96px 54px"
 // in cui stanno: totale, bonifico, cash, busta, modalita', giorni. La
 // prima — la voce — non e' qui: si prende quello che resta.
 //
-// Si possono tirare a mano dalle maniglie sull'intestazione (visibili
-// solo con l'interruttore delle maniglie acceso), e quello che si tira
+// Si possono tirare a mano dalle maniglie sull'intestazione — che qui
+// stanno sempre, senza l'interruttore generale — e quello che si tira
 // resta salvato. Quando la misura e' quella giusta si scrive qui e le
 // maniglie tornano a essere un attrezzo, non un'impostazione.
 const CHIAVE_LARGHEZZE_COSTI = "larghezze_colonne_costi";
@@ -25272,7 +25272,6 @@ function PannelloRiepilogoAmministrativo({
   // Le larghezze delle colonne, tirabili dalle maniglie sull'intestazione
   // e salvate dove le vedono tutti. Finche' non si tocca niente valgono
   // quelle scritte nel codice.
-  const maniglieAttive = useManiglieAttive();
   const [larghezzeSalvate, salvaLarghezzeColonne] = useImpostazioneCondivisa(CHIAVE_LARGHEZZE_COSTI, null);
   const [larghezzeVive, setLarghezzeVive] = useState(null);
   const larghezzeColonne = larghezzeVive
@@ -26081,12 +26080,13 @@ function PannelloRiepilogoAmministrativo({
                           vedono tutti, cosi' la misura trovata a mano non
                           va persa e si puo' poi scriverla nel codice.
 
-                          Le maniglie si vedono solo con l'interruttore
-                          delle maniglie acceso: sono un attrezzo per
-                          sistemare la pagina, non un comando per chi la
-                          usa. La prima colonna non ne ha — si prende
-                          quello che resta, e tirarla vorrebbe dire tirare
-                          tutte le altre. */}
+                          Qui le maniglie stanno sempre, senza aspettare
+                          l'interruttore generale: sono sei trattini fini
+                          appoggiati sui bordi della banda grigia, si
+                          leggono come i divisori di una tabella e chi non
+                          li tira non se ne accorge. La prima colonna non
+                          ne ha — si prende quello che resta, e tirarla
+                          vorrebbe dire tirare tutte le altre. */}
                       {[
                         { testo: "Voce", allinea: "left" },
                         { testo: "Totale", allinea: "right" },
@@ -26099,16 +26099,25 @@ function PannelloRiepilogoAmministrativo({
                         <div
                           key={c.testo} title={c.titolo}
                           style={{
-                            minWidth: 0, position: "relative",
-                            ...fontBody, fontSize: isMobile ? 8 : 9, fontWeight: 700, color: MUTED,
-                            textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4,
-                            textAlign: c.allinea,
+                            minWidth: 0, position: "relative", alignSelf: "stretch",
+                            display: "flex", alignItems: "center",
+                            justifyContent: c.allinea === "right" ? "flex-end" : c.allinea === "center" ? "center" : "flex-start",
                             paddingRight: c.allinea === "right" ? (isMobile ? 3 : 4) : 0,
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                           }}
                         >
-                          {c.testo}
-                          {maniglieAttive && i > 0 && (
+                          {/* Il titolo sta in un suo guscio: e' LUI che si
+                              taglia quando la colonna si stringe, non la
+                              cella. Se il taglio stesse sulla cella si
+                              porterebbe via anche la maniglia, che sporge
+                              di tre pixel sul bordo — ed era esattamente
+                              quello che succedeva: le maniglie c'erano e
+                              non si vedevano. */}
+                          <span style={{
+                            ...fontBody, fontSize: isMobile ? 8 : 9, fontWeight: 700, color: MUTED,
+                            textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4,
+                            minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          }}>{c.testo}</span>
+                          {i > 0 && (
                             <ManigliaColonnaCosti
                               larghezza={larghezzeColonne[i - 1]}
                               onTira={(nuova) => tiraColonna(i - 1, nuova)}
