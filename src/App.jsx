@@ -37309,7 +37309,29 @@ function IconaQiBanca({ size = 20, color = "#fff" }) {
 // data del giorno scenderebbe sotto i 20px e le pastiglie sotto i 7.
 const LARGHEZZA_RIFERIMENTO_RIGA = 860;
 const ScalaRigaContabilita = React.createContext(1);
-function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children }) {
+// Il testo sottolineato che fa qualcosa. In prima nota le azioni non
+// sono tasti: un libro giornale e' un documento, e un documento non ha
+// pulsanti dentro. Restano cliccabili e si vedono, ma non pesano quanto
+// la cifra che hanno accanto.
+function AzioneTesto({ onClick, colore = NAVY, children, title }) {
+  const k = useContext(ScalaRigaContabilita);
+  return (
+    <button
+      onClick={onClick} title={title}
+      style={{
+        ...fontBody, fontSize: Math.round(13 * k * 10) / 10, fontWeight: 600, color: colore,
+        background: "none", border: "none", padding: 0, cursor: "pointer",
+        textDecoration: "underline", textUnderlineOffset: 3, whiteSpace: "nowrap",
+      }}
+    >{children}</button>
+  );
+}
+// "sobrio": la riga come la vuole un libro giornale — data, titolo,
+// descrizione sotto, cifra a destra, e le azioni sotto a destra come
+// testi sottolineati. Niente riquadri, niente pastiglie, niente cuscino:
+// la prima nota e' un registro, non una vetrina, e venti righe di schede
+// colorate una sotto l'altra non si leggono come un elenco di conti.
+function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children, sobrio = false }) {
   const rif = useRef(null);
   const [larghezza, setLarghezza] = useState(null);
   useLayoutEffect(() => {
@@ -37328,6 +37350,40 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
   const q = (n) => Math.round(n * k * 10) / 10;
   const [anno, mese, giorno] = (data || "").split("-").map(Number);
   const riquadro = { background: BG_CHIARO, borderRadius: q(14), padding: `${q(12)}px ${q(16)}px`, boxSizing: "border-box" };
+  const etichetteTesto = chips.filter(Boolean).map((c) => (typeof c === "object" ? c.testo : c)).filter(Boolean);
+  if (sobrio) {
+    return (
+      <ScalaRigaContabilita.Provider value={k}>
+        <div ref={rif} style={{ padding: `${q(12)}px 0`, borderBottom: `1px solid ${CREAM_BORDER}`, boxSizing: "border-box" }}>
+          <div style={{ display: "flex", gap: q(16), alignItems: "flex-start" }}>
+            <div style={{ flex: `0 0 ${q(88)}px`, minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: q(14), fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{data ? fmtData(data) : "—"}</div>
+              {data && <div style={{ ...fontBody, fontSize: q(11), color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginTop: q(1) }}>{giornoSettimanaAbbr(data)}</div>}
+            </div>
+            <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: q(15), fontWeight: 700, color: NAVY, lineHeight: 1.3, overflowWrap: "anywhere" }}>{titolo}</div>
+              {corsoLabel && (
+                <div style={{ ...fontBody, fontSize: q(13), color: MUTED, marginTop: q(2), lineHeight: 1.35, overflowWrap: "anywhere" }}>{corsoLabel}</div>
+              )}
+              {etichetteTesto.length > 0 && (
+                <div style={{ ...fontBody, fontSize: q(12), color: MUTED, marginTop: q(2), lineHeight: 1.35, overflowWrap: "anywhere" }}>{etichetteTesto.join(" · ")}</div>
+              )}
+            </div>
+            {importo != null && (
+              <div style={{ flex: "0 0 auto", textAlign: "right", minWidth: q(110) }}>
+                <div style={{ ...fontDisplay, fontSize: q(18), fontWeight: 700, color: coloreImporto || NAVY, whiteSpace: "nowrap", lineHeight: 1.2 }}>{importo}</div>
+                <div style={{ ...fontBody, fontSize: q(10.5), color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: q(1) }}>{etichettaImporto}</div>
+              </div>
+            )}
+          </div>
+          {piede && (
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: q(14), flexWrap: "wrap", marginTop: q(6) }}>{piede}</div>
+          )}
+          {children}
+        </div>
+      </ScalaRigaContabilita.Provider>
+    );
+  }
   return (
     <ScalaRigaContabilita.Provider value={k}>
     {/* la stessa superficie a cuscino delle schede di Gestione modelle
@@ -41907,6 +41963,7 @@ function PaginaInserimentoCostiRicavi({
                   return (
                     <CardAmministrazione
                       key={m.id}
+                      sobrio
                       data={m.data}
                       titolo={m.titolo}
                       corsoLabel={etichettaCorsoPN(m.corsoData)}
@@ -41919,6 +41976,7 @@ function PaginaInserimentoCostiRicavi({
                 return (
                   <CardAmministrazione
                     key={m.id}
+                    sobrio
                     data={m.dataDocumento}
                     titolo={m.descrizione}
                     corsoLabel={m.sottotitolo && m.sottotitolo !== "—" ? m.sottotitolo : null}
@@ -41926,16 +41984,14 @@ function PaginaInserimentoCostiRicavi({
                     importo={`− ${fmtEuroErp(m.importo)}`} etichettaImporto="Uscita" coloreImporto="#C0392B"
                     piede={(
                       <>
-                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 14, padding: "12px 16px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center" }}>
+                        {/* lo stato non e' un'azione: resta scritto, nel suo
+                            colore, senza il riquadro che lo faceva sembrare
+                            un tasto da premere */}
+                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: stato.colore, whiteSpace: "nowrap" }}>
                           {etichettaOpzione(STATI_SPESA, m.spesaReale.stato)}
                         </span>
-                        <span style={{ flex: "1 1 auto" }} />
-                        <button onClick={() => onApriModificaSpesa(m.id)} title="Modifica" style={{ ...stileTastoCardChiaro(isMobile), padding: "10px 12px" }}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                        </button>
-                        <button onClick={() => eliminaSpesa(m.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: "10px 8px", display: "flex", alignItems: "center" }}>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-                        </button>
+                        <AzioneTesto onClick={() => onApriModificaSpesa(m.id)}>Modifica</AzioneTesto>
+                        <AzioneTesto onClick={() => eliminaSpesa(m.id)} colore="#C0392B">Elimina</AzioneTesto>
                       </>
                     )}
                   />
