@@ -20418,15 +20418,19 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
     const sicurezza = sicurezzaPuntiDi(schemaPuntiAmm);
     const dettaglio = righe.map((r) => {
       const prodotto = prodottoPerId[r.prodottoId] || null;
-      const lordo = round2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0));
+      const unitario = round2(Number(r.prezzo) || 0);
+      const lordo = round2(unitario * (Number(r.quantita) || 0));
       const margine = marginePercentualeDi(prodotto);
       const scontoPct = aFasce ? percentualeFasciaDi(prodotto, fasce, subtotale) : 0;
       const sconto = round2((lordo * scontoPct) / 100);
+      // quanto si incassa per UN pezzo: e' il numero che chi guarda
+      // confronta col prezzo di listino accanto
+      const pagatoUnitario = round2(unitario * (1 - scontoPct / 100));
       const pp = puntiProdotto(prodotto, sicurezza, contanti);
       const teorici = pp == null ? null : round2(pp * (Number(r.quantita) || 0));
       const scontati = puntiProdottoScontato(prodotto, sicurezza, contanti, scontoPct);
       const punti = teorici == null ? null : round2((scontati == null ? 0 : scontati) * (Number(r.quantita) || 0));
-      return { ...r, prodotto, lordo, margine, scontoPct, sconto, teorici, punti };
+      return { ...r, prodotto, unitario, pagatoUnitario, lordo, margine, scontoPct, sconto, teorici, punti };
     });
     const sconto = round2(dettaglio.reduce((t, d) => t + d.sconto, 0));
     const teorici = round2(dettaglio.reduce((t, d) => t + (d.teorici || 0), 0));
@@ -20498,9 +20502,10 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
                             <tr>
                               <th style={{ ...intest, textAlign: "left" }}>Prodotto</th>
                               <th style={{ ...intest, textAlign: "right" }}>Qtà</th>
-                              <th style={{ ...intest, textAlign: "right" }}>A listino</th>
+                              <th style={{ ...intest, textAlign: "right" }}>Al pubblico</th>
                               <th style={{ ...intest, textAlign: "right" }}>Margine</th>
                               <th style={{ ...intest, textAlign: "right" }}>Sconto</th>
+                              <th style={{ ...intest, textAlign: "right" }}>Pagato</th>
                               <th style={{ ...intest, textAlign: "right" }}>Punti</th>
                             </tr>
                           </thead>
@@ -20512,13 +20517,20 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
                                   {d.sku ? <span style={{ color: MUTED }}> · {d.sku}</span> : null}
                                 </td>
                                 <td style={{ ...cella, textAlign: "right" }}>{d.quantita}</td>
-                                <td style={{ ...cella, textAlign: "right" }}>{fmtEuroErp2(d.lordo)}</td>
+                                <td style={{ ...cella, textAlign: "right" }}>
+                                  {fmtEuroErp2(d.unitario)}
+                                  {d.quantita > 1 && <span style={{ color: MUTED }}> · {fmtEuroErp2(d.lordo)}</span>}
+                                </td>
                                 <td style={{ ...cella, textAlign: "right", color: d.margine == null ? "#C0392B" : MUTED }}>
                                   {d.margine == null ? "sconosciuto" : fmtPctErp2(d.margine)}
                                 </td>
                                 <td style={{ ...cella, textAlign: "right", color: d.sconto > 0 ? "#C0392B" : MUTED }}>
                                   {d.sconto > 0 ? `− ${fmtEuroErp2(d.sconto)}` : "—"}
                                   {d.scontoPct > 0 && <span style={{ color: MUTED }}> · {fmtPctErp2(d.scontoPct)}</span>}
+                                </td>
+                                <td style={{ ...cella, textAlign: "right", fontWeight: 700 }}>
+                                  {fmtEuroErp2(d.pagatoUnitario)}
+                                  {d.quantita > 1 && <span style={{ color: MUTED, fontWeight: 400 }}> · {fmtEuroErp2(round2(d.lordo - d.sconto))}</span>}
                                 </td>
                                 <td style={{ ...cella, textAlign: "right", color: d.punti ? GOLD : MUTED, fontWeight: d.punti ? 700 : 400 }}>
                                   {d.punti == null ? "—" : fmtPunti(d.punti)}
@@ -65235,7 +65247,9 @@ export default function App() {
     ritornoalcorso: ["normative_testi"],
     mappanormativepmu: [],
     modulistica: [],
-    magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
+    // "coupon" serve ai carrelli sospesi: senza, il pannello non trova il
+    // codice del corso e mostra tutti gli sconti a zero
+    magazzinoshop: ["prodotti_shop", "riordini_in_corso", "coupon"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
     // "agende" e "password_menu"/"utenti_app" (queste ultime gia' fra le
