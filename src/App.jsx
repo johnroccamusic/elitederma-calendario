@@ -24952,12 +24952,12 @@ function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evide
   // con "€ 300" e "€ 299,50" non si leggono come due numeri confrontabili
   const cifra = `€ ${Number(valore || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
-    <div style={{ flex: "1 1 0", minWidth: 0, boxSizing: "border-box", padding: `${q(16, 6)}px ${q(14, 5)}px`, borderRadius: q(16, 8), background: evidenziata ? "#F6EFE1" : "#fff", border: `1px solid ${evidenziata ? "#D9C48F" : CREAM_BORDER}`, boxShadow: "var(--ombra-aree, none)", display: "flex", flexDirection: "column" }}>
+    <div style={{ flex: "1 1 0", minWidth: 0, boxSizing: "border-box", padding: `${q(16, 6)}px ${q(14, 5)}px`, borderRadius: q(16, 8), background: evidenziata ? "#F6EFE1" : "#fff", border: `1px solid ${evidenziata ? "#D9C48F" : CREAM_BORDER}`, boxShadow: "var(--ombra-aree, none)", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
       <div style={{ width: q(40, 16), height: q(40, 16), borderRadius: "50%", background: evidenziata ? "#EFE3C8" : "#EEEDEA", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: q(12, 4) }}>{icone[icona]}</div>
-      <div style={{ ...fontBody, fontSize: q(9, 4), fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 * scala, lineHeight: 1.3, minHeight: "2.6em", display: "flex", alignItems: "flex-end", paddingBottom: q(8, 3), borderBottom: `1px solid ${evidenziata ? "#E6D7B4" : CREAM_BORDER}`, marginBottom: q(10, 4) }}>{etichetta}</div>
+      <div style={{ ...fontBody, fontSize: q(9, 4), fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 * scala, lineHeight: 1.3, minHeight: "2.6em", display: "flex", alignItems: "flex-end", justifyContent: "center", alignSelf: "stretch", paddingBottom: q(8, 3), borderBottom: `1px solid ${evidenziata ? "#E6D7B4" : CREAM_BORDER}`, marginBottom: q(10, 4) }}>{etichetta}</div>
       <div style={{ ...fontBody, fontSize: q(22, 8), fontWeight: 800, color: NAVY, whiteSpace: "nowrap", letterSpacing: -0.3 * scala }}>{cifra}</div>
       {nota && (
-        <div style={{ display: "flex", alignItems: "center", gap: q(8, 3), marginTop: q(12, 5), padding: `${q(8, 3)}px ${q(10, 4)}px`, borderRadius: q(10, 5), background: evidenziata ? "#EFE3C8" : "#EEEDEA", ...fontBody, fontSize: q(9.5, 4), color: MUTED, lineHeight: 1.3 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", gap: q(8, 3), marginTop: q(12, 5), padding: `${q(8, 3)}px ${q(10, 4)}px`, borderRadius: q(10, 5), background: evidenziata ? "#EFE3C8" : "#EEEDEA", ...fontBody, fontSize: q(9.5, 4), color: MUTED, lineHeight: 1.3 }}>
           {notaIcona && <span style={{ display: "flex", flexShrink: 0 }}>{icone[notaIcona]}</span>}
           <span>{nota}</span>
         </div>
