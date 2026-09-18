@@ -59851,7 +59851,13 @@ function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId, c
     dermografi: { assegnati: dermografiRichiestiEdizione(iscrittiEdizione || []), riserva: stato?.dermografi_riserva || {} },
     accessori,
     merce_vendita: merceVendita,
-    consulenze: (stato?.consulenze_edizione || []).map((r) => ({ id: r.id, prodotto_id: r.prodotto_id })),
+    // "da_vendere" viaggia con la consulenza: chi riceve il pacco deve
+    // sapere quali barattoli sono merce e quali sono da aprire in aula,
+    // e la fotografia della spedizione e' il posto dove quella verita'
+    // si congela
+    consulenze: (stato?.consulenze_edizione || []).map((r) => ({
+      id: r.id, prodotto_id: r.prodotto_id, da_vendere: !!daVendita[r.prodotto_id],
+    })),
   };
 }
 // quanti kit di ciascun tipo servono per un'edizione, dedotti dalle
@@ -60632,6 +60638,13 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         }, {})).map((g) => (
           <div key={g.prodottoId} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
             <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nomeProdotto(g.prodottoId)}</span>
+            {/* "Da vendere" sta qui e non piu' sui prodotti extra kit:
+                una consulenza che parte per essere venduta e' un caso
+                che si pone davvero, un rotolo lettino no. */}
+            <label title="Parte per essere venduta al corso, non per essere usata in aula" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11.5, color: extraDaVendita[g.prodottoId] ? NAVY : MUTED, whiteSpace: "nowrap", flexShrink: 0 }}>
+              <input type="checkbox" checked={!!extraDaVendita[g.prodottoId]} onChange={(e) => cambiaExtraDaVendita(g.prodottoId, e.target.checked)} />
+              Da vendere
+            </label>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
               <input
                 type="number" min="0" max="99"
@@ -60671,10 +60684,20 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <div key={prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
             <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 140px", minWidth: 0, overflowWrap: "anywhere" }}>{nomeProdotto(prodottoId)}</span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <label title="Parte per essere venduto al corso: non scarica il magazzino alla spedizione, scarica quando viene venduto" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11.5, color: extraDaVendita[prodottoId] ? NAVY : MUTED, whiteSpace: "nowrap" }}>
-                <input type="checkbox" checked={!!extraDaVendita[prodottoId]} onChange={(e) => cambiaExtraDaVendita(prodottoId, e.target.checked)} />
-                Da vendere
-              </label>
+              {/* Qui la spunta "Da vendere" non c'e' piu'. Questa lista e'
+                  quella dei consumabili del corso — olio, guanti, rotolo
+                  lettino, telini — e una casella "da vendere" accanto a
+                  ogni riga chiedeva a ogni pezzo una domanda che per
+                  quasi tutti non si pone. Chi manda merce da vendere la
+                  mette fra le consulenze, dove la spunta adesso c'e'.
+                  Le righe gia' segnate restano segnate e continuano a
+                  funzionare: e' sparito il modo di cambiarle da qui, non
+                  il dato. */}
+              {extraDaVendita[prodottoId] && (
+                <span title="Segnato da vendere prima che questa casella sparisse da qui: non scarica il magazzino alla spedizione" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "3px 8px", textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap" }}>
+                  da vendere
+                </span>
+              )}
               <input
                 type="number" min="0" style={{ ...inputStyle, width: 70, padding: "6px 8px" }}
                 value={accessoriQuantita[`extra::${prodottoId}`] ?? ""} placeholder="0"
