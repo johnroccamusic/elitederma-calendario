@@ -37040,6 +37040,24 @@ function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pa
   const k = useContext(ScalaRigaContabilita);
   const q = (n) => Math.round(n * k * 10) / 10;
   const isMobile = useIsMobile();
+  const sobria = useContext(RigaSobria);
+  // in un registro le azioni sono testi: dicono cosa fanno e non pesano
+  // quanto la cifra che hanno accanto. "Paga" resta in grassetto, che e'
+  // la cosa che di solito si va a fare
+  if (sobria) {
+    return (
+      <>
+        <AzioneTesto
+          onClick={() => onPannello(pannello === "documento" ? null : "documento")}
+          title={fatturaAssociata ? `Fattura n. ${numeroDocumento || "—"} gia' associata` : "Aggancia questa riga a una fattura gia' arrivata dal fornitore"}
+        >{fatturaAssociata ? "Cambia fattura" : "Associa fattura"}</AzioneTesto>
+        <AzioneTesto
+          onClick={() => onPannello(pannello === "paga" ? null : "paga")}
+          title="Apre la scheda della spesa: si conferma la classificazione, poi si sceglie come e quando e' stata pagata"
+        ><b>Paga</b></AzioneTesto>
+      </>
+    );
+  }
   return (
     <>
       <button
@@ -37116,6 +37134,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   );
   return (
     <CardAmministrazione
+      sobrio
       data={dataDebito} titolo={fornitore || nome} corsoLabel={oggetto || corsoLabel}
       chips={[
         categoriaNome ? { Icona: IconaQiDocumento, testo: categoriaNome } : null,
@@ -37309,6 +37328,10 @@ function IconaQiBanca({ size = 20, color = "#fff" }) {
 // data del giorno scenderebbe sotto i 20px e le pastiglie sotto i 7.
 const LARGHEZZA_RIFERIMENTO_RIGA = 860;
 const ScalaRigaContabilita = React.createContext(1);
+// "questa riga e' un registro, non una scheda": lo dice la riga, e chi
+// sta dentro — la data di scadenza, i tasti del piede — si adegua senza
+// che ogni livello debba passarsi la stessa parola di mano in mano
+const RigaSobria = React.createContext(false);
 // Il testo sottolineato che fa qualcosa. In prima nota le azioni non
 // sono tasti: un libro giornale e' un documento, e un documento non ha
 // pulsanti dentro. Restano cliccabili e si vedono, ma non pesano quanto
@@ -37354,6 +37377,7 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
   if (sobrio) {
     return (
       <ScalaRigaContabilita.Provider value={k}>
+      <RigaSobria.Provider value={true}>
         <div ref={rif} style={{ padding: `${q(12)}px 0`, borderBottom: `1px solid ${CREAM_BORDER}`, boxSizing: "border-box" }}>
           <div style={{ display: "flex", gap: q(16), alignItems: "flex-start" }}>
             <div style={{ flex: `0 0 ${q(88)}px`, minWidth: 0 }}>
@@ -37381,6 +37405,7 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
           )}
           {children}
         </div>
+      </RigaSobria.Provider>
       </ScalaRigaContabilita.Provider>
     );
   }
@@ -37457,9 +37482,29 @@ function RiquadroDataCard({ etichetta = "Scadenza", data, corsivo = false, onCam
   // piccola
   const k = useContext(ScalaRigaContabilita);
   const q = (n) => Math.round(n * k * 10) / 10;
+  const sobria = useContext(RigaSobria);
   const [inModifica, setInModifica] = useState(false);
   const [bozza, setBozza] = useState(data || dataOggiStr());
   useEffect(() => { setBozza(data || dataOggiStr()); }, [data]);
+  // in un registro la scadenza e' un dato scritto, non una targhetta: la
+  // data resta cliccabile — sottolineata, come le altre azioni — ma non
+  // si porta dietro un riquadro colorato
+  if (sobria && !(onCambia && inModifica)) {
+    return (
+      <span style={{ ...fontBody, fontSize: q(12.5), color: MUTED, whiteSpace: "nowrap" }}>
+        {etichetta}{" "}
+        <span
+          onClick={onCambia ? () => setInModifica(true) : undefined}
+          title={onCambia ? "Cambia la data di scadenza" : undefined}
+          style={{
+            ...fontBody, fontWeight: 700, fontStyle: corsivo ? "italic" : "normal",
+            color: corsivo ? GRAFITE : NAVY, cursor: onCambia ? "pointer" : "default",
+            textDecoration: onCambia ? "underline" : "none", textUnderlineOffset: 3,
+          }}
+        >{data ? fmtData(data) : "—"}</span>
+      </span>
+    );
+  }
   if (onCambia && inModifica) {
     return (
       <div style={{ background: BG_CHIARO, borderRadius: q(12), padding: `${q(6)}px ${q(9)}px`, boxSizing: "border-box", display: "flex", alignItems: "center", gap: q(8), width: "100%" }}>
