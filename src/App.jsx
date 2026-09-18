@@ -26270,10 +26270,18 @@ function PannelloRiepilogoAmministrativo({
                           // rientrato: cosi' si legge come "queste stanno
                           // dentro quella sopra" invece che come altre righe
                           // della tabella
-                          <div style={{ marginBottom: 8, padding: isMobile ? "4px 0 6px 10px" : "6px 0 8px 18px", background: "#FAFAFB", borderRadius: 10 }}>
+                          <div style={{ marginBottom: 8, padding: isMobile ? "4px 0 6px" : "6px 0 8px", background: "#FAFAFB", borderRadius: 10 }}>
+                            {/* Stesso rientro laterale delle righe vere:
+                                il fondo chiaro rientrava di suo, e allora
+                                tutte e sei le colonne del dettaglio
+                                cadevano otto pixel piu' a destra di quelle
+                                della riga sopra e di quella sotto. Il
+                                rientro che dice "queste stanno dentro
+                                quella sopra" ora e' solo nel nome, dove non
+                                sposta nessuna cifra. */}
                             {quoteVenditoreDettaglio.map((v) => (
-                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: grigliaCosti, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA }}>
-                                <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 14 : 24 }}>
+                              <div key={v.nome} style={{ display: "grid", gridTemplateColumns: grigliaCosti, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA, padding: isMobile ? "0 6px" : "0 10px" }}>
+                                <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 18 : 32 }}>
                                   {v.nome}
                                   <span style={{ ...fontBody, fontSize: isMobile ? 8 : 9, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
                                 </span>
