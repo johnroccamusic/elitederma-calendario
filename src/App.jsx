@@ -24927,28 +24927,37 @@ function CellaImportoRiepilogo({ Icona, label, valore, isMobile, colore = NAVY, 
 // due righe, filo di separazione, la cifra grande e sotto, se c'e', una
 // nota in una pastiglia grigia con la sua iconcina. L'ultima casella, il
 // cash pulito, sta su fondo sabbia con il bordo oro
-function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evidenziata = false, isMobile = false }) {
+function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evidenziata = false, isMobile = false, scala = 1 }) {
+  // "scala" e' quanto la casella si rimpicciolisce rispetto al suo
+  // disegno pieno. Non si sceglie a mano: la calcola la riga, dividendo
+  // lo spazio che ha per le caselle che deve tenerci (vedi
+  // corpoTestoInFila). Qui ogni misura — tondo, icona, etichetta, cifra,
+  // imbottitura — viene moltiplicata per quel numero, cosi' la casella
+  // sul telefono e' la stessa di quella sul monitor, solo piu' piccola.
+  const q = (n, minimo = 1) => Math.max(minimo, Math.round(n * scala * 10) / 10);
+  const lato = q(22, 9);
+  const latoPiccola = q(14, 7);
   const tratto = { fill: "none", stroke: NAVY, strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" };
   const icone = {
-    mano: <svg width="22" height="22" viewBox="0 0 24 24" {...tratto}><circle cx="13" cy="7" r="4" /><path d="M13 5.5v3M11.8 6.2h2.4M11.8 7.8h2.4" /><path d="M3 15.5h3l3 1.5h4a1.5 1.5 0 0 1 0 3H9" /><path d="M13 20h5l3-2.2a1.4 1.4 0 0 0-1.9-2L16 17.5" /></svg>,
-    documento: <svg width="22" height="22" viewBox="0 0 24 24" {...tratto}><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5" /><path d="M10 13h6M10 16.5h4" /></svg>,
-    portafoglio: <svg width="22" height="22" viewBox="0 0 24 24" {...tratto}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M16 14.5h2" /><path d="M6 7V5.5A1.5 1.5 0 0 1 7.5 4H16" /></svg>,
-    ritorno: <svg width="22" height="22" viewBox="0 0 24 24" {...tratto}><path d="M9 6H15a5 5 0 0 1 0 10H6" /><path d="M9 13l-3 3 3 3" /></svg>,
-    scintilla: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B7952B" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3c.6 3.8 2.2 5.4 6 6-3.8.6-5.4 2.2-6 6-.6-3.8-2.2-5.4-6-6 3.8-.6 5.4-2.2 6-6z" /><path d="M19 15c.3 1.6 1 2.3 2.6 2.6-1.6.3-2.3 1-2.6 2.6-.3-1.6-1-2.3-2.6-2.6 1.6-.3 2.3-1 2.6-2.6z" /></svg>,
-    orologio: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>,
-    portafoglioPiccolo: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M16 14.5h2" /></svg>,
-    giu: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B7952B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 8v8M8.5 12.5L12 16l3.5-3.5" /></svg>,
+    mano: <svg width={lato} height={lato} viewBox="0 0 24 24" {...tratto}><circle cx="13" cy="7" r="4" /><path d="M13 5.5v3M11.8 6.2h2.4M11.8 7.8h2.4" /><path d="M3 15.5h3l3 1.5h4a1.5 1.5 0 0 1 0 3H9" /><path d="M13 20h5l3-2.2a1.4 1.4 0 0 0-1.9-2L16 17.5" /></svg>,
+    documento: <svg width={lato} height={lato} viewBox="0 0 24 24" {...tratto}><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5" /><path d="M10 13h6M10 16.5h4" /></svg>,
+    portafoglio: <svg width={lato} height={lato} viewBox="0 0 24 24" {...tratto}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M16 14.5h2" /><path d="M6 7V5.5A1.5 1.5 0 0 1 7.5 4H16" /></svg>,
+    ritorno: <svg width={lato} height={lato} viewBox="0 0 24 24" {...tratto}><path d="M9 6H15a5 5 0 0 1 0 10H6" /><path d="M9 13l-3 3 3 3" /></svg>,
+    scintilla: <svg width={lato} height={lato} viewBox="0 0 24 24" fill="none" stroke="#B7952B" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3c.6 3.8 2.2 5.4 6 6-3.8.6-5.4 2.2-6 6-.6-3.8-2.2-5.4-6-6 3.8-.6 5.4-2.2 6-6z" /><path d="M19 15c.3 1.6 1 2.3 2.6 2.6-1.6.3-2.3 1-2.6 2.6-.3-1.6-1-2.3-2.6-2.6 1.6-.3 2.3-1 2.6-2.6z" /></svg>,
+    orologio: <svg width={latoPiccola} height={latoPiccola} viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>,
+    portafoglioPiccolo: <svg width={latoPiccola} height={latoPiccola} viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M16 14.5h2" /></svg>,
+    giu: <svg width={latoPiccola} height={latoPiccola} viewBox="0 0 24 24" fill="none" stroke="#B7952B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 8v8M8.5 12.5L12 16l3.5-3.5" /></svg>,
   };
   // due decimali sempre, anche sulle cifre tonde: due riquadri accostati
   // con "€ 300" e "€ 299,50" non si leggono come due numeri confrontabili
   const cifra = `€ ${Number(valore || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
-    <div style={{ flex: isMobile ? "1 1 40%" : "1 1 0", minWidth: 0, boxSizing: "border-box", padding: isMobile ? "12px 10px" : "16px 14px", borderRadius: 16, background: evidenziata ? "#F6EFE1" : "#fff", border: `1px solid ${evidenziata ? "#D9C48F" : CREAM_BORDER}`, boxShadow: "var(--ombra-aree, none)", display: "flex", flexDirection: "column" }}>
-      <div style={{ width: isMobile ? 34 : 40, height: isMobile ? 34 : 40, borderRadius: "50%", background: evidenziata ? "#EFE3C8" : "#EEEDEA", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: isMobile ? 8 : 12 }}>{icone[icona]}</div>
-      <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.3, minHeight: isMobile ? "2.6em" : "2.6em", display: "flex", alignItems: "flex-end", paddingBottom: 8, borderBottom: `1px solid ${evidenziata ? "#E6D7B4" : CREAM_BORDER}`, marginBottom: 10 }}>{etichetta}</div>
-      <div style={{ ...fontBody, fontSize: isMobile ? 17 : 24, fontWeight: 800, color: NAVY, whiteSpace: "nowrap", letterSpacing: -0.3 }}>{cifra}</div>
+    <div style={{ flex: "1 1 0", minWidth: 0, boxSizing: "border-box", padding: `${q(16, 6)}px ${q(14, 5)}px`, borderRadius: q(16, 8), background: evidenziata ? "#F6EFE1" : "#fff", border: `1px solid ${evidenziata ? "#D9C48F" : CREAM_BORDER}`, boxShadow: "var(--ombra-aree, none)", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: q(40, 16), height: q(40, 16), borderRadius: "50%", background: evidenziata ? "#EFE3C8" : "#EEEDEA", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: q(12, 4) }}>{icone[icona]}</div>
+      <div style={{ ...fontBody, fontSize: q(11, 5), fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 * scala, lineHeight: 1.3, minHeight: "2.6em", display: "flex", alignItems: "flex-end", paddingBottom: q(8, 3), borderBottom: `1px solid ${evidenziata ? "#E6D7B4" : CREAM_BORDER}`, marginBottom: q(10, 4) }}>{etichetta}</div>
+      <div style={{ ...fontBody, fontSize: q(24, 9), fontWeight: 800, color: NAVY, whiteSpace: "nowrap", letterSpacing: -0.3 * scala }}>{cifra}</div>
       {nota && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "8px 10px", borderRadius: 10, background: evidenziata ? "#EFE3C8" : "#EEEDEA", ...fontBody, fontSize: isMobile ? 9.5 : 11.5, color: MUTED, lineHeight: 1.3 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: q(8, 3), marginTop: q(12, 5), padding: `${q(8, 3)}px ${q(10, 4)}px`, borderRadius: q(10, 5), background: evidenziata ? "#EFE3C8" : "#EEEDEA", ...fontBody, fontSize: q(11.5, 5), color: MUTED, lineHeight: 1.3 }}>
           {notaIcona && <span style={{ display: "flex", flexShrink: 0 }}>{icone[notaIcona]}</span>}
           <span>{nota}</span>
         </div>
@@ -24969,6 +24978,46 @@ function PannelloRiepilogoAmministrativo({
   const setMsg = onMessaggio || (() => {});
   const isMobile = useIsMobile();
   const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id);
+
+  // Il righello del Riepilogo Cash.
+  //
+  // Cinque caselle su una riga sola, anche dal telefono. Quanto sia larga
+  // ognuna dipende dallo schermo, quindi si misura la riga vera e si
+  // ricava di quanto rimpicciolire tutto il disegno: la cifra e' il pezzo
+  // che non puo' andare a capo, quindi e' lei a decidere — trovata la
+  // misura giusta per la cifra, tondo, etichetta e pastiglia scendono
+  // nella stessa proporzione.
+  const rigaCashRef = useRef(null);
+  const [larghezzaCash, setLarghezzaCash] = useState(0);
+  useLayoutEffect(() => {
+    const nodo = rigaCashRef.current;
+    if (!nodo) return undefined;
+    const misura = () => setLarghezzaCash(nodo.clientWidth || 0);
+    misura();
+    if (typeof window.ResizeObserver !== "function") return undefined;
+    const osservatore = new window.ResizeObserver(misura);
+    osservatore.observe(nodo);
+    return () => osservatore.disconnect();
+  }, [isMobile]);
+  const gapCash = isMobile ? 6 : 10;
+  // la cifra piu' lunga possibile in questa classe: "€ 10.690,00" sono
+  // undici caratteri, e sono quelli che devono starci
+  const caratteriCifra = 11;
+  // La scala non si puo' chiedere a corpoTestoInFila: li' l'imbottitura
+  // e' un numero fisso, qui si rimpicciolisce anche lei. Quindi si mette
+  // in fila la disuguaglianza e si risolve.
+  //
+  //   larghezza della cifra + imbottitura dei due lati <= larghezza della casella
+  //   s * (11 * 0,42 * 24)   +   s * 28                <= carta - bordi
+  //
+  // 0,42 em per carattere e' la larghezza vera delle cifre di questo font
+  // a peso 800, misurata su "€ 10.690,00" nel disegno pieno.
+  const scalaCash = (() => {
+    if (!(larghezzaCash > 0)) return 1;
+    const carta = (larghezzaCash - gapCash * 4) / 5;
+    const servePerUno = caratteriCifra * 0.42 * 24 + 14 * 2;
+    return Math.min(1, Math.max(0.2, (carta - 2) / servePerUno));
+  })();
 
   // Le caselle della tabella costi sul telefono: stesso vestito, corpo e
   // imbottitura ridotti quanto basta a far stare cinque colonne in riga.
@@ -26136,19 +26185,25 @@ function PannelloRiepilogoAmministrativo({
                 <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
                   <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 6 }}>Riepilogo Cash</div>
                   <div style={{ width: 56, height: 2, background: "#D9C48F", margin: "0 auto 16px" }} />
-                  <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: isMobile ? "wrap" : "nowrap", gap: isMobile ? 6 : 10 }}>
+                  {/* Le cinque caselle stanno su una riga sola anche dal
+                      telefono, come sul monitor: si rimpiccioliscono tutte
+                      insieme invece di andare a capo a due a due. La misura
+                      la decide la cifra piu' lunga della riga — e' quella
+                      che non deve mai andare a capo — e da li' scende tutto
+                      il resto in proporzione (vedi CasellaRiepilogoCash). */}
+                  <div ref={rigaCashRef} style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "nowrap", gap: gapCash }}>
                     {/* Le cinque caselle del cash, da sinistra a destra come
                         vanno le cose: quanto e' entrato, quanto costa in
                         contanti la classe, quanto di quel costo e' uscito
                         dalla busta, quanto e' stato rinviato allo scadenziario,
                         e quanto resta in busta. L'ultima si muove solo quando
                         i pagamenti sono stati disposti davvero. */}
-                    <CasellaRiepilogoCash isMobile={isMobile} icona="mano" etichetta="Cash incassato al corso" valore={contantiClasse} nota={daIncassareAncoraClasse > 0 ? `${fmtEuroErp2(daIncassareAncoraClasse)} ancora da incassare` : null} notaIcona="orologio" />
-                    <CasellaRiepilogoCash isMobile={isMobile} icona="documento" etichetta="Totale cash da pagare" valore={totaleCashDaPagareClasse} nota="dalla busta o rinviato" notaIcona="orologio" />
-                    <CasellaRiepilogoCash isMobile={isMobile} icona="portafoglio" etichetta="Pagamenti cash presi dalla busta" valore={cashRegistratoBustaClasse} nota={cashDaDisporreClasse > 0 ? `${fmtEuroErp2(cashDaDisporreClasse)} da disporre` : null} notaIcona="portafoglioPiccolo" />
-                    <CasellaRiepilogoCash isMobile={isMobile} icona="ritorno" etichetta="Pagamenti cash rinviati" valore={cashRinviatiClasse} nota={cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null} notaIcona="ritorno" />
+                    <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="mano" etichetta="Cash incassato al corso" valore={contantiClasse} nota={daIncassareAncoraClasse > 0 ? `${fmtEuroErp2(daIncassareAncoraClasse)} ancora da incassare` : null} notaIcona="orologio" />
+                    <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="documento" etichetta="Totale cash da pagare" valore={totaleCashDaPagareClasse} nota="dalla busta o rinviato" notaIcona="orologio" />
+                    <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="portafoglio" etichetta="Pagamenti cash presi dalla busta" valore={cashRegistratoBustaClasse} nota={cashDaDisporreClasse > 0 ? `${fmtEuroErp2(cashDaDisporreClasse)} da disporre` : null} notaIcona="portafoglioPiccolo" />
+                    <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="ritorno" etichetta="Pagamenti cash rinviati" valore={cashRinviatiClasse} nota={cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null} notaIcona="ritorno" />
                     <CasellaRiepilogoCash
-                      isMobile={isMobile} evidenziata icona="scintilla" etichetta="Cash pulito in busta" valore={cassaContantiClasse}
+                      scala={scalaCash} isMobile={isMobile} evidenziata icona="scintilla" etichetta="Cash pulito in busta" valore={cassaContantiClasse}
                       nota={cashMancanteClasse > 0
                         ? `${fmtEuroErp2(cashMancanteClasse)} messi da fuori`
                         : cashDaDisporreClasse > 0
@@ -31271,7 +31326,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
               style={{ display: "flex", alignItems: "center", gap: 5, background: BG_CHIARO, border: "none", borderRadius: 20, padding: "4px 9px", cursor: "pointer", flexShrink: 0 }}
             >
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED }}>{righeAggiornamenti.length}</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: aggiornamentiAperti ? "rotate(-90deg)" : "rotate(90deg)" }}>
+              <svg width={latoPiccola} height={latoPiccola} viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: aggiornamentiAperti ? "rotate(-90deg)" : "rotate(90deg)" }}>
                 <polyline points="9 18 15 12 9 6" />
               </svg>
             </button>
