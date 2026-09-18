@@ -38985,6 +38985,77 @@ function contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master,
   return { totale: round2(totale), quante: righe.length, righe };
 }
 
+/**
+ * Le buste dopo la prima, lette da sole.
+ *
+ * Tabella piccola, serve solo a contare le contabilita' da approvare:
+ * chi ne ha bisogno la chiede qui invece di farsela passare da sopra
+ * attraverso quattro pagine.
+ */
+function useBusteAppendici(corsiDate, spese, venditeShop) {
+  const [buste, setBuste] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("corsi_date_buste").select("*").then(({ data }) => { if (vivo) setBuste(data || []); });
+    return () => { vivo = false; };
+  }, [corsiDate, spese, venditeShop]);
+  return buste;
+}
+
+/**
+ * I cinque segnalatori della contabilita'.
+ *
+ * Sono le code che si allungano da sole — le fatture arrivano da Fatture
+ * in Cloud, le buste si chiudono quando finisce un corso — e che nessuno
+ * vede finche' non entra nella scheda giusta. Ogni riquadro porta dove si
+ * lavora quella coda.
+ *
+ * Stanno in un componente solo perche' si vedono in due posti,
+ * Contabilita' e Prima nota cassa, e cinque numeri calcolati due volte
+ * sono cinque numeri che prima o poi si contraddicono. L'unico che arriva
+ * da fuori e' "spese da pagare": lo sa solo chi ha gia' montato lo
+ * scadenziario, e rifarlo qui vorrebbe dire rifare quel motore.
+ *
+ * Sul mock del 16/09/2026: a sinistra il disco col medaglione e l'icona
+ * bianca, una riga verticale, a destra l'etichetta su due righe e il
+ * numero grande. Il disco e' grigio-blu dove non c'e' urgenza, oro per
+ * quello che aspetta, rosso per quello che costa a qualcun altro. I
+ * colori accesi si vedono anche a zero: il riquadro dice cos'e', il
+ * numero dice quanto.
+ */
+function SegnalatoriContabilita({
+  isMobile, style, speseDaPagare,
+  documentoFornitoreTabella, fattureRicevuteFic,
+  corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
+  leva, location, hotel, quoteVenditoriSplit, spese, venditeShop,
+  onRiconciliazione, onDocumenti, onPassivo, onFondocassa,
+}) {
+  const busteAppendici = useBusteAppendici(corsiDate, spese, venditeShop);
+  const documenti = documentoFornitoreTabella || [];
+  const daRiconciliare = documenti.filter((d) => d.tipo !== "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
+  const ncDaRiconciliare = documenti.filter((d) => d.tipo === "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
+  const daImportare = (fattureRicevuteFic || []).filter((f) => !f.spesa_id && dentroContabilita(f)).length;
+  const daApprovare = contabilitaDaApprovare({
+    corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
+    leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici,
+  }).quante;
+  const riquadri = [
+    { chiave: "riconciliare", etichetta: "Documenti da riconciliare", valore: daRiconciliare, colore: "#6E7391", sfondo: "#fff", disco: "#6E7391", Icona: IconaAvvisoDocumento, onClick: () => onRiconciliazione?.() },
+    { chiave: "importare", etichetta: "Spese da importare", valore: daImportare, colore: "#B8860B", sfondo: "#FBF3E0", disco: "#B8860B", Icona: IconaAvvisoMonete, onClick: onDocumenti },
+    { chiave: "pagare", etichetta: "Spese da pagare", valore: speseDaPagare, colore: "#C0392B", sfondo: "#FBE4E1", disco: "#C0392B", Icona: IconaAvvisoCarta, onClick: onPassivo },
+    { chiave: "notecredito", etichetta: "Note di credito da riconciliare", valore: ncDaRiconciliare, colore: "#6E7391", sfondo: "#fff", disco: "#6E7391", Icona: IconaAvvisoDocumentoPiu, onClick: () => onRiconciliazione?.() },
+    // le buste dei corsi finiti e le appendici aperte: si approvano
+    // dal Riepilogo della classe, la cassa contanti le elenca
+    { chiave: "daapprovare", etichetta: "Contabilità da approvare", valore: daApprovare, colore: "#B8860B", sfondo: "#FBF3E0", disco: "#B8860B", Icona: IconaAvvisoSpunta, onClick: onFondocassa },
+  ];
+  // cinque su una linea sola, sempre: se non ci stanno a misura piena si
+  // rimpiccioliscono tutti insieme (RigaSegnalatoriInLinea). Con auto-fit
+  // andavano a capo tre e due appena lo spazio si stringeva, e cinque
+  // numeri da leggere in un colpo d'occhio diventavano due blocchi da
+  // scorrere.
+  return <RigaSegnalatoriInLinea isMobile={isMobile} perRigaTelefono={3} riquadri={riquadri} style={style} />;
+}
+
 function PannelloCassaContanti({
   corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
   leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, ricarica, onApriClasse,
@@ -40572,14 +40643,6 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
 function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriNuovaSpesaDaMovimentoBanca, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "passivo");
-  // le buste dopo la prima, per contare le contabilita' da approvare in
-  // cima: tabella piccola, letta qui da sola
-  const [busteAppendiciAmm, setBusteAppendiciAmm] = useState([]);
-  useEffect(() => {
-    let vivo = true;
-    supabase.from("corsi_date_buste").select("*").then(({ data }) => { if (vivo) setBusteAppendiciAmm(data || []); });
-    return () => { vivo = false; };
-  }, [corsiDate, spese, venditeShop]);
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
   // pagina (es. la scheda di un allievo da Scadenziario Attivo) e poi si
   // torna "Indietro", questa pagina viene rimontata da zero e deve
@@ -41403,43 +41466,28 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, scadenze da pagare, documenti fornitore e scadenze attive, in un unico posto.</div>
 
-        {/* Cosa c'è da fare, in quattro numeri: sono le code che si
-            allungano da sole (le fatture arrivano da Fatture in Cloud) e
-            che nessuno vede finché non entra nella scheda giusta. Ogni
-            riquadro porta dove si lavora quella coda. */}
-        {(() => {
-          const documenti = documentoFornitoreTabella || [];
-          const daRiconciliare = documenti.filter((d) => d.tipo !== "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
-          const ncDaRiconciliare = documenti.filter((d) => d.tipo === "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
-          const daImportare = (fattureRicevuteFic || []).filter((f) => !f.spesa_id && dentroContabilita(f)).length;
-          const contabilitaDaApprovareConto = contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici: busteAppendiciAmm }).quante;
-          // lo stesso numero dello Scadenziario Passivo: daPagare contiene
-          // gia' le spese reali non pagate, sommarle un'altra volta le
-          // contava due volte ("3" in cima, "2" nell'elenco)
-          const speseDaPagare = daPagare.length;
-          const riquadri = [
-            // Sul mock del 16/09/2026: a sinistra il disco col medaglione e
-            // l'icona bianca, una riga verticale, a destra l'etichetta su
-            // due righe e il numero grande. Il disco e' grigio-blu dove non
-            // c'e' urgenza, oro per quello che aspetta, rosso per quello che
-            // costa a qualcun altro. I colori accesi si vedono anche a zero:
-            // il riquadro dice cos'e', il numero dice quanto
-            { chiave: "riconciliare", etichetta: "Documenti da riconciliare", valore: daRiconciliare, colore: "#6E7391", sfondo: "#fff", disco: "#6E7391", Icona: IconaAvvisoDocumento, onClick: onApriRiconciliazione },
-            { chiave: "importare", etichetta: "Spese da importare", valore: daImportare, colore: "#B8860B", sfondo: "#FBF3E0", disco: "#B8860B", Icona: IconaAvvisoMonete, onClick: () => setTab("documenti") },
-            { chiave: "pagare", etichetta: "Spese da pagare", valore: speseDaPagare, colore: "#C0392B", sfondo: "#FBE4E1", disco: "#C0392B", Icona: IconaAvvisoCarta, onClick: () => setTab("passivo") },
-            { chiave: "notecredito", etichetta: "Note di credito da riconciliare", valore: ncDaRiconciliare, colore: "#6E7391", sfondo: "#fff", disco: "#6E7391", Icona: IconaAvvisoDocumentoPiu, onClick: onApriRiconciliazione },
-            // le buste dei corsi finiti e le appendici aperte: si approvano
-            // dal Riepilogo della classe, la cassa contanti le elenca
-            { chiave: "daapprovare", etichetta: "Contabilità da approvare", valore: contabilitaDaApprovareConto, colore: "#B8860B", sfondo: "#FBF3E0", disco: "#B8860B", Icona: IconaAvvisoSpunta, onClick: () => setTab("fondocassa") },
-          ];
-          // I quattro avvisi su una riga sola, sempre. Con auto-fit e un
-          // minimo di 190px andavano a capo due e due appena lo spazio si
-          // stringeva, e quattro numeri che devono leggersi in un colpo
-          // d'occhio diventavano due blocchi da scorrere.
-          // cinque su una linea sola, sempre: se non ci stanno a misura
-          // piena si rimpiccioliscono tutti insieme (RigaSegnalatoriInLinea)
-          return <RigaSegnalatoriInLinea isMobile={isMobile} perRigaTelefono={3} riquadri={riquadri} style={{ marginBottom: 18 }} />;
-        })()}
+        {/* Cosa c'è da fare, in cinque numeri. Sono gli stessi che si
+            vedono in cima a Prima nota cassa: un componente solo, cosi'
+            non possono dire due cose diverse.
+
+            "Spese da pagare" e' l'unico che arriva da qui: e' lo stesso
+            numero dello Scadenziario Passivo, e daPagare contiene gia' le
+            spese reali non pagate — sommarle un'altra volta le contava
+            due volte ("3" in cima, "2" nell'elenco). */}
+        <SegnalatoriContabilita
+          isMobile={isMobile} style={{ marginBottom: 18 }}
+          speseDaPagare={daPagare.length}
+          documentoFornitoreTabella={documentoFornitoreTabella}
+          fattureRicevuteFic={fattureRicevuteFic}
+          corsiDate={corsiDate} iscritti={iscritti} corsiDateDocenti={corsiDateDocenti}
+          master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
+          leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit}
+          spese={spese} venditeShop={venditeShop}
+          onRiconciliazione={onApriRiconciliazione}
+          onDocumenti={() => setTab("documenti")}
+          onPassivo={() => setTab("passivo")}
+          onFondocassa={() => setTab("fondocassa")}
+        />
 
         {/* I quattro avvisi e le schede sono due cose diverse: i primi
             dicono quanto lavoro c'e', le seconde dove si va a farlo. Il filo
@@ -42069,12 +42117,14 @@ function PaginaInserimentoCostiRicavi({
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
   abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, venditeShop = [],
+  // servono ai cinque segnalatori in cima, gli stessi di Contabilita'
+  documentoFornitoreTabella = [],
   // l'ordine delle tessere e' lo stesso di Contabilita': e' una barra di
   // navigazione, e una barra che si riordina da sola quando ci entri
   // dentro non e' piu' un punto di riferimento. Senza questa, qui le
   // tessere ricadevano nell'ordine in cui sono scritte nel codice
   ordineSchedeContabilita,
-  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab,
+  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab, onApriRiconciliazione,
 }) {
   const isMobile = useIsMobile();
   // "tutto", "entrate" o "uscite": la prima nota e' un libro cassa con
@@ -42325,6 +42375,11 @@ function PaginaInserimentoCostiRicavi({
   };
   const scadenziarioAttivoPerConteggio = calcolaScadenziarioAttivo({ iscritti, corsiDate }).length;
   const occorrenzeAbbonamentiPerConteggio = calcolaOccorrenzeAbbonamenti({ abbonamentiContratti, abbonamentiImporti, spese }).length;
+  // Quante spese aspettano di essere pagate: il numero della tessera
+  // Scadenziario Passivo E quello del segnalatore rosso in cima, scritto
+  // una volta sola. Due conti uguali fatti in due punti diventano due
+  // numeri diversi il giorno in cui se ne tocca uno.
+  const passivoCount = daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio + vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi }).length;
 
   async function eliminaSpesa(id) {
     if (!window.confirm("Eliminare questa spesa?")) return;
@@ -42400,13 +42455,43 @@ function PaginaInserimentoCostiRicavi({
         )}
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Il libro cassa: tutte le entrate e tutte le uscite nel giorno in cui i soldi si sono mossi davvero.</div>
 
+        {/* Gli stessi cinque segnalatori di Contabilita', sopra la fila
+            delle tessere. Sono le code che si allungano da sole: chi entra
+            qui dalla prima nota le deve vedere come le vedrebbe entrando
+            di la', altrimenti a seconda della porta da cui si passa l'app
+            racconta due situazioni diverse.
+
+            "Spese da pagare" e' lo stesso conto della tessera Scadenziario
+            Passivo qui sotto — scadenziario virtuale, spese reali,
+            occorrenze degli abbonamenti e cash rinviati — scritto una
+            volta sola in passivoCount e riusato, cosi' il numero in cima
+            e quello sulla tessera non possono divergere. */}
+        <SegnalatoriContabilita
+          isMobile={isMobile} style={{ marginBottom: 18 }}
+          speseDaPagare={passivoCount}
+          documentoFornitoreTabella={documentoFornitoreTabella}
+          fattureRicevuteFic={fattureRicevuteFic}
+          corsiDate={corsiDate} iscritti={iscritti} corsiDateDocenti={corsiDateDocenti}
+          master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
+          leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit}
+          spese={spese} venditeShop={venditeShop}
+          onRiconciliazione={onApriRiconciliazione}
+          onDocumenti={() => onApriAmministrazioneTab("documenti")}
+          onPassivo={() => onApriAmministrazioneTab("passivo")}
+          onFondocassa={() => onApriAmministrazioneTab("fondocassa")}
+        />
+
+        {/* la stessa riga marrone di Contabilita': i segnalatori dicono
+            quanto lavoro c'e', le tessere dove si va a farlo */}
+        <div style={{ height: 1, background: "#D5C9AF", margin: isMobile ? "14px 0" : "20px 0" }} />
+
         <TabsAmministrazione
           schedaAttiva="primanota"
           onApriPrimaNotaCassa={() => {}}
           onApriScheda={onApriAmministrazioneTab}
           ordine={ordineSchedeContabilita}
           documentiCount={documentiFornitorePerConteggio}
-          passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio + vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi }).length}
+          passivoCount={passivoCount}
           attivoCount={scadenziarioAttivoPerConteggio}
           abbonamentiCount={(abbonamentiContratti || []).length}
           ruoloUtente={ruoloUtente}
@@ -68147,9 +68232,11 @@ export default function App() {
           categorieGruppi={categorieGruppi}
           abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti}
           fattureRicevuteFic={fattureRicevuteFic}
+          documentoFornitoreTabella={documentoFornitoreTabella}
           ricarica={fetchDati} onBack={() => setView("amministrazione")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
           onApriAmministrazioneTab={apriAmministrazioneTab}
+          onApriRiconciliazione={apriRiconciliazione}
         />
       )}
 
