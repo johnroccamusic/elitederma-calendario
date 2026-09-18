@@ -37070,16 +37070,29 @@ function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pa
   // quanto la cifra che hanno accanto. "Paga" resta in grassetto, che e'
   // la cosa che di solito si va a fare
   if (sobria) {
+    // Due tastini della stessa larghezza invece di due testi sottolineati
+    // di lunghezze diverse: "Cambia fattura" e "Paga" sono due azioni
+    // sullo stesso piano, e scritte come link una sembrava il triplo
+    // dell'altra. Discreti — bianchi, bordo sottile — perche' in un
+    // registro le azioni non devono pesare quanto la cifra accanto.
+    const tastino = (forte) => ({
+      ...fontBody, fontSize: q(12), fontWeight: forte ? 700 : 600, color: NAVY,
+      background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: q(9),
+      padding: `${q(6)}px ${q(10)}px`, minWidth: q(104), textAlign: "center",
+      cursor: "pointer", whiteSpace: "nowrap", lineHeight: 1.15,
+    });
     return (
       <>
-        <AzioneTesto
+        <button
           onClick={() => onPannello(pannello === "documento" ? null : "documento")}
           title={fatturaAssociata ? `Fattura n. ${numeroDocumento || "—"} gia' associata` : "Aggancia questa riga a una fattura gia' arrivata dal fornitore"}
-        >{fatturaAssociata ? "Cambia fattura" : "Associa fattura"}</AzioneTesto>
-        <AzioneTesto
+          style={{ ...tastino(false), outline: pannello === "documento" ? `2px solid ${NAVY}` : "none" }}
+        >{fatturaAssociata ? "Cambia fattura" : "Associa fattura"}</button>
+        <button
           onClick={() => onPannello(pannello === "paga" ? null : "paga")}
           title="Apre la scheda della spesa: si conferma la classificazione, poi si sceglie come e quando e' stata pagata"
-        ><b>Paga</b></AzioneTesto>
+          style={{ ...tastino(true), outline: pannello === "paga" ? `2px solid ${NAVY}` : "none" }}
+        >Paga</button>
       </>
     );
   }
@@ -41587,7 +41600,9 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                 Nuova spesa da pagare
               </button>
             </div>
-            <div style={{ marginBottom: 12 }} />
+            {/* la barra dei segnalatori e i filtri sotto sono due cose
+                diverse: attaccate si leggevano come un blocco solo */}
+            <div style={{ height: 60 }} />
 
             {/* la testata unica di tutte le sezioni: filtri di stato,
                 riga anno/tutto l'anno/periodo/ricerca, fila dei mesi */}
