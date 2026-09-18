@@ -41153,7 +41153,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           onAssociaPagata={(voci) => associaDocumentoASpesaPagata(docDaAssociare, voci)}
         />
       )}
-      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ maxWidth: LARGHEZZA_SCHEDE_CONTABILITA, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
@@ -42129,7 +42129,13 @@ function PaginaInserimentoCostiRicavi({
           }}
         />
       )}
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        {/* la stessa larghezza dello Scadenziario passivo e di tutte le
+            altre schede di Contabilita': sono pagine sorelle, si aprono
+            dalla stessa fila di tessere, e vederle larghe diverse fa
+            sembrare che una sia zoomata. Il numero sta in un posto solo
+            (LARGHEZZA_SCHEDE_CONTABILITA) perche' due numeri uguali
+            scritti due volte prima o poi diventano diversi. */}
+      <div style={{ maxWidth: LARGHEZZA_SCHEDE_CONTABILITA, margin: "0 auto" }}>
         {/* il tondo del livello precedente sta a SINISTRA del titolo, sulla
             stessa riga e centrato con lui: e' la regola di tutte le pagine
             dell'app. Qui il titolo stava sotto, e il tondo sembrava
