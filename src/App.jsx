@@ -10,7 +10,7 @@ import {
   NAVY, CREAM_BORDER, BG, BG_CHIARO, MUTED, GRAFITE, GOLD, GRIGIO_TENDINA_MODELLA,
   GIALLO_MATTINA, ARANCIO_POMERIGGIO, VERDE_TROVATA, ROSSO_DA_TROVARE,
   fontDisplay, stileTitoloPagina, fontBody, fontHero, fontCondensato,
-  inputStyle, campoCompattoStyle, round2, numeroFascia,
+  inputStyle, campoCompattoStyle, round2, numeroFascia, corpoTestoInFila,
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, ContatoreQuantita, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import { caricaKitInAula, kitDaAprireAutomaticamente, registraPrelieviDaVendita } from "./rientri/pos";
@@ -10712,6 +10712,35 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const filo = { height: 1, background: CREAM_BORDER };
   const spaziatura = isMobile ? "14px 14px" : "18px 20px";
 
+  // Il righello della fila di tasti.
+  //
+  // Quanto sia largo un pulsante non lo si sa scrivendo il codice: sono
+  // tre, quattro o cinque a seconda del corso, e la scheda sta in una
+  // colonna che cambia larghezza col telefono. Si misura la riga vera e
+  // si ricalcola il corpo del testo (vedi corpoTestoInFila): e' l'unico
+  // modo di tenere il testo in proporzione senza tagliare niente.
+  const rigaTastiRef = useRef(null);
+  const [larghezzaTasti, setLarghezzaTasti] = useState(0);
+  useLayoutEffect(() => {
+    const nodo = rigaTastiRef.current;
+    if (!nodo) return undefined;
+    // la larghezza utile e' quella DENTRO la spaziatura della riga
+    const misura = () => {
+      const stile = window.getComputedStyle ? window.getComputedStyle(nodo) : null;
+      const dentro = nodo.clientWidth
+        - (parseFloat(stile?.paddingLeft) || 0)
+        - (parseFloat(stile?.paddingRight) || 0);
+      setLarghezzaTasti(dentro > 0 ? dentro : 0);
+    };
+    misura();
+    // ResizeObserver non c'e' ovunque (e non c'e' nei test): senza, si
+    // resta alla misura del primo disegno, che e' gia' quella giusta
+    if (typeof window.ResizeObserver !== "function") return undefined;
+    const osservatore = new window.ResizeObserver(misura);
+    osservatore.observe(nodo);
+    return () => osservatore.disconnect();
+  }, [isMobile, conScorte, inFinestraInventario, !!codiceReferral]);
+
   return (
     // Niente piu' filo colorato tutt'intorno: il colore del corso resta
     // solo sul riquadro della data, dove serve a riconoscerlo, invece di
@@ -10918,8 +10947,8 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       <div style={filo} />
       {/* tutti su una riga sola, anche da telefono: sono tasti di due
           parole, e le due parole stanno una sopra l'altra */}
-      <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 6 : 12, flexWrap: "nowrap", padding: spaziatura }}>
-        {[
+      {(() => {
+      const tastiRiga = [
           onApriClasse && { testo: "Dettagli corso", onClick: () => onApriClasse(corsoData.id) },
           onApriModelle && { testo: "Dettagli modelle", onClick: () => onApriModelle(corsoData.id) },
           // compare solo dove c'e' davvero una scorta da cui prendere:
@@ -10929,18 +10958,78 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           // c'e' niente da contare, e dopo una settimana il pacco e' gia'
           // partito da un pezzo
           conScorte && inFinestraInventario && onApriInventario && { testo: "Inventario fine corso", onClick: () => onApriInventario(corsoData.id) },
-        ].filter(Boolean).map((t) => (
+      ].filter(Boolean);
+
+      // Il testo scende insieme al pulsante, non dopo.
+      //
+      // Su cinque tasti in fila, su un telefono, ogni pulsante finisce
+      // sotto i settanta pixel: "integrazioni" a corpo fisso li sfonda,
+      // e quello che si vede e' una parola tagliata o due parole una
+      // sopra l'altra. Qui il corpo e' una FRAZIONE della larghezza del
+      // pulsante (cqw = un centesimo del contenitore), quindi il
+      // rapporto fra testo e scatola resta lo stesso a ogni larghezza —
+      // il pannello si rimpicciolisce tutto insieme invece di rompersi.
+      //
+      // La frazione la decide la parola piu' lunga di TUTTA la riga, non
+      // quella di ogni tasto: cosi' i pulsanti hanno tutti lo stesso
+      // corpo e la riga resta una riga, non una scaletta. Il tetto in px
+      // e' la misura di sempre, che su schermo largo vince — da
+      // desktop non cambia niente.
+      const parolePiuLunghe = [
+        ...tastiRiga.map((t) => t.testo),
+        ...(couponVisibile ? ["Coupon", String(codiceReferral || "")] : []),
+      ].flatMap((x) => x.split(" ")).map((x) => x.length);
+      const piuLunga = Math.max(1, ...parolePiuLunghe);
+      const gap = isMobile ? 6 : 12;
+      const paddingOrizzontale = (isMobile ? 6 : 16) * 2 + 2; // padding dei due lati + bordo
+      const quantiTotali = tastiRiga.length + (couponVisibile ? 1 : 0);
+      const misura = (quanti) => corpoTestoInFila({
+        larghezzaRiga: larghezzaTasti,
+        quanti, gap, paddingOrizzontale, parolaPiuLunga: piuLunga,
+        massimo: isMobile ? 12 : 15,
+      });
+
+      // Sotto una certa misura rimpicciolire non e' piu' adattarsi.
+      //
+      // Cinque scatole su un telefono da 390 fanno settanta pixel l'una,
+      // e "integrazioni" — dodici lettere — a quella larghezza sta solo
+      // sotto i sette pixel. Non e' tagliato, ma non si legge: il testo
+      // in proporzione ha senso finche' resta una scritta, non quando
+      // diventa un ricciolo grigio.
+      //
+      // Allora, e solo allora, la riga va a capo. Non e' un'eccezione
+      // alla regola: e' l'unico modo di dare al pulsante piu' larghezza,
+      // che e' quello che alla proporzione serviva fin dall'inizio. Con
+      // tre tasti non succede mai; con cinque succede sui telefoni
+      // stretti, dove una riga sola era gia' una finzione.
+      const SOGLIA_LEGGIBILE = 9;
+      const corpoUnaFila = misura(quantiTotali);
+      const aCapo = isMobile && quantiTotali > 2 && corpoUnaFila < SOGLIA_LEGGIBILE;
+      const perFila = aCapo ? Math.ceil(quantiTotali / 2) : quantiTotali;
+      const corpo = aCapo ? misura(perFila) : corpoUnaFila;
+      // la parola "Coupon" sopra il codice e' sempre stata piu' piccola
+      // del codice: scende con lo stesso passo, non per conto suo
+      const corpoPiccolo = Math.max(1, corpo * (isMobile ? 10 / 12 : 12 / 15));
+      return (
+      <div ref={rigaTastiRef} data-riga="tasti" style={{ display: "flex", alignItems: "stretch", gap, flexWrap: aCapo ? "wrap" : "nowrap", padding: spaziatura }}>
+        {tastiRiga.map((t) => (
           <button
             key={t.testo}
             onClick={(e) => { e.stopPropagation(); t.onClick(); }}
             style={{
-              ...fontBody, fontSize: isMobile ? 12 : 15, fontWeight: 700, color: NAVY, lineHeight: 1.15,
+              ...fontBody, fontSize: corpo, fontWeight: 700, color: NAVY, lineHeight: 1.15,
               background: "#F7F4EC", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12,
               padding: isMobile ? "8px 6px" : "10px 16px", cursor: "pointer", textAlign: "center",
-              flex: "1 1 0", minWidth: 0,
+              flex: aCapo ? `1 1 calc(${(100 / perFila).toFixed(2)}% - ${gap}px)` : "1 1 0", minWidth: 0,
             }}
           >
-            {t.testo.split(" ").map((parola, i) => <span key={i} style={{ display: "block" }}>{parola}</span>)}
+            {t.testo.split(" ").map((parola, i) => (
+              // niente a capo dentro la parola e niente trabocco: se mai
+              // il calcolo del corpo sbagliasse di un pelo, la parola
+              // stringe le lettere invece di uscire dal pulsante o di
+              // spezzarsi a meta'
+              <span key={i} style={{ display: "block", whiteSpace: "nowrap" }}>{parola}</span>
+            ))}
           </button>
         ))}
         {couponVisibile && (
@@ -10950,17 +11039,20 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           <div
             title="Il codice sconto da dare agli allievi di questa classe"
             style={{
-              ...fontBody, fontSize: isMobile ? 12 : 15, fontWeight: 700, color: "#C0392B", lineHeight: 1.15,
+              ...fontBody, fontSize: corpo, fontWeight: 700, color: "#C0392B", lineHeight: 1.15,
               background: "#FBF5F3", border: "1px solid #F0D4CE", borderRadius: 12,
-              padding: isMobile ? "8px 6px" : "10px 16px", marginLeft: "auto", textAlign: "center",
-              flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center",
+              padding: isMobile ? "8px 6px" : "10px 16px", marginLeft: aCapo ? 0 : "auto", textAlign: "center",
+              flex: aCapo ? `1 1 calc(${(100 / perFila).toFixed(2)}% - ${gap}px)` : "1 1 0",
+              minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center",
             }}
           >
-            <span style={{ fontSize: isMobile ? 10 : 12, fontWeight: 600 }}>Coupon</span>
-            <span>{codiceReferral.toUpperCase()}</span>
+            <span style={{ fontSize: corpoPiccolo, fontWeight: 600, whiteSpace: "nowrap" }}>Coupon</span>
+            <span style={{ whiteSpace: "nowrap" }}>{codiceReferral.toUpperCase()}</span>
           </div>
         )}
       </div>
+      );
+      })()}
     </div>
   );
 }

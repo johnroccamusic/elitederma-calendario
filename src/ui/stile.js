@@ -67,3 +67,46 @@ export function round2(n) {
 
 // il separatore decimale come lo scrive e lo legge chi usa l'app
 export function numeroFascia(n) { return String(n).replace(".", ","); }
+
+// Quanto grande puo' essere il testo dentro una fila di pulsanti che si
+// dividono lo spazio in parti uguali.
+//
+// Serve dove una riga di tasti non va mai a capo — la scheda del corso
+// sulla dashboard master — e quindi, stringendo lo schermo, ogni tasto
+// diventa piu' stretto. A corpo fisso la parola piu' lunga esce dal
+// pulsante: la si vede tagliata, o addosso a quella del tasto accanto.
+//
+// Qui il corpo scende insieme al pulsante, cosi' il rapporto fra testo e
+// scatola resta quello di sempre e la riga si rimpicciolisce tutta
+// intera invece di rompersi.
+//
+// La misura la decide la parola piu' lunga di TUTTA la riga, non quella
+// di ogni tasto: se ogni pulsante scegliesse per conto suo, cinque
+// pulsanti avrebbero cinque corpi diversi e la riga sembrerebbe una
+// scaletta.
+//
+// 0,62 em per carattere e' la larghezza media reale di questo font a
+// peso 700 — misurata sulle parole che ci finiscono davvero, non presa
+// da una tabella.
+export function corpoTestoInFila({
+  larghezzaRiga,
+  quanti,
+  gap = 0,
+  paddingOrizzontale = 0,
+  parolaPiuLunga = 1,
+  massimo = 15,
+  fattoreCarattere = 0.62,
+}) {
+  // finche' non si conosce la larghezza vera (primo disegno, prima che
+  // il righello abbia misurato) si usa la misura piena: meglio partire
+  // giusti su schermo largo che far lampeggiare tutti i testi
+  if (!(larghezzaRiga > 0) || !(quanti > 0)) return massimo;
+  const perPulsante = (larghezzaRiga - gap * Math.max(0, quanti - 1)) / quanti;
+  const dentro = perPulsante - paddingOrizzontale;
+  if (!(dentro > 0)) return 1;
+  const quanto = dentro / (Math.max(1, parolaPiuLunga) * fattoreCarattere);
+  // mai sopra la misura di sempre: su schermo largo non deve cambiare
+  // niente, e un testo che cresce oltre il suo corpo naturale e' brutto
+  // quanto uno tagliato
+  return Math.max(1, Math.min(massimo, quanto));
+}
