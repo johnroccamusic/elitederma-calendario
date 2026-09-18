@@ -9,10 +9,41 @@
 // al momento della vendita, i cambi li ha scritti la master col pezzo in
 // mano. Qui si conferma.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina } from "../ui/stile.js";
 import { Button, ContatoreQuantita, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano } from "./rientro";
+import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano, salvaBozzaRientro } from "./rientro";
+
+// La scialuppa.
+//
+// La bozza vera sta sul server: e' quella che si rilegge riaprendo la
+// scheda, anche da un altro telefono. Questo qui tiene SOLO cio' che sul
+// server non e' ancora arrivato — la linea che cade a meta' conteggio, e
+// la pagina che iOS butta via mentre il telefono e' in tasca. Si svuota
+// nell'istante in cui il server conferma, quindi non e' una seconda
+// verita': e' una busta con dentro la posta non ancora spedita.
+const CHIAVE_SCIALUPPA = (spedizioneId) => `bozza-rientro:${spedizioneId}`;
+
+function leggiScialuppa(spedizioneId) {
+  try {
+    const grezzo = window.localStorage.getItem(CHIAVE_SCIALUPPA(spedizioneId));
+    return grezzo ? JSON.parse(grezzo) : null;
+  } catch { return null; }
+}
+function scriviScialuppa(spedizioneId, contenuto) {
+  // in incognito localStorage esiste e tira un'eccezione: che la
+  // scialuppa non ci sia e' un peccato, che faccia saltare il
+  // conteggio sarebbe un disastro
+  try {
+    if (contenuto) window.localStorage.setItem(CHIAVE_SCIALUPPA(spedizioneId), JSON.stringify(contenuto));
+    else window.localStorage.removeItem(CHIAVE_SCIALUPPA(spedizioneId));
+  } catch { /* pazienza */ }
+}
+
+const oraBreve = (iso) => {
+  try { return new Date(iso).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" }); }
+  catch { return ""; }
+};
 
 function Blocco({ numero, titolo, sottotitolo, children }) {
   return (
@@ -51,6 +82,18 @@ export default function SchedaRientro({
   const [sceltaKit, setSceltaKit] = useState(null);
   const [messaggio, setMessaggio] = useState("");
   const [salvando, setSalvando] = useState(false);
+  // "fermo" | "salvo" | "salvato" | "in_ritardo": lo stato della bozza,
+  // che e' l'unica cosa che la master deve poter controllare a colpo
+  // d'occhio mentre conta
+  const [statoBozza, setStatoBozza] = useState("fermo");
+  const [bozzaTs, setBozzaTs] = useState(null);
+  // cresce a ogni nuovo tentativo dopo un errore: e' cio' che rimette in
+  // moto il ciclo di salvataggio senza fingere una modifica che non c'e'
+  const [tentativo, setTentativo] = useState(0);
+  // finche' non si tocca niente non si salva niente: riaprire una scheda
+  // per guardarla non deve scrivere sul database
+  const toccata = useRef(false);
+  const timerBozza = useRef(null);
 
   const prodottoById = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
   const kitById = useMemo(() => Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k])), [kitDefinizioni]);
@@ -75,6 +118,23 @@ export default function SchedaRientro({
           ? { rientrata: gia.rientrata, guasta: gia.guasta, consegnata: gia.consegnata }
           : { rientrata: r.atteso, guasta: 0, consegnata: 0 };
       });
+      setConsegne(d.bozzaConsegne || {});
+      setBozzaTs(d.bozzaTs || null);
+
+      // se nella scialuppa c'e' qualcosa, un salvataggio non era andato
+      // a buon fine: quello che c'e' li' e' piu' recente di quello sul
+      // server, e vince
+      const rimasta = d.rientro?.stato === "chiuso" ? null : leggiScialuppa(d.spedizioneId);
+      if (rimasta) {
+        Object.entries(rimasta.valori || {}).forEach(([rigaId, v]) => {
+          if (iniziali[rigaId]) iniziali[rigaId] = { ...iniziali[rigaId], ...v };
+        });
+        setConsegne(rimasta.consegne || {});
+        // c'e' della posta da spedire: il ciclo di salvataggio riparte
+        // da solo e la manda appena c'e' linea
+        toccata.current = true;
+        setStatoBozza("in_ritardo");
+      }
       setValori(iniziali);
     }
     setCaricando(false);
@@ -88,6 +148,7 @@ export default function SchedaRientro({
   const righePerTipo = (tipo) => (dati?.righe || []).filter((r) => r.tipo === tipo);
   const valore = (rigaId) => valori[rigaId] || { rientrata: 0, guasta: 0, consegnata: 0 };
   function cambia(rigaId, campo, n) {
+    toccata.current = true;
     setValori((prev) => ({ ...prev, [rigaId]: { ...valore(rigaId), [campo]: Math.max(0, Math.round(n) || 0) } }));
   }
 
@@ -100,6 +161,57 @@ export default function SchedaRientro({
   })), [dati, valori, consegne, iscrittiEdizione]);
 
   const nonQuadrano = dermografiNonQuadrano(dichiarazioni);
+  const chiusa = dati?.rientro?.stato === "chiuso";
+
+  // Il salvataggio progressivo.
+  //
+  // Un secondo e mezzo dopo l'ultimo tocco, non a ogni tocco: sui +/-
+  // degli sfusi la master preme quattro volte di fila, e quattro
+  // scritture per arrivare a "4" sono tre di troppo.
+  //
+  // Prima di partire il contenuto va nella scialuppa, non dopo: se la
+  // richiesta non arriva mai — linea caduta, telefono in tasca, pagina
+  // buttata via dal sistema — quello che la master aveva contato e'
+  // gia' al sicuro. Si toglie solo quando il server ha confermato.
+  useEffect(() => {
+    if (caricando || chiusa || !dati || !toccata.current) return;
+    scriviScialuppa(dati.spedizioneId, { valori, consegne, ts: Date.now() });
+    setStatoBozza((s) => (s === "in_ritardo" ? s : "salvo"));
+    clearTimeout(timerBozza.current);
+    timerBozza.current = setTimeout(async () => {
+      const esito = await salvaBozzaRientro({
+        spedizioneId: dati.spedizioneId,
+        masterId: masterLoggataId || null,
+        righe: dichiarazioni,
+        consegne,
+      });
+      if (esito.errore === "chiusa") {
+        // qualcuno ha chiuso la scheda mentre era aperta anche qui: la
+        // bozza non ha piu' senso, e insistere riscriverebbe righe da
+        // cui il magazzino e' gia' stato ripristinato
+        scriviScialuppa(dati.spedizioneId, null);
+        setStatoBozza("fermo");
+        setMessaggio("Questa scheda e' stata chiusa da un altro dispositivo: ricaricala per vederla aggiornata.");
+        return;
+      }
+      if (esito.errore) { setStatoBozza("in_ritardo"); return; }
+      scriviScialuppa(dati.spedizioneId, null);
+      setBozzaTs(esito.ts || null);
+      setStatoBozza("salvato");
+    }, 1500);
+    return () => clearTimeout(timerBozza.current);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [dichiarazioni, consegne, caricando, chiusa, tentativo]);
+
+  // quando non c'e' linea il tentativo fallisce e basta: si riprova da
+  // soli ogni otto secondi, perche' la master sta contando e non deve
+  // accorgersene. Si smette quando il salvataggio passa, o quando la
+  // scheda viene chiusa
+  useEffect(() => {
+    if (statoBozza !== "in_ritardo" || !dati || chiusa) return;
+    const t = setTimeout(() => setTentativo((n) => n + 1), 8000);
+    return () => clearTimeout(t);
+  }, [statoBozza, tentativo, dati, chiusa]);
 
   async function destino(istanza, chiave, iscrittoId = null) {
     setSceltaKit(null);
@@ -120,11 +232,13 @@ export default function SchedaRientro({
     });
     setSalvando(false);
     if (esito.errore) { setMessaggio(esito.errore); return; }
+    // la chiusura ha riscritto le righe da capo: la posta e' arrivata
+    clearTimeout(timerBozza.current);
+    scriviScialuppa(dati.spedizioneId, null);
+    setStatoBozza("fermo");
     setMessaggio(esito.anomalie ? "Inventario chiuso. Ci sono differenze da verificare, le vedrà chi riceve il pacco." : "Inventario chiuso.");
     await ricarica();
   }
-
-  const chiusa = dati?.rientro?.stato === "chiuso";
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -136,6 +250,27 @@ export default function SchedaRientro({
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18, lineHeight: 1.5 }}>
           {corso?.nome || "—"} · {loc?.nome || "—"}. È già compilato con quello che il sistema sa: controlla e correggi solo dove serve.
         </div>
+
+        {/* Quello che hai contato non vive nel telefono: la master deve
+            poterlo vedere senza chiederlo, perché è l'unica ragione per
+            cui può permettersi di non avere fretta. */}
+        {!caricando && dati && !chiusa && (statoBozza !== "fermo" || bozzaTs) && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 7, marginBottom: 14,
+            ...fontBody, fontSize: 11.5, fontWeight: 700,
+            color: statoBozza === "in_ritardo" ? "#8A6A1B" : MUTED,
+          }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: 4, flexShrink: 0,
+              background: statoBozza === "in_ritardo" ? "#C89A2B" : statoBozza === "salvo" ? GOLD : "#2E7D32",
+            }} />
+            {statoBozza === "in_ritardo"
+              ? "Non riesco a salvare: quello che hai contato è al sicuro sul telefono, riprovo da solo."
+              : statoBozza === "salvo"
+                ? "Salvo…"
+                : `Salvato${bozzaTs ? ` alle ${oraBreve(bozzaTs)}` : ""}. Puoi chiudere la pagina e riprendere da qui.`}
+          </div>
+        )}
 
         {messaggio && (
           <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: messaggio.startsWith("Inventario chiuso") ? "#2E7D32" : "#C0392B", background: messaggio.startsWith("Inventario chiuso") ? "#E9F6EC" : "#FDECEC", border: `1px solid ${messaggio.startsWith("Inventario chiuso") ? "#BFE3C6" : "#F5C6C6"}`, borderRadius: 10, padding: "10px 12px", marginBottom: 16 }}>
@@ -163,7 +298,7 @@ export default function SchedaRientro({
                 {iscrittiEdizione.map((i) => (
                   <button
                     key={i.id} disabled={chiusa}
-                    onClick={() => setConsegne((p) => ({ ...p, [i.id]: !consegnato(i.id) }))}
+                    onClick={() => { toccata.current = true; setConsegne((p) => ({ ...p, [i.id]: !consegnato(i.id) })); }}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%",
                       textAlign: "left", background: consegnato(i.id) ? "#E9F6EC" : "#fff",

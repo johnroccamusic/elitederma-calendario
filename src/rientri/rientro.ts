@@ -49,6 +49,10 @@ export interface DatiRientro {
   difettosiAttesi: { prodottoId: string; nota: string | null }[];
   /** quante righe erano gia' state dichiarate: serve a non ripartire da zero */
   dichiarazioni: Record<string, { rientrata: number; guasta: number; consegnata: number }>;
+  /** quando la bozza e' arrivata sul server, null se non ne e' mai arrivata una */
+  bozzaTs: string | null;
+  /** chi il kit NON l'ha ricevuto: solo le eccezioni, { iscrittoId: false } */
+  bozzaConsegne: Record<string, boolean>;
 }
 
 /** Tutto quello che serve alla scheda, in una lettura sola. */
@@ -136,6 +140,9 @@ export async function caricaRientro(corsoDataId: string | null): Promise<DatiRie
       .filter((s) => s.difettoso_rientra)
       .map((s) => ({ prodottoId: s.prodotto_sostituito_id, nota: s.nota || null })),
     dichiarazioni,
+    bozzaTs: rientro?.bozza_ts || null,
+    bozzaConsegne: (rientro?.bozza_consegne && typeof rientro.bozza_consegne === "object")
+      ? rientro.bozza_consegne : {},
   };
 }
 
@@ -172,6 +179,79 @@ export function dermografiNonQuadrano(righe: DichiarazioneRiga[]): Dichiarazione
   return righe.filter(
     (r) => r.tipo === "dermografo" && r.rientrata + r.guasta + r.venduti !== r.spediti,
   );
+}
+
+/**
+ * Salva la bozza: quello che la master ha contato finora, sul server,
+ * mentre la scheda e' ancora aperta.
+ *
+ * Scrive nelle STESSE righe della chiusura, non in una tabella a parte.
+ * Sembra spericolato e non lo e': tutto cio' che legge un rientro — la
+ * lista di rientro, il ripristino dello stock, le anomalie, l'analisi
+ * dei consumi — comincia con `stato !== "chiuso" -> niente`. Finche' il
+ * rientro e' aperto quelle righe non le guarda nessuno, e quando la
+ * master chiude vengono riscritte tutte da capo. Una bozza non puo'
+ * muovere un pezzo di magazzino perche' nessuno la legge.
+ *
+ * Due cose che questa funzione NON fa, e sono il motivo per cui e'
+ * separata da chiudiRientro:
+ *   - non tocca mai `stato`, `chiuso_ts`, `ha_anomalie`, `note_anomalie`
+ *   - non calcola `quantita_consumata_calcolata`, che resta null finche'
+ *     non si chiude: e' il numero su cui poggia l'analisi dei consumi,
+ *     e va congelato una volta sola, alla fine
+ *
+ * E non blocca niente. I dermografi che non quadrano fermano la
+ * chiusura, non il salvataggio: una scheda a meta' non quadra quasi
+ * mai, e' proprio il suo mestiere.
+ */
+export async function salvaBozzaRientro({
+  spedizioneId, masterId, righe, consegne,
+}: {
+  spedizioneId: string;
+  masterId: string | null;
+  righe: DichiarazioneRiga[];
+  consegne: Record<string, boolean>;
+}): Promise<{ errore?: string; ts?: string }> {
+  // una scheda gia' chiusa non si tocca piu': se due dispositivi hanno
+  // la stessa scheda aperta e uno chiude, l'altro non deve poter
+  // riscrivere le righe da cui si e' appena ripristinato il magazzino
+  const { data: esistente } = await supabase
+    .from("rientri").select("id, stato").eq("spedizione_id", spedizioneId).maybeSingle();
+  if (esistente?.stato === "chiuso") return { errore: "chiusa" };
+
+  const ts = new Date().toISOString();
+  // solo le eccezioni: chi il kit non l'ha ricevuto
+  const eccezioni: Record<string, boolean> = {};
+  Object.entries(consegne || {}).forEach(([id, v]) => { if (v === false) eccezioni[id] = false; });
+
+  const { data: rientro, error } = await supabase
+    .from("rientri")
+    .upsert(
+      { spedizione_id: spedizioneId, master_id: masterId, bozza_ts: ts, bozza_consegne: eccezioni },
+      { onConflict: "spedizione_id" },
+    )
+    .select("id, stato").single();
+  if (error || !rientro) return { errore: error?.message || "non riesco a salvare" };
+  // seconda rete: fra la lettura di sopra e questa upsert ci sta una
+  // chiusura da un altro dispositivo
+  if (rientro.stato === "chiuso") return { errore: "chiusa" };
+
+  if (righe.length > 0) {
+    const { error: erroreRighe } = await supabase.from("rientro_righe").upsert(
+      righe.map((r) => ({
+        rientro_id: rientro.id,
+        spedizione_riga_id: r.rigaId,
+        tipo: r.tipo,
+        quantita_rientrata: r.rientrata,
+        quantita_venduta: r.venduti,
+        quantita_guasta: r.guasta,
+        quantita_consegnata: r.consegnata,
+      })),
+      { onConflict: "rientro_id,spedizione_riga_id" },
+    );
+    if (erroreRighe) return { errore: erroreRighe.message };
+  }
+  return { ts };
 }
 
 /**
@@ -235,6 +315,11 @@ export async function chiudiRientro({
     chiuso_ts: new Date().toISOString(),
     ha_anomalie: note.length > 0,
     note_anomalie: note,
+    // la bozza ha finito il suo lavoro: le righe qui sopra sono state
+    // riscritte dalla chiusura, e un "salvato alle 14:32" rimasto li'
+    // direbbe una cosa vecchia
+    bozza_ts: null,
+    bozza_consegne: null,
   }).eq("id", rientro.id);
   if (erroreChiusura) return { errore: erroreChiusura.message };
 
