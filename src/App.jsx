@@ -19978,7 +19978,128 @@ function Riquadrino({ etichetta, valore, colore = NAVY, forte = false }) {
     </div>
   );
 }
-function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, isMobile, prodottiShop = [], coupon = [] }) {
+// Quanto vale davvero un carrello, riga per riga: prezzo al pubblico,
+// margine, sconto che le fasce di oggi gli riconoscono, quanto si
+// incassa e quanti punti genera.
+//
+// Sta qui fuori perche' la guardano in due: chi amministra, nell'elenco
+// dei carrelli sospesi, e chi amministra di nuovo quando entra nel POS
+// di un'altra persona per chiudere il suo carrello. Due copie di questo
+// calcolo vorrebbero dire due numeri diversi sulla stessa vendita.
+//
+// Niente si congela: sconto e punti dipendono da quanto vale il
+// carrello e dalle fasce di OGGI, e si rifanno ogni volta che lo si
+// guarda. Scriverli una volta per tutte vorrebbe dire mostrare numeri
+// calcolati con le regole di ieri.
+function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, schemaPunti }) {
+  const righe = Array.isArray(c?.carrello) ? c.carrello : [];
+  const subtotale = round2(righe.reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
+  const contanti = pagamentoContaComeContanti(c?.metodoPagamento);
+  const couponEdizione = c?.corsoPosId ? (coupon || []).find((x) => x.corsi_date_id === c.corsoPosId) : null;
+  const aFasce = c?.scontoCorsoAttivo !== false && !c?.omaggioAttivo && couponEdizione?.tipo_regola_sconto === "fasce";
+  const fasce = aFasce
+    ? fasceCorsiPerPagamento(serieScontoScritta(fasceCarta) ? fasceCarta : couponEdizione.fasce_sconto, fasceContanti, contanti)
+    : null;
+  const sicurezza = sicurezzaPuntiDi(schemaPunti);
+  const dettaglio = righe.map((r) => {
+    const prodotto = prodottoPerId[r.prodottoId] || null;
+    const unitario = round2(Number(r.prezzo) || 0);
+    const lordo = round2(unitario * (Number(r.quantita) || 0));
+    const margine = marginePercentualeDi(prodotto);
+    const scontoPct = aFasce ? percentualeFasciaDi(prodotto, fasce, subtotale) : 0;
+    const sconto = round2((lordo * scontoPct) / 100);
+    // quanto si incassa per UN pezzo: e' il numero che chi guarda
+    // confronta col prezzo di listino accanto
+    const pagatoUnitario = round2(unitario * (1 - scontoPct / 100));
+    const pp = puntiProdotto(prodotto, sicurezza, contanti);
+    const teorici = pp == null ? null : round2(pp * (Number(r.quantita) || 0));
+    const scontati = puntiProdottoScontato(prodotto, sicurezza, contanti, scontoPct);
+    const punti = teorici == null ? null : round2((scontati == null ? 0 : scontati) * (Number(r.quantita) || 0));
+    return { ...r, prodotto, unitario, pagatoUnitario, lordo, margine, scontoPct, sconto, teorici, punti };
+  });
+  const sconto = round2(dettaglio.reduce((t, d) => t + d.sconto, 0));
+  const teorici = round2(dettaglio.reduce((t, d) => t + (d.teorici || 0), 0));
+  const punti = round2(dettaglio.reduce((t, d) => t + (d.punti || 0), 0));
+  return {
+    dettaglio, subtotale, sconto, teorici, punti, contanti, aFasce,
+    codice: couponEdizione?.codice || null,
+    pctMedia: subtotale > 0 ? round2((sconto / subtotale) * 100) : 0,
+    daIncassare: round2(subtotale - sconto),
+    senzaMargine: dettaglio.filter((d) => d.margine == null).length,
+  };
+}
+
+// Il conto del carrello messo in tabella: una riga per prodotto, col
+// prezzo al pubblico, il margine, lo sconto che le fasce gli
+// riconoscono, quanto si incassa e quanti punti genera.
+//
+// La vedono solo gli occhi che devono deciderne qualcosa: chi
+// amministra, nell'elenco dei carrelli sospesi e dentro il POS quando ne
+// sta chiudendo uno per conto di un altro. La master, sul suo POS,
+// continua a vedere la lista di sempre — il margine di un prodotto non
+// e' una cosa che le serve mentre incassa.
+function TabellaContoCarrello({ conto, minWidth = 460 }) {
+  const cella = { ...fontBody, fontSize: 11.5, color: NAVY, padding: "4px 0", whiteSpace: "nowrap" };
+  const intest = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, padding: "0 0 4px", whiteSpace: "nowrap" };
+  return (
+    <div style={{ overflowX: "auto", marginTop: 4 }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth }}>
+        <thead>
+          <tr>
+            <th style={{ ...intest, textAlign: "left" }}>Prodotto</th>
+            <th style={{ ...intest, textAlign: "right" }}>Qtà</th>
+            <th style={{ ...intest, textAlign: "right" }}>Al pubblico</th>
+            <th style={{ ...intest, textAlign: "right" }}>Margine</th>
+            <th style={{ ...intest, textAlign: "right" }}>Sconto</th>
+            <th style={{ ...intest, textAlign: "right" }}>Pagato</th>
+            <th style={{ ...intest, textAlign: "right" }}>Punti</th>
+          </tr>
+        </thead>
+        <tbody>
+          {conto.dettaglio.map((d, i) => (
+            <tr key={i} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <td style={{ ...cella, whiteSpace: "normal", paddingRight: 8 }}>
+                {d.nome}
+                {d.sku ? <span style={{ color: MUTED }}> · {d.sku}</span> : null}
+              </td>
+              <td style={{ ...cella, textAlign: "right" }}>{d.quantita}</td>
+              <td style={{ ...cella, textAlign: "right" }}>
+                {fmtEuroErp2(d.unitario)}
+                {d.quantita > 1 && <span style={{ color: MUTED }}> · {fmtEuroErp2(d.lordo)}</span>}
+              </td>
+              <td style={{ ...cella, textAlign: "right", color: d.margine == null ? "#C0392B" : MUTED }}>
+                {d.margine == null ? "sconosciuto" : fmtPctErp2(d.margine)}
+              </td>
+              <td style={{ ...cella, textAlign: "right", color: d.sconto > 0 ? "#C0392B" : MUTED }}>
+                {d.sconto > 0 ? `− ${fmtEuroErp2(d.sconto)}` : "—"}
+                {d.scontoPct > 0 && <span style={{ color: MUTED }}> · {fmtPctErp2(d.scontoPct)}</span>}
+              </td>
+              <td style={{ ...cella, textAlign: "right", fontWeight: 700 }}>
+                {fmtEuroErp2(d.pagatoUnitario)}
+                {d.quantita > 1 && <span style={{ color: MUTED, fontWeight: 400 }}> · {fmtEuroErp2(round2(d.lordo - d.sconto))}</span>}
+              </td>
+              <td style={{ ...cella, textAlign: "right", color: d.punti ? GOLD : MUTED, fontWeight: d.punti ? 700 : 400 }}>
+                {d.punti == null ? "—" : fmtPunti(d.punti)}
+                {d.teorici != null && d.teorici !== d.punti && <span style={{ color: MUTED, fontWeight: 400 }}> / {fmtPunti(d.teorici)}</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {conto.senzaMargine > 0 && (
+        <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", marginTop: 6, lineHeight: 1.4 }}>
+          {conto.senzaMargine === 1 ? "Un prodotto non ha" : `${conto.senzaMargine} prodotti non hanno`} il costo d'acquisto in anagrafica:
+          senza margine non prend{conto.senzaMargine === 1 ? "e" : "ono"} sconto e non fa{conto.senzaMargine === 1 ? "" : "nno"} punti.
+        </div>
+      )}
+      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 6, lineHeight: 1.4 }}>
+        Sconto e punti sono ricalcolati adesso, con le regole di oggi: il carrello parcheggiato non li congela.
+      </div>
+    </div>
+  );
+}
+
+function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, onEntraNelPos, isMobile, prodottiShop = [], coupon = [] }) {
   // Un carrello fermo non e' solo una lista della spesa: e' materiale che
   // nessuno puo' vendere, e per decidere se sollecitarlo o buttarlo serve
   // sapere quanto vale davvero — quanto sconto sta promettendo, con che
@@ -19992,43 +20113,26 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
   const prodottoPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((x) => [x.id, x])), [prodottiShop]);
   const [aperti, setAperti] = useState({});
   const ordinati = [...lista].sort((a, b) => String(b.creato || "").localeCompare(String(a.creato || "")));
-  function contoDi(c) {
-    const righe = Array.isArray(c.carrello) ? c.carrello : [];
-    const subtotale = round2(righe.reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
-    const contanti = pagamentoContaComeContanti(c.metodoPagamento);
-    const couponEdizione = c.corsoPosId ? (coupon || []).find((x) => x.corsi_date_id === c.corsoPosId) : null;
-    const aFasce = c.scontoCorsoAttivo !== false && !c.omaggioAttivo && couponEdizione?.tipo_regola_sconto === "fasce";
-    const fasce = aFasce
-      ? fasceCorsiPerPagamento(serieScontoScritta(fasceCartaAmm) ? fasceCartaAmm : couponEdizione.fasce_sconto, fasceContantiAmm, contanti)
-      : null;
-    const sicurezza = sicurezzaPuntiDi(schemaPuntiAmm);
-    const dettaglio = righe.map((r) => {
-      const prodotto = prodottoPerId[r.prodottoId] || null;
-      const unitario = round2(Number(r.prezzo) || 0);
-      const lordo = round2(unitario * (Number(r.quantita) || 0));
-      const margine = marginePercentualeDi(prodotto);
-      const scontoPct = aFasce ? percentualeFasciaDi(prodotto, fasce, subtotale) : 0;
-      const sconto = round2((lordo * scontoPct) / 100);
-      // quanto si incassa per UN pezzo: e' il numero che chi guarda
-      // confronta col prezzo di listino accanto
-      const pagatoUnitario = round2(unitario * (1 - scontoPct / 100));
-      const pp = puntiProdotto(prodotto, sicurezza, contanti);
-      const teorici = pp == null ? null : round2(pp * (Number(r.quantita) || 0));
-      const scontati = puntiProdottoScontato(prodotto, sicurezza, contanti, scontoPct);
-      const punti = teorici == null ? null : round2((scontati == null ? 0 : scontati) * (Number(r.quantita) || 0));
-      return { ...r, prodotto, unitario, pagatoUnitario, lordo, margine, scontoPct, sconto, teorici, punti };
+  const contoDi = (c) => contoCarrello(c, { prodottoPerId, coupon, fasceCarta: fasceCartaAmm, fasceContanti: fasceContantiAmm, schemaPunti: schemaPuntiAmm });
+  // Un riquadro per persona, col numero dei suoi carrelli che lampeggia.
+  //
+  // L'elenco lungo dice quali carrelli ci sono; questi dicono DI CHI
+  // sono, che e' la domanda che ci si fa per prima — un carrello fermo
+  // lo si chiude entrando nel POS di chi l'ha lasciato li', e la strada
+  // parte da qui.
+  const perOperatore = useMemo(() => {
+    const gruppi = {};
+    (lista || []).forEach((c) => {
+      const o = c.operatore || { tipo: "?", id: "?", nome: "Senza nome" };
+      const k = `${o.tipo}:${o.id}`;
+      if (!gruppi[k]) gruppi[k] = { operatore: o, carrelli: 0, pezzi: 0, totale: 0 };
+      gruppi[k].carrelli += 1;
+      gruppi[k].pezzi += (c.carrello || []).reduce((n, r) => n + (Number(r.quantita) || 0), 0);
+      gruppi[k].totale += totaleCarrelloSospeso(c);
     });
-    const sconto = round2(dettaglio.reduce((t, d) => t + d.sconto, 0));
-    const teorici = round2(dettaglio.reduce((t, d) => t + (d.teorici || 0), 0));
-    const punti = round2(dettaglio.reduce((t, d) => t + (d.punti || 0), 0));
-    return {
-      dettaglio, subtotale, sconto, teorici, punti, contanti, aFasce,
-      codice: couponEdizione?.codice || null,
-      pctMedia: subtotale > 0 ? round2((sconto / subtotale) * 100) : 0,
-      daIncassare: round2(subtotale - sconto),
-      senzaMargine: dettaglio.filter((d) => d.margine == null).length,
-    };
-  }
+    return Object.values(gruppi).sort((a, b) => b.carrelli - a.carrelli || String(a.operatore.nome || "").localeCompare(String(b.operatore.nome || "")));
+  }, [lista]);
+
   const quando = (iso) => (iso ? new Date(iso).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
   const pezziTotali = ordinati.reduce((t, c) => t + (c.carrello || []).reduce((s2, r) => s2 + (Number(r.quantita) || 0), 0), 0);
   return (
@@ -20043,6 +20147,44 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
         </div>
         <div style={{ padding: 14, maxHeight: "70vh", overflowY: "auto" }}>
           {ordinati.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 16 }}>Nessun carrello sospeso: tutto il materiale è in vendita.</div>}
+
+          {onEntraNelPos && perOperatore.length > 0 && (
+            <>
+              <style>{`@keyframes lampeggiaCarrelliOperatore { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }`}</style>
+              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                Entra nel POS di
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 104 : 124}px, 1fr))`, gap: 10, marginBottom: 18 }}>
+                {perOperatore.map((g) => (
+                  <button
+                    key={`${g.operatore.tipo}:${g.operatore.id}`}
+                    onClick={() => onEntraNelPos(g.operatore)}
+                    title={`Apri il POS come ${toTitleCase(g.operatore.nome || "")} e chiudi i suoi carrelli`}
+                    style={{
+                      position: "relative", aspectRatio: "1 / 1", borderRadius: 14,
+                      border: `1px solid ${CREAM_BORDER}`, background: "#FBF9F4", cursor: "pointer",
+                      display: "grid", gridTemplateRows: "1fr auto 1fr", alignItems: "center", justifyItems: "center",
+                      padding: 8, textAlign: "center", minWidth: 0,
+                    }}
+                  >
+                    <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.2, alignSelf: "end", paddingBottom: 4, overflowWrap: "anywhere" }}>
+                      {toTitleCase(g.operatore.nome || "Sconosciuto")}
+                    </span>
+                    <span style={{
+                      ...fontDisplay, fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#fff",
+                      background: "#C0392B", borderRadius: 20, minWidth: 34, padding: "2px 10px", lineHeight: 1.2,
+                      animation: "lampeggiaCarrelliOperatore 1.2s ease-in-out infinite",
+                    }}>
+                      {g.carrelli}
+                    </span>
+                    <span style={{ ...fontBody, fontSize: 10, color: MUTED, alignSelf: "start", paddingTop: 4, whiteSpace: "nowrap" }}>
+                      {g.pezzi} pezz{g.pezzi === 1 ? "o" : "i"} · {fmtEuroErp2(g.totale)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           {ordinati.map((c) => (
             <div key={c.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -20061,8 +20203,6 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
               {(() => {
                 const conto = contoDi(c);
                 const aperto = !!aperti[c.id];
-                const cella = { ...fontBody, fontSize: 11.5, color: NAVY, padding: "4px 0", whiteSpace: "nowrap" };
-                const intest = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, padding: "0 0 4px", whiteSpace: "nowrap" };
                 return (
                   <div style={{ marginTop: 8, borderTop: `1px dashed ${CREAM_BORDER}`, paddingTop: 8 }}>
                     {/* il riassunto si vede sempre: e' quello che dice se il
@@ -20081,62 +20221,7 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, is
                     >
                       {aperto ? "Nascondi il dettaglio" : `Vedi il dettaglio · ${conto.dettaglio.length} righe`} {aperto ? "▴" : "▾"}
                     </button>
-                    {aperto && (
-                      <div style={{ overflowX: "auto", marginTop: 4 }}>
-                        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 460 }}>
-                          <thead>
-                            <tr>
-                              <th style={{ ...intest, textAlign: "left" }}>Prodotto</th>
-                              <th style={{ ...intest, textAlign: "right" }}>Qtà</th>
-                              <th style={{ ...intest, textAlign: "right" }}>Al pubblico</th>
-                              <th style={{ ...intest, textAlign: "right" }}>Margine</th>
-                              <th style={{ ...intest, textAlign: "right" }}>Sconto</th>
-                              <th style={{ ...intest, textAlign: "right" }}>Pagato</th>
-                              <th style={{ ...intest, textAlign: "right" }}>Punti</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {conto.dettaglio.map((d, i) => (
-                              <tr key={i} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
-                                <td style={{ ...cella, whiteSpace: "normal", paddingRight: 8 }}>
-                                  {d.nome}
-                                  {d.sku ? <span style={{ color: MUTED }}> · {d.sku}</span> : null}
-                                </td>
-                                <td style={{ ...cella, textAlign: "right" }}>{d.quantita}</td>
-                                <td style={{ ...cella, textAlign: "right" }}>
-                                  {fmtEuroErp2(d.unitario)}
-                                  {d.quantita > 1 && <span style={{ color: MUTED }}> · {fmtEuroErp2(d.lordo)}</span>}
-                                </td>
-                                <td style={{ ...cella, textAlign: "right", color: d.margine == null ? "#C0392B" : MUTED }}>
-                                  {d.margine == null ? "sconosciuto" : fmtPctErp2(d.margine)}
-                                </td>
-                                <td style={{ ...cella, textAlign: "right", color: d.sconto > 0 ? "#C0392B" : MUTED }}>
-                                  {d.sconto > 0 ? `− ${fmtEuroErp2(d.sconto)}` : "—"}
-                                  {d.scontoPct > 0 && <span style={{ color: MUTED }}> · {fmtPctErp2(d.scontoPct)}</span>}
-                                </td>
-                                <td style={{ ...cella, textAlign: "right", fontWeight: 700 }}>
-                                  {fmtEuroErp2(d.pagatoUnitario)}
-                                  {d.quantita > 1 && <span style={{ color: MUTED, fontWeight: 400 }}> · {fmtEuroErp2(round2(d.lordo - d.sconto))}</span>}
-                                </td>
-                                <td style={{ ...cella, textAlign: "right", color: d.punti ? GOLD : MUTED, fontWeight: d.punti ? 700 : 400 }}>
-                                  {d.punti == null ? "—" : fmtPunti(d.punti)}
-                                  {d.teorici != null && d.teorici !== d.punti && <span style={{ color: MUTED, fontWeight: 400 }}> / {fmtPunti(d.teorici)}</span>}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {conto.senzaMargine > 0 && (
-                          <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", marginTop: 6, lineHeight: 1.4 }}>
-                            {conto.senzaMargine === 1 ? "Un prodotto non ha" : `${conto.senzaMargine} prodotti non hanno`} il costo d'acquisto in anagrafica:
-                            senza margine non prend{conto.senzaMargine === 1 ? "e" : "ono"} sconto e non fa{conto.senzaMargine === 1 ? "" : "nno"} punti.
-                          </div>
-                        )}
-                        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 6, lineHeight: 1.4 }}>
-                          Sconto e punti sono ricalcolati adesso, con le regole di oggi: il carrello parcheggiato non li congela.
-                        </div>
-                      </div>
-                    )}
+                    {aperto && <TabellaContoCarrello conto={conto} />}
                     {c.note && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>Note: {c.note}</div>}
                   </div>
                 );
@@ -33516,7 +33601,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS: un carrello
   // dimenticato tiene fermo materiale che nessuno puo' vendere, e da qui
@@ -33539,7 +33624,11 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMag
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
       {mostraSospesi && (
-        <PannelloCarrelliSospesiAmministrazione lista={sospesiTutti} isMobile={isMobile} prodottiShop={prodottiShop} coupon={coupon} onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso} />
+        <PannelloCarrelliSospesiAmministrazione
+          lista={sospesiTutti} isMobile={isMobile} prodottiShop={prodottiShop} coupon={coupon}
+          onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso}
+          onEntraNelPos={onEntraNelPosCome ? (operatore) => { setMostraSospesi(false); onEntraNelPosCome(operatore); } : null}
+        />
       )}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
@@ -54648,7 +54737,7 @@ function etichettaMetodoVendita(metodo) {
   if (metodo === "buono_amazon") return "Buono Amazon";
   return "POS";
 }
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, titolo = "POS Vendita diretta" }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, titolo = "POS Vendita diretta" }) {
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
   // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
@@ -54682,7 +54771,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // master, poi venditore, poi utente operativo nominale (Amministratore/
   // Stefano/Elena…) — sulle vendite prodotti si definiscono i target con
   // premio produzione, quindi va sempre saputo con certezza chi ha venduto
-  const operatore = operatoreCorrente(utenteLoggato, venditoreLoggato);
+  // Chi sta battendo davvero, e per conto di chi.
+  //
+  // Normalmente coincidono. Non coincidono quando chi amministra entra
+  // da "Carrelli sospesi" nel carrello di qualcun altro per portarlo a
+  // termine: da quel momento il POS e' il suo — vede i suoi carrelli, la
+  // vendita conta a lei — ma chi preme i tasti resta chi e' loggato, e
+  // resta scritto (vedi registrata_da_* sulla vendita).
+  const operatoreReale = operatoreCorrente(utenteLoggato, venditoreLoggato);
+  const operatore = operatoreImpersonato || operatoreReale;
+  const perContoDiAltri = !!operatoreImpersonato && !stessoOperatore(operatoreImpersonato, operatoreReale);
   // target in corso per l'operatore loggato (solo master/venditore: i
   // target esistono solo per questi due soggetti, vedi Target
   // Master/Venditori in Impostazioni), con l'avanzamento già calcolato
@@ -55025,6 +55123,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // riservatiAltrove). L'elenco completo ce l'ha chi amministra, in
   // Magazzino e shop
   const mieiSospesi = listaSospesi.filter((c) => stessoOperatore(c.operatore, operatore));
+  // il carrello che si sta battendo, valutato con le stesse regole con
+  // cui l'elenco dei carrelli sospesi valuta quelli parcheggiati: serve
+  // solo a chi amministra il carrello di un altro (vedi perContoDiAltri)
+  const contoCarrelloVivo = useMemo(
+    () => contoCarrello(
+      { carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo },
+      { prodottoPerId: prodottiPerId, coupon, fasceCarta: fasceCorsiCartaPos, fasceContanti: fasceContantiCorsiPos, schemaPunti: schemaPuntiPos },
+    ),
+    [carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, prodottiPerId, coupon, fasceCorsiCartaPos, fasceContantiCorsiPos, schemaPuntiPos],
+  );
   const [carrelloSospesoId, setCarrelloSospesoId] = useState(null);
   const [pannelloSospesiAperto, setPannelloSospesiAperto] = useState(false);
   // si scrive sempre sull'ultima lista arrivata, non su quella chiusa nella
@@ -55570,10 +55678,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       operatore_id: venditaVaAllaMaster ? masterDelCorso.id : operatore.id,
       operatore_nome: venditaVaAllaMaster ? masterDelCorso.nome : operatore.nome,
       // e qui resta scritto chi l'ha battuta davvero: su un incasso non
-      // e' un dettaglio da perdere
-      registrata_da_tipo: venditaVaAllaMaster ? operatore.tipo : null,
-      registrata_da_id: venditaVaAllaMaster ? operatore.id : null,
-      registrata_da_nome: venditaVaAllaMaster ? operatore.nome : null,
+      // e' un dettaglio da perdere. Due casi diversi, stessa colonna: la
+      // spunta "vendi per la master del corso", e chi amministra che
+      // chiude il carrello sospeso di qualcun altro
+      registrata_da_tipo: (venditaVaAllaMaster || perContoDiAltri) ? operatoreReale.tipo : null,
+      registrata_da_id: (venditaVaAllaMaster || perContoDiAltri) ? operatoreReale.id : null,
+      registrata_da_nome: (venditaVaAllaMaster || perContoDiAltri) ? operatoreReale.nome : null,
       corso_data_id: corsoPosSel?.id || null,
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
@@ -55778,6 +55888,23 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // l'involucro intorno cambia
   const contenutoCarrelloCorpo = (
     <>
+      {/* Quando chi amministra sta chiudendo il carrello di un altro, il
+          POS deve dirlo in cima e a lettere grandi. Non e' una cortesia:
+          e' che da qui in poi ogni euro e ogni punto vanno a una persona
+          che non e' quella loggata, e accorgersene dopo aver incassato
+          non serve a niente. */}
+      {perContoDiAltri && (
+        <div style={{
+          marginBottom: isMobile ? 8 : 14, borderRadius: 14, padding: "11px 14px",
+          background: "#EEF3FA", border: "1px solid #C9D8EC",
+          ...fontBody, fontSize: 12.5, color: "#1F3A5F", lineHeight: 1.45,
+        }}>
+          <b style={{ display: "block", fontSize: 13.5 }}>Stai operando come {toTitleCase(operatore?.nome || "—")}</b>
+          La vendita conterà a {toTitleCase(operatore?.nome || "—")} — incasso, provvigione e punti.
+          Resta scritto che l'hai battuta tu.
+        </div>
+      )}
+
       {/* la spunta della simulazione sta in cima al carrello e, quando è
           accesa, si vede da lontano: una prova dimenticata accesa è una
           vendita vera che sparisce dai conti, ed è il danno peggiore di
@@ -55963,6 +56090,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Il dettaglio che vede solo chi sta chiudendo il carrello di un
+          altro: prezzo al pubblico, margine, sconto, incassato, punti.
+          E' la stessa tabella dell'elenco dei carrelli sospesi, non una
+          copia — chi amministra deve leggere gli stessi numeri sia da
+          fuori che da dentro. La master, sul suo POS, non la vede: il
+          margine di un prodotto non le serve mentre incassa. */}
+      {perContoDiAltri && carrello.length > 0 && (
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, background: "#FBF9F4", borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: isMobile ? 10 : 14 }}>
+          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
+            Dettaglio per chi amministra
+          </div>
+          <TabellaContoCarrello conto={contoCarrelloVivo} minWidth={isMobile ? 420 : 460} />
         </div>
       )}
 
@@ -65900,6 +66042,23 @@ export default function App() {
   // il pallino sul tasto "Progetti in corso": quanti hanno sfondato la
   // scadenza senza essere finiti. Si rilegge tornando in home, dove il
   // tasto si vede — non serve tenerlo aggiornato mentre si e' altrove
+  // Chi amministra puo' entrare nel POS "come" un'altra persona, per
+  // chiudere un carrello che quella ha lasciato sospeso. Qui resta
+  // scritto per conto di chi: e' l'unica cosa che il POS deve sapere in
+  // piu', e si spegne appena si esce.
+  const [posComeOperatore, setPosComeOperatore] = useState(null);
+  function entraNelPosCome(operatore) {
+    setPosComeOperatore(operatore || null);
+    apriViewProtetta("pos");
+  }
+  // uscendo dal POS in qualunque modo — il tasto indietro, lo swipe, un
+  // tasto della home — l'identita' prestata si spegne. Restare "come
+  // qualcun altro" senza il POS davanti sarebbe una trappola: la volta
+  // dopo che si apre il POS si venderebbe a nome suo senza saperlo
+  useEffect(() => {
+    if (view !== "pos" && posComeOperatore) setPosComeOperatore(null);
+  }, [view, posComeOperatore]);
+
   const [progettiScaduti, setProgettiScaduti] = useState(0);
   useEffect(() => {
     if (!ok || view !== "home") return;
@@ -67235,6 +67394,7 @@ export default function App() {
       {view === "magazzinoshop" && (
         <PaginaMagazzinoShop
           prodottiShop={prodottiShop} coupon={coupon}
+          onEntraNelPosCome={entraNelPosCome}
           onBack={() => setView("home")}
           onApriMagazzino={apriMagazzino}
           onApriGestioneShop={apriGestioneShop}
@@ -67420,10 +67580,12 @@ export default function App() {
       {view === "pos" && (
         <PaginaPOS
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
+          prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati}
           utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato} targetVenditeProdotti={targetVenditeProdotti}
           ruoloUtente={ruoloUtente} corsiDate={corsiDate} corsi={corsi} location={location} iscritti={iscritti} coupon={coupon}
           bundleComponenti={bundleComponenti} master={master}
+          operatoreImpersonato={posComeOperatore}
+          onBack={() => { setPosComeOperatore(null); setView(posComeOperatore ? "magazzinoshop" : "home"); }}
           titolo={etichettaTasto("home", "pos", "POS Vendita diretta")}
         />
       )}
