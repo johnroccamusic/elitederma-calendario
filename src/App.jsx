@@ -19,6 +19,7 @@ import SchedaRientro from "./rientri/SchedaRientro.jsx";
 import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
 import MagazzinoGuasti from "./rientri/MagazzinoGuasti.jsx";
 import AnalisiConsumi from "./rientri/AnalisiConsumi.jsx";
+import { analizzaConsumi, consumoRealePerAllievo } from "./rientri/consumi";
 import AnomalieRientri from "./rientri/AnomalieRientri.jsx";
 import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
@@ -49407,6 +49408,23 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
 
+  // I CONSUMI VERI, accanto alla teoria.
+  //
+  // L'Advisor calcola il fabbisogno dalla distinta dei kit: tot pezzi per
+  // kit, per allievo. E' una previsione onesta, ma e' una previsione — e
+  // dagli inventari di fine corso adesso si sa quanto si consuma DAVVERO.
+  //
+  // Il numero non lo cambio di nascosto: quando la realta' si discosta
+  // dalla teoria di piu' di un quinto, l'Advisor lo dice, e chi ordina
+  // decide. Cambiare da solo le quantita' da ordinare sulla base di tre
+  // corsi chiusi sarebbe peggio del problema che risolve.
+  const [consumiVeri, setConsumiVeri] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    analizzaConsumi().then((a) => { if (vivo) setConsumiVeri(a); });
+    return () => { vivo = false; };
+  }, []);
+
   // la prima foto di ogni prodotto: una riga d'ordine con la foto si
   // riconosce senza leggerla, ed e' la stessa che si vede in magazzino
   const immaginePerProdotto = useMemo(() => {
@@ -49802,6 +49820,46 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
           Con le scorte di adesso, fino a quando riesci a coprire i corsi in calendario — e cosa devi ordinare.
         </div>
+      {(() => {
+        if (!consumiVeri || consumiVeri.edizioniChiuse === 0) return null;
+        // la teoria: quanti pezzi di quel prodotto prevede la distinta per
+        // ogni allievo, sommando tutti i kit in cui compare
+        const teoricoPerAllievo = {};
+        (corsiKitProdotti || []).filter((r) => r.tipo === "kit" && r.kit_id).forEach((r) => {
+          teoricoPerAllievo[r.prodotto_id] = Math.max(teoricoPerAllievo[r.prodotto_id] || 0, Number(r.quantita) || 0);
+        });
+        const scostati = [];
+        Object.keys(teoricoPerAllievo).forEach((prodottoId) => {
+          const reale = consumoRealePerAllievo(consumiVeri, prodottoId);
+          const teoria = teoricoPerAllievo[prodottoId];
+          if (!reale || !(teoria > 0)) return;
+          const scarto = Math.round(((reale.media - teoria) / teoria) * 100);
+          if (Math.abs(scarto) >= 20) scostati.push({ prodottoId, teoria, reale: reale.media, scarto, corsi: reale.edizioni });
+        });
+        if (scostati.length === 0) return null;
+        scostati.sort((a, b) => Math.abs(b.scarto) - Math.abs(a.scarto));
+        return (
+          <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: "1px solid #EAD9B0", background: "#FBF3E0" }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#8A6D1D", marginBottom: 4 }}>
+              Su {scostati.length} {scostati.length === 1 ? "prodotto il consumo vero e' diverso" : "prodotti il consumo vero e' diverso"} dalla teoria dei kit
+            </div>
+            <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", marginBottom: 10, lineHeight: 1.45 }}>
+              I conti qui sotto sono fatti sulla composizione dei kit. Dagli inventari di fine corso risulta un consumo diverso: valuta tu se ordinarne di piu' o di meno.
+            </div>
+            {scostati.slice(0, 6).map((x) => (
+              <div key={x.prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", flexWrap: "wrap" }}>
+                <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, minWidth: 0 }}>
+                  {(prodottiShop || []).find((p) => p.id === x.prodottoId)?.nome || "—"}
+                  <span style={{ color: "#8A6D1D" }}> · teoria {x.teoria} per allievo, davvero {String(x.reale).replace(".", ",")} su {x.corsi} corsi</span>
+                </span>
+                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: x.scarto > 0 ? "#C0392B" : "#2E7D32", whiteSpace: "nowrap" }}>
+                  {x.scarto > 0 ? "+" : ""}{x.scarto}%
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       <div style={{ ...cardStyle, padding: 18, background: sfondoSemaforo, border: `1px solid ${coloreSemaforo}33`, marginBottom: 16, display: "flex", gap: 14, alignItems: "flex-start" }}>
         {/* il tondo col punto esclamativo prende il colore del semaforo:
             rosso quando un corso resta scoperto, verde quando reggono */}
