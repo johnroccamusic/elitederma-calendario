@@ -33370,10 +33370,16 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
 
 function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
-  // i carrelli sospesi di TUTTI gli utenti del POS, per chi amministra:
-  // un carrello dimenticato tiene fermo materiale che nessuno puo'
-  // vendere, e da qui si vede di chi e' e da quando
-  const puoVedereSospesi = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
+  // i carrelli sospesi di TUTTI gli utenti del POS: un carrello
+  // dimenticato tiene fermo materiale che nessuno puo' vendere, e da qui
+  // si vede di chi e' e da quando.
+  //
+  // Lo vede chiunque sia arrivato su questa pagina. Prima era riservato a
+  // chi risulta "amministratore" in utenti_app — due persone su quattro
+  // fra quelle che qui ci entrano davvero — e chi prepara i pacchi, che
+  // quel materiale fermo ce l'ha sullo scaffale, non lo vedeva. Un
+  // secondo cancello dentro una pagina gia' protetta dal permesso
+  // "magazzinoshop" teneva fuori le persone sbagliate.
   const [carrelliSospesiTutti, salvaCarrelliSospesiTutti] = useImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
   const sospesiTutti = Array.isArray(carrelliSospesiTutti) ? carrelliSospesiTutti : [];
   const [mostraSospesi, setMostraSospesi] = useState(false);
@@ -33384,7 +33390,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMag
   }
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
-      {mostraSospesi && puoVedereSospesi && (
+      {mostraSospesi && (
         <PannelloCarrelliSospesiAmministrazione lista={sospesiTutti} isMobile={isMobile} prodottiShop={prodottiShop} coupon={coupon} onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso} />
       )}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
@@ -33409,7 +33415,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMag
             { chiave: "analisiconsumi", title: "Consumi ai corsi", descrizione: "Quanto si consuma per allievo, chi si discosta dalla media e quali corsi vanno fuori riga.", Icona: IconaElencoRighe, attivo: true, onClick: onApriAnalisiConsumi },
             // i carrelli sospesi come tasto vero, con icona e disco, al posto
             // del tastino accanto al titolo (16/09/2026); solo per chi amministra
-            ...(puoVedereSospesi ? [{ chiave: "carrellisospesi", title: "Carrelli sospesi", descrizione: "I carrelli salvati e non pagati di tutti gli operatori: materiale fermo che nessuno può vendere.", Icona: IconaCarrelloPos, attivo: true, onClick: () => setMostraSospesi(true), badge: sospesiTutti.length || undefined }] : []),
+            { chiave: "carrellisospesi", title: "Carrelli sospesi", descrizione: "I carrelli salvati e non pagati di tutti gli operatori: materiale fermo che nessuno può vendere.", Icona: IconaCarrelloPos, attivo: true, onClick: () => setMostraSospesi(true), badge: sospesiTutti.length || undefined },
             { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
           ]}
         />
