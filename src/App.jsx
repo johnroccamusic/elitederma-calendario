@@ -17,6 +17,8 @@ import DomandaProvenienza from "./rientri/DomandaProvenienza.jsx";
 import { caricaKitInAula, registraPrelieviDaVendita } from "./rientri/pos";
 import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
 import SchedaRientro from "./rientri/SchedaRientro.jsx";
+import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
+import MagazzinoGuasti from "./rientri/MagazzinoGuasti.jsx";
 import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
@@ -33905,7 +33907,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS, per chi amministra:
   // un carrello dimenticato tiene fermo materiale che nessuno puo'
@@ -33942,6 +33944,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onBack, onApriMag
             { chiave: "venditealbanco", title: "Vendite al banco", descrizione: "Tutte le vendite fatte con il POS interno.", Icona: IconaTilePos, attivo: true, onClick: onApriVenditeAlBanco },
             { chiave: "prodottiusatikit", title: "Prodotti usati per i kit", descrizione: "Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiUsatiKit },
             { chiave: "omaggi", title: "Omaggi", descrizione: "Prodotti usciti dal POS senza essere venduti, regalati.", Icona: IconaTileOmaggio, attivo: true, onClick: onApriOmaggi },
+            { chiave: "magazzinoguasti", title: "Magazzino guasti", descrizione: "Quello che torna rotto dai corsi: fuori giacenza, e quali prodotti si rompono più spesso.", Icona: IconaAvvisoTriangolo, attivo: true, onClick: onApriMagazzinoGuasti },
             // i carrelli sospesi come tasto vero, con icona e disco, al posto
             // del tastino accanto al titolo (16/09/2026); solo per chi amministra
             ...(puoVedereSospesi ? [{ chiave: "carrellisospesi", title: "Carrelli sospesi", descrizione: "I carrelli salvati e non pagati di tutti gli operatori: materiale fermo che nessuno può vendere.", Icona: IconaCarrelloPos, attivo: true, onClick: () => setMostraSospesi(true), badge: sospesiTutti.length || undefined }] : []),
@@ -60296,6 +60299,18 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   // riceve, e sommarla al totale farebbe partire un pezzo di troppo. Chi
   // la taglia non ce l'ha ancora si conta a parte, perche' e' una cosa da
   // sistemare prima che il pacco chiuda, non un dato da ignorare.
+  // Due liste, non due pagine. Quella di allestimento dice cosa e'
+  // partito; quella di rientro dice cosa torna, e nasce solo quando la
+  // master ha chiuso il suo inventario. Si passa dall'una all'altra dal
+  // tasto in alto: sono due facce dello stesso pacco.
+  const [listaMostrata, setListaMostrata] = useState("allestimento");
+  const [listaRientro, setListaRientro] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    leggiListaRientro(corsoData?.id || null).then((l) => { if (vivo) setListaRientro(l); });
+    return () => { vivo = false; };
+  }, [corsoData?.id]);
+
   const riepilogoTaglie = (() => {
     const ordine = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
     const per = {};
@@ -60428,6 +60443,53 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
       </div>
 
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          {listaMostrata === "rientro" ? "Lista di rientro" : "Lista di allestimento"}
+        </div>
+        {listaRientro && (
+          <button
+            onClick={() => setListaMostrata((v) => (v === "rientro" ? "allestimento" : "rientro"))}
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap", minHeight: 40 }}
+          >
+            {listaMostrata === "rientro" ? "Vedi la lista di allestimento" : "Vedi la lista di rientro"}
+          </button>
+        )}
+      </div>
+
+      {listaMostrata === "rientro" && listaRientro && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.45 }}>
+            Dichiarata dalla master{listaRientro.chiusoIl ? ` il ${fmtData(String(listaRientro.chiusoIl).slice(0, 10))}` : ""}.
+            Non e' l'allestimento al contrario: i pezzi consumati, venduti o usati per una sostituzione indietro non tornano.
+            Questi rientrano in magazzino all'ultima fase, “Prodotti ripristinati”.
+          </div>
+          {listaRientro.haAnomalie && listaRientro.note.map((n, i) => (
+            <div key={i} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", border: "1px solid #EAD9B0", borderRadius: 10, padding: "9px 12px", marginBottom: 8 }}>
+              {n.testo}
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 18, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, paddingRight: 2, marginBottom: 4 }}>
+            <span>Partiti</span><span>Rientrano</span><span>Guasti</span>
+          </div>
+          {listaRientro.voci.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Non torna indietro niente.</div>
+          ) : listaRientro.voci.map((v, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 140px", minWidth: 0, overflowWrap: "anywhere" }}>
+                {v.prodottoId ? nomeProdotto(v.prodottoId) : (v.modello ? etichettaDermografo(v.modello) : (kitDefinizioni.find((k) => k.id === v.kitId)?.nome || "Kit"))}
+                {v.consumata > 0 && <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>consumati {v.consumata}</span>}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
+                <span style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: MUTED, width: 30, textAlign: "center" }}>{v.spediti}</span>
+                <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, width: 30, textAlign: "center" }}>{v.rientrata}</span>
+                <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: v.guasta > 0 ? "#C0392B" : "#DAD5C8", width: 30, textAlign: "center" }}>{v.guasta}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {soloLettura && (
         <div style={{ ...cardStyle, padding: 14, marginBottom: 14, border: "1px solid #A8C4E8", background: "#EDF3FB" }}>
           <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#1F4E8C" }}>Liste e prodotti chiusi</div>
@@ -60440,7 +60502,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           campi, tendine e bottoni. Meglio un contenitore solo che quindici
           controlli disattivati a mano, che alla prossima riga aggiunta ci
           si dimentica di disattivare */}
-      <fieldset disabled={soloLettura} style={{ border: "none", margin: 0, padding: 0, minInlineSize: 0, opacity: soloLettura ? 0.65 : 1 }}>
+      <fieldset disabled={soloLettura} hidden={listaMostrata === "rientro"} style={{ border: "none", margin: 0, padding: 0, minInlineSize: 0, opacity: soloLettura ? 0.65 : 1 }}>
       <div style={labelStyle}>Kit previsti (dagli iscritti)</div>
       <div style={{ marginBottom: 20 }}>
         {righeKitRichiesti.length === 0 ? (
@@ -61060,11 +61122,63 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {} });
   }
   async function ripristinaKitRientro(corsoData) {
-    await ripristinaMagazzinoDaScarico(corsoData);
-    // "completato", non "prodotti_ripristinati": è l'ultima fascia
-    // della lista, senza il sentinella resterebbe "corrente" (rossa)
-    // per sempre invece di passare a "fatto" (verde)
-    await salvaCampiEdizione(corsoData.id, { fase_rientro: FASE_LOGISTICA_COMPLETATA });
+    // Se la master ha chiuso il suo inventario, si rimette a scaffale
+    // quello che e' TORNATO — non quello che era partito. Fra le due cose
+    // ci sono i pezzi consumati in aula, i venduti e quelli usati per una
+    // sostituzione: ricaricare la lista di partenza vorrebbe dire contare
+    // pezzi che non ci sono.
+    //
+    // Senza inventario chiuso (edizioni vecchie, o master che non l'ha
+    // compilato) resta il comportamento di prima: si rimette quello che
+    // era stato scaricato.
+    const piano = await calcolaRipristino(corsoData.id, corsiKitProdotti || []);
+    if (!piano) {
+      await ripristinaMagazzinoDaScarico(corsoData);
+      await salvaCampiEdizione(corsoData.id, { fase_rientro: FASE_LOGISTICA_COMPLETATA });
+      return;
+    }
+    if (!iniziaLavorazione(corsoData.id)) {
+      window.alert("Il magazzino di questo corso si sta ancora muovendo: aspetta che finisca prima di premere di nuovo.");
+      return;
+    }
+    try {
+      const delta = { ...piano.perProdotto };
+      Object.entries(piano.perModello).forEach(([modello, q]) => {
+        const prodotto = prodottoDermografo(prodottiShop, modello);
+        if (prodotto) delta[prodotto.id] = (delta[prodotto.id] || 0) + q;
+      });
+      const voci = Object.entries(delta).filter(([, q]) => q > 0);
+      setAvanzamentoScarico({ fatti: 0, totale: voci.length });
+      let fatti = 0;
+      await inParallelo(voci, CONCORRENZA_MAGAZZINO, async ([prodottoId, q]) => {
+        const prodotto = (prodottiShop || []).find((p) => p.id === prodottoId);
+        if (prodotto) await muoviStock(prodotto, q, { origine: "kit_corso", nota: "Rientrati dal corso, dichiarati dalla master", riferimento: corsoData.id });
+        fatti += 1;
+        setAvanzamentoScarico({ fatti, totale: voci.length });
+        return null;
+      });
+
+      // i guasti NON tornano a scaffale: vanno nel magazzino dei difettosi,
+      // dove qualcuno decidera' se buttarli o rimetterli dentro
+      const guasti = Object.entries(piano.guastiProdotto).map(([prodottoId, quantita]) => ({ prodottoId, quantita, nota: "Rientrato guasto dal corso" }));
+      Object.entries(piano.guastiModello).forEach(([modello, quantita]) => {
+        const prodotto = prodottoDermografo(prodottiShop, modello);
+        if (prodotto) guasti.push({ prodottoId: prodotto.id, quantita, nota: `Dermografo ${etichettaDermografo(modello)} rientrato guasto` });
+      });
+      const erroreGuasti = await registraDifettosi({ corsoDataId: corsoData.id, voci: guasti });
+      if (erroreGuasti) window.alert("I prodotti sono rientrati, ma i guasti non sono stati registrati: " + erroreGuasti);
+
+      await salvaCampiEdizione(corsoData.id, {
+        scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {},
+        fase_rientro: FASE_LOGISTICA_COMPLETATA,
+      });
+      const quantiGuasti = guasti.reduce((n, g) => n + g.quantita, 0);
+      if (quantiGuasti > 0) {
+        window.alert(`Rientrati in magazzino ${voci.reduce((n, [, q]) => n + q, 0)} pezzi. ${quantiGuasti} sono tornati guasti e NON sono stati rimessi a scaffale: li trovi in Magazzino guasti.`);
+      }
+    } finally {
+      fineLavorazione(corsoData.id);
+    }
   }
   // fase "Pacco ritirato dal corriere": è il momento in cui il pacco
   // parte davvero, quindi è qui che si chiede se scaricare i prodotti
@@ -66923,6 +67037,13 @@ export default function App() {
         />
       )}
 
+      {view === "magazzinoguasti" && (
+        <MagazzinoGuasti
+          prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} location={location}
+          isMobile={isMobile} onBack={() => setView("magazzinoshop")}
+        />
+      )}
+
       {view === "magazzinoshop" && (
         <PaginaMagazzinoShop
           prodottiShop={prodottiShop} coupon={coupon}
@@ -66933,6 +67054,7 @@ export default function App() {
           onApriVenditeAlBanco={() => apriVenditeAlBanco("magazzinoshop")}
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
           onApriOmaggi={apriOmaggi}
+          onApriMagazzinoGuasti={() => setView("magazzinoguasti")}
           onApriClassificazioneVoci={apriClassificazioneVoci}
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriMagazziniEsterni={apriMagazziniEsterni}
