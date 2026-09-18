@@ -12053,12 +12053,32 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // schermo largo restavano appoggiati a sinistra, e quattro
               // numeri di lunghezza diversa — 4, 0, 194,07, 219,21 —
               // appoggiati a sinistra sembrano una colonna storta.
+              // Da telefono il numero sta nel centro ESATTO del quadrato,
+              // con l'etichetta appoggiata sopra.
+              //
+              // Prima si centrava la coppia etichetta + numero, e il
+              // risultato e' che nessuno dei due sta in mezzo: il numero
+              // finisce sotto la meta', e di quattro quadrati affiancati
+              // si legge una fila di numeri che non e' allineata a
+              // niente. Tre fasce — vuoto, numero, vuoto — mettono il
+              // numero sulla mezzeria e basta, qualunque sia la lunghezza
+              // dell'etichetta sopra: una riga o tre, il numero non si
+              // sposta.
               const cardPunti = {
                 ...cardStyle, minWidth: 0, boxSizing: "border-box",
                 padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                textAlign: "center", gap: isMobile ? 2 : 6,
-                ...(isMobile ? { aspectRatio: "1 / 1", overflow: "hidden" } : { height: "100%" }),
+                textAlign: "center",
+                ...(isMobile
+                  ? {
+                    aspectRatio: "1 / 1", overflow: "hidden",
+                    display: "grid", gridTemplateRows: "1fr auto 1fr",
+                    alignItems: "center", justifyItems: "center",
+                  }
+                  : {
+                    height: "100%",
+                    display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center", gap: 6,
+                  }),
               };
               // su mobile l'etichetta occupa un'altezza fissa (fino a 3 righe),
               // così i numeri delle 4 card partono tutti dalla stessa riga
@@ -12066,7 +12086,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // numero e riga sotto si stringono invece di sfondare
               // il margine sotto l'etichetta lo fa adesso il "gap" della
               // scheda: tenerlo anche qui lo raddoppiava
-              const lblPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, overflowWrap: "anywhere", textAlign: "center" };
+              // l'etichetta vive nella prima fascia e si appoggia in
+              // basso, cioe' appena sopra il numero: cosi' gli sta vicina
+              // invece di galleggiare in cima al quadrato
+              const lblPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, overflowWrap: "anywhere", textAlign: "center", ...(isMobile ? { alignSelf: "end", paddingBottom: 3 } : {}) };
               const numPunti = { ...fontDisplay, fontSize: isMobile ? 18 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", textAlign: "center" };
               const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
               return (
