@@ -12039,13 +12039,26 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // riepilogo dell'app: quattro colonne su uno schermo stretto
               // facevano quattro strisce alte e magre, e il numero — che e'
               // l'unica cosa che si guarda — finiva perso a meta' altezza
-              const cardPunti = { ...cardStyle, minWidth: 0, boxSizing: "border-box", padding: isMobile ? "8px 4px" : 16, marginBottom: 0, ...(isMobile ? { aspectRatio: "1 / 1", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 2 } : { height: "100%" }) };
+              // Etichetta e numero stanno in mezzo, sempre. Erano centrati
+              // solo sul telefono, dove la scheda e' un quadrato: su
+              // schermo largo restavano appoggiati a sinistra, e quattro
+              // numeri di lunghezza diversa — 4, 0, 194,07, 219,21 —
+              // appoggiati a sinistra sembrano una colonna storta.
+              const cardPunti = {
+                ...cardStyle, minWidth: 0, boxSizing: "border-box",
+                padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                textAlign: "center", gap: isMobile ? 2 : 6,
+                ...(isMobile ? { aspectRatio: "1 / 1", overflow: "hidden" } : { height: "100%" }),
+              };
               // su mobile l'etichetta occupa un'altezza fissa (fino a 3 righe),
               // così i numeri delle 4 card partono tutti dalla stessa riga
               // dentro un quadrato lo spazio e' quello che e': etichetta,
               // numero e riga sotto si stringono invece di sfondare
-              const lblPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, marginBottom: isMobile ? 0 : 6, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center" } : {}) };
-              const numPunti = { ...fontDisplay, fontSize: isMobile ? 18 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", ...(isMobile ? { textAlign: "center" } : {}) };
+              // il margine sotto l'etichetta lo fa adesso il "gap" della
+              // scheda: tenerlo anche qui lo raddoppiava
+              const lblPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, overflowWrap: "anywhere", textAlign: "center" };
+              const numPunti = { ...fontDisplay, fontSize: isMobile ? 18 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", textAlign: "center" };
               const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
               return (
             // quattro colonne uguali, non quattro flex che possono andare a
