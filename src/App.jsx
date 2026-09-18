@@ -41713,10 +41713,12 @@ const SPESE_PAGINA_INIZIALE = 10;
  * spesa comparirebbe qui come scelta possibile e, scegliendola, la si
  * staccherebbe da dove sta senza che nessuno se ne accorga.
  *
- * In cima quelle dell'importo giusto. Non e' un filtro — un pagamento
- * puo' coprire una fattura in parte o due insieme — ma nove volte su
- * dieci la fattura che si cerca vale esattamente quello che e' uscito,
- * e averla per prima toglie la ricerca.
+ * L'ordine e' quello delle date, dalla piu' recente: sempre, senza
+ * eccezioni. Prima le fatture dell'importo esatto saltavano in cima, e
+ * su un fornitore con venti fatture quel salto rompeva l'unica cosa che
+ * permette di scorrere un elenco lungo senza perdersi — sapere dove si
+ * e' arrivati. L'importo esatto resta segnalato dov'e', in verde: e' un
+ * aiuto a riconoscerla, non una ragione per spostarla.
  */
 function ModaleAssociaFattura({ spesa, fatture, onChiudi, onAssociata }) {
   const [ricerca, setRicerca] = useState("");
@@ -41731,11 +41733,12 @@ function ModaleAssociaFattura({ spesa, fatture, onChiudi, onAssociata }) {
       const dentro = [f.fornitore_nome, f.numero_documento, f.descrizione, f.categoria].filter(Boolean).join(" ").toLowerCase();
       return parole.every((p) => dentro.includes(p));
     });
-    const stessoImporto = (f) => Math.abs(Number(f.totale || 0) - importoSpesa) < 0.02;
-    return [...filtrate].sort((a, b) => {
-      if (stessoImporto(a) !== stessoImporto(b)) return stessoImporto(a) ? -1 : 1;
-      return String(b.data_documento || "").localeCompare(String(a.data_documento || ""));
-    });
+    // solo la data, dalla piu' recente. A parita' di giorno il numero
+    // del documento, che su uno stesso fornitore cresce col tempo
+    return [...filtrate].sort((a, b) => (
+      String(b.data_documento || "").localeCompare(String(a.data_documento || ""))
+      || String(b.numero_documento || "").localeCompare(String(a.numero_documento || ""), "it", { numeric: true })
+    ));
   }, [fatture, ricerca, importoSpesa]);
 
   async function associa(f) {
