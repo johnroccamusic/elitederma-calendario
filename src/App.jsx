@@ -17780,7 +17780,7 @@ const ALIQUOTA_IVA_RIEPILOGO_CLASSE = 22;
 // griglia con la stessa impronta di quella della tabella sopra (2fr per la
 // voce, 1fr per ogni importo, una colonna fissa in fondo), cosi' le due
 // tabelle restano incolonnate fra loro.
-const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 48px 46px 18px";
+const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 48px 46px 52px";
 // Sei colonne: voce, i tre importi, il cestino, la modalita'.
 //
 // Le tre degli importi sono a larghezza fissa e stretta - una cifra di
@@ -17794,10 +17794,12 @@ const GRIGLIA_COSTI_MOBILE = "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minma
 // posto. Le due tabelle accostate la usano al contrario - il cestino solo
 // sotto, la modalita' solo sopra - ma la colonna c'e' in entrambe, ed e'
 // per questo che restano incolonnate.
-// L'ultima colonna, stretta, e' il "+" che apre l'appunto sotto la riga.
-// Sta in tutte e due le tabelle anche se solo una lo usa, come gia' il
+// L'ultima colonna tiene due cose diverse a seconda della tabella: il
+// "+" che apre l'appunto sulle spese libere, e i GIORNI di presenza —
+// "3gg" con le sue due freccette — sulle righe automatiche che ne hanno.
+// Sta in tutte e due anche quando una la lascia vuota, come gia' il
 // cestino: e' quello che le tiene incolonnate fra loro.
-const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 54px 54px 54px 66px 92px 20px";
+const GRIGLIA_COSTI_DESKTOP = "minmax(0, 1fr) 54px 54px 54px 66px 92px 58px";
 
 function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie }) {
   const isMobile = useIsMobile();
@@ -25806,14 +25808,20 @@ function PannelloRiepilogoAmministrativo({
                     classe ne avesse una il numero non sparisce. E'
                     sparito il modo di scriverne di nuove a mano. */}
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, whiteSpace: "nowrap" }}>Costi della classe</div>
-                  <div style={{ flex: 1, height: 1, background: GOLD, opacity: 0.45 }} />
-                  <div style={{ position: "relative" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, marginBottom: 14, flexWrap: "wrap" }}>
+                  <span style={{ width: isMobile ? 38 : 46, height: isMobile ? 38 : 46, borderRadius: 12, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0 }}>
+                    <IconaAvvisoMonete size={isMobile ? 20 : 24} color={NAVY} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.15 }}>Costi della classe</div>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: MUTED, marginTop: 2 }}>Gestisci tutte le spese relative al corso</div>
+                  </div>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
                     <button
                       type="button" onClick={() => setSceltaCategoriaCosto((v) => !v)}
-                      style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
+                      style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 12, padding: isMobile ? "9px 14px" : "11px 18px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 8px 16px -10px rgba(14,27,51,0.7)" }}
                     >
+                      <span style={{ fontSize: isMobile ? 15 : 17, lineHeight: 1 }}>+</span>
                       Aggiungi spesa
                     </button>
                     {sceltaCategoriaCosto && (
@@ -25841,11 +25849,17 @@ function PannelloRiepilogoAmministrativo({
                 </div>
                 {righeSpeseTutte.length > 0 && (
                   <div style={{ marginBottom: 8 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, marginBottom: 4 }}>
+                    {/* La banda dei titoli: grigia e attaccata alle righe,
+                        cosi' si legge come l'intestazione di una tabella e
+                        non come tre parole sciolte sopra dei numeri. Le tre
+                        cifre sono allineate a DESTRA, qui come nelle righe e
+                        come nella banda dei totali: e' l'unico modo perche'
+                        le unita' cadano una sotto l'altra. */}
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? GRIGLIA_COSTI_MOBILE : GRIGLIA_COSTI_DESKTOP, gap: isMobile ? 4 : 8, background: "#F4F4F6", borderRadius: "12px 12px 0 0", padding: isMobile ? "8px 6px" : "10px 10px", marginBottom: 0 }}>
                       <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 }}>Voce</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Totale</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Bonifico</div>
-                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "center" }}>Cash</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>Totale</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>Bonifico</div>
+                      <div style={{ minWidth: 0, ...fontBody, fontSize: isMobile ? 8.5 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5 , textAlign: "right", paddingRight: isMobile ? 4 : 5 }}>Cash</div>
                       {/* Dove finisce la parte in contanti della riga: nella
                           busta di questo corso (esce subito e va in prima
                           nota) o nello scadenziario passivo, il Quadro
@@ -25945,9 +25959,6 @@ function PannelloRiepilogoAmministrativo({
                               <span title="Contante già registrato come spesa pagata" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>pagato</span>
                             )}
                           </div>
-                          {/* spunte e giorni uno accanto all'altro, non uno
-                              sotto l'altro: B/C/1/2 a sinistra, i giorni con
-                              le loro freccette a destra */}
                           <div style={{ minWidth: 0, display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
                             {r.tipo === "location" && (() => {
                               const modalita = modalitaSplitMaster(r);
@@ -26006,24 +26017,26 @@ function PannelloRiepilogoAmministrativo({
                                 </div>
                               );
                             })()}
-                            {/* I giorni stanno DOPO le spunte: B/C/1/2 dicono
-                                come si paga, ed e' la prima cosa che si
-                                guarda; i giorni sono una correzione, e
-                                stavano sopra a farsi leggere per primi.
-                                Le due freccette al posto del meno e del
-                                piu': in una tabella di righe fitte due
-                                tasti quadrati per riga erano il pezzo piu'
-                                pesante di tutta la colonna. */}
+                          </div>
+                          {/* I giorni hanno una colonna loro, l'ultima:
+                              accanto alle spunte si portavano dietro la
+                              larghezza di B/C/1/2 e la riga ballava fra
+                              chi i giorni ce li ha e chi no. Le due
+                              freccette al posto del meno e del piu': in
+                              una tabella di righe fitte due tasti quadrati
+                              per riga erano il pezzo piu' pesante di tutta
+                              la colonna. */}
+                          <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
                             {r.giorni != null && (
-                              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, minWidth: 26, textAlign: "right", whiteSpace: "nowrap" }}>{r.giorni}gg</span>
+                              <>
+                                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, whiteSpace: "nowrap" }}>{r.giorni}gg</span>
                                 <FrecceSuGiu
                                   altezza={22} larghezza={16} raggio={6}
                                   puoScendere={r.giorni > 0}
                                   onSu={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)}
                                   onGiu={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))}
                                 />
-                              </div>
+                              </>
                             )}
                           </div>
                         </div>
