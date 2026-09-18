@@ -24954,10 +24954,10 @@ function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evide
   return (
     <div style={{ flex: "1 1 0", minWidth: 0, boxSizing: "border-box", padding: `${q(16, 6)}px ${q(14, 5)}px`, borderRadius: q(16, 8), background: evidenziata ? "#F6EFE1" : "#fff", border: `1px solid ${evidenziata ? "#D9C48F" : CREAM_BORDER}`, boxShadow: "var(--ombra-aree, none)", display: "flex", flexDirection: "column" }}>
       <div style={{ width: q(40, 16), height: q(40, 16), borderRadius: "50%", background: evidenziata ? "#EFE3C8" : "#EEEDEA", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: q(12, 4) }}>{icone[icona]}</div>
-      <div style={{ ...fontBody, fontSize: q(11, 5), fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 * scala, lineHeight: 1.3, minHeight: "2.6em", display: "flex", alignItems: "flex-end", paddingBottom: q(8, 3), borderBottom: `1px solid ${evidenziata ? "#E6D7B4" : CREAM_BORDER}`, marginBottom: q(10, 4) }}>{etichetta}</div>
-      <div style={{ ...fontBody, fontSize: q(24, 9), fontWeight: 800, color: NAVY, whiteSpace: "nowrap", letterSpacing: -0.3 * scala }}>{cifra}</div>
+      <div style={{ ...fontBody, fontSize: q(9, 4), fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 * scala, lineHeight: 1.3, minHeight: "2.6em", display: "flex", alignItems: "flex-end", paddingBottom: q(8, 3), borderBottom: `1px solid ${evidenziata ? "#E6D7B4" : CREAM_BORDER}`, marginBottom: q(10, 4) }}>{etichetta}</div>
+      <div style={{ ...fontBody, fontSize: q(22, 8), fontWeight: 800, color: NAVY, whiteSpace: "nowrap", letterSpacing: -0.3 * scala }}>{cifra}</div>
       {nota && (
-        <div style={{ display: "flex", alignItems: "center", gap: q(8, 3), marginTop: q(12, 5), padding: `${q(8, 3)}px ${q(10, 4)}px`, borderRadius: q(10, 5), background: evidenziata ? "#EFE3C8" : "#EEEDEA", ...fontBody, fontSize: q(11.5, 5), color: MUTED, lineHeight: 1.3 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: q(8, 3), marginTop: q(12, 5), padding: `${q(8, 3)}px ${q(10, 4)}px`, borderRadius: q(10, 5), background: evidenziata ? "#EFE3C8" : "#EEEDEA", ...fontBody, fontSize: q(9.5, 4), color: MUTED, lineHeight: 1.3 }}>
           {notaIcona && <span style={{ display: "flex", flexShrink: 0 }}>{icone[notaIcona]}</span>}
           <span>{nota}</span>
         </div>
@@ -25008,14 +25008,17 @@ function PannelloRiepilogoAmministrativo({
   // in fila la disuguaglianza e si risolve.
   //
   //   larghezza della cifra + imbottitura dei due lati <= larghezza della casella
-  //   s * (11 * 0,42 * 24)   +   s * 28                <= carta - bordi
+  //   s * (11 * 0,42 * 22)   +   s * 28                <= carta - bordi
   //
   // 0,42 em per carattere e' la larghezza vera delle cifre di questo font
-  // a peso 800, misurata su "€ 10.690,00" nel disegno pieno.
+  // a peso 800; 22 e' il corpo pieno della cifra (vedi
+  // CasellaRiepilogoCash) — se cambia li', va cambiato anche qui, o la
+  // scala promette uno spazio che la cifra non usa piu'.
+  const CORPO_CIFRA = 22;
   const scalaCash = (() => {
     if (!(larghezzaCash > 0)) return 1;
     const carta = (larghezzaCash - gapCash * 4) / 5;
-    const servePerUno = caratteriCifra * 0.42 * 24 + 14 * 2;
+    const servePerUno = caratteriCifra * 0.42 * CORPO_CIFRA + 14 * 2;
     return Math.min(1, Math.max(0.2, (carta - 2) / servePerUno));
   })();
 
