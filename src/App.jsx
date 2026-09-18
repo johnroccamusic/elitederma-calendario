@@ -36576,9 +36576,10 @@ function IntestazioneGiornoScadenzeAttivo({ data }) {
 // combina le due intestazioni sopra su un elenco di scadenze già
 // ordinato per data — stesso principio di elencoConIntestazioniMese,
 // qui su due livelli invece di uno
-function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga, dataDi = (r) => r.scadenza, righeConData = false) {
+function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga, dataDi = (r) => r.scadenza, righeConData = false, gruppoDi = null) {
   let meseAttuale = null;
   let giornoAttuale = null;
+  let gruppoAttuale = null;
   const elementi = [];
   righe.forEach((riga, idx) => {
     const data = dataDi(riga);
@@ -36595,6 +36596,24 @@ function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga, data
       elementi.push(<IntestazioneMeseScadenzeAttivo key={`mese-${chiaveMese}`} mese={MESI[mese - 1]} anno={anno} count={info.count} totale={info.totale} />);
       meseAttuale = chiaveMese;
       giornoAttuale = null;
+      gruppoAttuale = null;
+    }
+    // un titolo in mezzo alla colonna quando cambia il gruppo: dentro lo
+    // stesso mese ci sono spese di corsi gia' cominciati — quelle sono
+    // maturate, il costo c'e' stato — e spese di corsi che devono ancora
+    // partire, che si possono ancora annullare. Sono due cose diverse e
+    // nel mucchio non si distinguevano
+    if (gruppoDi) {
+      const gruppo = gruppoDi(riga);
+      if (gruppo && gruppo !== gruppoAttuale) {
+        elementi.push(
+          <div key={`gruppo-${chiaveMese || "senza"}-${gruppo}`} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 1.2, textAlign: "center", padding: "16px 0 8px" }}>
+            {gruppo === "maturate" ? "Maturate" : "Prossimi eventi"}
+          </div>,
+        );
+        gruppoAttuale = gruppo;
+        giornoAttuale = null;
+      }
     }
     // l'intestazione del giorno si scrive solo se le righe non portano
     // gia' la loro data: in un registro il giorno scritto due volte, una
@@ -40747,6 +40766,36 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
         return nomeFornitore.toLowerCase().includes(q) || (r.spesa.descrizione || "").toLowerCase().includes(q) || oggettoDiSpesa(r.spesa, r.corsoData).toLowerCase().includes(q);
       })
     : elencoMesePassivo;
+  // MATURATE contro PROSSIMI EVENTI.
+  //
+  // Maturata vuol dire che il corso e' gia' cominciato: da quel momento il
+  // costo c'e' stato, la sala e' stata usata, la master ha insegnato — la
+  // spesa esiste anche se la fattura non e' ancora arrivata. Prima
+  // dell'inizio e' un impegno preso, e un corso puo' ancora spostarsi o
+  // saltare.
+  //
+  // Le voci che non hanno un corso dietro (una fattura cumulativa, una
+  // spesa generica) si giudicano sulla loro scadenza: se e' passata il
+  // fornitore aspetta gia' i soldi.
+  const gruppoMaturazione = (r) => {
+    const inizio = r.corsoData?.data_inizio || null;
+    if (inizio) return inizio <= oggiStr ? "maturate" : "prossimi";
+    const sc = dataDiPassivoAttuale(r);
+    return sc && sc <= oggiStr ? "maturate" : "prossimi";
+  };
+  // dentro ogni mese le maturate stanno sopra, ognuna delle due in ordine
+  // di data: senza riordinare, i due titoli si alternerebbero piu' volte
+  // nello stesso mese
+  const elencoRaggruppatoPassivo = [...elencoFiltratoPassivo].sort((a, b) => {
+    const da = dataDiPassivoAttuale(a) || "9999-99-99";
+    const db = dataDiPassivoAttuale(b) || "9999-99-99";
+    const mese = da.slice(0, 7).localeCompare(db.slice(0, 7));
+    if (mese !== 0) return mese;
+    const ga = gruppoMaturazione(a) === "maturate" ? 0 : 1;
+    const gb = gruppoMaturazione(b) === "maturate" ? 0 : 1;
+    if (ga !== gb) return ga - gb;
+    return da.localeCompare(db);
+  });
   const riepilogoMeseFiltratoPassivo = riepilogoMensileScadenze(elencoFiltratoPassivo, dataDiPassivoAttuale, importoDiPassivoAttuale);
 
   const scadenziarioAttivo = calcolaScadenziarioAttivo({ iscritti, corsiDate });
@@ -41566,7 +41615,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
             {subTabPassivo === "dapagare" && (
               <div style={{ ...cardStyle }}>
                 {elencoFiltratoPassivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
-                {elencoScadenzeConIntestazioni(elencoFiltratoPassivo, riepilogoMeseFiltratoPassivo, (item) => (
+                {elencoScadenzeConIntestazioni(elencoRaggruppatoPassivo, riepilogoMeseFiltratoPassivo, (item) => (
                   <RigaScadenziarioDaPagare
                     key={item.key}
                     nome={item.nome}
@@ -41592,7 +41641,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     corsi={corsi} location={location} corsiDate={corsiDate}
                     ambitoIniziale={item.corsoData ? { tipoAmbito: "classe", classeId: item.corsoData.id, sedeId: item.corsoData.location_id, corsoId: item.corsoData.corso_id } : { tipoAmbito: "generale" }}
                   />
-                ), dataDiPassivoDaPagare, true)}
+                ), dataDiPassivoDaPagare, true, gruppoMaturazione)}
               </div>
             )}
             {subTabPassivo === "evase" && (
