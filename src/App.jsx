@@ -24,6 +24,8 @@ import AnomalieRientri from "./rientri/AnomalieRientri.jsx";
 import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
+import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
+import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -13600,6 +13602,7 @@ function PaginaGestioneModelle({
     { chiave: "archivio", testo: "Archivio corsi" },
     { chiave: "crm", testo: "CRM modelle" },
     { chiave: "dasistemare", testo: `Da sistemare${quantiDaSistemare > 0 ? ` (${quantiDaSistemare})` : ""}` },
+    { chiave: "consensi", testo: "Archivio consensi" },
   ];
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -13640,7 +13643,9 @@ function PaginaGestioneModelle({
         )}
         <div style={{ marginBottom: 20 }} />
 
-        {tabGM === "dasistemare" ? (
+        {tabGM === "consensi" ? (
+          <ArchivioConsensi isMobile={isMobile} CampoRicerca={CampoRicerca} />
+        ) : tabGM === "dasistemare" ? (
           <PaginaModelleDaSistemare
             corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} corsiGiorni={corsiGiorni}
             onApriIscritto={onApriIscritto} onApriData={apriDataModelle}
@@ -64809,6 +64814,11 @@ export default function App() {
     const tipoBiglietti = new URLSearchParams(window.location.search).get("tipo");
     return <VistaBiglietti param={paramBiglietti} tipo={tipoBiglietti} />;
   }
+  // ?consenso=<codice>: il modulo che la modella apre inquadrando il QR.
+  // Come le altre tre rotte pubbliche esce di qui prima di montare
+  // l'applicazione — chi arriva da quel codice non deve vedere nient'altro
+  const paramConsenso = new URLSearchParams(window.location.search).get("consenso");
+  if (paramConsenso) return <PaginaConsenso codice={paramConsenso} />;
   // se il link contiene ?modelle=<id>, mostro solo l'elenco dei trattamenti
   // richiesti per questa classe (nessun dato personale/di pagamento)
   const paramModelle = new URLSearchParams(window.location.search).get("modelle");
