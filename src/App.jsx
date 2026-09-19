@@ -2705,7 +2705,9 @@ function FotoMaster({ url, lato = 110, titolo }) {
         width: lato, height: lato, borderRadius: 16, flexShrink: 0, overflow: "hidden",
         background: "#F4F1EA", border: `1px solid ${CREAM_BORDER}`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        boxShadow: "0 8px 18px -12px rgba(14,27,51,0.45)",
+        // un'ombra vera sotto: staccata dal fondo, cosi' il riquadro
+        // sembra appoggiato sopra la scheda e non incollato dentro
+        boxShadow: "0 16px 26px -14px rgba(14,27,51,0.55), 0 5px 10px -6px rgba(14,27,51,0.30)",
       }}
     >
       {url
