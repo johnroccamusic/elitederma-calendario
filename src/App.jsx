@@ -48610,7 +48610,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           gap: 16, alignItems: "start",
         }}>
 
-        {vistaProdotti === "elenco" && (<>
+        {vistaProdotti === "elenco" && (<div style={{ minWidth: 0 }}>
         <div ref={rifElencoCard} style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: larghezzaTabellaMagazzino, borderCollapse: "collapse", tableLayout: "fixed" }}>
@@ -48736,7 +48736,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: GOLD, display: "inline-block" }} /> Shop Online: quantità pubblicata su WooCommerce</div>
           </div>
         </div>
-        </>)}
+        </div>)}
 
         {categorieMontate && (() => {
           const affiancata = !!schedaAperta && vistaProdotti === "elenco";
