@@ -47657,6 +47657,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // giro che si fa venti volte.
   // quale prodotto si sta configurando nella colonna di destra, o null
   const [schedaAperta, setSchedaAperta] = useState(null);
+  // Affiancata SOLO nella vista a elenco. Nella vista a categorie la
+  // pagina shop ha gia' le sue tre colonne (albero, elenco, scheda) e
+  // pretende tutta la larghezza: stringerla per fare posto a una seconda
+  // scheda a destra la faceva traboccare sopra l'elenco delle categorie.
+  const affiancataScheda = !!schedaAperta && vistaProdotti === "elenco";
   // La scheda entra nello spazio che c'e', non viceversa: alta esattamente
   // quanto il riquadro dell'elenco, e se il contenuto non ci sta si
   // rimpicciolisce finche' non ci sta. Meglio un testo piccolo che una
@@ -47693,9 +47698,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const apriScheda = (p, dallElenco) => {
     setAperturaScheda((prec) => ({ prodottoId: p.id, n: (prec?.n || 0) + 1 }));
     setCategorieMontate(true);
-    if (dallElenco) {
+    if (dallElenco && !isMobile) {
       // Si affianca: l'elenco si stringe a sinistra, la scheda compare a
       // destra. Niente da calcolare, nessuna posizione da indovinare.
+      // Al telefono non c'e' spazio per due colonne: si apre a tutta
+      // pagina come si e' sempre fatto.
       setSchedaAperta(p.id);
     } else {
       setSchedaAperta(null);
@@ -48605,8 +48612,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             transform quel conto sbagliava sempre di qualcosa. Affiancate
             non c'e' niente da calcolare — se lo dividono e basta. */}
         <div style={{
-          display: schedaAperta ? "grid" : "block",
-          gridTemplateColumns: schedaAperta ? (isMobile ? "1fr" : "minmax(0, 1fr) 460px") : undefined,
+          display: affiancataScheda && !isMobile ? "grid" : "block",
+          gridTemplateColumns: affiancataScheda && !isMobile ? "minmax(0, 1fr) 460px" : undefined,
           gap: 16, alignItems: "start",
         }}>
 
@@ -48739,7 +48746,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
         </div>)}
 
         {categorieMontate && (() => {
-          const affiancata = !!schedaAperta && vistaProdotti === "elenco";
+          const affiancata = affiancataScheda && !isMobile;
           // Tutta la scheda, aperta: niente altezza massima che la
           // schiaccerebbe in un riquadro da scorrere. Sta sopra la
           // tabella, a destra della colonna dei nomi — cosi' il prodotto
