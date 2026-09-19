@@ -4339,11 +4339,26 @@ function indiceFasciaSpesa(spesa, soglie) {
   if (v < s[2]) return 2;
   return 3;
 }
+// Le etichette dicono ESATTAMENTE dove cade un carrello, confini
+// compresi. Prima erano "Fino a 100 €", "Da 100 € a 200 €", "Oltre
+// 300 €": un carrello da esattamente 100 € compariva in due fasce e
+// nessuna delle due diceva quale vince. Il conto non e' mai stato
+// ambiguo — indiceFasciaSpesa taglia su "minore di", quindi 100 € sta
+// nella seconda — ma le parole dicevano un'altra cosa.
 function etichettaFasciaSpesa(i, soglie) {
   const s = soglieSpesaValide(soglie);
-  if (i === 0) return `Fino a ${fmtEuroErp2(s[0])}`;
-  if (i === 3) return `Oltre ${fmtEuroErp2(s[2])}`;
-  return `Da ${fmtEuroErp2(s[i - 1])} a ${fmtEuroErp2(s[i])}`;
+  if (i === 0) return `Sotto ${fmtEuroErp2(s[0])}`;
+  if (i === 3) return `Da ${fmtEuroErp2(s[2])} in su`;
+  return `Da ${fmtEuroErp2(s[i - 1])} a meno di ${fmtEuroErp2(s[i])}`;
+}
+// La stessa cosa per i margini, che pero' tagliano al contrario:
+// percentualeFasciaDi sceglie con "minore o uguale", quindi un margine
+// di esattamente 16,5% sta nella PRIMA fascia, non nella seconda. Due
+// convenzioni opposte nella stessa tabella: almeno che si vedano.
+function etichettaFasciaMargine(f, i) {
+  return i === 0
+    ? `${numeroFascia(f.da)}–${numeroFascia(f.a)}%`
+    : `oltre ${numeroFascia(f.da)}% fino a ${numeroFascia(f.a)}%`;
 }
 // le sei percentuali che valgono per una spesa di quell'importo
 function fasceMargineDiSpesa(fasce, spesa) {
@@ -35135,7 +35150,9 @@ function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = fal
             <tr>
               <th style={{ ...intestazione, textAlign: "left", paddingLeft: 0 }}>Spesa \ margine</th>
               {FASCE_MARGINE.map((f) => (
-                <th key={f.da} style={intestazione}>{numeroFascia(f.da)}–{numeroFascia(f.a)}%</th>
+                <th key={f.da} style={intestazione} title={etichettaFasciaMargine(f, FASCE_MARGINE.indexOf(f))}>
+                  {FASCE_MARGINE.indexOf(f) === 0 ? "" : ">"}{numeroFascia(f.da)}–{numeroFascia(f.a)}%
+                </th>
               ))}
             </tr>
           </thead>
@@ -35149,7 +35166,7 @@ function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = fal
                   <td key={f.da} style={cella}>
                     <CampoNumero
                       valore={f.percentuale} min={0} max={100}
-                      titolo={`Spesa ${etichettaFasciaSpesa(i, g.soglie).toLowerCase()}, margine ${numeroFascia(f.da)}–${numeroFascia(f.a)}%`}
+                      titolo={`Spesa ${etichettaFasciaSpesa(i, g.soglie).toLowerCase()}, margine ${etichettaFasciaMargine(f, FASCE_MARGINE.indexOf(f))}`}
                       onCambia={(n) => cambiaPercentuale(i, k, n)}
                       style={{ ...inputStyle, width: "100%", minWidth: isMobile ? 46 : 58, textAlign: "center", padding: isMobile ? "5px 2px" : "6px 4px", fontWeight: 700, fontSize: isMobile ? 12 : 13 }}
                     />
@@ -35256,7 +35273,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
           <div style={{ display: "flex", gap: isMobile ? 8 : 14, flexWrap: "wrap" }}>
             {elenco.map((f, i) => (
               <div key={f.da} style={{ flex: "1 1 110px", minWidth: 96 }}>
-                <Field label={`Margine ${numeroFascia(f.da)}–${numeroFascia(f.a)}%`}>
+                <Field label={`Margine ${etichettaFasciaMargine(f, FASCE_MARGINE.indexOf(f))}`}>
                   <CampoNumero
                     valore={f.percentuale} min={0} max={100} style={inputStyle}
                     titolo="Scrivi la percentuale e premi Invio, o esci dal campo"
