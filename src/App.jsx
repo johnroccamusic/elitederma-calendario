@@ -12480,7 +12480,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
             <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Consumabili</div>
               <div style={labelStyleInv}>Dischetti, rotoli, guanti… con il livello di utilizzo rimasto.</div>
-              <div style={{ position: "relative" }}>
+              <div ref={rifElenco} style={{ position: "relative" }}>
                 <CampoRicerca value={ricercaConsumabile} onChange={(e) => setRicercaConsumabile(e.target.value)} placeholder="Cerca prodotto…" />
                 {risultatiConsumabile.length > 0 && (
                   <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
@@ -47039,7 +47039,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
 
 // sicurezzaPunti, pctQuotaColonna ed euroQuota arrivano dalla pagina: sono
 // le percentuali scritte nei titoli delle colonne "Sicurezza" e "Quota"
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
   // la percentuale di sicurezza di QUESTO prodotto: si scrive nella cella
   // "Sicurezza" e si salva quando si esce dal campo (o con Invio). Vuota
   // = torna a quella generale
@@ -47418,7 +47418,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   const elencoColonne = colonne || COLONNE_MAGAZZINO;
   return (
     <>
-      <tr>
+      <tr style={evidenziata ? { background: "#FBF3E0", boxShadow: `inset 3px 0 0 ${NAVY}` } : undefined}>
         {elencoColonne.map((col) => (
           <React.Fragment key={col.label}>{celle[col.label]}</React.Fragment>
         ))}
@@ -47609,14 +47609,18 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // punto in cui si era. Con venti prodotti da sistemare di fila e' il
   // giro che si fa venti volte.
   const [schedaAncorata, setSchedaAncorata] = useState(null);
+  const rifElenco = useRef(null);
   const apriScheda = (p, rect) => {
     setAperturaScheda((prec) => ({ prodottoId: p.id, n: (prec?.n || 0) + 1 }));
     setCategorieMontate(true);
     if (rect) {
-      // ancorata alla riga, ma senza uscire dallo schermo: se la riga sta
-      // in fondo, la scheda risale quanto basta per vedersi intera
-      const alta = Math.min(640, window.innerHeight - 40);
-      setSchedaAncorata({ top: Math.max(16, Math.min(rect.top, window.innerHeight - alta - 16)), alta });
+      // Il punto nella PAGINA, non nello schermo. Ancorandola allo schermo
+      // la scheda finiva dove capitava — in fondo a destra invece che
+      // accanto alla riga — perche' "fixed" non sa niente di quanto si e'
+      // scorso. Qui si somma lo scorrimento e la scheda resta appesa alla
+      // riga, sempre.
+      const base = rifElenco.current?.getBoundingClientRect().top ?? 0;
+      setSchedaAncorata({ top: Math.max(0, rect.top - base), prodottoId: p.id });
     } else {
       setSchedaAncorata(null);
       if (vistaProdotti !== "categorie") setVistaPrimaDellaScheda(vistaProdotti);
@@ -48512,16 +48516,23 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             accanto alla riga cliccata. Montarla due volte vorrebbe dire
             due copie dello stesso form, e quella nascosta si porterebbe
             dietro modifiche che nessuno vede. */}
+        {/* Il riferimento della scheda appesa: la sua posizione si misura
+            da qui, cosi' resta attaccata alla riga anche scorrendo la pagina */}
+        <div style={{ position: "relative" }}>
         {categorieMontate && (() => {
           const appesa = !!schedaAncorata && vistaProdotti === "elenco";
+          // Tutta la scheda, aperta: niente altezza massima che la
+          // schiaccerebbe in un riquadro da scorrere. Sta sopra la
+          // tabella, a destra della colonna dei nomi — cosi' il prodotto
+          // cliccato resta visibile a sinistra mentre lo si modifica.
           const cornice = appesa
-            ? { ...cardStyle, padding: 12, margin: 0, position: "fixed", top: schedaAncorata.top, right: isMobile ? 8 : 24, left: isMobile ? 8 : "auto", width: isMobile ? "auto" : 620, maxWidth: "calc(100vw - 32px)", maxHeight: schedaAncorata.alta, overflowY: "auto", zIndex: 2600, boxShadow: "0 18px 46px -12px rgba(14,27,51,0.42)" }
+            ? { ...cardStyle, padding: isMobile ? 12 : 16, margin: 0, position: "absolute", top: schedaAncorata.top, left: isMobile ? 8 : 300, right: isMobile ? 8 : "auto", width: isMobile ? "auto" : 640, maxWidth: "calc(100vw - 32px)", zIndex: 2600, border: `2px solid ${NAVY}`, borderTopLeftRadius: 0, boxShadow: "0 22px 60px -14px rgba(14,27,51,0.45)" }
             : { ...cardStyle, padding: 14, marginTop: 10, marginBottom: 22, display: vistaProdotti === "categorie" ? "block" : "none" };
           return (
             <>
-              {/* un velo leggero: la tabella resta leggibile dietro, ma un
-                  tocco fuori chiude la scheda */}
-              {appesa && <div onClick={() => setSchedaAncorata(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,20,30,0.18)", zIndex: 2590 }} />}
+              {/* nessun velo: chi sistema venti prodotti di fila passa da
+                  uno all'altro cliccando la riga accanto, e un velo
+                  glielo impedirebbe. Si chiude con la × o salvando. */}
               <div style={cornice}>
                 {appesa && (
                   <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 2 }}>
@@ -48644,7 +48655,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={(id, rect) => apriScheda(p, rect)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={(id, rect) => apriScheda(p, rect)} evidenziata={schedaAncorata?.prodottoId === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -48672,6 +48683,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           </div>
         </div>
         </>)}
+        </div>
       </div>
 
       {apriConfezioneBoxId && (
