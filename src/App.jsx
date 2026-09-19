@@ -48016,6 +48016,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   if (filtroRapido === "esauriti") prodottiVisti = prodottiVisti.filter((p) => p.esaurito);
   if (filtroRapido === "senzacosto") prodottiVisti = prodottiVisti.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
   if (filtroRapido === "fermi") prodottiVisti = prodottiVisti.filter((p) => p.inVendita && p.giorniFermo > 90);
+  // "Confezioni e sfusi": i pacchi che si aprono e i pezzi che ne escono,
+  // insieme. Sono due anagrafiche legate da un filo (prodotto_sfuso_id) e
+  // si guardano in coppia — quanti pacchi sigillati restano, quanti pezzi
+  // ci sono gia' sull'altro scaffale. Sparpagliati in duecento righe
+  // quella coppia non si vede mai.
+  if (filtroRapido === "confezioni") {
+    const daAprire = prodottiConStato.filter(generaSingoli);
+    const idSfusi = new Set(daAprire.map((x) => x.prodotto_sfuso_id).filter(Boolean));
+    prodottiVisti = prodottiVisti.filter((p) => generaSingoli(p) || idSfusi.has(p.id));
+  }
 
   const prodottiOrdinati = [...prodottiVisti].sort((a, b) => {
     const { campo, direzione } = ordinamento;
@@ -48369,6 +48379,36 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 </div>
               </div>
             )}
+            {/* "Confezioni e sfusi": mostra solo i pacchi che si aprono e i
+                pezzi che ne escono. Il colore del tasto e' lo stesso
+                arancio con cui nella lista si scrivono i loro nomi —
+                si preme quello e restano quelli. */}
+            {vistaProdotti === "elenco" && (() => {
+              const quante = prodottiConStato.filter(generaSingoli).length;
+              if (quante === 0) return null;
+              const acceso = filtroRapido === "confezioni";
+              return (
+                <button
+                  onClick={() => setFiltroRapido(acceso ? "tutti" : "confezioni")}
+                  aria-pressed={acceso}
+                  title={acceso ? "Torna a vedere tutti i prodotti" : "Mostra solo le confezioni da aprire e i pezzi singoli che ne escono"}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600,
+                    color: acceso ? "#fff" : ARANCIO_GENERA_SINGOLI,
+                    background: acceso ? ARANCIO_GENERA_SINGOLI : "#fff",
+                    border: `1px solid ${acceso ? ARANCIO_GENERA_SINGOLI : "#E3C9AC"}`,
+                    borderRadius: 18, padding: "8px 13px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                  }}
+                >
+                  {/* la scatola che si apre */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9Z" />
+                    <path d="M2 5h9l1 4H3L2 5Z" /><path d="M22 5h-9l-1 4h9l1-4Z" />
+                  </svg>
+                  Confezioni e sfusi{acceso ? "" : ` (${quante})`}
+                </button>
+              );
+            })()}
             {/* compare solo quando c'è davvero qualcosa da azzerare: un tasto
                 sempre presente e quasi sempre inutile è solo rumore. Toglie
                 in un colpo ricerca, categoria, fornitore e filtro di stato —
