@@ -59927,7 +59927,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }
   // cambiare natura suggerisce i flag tipici del caso, ma restano tutti
   // modificabili a mano
+  // "Confezione da aprire" non e' un tipo nuovo sul database: e' un
+  // prodotto semplice con la casella dei pacchi sigillati accesa. Sul
+  // database resta "semplice", cosi' i 289 prodotti gia' configurati
+  // continuano a funzionare e non serve nessuna migrazione. Quello che
+  // cambia e' il nome che si legge: prima bisognava sapere che esisteva
+  // una spunta sotto la tendina, e chi non lo sapeva non trovava mai i
+  // campi "pezzi per confezione" e "sfuso collegato".
   function cambiaTipo(nuovo) {
+    if (nuovo === "confezione") { aggiornaForm({ tipoProdotto: "semplice", bundleFisica: true, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true }); return; }
     if (nuovo === "bundle") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: true, costo: "" });
     // "sfuso" e "componente" vivono nello stesso modo: hanno una giacenza
     // loro, non si vendono singolarmente. Cambia da dove ARRIVANO — lo
@@ -59937,8 +59945,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // un pacco.
     else if (nuovo === "componente" || nuovo === "sfuso") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: false });
     else if (nuovo === "vetrina") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: false, costo: "" });
-    else aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true });
+    else aggiornaForm({ tipoProdotto: nuovo, bundleFisica: false, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true });
   }
+  const naturaMostrata = prodottoForm?.tipoProdotto === "semplice" && prodottoForm?.bundleFisica
+    ? "confezione" : prodottoForm?.tipoProdotto;
   function cambiaBundleFisica(attiva) {
     if (attiva) aggiornaForm({ bundleFisica: true, contaMagazzino: true, giacenzaPropria: true });
     else if (prodottoForm?.tipoProdotto === "bundle") aggiornaForm({ bundleFisica: false, contaMagazzino: false, giacenzaPropria: false, costo: "" });
@@ -60476,12 +60486,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
       <div style={{ height: 1, background: CREAM_BORDER, margin: "18px 0 16px" }} />
 
+      {/* Semplice + pacchi sigillati si legge "Confezione da aprire": e'
+          la stessa cosa, detta come la direbbe chi lavora in magazzino */}
       <Field label="Natura del prodotto">
-        <select style={inputStyle} value={prodottoForm.tipoProdotto} onChange={(e) => cambiaTipo(e.target.value)}>
+        <select style={inputStyle} value={naturaMostrata} onChange={(e) => cambiaTipo(e.target.value)}>
           <option value="semplice">Semplice — prodotto normale, si vende e si scarica da solo</option>
+          <option value="confezione">Semplice che genera singoli — si carica e si vende da solo, e aprendolo ne escono i pezzi singoli</option>
+          <option value="sfuso">Sfuso — pezzo singolo ricavato aprendo una confezione, usato come componente nei kit</option>
           <option value="bundle">Bundle — kit venduto come un pezzo unico, composto da altri prodotti che vengono scaricati insieme</option>
           <option value="componente">Componente — fa parte di un bundle, non si vende singolarmente</option>
-          <option value="sfuso">Sfuso — pezzo singolo ricavato aprendo una confezione, usato come componente nei kit</option>
           <option value="vetrina">Vetrina — prodotto padre mostrato sullo shop, la vendita avviene sulle sue varianti</option>
           <option value="variante">Variante — una versione specifica di un prodotto vetrina (es. una taglia), è questa che si vende e si scarica</option>
         </select>
@@ -60515,10 +60528,16 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
       {(prodottoForm.tipoProdotto === "bundle" || prodottoForm.tipoProdotto === "semplice") && (
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
-            <input type="checkbox" checked={prodottoForm.bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={{ width: 14, height: 14 }} />
-            Confezione con giacenza fisica (pacchi sigillati sullo scaffale)
-          </label>
+          {/* La casella si vede solo sul Bundle — un kit che oltre alla
+              distinta ha anche pacchi suoi sullo scaffale. Sul prodotto
+              semplice non serve piu': lo dice la tendina, e due comandi
+              per la stessa cosa sono un comando di troppo. */}
+          {prodottoForm.tipoProdotto === "bundle" && (
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
+              <input type="checkbox" checked={prodottoForm.bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={{ width: 14, height: 14 }} />
+              Confezione con giacenza fisica (pacchi sigillati sullo scaffale)
+            </label>
+          )}
           {/* il caso del dermografo col suo manuale: il prodotto esiste per
               conto suo e ha i suoi pezzi, ma quando esce ne porta con sé
               altri. Diverso dal bundle, che i pezzi propri non li ha */}
@@ -60528,11 +60547,26 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35 }}>Il prodotto ha i suoi pezzi in magazzino e, quando esce, escono anche quelli elencati qui sotto (es. il manuale del dermografo).</div>
             </span>
           </label>
-          {prodottoForm.bundleFisica && (
+          {prodottoForm.bundleFisica && (() => {
+            // I due campi che dicono al magazzino cosa succede aprendo:
+            // DOVE vanno i pezzi e QUANTI ne nascono. Sono gli stessi due
+            // che legge la funzione apri_confezione, e senza uno dei due
+            // lei si rifiuta di aprire. Meglio dirlo qui, mentre si
+            // compila, che scoprirlo davanti allo scaffale.
+            const senzaSfuso = !prodottoForm.prodottoSfusoId;
+            const senzaPezzi = !(parseNum(prodottoForm.pezziConfezione) > 0);
+            return (
             <>
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
                 Il box ha uno stock suo (i pacchi sigillati) e il prodotto sfuso collegato ne ha un altro (i pezzi aperti): sono indipendenti, si travasano solo con l'operazione "Apri confezione" in Gestione magazzino.
               </div>
+              {(senzaSfuso || senzaPezzi) && (
+                <div style={{ ...fontBody, fontSize: 12, color: "#8A6A1B", background: "#FBF3E0", border: "1px solid #EAD9B0", borderRadius: 10, padding: "9px 12px", marginBottom: 10, lineHeight: 1.45 }}>
+                  <b>Manca ancora {senzaSfuso && senzaPezzi ? "tutto" : senzaSfuso ? "il pezzo singolo" : "il numero di pezzi"}.</b>{" "}
+                  Finché questi due campi non sono compilati la confezione non si può aprire: è da qui che il magazzino sa
+                  {senzaSfuso ? " DOVE" : " dove"} vanno i pezzi e{senzaPezzi ? " QUANTI" : " quanti"} ne nascono.
+                </div>
+              )}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ flex: "2 1 200px" }}>
                   <Field label="Prodotto sfuso collegato (il pezzo singolo)">
@@ -60549,12 +60583,13 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 </div>
                 <div style={{ flex: "1 1 120px" }}>
                   <Field label="Pezzi per confezione">
-                    <input style={inputStyle} inputMode="numeric" value={prodottoForm.pezziConfezione} onChange={(e) => aggiornaForm({ pezziConfezione: e.target.value })} placeholder="es. 20" />
+                    <input style={{ ...inputStyle, borderColor: senzaPezzi ? "#EAD9B0" : undefined, background: senzaPezzi ? "#FEFBF3" : undefined }} inputMode="numeric" value={prodottoForm.pezziConfezione} onChange={(e) => aggiornaForm({ pezziConfezione: e.target.value })} placeholder="es. 20" />
                   </Field>
                 </div>
               </div>
             </>
-          )}
+            );
+          })()}
         </div>
       )}
 
