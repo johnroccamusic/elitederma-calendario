@@ -48781,6 +48781,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                   vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
                   ricercaEsterna={ricercaProdotto} categoriaEsternaId={categoriaSel}
                   onSchedaChiusa={() => setSchedaAperta(null)}
+                  onSchedaApertaSu={(id) => setSchedaAperta(id)}
                 />
                 </div>
               </div>
@@ -59066,7 +59067,7 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
   );
 }
 
-function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId, soloScheda = false, onSchedaChiusa }) {
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId, soloScheda = false, onSchedaChiusa, onSchedaApertaSu }) {
   // i dati che questa pagina usa davvero, dichiarati QUI e non solo nella
   // mappa delle viste: se un domani la pagina viene incorporata altrove
   // (è già successo), se li porta dietro invece di trovarsi liste vuote
@@ -59418,6 +59419,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }
 
   function apriProdotto(p) {
+    // chi ci ospita segue: la scheda e' una sola, aperta sullo stesso
+    // prodotto sia qui nella vista a categorie sia accanto all'elenco.
+    // Aprendone una dalle tessere, tornando all'elenco la si ritrova a
+    // destra con la sua riga accesa — non sparisce di qua per riapparire
+    // di la'
+    onSchedaApertaSu?.(p.id);
     setProdottoForm(datiFormDaProdotto(p));
     formToccatoRef.current = false;
     setComponenti([]);
