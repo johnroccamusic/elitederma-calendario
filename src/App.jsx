@@ -2814,13 +2814,16 @@ function SchedaDatiClasse({ celle }) {
   // larghezza vera. Mezzo pixel basta e avanza, i tondi netti fanno
   // saltare le proporzioni sulle misure piccole
   const q = (n) => Math.round(n * k * 2) / 2;
-  const pastiglia = q(76);
+  // Le tre celle si leggono di lato, non in colonna: il tondo con la sua
+  // etichetta sotto a sinistra, il dato a destra. Occupa meno di un terzo
+  // dell'altezza di prima, e a colpo d'occhio si legge come una riga sola.
+  const pastiglia = q(56);
   return (
     <div
       ref={rif}
       style={{
         position: "relative", boxSizing: "border-box",
-        borderRadius: q(26), padding: `${q(22)}px ${q(20)}px ${q(24)}px`,
+        borderRadius: q(22), padding: `${q(14)}px ${q(14)}px ${q(15)}px`,
         background: "linear-gradient(145deg, #FCFBF9 0%, #F1ECE4 100%)",
         border: "1px solid rgba(255,255,255,0.9)",
         // in rilievo: luce da sopra a sinistra, ombra sotto a destra
@@ -2833,37 +2836,40 @@ function SchedaDatiClasse({ celle }) {
             {i > 0 && (
               // il filo fra una colonna e l'altra non arriva ai bordi: parte
               // all'altezza della pastiglia e si ferma prima del fondo
-              <div style={{ width: 1, flexShrink: 0, alignSelf: "stretch", background: "#E2D6BE", margin: `${q(8)}px 0 ${q(2)}px` }} />
+              <div style={{ width: 1, flexShrink: 0, alignSelf: "stretch", background: "#E2D6BE", margin: `${q(4)}px 0` }} />
             )}
-            <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: `0 ${q(9)}px` }}>
-              <span
-                style={{
-                  width: pastiglia, height: pastiglia, borderRadius: "50%", flexShrink: 0,
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  background: "linear-gradient(145deg, #F0EAE1 0%, #FDFCFA 100%)",
-                  // incavata: l'opposto della scheda, cosi' il tondo sembra
-                  // scavato dentro il rilievo invece di appoggiato sopra
-                  boxShadow: `inset ${q(3)}px ${q(3)}px ${q(7)}px rgba(150,127,96,0.22), inset -${q(3)}px -${q(3)}px ${q(7)}px rgba(255,255,255,0.95)`,
-                  marginBottom: q(14),
-                }}
-              >
-                <cella.Icona size={q(38)} color={NAVY} />
-              </span>
-              <div style={{ ...fontBody, fontSize: q(13.5), fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: q(2), lineHeight: 1.1, textAlign: "center", marginBottom: q(8), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
-                {cella.label}
-              </div>
-              {cella.righe.map((riga, j) => (
-                <div
-                  key={j}
+            <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: q(12), padding: `0 ${q(10)}px` }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                <span
                   style={{
-                    ...fontDisplay, fontWeight: 800,
-                    fontSize: j === 0 && cella.primaGrande ? q(30) : q(24),
-                    color: cella.colore || NAVY, lineHeight: 1.16, textAlign: "center", overflowWrap: "anywhere",
+                    width: pastiglia, height: pastiglia, borderRadius: "50%",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    background: "linear-gradient(145deg, #F0EAE1 0%, #FDFCFA 100%)",
+                    // incavata: l'opposto della scheda, cosi' il tondo sembra
+                    // scavato dentro il rilievo invece che appoggiato sopra
+                    boxShadow: `inset ${q(3)}px ${q(3)}px ${q(7)}px rgba(150,127,96,0.22), inset -${q(3)}px -${q(3)}px ${q(7)}px rgba(255,255,255,0.95)`,
                   }}
                 >
-                  {riga}
+                  <cella.Icona size={q(28)} color={NAVY} />
+                </span>
+                <div style={{ ...fontBody, fontSize: q(11), fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: q(1.6), lineHeight: 1.1, textAlign: "center", marginTop: q(7), whiteSpace: "nowrap" }}>
+                  {cella.label}
                 </div>
-              ))}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                {cella.righe.map((riga, j) => (
+                  <div
+                    key={j}
+                    style={{
+                      ...fontDisplay, fontWeight: 800,
+                      fontSize: j === 0 && cella.primaGrande ? q(22) : q(19),
+                      color: cella.colore || NAVY, lineHeight: 1.18, overflowWrap: "anywhere",
+                    }}
+                  >
+                    {riga}
+                  </div>
+                ))}
+              </div>
             </div>
           </React.Fragment>
         ))}
@@ -29233,7 +29239,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   righe: parole.length > 1 ? [parole[0], parole.slice(1).join(" ")] : [nomeMaster],
                 },
                 {
-                  chiave: "disponibilita", Icona: IconaTrePersoneAccento, label: "Disponibilità",
+                  chiave: "disponibilita", Icona: IconaTrePersoneAccento, label: "Posti",
                   // classe piena: il numero si stacca in rosso. E' l'unica
                   // cosa che cambia colore, ed e' quella che decide se si
                   // puo' iscrivere ancora qualcuno
