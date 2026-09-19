@@ -29246,7 +29246,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 {/* il carattere dei titoli dell'app, non il serif della
                     copertina: e' lo stesso nome che si legge in ogni altra
                     schermata, e cambiava faccia solo qui */}
-                <div style={{ ...fontDisplay, fontWeight: 700, letterSpacing: 0.5, fontSize: spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
+                {/* l'ombra sotto il nome del corso: la stessa idea del
+                    rilievo dei riquadri, portata sulle lettere — un filo
+                    di luce sopra e un'ombra corta sotto */}
+                <div style={{ ...fontDisplay, fontWeight: 700, letterSpacing: 0.5, fontSize: spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.05, textShadow: "0 1px 0 rgba(255,255,255,0.9), 0 4px 10px rgba(14,27,51,0.28), 0 1px 2px rgba(14,27,51,0.18)" }}>{(corso?.nome || "").toUpperCase()}</div>
                 {manigliaRidimensiona("titoloFontSize")}
               </div>
               {/* la faccia di chi tiene il corso, nello stesso angolo
