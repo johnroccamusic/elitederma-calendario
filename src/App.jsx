@@ -24898,7 +24898,9 @@ function BottonePulsanteScheda({ p }) {
           flex: "1 1 88px", minWidth: 0, boxSizing: "border-box",
         }}
       >
-        <span style={{ width: isMobile ? 51 : 46, height: isMobile ? 51 : 46, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...(p.attivo ? TONDO_INCAVATO_ACCESO : TONDO_INCAVATO) }}>
+        {/* tondo piu' largo del 20% (era 46/51): l'icona resta com'e', a
+            guadagnarci e' l'aria intorno */}
+        <span style={{ width: isMobile ? 61 : 55, height: isMobile ? 61 : 55, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...(p.attivo ? TONDO_INCAVATO_ACCESO : TONDO_INCAVATO) }}>
           <p.Icona size={isMobile ? 24 : 20} color={p.attivo ? "#fff" : NAVY} />
         </span>
         <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", overflowWrap: "anywhere" }}>{p.etichetta}</span>
