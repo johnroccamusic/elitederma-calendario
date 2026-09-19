@@ -30758,28 +30758,31 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             // bastavano a capire dove finiva un allievo e cominciava il
             // successivo. Trenta si', e si scorre lo stesso
             return (
-            <div key={i.id} style={{ ...cardStyle, padding: mostraGestione ? 0 : 16, marginBottom: isMobile && mostraGestione ? 30 : 10, overflow: "hidden" }}>
+            <div key={i.id} style={{ ...cardStyle, padding: mostraGestione ? 0 : (isMobile ? 8 : 16), marginBottom: isMobile && mostraGestione ? 30 : 10, overflow: "hidden" }}>
               {!mostraGestione && (
                 // fuori da "Contabilità classe": scheda semplice, solo nome e telefono
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 10 }}>
+                // dal telefono la scheda si stringe: meno imbottitura,
+                // righe piu' vicine e caratteri un filo piu' piccoli. Con
+                // dieci allievi la lista era tre schermate
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: isMobile ? 2 : 10 }}>
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per vedere i dati dell'iscritto"
-                    style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8, minWidth: 0 }}
+                    style={{ ...fontBody, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: isMobile ? 6 : 8, rowGap: isMobile ? 0 : undefined, lineHeight: isMobile ? 1.15 : undefined, minWidth: 0 }}
                   >
-                    <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
+                    <span style={{ color: MUTED, fontWeight: 400, fontSize: isMobile ? 13 : 14 }}>{idx + 1}.</span>
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
-                    {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
-                    {i.pacchetto_kit && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
-                    {dermografoAcquistato(i) && <span style={{ fontSize: 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
-                    {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
+                    {i.tutor && <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
+                    {i.pacchetto_kit && <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
+                    {dermografoAcquistato(i) && <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
+                    {i.note && <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
+                  <span style={{ fontSize: isMobile ? 11.5 : 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: isMobile ? 10 : 12, marginLeft: "auto" }}>
                     {i.telefono && (
                       <>
                         <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
-                        <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
-                          <IconaWhatsapp size={22} />
+                        <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: isMobile ? 5 : 8, margin: isMobile ? -5 : -8 }}>
+                          <IconaWhatsapp size={isMobile ? 19 : 22} />
                         </a>
                       </>
                     )}
@@ -30791,9 +30794,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       <button
                         onClick={(e) => { e.stopPropagation(); elimina(i.id); }}
                         title="Elimina questo allievo"
-                        style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, margin: -6, display: "flex", alignItems: "center" }}
+                        style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: isMobile ? 4 : 6, margin: isMobile ? -4 : -6, display: "flex", alignItems: "center" }}
                       >
-                        <IconaCestino size={18} />
+                        <IconaCestino size={isMobile ? 16 : 18} />
                       </button>
                     )}
                   </span>
