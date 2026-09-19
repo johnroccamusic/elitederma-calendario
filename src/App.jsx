@@ -59169,6 +59169,28 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // il nome di una voce è lungo
   const [largFo, setLargFo] = useLayoutCondiviso(CHIAVE_LARGHEZZE_FRONTOFFICE, {});
   function larghezzaFoDi(chiave, larghezzaDefault) { return largFo[chiave] ?? larghezzaDefault; }
+
+  // Le tre colonne a misura fissa (albero, elenco, scheda) stanno bene su
+  // un monitor largo. Sotto i 1150px la scheda — che e' l'ultima e prende
+  // "quel che resta" — si riduceva a una striscia da 80-200px, alta
+  // ottomila pixel, e la pagina cominciava a scorrere di lato: dal
+  // telefono in vista scrivania la scheda risultava semplicemente non
+  // esserci. Qui sotto quella soglia le tre colonne si dividono lo spazio
+  // in proporzione, e la scheda non scende mai sotto i 340px.
+  const rifGriglia = useRef(null);
+  const [larghezzaGriglia, setLarghezzaGriglia] = useState(0);
+  useLayoutEffect(() => {
+    const n = rifGriglia.current;
+    if (!n) return;
+    const misura = () => setLarghezzaGriglia(Math.round(n.getBoundingClientRect().width));
+    misura();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(misura) : null;
+    if (ro) ro.observe(n);
+    window.addEventListener("resize", misura);
+    window.addEventListener("zoom-pagina", misura);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener("resize", misura); window.removeEventListener("zoom-pagina", misura); };
+  }, [vista, isMobile, soloScheda]);
+  const colonneStrette = larghezzaGriglia > 0 && larghezzaGriglia < 1150;
   const ridimFoRef = React.useRef(null);
   function iniziaRidimFo(e, chiave, larghezzaAttuale) {
     e.preventDefault();
@@ -61393,7 +61415,16 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         ) : (
           <>
           {strisciaLavori}
-          <div style={{ display: "grid", gridTemplateColumns: `${larghezzaFoDi("boAlbero", 280)}px ${larghezzaFoDi("boLista", 340)}px minmax(0,1fr)`, gap: 16, alignItems: "start" }}>
+          <div
+            ref={rifGriglia}
+            style={{
+              display: "grid",
+              gridTemplateColumns: colonneStrette
+                ? "minmax(140px, 0.9fr) minmax(180px, 1.1fr) minmax(340px, 1.8fr)"
+                : `${larghezzaFoDi("boAlbero", 280)}px ${larghezzaFoDi("boLista", 340)}px minmax(0,1fr)`,
+              gap: 16, alignItems: "start",
+            }}
+          >
             {paneAlbero}
             {paneLista}
             {paneDettaglio}
