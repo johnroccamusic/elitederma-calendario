@@ -48027,7 +48027,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     prodottiVisti = prodottiVisti.filter((p) => generaSingoli(p) || idSfusi.has(p.id));
   }
 
-  const prodottiOrdinati = [...prodottiVisti].sort((a, b) => {
+  const prodottiOrdinatiBase = [...prodottiVisti].sort((a, b) => {
     const { campo, direzione } = ordinamento;
     const dir = direzione === "asc" ? 1 : -1;
     const va = a[campo], vb = b[campo];
@@ -48038,6 +48038,33 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     if (typeof va === "boolean") return (va === vb ? 0 : va ? -1 : 1) * dir;
     return (va - vb) * dir;
   });
+
+  // Col filtro "Confezioni e sfusi" acceso, ogni pezzo singolo si mette
+  // subito sotto il suo pacco. L'ordinamento scelto in testata continua a
+  // valere — ma solo sui pacchi: lo sfuso non ha un posto suo, ha senso
+  // solo accanto a quello da cui esce, e leggere "337 pacchi" in cima e
+  // "2 sfusi" venti righe sotto non dice niente a nessuno.
+  //
+  // Uno sfuso senza pacco (o cadutone fuori per via di un altro filtro)
+  // resta dov'era: non si inventa un posto a chi non ha un genitore.
+  const prodottiOrdinati = filtroRapido !== "confezioni" ? prodottiOrdinatiBase : (() => {
+    const perId = new Map(prodottiOrdinatiBase.map((p) => [p.id, p]));
+    const accodati = new Set();
+    const fuori = [];
+    prodottiOrdinatiBase.forEach((p) => {
+      if (!generaSingoli(p)) return;
+      const figlio = p.prodotto_sfuso_id ? perId.get(p.prodotto_sfuso_id) : null;
+      if (figlio) accodati.add(figlio.id);
+    });
+    prodottiOrdinatiBase.forEach((p) => {
+      if (accodati.has(p.id)) return;          // lo mette il suo pacco
+      fuori.push(p);
+      if (!generaSingoli(p) || !p.prodotto_sfuso_id) return;
+      const figlio = perId.get(p.prodotto_sfuso_id);
+      if (figlio) fuori.push(figlio);
+    });
+    return fuori;
+  })();
 
   // I prodotti che bloccano un corso in calendario. "Attenzione magazzino"
   // guardava solo la scorta minima, e quella e' una regola di negozio: dice
