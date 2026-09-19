@@ -80,13 +80,18 @@ class ConfineErrori extends React.Component {
   }
 }
 
-// Le tre pagine pubbliche dell'app - il link per la master, la ricerca
-// modelle e i biglietti di viaggio - sono fatte apposta per chi non ha, e
-// non deve avere, un account. Il gate le lascia passare: a difenderle e' il
-// token nell'indirizzo, non il login. Senza questa deroga App.jsx non
-// verrebbe nemmeno importato, e chi riceve il link troverebbe il form
-// "Area riservata allo staff".
-const PARAMETRI_PUBBLICI = ["master", "modelle", "biglietti"];
+// Le pagine pubbliche dell'app - il link per la master, la ricerca
+// modelle, i biglietti di viaggio e il modulo del consenso che la modella
+// apre col QR - sono fatte apposta per chi non ha, e non deve avere, un
+// account. Il gate le lascia passare: a difenderle e' il token
+// nell'indirizzo, non il login. Senza questa deroga App.jsx non verrebbe
+// nemmeno importato, e chi riceve il link troverebbe il form "Area
+// riservata allo staff".
+//
+// Questa lista e' l'unico posto che decide chi passa. Ogni rotta pubblica
+// nuova va scritta QUI oltre che in App.jsx: "consenso" c'era la' e non
+// qui, e il QR portava la modella dritta sul form dello staff (19/09/2026).
+const PARAMETRI_PUBBLICI = ["master", "modelle", "biglietti", "consenso"];
 
 function rottaPubblica() {
   if (typeof window === "undefined") return false;
