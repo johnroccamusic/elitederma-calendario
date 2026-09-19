@@ -47138,7 +47138,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   // cambiare trascinando i titoli
   const celle = {
     "Prodotto": (
-        <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdTesto, ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
+        <td onClick={(e) => onApriModifica(p.id, e.currentTarget.getBoundingClientRect())} title="Clicca per modificare il prodotto" style={{ ...tdTesto, ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
           <span
             title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
             style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
@@ -47603,7 +47603,26 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     setAperturaScheda((prec) => ({ ...opzioni, n: (prec?.n || 0) + 1 }));
     mostraVista("categorie");
   }
-  const apriScheda = (p) => apriSchedaProdotto({ prodottoId: p.id });
+  // Cliccando una riga dell'elenco la scheda si apre LI', accanto alla
+  // riga, e la tabella resta dov'e'. Prima la pagina cambiava vista: si
+  // perdeva di vista l'elenco, e tornando indietro bisognava ritrovare il
+  // punto in cui si era. Con venti prodotti da sistemare di fila e' il
+  // giro che si fa venti volte.
+  const [schedaAncorata, setSchedaAncorata] = useState(null);
+  const apriScheda = (p, rect) => {
+    setAperturaScheda((prec) => ({ prodottoId: p.id, n: (prec?.n || 0) + 1 }));
+    setCategorieMontate(true);
+    if (rect) {
+      // ancorata alla riga, ma senza uscire dallo schermo: se la riga sta
+      // in fondo, la scheda risale quanto basta per vedersi intera
+      const alta = Math.min(640, window.innerHeight - 40);
+      setSchedaAncorata({ top: Math.max(16, Math.min(rect.top, window.innerHeight - alta - 16)), alta });
+    } else {
+      setSchedaAncorata(null);
+      if (vistaProdotti !== "categorie") setVistaPrimaDellaScheda(vistaProdotti);
+      mostraVista("categorie");
+    }
+  };
   // arrivando dall'Advisor la scheda si apre da sola. Qui NON si segna la
   // vista di provenienza: il primo "indietro" deve riportare all'Advisor,
   // non all'elenco di un magazzino in cui non si e' mai passati
@@ -48488,20 +48507,43 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             Si monta al primo utilizzo e poi resta montata, solo nascosta:
             tornando all'elenco e rientrando si ritrova la scheda aperta con
             le modifiche non ancora salvate, invece di una pagina vuota */}
-        {categorieMontate && (
-        <div style={{ ...cardStyle, padding: 14, marginTop: 10, marginBottom: 22, display: vistaProdotti === "categorie" ? "block" : "none" }}>
-          <PaginaGestioneShop
-            incorporata
-            altezzaPannelli="auto"
-            categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
-            prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
-            fornitori={fornitori} impostazioniIva={impostazioniIva}
-            ricarica={ricarica} assicuraTabelle={assicuraTabelle} onBack={onBack}
-            vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
-            ricercaEsterna={ricercaProdotto} categoriaEsternaId={categoriaSel}
-          />
-        </div>
-        )}
+        {/* Un solo montaggio della pagina shop, due modi di mostrarla:
+            distesa nella vista a categorie, oppure come scheda appesa
+            accanto alla riga cliccata. Montarla due volte vorrebbe dire
+            due copie dello stesso form, e quella nascosta si porterebbe
+            dietro modifiche che nessuno vede. */}
+        {categorieMontate && (() => {
+          const appesa = !!schedaAncorata && vistaProdotti === "elenco";
+          const cornice = appesa
+            ? { ...cardStyle, padding: 12, margin: 0, position: "fixed", top: schedaAncorata.top, right: isMobile ? 8 : 24, left: isMobile ? 8 : "auto", width: isMobile ? "auto" : 620, maxWidth: "calc(100vw - 32px)", maxHeight: schedaAncorata.alta, overflowY: "auto", zIndex: 2600, boxShadow: "0 18px 46px -12px rgba(14,27,51,0.42)" }
+            : { ...cardStyle, padding: 14, marginTop: 10, marginBottom: 22, display: vistaProdotti === "categorie" ? "block" : "none" };
+          return (
+            <>
+              {/* un velo leggero: la tabella resta leggibile dietro, ma un
+                  tocco fuori chiude la scheda */}
+              {appesa && <div onClick={() => setSchedaAncorata(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,20,30,0.18)", zIndex: 2590 }} />}
+              <div style={cornice}>
+                {appesa && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 2 }}>
+                    <button onClick={() => setSchedaAncorata(null)} data-niente-ombra title="Chiudi la scheda" style={{ background: "transparent", border: "none", cursor: "pointer", color: MUTED, fontSize: 22, lineHeight: 1, padding: "0 2px" }}>×</button>
+                  </div>
+                )}
+                <PaginaGestioneShop
+                  incorporata
+                  soloScheda={appesa}
+                  altezzaPannelli="auto"
+                  categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
+                  prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
+                  fornitori={fornitori} impostazioniIva={impostazioniIva}
+                  ricarica={ricarica} assicuraTabelle={assicuraTabelle} onBack={onBack}
+                  vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
+                  ricercaEsterna={ricercaProdotto} categoriaEsternaId={categoriaSel}
+                  onSchedaChiusa={() => setSchedaAncorata(null)}
+                />
+              </div>
+            </>
+          );
+        })()}
 
         {vistaProdotti === "elenco" && (<>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
@@ -58908,7 +58950,7 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
   );
 }
 
-function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId }) {
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId, soloScheda = false, onSchedaChiusa }) {
   // i dati che questa pagina usa davvero, dichiarati QUI e non solo nella
   // mappa delle viste: se un domani la pagina viene incorporata altrove
   // (è già successo), se li porta dietro invece di trovarsi liste vuote
@@ -59701,6 +59743,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   function chiudiSchedaProdotto() {
     setProdottoForm(null);
     if (isMobile) setVistaMobile("lista");
+    // chi ci ha aperti sopra una scheda appesa la chiude con noi: dopo
+    // "Salva e esci" resterebbe un riquadro con dentro un segnaposto
+    onSchedaChiusa?.();
   }
 
   // il salvataggio vero, staccato dalla scheda: riceve una COPIA di quello
@@ -61192,6 +61237,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               {paneFoProdotti}
             </div>
           )
+        ) : soloScheda ? (
+          /* la sola scheda del prodotto: la usa Gestione magazzino per
+             aprirla accanto alla riga cliccata, con l'elenco che resta
+             dov'e'. Albero ed elenco qui sarebbero due copie di quello
+             che si sta gia' guardando. */
+          paneDettaglio
         ) : isMobile ? (
           <>
             {strisciaLavori}
