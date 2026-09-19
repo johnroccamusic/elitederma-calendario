@@ -47143,7 +47143,10 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
             title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
             style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
           />
-          <span style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
+          <span
+            title={generaSingoli(p) ? "Si apre: da questa confezione si ricavano i pezzi singoli" : undefined}
+            style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis", color: generaSingoli(p) ? ARANCIO_GENERA_SINGOLI : undefined }}
+          >{p.nome}</span>
         </td>
     ),
     "Fornitore": (
@@ -49028,6 +49031,17 @@ function RigaSegnalazioneMagazzino({ segnalazione, fonte, onSalvaNota }) {
 function bundleVirtuale(p) {
   return p?.tipo_prodotto === "bundle" && !p?.bundle_con_giacenza_fisica;
 }
+// "Semplice che genera singoli": il pacco che si compra e si vende
+// intero e che, aperto, diventa pezzi sfusi. E' la stessa condizione che
+// la scheda prodotto chiama con quel nome nella tendina.
+//
+// Negli elenchi di magazzino il nome di questi prodotti si scrive in
+// arancio scuro: in mezzo a duecento righe uguali serve riconoscere al
+// volo quali si possono aprire, senza aprire la scheda di ognuno.
+function generaSingoli(p) {
+  return p?.tipo_prodotto === "semplice" && !!p?.bundle_con_giacenza_fisica;
+}
+const ARANCIO_GENERA_SINGOLI = "#B4530A";
 // avvisi azionabili del magazzino, in ordine di gravità: giacenze rimaste
 // negative (da sistemare), sfusi sotto soglia con pacchi sigillati da
 // aprire, box/sfusi da riordinare dal fornitore. I prodotti "normali"
