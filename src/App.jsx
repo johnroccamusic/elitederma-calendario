@@ -1576,6 +1576,16 @@ function IconaToccoAccento({ size = 26, color = NAVY }) {
     </svg>
   );
 }
+// il segnaposto della sede: stessa gabbia 24 e stesso tratto delle altre
+// due, per stare nel tondo incavato accanto a data e master
+function IconaLuogoAccento({ size = 26, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 21.2s7-5.6 7-11.2a7 7 0 1 0-14 0c0 5.6 7 11.2 7 11.2Z" />
+      <circle cx="12" cy="9.8" r="2.7" />
+    </svg>
+  );
+}
 function IconaTrePersoneAccento({ size = 26, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -29205,20 +29215,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 <div style={{ ...fontDisplay, fontWeight: 700, letterSpacing: 0.5, fontSize: spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
                 {manigliaRidimensiona("titoloFontSize")}
               </div>
-              {loc?.nome && (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  {/* da telefono la pastiglia sta appoggiata al titolo, e
-                      senza il filo d'oro: accanto a un nome grande quel
-                      bordo faceva rumore. Da scrivania resta com'era,
-                      spinta a destra */}
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: isMobile ? "none" : `1px solid ${GOLD}`, borderRadius: Math.round(spaziIscrizioni.pillolaFontSize * 1.125), padding: `${spaziIscrizioni.pillolaPaddingV}px ${Math.round(spaziIscrizioni.pillolaFontSize * 0.75)}px`, flexShrink: 0, marginLeft: isMobile ? 0 : "auto" }}>
-                    <IconaPin size={Math.round(spaziIscrizioni.pillolaFontSize * 0.94)} color={GOLD} />
-                    <span style={{ ...fontBody, fontSize: spaziIscrizioni.pillolaFontSize, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
-                  </div>
-                  {manigliaRidimensiona("pillolaFontSize")}
-                  {manigliaRidimensiona("pillolaPaddingV", "y")}
-                </div>
-              )}
             </div>
             {manigliaSpazio("dopoTitolo")}
             {(() => {
@@ -29230,6 +29226,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               const nomeMaster = (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?";
               const parole = nomeMaster.split(/\s+/).filter(Boolean);
               const celle = [
+                loc?.nome && {
+                  chiave: "sede", Icona: IconaLuogoAccento, label: "Località",
+                  righe: [loc.nome.toUpperCase()],
+                },
                 {
                   chiave: "date", Icona: IconaDataAccento, label: "Date", primaGrande: true,
                   righe: righeIntervalloData(corsoData.data_inizio, corsoData.data_fine),
@@ -29237,14 +29237,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 corsoData.master_id && {
                   chiave: "master", Icona: IconaToccoAccento, label: "Master",
                   righe: parole.length > 1 ? [parole[0], parole.slice(1).join(" ")] : [nomeMaster],
-                },
-                {
-                  chiave: "disponibilita", Icona: IconaTrePersoneAccento, label: "Posti",
-                  // classe piena: il numero si stacca in rosso. E' l'unica
-                  // cosa che cambia colore, ed e' quella che decide se si
-                  // puo' iscrivere ancora qualcuno
-                  colore: liberi === 0 ? "#C0392B" : NAVY,
-                  righe: [`${liberi} post${liberi === 1 ? "o" : "i"}`, liberi === 1 ? "libero" : "liberi"],
                 },
               ].filter(Boolean);
               return (
@@ -30679,7 +30671,12 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
       {vista === "lista" && !costiAperto && (
         <>
-          <div style={{ ...hStyle, marginBottom: 12 }}>Iscritti ({listaIscritti.length})</div>
+          {/* i posti liberi stanno qui, accanto al numero degli iscritti:
+              e' la stessa domanda ("quanti siamo, quanti ne entrano
+              ancora"), e in due posti diversi si leggeva due volte */}
+          <div style={{ ...hStyle, fontWeight: 700, marginBottom: 12 }}>
+            Iscritti ({listaIscritti.length}) <span style={{ color: liberi === 0 ? "#C0392B" : NAVY }}>— {liberi} post{liberi === 1 ? "o" : "i"} liber{liberi === 1 ? "o" : "i"}</span>
+          </div>
           {listaIscritti.length === 0 && (
             <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora. Usa "Iscrivi" in alto per aggiungerne uno.</div>
           )}
