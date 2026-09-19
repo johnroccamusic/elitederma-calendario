@@ -477,14 +477,21 @@ function fasceCorsiPerPagamento(fasceCarta, fasceContantiSalvate, contanti) {
   if (contanti && serieScontoScritta(fasceContantiSalvate)) return fasceContantiSalvate;
   return fasceCarta;
 }
-// Il referral personale delle master, invece, ha una tabella sola.
-// Dal 14/09 al 17/09/2026 ne aveva due, come i corsi, con una serie per
-// i contanti: non ha senso. Il codice personale e' un codice da
-// testimonial, si usa sul sito, e una master non incassa contanti — chi
-// lo digita al POS pagando in contanti prende la stessa serie della
-// carta. La serie che c'era (2 / 3,5 / 5 / 6 / 7 / 8) resta scritta
-// nell'impostazione fasceSconto_referral_contanti, che nessuno legge
-// piu': se un giorno servisse, e' li'.
+// Anche il referral personale delle master ha le sue due serie, come i
+// corsi: una per carta e shop, una per i contanti e il buono Amazon.
+//
+// La storia, perche' non si rifaccia il giro: dal 14 al 17 settembre
+// 2026 c'erano, poi furono tolte — "il codice personale e' da
+// testimonial, vive sul sito, una master non incassa contanti". Ma i
+// contanti al banco la master li incassa eccome, e con la stessa serie
+// della carta lo sconto non si muoveva piu' cambiando il pagamento,
+// mentre per il codice d'aula si muoveva: due codici, due regole
+// diverse, senza che niente lo spiegasse. Rimesse il 19/09/2026.
+//
+// La serie dei contanti sta in fasceSconto_referral_contanti, e chi la
+// scrive e' Gestione punti. Vuota vuol dire "uguale a quella della
+// carta", esattamente come per i corsi.
+const CHIAVE_FASCE_REFERRAL_CONTANTI = "fasceSconto_referral_contanti";
 // Regola dei punti, riscritta il 13/09/2026 e valida in tutta l'app:
 //   punti = cedibile - percentuale di sicurezza, con due decimali.
 // Un punto e' un euro di massimo cedibile: nessun moltiplicatore, la
@@ -20340,7 +20347,7 @@ function Riquadrino({ etichetta, valore, colore = NAVY, forte = false }) {
 // carrello e dalle fasce di OGGI, e si rifanno ogni volta che lo si
 // guarda. Scriverli una volta per tutte vorrebbe dire mostrare numeri
 // calcolati con le regole di ieri.
-function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, schemaPunti, regolaReferral = null }) {
+function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, schemaPunti, regolaReferral = null, fasceReferralContanti = null }) {
   const righe = Array.isArray(c?.carrello) ? c.carrello : [];
   const subtotale = round2(righe.reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
   const contanti = pagamentoContaComeContanti(c?.metodoPagamento);
@@ -20368,7 +20375,11 @@ function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, sc
   const aFasce = c?.scontoCorsoAttivo !== false && !c?.omaggioAttivo && couponAttivo?.tipo_regola_sconto === "fasce";
   const fasce = aFasce
     ? (personale
-      ? (serieScontoScritta(regolaReferral?.fasce) ? regolaReferral.fasce : couponAttivo.fasce_sconto)
+      // il referral personale: la sua serie di carta, o quella dei
+      // contanti quando si paga in contanti o con buono Amazon
+      ? fasceCorsiPerPagamento(
+          serieScontoScritta(regolaReferral?.fasce) ? regolaReferral.fasce : couponAttivo.fasce_sconto,
+          fasceReferralContanti, contanti)
       : fasceCorsiPerPagamento(serieScontoScritta(fasceCarta) ? fasceCarta : couponAttivo.fasce_sconto, fasceContanti, contanti))
     : null;
   // il coupon a percentuale secca: la percentuale sta sul coupon, e su
@@ -20499,11 +20510,12 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, on
   const [fasceContantiAmm] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const [fasceCartaAmm] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
   const [regolaReferralAmm] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  const [fasceReferralContantiAmm] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const [schemaPuntiAmm] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const prodottoPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((x) => [x.id, x])), [prodottiShop]);
   const [aperti, setAperti] = useState({});
   const ordinati = [...lista].sort((a, b) => String(b.creato || "").localeCompare(String(a.creato || "")));
-  const contoDi = (c) => contoCarrello(c, { prodottoPerId, coupon, fasceCarta: fasceCartaAmm, fasceContanti: fasceContantiAmm, schemaPunti: schemaPuntiAmm, regolaReferral: regolaReferralAmm });
+  const contoDi = (c) => contoCarrello(c, { prodottoPerId, coupon, fasceCarta: fasceCartaAmm, fasceContanti: fasceContantiAmm, schemaPunti: schemaPuntiAmm, regolaReferral: regolaReferralAmm, fasceReferralContanti: fasceReferralContantiAmm });
   // Un riquadro per persona, col numero dei suoi carrelli che lampeggia.
   //
   // L'elenco lungo dice quali carrelli ci sono; questi dicono DI CHI
@@ -35463,6 +35475,9 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   // due strade per la stessa cosa, con meta' dei codici fatti in un modo
   // e meta' nell'altro.
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  // La serie della carta, ed e' giusto cosi': questo pannello scrive il
+  // coupon su WooCommerce, e il sito non incassa contanti. La serie dei
+  // contanti vale solo al banco, dove la applica il POS.
   const fasceReferral = fasceScontoValide(gruppiFasceValidi(regolaReferralMaster?.fasce).gruppi[0]);
   async function proponiCodiceReferral(m) {
     const codice = await generaCodiceReferralUnivoco(m.nome);
@@ -44098,6 +44113,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     ricarica(["regole_referral_automatico"]);
   }
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  // La seconda serie del referral: contanti e buono Amazon. Vuota vuol
+  // dire "uguale a quella della carta", come per i corsi
+  const [fasceReferralContanti, setFasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
+  const referralContantiUgualiACarta = !serieScontoScritta(fasceReferralContanti);
   // Le fasce del referral personale si salvano fra le impostazioni, ma i
   // codici gia' emessi portano la LORO regola, copiata quando sono nati:
   // i 17 codici delle master erano rimasti al 15% fisso mentre qui si
@@ -44158,9 +44177,16 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         const alCorso = !!v.corso_data_id;
         // al corso: la serie della carta o quella dei contanti, a seconda
         // di come l'allievo ha pagato
+        // La stessa regola per tutti e due i canali: la serie della
+        // carta, o quella dei contanti se e' stato pagato in contanti o
+        // con buono Amazon. Il referral usava sempre quella della carta,
+        // e dal 19/09/2026 ha la sua serie contanti come i corsi: se qui
+        // restasse la vecchia regola, la classifica direbbe punti diversi
+        // da quelli che il POS ha mostrato mentre incassava.
+        const contantiVendita = pagamentoContaComeContanti(v.metodo_pagamento);
         const fasceCanale = alCorso
-          ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, pagamentoContaComeContanti(v.metodo_pagamento))
-          : regolaReferralMaster?.fasce;
+          ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, contantiVendita)
+          : fasceCorsiPerPagamento(regolaReferralMaster?.fasce, fasceReferralContanti, contantiVendita);
         (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
           if (r.spedizione) return;
         if (r.spedizione) return;
@@ -44303,18 +44329,35 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto con il referral personale</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Stesse quattro fasce di spesa del codice d'aula, ma <b style={{ color: NAVY }}>una serie sola</b>: il codice personale è un codice da testimonial, vive sul sito, e una master non incassa contanti. Si salva appena la cambi.
+            Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Stesse quattro fasce di spesa del codice d'aula, e <b style={{ color: NAVY }}>due serie</b> come lì: una per carta e shop, una per i contanti e il buono Amazon incassati al banco. Si salva appena la cambi.
           </div>
-          {/* Una tabella sola, non due. Fino al 17/09/2026 c'era anche una
-              serie contanti per il referral personale: non ha senso, il
-              codice di una testimonial si usa online. Chi lo digita al POS
-              pagando in contanti prende questa, come con la carta */}
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop</div>
           <FasceDiSpesa
             valore={regolaReferralMaster?.fasce}
             onCambia={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: gruppiFasceValidi(f) })}
             prodottiShop={prodottiShop} isMobile={isMobile}
           />
           <div style={{ marginBottom: 18 }} />
+          {/* La seconda serie, rimessa il 19/09/2026. Era stata tolta il
+              17/09 con la motivazione che "una master non incassa
+              contanti": i contanti al banco li incassa, e senza questa
+              serie il referral era l'unico codice che non cambiava sconto
+              cambiando il pagamento. */}
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
+          <FasceDiSpesa
+            senzaWoo
+            valore={fasceReferralContanti}
+            onCambia={(v) => setFasceReferralContanti(gruppiFasceValidi(v))}
+            prodottiShop={prodottiShop} isMobile={isMobile}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4, marginBottom: 18 }}>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: referralContantiUgualiACarta ? MUTED : "#2E7D32" }}>
+              {referralContantiUgualiACarta
+                ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo."
+                : "Serie salvata: il POS la applica quando il referral si usa pagando in contanti o con buono Amazon."}
+            </span>
+            {!referralContantiUgualiACarta && <Button variant="ghost" onClick={() => setFasceReferralContanti([])}>Rimetti uguali a carta e shop</Button>}
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
             <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Applico…" : "Applica ai codici personali esistenti"}</Button>
             <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
@@ -56048,6 +56091,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // e quella del referral personale, per contanti e buono Amazon
   // il referral personale ha una tabella sola, valida comunque si paghi
   const [regolaReferralPos] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  const [fasceReferralContantiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const [note, setNote] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
@@ -56335,9 +56379,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const contoCarrelloVivo = useMemo(
     () => contoCarrello(
       { carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, couponCodiceTesto, referralPersonaleAttivo },
-      { prodottoPerId: prodottiPerId, coupon, fasceCarta: fasceCorsiCartaPos, fasceContanti: fasceContantiCorsiPos, schemaPunti: schemaPuntiPos, regolaReferral: regolaReferralPos },
+      { prodottoPerId: prodottiPerId, coupon, fasceCarta: fasceCorsiCartaPos, fasceContanti: fasceContantiCorsiPos, schemaPunti: schemaPuntiPos, regolaReferral: regolaReferralPos, fasceReferralContanti: fasceReferralContantiPos },
     ),
-    [carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, couponCodiceTesto, referralPersonaleAttivo, prodottiPerId, coupon, fasceCorsiCartaPos, fasceContantiCorsiPos, schemaPuntiPos, regolaReferralPos],
+    [carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, couponCodiceTesto, referralPersonaleAttivo, prodottiPerId, coupon, fasceCorsiCartaPos, fasceContantiCorsiPos, schemaPuntiPos, regolaReferralPos, fasceReferralContantiPos],
   );
   function commutaReferralPersonale(acceso) {
     setReferralPersonaleAttivo(acceso);
@@ -56443,15 +56487,19 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const couponPersonaleAttivo = !!couponAttivo?.master_id && !couponAttivo?.corsi_date_id;
   const fasceCouponAttive = couponAFasce
     ? (couponPersonaleAttivo
-      ? (serieScontoScritta(regolaReferralPos?.fasce) ? regolaReferralPos.fasce : couponAttivo.fasce_sconto)
+      ? fasceCorsiPerPagamento(
+          serieScontoScritta(regolaReferralPos?.fasce) ? regolaReferralPos.fasce : couponAttivo.fasce_sconto,
+          fasceReferralContantiPos, pagamentoContaComeContanti(metodoPagamento))
       : fasceCorsiPerPagamento(
           !!couponAttivo.corsi_date_id && serieScontoScritta(fasceCorsiCartaPos) ? fasceCorsiCartaPos : couponAttivo.fasce_sconto,
           fasceContantiCorsiPos,
           !!couponAttivo.corsi_date_id && pagamentoContaComeContanti(metodoPagamento)))
     : null;
-  const fasceContantiInUso = couponAFasce && (couponPersonaleAttivo
-    ? false
-    : (pagamentoContaComeContanti(metodoPagamento) && Array.isArray(fasceContantiCorsiPos) && fasceContantiCorsiPos.length > 0));
+  // "sta valendo la serie dei contanti": vale per tutti e due i codici,
+  // ognuno con la sua serie
+  const fasceContantiInUso = couponAFasce && pagamentoContaComeContanti(metodoPagamento) && (couponPersonaleAttivo
+    ? serieScontoScritta(fasceReferralContantiPos)
+    : serieScontoScritta(fasceContantiCorsiPos));
   const scontoCoupon = couponAFasce
     ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive)
     : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
