@@ -288,6 +288,9 @@ const CHIAVE_MANIGLIE = "maniglie_impaginazione";
 // Vuoto = le due foto di serie (sfondo-app-desktop.jpg / -mobile.jpg)
 const CHIAVE_SFONDO_APP = "sfondo_app";
 const SFONDI_APP_DI_SERIE = { desktop: "/sfondo-app-desktop.jpg", mobile: "/sfondo-app-mobile.jpg" };
+// la copia dello sfondo scelto tenuta nel browser: la legge lo script in
+// fondo a index.html, prima che l'app parta. Stessa chiave la' e qui.
+const CHIAVE_SFONDO_LOCALE = "edc_sfondo_app";
 // i cerchietti "i" con le istruzioni dei tasti: un interruttore solo per
 // tutta l'app, in Aspetto dell'app. Vuoto = accesi
 const CHIAVE_AIUTI = "aiuti_visibili";
@@ -758,6 +761,31 @@ let vistaForzata = (() => {
 // "desktop": dal telefono, l'app come sul computer (viewport larga, pizzico
 // per ingrandire). "mobile": dal computer, l'app dentro un telefono
 // disegnato al centro dello schermo. null: ognuno com'e'
+// Cambiare vista telefono/computer richiede di ricaricare: il viewport
+// non si puo' cambiare a caldo, il browser lo rilegge solo all'avvio.
+//
+// Ma la ricarica riportava alla home. Chi stava dentro Gestione
+// magazzino premeva il tasto e si ritrovava fuori, nella pagina delle
+// icone, con tutto da rifare. La regola e': cambiando vista si resta
+// dove si e', in qualunque punto dell'app.
+//
+// Quindi prima di ricaricare si segna dove si era, e all'avvio si torna
+// li'. In sessionStorage e non in localStorage: vale per questa scheda e
+// per questa sessione, non per il prossimo accesso fra tre giorni.
+const CHIAVE_VISTA_RIPRESA = "edc_vista_ripresa";
+let VISTA_CORRENTE = "home";
+function segnaVistaCorrente(v) { VISTA_CORRENTE = v || "home"; }
+function ricaricaRestandoDoveSiE() {
+  try { sessionStorage.setItem(CHIAVE_VISTA_RIPRESA, VISTA_CORRENTE); } catch (e) { /* scheda privata: si ricarica e basta */ }
+  window.location.reload();
+}
+function vistaDaRiprendere() {
+  try {
+    const v = sessionStorage.getItem(CHIAVE_VISTA_RIPRESA);
+    if (v) sessionStorage.removeItem(CHIAVE_VISTA_RIPRESA);
+    return v || null;
+  } catch (e) { return null; }
+}
 function applicaVistaForzata(v) {
   vistaForzata = v === "desktop" || v === "mobile" ? v : null;
   try { if (vistaForzata) window.localStorage.setItem(CHIAVE_VISTA_FORZATA, vistaForzata); else window.localStorage.removeItem(CHIAVE_VISTA_FORZATA); } catch (e) { /* navigazione privata */ }
@@ -1045,12 +1073,31 @@ function PannelloStileOggetti({ vista, programmatore }) {
   );
 }
 
-function TastoVistaForzata({ programmatore = false }) {
-  // solo per chi programma: serve a controllare il lavoro, non a usare
-  // l'app. Se la vista era rimasta forzata da un accesso precedente e
-  // ora il ruolo non lo permette, si torna normali da soli
-  if (!programmatore) {
-    if (vistaForzata) { applicaVistaForzata(null); window.location.reload(); }
+// Chi puo' passare da vista telefono a vista computer.
+//
+// Oltre a chi programma, le persone dell'amministrazione che lavorano
+// dal telefono e hanno bisogno di vedere le tabelle larghe: Stefano,
+// Raffaele, Elena e Andrea — che e' sia master sia venditore, e a
+// seconda di come entra l'app lo riconosce da una parte o dall'altra.
+//
+// Sono nomi e non un ruolo perche' e' un permesso personale, non una
+// mansione: darlo a "tutti gli amministratori" lo darebbe anche a chi
+// non l'ha chiesto. Si confronta il solo nome di battesimo, cosi'
+// funziona sia con "Stefano Di Napoli" sia con "STEFANO".
+const NOMI_VISTA_FORZATA = ["stefano", "raffaele", "elena", "andrea"];
+function puoForzareLaVista(ruoloUtente, utenteLoggato, venditoreLoggato) {
+  if (ruoloUtente === "programmatore") return true;
+  return [utenteLoggato?.nome, venditoreLoggato?.nome]
+    .filter(Boolean)
+    .some((n) => NOMI_VISTA_FORZATA.includes(String(n).trim().split(/\s+/)[0].toLowerCase()));
+}
+
+function TastoVistaForzata({ abilitato = false }) {
+  // Se la vista era rimasta forzata da un accesso precedente e ora chi
+  // entra non puo' cambiarla, si torna normali da soli: altrimenti
+  // resterebbe bloccato in una vista che non sa come togliere.
+  if (!abilitato) {
+    if (vistaForzata) { applicaVistaForzata(null); ricaricaRestandoDoveSiE(); }
     return null;
   }
   // dal computer il tastino sta solo dentro il telefono simulato, per
@@ -1060,7 +1107,7 @@ function TastoVistaForzata({ programmatore = false }) {
     return (
       <button
         type="button"
-        onClick={() => { applicaVistaForzata(null); window.location.reload(); }}
+        onClick={() => { applicaVistaForzata(null); ricaricaRestandoDoveSiE(); }}
         title="Torna alla vista computer"
         style={{
           position: "fixed", top: 8, right: 8, zIndex: 9999,
@@ -1088,7 +1135,7 @@ function TastoVistaForzata({ programmatore = false }) {
       // aperta lascia il browser del telefono a meta' strada (titoli
       // grandi, larghezze vecchie). Ripartire da capo e' l'unico modo
       // pulito, e la scelta e' gia' salvata sul dispositivo.
-      onClick={() => { applicaVistaForzata(desktop ? null : "desktop"); window.location.reload(); }}
+      onClick={() => { applicaVistaForzata(desktop ? null : "desktop"); ricaricaRestandoDoveSiE(); }}
       title={desktop ? "Torna alla vista telefono" : "Vedi come sul computer (poi puoi ingrandire con due dita)"}
       style={{
         position: "fixed", top: `calc(env(safe-area-inset-top, 0px) + ${Math.round(8 * fattore)}px)`, right: Math.round(8 * fattore), zIndex: 9999,
@@ -66610,8 +66657,18 @@ export default function App() {
   useEffect(() => {
     const el = typeof document !== "undefined" ? document.getElementById("sfondo-app") : null;
     if (!el) return;
-    const url = sfondoPerTelefono ? sfondoAppScelto?.mobile : sfondoAppScelto?.desktop;
-    el.style.backgroundImage = url ? `url("${url}")` : "";
+    const scelto = sfondoPerTelefono ? sfondoAppScelto?.mobile : sfondoAppScelto?.desktop;
+    const diSerie = sfondoPerTelefono ? SFONDI_APP_DI_SERIE.mobile : SFONDI_APP_DI_SERIE.desktop;
+    el.style.backgroundImage = `url("${scelto || diSerie}")`;
+    // La copia nel browser, che lo script di index.html legge al prossimo
+    // avvio per dipingere subito quello giusto invece di far comparire
+    // quello di serie e sostituirlo un istante dopo. Si riscrive a ogni
+    // cambio, cosi' lo sfondo vecchio non torna piu'.
+    try {
+      const avere = { desktop: sfondoAppScelto?.desktop || null, mobile: sfondoAppScelto?.mobile || null };
+      if (avere.desktop || avere.mobile) window.localStorage.setItem(CHIAVE_SFONDO_LOCALE, JSON.stringify(avere));
+      else window.localStorage.removeItem(CHIAVE_SFONDO_LOCALE);
+    } catch (e) { /* scheda privata: si ricade sullo sfondo di serie, e va bene */ }
   }, [sfondoAppScelto, sfondoPerTelefono]);
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
@@ -66653,7 +66710,11 @@ export default function App() {
   const isMobile = useIsMobile();
   const tastieraAperta = useTastieraAperta();
   const appDaSchermataHome = useAppDaSchermataHome();
-  const [view, setView] = useState("home");
+  const [view, setView] = useState(() => vistaDaRiprendere() || "home");
+  // il segnaposto si tiene aggiornato a ogni spostamento: quando si
+  // cambia vista telefono/computer la pagina si ricarica, e deve
+  // ripartire da qui invece che dalla home
+  useEffect(() => { segnaVistaCorrente(view); }, [view]);
   // quale delle due aree delle impostazioni e' aperta: la scelta vive qui
   // perche' chi apre decide dove atterrare (la rotellina su "Setting")
   const [areaImpostazioni, setAreaImpostazioni] = useState("setting");
@@ -68330,7 +68391,7 @@ export default function App() {
       <StiliGlobaliAspetto />
       {/* dal telefono: il tastino in alto a destra per vedere l'app come
           sul computer, con il pizzico per ingrandire */}
-      <TastoVistaForzata programmatore={ruoloUtente === "programmatore"} />
+      <TastoVistaForzata abilitato={puoForzareLaVista(ruoloUtente, utenteLoggato, venditoreLoggato)} />
       {/* "Stile": i colori scelti a mano sugli oggetti. Il tasto lo vede
           solo il programmatore, i colori li vedono tutti */}
       <PannelloStileOggetti vista={view} programmatore={ruoloUtente === "programmatore"} />
@@ -68590,7 +68651,7 @@ export default function App() {
                   telefono disegnato al centro dello schermo, per
                   controllare la vista telefono senza prendere il telefono */}
               {ruoloUtente === "programmatore" && !isMobile && !dispositivoTouchPiccolo() && (
-                <button onClick={() => { applicaVistaForzata("mobile"); window.location.reload(); }} title="Simula la vista telefono" style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer" }}>
+                <button onClick={() => { applicaVistaForzata("mobile"); ricaricaRestandoDoveSiE(); }} title="Simula la vista telefono" style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer" }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></svg>
                   Vista telefono
                 </button>

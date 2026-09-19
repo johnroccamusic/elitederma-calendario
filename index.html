@@ -37,14 +37,15 @@
         inset: 0;
         z-index: -1;
         background-color: #F7F5EF;
-        background-image: url("/sfondo-app-mobile.jpg");
+        /* nessuna immagine qui: la sceglie lo script in fondo, prima del
+           primo disegno. Scritta nel CSS, quella di serie compariva
+           sempre e veniva sostituita un istante dopo da quella scelta in
+           Aspetto dell'app — un lampo del vecchio sfondo a ogni avvio */
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
       }
-      @media (min-width: 701px) {
-        #sfondo-app { background-image: url("/sfondo-app-desktop.jpg"); }
-      }
+
       /* con viewport-fit=cover (sopra) il contenuto normale arriverebbe fin
          sotto la barra di stato/notch: serve rimandarlo giù quel tanto che
          basta. Il padding va sul contenitore React di ogni schermata (con
@@ -71,6 +72,28 @@
   </head>
   <body style="margin:0">
     <div id="sfondo-app"></div>
+    <script>
+      // Lo sfondo, deciso prima che l'app parta.
+      //
+      // L'immagine scelta in Aspetto dell'app vive sul server, e arriva
+      // dopo un giro di rete. Fino a ieri nel frattempo si vedeva quella
+      // di serie, che poi spariva: un lampo del vecchio sfondo a ogni
+      // avvio. Qui si legge la copia tenuta nel browser e si dipinge
+      // subito quella giusta; l'app poi la conferma o la aggiorna.
+      //
+      // La scelta fra telefono e computer usa la stessa soglia del resto
+      // dell'app (700 px).
+      (function () {
+        var el = document.getElementById("sfondo-app");
+        if (!el) return;
+        var scelta = null;
+        try { scelta = JSON.parse(window.localStorage.getItem("edc_sfondo_app") || "null"); } catch (e) { scelta = null; }
+        var telefono = window.innerWidth <= 700;
+        var url = (scelta && (telefono ? scelta.mobile : scelta.desktop))
+          || (telefono ? "/sfondo-app-mobile.jpg" : "/sfondo-app-desktop.jpg");
+        el.style.backgroundImage = 'url("' + url + '")';
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
