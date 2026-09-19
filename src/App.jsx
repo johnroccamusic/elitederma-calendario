@@ -3915,7 +3915,7 @@ function IntestazioneArea({ Icona, children }) {
 // scorrere a mano fino alla lettera giusta. Qui la lista si apre con una
 // riga di ricerca in testa e si filtra per parola mentre si scrive.
 // opzioni = [{ id, nome }]; valore "" significa nessuna scelta
-function TendinaRicerca({ valore, opzioni, onCambia, etichettaVuoto = "— nessuno —", placeholderRicerca = "Cerca per parola…" }) {
+function TendinaRicerca({ valore, opzioni, onCambia, etichettaVuoto = "— nessuno —", placeholderRicerca = "Cerca per parola…", stile = null }) {
   const [aperta, setAperta] = useState(false);
   const [filtro, setFiltro] = useState("");
   const contenitore = useRef(null);
@@ -3942,7 +3942,7 @@ function TendinaRicerca({ valore, opzioni, onCambia, etichettaVuoto = "— nessu
       <button
         type="button"
         onClick={() => { setAperta((a) => !a); setFiltro(""); }}
-        style={{ ...inputStyle, background: "#fff", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
+        style={{ ...inputStyle, background: "#fff", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, ...(stile || {}) }}
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: scelta ? NAVY : MUTED }}>
           {scelta ? scelta.nome : etichettaVuoto}
@@ -59074,6 +59074,76 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
   );
 }
 
+// ——— Seconda meta' della scheda prodotto: disponibilita', categorie,
+// natura, scorta ———
+//
+// Il disegno e' quello che ha fatto l'utente a mano: ogni blocco ha la
+// sua icona dentro un quadrato arrotondato a sinistra, il titolo, una
+// riga che dice a cosa serve, e i campi sotto. Grigi freddi e accenti
+// blu invece del crema del resto dell'app: e' la parte della scheda che
+// si legge e si compila, non quella che si sfoglia, e va distinta a
+// colpo d'occhio. Vale solo qui dentro — la tavolozza dell'app non si
+// tocca.
+const SP_BORDO = "#E4E8EE";
+const SP_GRIGIO = "#F4F6F8";
+const SP_BLU = "#1C6DD0";
+const SP_TESTO = "#0F1F3D";
+const SP_SPENTO = "#77839A";
+const spSpunta = { width: 18, height: 18, accentColor: SP_BLU, flexShrink: 0, cursor: "pointer", margin: 0 };
+const spCampo = { ...fontBody, width: "100%", boxSizing: "border-box", padding: "12px 13px", borderRadius: 10, border: `1px solid ${SP_BORDO}`, fontSize: 14.5, color: SP_TESTO, background: "#fff" };
+const spEtichetta = { ...fontBody, fontSize: 13, color: SP_SPENTO, marginBottom: 6 };
+const spRiga = { display: "flex", alignItems: "center", gap: 9, cursor: "pointer", ...fontBody, fontSize: 14, color: SP_TESTO };
+
+function SpDisegno({ s = 22, children }) {
+  return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{children}</svg>;
+}
+const SpIcoCubo = ({ s }) => <SpDisegno s={s}><path d="M21 8 12 3 3 8l9 5 9-5Z" /><path d="M3 8v8l9 5 9-5V8" /><path d="M12 13v8" /></SpDisegno>;
+const SpIcoCarrello = ({ s }) => <SpDisegno s={s}><circle cx="9.5" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h2.6l2.3 11.4a1.8 1.8 0 0 0 1.8 1.4h8.6a1.8 1.8 0 0 0 1.8-1.4L21 7H5.2" /></SpDisegno>;
+const SpIcoLivelli = ({ s }) => <SpDisegno s={s}><path d="M12 3 2 8l10 5 10-5-10-5Z" /><path d="m2 16 10 5 10-5" /><path d="m2 12 10 5 10-5" /></SpDisegno>;
+const SpIcoCatena = ({ s }) => <SpDisegno s={s}><path d="M10.5 13.5a4.5 4.5 0 0 0 6.7.5l2.4-2.4a4.5 4.5 0 0 0-6.4-6.4l-1.4 1.4" /><path d="M13.5 10.5a4.5 4.5 0 0 0-6.7-.5l-2.4 2.4a4.5 4.5 0 0 0 6.4 6.4l1.4-1.4" /></SpDisegno>;
+const SpIcoGrafico = ({ s }) => <SpDisegno s={s}><path d="M5.5 20V11M12 20V4.5M18.5 20v-6" /></SpDisegno>;
+const SpIcoInfo = ({ s = 16 }) => <SpDisegno s={s}><circle cx="12" cy="12" r="9" /><path d="M12 11.5v5M12 7.8h.01" /></SpDisegno>;
+const SpIcoChevron = ({ aperto, s = 20 }) => <SpDisegno s={s}>{aperto ? <path d="m6 14.5 6-6 6 6" /> : <path d="m6 9.5 6 6 6-6" />}</SpDisegno>;
+
+/** Il quadrato arrotondato che porta l'icona, a sinistra di ogni blocco. */
+function SpIcona({ children, lato = 48 }) {
+  return (
+    <div style={{ width: lato, height: lato, borderRadius: 14, background: SP_GRIGIO, border: `1px solid ${SP_BORDO}`, display: "flex", alignItems: "center", justifyContent: "center", color: SP_TESTO, flexShrink: 0 }}>
+      {children}
+    </div>
+  );
+}
+
+/** Un blocco della scheda: icona, titolo, spiegazione, contenuto. */
+function SpBlocco({ icona, titolo, sottotitolo, azione, lato = 44, dimTitolo = 15.5, children, style }) {
+  return (
+    <div style={{ marginBottom: 16, ...style }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: sottotitolo ? 12 : 10 }}>
+        <SpIcona lato={lato}>{icona}</SpIcona>
+        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+          <div style={{ ...fontDisplay, fontSize: dimTitolo, fontWeight: 700, color: SP_TESTO, lineHeight: 1.25 }}>{titolo}</div>
+          {sottotitolo && <div style={{ ...fontBody, fontSize: 13, color: SP_SPENTO, marginTop: 3, lineHeight: 1.4 }}>{sottotitolo}</div>}
+        </div>
+        {azione}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** La riga grigia con la ⓘ: quello che c'e' da sapere, non da compilare. */
+function SpNota({ children, sfondo = SP_GRIGIO, colore = SP_SPENTO }) {
+  return (
+    <div style={{ display: "flex", gap: 9, background: sfondo, borderRadius: 10, padding: "12px 13px", ...fontBody, fontSize: 12.5, color: colore, lineHeight: 1.45 }}>
+      <div style={{ flexShrink: 0, paddingTop: 1 }}><SpIcoInfo /></div>
+      <div style={{ minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+/** La linea sottile che separa un blocco dall'altro. */
+const SpRigaSeparatrice = () => <div style={{ height: 1, background: SP_BORDO, margin: "18px 0" }} />;
+
 function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId, soloScheda = false, onSchedaChiusa, onSchedaApertaSu }) {
   // i dati che questa pagina usa davvero, dichiarati QUI e non solo nella
   // mappa delle viste: se un domani la pagina viene incorporata altrove
@@ -59137,6 +59207,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [erroreSalvataggio, setErroreSalvataggio] = useState(null);
   // copia dei dati di scorta e riordino su più prodotti in un colpo solo
   const [copiaAperta, setCopiaAperta] = useState(false);
+  // il blocco "Disponibilita' e vendite" si puo' richiudere: sotto ci
+  // sono categorie, natura e scorta, e chi viene qui per quelle non deve
+  // scorrere ogni volta oltre le vendite
+  const [dispAperta, setDispAperta] = useState(true);
   const [filtroCopia, setFiltroCopia] = useState("");
   const [selezionatiCopia, setSelezionatiCopia] = useState({});
   const [applicandoCopia, setApplicandoCopia] = useState(false);
@@ -60631,94 +60705,125 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           Margine (sui netti): <b>{fmtEuroIva(calcoloPrezzi.margine)}</b>{calcoloPrezzi.marginePct != null && <> — <b>{calcoloPrezzi.marginePct}%</b></>}
         </div>
       )}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 140px" }}>
-          <Field label="Disponibilità">
+      <SpBlocco
+        lato={52} dimTitolo={19}
+        icona={<SpIcoCubo s={26} />}
+        titolo="Disponibilità e vendite"
+        sottotitolo="Gestisci la visibilità del prodotto e la quantità disponibile."
+        azione={(
+          <button
+            onClick={() => setDispAperta((x) => !x)} data-niente-ombra
+            title={dispAperta ? "Richiudi questo blocco" : "Apri questo blocco"}
+            style={{ background: "none", border: "none", cursor: "pointer", color: SP_SPENTO, padding: 4, display: "flex" }}
+          >
+            <SpIcoChevron aperto={dispAperta} />
+          </button>
+        )}
+      >
+        {dispAperta && (<>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr)", gap: 12, alignItems: "start", marginBottom: 16 }}>
+          <div>
+            <div style={spEtichetta}>Disponibilità</div>
             {/* gli stessi stati di WooCommerce: pubblicato lo vedono tutti,
                 privato solo chi entra nel sito da amministratore (utile per
                 preparare un prodotto o tenerlo fuori catalogo senza
                 perderlo), bozza non è nemmeno pubblicato */}
-            <select style={inputStyle} value={prodottoForm.stato} onChange={(e) => aggiornaForm({ stato: e.target.value })}>
+            <select style={spCampo} value={prodottoForm.stato} onChange={(e) => aggiornaForm({ stato: e.target.value })}>
               <option value="publish">Pubblicato</option>
               <option value="private">Privato</option>
               <option value="draft">Bozza</option>
             </select>
-          </Field>
-        </div>
-        <div style={{ flex: "1 1 140px" }}>
-          <Field label="Quantità in stock">
+          </div>
+          <div>
+            <div style={spEtichetta}>Quantità in stock</div>
             <input
-              style={{ ...inputStyle, ...(prodottoForm.giacenzaPropria ? {} : { background: "#EFEFEF", color: MUTED }) }}
+              style={{ ...spCampo, ...(prodottoForm.giacenzaPropria ? {} : { background: "#F1F2F5", color: SP_SPENTO }) }}
               inputMode="numeric" value={prodottoForm.qtaStock} placeholder="0" disabled={!prodottoForm.giacenzaPropria}
               onChange={(e) => aggiornaForm({ qtaStock: e.target.value })}
             />
-          </Field>
-        </div>
-      </div>
-      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -6, marginBottom: 10, lineHeight: 1.35 }}>
-        {prodottoForm.giacenzaPropria
-          ? (calcoloPrezzi.vaSuWoo
-              ? "Pezzi fisicamente presenti. Sono gli stessi che lo shop online vende: la quantità pubblicata su WooCommerce viene riallineata a questo numero."
-              : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")
-          : "Quantità non editabile a mano: viene calcolata (bundle) o non si applica (vetrina di una variante)."}
-      </div>
-      {/* dove si vende questo prodotto: le due scelte sono indipendenti —
-          può stare sullo shop e non al banco, o il contrario. Quando è la
-          categoria a tenerlo fuori, sceglierlo qui chiede prima il permesso
-          di riaprire anche la categoria: altrimenti la casella direbbe una
-          cosa e il prodotto resterebbe invisibile lo stesso */}
-      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.vaSuWoo && prodottoForm.stato !== "private" ? { color: "#2E7D32", background: "#E3F3E5" } : prodottoForm.stato === "private" ? { color: "#3B6FA0", background: "#E7EEF5" } : { color: MUTED, background: "#EFEFEF" }) }}>
-            {calcoloPrezzi.varianteNonPubblicabile
-              ? "Sullo shop tramite la vetrina"
-              : prodottoForm.stato === "private" && calcoloPrezzi.vaSuWoo
-                ? "Sul sito, ma privato"
-                : calcoloPrezzi.vaSuWoo ? "In vendita sullo shop" : "Non sullo shop"}
-          </span>
-          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.nonSulPos ? { color: MUTED, background: "#EFEFEF" } : { color: "#2E7D32", background: "#E3F3E5" }) }}>
-            {calcoloPrezzi.nonSulPos ? "Non sul POS" : "In vendita sul POS"}
-          </span>
+          </div>
+          <SpNota>
+            {prodottoForm.giacenzaPropria
+              ? (calcoloPrezzi.vaSuWoo
+                  ? "Pezzi fisicamente presenti. È lo stesso valore che lo shop online vende (sincronizzato con WooCommerce)."
+                  : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")
+              : "Quantità non editabile a mano: viene calcolata (bundle) o non si applica (vetrina di una variante)."}
+          </SpNota>
         </div>
 
-        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 5 }}>Vendita al banco (POS)</div>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
-          {[{ v: false, l: "Sul POS" }, { v: true, l: "Non sul POS" }].map((o) => (
-            <label key={String(o.v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-              <input type="radio" name={`prod-pos-${prodottoForm.id || "nuovo"}`} checked={calcoloPrezzi.nonSulPos === o.v} onChange={() => scegliCanalePos(o.v)} style={{ width: 14, height: 14 }} />
-              {o.l}
-            </label>
-          ))}
-        </div>
+        {/* dove si vende questo prodotto: le due scelte sono indipendenti —
+            può stare sullo shop e non al banco, o il contrario. Quando è la
+            categoria a tenerlo fuori, sceglierlo qui chiede prima il permesso
+            di riaprire anche la categoria: altrimenti la casella direbbe una
+            cosa e il prodotto resterebbe invisibile lo stesso */}
+        <div style={{ border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
+            <SpIcona lato={48}><SpIcoCarrello s={24} /></SpIcona>
+            <div style={{ ...fontDisplay, fontSize: 15.5, fontWeight: 700, color: SP_TESTO }}>Vendite</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, borderRadius: 999, padding: "5px 12px", ...(calcoloPrezzi.vaSuWoo && prodottoForm.stato !== "private" ? { color: "#2E7D32", background: "#E7F4EA" } : prodottoForm.stato === "private" ? { color: "#3B6FA0", background: "#E7EEF5" } : { color: SP_SPENTO, background: SP_GRIGIO }) }}>
+                {calcoloPrezzi.varianteNonPubblicabile
+                  ? "Sullo shop tramite la vetrina"
+                  : prodottoForm.stato === "private" && calcoloPrezzi.vaSuWoo
+                    ? "Sul sito, ma privato"
+                    : calcoloPrezzi.vaSuWoo ? "In vendita sullo shop" : "Non sullo shop"}
+              </span>
+              <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, borderRadius: 999, padding: "5px 12px", ...(calcoloPrezzi.nonSulPos ? { color: SP_SPENTO, background: SP_GRIGIO } : { color: "#2E7D32", background: "#E7F4EA" }) }}>
+                {calcoloPrezzi.nonSulPos ? "Non sul POS" : "In vendita sul POS"}
+              </span>
+            </div>
+          </div>
 
-        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 5 }}>Shop online</div>
-        {calcoloPrezzi.varianteNonPubblicabile ? (
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>
-            Sullo shop questa taglia non è un prodotto a sé: il cliente la sceglie dal menu dentro la vetrina
-            {prodottoForm.prodottoPadreId ? ` "${(prodottiShop || []).find((pp) => pp.id === prodottoForm.prodottoPadreId)?.nome || ""}"` : ""}.
-            È lì che si pubblica. Qui la variante conta per magazzino, POS e scarico dei kit.
+          <div style={{ display: isMobile ? "block" : "grid", gridTemplateColumns: isMobile ? undefined : "minmax(0,1fr) 1px minmax(0,1fr)", gap: isMobile ? 0 : 18, alignItems: "start" }}>
+            <div>
+              <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: SP_TESTO, marginBottom: 10 }}>Vendita al banco (POS)</div>
+              <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
+                {[{ v: false, l: "Sul POS" }, { v: true, l: "Non sul POS" }].map((o) => (
+                  <label key={String(o.v)} style={spRiga}>
+                    <input type="radio" name={`prod-pos-${prodottoForm.id || "nuovo"}`} checked={calcoloPrezzi.nonSulPos === o.v} onChange={() => scegliCanalePos(o.v)} style={spSpunta} />
+                    {o.l}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {!isMobile && <div style={{ background: SP_BORDO, alignSelf: "stretch", width: 1 }} />}
+
+            <div style={{ marginTop: isMobile ? 14 : 0 }}>
+              <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: SP_TESTO, marginBottom: 10 }}>Shop online</div>
+              {calcoloPrezzi.varianteNonPubblicabile ? (
+                <div style={{ ...fontBody, fontSize: 12.5, color: SP_SPENTO, lineHeight: 1.45 }}>
+                  Sullo shop questa taglia non è un prodotto a sé: il cliente la sceglie dal menu dentro la vetrina
+                  {prodottoForm.prodottoPadreId ? ` "${(prodottiShop || []).find((pp) => pp.id === prodottoForm.prodottoPadreId)?.nome || ""}"` : ""}.
+                  È lì che si pubblica. Qui la variante conta per magazzino, POS e scarico dei kit.
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
+                  {[{ v: false, l: "Online" }, { v: true, l: "Offline" }].map((o) => (
+                    <label key={String(o.v)} style={spRiga}>
+                      <input type="radio" name={`prod-online-${prodottoForm.id || "nuovo"}`} checked={calcoloPrezzi.soloOffline === o.v} onChange={() => scegliCanaleOnline(o.v)} style={spSpunta} />
+                      {o.l}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            {[{ v: false, l: "Online" }, { v: true, l: "Offline" }].map((o) => (
-              <label key={String(o.v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-                <input type="radio" name={`prod-online-${prodottoForm.id || "nuovo"}`} checked={calcoloPrezzi.soloOffline === o.v} onChange={() => scegliCanaleOnline(o.v)} style={{ width: 14, height: 14 }} />
-                {o.l}
-              </label>
-            ))}
-          </div>
-        )}
-        {(prodottoForm.sbloccaOffline || []).length > 0 && (
-          <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 8, lineHeight: 1.4 }}>
-            Salvando, {nomiCategorie(prodottoForm.sbloccaOffline)} {(prodottoForm.sbloccaOffline || []).length === 1 ? "torna" : "tornano"} online: vale per tutti i prodotti che {(prodottoForm.sbloccaOffline || []).length === 1 ? "contiene" : "contengono"}.
-          </div>
-        )}
-        {(prodottoForm.sbloccaPos || []).length > 0 && (
-          <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 6, lineHeight: 1.4 }}>
-            Salvando, {nomiCategorie(prodottoForm.sbloccaPos)} {(prodottoForm.sbloccaPos || []).length === 1 ? "torna" : "tornano"} sul POS.
-          </div>
-        )}
-      </div>
+
+          {(prodottoForm.sbloccaOffline || []).length > 0 && (
+            <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginTop: 12, lineHeight: 1.45 }}>
+              Salvando, {nomiCategorie(prodottoForm.sbloccaOffline)} {(prodottoForm.sbloccaOffline || []).length === 1 ? "torna" : "tornano"} online: vale per tutti i prodotti che {(prodottoForm.sbloccaOffline || []).length === 1 ? "contiene" : "contengono"}.
+            </div>
+          )}
+          {(prodottoForm.sbloccaPos || []).length > 0 && (
+            <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginTop: 8, lineHeight: 1.45 }}>
+              Salvando, {nomiCategorie(prodottoForm.sbloccaPos)} {(prodottoForm.sbloccaPos || []).length === 1 ? "torna" : "tornano"} sul POS.
+            </div>
+          )}
+        </div>
+        </>)}
+      </SpBlocco>
+
       {calcoloPrezzi.soloOffline && (
         <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 10 }}>
           Il prodotto resta nel magazzino interno. Se era pubblicato, salvando passa in bozza sullo shop.
@@ -60730,52 +60835,64 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         const opzioniExtra = opzioni.filter((c) => c.id !== primariaId && !extraIds.includes(c.id));
         return (
           <>
-            <Field label="Categoria Front Office di destinazione">
-              <select style={inputStyle} value={primariaId || ""} onChange={(e) => impostaCategoriaPrimaria(e.target.value || null)}>
+            <SpRigaSeparatrice />
+            <SpBlocco
+              icona={<SpIcoLivelli s={22} />}
+              titolo="Categoria Front Office di destinazione"
+              sottotitolo="Sottocategoria dove il cliente trova questo prodotto nel Front Office."
+            >
+              <select style={spCampo} value={primariaId || ""} onChange={(e) => impostaCategoriaPrimaria(e.target.value || null)}>
                 <option value="">— nessuna —</option>
                 {opzioni.map((c) => (
                   <option key={c.id} value={c.id}>{c.profondita > 0 ? "— " : ""}{c.nome}</option>
                 ))}
               </select>
-              <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>È la sottocategoria (o categoria) dove il cliente trova questo prodotto nel Front Office.</div>
-            </Field>
+            </SpBlocco>
             {(extraIds.length > 0 || opzioniExtra.length > 0) && (
-              <Field label="Compare anche in (opzionale)">
-                {extraIds.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                    {extraIds.map((id) => {
-                      const c = opzioni.find((o) => o.id === id);
-                      return (
-                        <span key={id} style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 12, color: NAVY, background: BG, borderRadius: 14, padding: "3px 6px 3px 10px" }}>
-                          {c ? c.nome : "—"}
-                          <button onClick={() => rimuoviCategoriaExtra(id)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", padding: 2 }}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-                {opzioniExtra.length > 0 && (
-                  <select style={inputStyle} value="" onChange={(e) => aggiungiCategoriaExtra(e.target.value)}>
-                    <option value="">+ aggiungi un'altra sottocategoria…</option>
-                    {opzioniExtra.map((c) => (
-                      <option key={c.id} value={c.id}>{c.profondita > 0 ? "— " : ""}{c.nome}</option>
-                    ))}
-                  </select>
-                )}
-              </Field>
+              <SpBlocco icona={<SpIcoCatena s={21} />} titolo="Compare anche in (opzionale)" dimTitolo={14.5}>
+                <div style={{ display: isMobile ? "block" : "flex", gap: 12, alignItems: "flex-start" }}>
+                  {extraIds.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flex: "1 1 40%", marginBottom: isMobile ? 8 : 0 }}>
+                      {extraIds.map((id) => {
+                        const c = opzioni.find((o) => o.id === id);
+                        return (
+                          <span key={id} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 13, color: SP_TESTO, background: SP_GRIGIO, border: `1px solid ${SP_BORDO}`, borderRadius: 10, padding: "7px 8px 7px 12px", height: 24 }}>
+                            {c ? c.nome : "—"}
+                            <button onClick={() => rimuoviCategoriaExtra(id)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: SP_SPENTO, display: "flex", padding: 2 }}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {opzioniExtra.length > 0 && (
+                    <div style={{ flex: "1 1 55%", minWidth: 0 }}>
+                      <select style={spCampo} value="" onChange={(e) => aggiungiCategoriaExtra(e.target.value)}>
+                        <option value="">+ aggiungi un'altra sottocategoria…</option>
+                        {opzioniExtra.map((c) => (
+                          <option key={c.id} value={c.id}>{c.profondita > 0 ? "— " : ""}{c.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </SpBlocco>
             )}
           </>
         );
       })()}
 
-      <div style={{ height: 1, background: CREAM_BORDER, margin: "18px 0 16px" }} />
+      <SpRigaSeparatrice />
 
       {/* Semplice + pacchi sigillati si legge "Confezione da aprire": e'
           la stessa cosa, detta come la direbbe chi lavora in magazzino */}
-      <Field label="Natura del prodotto">
-        <select style={inputStyle} value={naturaMostrata} onChange={(e) => cambiaTipo(e.target.value)}>
+      <SpBlocco
+        icona={<SpIcoCubo s={22} />}
+        titolo="Natura del prodotto"
+        sottotitolo="Definisce come si comporta il prodotto in magazzino e in vendita."
+      >
+        <select style={spCampo} value={naturaMostrata} onChange={(e) => cambiaTipo(e.target.value)}>
           <option value="semplice">Semplice — prodotto normale, si vende e si scarica da solo</option>
           <option value="confezione">Semplice che genera singoli — si carica e si vende da solo, e aprendolo ne escono i pezzi singoli</option>
           <option value="sfuso">Sfuso — pezzo singolo ricavato aprendo una confezione, usato come componente nei kit</option>
@@ -60784,21 +60901,21 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           <option value="vetrina">Vetrina — prodotto padre mostrato sullo shop, la vendita avviene sulle sue varianti</option>
           <option value="variante">Variante — una versione specifica di un prodotto vetrina (es. una taglia), è questa che si vende e si scarica</option>
         </select>
-      </Field>
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 10 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-          <input type="checkbox" checked={prodottoForm.contaMagazzino} onChange={(e) => aggiornaForm({ contaMagazzino: e.target.checked })} style={{ width: 14, height: 14 }} />
-          Conta nel magazzino
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-          <input type="checkbox" checked={prodottoForm.contaIncassi} onChange={(e) => aggiornaForm({ contaIncassi: e.target.checked })} style={{ width: 14, height: 14 }} />
-          Conta negli incassi
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-          <input type="checkbox" checked={prodottoForm.giacenzaPropria} onChange={(e) => aggiornaForm({ giacenzaPropria: e.target.checked })} style={{ width: 14, height: 14 }} />
-          Giacenza propria
-        </label>
-      </div>
+        <div style={{ display: "flex", gap: 26, flexWrap: "wrap", marginTop: 14 }}>
+          <label style={spRiga}>
+            <input type="checkbox" checked={prodottoForm.contaMagazzino} onChange={(e) => aggiornaForm({ contaMagazzino: e.target.checked })} style={spSpunta} />
+            Conta nel magazzino
+          </label>
+          <label style={spRiga}>
+            <input type="checkbox" checked={prodottoForm.contaIncassi} onChange={(e) => aggiornaForm({ contaIncassi: e.target.checked })} style={spSpunta} />
+            Conta negli incassi
+          </label>
+          <label style={spRiga}>
+            <input type="checkbox" checked={prodottoForm.giacenzaPropria} onChange={(e) => aggiornaForm({ giacenzaPropria: e.target.checked })} style={spSpunta} />
+            Giacenza propria
+          </label>
+        </div>
+      </SpBlocco>
 
       {prodottoForm.tipoProdotto === "variante" && (
         <Field label="Prodotto padre — obbligatorio (la vetrina, es. 'Maglietta Elitederma')">
@@ -60819,18 +60936,18 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               semplice non serve piu': lo dice la tendina, e due comandi
               per la stessa cosa sono un comando di troppo. */}
           {prodottoForm.tipoProdotto === "bundle" && (
-            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
-              <input type="checkbox" checked={prodottoForm.bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={{ width: 14, height: 14 }} />
+            <label style={{ ...spRiga, marginBottom: 10 }}>
+              <input type="checkbox" checked={prodottoForm.bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={spSpunta} />
               Confezione con giacenza fisica (pacchi sigillati sullo scaffale)
             </label>
           )}
           {/* il caso del dermografo col suo manuale: il prodotto esiste per
               conto suo e ha i suoi pezzi, ma quando esce ne porta con sé
               altri. Diverso dal bundle, che i pezzi propri non li ha */}
-          <label style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
-            <input type="checkbox" checked={!!prodottoForm.componentiAccompagnano} onChange={(e) => aggiornaForm({ componentiAccompagnano: e.target.checked })} style={{ width: 14, height: 14, marginTop: 2 }} />
+          <label style={{ ...spRiga, alignItems: "flex-start", marginBottom: 10 }}>
+            <input type="checkbox" checked={!!prodottoForm.componentiAccompagnano} onChange={(e) => aggiornaForm({ componentiAccompagnano: e.target.checked })} style={{ ...spSpunta, marginTop: 1 }} />
             <span>Si porta dietro altro materiale
-              <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35 }}>Il prodotto ha i suoi pezzi in magazzino e, quando esce, escono anche quelli elencati qui sotto (es. il manuale del dermografo).</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: SP_SPENTO, lineHeight: 1.45, marginTop: 3 }}>Il prodotto ha i suoi pezzi in magazzino e, quando esce, escono anche quelli elencati qui sotto (es. il manuale del dermografo).</div>
             </span>
           </label>
           {prodottoForm.bundleFisica && (() => {
@@ -60941,59 +61058,60 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       )}
 
       {prodottoForm.giacenzaPropria && (
-        <div style={{ marginBottom: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Scorta e riordino</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-              <Field label="Scorta minima">
-                <input style={inputStyle} inputMode="numeric" value={prodottoForm.scortaMinima} onChange={(e) => aggiornaForm({ scortaMinima: e.target.value })} placeholder="—" />
-              </Field>
+        <div style={{ marginBottom: 16 }}>
+        <div style={{ background: "#F8F9FB", border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: 16, marginBottom: 12 }}>
+          <SpBlocco
+            icona={<SpIcoGrafico s={22} />}
+            titolo="Scorta e riordino"
+            sottotitolo={'Imposta i parametri per l\'avviso "sotto scorta" e il riordino automatico.'}
+            style={{ marginBottom: 14 }}
+          >
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={spEtichetta}>Scorta minima</div>
+              <input style={spCampo} inputMode="numeric" value={prodottoForm.scortaMinima} onChange={(e) => aggiornaForm({ scortaMinima: e.target.value })} placeholder="—" />
             </div>
-            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
-              <Field label="Tempo di consegna (giorni)">
-                <input style={inputStyle} inputMode="numeric" value={prodottoForm.leadTime} onChange={(e) => aggiornaForm({ leadTime: e.target.value })} placeholder="es. 45" />
-              </Field>
+            <div>
+              <div style={spEtichetta}>Tempo di consegna (giorni)</div>
+              <input style={spCampo} inputMode="numeric" value={prodottoForm.leadTime} onChange={(e) => aggiornaForm({ leadTime: e.target.value })} placeholder="es. 45" />
             </div>
-            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
-              <Field label="Margine di sicurezza (giorni)">
-                <input style={inputStyle} inputMode="numeric" value={prodottoForm.giorniSicurezza} onChange={(e) => aggiornaForm({ giorniSicurezza: e.target.value })} placeholder="da Impostazioni" />
-              </Field>
+            <div>
+              <div style={spEtichetta}>Margine di sicurezza (giorni)</div>
+              <input style={spCampo} inputMode="numeric" value={prodottoForm.giorniSicurezza} onChange={(e) => aggiornaForm({ giorniSicurezza: e.target.value })} placeholder="da Impostazioni" />
             </div>
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "2 1 160px", minWidth: 0 }}>
-              <Field label="Fornitore">
-                <TendinaRicerca
-                  valore={prodottoForm.fornitoreId}
-                  opzioni={[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
-                  onCambia={(v) => aggiornaForm({ fornitoreId: v })}
-                  placeholderRicerca="Cerca fornitore…"
-                />
-              </Field>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12, marginBottom: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={spEtichetta}>Fornitore</div>
+              <TendinaRicerca
+                valore={prodottoForm.fornitoreId}
+                opzioni={[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
+                onCambia={(v) => aggiornaForm({ fornitoreId: v })}
+                placeholderRicerca="Cerca fornitore…"
+                stile={spCampo}
+              />
             </div>
-            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
-              <Field label="Lotto minimo d'ordine">
-                <input style={inputStyle} inputMode="numeric" value={prodottoForm.lottoMinimo} onChange={(e) => aggiornaForm({ lottoMinimo: e.target.value })} placeholder="—" />
-              </Field>
+            <div>
+              <div style={spEtichetta}>Lotto minimo d'ordine</div>
+              <input style={spCampo} inputMode="numeric" value={prodottoForm.lottoMinimo} onChange={(e) => aggiornaForm({ lottoMinimo: e.target.value })} placeholder="—" />
             </div>
             {/* quanti pezzi si prendono di abitudine: è il numero con cui
                 l'Advisor preparerà la bozza d'ordine al fornitore. Diverso
                 dal lotto minimo, che è il paletto imposto da lui */}
-            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
-              <Field label="Quantità di riordino">
-                <input style={inputStyle} inputMode="numeric" value={prodottoForm.quantitaRiordino} onChange={(e) => aggiornaForm({ quantitaRiordino: e.target.value })} placeholder="—" />
-              </Field>
+            <div>
+              <div style={spEtichetta}>Quantità di riordino</div>
+              <input style={spCampo} inputMode="numeric" value={prodottoForm.quantitaRiordino} onChange={(e) => aggiornaForm({ quantitaRiordino: e.target.value })} placeholder="—" />
             </div>
           </div>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-            <b>Quantità di riordino</b>: i pezzi che ordini di solito di questo prodotto. Serve a preparare l'ordine al fornitore già compilato; il lotto minimo resta il limite sotto cui non si può scendere.
-          </div>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-            Senza tempo di consegna l'Advisor non può dire entro quando ordinare questo prodotto: resta solo l'avviso "sotto scorta".
-          </div>
+          <SpNota sfondo="#F1F3F6">
+            <b style={{ color: SP_TESTO }}>Quantità di riordino</b>: i pezzi che ordini di solito di questo prodotto. Serve a preparare l'ordine al fornitore già compilato; il lotto minimo resta il limite sotto cui non si può scendere.
+            <div style={{ marginTop: 6 }}>Senza tempo di consegna l'Advisor non può dire entro quando ordinare: resta solo l'avviso "sotto scorta".</div>
+          </SpNota>
+          </SpBlocco>
+        </div>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 10 }}>
-            <input type="checkbox" checked={copiaAperta} onChange={(e) => { setCopiaAperta(e.target.checked); setMsgCopia(""); }} style={{ width: 14, height: 14 }} />
+          <label style={spRiga}>
+            <input type="checkbox" checked={copiaAperta} onChange={(e) => { setCopiaAperta(e.target.checked); setMsgCopia(""); }} style={spSpunta} />
             Applica questi dati anche ad altri prodotti
           </label>
           {copiaAperta && (() => {
@@ -61057,13 +61175,19 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       {/* la scheda è lunga: i tasti stanno anche in fondo, non solo in testa.
           "Salva e esci" serve a chi sistema molti prodotti di fila: salva e
           torna all'elenco, senza dover richiudere a mano */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Button onClick={() => salvaProdotto(false)} style={{ flex: "1 1 200px" }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <button
+          onClick={() => salvaProdotto(false)} data-niente-ombra
+          style={{ ...fontBody, flex: "1 1 200px", fontSize: 15, fontWeight: 700, color: "#fff", background: SP_TESTO, border: "none", borderRadius: 12, padding: "16px 18px", cursor: "pointer" }}
+        >
           {prodottoForm.id ? "Salva modifiche" : "Crea prodotto"}
-        </Button>
-        <Button variant="ghost" onClick={() => salvaProdotto(true)} style={{ flex: "1 1 160px" }}>
+        </button>
+        <button
+          onClick={() => salvaProdotto(true)} data-niente-ombra
+          style={{ ...fontBody, flex: "1 1 160px", fontSize: 15, fontWeight: 700, color: SP_TESTO, background: "#fff", border: `1px solid ${SP_BORDO}`, borderRadius: 12, padding: "16px 18px", cursor: "pointer" }}
+        >
           Salva e esci
-        </Button>
+        </button>
       </div>
     </div>
   );
