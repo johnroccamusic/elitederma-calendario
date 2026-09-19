@@ -47610,6 +47610,18 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // giro che si fa venti volte.
   const [schedaAncorata, setSchedaAncorata] = useState(null);
   const rifElenco = useRef(null);
+  const rifScheda = useRef(null);
+  // la correzione, una volta sola per apertura: si guarda dove la scheda
+  // e' finita davvero e si sposta della differenza
+  useLayoutEffect(() => {
+    if (!schedaAncorata || schedaAncorata.corretta) return;
+    const el = rifScheda.current;
+    if (!el) return;
+    const scarto = schedaAncorata.obiettivo - el.getBoundingClientRect().top;
+    setSchedaAncorata((prec) => (prec && !prec.corretta
+      ? { ...prec, top: Math.abs(scarto) < 1 ? prec.top : Math.round(prec.top + scarto), corretta: true }
+      : prec));
+  }, [schedaAncorata]);
   const apriScheda = (p, rect) => {
     setAperturaScheda((prec) => ({ prodottoId: p.id, n: (prec?.n || 0) + 1 }));
     setCategorieMontate(true);
@@ -47627,7 +47639,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       // un pezzo fisso: la scheda usciva parecchio piu' in basso della
       // riga. Ancorata allo schermo non c'e' niente da calcolare —
       // il bordo della scheda e' il bordo della riga.
-      setSchedaAncorata({ top: Math.round(rect.top), prodottoId: p.id });
+      // "obiettivo" e' dove la scheda DEVE stare: il bordo alto della riga.
+      // "top" e' quello che scriviamo nello stile, e non e' detto che
+      // coincida: l'app usa document.body.style.zoom per la vista forzata,
+      // e lo zoom CSS falsa le coordinate del posizionamento fisso — di
+      // una quantita' costante, che e' esattamente lo scarto che si vedeva.
+      // Appena disegnata, la scheda si misura e si corregge da sola: cosi'
+      // vale per lo zoom, per un antenato con transform, per qualunque
+      // cosa ci inventeremo dopo.
+      setSchedaAncorata({ top: Math.round(rect.top), obiettivo: Math.round(rect.top), prodottoId: p.id });
     } else {
       setSchedaAncorata(null);
       if (vistaProdotti !== "categorie") setVistaPrimaDellaScheda(vistaProdotti);
@@ -48550,7 +48570,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               {/* nessun velo: chi sistema venti prodotti di fila passa da
                   uno all'altro cliccando la riga accanto, e un velo
                   glielo impedirebbe. Si chiude con la × o salvando. */}
-              <div style={cornice}>
+              <div ref={appesa ? rifScheda : null} style={cornice}>
                 {appesa && (
                   <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 2 }}>
                     <button onClick={() => setSchedaAncorata(null)} data-niente-ombra title="Chiudi la scheda" style={{ background: "transparent", border: "none", cursor: "pointer", color: MUTED, fontSize: 22, lineHeight: 1, padding: "0 2px" }}>×</button>
