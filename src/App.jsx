@@ -47675,6 +47675,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const rifSchedaDentro = useRef(null);
   const [altezzaElenco, setAltezzaElenco] = useState(0);
   const [scalaScheda, setScalaScheda] = useState(1);
+  // quanto e' alta davvero la scheda dentro: rimpicciolire con transform
+  // non cambia lo spazio che occupa, quindi l'altezza vera gliela diamo noi
+  const [altezzaContenuto, setAltezzaContenuto] = useState(0);
   const passiScala = useRef(0);
   useLayoutEffect(() => {
     const n = rifElencoCard.current;
@@ -47686,15 +47689,32 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     return () => { if (ro) ro.disconnect(); };
   }, [schedaAperta]);
   useLayoutEffect(() => { passiScala.current = 0; setScalaScheda(1); }, [schedaAperta]);
+  // La scheda dentro si misura da sola, con un osservatore: scrivendo
+  // nella descrizione cambia altezza senza che questa pagina si ridisegni
+  // — e misurandola solo ai nostri render il numero restava quello del
+  // primo istante, la scheda non cresceva e il tasto Salva finiva fuori.
   useLayoutEffect(() => {
     const n = rifSchedaDentro.current;
     if (!n || !schedaAperta || !altezzaElenco) return;
-    if (passiScala.current > 5) return;
-    const naturale = n.scrollHeight;
-    if (!naturale) return;
-    const voluta = Math.max(0.35, Math.min(1, (altezzaElenco - 44) / naturale));
-    if (Math.abs(voluta - scalaScheda) > 0.02) { passiScala.current += 1; setScalaScheda(voluta); }
-  });
+    const misura = () => {
+      const naturale = n.scrollHeight;
+      if (!naturale) return;
+      setAltezzaContenuto((prec) => (Math.abs(naturale - prec) > 2 ? naturale : prec));
+      // si prova a farla stare nello spazio dell'elenco, ma non oltre una
+      // misura che si legge ancora: se non ci sta, cresce
+      setScalaScheda((prec) => {
+        if (passiScala.current > 12) return prec;
+        const voluta = Math.max(0.6, Math.min(1, (altezzaElenco - 44) / naturale));
+        if (Math.abs(voluta - prec) <= 0.02) return prec;
+        passiScala.current += 1;
+        return voluta;
+      });
+    };
+    misura();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(misura) : null;
+    if (ro) ro.observe(n);
+    return () => { if (ro) ro.disconnect(); };
+  }, [schedaAperta, altezzaElenco]);
   const apriScheda = (p, dallElenco) => {
     setAperturaScheda((prec) => ({ prodottoId: p.id, n: (prec?.n || 0) + 1 }));
     setCategorieMontate(true);
@@ -48756,8 +48776,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           const cornice = affiancata
             ? {
                 ...cardStyle, padding: isMobile ? 12 : 16, margin: "10px 0 0",
-                height: altezzaElenco ? altezzaElenco - 10 : undefined,
-                overflow: "hidden",
+                // alta almeno quanto l'elenco, ma se la scheda e' lunga
+                // cresce: prima veniva tagliata al bordo e il tasto Salva
+                // spariva sotto, senza modo di arrivarci
+                minHeight: altezzaElenco ? altezzaElenco - 10 : undefined,
+                overflow: "visible",
                 border: `2px solid ${NAVY}`,
                 boxShadow: "0 12px 34px -16px rgba(14,27,51,0.35)",
               }
@@ -48773,6 +48796,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                     <button onClick={() => setSchedaAperta(null)} data-niente-ombra title="Chiudi la scheda e riallargare l'elenco" style={{ ...fontBody, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, cursor: "pointer", color: NAVY, fontSize: 12.5, fontWeight: 700, padding: "6px 14px" }}>Chiudi ×</button>
                   </div>
                 )}
+                <div style={affiancata && altezzaContenuto ? { height: Math.ceil(altezzaContenuto * scalaScheda), overflow: "hidden" } : undefined}>
                 <div
                   ref={affiancata ? rifSchedaDentro : null}
                   style={affiancata ? { transformOrigin: "top left", transform: `scale(${scalaScheda})`, width: `${100 / scalaScheda}%` } : undefined}
@@ -48790,6 +48814,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                   onSchedaChiusa={() => setSchedaAperta(null)}
                   onSchedaApertaSu={(id) => setSchedaAperta(id)}
                 />
+                </div>
                 </div>
               </div>
             </>
@@ -59031,25 +59056,121 @@ function ModaleVoceMenuFo({ categorieWoo, pagineWp, valoreIniziale, onClose, onS
 // un prodotto diverso, dato che il contenuto iniziale viene scritto nel div
 // una sola volta (altrimenti riscriverlo ad ogni render sposterebbe il
 // cursore mentre si digita)
+// Le misure del testo, dalla piu' piccola alla piu' grande. Poche e
+// decise: sei tacche si scorrono col pollice, una casella coi numeri no.
+const DIMENSIONI_TESTO = [11, 12, 13, 14, 16, 18, 22];
+const DIM_TESTO_BASE = 14;
+// il contenuto salvato porta con se' la sua misura, se diversa da quella
+// di base: e' un <div> vero, quindi il sito lo mostra come si vede qui
+const RE_MISURA = /^<div data-dim="(\d+)">([\s\S]*)<\/div>$/;
+
+/**
+ * Ripulisce il testo incollato da un'altra parte.
+ *
+ * Copiando da Word, da una mail o da un'altra scheda, il testo si porta
+ * dietro font, misure e colori del posto da cui viene: si incolla
+ * gigante o microscopico, e da dentro la casella non c'e' modo di
+ * rimetterlo a posto. Qui resta quello che serve — grassetto, corsivo,
+ * elenchi, a capo — e cade tutto il resto.
+ */
+function ripuliscilo(html) {
+  if (typeof document === "undefined") return html;
+  const d = document.createElement("div");
+  d.innerHTML = html || "";
+  d.querySelectorAll("*").forEach((n) => {
+    if (n.tagName === "FONT") { n.replaceWith(...n.childNodes); return; }
+    n.removeAttribute("style");
+    n.removeAttribute("class");
+    n.removeAttribute("color");
+    n.removeAttribute("face");
+    n.removeAttribute("size");
+  });
+  return d.innerHTML;
+}
+
+// editor di testo con formattazione (grassetto/corsivo/elenco) invece di un
+// campo dove si vedrebbe il codice HTML grezzo: WooCommerce salva le
+// descrizioni come HTML, ma chi lavora in magazzino non deve scriverlo a
+// mano. "key" sull'istanza (fatto dal chiamante, tipicamente sull'id del
+// prodotto/categoria) serve a far ripartire il contenuto quando si passa a
+// un prodotto diverso, dato che il contenuto iniziale viene scritto nel div
+// una sola volta (altrimenti riscriverlo ad ogni render sposterebbe il
+// cursore mentre si digita)
 function EditorRicco({ value, onChange, minHeight = 90 }) {
   const ref = useRef(null);
+  const avvolto = RE_MISURA.exec(value || "");
+  const [dimensione, setDimensione] = useState(avvolto ? Number(avvolto[1]) : DIM_TESTO_BASE);
 
   useEffect(() => {
-    if (ref.current) ref.current.innerHTML = value || "";
+    if (ref.current) ref.current.innerHTML = avvolto ? avvolto[2] : (value || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function pubblica(dim = dimensione) {
+    const dentro = ref.current ? ref.current.innerHTML : "";
+    onChange(dim === DIM_TESTO_BASE ? dentro : `<div data-dim="${dim}">${dentro}</div>`);
+  }
 
   function comando(nome) {
     document.execCommand("styleWithCSS", false, false);
     document.execCommand(nome);
-    onChange(ref.current.innerHTML);
+    pubblica();
   }
 
-  const bottone = (etichetta, comandoNome, stile) => (
+  // c'e' un pezzo di testo selezionato dentro questa casella?
+  function selezioneQui() {
+    const sel = typeof window !== "undefined" ? window.getSelection() : null;
+    if (!sel || sel.rangeCount === 0 || String(sel) === "") return null;
+    if (!ref.current || !ref.current.contains(sel.anchorNode)) return null;
+    return sel;
+  }
+
+  // Un passo piu' grande o piu' piccolo. Se c'e' del testo selezionato
+  // cambia solo quello; se non c'e' niente di selezionato cambia tutta la
+  // casella — che e' il caso di chi ha appena incollato e vuole rimettere
+  // in riga l'intero paragrafo.
+  function cambiaMisura(passo) {
+    const i = DIMENSIONI_TESTO.indexOf(dimensione);
+    const sel = selezioneQui();
+    if (sel) {
+      const r = sel.getRangeAt(0);
+      const scatola = document.createElement("div");
+      scatola.appendChild(r.cloneContents());
+      const attuale = Number((scatola.querySelector("[style*='font-size']")?.style.fontSize || "").replace("px", "")) || dimensione;
+      const j = Math.max(0, Math.min(DIMENSIONI_TESTO.length - 1, DIMENSIONI_TESTO.indexOf(attuale) + passo));
+      document.execCommand("styleWithCSS", false, true);
+      document.execCommand("insertHTML", false, `<span style="font-size:${DIMENSIONI_TESTO[j]}px">${ripuliscilo(scatola.innerHTML)}</span>`);
+      pubblica();
+      return;
+    }
+    const nuova = DIMENSIONI_TESTO[Math.max(0, Math.min(DIMENSIONI_TESTO.length - 1, (i < 0 ? DIMENSIONI_TESTO.indexOf(DIM_TESTO_BASE) : i) + passo))];
+    setDimensione(nuova);
+    pubblica(nuova);
+  }
+
+  // "Pulisci": tutto il testo torna a una misura sola, senza font ereditati
+  function pulisci() {
+    if (!ref.current) return;
+    ref.current.innerHTML = ripuliscilo(ref.current.innerHTML);
+    setDimensione(DIM_TESTO_BASE);
+    pubblica(DIM_TESTO_BASE);
+  }
+
+  // incollare porta dentro solo il testo: niente font, niente misure,
+  // niente colori presi dal posto da cui arriva
+  function incolla(e) {
+    e.preventDefault();
+    const testo = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
+    document.execCommand("insertText", false, testo);
+    pubblica();
+  }
+
+  const bottone = (etichetta, alClic, stile, titolo) => (
     <button
       type="button"
+      title={titolo}
       onMouseDown={(e) => e.preventDefault()}
-      onClick={() => comando(comandoNome)}
+      onClick={alClic}
       style={{ ...fontBody, fontSize: 13, minWidth: 28, padding: "4px 8px", borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...stile }}
     >
       {etichetta}
@@ -59058,17 +59179,23 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-        {bottone("B", "bold", { fontWeight: 700 })}
-        {bottone("I", "italic", { fontStyle: "italic" })}
-        {bottone("• Elenco", "insertUnorderedList", {})}
+      <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center", flexWrap: "wrap" }}>
+        {bottone("B", () => comando("bold"), { fontWeight: 700 }, "Grassetto")}
+        {bottone("I", () => comando("italic"), { fontStyle: "italic" }, "Corsivo")}
+        {bottone("• Elenco", () => comando("insertUnorderedList"), {}, "Elenco puntato")}
+        <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, margin: "0 2px" }} />
+        {bottone("A−", () => cambiaMisura(-1), { fontSize: 12 }, "Testo più piccolo (solo la parte selezionata, o tutta la casella)")}
+        <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, minWidth: 30, textAlign: "center" }}>{dimensione}px</span>
+        {bottone("A+", () => cambiaMisura(1), { fontSize: 15, fontWeight: 700 }, "Testo più grande (solo la parte selezionata, o tutta la casella)")}
+        {bottone("Pulisci", pulisci, { fontSize: 12 }, "Toglie font e misure ereditati da un copia-incolla e riporta tutto a una misura sola")}
       </div>
       <div
         ref={ref}
         contentEditable
         suppressContentEditableWarning
-        onInput={(e) => onChange(e.currentTarget.innerHTML)}
-        style={{ ...inputStyle, minHeight, overflow: "auto" }}
+        onInput={() => pubblica()}
+        onPaste={incolla}
+        style={{ ...inputStyle, minHeight, overflow: "auto", fontSize: dimensione }}
       />
     </div>
   );
@@ -60632,10 +60759,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         </div>
         <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Trascina per riordinare le immagini. La prima è la copertina mostrata sullo shop. L'icona con la fotocamera sostituisce l'immagine senza doverla prima cancellare.</div>
       </Field>
-      <Field label="Nome prodotto"><input style={inputStyle} value={prodottoForm.nome} onChange={(e) => setProdottoForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
-      <Field label="Descrizione breve">
-        <EditorRicco key={`breve-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizioneBreve} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizioneBreve: html }))} minHeight={60} />
-      </Field>
+      {/* nome e descrizione breve affiancati: sono due righe corte, e
+          da sole si prendevano due fasce alte di scheda */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(0, 1.25fr)", gap: 12, alignItems: "start" }}>
+        <Field label="Nome prodotto"><input style={inputStyle} value={prodottoForm.nome} onChange={(e) => setProdottoForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
+        <Field label="Descrizione breve">
+          <EditorRicco key={`breve-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizioneBreve} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizioneBreve: html }))} minHeight={60} />
+        </Field>
+      </div>
       <Field label="Descrizione completa">
         <EditorRicco key={`completa-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizione} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizione: html }))} minHeight={110} />
       </Field>
