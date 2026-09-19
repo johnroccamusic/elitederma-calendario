@@ -30767,20 +30767,25 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per vedere i dati dell'iscritto"
-                    style={{ ...fontBody, fontSize: isMobile ? 17 : 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: isMobile ? 6 : 8, rowGap: isMobile ? 0 : undefined, lineHeight: isMobile ? 1.15 : undefined, minWidth: 0 }}
+                    style={{ ...fontBody, fontSize: isMobile ? 17 : 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", alignItems: "baseline", gap: isMobile ? 6 : 8, minWidth: 0 }}
                   >
-                    <span style={{ color: MUTED, fontWeight: 400, fontSize: isMobile ? 15 : 14 }}>{idx + 1}.</span>
-                    <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
-                    {i.tutor && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
-                    {/* dal telefono il pacchetto va SEMPRE a capo, sotto
-                        al nome: a seconda di quanto e' lungo il nome
-                        finiva a volte in fondo alla prima riga e a volte
-                        sotto, e le schede non erano piu' uguali fra loro.
-                        Un elemento largo quanto la riga forza il capo. */}
-                    {isMobile && i.pacchetto_kit && <span style={{ flexBasis: "100%", height: 0 }} />}
-                    {i.pacchetto_kit && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
-                    {dermografoAcquistato(i) && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
-                    {i.note && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
+                    <span style={{ color: MUTED, fontWeight: 400, fontSize: isMobile ? 15 : 14, flexShrink: 0 }}>{idx + 1}.</span>
+                    {/* il numero sta in una colonna sua: cosi' quello che
+                        va a capo — il pacchetto — comincia sotto al nome
+                        dell'allieva e non sotto al numero */}
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: isMobile ? 6 : 8, rowGap: isMobile ? 0 : undefined, lineHeight: isMobile ? 1.15 : undefined, minWidth: 0 }}>
+                      <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                      {i.tutor && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
+                      {/* dal telefono il pacchetto va SEMPRE a capo, sotto
+                          al nome: a seconda di quanto e' lungo il nome
+                          finiva a volte in fondo alla prima riga e a volte
+                          sotto, e le schede non erano piu' uguali fra loro.
+                          Un elemento largo quanto la riga forza il capo. */}
+                      {isMobile && i.pacchetto_kit && <span style={{ flexBasis: "100%", height: 0 }} />}
+                      {i.pacchetto_kit && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: isMobile ? GRIGIO_LEGGIBILE : MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
+                      {dermografoAcquistato(i) && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
+                      {i.note && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
+                    </div>
                   </div>
                   <span style={{ fontSize: isMobile ? 13.5 : 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: isMobile ? 10 : 12, marginLeft: "auto" }}>
                     {i.telefono && (
