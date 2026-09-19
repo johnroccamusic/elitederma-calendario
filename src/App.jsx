@@ -3340,6 +3340,19 @@ const SPESSORE_LEGGERO = "inset 0 1px 0 rgba(255,255,255,1), inset 0 -3px 0 rgba
 // tasti dei filtri ma al contrario, come se il campo fosse scavato nella
 // pagina: ombra dentro in alto, luce sul bordo basso
 const INCAVO_LEGGERO = "inset 0 3px 5px rgba(14,27,51,0.16), inset 0 1px 0 rgba(120,126,138,0.28), inset 0 -1px 0 rgba(255,255,255,0.95), 0 0 0 1px rgba(120,126,138,0.18), 0 1px 0 rgba(255,255,255,0.7)";
+// Il tondo scavato delle tile: lo stesso dei riquadri "Dati classe" —
+// luce che entra da sotto a destra, ombra da sopra a sinistra, cosi' il
+// cerchio sembra ricavato nella scheda invece che appoggiato sopra.
+// Quello acceso e' lo stesso incavo, in scuro.
+const TONDO_INCAVATO = {
+  background: "linear-gradient(145deg, #F0EAE1 0%, #FDFCFA 100%)",
+  boxShadow: "inset 3px 3px 7px rgba(150,127,96,0.26), inset -3px -3px 7px rgba(255,255,255,0.95)",
+};
+const TONDO_INCAVATO_ACCESO = {
+  background: "linear-gradient(145deg, #0A1428 0%, #1A2B4C 100%)",
+  boxShadow: "inset 3px 3px 8px rgba(0,0,0,0.55), inset -2px -2px 6px rgba(255,255,255,0.14), 0 2px 6px rgba(14,27,51,0.22)",
+};
+
 function superficieCuscino(colore = "#FFFFFF", spessore = SPESSORE_CUSCINO) {
   return { background: sfondoMedaglione(colore), boxShadow: spessore, border: "none" };
 }
@@ -24885,7 +24898,7 @@ function BottonePulsanteScheda({ p }) {
           flex: "1 1 88px", minWidth: 0, boxSizing: "border-box",
         }}
       >
-        <span style={{ width: isMobile ? 51 : 46, height: isMobile ? 51 : 46, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: p.attivo ? "0 4px 12px rgba(14,27,51,0.25)" : "none" }}>
+        <span style={{ width: isMobile ? 51 : 46, height: isMobile ? 51 : 46, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...(p.attivo ? TONDO_INCAVATO_ACCESO : TONDO_INCAVATO) }}>
           <p.Icona size={isMobile ? 24 : 20} color={p.attivo ? "#fff" : NAVY} />
         </span>
         <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", overflowWrap: "anywhere" }}>{p.etichetta}</span>
