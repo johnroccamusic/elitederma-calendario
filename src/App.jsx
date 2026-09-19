@@ -12184,8 +12184,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           <div style={{ flex: "1 1 240px", minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
               <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+              {/* il nome sulla riga sua: "Dashboard" e' la parola di
+                  servizio, il nome e' quello che si legge */}
               <div style={{ ...stileTitoloPagina, color: NAVY }}>
-                {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
+                {masterSel ? <>Dashboard<br />{toTitleCase(masterSel.nome)}</> : titolo}
               </div>
             </div>
             {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Area master</div>}
