@@ -25803,8 +25803,11 @@ function PannelloRiepilogoAmministrativo({
     ...fontBody, fontSize: 8.5, fontWeight: 700, color: MUTED,
     textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, minWidth: 0,
   };
+  // i numeri tre punti piu' grandi dei titoli: nel quadro sono in Cabin
+  // Condensed, che a parita' di punti rende piu' piccolo, e sono la cosa
+  // che si va a leggere
   const cifraRiga = {
-    ...fontBody, fontSize: isMobile ? 9.5 : 10.5, color: MUTED,
+    ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED,
     textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 3 : 4,
   };
   // Trentacinque pixel per riga, dovunque: la tabella dei costi, il
@@ -26941,7 +26944,7 @@ function PannelloRiepilogoAmministrativo({
                   const cash = round2(sommaAuto("cash") + cashLibere);
                   const bonifico = round2(totale - cash);
                   if (!(totale || cash || bonifico)) return null;
-                  const cifra = { ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 3 : 4, minWidth: 0 };
+                  const cifra = { ...fontBody, fontSize: isMobile ? 13.5 : 15, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 3 : 4, minWidth: 0 };
                   return (
                     <div className="quadro-costi" style={{
                       display: "grid", gridTemplateColumns: grigliaCosti,
