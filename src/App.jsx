@@ -2689,6 +2689,32 @@ function IconaPersonaAggiungi({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+/**
+ * La foto della master, quella caricata nella sua scheda in Impostazioni.
+ *
+ * Un riquadro solo, usato dalla dashboard master e dalla scheda della
+ * classe: la stessa faccia nello stesso angolo, cosi' aprendo una
+ * classe si sa subito di chi e' senza leggere il nome. Senza foto
+ * caricata resta l'omino grigio invece di un buco bianco.
+ */
+function FotoMaster({ url, lato = 110, titolo }) {
+  return (
+    <div
+      title={titolo}
+      style={{
+        width: lato, height: lato, borderRadius: 16, flexShrink: 0, overflow: "hidden",
+        background: "#F4F1EA", border: `1px solid ${CREAM_BORDER}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: "0 8px 18px -12px rgba(14,27,51,0.45)",
+      }}
+    >
+      {url
+        ? <img src={url} alt={titolo || "Foto della master"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        : <IconaAvatarGenerico size={Math.round(lato * 0.52)} />}
+    </div>
+  );
+}
+
 // omino generico: placeholder dell'avatar master finché non si carica
 // una foto vera (foto_url)
 function IconaAvatarGenerico({ size = 64, color = "#9AA0AC" }) {
@@ -12147,14 +12173,20 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        {/* il tondo a sinistra, il titolo accanto e centrato con lui */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
-          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
-          <div style={{ ...stileTitoloPagina, color: NAVY }}>
-            {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
+        {/* il tondo a sinistra, il titolo accanto e centrato con lui, e
+            la foto della master all'altro capo della riga */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 10, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+              <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+              <div style={{ ...stileTitoloPagina, color: NAVY }}>
+                {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
+              </div>
+            </div>
+            {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Area master</div>}
           </div>
+          {masterSel && <FotoMaster url={masterSel.foto_url} lato={isMobile ? 84 : 118} titolo={toTitleCase(masterSel.nome)} />}
         </div>
-        {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 10 }}>Area master</div>}
         {masterSel && <LoghiMasterPubblicati masterId={masterSel.id} />}
 
         {/* Il referral code personale, subito sotto il nome: e' la prima
@@ -29208,13 +29240,21 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             </div>
             {manigliaSpazio("dopoEyebrow")}
             <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoTitolo }}>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "1 1 auto", minWidth: 0 }}>
                 {/* il carattere dei titoli dell'app, non il serif della
                     copertina: e' lo stesso nome che si legge in ogni altra
                     schermata, e cambiava faccia solo qui */}
                 <div style={{ ...fontDisplay, fontWeight: 700, letterSpacing: 0.5, fontSize: spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
                 {manigliaRidimensiona("titoloFontSize")}
               </div>
+              {/* la faccia di chi tiene il corso, nello stesso angolo
+                  della dashboard master: aprendo una classe si sa di chi
+                  e' senza leggere il nome nella cella */}
+              {(() => {
+                const suaMaster = (master || []).find((m) => m.id === corsoData.master_id);
+                if (!suaMaster) return null;
+                return <div style={{ marginLeft: "auto" }}><FotoMaster url={suaMaster.foto_url} lato={isMobile ? 62 : 86} titolo={toTitleCase(suaMaster.nome)} /></div>;
+              })()}
             </div>
             {manigliaSpazio("dopoTitolo")}
             {(() => {
