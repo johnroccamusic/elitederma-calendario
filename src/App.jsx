@@ -291,6 +291,16 @@ const SFONDI_APP_DI_SERIE = { desktop: "/sfondo-app-desktop.jpg", mobile: "/sfon
 // i cerchietti "i" con le istruzioni dei tasti: un interruttore solo per
 // tutta l'app, in Aspetto dell'app. Vuoto = accesi
 const CHIAVE_AIUTI = "aiuti_visibili";
+// Il tasto flottante "Stile", quello che sta appoggiato in basso a
+// destra e apre la tavolozza dei 256 colori. Lo vede solo chi programma,
+// ma sul telefono finisce sopra la barra del dock e copre i tasti che
+// stanno sotto: quando non si sta colorando niente, e' solo un ostacolo.
+// Acceso di serie, perche' e' sempre stato li'.
+const CHIAVE_TASTO_STILE = "tasto_stile_visibile";
+function useTastoStileVisibile() {
+  const [acceso] = useLayoutCondiviso(CHIAVE_TASTO_STILE, true);
+  return acceso !== false;
+}
 function useManiglieAttive() {
   const [attive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   return attive === true;
@@ -903,6 +913,10 @@ function stileAvviaOsservatore() {
 }
 function PannelloStileOggetti({ vista, programmatore }) {
   const [mappa, salvaMappa] = useImpostazioneCondivisa(CHIAVE_STILE_OGGETTI, {});
+  // l'interruttore di Aspetto dell'app. Spegne il TASTO, non i colori:
+  // quelli restano dove sono e continuano a vedersi, perche' sono il
+  // lavoro fatto e non un attrezzo
+  const tastoVisibile = useTastoStileVisibile();
   const [attivo, setAttivo] = useState(false);
   const [selezione, setSelezione] = useState(null); // { chiave, voce, elemento }
   const [proprieta, setProprieta] = useState("sfondo");
@@ -979,6 +993,7 @@ function PannelloStileOggetti({ vista, programmatore }) {
   const quantiQui = Object.values(mappa || {}).filter((v) => v && v.vista === vista).length;
   return (
     <>
+      {tastoVisibile && (
       <button
         ref={rifTasto}
         type="button"
@@ -988,6 +1003,7 @@ function PannelloStileOggetti({ vista, programmatore }) {
       >
         Stile{quantiQui ? ` (${quantiQui})` : ""}
       </button>
+      )}
       {attivo && selezione && (
         <div ref={rifPannello} style={{ position: "fixed", right: 12, bottom: 144, zIndex: 9999, width: 344, maxWidth: "calc(100vw - 24px)", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: "0 12px 30px rgba(14,27,51,0.3)", padding: 12, ...fontBody, cursor: "default" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -15584,6 +15600,7 @@ function PaginaAspettoApp() {
   const [maniglieAttive, salvaManiglieAttive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   // e i cerchietti "i" con le istruzioni dei tasti, stessa cosa
   const [aiutiVisibili, salvaAiutiVisibili] = useLayoutCondiviso(CHIAVE_AIUTI, true);
+  const [tastoStileAcceso, salvaTastoStile] = useLayoutCondiviso(CHIAVE_TASTO_STILE, true);
   // Lo sfondo dell'app: una foto per il computer (16:9) e una per il
   // telefono (verticale). Si caricano nel bucket "sfondi-app" e l'indirizzo
   // si ricorda fra le impostazioni condivise; l'app le adatta da sola a
@@ -15726,6 +15743,48 @@ function PaginaAspettoApp() {
             background: aiutiVisibili !== false ? "#E7F3E9" : BG,
             borderRadius: 12, padding: "3px 9px",
           }}>{aiutiVisibili !== false ? "ON" : "OFF"}</span>
+        </button>
+      </div>
+
+      {/* Il tasto flottante "Stile". Lo vede solo chi programma, ma sta
+          appoggiato in basso a destra e sul telefono finisce sopra la
+          barra del dock, coprendo i tasti sotto. Quando non si sta
+          colorando niente e' solo un ostacolo, e prima non c'era modo di
+          toglierlo di mezzo se non uscendo da programmatore.
+
+          Spegne il TASTO, non i colori: quelli restano dove sono e
+          continuano a vedersi da tutti. Sono il lavoro fatto, non
+          l'attrezzo per farlo. */}
+      <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Tasto “Stile” flottante</div>
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+            {tastoStileAcceso !== false
+              ? "Acceso: in basso a destra c'è il tasto “Stile” per colorare a mano gli oggetti della pagina. Lo vede solo chi programma."
+              : "Spento: il tasto non compare e la barra del dock resta libera. I colori già dati restano al loro posto e li vedono tutti."}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => salvaTastoStile(tastoStileAcceso === false)}
+          title="Mostra o nasconde il tasto flottante “Stile”. I colori già dati non si toccano"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0,
+            ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY,
+            background: "#fff", border: `1px solid ${tastoStileAcceso !== false ? "#1F7A33" : CREAM_BORDER}`, borderRadius: 22,
+            padding: "9px 14px", cursor: "pointer",
+          }}
+        >
+          <span style={{ width: 16, height: 16, borderRadius: 4, border: "1px solid currentColor", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: tastoStileAcceso !== false ? "#1F7A33" : MUTED }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: "currentColor" }} />
+          </span>
+          {tastoStileAcceso !== false ? "Nascondi il tasto" : "Mostra il tasto"}
+          <span style={{
+            ...fontBody, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6,
+            color: tastoStileAcceso !== false ? "#1F7A33" : MUTED,
+            background: tastoStileAcceso !== false ? "#E7F3E9" : BG,
+            borderRadius: 12, padding: "3px 9px",
+          }}>{tastoStileAcceso !== false ? "ON" : "OFF"}</span>
         </button>
       </div>
 
