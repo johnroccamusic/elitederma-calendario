@@ -20391,8 +20391,10 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, on
     (lista || []).forEach((c) => {
       const o = c.operatore || { tipo: "?", id: "?", nome: "Senza nome" };
       const k = `${o.tipo}:${o.id}`;
-      if (!gruppi[k]) gruppi[k] = { operatore: o, carrelli: 0, pezzi: 0, totale: 0 };
+      if (!gruppi[k]) gruppi[k] = { operatore: o, carrelli: 0, pezzi: 0, totale: 0, unicoId: null };
       gruppi[k].carrelli += 1;
+      // se ne ha uno solo, questo e' quello: il riquadro lo apre diretto
+      gruppi[k].unicoId = gruppi[k].carrelli === 1 ? c.id : null;
       gruppi[k].pezzi += (c.carrello || []).reduce((n, r) => n + (Number(r.quantita) || 0), 0);
       gruppi[k].totale += totaleCarrelloSospeso(c);
     });
@@ -20424,8 +20426,14 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, on
                 {perOperatore.map((g) => (
                   <button
                     key={`${g.operatore.tipo}:${g.operatore.id}`}
-                    onClick={() => onEntraNelPos(g.operatore)}
-                    title={`Apri il POS come ${toTitleCase(g.operatore.nome || "")} e chiudi i suoi carrelli`}
+                    // col carrello in mano, non solo col nome: se ne ha uno
+                    // solo si apre quello, se ne ha piu' d'uno il POS apre
+                    // la linguetta con i suoi. Prima si entrava e basta, e
+                    // il carrello bisognava ritrovarselo da soli
+                    onClick={() => onEntraNelPos(g.operatore, g.carrelli === 1 ? g.unicoId : null)}
+                    title={g.carrelli === 1
+                      ? `Apri nel POS il carrello di ${toTitleCase(g.operatore.nome || "")}`
+                      : `Apri il POS come ${toTitleCase(g.operatore.nome || "")} e scegli fra i suoi ${g.carrelli} carrelli`}
                     style={{
                       position: "relative", aspectRatio: "1 / 1", borderRadius: 14,
                       border: `1px solid ${CREAM_BORDER}`, background: "#FBF9F4", cursor: "pointer",
@@ -20463,6 +20471,18 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, on
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(totaleCarrelloSospeso(c))}</div>
+                  {/* la strada piu' corta: da qui al carrello aperto,
+                      senza passare dal riquadro e dalla linguetta */}
+                  {onEntraNelPos && (
+                    <button
+                      onClick={() => onEntraNelPos(c.operatore, c.id)}
+                      data-niente-ombra
+                      title={`Apri questo carrello nel POS di ${toTitleCase(c.operatore?.nome || "chi l'ha lasciato")}`}
+                      style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+                    >
+                      Apri nel POS
+                    </button>
+                  )}
                   <button onClick={() => onElimina(c)} data-niente-ombra style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}>Elimina</button>
                 </div>
               </div>
@@ -34110,7 +34130,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onEntraNelPosCome
         <PannelloCarrelliSospesiAmministrazione
           lista={sospesiTutti} isMobile={isMobile} prodottiShop={prodottiShop} coupon={coupon}
           onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso}
-          onEntraNelPos={onEntraNelPosCome ? (operatore) => { setMostraSospesi(false); onEntraNelPosCome(operatore); } : null}
+          onEntraNelPos={onEntraNelPosCome ? (operatore, carrelloId) => { setMostraSospesi(false); onEntraNelPosCome(operatore, carrelloId); } : null}
         />
       )}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
@@ -55538,7 +55558,7 @@ function etichettaMetodoVendita(metodo) {
   if (metodo === "buono_amazon") return "Buono Amazon";
   return "POS";
 }
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, titolo = "POS Vendita diretta" }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
   // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
@@ -56123,6 +56143,35 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setMsg("");
     if (isMobile) setCarrelloEspanso(true);
   }
+  // Arrivando da "carrelli sospesi", il carrello e' gia' scelto: si apre
+  // da solo, senza chiedere conferma (il POS e' appena nato, non c'e'
+  // niente da sostituire).
+  //
+  // Si aspetta: la lista dei sospesi arriva dal server e al primo
+  // disegno puo' ancora non esserci. E si fa una volta sola — dopo, il
+  // carrello e' in mano a chi lo sta battendo, e riaprirlo da capo gli
+  // cancellerebbe quello che ha appena toccato.
+  const ingressoGiaFatto = useRef(false);
+  useEffect(() => {
+    if (ingressoGiaFatto.current) return;
+    if (!operatoreImpersonato) return;
+    if (carrelloDaAprire) {
+      const c = listaSospesi.find((x) => x.id === carrelloDaAprire);
+      if (!c) return;                       // non e' ancora arrivata la lista
+      ingressoGiaFatto.current = true;
+      ripristinaCarrello(c);
+      setCarrelloSospesoId(c.id);
+      setPannelloSospesiAperto(false);
+      if (isMobile) setCarrelloEspanso(true);
+      return;
+    }
+    // nessun carrello indicato: ne ha piu' d'uno, e la scelta e' sua.
+    // Si apre la linguetta invece di lasciarla chiusa in un POS vuoto
+    if (mieiSospesi.length === 0) return;
+    ingressoGiaFatto.current = true;
+    setPannelloSospesiAperto(true);
+  }, [operatoreImpersonato, carrelloDaAprire, listaSospesi, mieiSospesi.length, isMobile]);
+
   function eliminaCarrelloSospeso(c) {
     if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}"? I suoi pezzi tornano in vendita.`)) return;
     salvaCarrelliSospesi(sospesiAttuali().filter((x) => x.id !== c.id));
@@ -66875,8 +66924,14 @@ export default function App() {
   // scritto per conto di chi: e' l'unica cosa che il POS deve sapere in
   // piu', e si spegne appena si esce.
   const [posComeOperatore, setPosComeOperatore] = useState(null);
-  function entraNelPosCome(operatore) {
+  // e QUALE carrello aprire appena si entra. Senza, il POS si apriva
+  // vuoto e il carrello restava fermo nella linguetta: chi arriva da
+  // "carrelli sospesi" ha gia' detto quale vuole, farglielo ricercare
+  // era un giro a vuoto
+  const [posCarrelloDaAprire, setPosCarrelloDaAprire] = useState(null);
+  function entraNelPosCome(operatore, carrelloId = null) {
     setPosComeOperatore(operatore || null);
+    setPosCarrelloDaAprire(carrelloId || null);
     apriViewProtetta("pos");
   }
   // uscendo dal POS in qualunque modo — il tasto indietro, lo swipe, un
@@ -66885,7 +66940,8 @@ export default function App() {
   // dopo che si apre il POS si venderebbe a nome suo senza saperlo
   useEffect(() => {
     if (view !== "pos" && posComeOperatore) setPosComeOperatore(null);
-  }, [view, posComeOperatore]);
+    if (view !== "pos" && posCarrelloDaAprire) setPosCarrelloDaAprire(null);
+  }, [view, posComeOperatore, posCarrelloDaAprire]);
 
   const [progettiScaduti, setProgettiScaduti] = useState(0);
   useEffect(() => {
@@ -68415,7 +68471,8 @@ export default function App() {
           ruoloUtente={ruoloUtente} corsiDate={corsiDate} corsi={corsi} location={location} iscritti={iscritti} coupon={coupon}
           bundleComponenti={bundleComponenti} master={master}
           operatoreImpersonato={posComeOperatore}
-          onBack={() => { setPosComeOperatore(null); setView(posComeOperatore ? "magazzinoshop" : "home"); }}
+          carrelloDaAprire={posCarrelloDaAprire}
+          onBack={() => { setPosCarrelloDaAprire(null); setPosComeOperatore(null); setView(posComeOperatore ? "magazzinoshop" : "home"); }}
           titolo={etichettaTasto("home", "pos", "POS Vendita diretta")}
         />
       )}
