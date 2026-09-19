@@ -26609,7 +26609,7 @@ function PannelloRiepilogoAmministrativo({
                     colonna si schiacciava e il nome della spesa spariva —
                     restava l'icona, e una riga senza nome non dice niente. */}
                 {(righeSpeseTutte.length > 0 || speseClasseLibere.length > 0) && (
-                  <div style={{ marginBottom: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflowX: "auto" }}>
+                  <div className="quadro-costi" style={{ marginBottom: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflowX: "auto" }}>
                     {/* La banda dei titoli: grigia e attaccata alle righe,
                         cosi' si legge come l'intestazione di una tabella e
                         non come tre parole sciolte sopra dei numeri. Le tre
@@ -26943,7 +26943,7 @@ function PannelloRiepilogoAmministrativo({
                   if (!(totale || cash || bonifico)) return null;
                   const cifra = { ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap", paddingRight: isMobile ? 3 : 4, minWidth: 0 };
                   return (
-                    <div style={{
+                    <div className="quadro-costi" style={{
                       display: "grid", gridTemplateColumns: grigliaCosti,
                       gap: isMobile ? 4 : 8, alignItems: "center",
                       background: "#F4F4F6", borderRadius: 12, minHeight: 45, padding: isMobile ? "0 6px" : "0 10px",
