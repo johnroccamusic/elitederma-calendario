@@ -24927,8 +24927,11 @@ function BottonePulsanteScheda({ p }) {
         // acceso = verde. Lo usa solo A.C.M., che a differenza degli altri
         // quattro non fa una cosa: dice uno stato, e uno stato si deve
         // vedere senza leggere l'etichetta
-        border: `1px solid ${p.attivo ? "#9CCBA6" : CREAM_BORDER}`,
-        background: p.attivo ? "#E7F3E9" : "#fff",
+        //
+        // Lo spessore e' quello dei riquadri dei segnalatori, con la fascia
+        // grigia in basso spessa la meta': su un tasto alto quaranta pixel
+        // lo zoccolo intero sarebbe un gradino
+        ...superficieCuscino(p.attivo ? "#E7F3E9" : "#FFFFFF", SPESSORE_CUSCINO_META),
         color: p.attivo ? "#1F7A33" : NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
         // base 0 anche da scrivania: con la misura fissa a 130 il quinto
