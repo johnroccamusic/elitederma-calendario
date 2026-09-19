@@ -29254,7 +29254,19 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 {/* l'ombra sotto il nome del corso: la stessa idea del
                     rilievo dei riquadri, portata sulle lettere — un filo
                     di luce sopra e un'ombra corta sotto */}
-                <div style={{ ...fontDisplay, fontWeight: 700, letterSpacing: 0.5, fontSize: isMobile ? Math.round(spaziIscrizioni.titoloFontSize / 2) : spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.05, textShadow: "0 1px 0 rgba(255,255,255,0.9), 0 4px 10px rgba(14,27,51,0.28), 0 1px 2px rgba(14,27,51,0.18)" }}>{(corso?.nome || "").toUpperCase()}</div>
+                <div style={{ ...fontDisplay, fontWeight: 700, letterSpacing: 0.5, fontSize: isMobile ? Math.round(spaziIscrizioni.titoloFontSize / 2) + 3 : spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.12, textShadow: "0 1px 0 rgba(255,255,255,0.9), 0 4px 10px rgba(14,27,51,0.28), 0 1px 2px rgba(14,27,51,0.18)" }}>
+                  {(() => {
+                    const nome = (corso?.nome || "").toUpperCase();
+                    // dal telefono il nome va sempre su due righe: la prima
+                    // parola sopra, il resto sotto ("PMU" / "BASE"). Su una
+                    // riga sola, accanto alla foto, restava lo spazio per
+                    // cinque lettere e il nome si spezzava dove capitava
+                    if (!isMobile) return nome;
+                    const spazio = nome.indexOf(" ");
+                    if (spazio < 0) return nome;
+                    return <>{nome.slice(0, spazio)}<br />{nome.slice(spazio + 1)}</>;
+                  })()}
+                </div>
                 {manigliaRidimensiona("titoloFontSize")}
               </div>
               {/* la faccia di chi tiene il corso, nello stesso angolo
@@ -29263,7 +29275,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               {(() => {
                 const suaMaster = (master || []).find((m) => m.id === corsoData.master_id);
                 if (!suaMaster) return null;
-                return <div style={{ marginLeft: "auto" }}><FotoMaster url={suaMaster.foto_url} lato={isMobile ? 124 : 86} titolo={toTitleCase(suaMaster.nome)} /></div>;
+                return <div style={{ marginLeft: "auto" }}><FotoMaster url={suaMaster.foto_url} lato={isMobile ? 99 : 86} titolo={toTitleCase(suaMaster.nome)} /></div>;
               })()}
             </div>
             {manigliaSpazio("dopoTitolo")}
