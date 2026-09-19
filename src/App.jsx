@@ -29254,7 +29254,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 {/* l'ombra sotto il nome del corso: la stessa idea del
                     rilievo dei riquadri, portata sulle lettere — un filo
                     di luce sopra e un'ombra corta sotto */}
-                <div style={{ ...fontDisplay, fontWeight: 700, letterSpacing: 0.5, fontSize: isMobile ? Math.round(spaziIscrizioni.titoloFontSize / 2) + 7 : spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.12, textShadow: "0 1px 0 rgba(255,255,255,0.9), 0 4px 10px rgba(14,27,51,0.28), 0 1px 2px rgba(14,27,51,0.18)" }}>
+                <div style={{ ...fontDisplay, fontWeight: isMobile ? 800 : 700, letterSpacing: 0.5, fontSize: isMobile ? Math.round(spaziIscrizioni.titoloFontSize / 2) + 9 : spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.12, textShadow: "0 1px 0 rgba(255,255,255,0.9), 0 4px 10px rgba(14,27,51,0.28), 0 1px 2px rgba(14,27,51,0.18)" }}>
                   {(() => {
                     const nome = (corso?.nome || "").toUpperCase();
                     // dal telefono il nome va sempre su due righe: la prima
