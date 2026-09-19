@@ -30772,6 +30772,12 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: isMobile ? 13 : 14 }}>{idx + 1}.</span>
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
+                    {/* dal telefono il pacchetto va SEMPRE a capo, sotto
+                        al nome: a seconda di quanto e' lungo il nome
+                        finiva a volte in fondo alla prima riga e a volte
+                        sotto, e le schede non erano piu' uguali fra loro.
+                        Un elemento largo quanto la riga forza il capo. */}
+                    {isMobile && i.pacchetto_kit && <span style={{ flexBasis: "100%", height: 0 }} />}
                     {i.pacchetto_kit && <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
                     {dermografoAcquistato(i) && <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
                     {i.note && <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
