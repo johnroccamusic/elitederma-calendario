@@ -4037,6 +4037,29 @@ const ALIQUOTE_IVA_STANDARD = [0, 4, 5, 10, 22];
 // Alla lettera: margine di dieci euro, quindici per cento, sconto di un
 // euro e cinquanta. Niente ritocchi per l'IVA — lo sconto e' quello, ed
 // e' quello che il cliente non paga.
+// La percentuale che una riga si prende davvero da un coupon a
+// percentuale secca, letta SUL LORDO della riga — che e' l'unico modo
+// di scriverla in una tabella dove ogni riga mostra la sua.
+//
+// Il coupon dice su cosa si legge la sua percentuale: sul prezzo al
+// pubblico (com'e' sempre stato), sul netto, o sul margine. Le ultime
+// due, riportate sul lordo, danno una percentuale diversa riga per riga:
+// il 15% del netto e' il 12,30% del lordo con l'IVA al 22, e sul margine
+// dipende da quanto costa quel prodotto.
+function percentualeSeccaDiRiga(prodotto, riga, percentuale, base) {
+  if (!(percentuale > 0)) return 0;
+  const lordo = round2((Number(riga?.prezzo) || 0) * (Number(riga?.quantita) || 0));
+  if (!(lordo > 0)) return 0;
+  if (base === "margine") {
+    const euro = scontoSulMargineDiRiga(prodotto, Number(riga?.quantita) || 0, percentuale);
+    return round2((euro / lordo) * 100);
+  }
+  if (base === "netto") {
+    const aliquota = prodotto?.aliquota_iva_vendita ?? 22;
+    return round2(percentuale / (1 + aliquota / 100));
+  }
+  return percentuale;
+}
 function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
   if (!prodotto || !(percentuale > 0) || !(quantita > 0)) return 0;
   const costo = prodotto.costo_acquisto;
@@ -20258,22 +20281,51 @@ function Riquadrino({ etichetta, valore, colore = NAVY, forte = false }) {
 // carrello e dalle fasce di OGGI, e si rifanno ogni volta che lo si
 // guarda. Scriverli una volta per tutte vorrebbe dire mostrare numeri
 // calcolati con le regole di ieri.
-function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, schemaPunti }) {
+function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, schemaPunti, regolaReferral = null }) {
   const righe = Array.isArray(c?.carrello) ? c.carrello : [];
   const subtotale = round2(righe.reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
   const contanti = pagamentoContaComeContanti(c?.metodoPagamento);
+  // Quale codice sta scontando questo carrello.
+  //
+  // Due strade, come nel POS: il coupon dell'edizione, che arriva dalla
+  // classe scelta, e il codice scritto a mano — il referral personale
+  // della master, quasi sempre. Il secondo lo si cerca per codice,
+  // com'e' scritto nel carrello.
+  //
+  // Prima questa funzione conosceva solo il primo. Cosi' un carrello
+  // sospeso con dentro il referral di una master si mostrava a prezzo
+  // pieno, con zero sconto e i punti interi — mentre il carrello vero
+  // era scontato. Il numero in cima e quello nel dettaglio dicevano due
+  // cose diverse sullo stesso carrello (19/09/2026).
   const couponEdizione = c?.corsoPosId ? (coupon || []).find((x) => x.corsi_date_id === c.corsoPosId) : null;
-  const aFasce = c?.scontoCorsoAttivo !== false && !c?.omaggioAttivo && couponEdizione?.tipo_regola_sconto === "fasce";
-  const fasce = aFasce
-    ? fasceCorsiPerPagamento(serieScontoScritta(fasceCarta) ? fasceCarta : couponEdizione.fasce_sconto, fasceContanti, contanti)
+  const codiceScritto = String(c?.couponCodiceTesto || "").trim().toUpperCase();
+  const couponScritto = !couponEdizione && codiceScritto
+    ? (coupon || []).find((x) => String(x.codice || "").trim().toUpperCase() === codiceScritto) || null
     : null;
+  const couponAttivo = couponEdizione || couponScritto;
+  // un codice personale (della master, senza classe) non segue la serie
+  // dei contanti dei corsi: ha la sua, quella del referral
+  const personale = !!couponAttivo?.master_id && !couponAttivo?.corsi_date_id;
+  const aFasce = c?.scontoCorsoAttivo !== false && !c?.omaggioAttivo && couponAttivo?.tipo_regola_sconto === "fasce";
+  const fasce = aFasce
+    ? (personale
+      ? (serieScontoScritta(regolaReferral?.fasce) ? regolaReferral.fasce : couponAttivo.fasce_sconto)
+      : fasceCorsiPerPagamento(serieScontoScritta(fasceCarta) ? fasceCarta : couponAttivo.fasce_sconto, fasceContanti, contanti))
+    : null;
+  // il coupon a percentuale secca: la percentuale sta sul coupon, e su
+  // cosa si legge (prezzo, netto o margine) lo dice il coupon stesso
+  const pctSecca = !aFasce && !c?.omaggioAttivo && couponAttivo && couponAttivo.tipo_regola_sconto !== "fasce"
+    ? (Number(couponAttivo.valore) || 0) : 0;
+  const baseSecca = BASE_SCONTO_VALIDA(couponAttivo?.base_sconto);
   const sicurezza = sicurezzaPuntiDi(schemaPunti);
   const dettaglio = righe.map((r) => {
     const prodotto = prodottoPerId[r.prodottoId] || null;
     const unitario = round2(Number(r.prezzo) || 0);
     const lordo = round2(unitario * (Number(r.quantita) || 0));
     const margine = marginePercentualeDi(prodotto);
-    const scontoPct = aFasce ? percentualeFasciaDi(prodotto, fasce, subtotale) : 0;
+    const scontoPct = aFasce
+      ? percentualeFasciaDi(prodotto, fasce, subtotale)
+      : (pctSecca > 0 ? percentualeSeccaDiRiga(prodotto, r, pctSecca, baseSecca) : 0);
     const sconto = round2((lordo * scontoPct) / 100);
     // quanto si incassa per UN pezzo: e' il numero che chi guarda
     // confronta col prezzo di listino accanto
@@ -20288,8 +20340,9 @@ function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, sc
   const teorici = round2(dettaglio.reduce((t, d) => t + (d.teorici || 0), 0));
   const punti = round2(dettaglio.reduce((t, d) => t + (d.punti || 0), 0));
   return {
-    dettaglio, subtotale, sconto, teorici, punti, contanti, aFasce,
-    codice: couponEdizione?.codice || null,
+    dettaglio, subtotale, sconto, teorici, punti, contanti, aFasce: aFasce || pctSecca > 0,
+    codice: couponAttivo?.codice || null,
+    personale,
     pctMedia: subtotale > 0 ? round2((sconto / subtotale) * 100) : 0,
     daIncassare: round2(subtotale - sconto),
     senzaMargine: dettaglio.filter((d) => d.margine == null).length,
@@ -20391,7 +20444,7 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, on
   const prodottoPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((x) => [x.id, x])), [prodottiShop]);
   const [aperti, setAperti] = useState({});
   const ordinati = [...lista].sort((a, b) => String(b.creato || "").localeCompare(String(a.creato || "")));
-  const contoDi = (c) => contoCarrello(c, { prodottoPerId, coupon, fasceCarta: fasceCartaAmm, fasceContanti: fasceContantiAmm, schemaPunti: schemaPuntiAmm });
+  const contoDi = (c) => contoCarrello(c, { prodottoPerId, coupon, fasceCarta: fasceCartaAmm, fasceContanti: fasceContantiAmm, schemaPunti: schemaPuntiAmm, regolaReferral: regolaReferralAmm });
   // Un riquadro per persona, col numero dei suoi carrelli che lampeggia.
   //
   // L'elenco lungo dice quali carrelli ci sono; questi dicono DI CHI
@@ -55956,16 +56009,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // riservatiAltrove). L'elenco completo ce l'ha chi amministra, in
   // Magazzino e shop
   const mieiSospesi = listaSospesi.filter((c) => stessoOperatore(c.operatore, operatore));
-  // il carrello che si sta battendo, valutato con le stesse regole con
-  // cui l'elenco dei carrelli sospesi valuta quelli parcheggiati: serve
-  // solo a chi amministra il carrello di un altro (vedi perContoDiAltri)
-  const contoCarrelloVivo = useMemo(
-    () => contoCarrello(
-      { carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo },
-      { prodottoPerId: prodottiPerId, coupon, fasceCarta: fasceCorsiCartaPos, fasceContanti: fasceContantiCorsiPos, schemaPunti: schemaPuntiPos },
-    ),
-    [carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, prodottiPerId, coupon, fasceCorsiCartaPos, fasceContantiCorsiPos, schemaPuntiPos],
-  );
   const [carrelloSospesoId, setCarrelloSospesoId] = useState(null);
   const [pannelloSospesiAperto, setPannelloSospesiAperto] = useState(false);
   // si scrive sempre sull'ultima lista arrivata, non su quella chiusa nella
@@ -56222,6 +56265,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       && !(c.valido_da && oggi < c.valido_da) && !(c.valido_fino_a && oggi > c.valido_fino_a)) || null;
   })();
   const [referralPersonaleAttivo, setReferralPersonaleAttivo] = useState(false);
+  // il carrello che si sta battendo, valutato con le stesse regole con
+  // cui l'elenco dei carrelli sospesi valuta quelli parcheggiati: serve
+  // solo a chi amministra il carrello di un altro (vedi perContoDiAltri).
+  //
+  // Sta QUI e non piu' in alto perche' legge referralPersonaleAttivo e
+  // couponCodiceTesto, che nascono due righe sopra: scritto prima, la
+  // pagina moriva bianca appena si apriva il POS — e la build non se ne
+  // accorge, perche' e' un ordine di righe, non un nome sbagliato.
+  const contoCarrelloVivo = useMemo(
+    () => contoCarrello(
+      { carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, couponCodiceTesto, referralPersonaleAttivo },
+      { prodottoPerId: prodottiPerId, coupon, fasceCarta: fasceCorsiCartaPos, fasceContanti: fasceContantiCorsiPos, schemaPunti: schemaPuntiPos, regolaReferral: regolaReferralPos },
+    ),
+    [carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, couponCodiceTesto, referralPersonaleAttivo, prodottiPerId, coupon, fasceCorsiCartaPos, fasceContantiCorsiPos, schemaPuntiPos, regolaReferralPos],
+  );
   function commutaReferralPersonale(acceso) {
     setReferralPersonaleAttivo(acceso);
     if (acceso && couponReferralPersonale) {
