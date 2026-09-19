@@ -47655,28 +47655,50 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // perdeva di vista l'elenco, e tornando indietro bisognava ritrovare il
   // punto in cui si era. Con venti prodotti da sistemare di fila e' il
   // giro che si fa venti volte.
-  const [schedaAncorata, setSchedaAncorata] = useState(null);
-  const rifElenco = useRef(null);
-  const apriScheda = (p, rect) => {
+  // quale prodotto si sta configurando nella colonna di destra, o null
+  const [schedaAperta, setSchedaAperta] = useState(null);
+  // La scheda entra nello spazio che c'e', non viceversa: alta esattamente
+  // quanto il riquadro dell'elenco, e se il contenuto non ci sta si
+  // rimpicciolisce finche' non ci sta. Meglio un testo piccolo che una
+  // scheda tagliata a meta' o un riquadro da scorrere.
+  //
+  // Il conto si fa misurando, non indovinando: cambiando la scala cambia
+  // anche la larghezza (e quindi l'altezza del contenuto), percio' si
+  // rimisura finche' non si assesta — con un tetto di passaggi, che una
+  // scala che oscilla e' peggio di una scala sbagliata.
+  const rifElencoCard = useRef(null);
+  const rifSchedaDentro = useRef(null);
+  const [altezzaElenco, setAltezzaElenco] = useState(0);
+  const [scalaScheda, setScalaScheda] = useState(1);
+  const passiScala = useRef(0);
+  useLayoutEffect(() => {
+    const n = rifElencoCard.current;
+    if (!n || !schedaAperta) return;
+    const misura = () => setAltezzaElenco(Math.round(n.getBoundingClientRect().height));
+    misura();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(misura) : null;
+    if (ro) ro.observe(n);
+    return () => { if (ro) ro.disconnect(); };
+  }, [schedaAperta]);
+  useLayoutEffect(() => { passiScala.current = 0; setScalaScheda(1); }, [schedaAperta]);
+  useLayoutEffect(() => {
+    const n = rifSchedaDentro.current;
+    if (!n || !schedaAperta || !altezzaElenco) return;
+    if (passiScala.current > 5) return;
+    const naturale = n.scrollHeight;
+    if (!naturale) return;
+    const voluta = Math.max(0.35, Math.min(1, (altezzaElenco - 44) / naturale));
+    if (Math.abs(voluta - scalaScheda) > 0.02) { passiScala.current += 1; setScalaScheda(voluta); }
+  });
+  const apriScheda = (p, dallElenco) => {
     setAperturaScheda((prec) => ({ prodottoId: p.id, n: (prec?.n || 0) + 1 }));
     setCategorieMontate(true);
-    if (rect) {
-      // Il punto nella PAGINA, non nello schermo. Ancorandola allo schermo
-      // la scheda finiva dove capitava — in fondo a destra invece che
-      // accanto alla riga — perche' "fixed" non sa niente di quanto si e'
-      // scorso. Qui si somma lo scorrimento e la scheda resta appesa alla
-      // riga, sempre.
-      // Il bordo alto della riga COSI' COM'E' A SCHERMO, e basta.
-      //
-      // Prima lo calcolavo rispetto alla cima dell'elenco, per farla
-      // restare attaccata anche scorrendo. Ma quel conto dipende da quanto
-      // si e' scorso e da chi sono i contenitori intorno, e sbagliava di
-      // un pezzo fisso: la scheda usciva parecchio piu' in basso della
-      // riga. Ancorata allo schermo non c'e' niente da calcolare —
-      // il bordo della scheda e' il bordo della riga.
-      setSchedaAncorata({ top: Math.round(rect.top), prodottoId: p.id });
+    if (dallElenco) {
+      // Si affianca: l'elenco si stringe a sinistra, la scheda compare a
+      // destra. Niente da calcolare, nessuna posizione da indovinare.
+      setSchedaAperta(p.id);
     } else {
-      setSchedaAncorata(null);
+      setSchedaAperta(null);
       if (vistaProdotti !== "categorie") setVistaPrimaDellaScheda(vistaProdotti);
       mostraVista("categorie");
     }
@@ -48572,56 +48594,24 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             dietro modifiche che nessuno vede. */}
         {/* Il riferimento della scheda appesa: la sua posizione si misura
             da qui, cosi' resta attaccata alla riga anche scorrendo la pagina */}
-        <div ref={rifElenco} style={{ position: "relative" }}>
-        {categorieMontate && (() => {
-          const appesa = !!schedaAncorata && vistaProdotti === "elenco";
-          // Tutta la scheda, aperta: niente altezza massima che la
-          // schiaccerebbe in un riquadro da scorrere. Sta sopra la
-          // tabella, a destra della colonna dei nomi — cosi' il prodotto
-          // cliccato resta visibile a sinistra mentre lo si modifica.
-          const cornice = appesa
-            ? {
-                ...cardStyle, padding: isMobile ? 12 : 16, margin: 0,
-                position: "fixed", top: schedaAncorata.top,
-                left: isMobile ? 8 : 300, right: isMobile ? 8 : "auto",
-                width: isMobile ? "auto" : 640, maxWidth: "calc(100vw - 32px)",
-                // si apre fin dove c'e' posto sotto la riga; se non ne
-                // basta, scorre dentro invece di uscire dallo schermo
-                maxHeight: `calc(100vh - ${schedaAncorata.top + 16}px)`, overflowY: "auto",
-                zIndex: 2600, border: `2px solid ${NAVY}`, borderTopLeftRadius: 0,
-                boxShadow: "0 22px 60px -14px rgba(14,27,51,0.45)",
-              }
-            : { ...cardStyle, padding: 14, marginTop: 10, marginBottom: 22, display: vistaProdotti === "categorie" ? "block" : "none" };
-          return (
-            <>
-              {/* nessun velo: chi sistema venti prodotti di fila passa da
-                  uno all'altro cliccando la riga accanto, e un velo
-                  glielo impedirebbe. Si chiude con la × o salvando. */}
-              <div style={cornice}>
-                {appesa && (
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 2 }}>
-                    <button onClick={() => setSchedaAncorata(null)} data-niente-ombra title="Chiudi la scheda" style={{ background: "transparent", border: "none", cursor: "pointer", color: MUTED, fontSize: 22, lineHeight: 1, padding: "0 2px" }}>×</button>
-                  </div>
-                )}
-                <PaginaGestioneShop
-                  incorporata
-                  soloScheda={appesa}
-                  altezzaPannelli="auto"
-                  categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
-                  prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
-                  fornitori={fornitori} impostazioniIva={impostazioniIva}
-                  ricarica={ricarica} assicuraTabelle={assicuraTabelle} onBack={onBack}
-                  vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
-                  ricercaEsterna={ricercaProdotto} categoriaEsternaId={categoriaSel}
-                  onSchedaChiusa={() => setSchedaAncorata(null)}
-                />
-              </div>
-            </>
-          );
-        })()}
+        {/* Due colonne, come due finestre affiancate: a sinistra l'elenco
+            che continua a scorrere, a destra la scheda del prodotto che si
+            sta configurando. Cliccando un altro prodotto cambia solo la
+            colonna di destra.
+
+            E' venuto dopo tre tentativi di farla galleggiare sopra la
+            tabella, ancorata alla riga: la posizione andava calcolata, e
+            fra scorrimento, zoom della vista forzata e contenitori con
+            transform quel conto sbagliava sempre di qualcosa. Affiancate
+            non c'e' niente da calcolare — se lo dividono e basta. */}
+        <div style={{
+          display: schedaAperta ? "grid" : "block",
+          gridTemplateColumns: schedaAperta ? (isMobile ? "1fr" : "minmax(0, 1fr) 460px") : undefined,
+          gap: 16, alignItems: "start",
+        }}>
 
         {vistaProdotti === "elenco" && (<>
-        <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
+        <div ref={rifElencoCard} style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: larghezzaTabellaMagazzino, borderCollapse: "collapse", tableLayout: "fixed" }}>
               <colgroup>{colonneMagazzino.map((col) => <col key={col.label} style={{ width: larghezzaDi(col.label, col.larghezza) }} />)}</colgroup>
@@ -48719,7 +48709,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={(id, rect) => apriScheda(p, rect)} evidenziata={schedaAncorata?.prodottoId === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -48747,6 +48737,56 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           </div>
         </div>
         </>)}
+
+        {categorieMontate && (() => {
+          const affiancata = !!schedaAperta && vistaProdotti === "elenco";
+          // Tutta la scheda, aperta: niente altezza massima che la
+          // schiaccerebbe in un riquadro da scorrere. Sta sopra la
+          // tabella, a destra della colonna dei nomi — cosi' il prodotto
+          // cliccato resta visibile a sinistra mentre lo si modifica.
+          // La colonna di destra si appiccica in alto: scorrendo l'elenco
+          // la scheda resta davanti agli occhi invece di sparire su.
+          const cornice = affiancata
+            ? {
+                ...cardStyle, padding: isMobile ? 12 : 16, margin: "10px 0 0",
+                height: altezzaElenco ? altezzaElenco - 10 : undefined,
+                overflow: "hidden",
+                border: `2px solid ${NAVY}`,
+                boxShadow: "0 12px 34px -16px rgba(14,27,51,0.35)",
+              }
+            : { ...cardStyle, padding: 14, marginTop: 10, marginBottom: 22, display: vistaProdotti === "categorie" ? "block" : "none" };
+          return (
+            <>
+              {/* nessun velo: chi sistema venti prodotti di fila passa da
+                  uno all'altro cliccando la riga accanto, e un velo
+                  glielo impedirebbe. Si chiude con la × o salvando. */}
+              <div style={cornice}>
+                {affiancata && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+                    <button onClick={() => setSchedaAperta(null)} data-niente-ombra title="Chiudi la scheda e riallargare l'elenco" style={{ ...fontBody, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, cursor: "pointer", color: NAVY, fontSize: 12.5, fontWeight: 700, padding: "6px 14px" }}>Chiudi ×</button>
+                  </div>
+                )}
+                <div
+                  ref={affiancata ? rifSchedaDentro : null}
+                  style={affiancata ? { transformOrigin: "top left", transform: `scale(${scalaScheda})`, width: `${100 / scalaScheda}%` } : undefined}
+                >
+                <PaginaGestioneShop
+                  incorporata
+                  soloScheda={affiancata}
+                  altezzaPannelli="auto"
+                  categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
+                  prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
+                  fornitori={fornitori} impostazioniIva={impostazioniIva}
+                  ricarica={ricarica} assicuraTabelle={assicuraTabelle} onBack={onBack}
+                  vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
+                  ricercaEsterna={ricercaProdotto} categoriaEsternaId={categoriaSel}
+                  onSchedaChiusa={() => setSchedaAperta(null)}
+                />
+                </div>
+              </div>
+            </>
+          );
+        })()}
         </div>
       </div>
 
