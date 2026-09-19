@@ -29254,7 +29254,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 {/* l'ombra sotto il nome del corso: la stessa idea del
                     rilievo dei riquadri, portata sulle lettere — un filo
                     di luce sopra e un'ombra corta sotto */}
-                <div style={{ ...fontDisplay, fontWeight: isMobile ? 800 : 700, letterSpacing: 0.5, fontSize: isMobile ? Math.round(spaziIscrizioni.titoloFontSize / 2) + 9 : spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.12, textShadow: "0 1px 0 rgba(255,255,255,0.9), 0 4px 10px rgba(14,27,51,0.28), 0 1px 2px rgba(14,27,51,0.18)" }}>
+                <div style={{ ...fontDisplay, fontWeight: isMobile ? 800 : 700, letterSpacing: 0.5, fontSize: isMobile ? Math.round(spaziIscrizioni.titoloFontSize / 2) + 9 : spaziIscrizioni.titoloFontSize - 3, color: NAVY, lineHeight: 1.12, textShadow: "0 1px 0 rgba(255,255,255,0.9), 0 4px 10px rgba(14,27,51,0.28), 0 1px 2px rgba(14,27,51,0.18)" }}>
                   {(() => {
                     const nome = (corso?.nome || "").toUpperCase();
                     // il nome va sempre su due righe: la prima parola
@@ -30763,36 +30763,45 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 // dal telefono la scheda si stringe: meno imbottitura,
                 // righe piu' vicine e caratteri un filo piu' piccoli. Con
                 // dieci allievi la lista era tre schermate
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: isMobile ? 2 : 10 }}>
+                // da scrivania la riga non va a capo: nome, tutor,
+                // pacchetto e telefono stanno tutti in fila, e se il nome
+                // e' lunghissimo si accorcia lui invece di spingere il
+                // telefono sotto
+                <div style={{ display: "flex", flexWrap: isMobile ? "wrap" : "nowrap", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 2 : 10 }}>
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per vedere i dati dell'iscritto"
-                    style={{ ...fontBody, fontSize: isMobile ? 17 : 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", alignItems: "baseline", gap: isMobile ? 6 : 8, minWidth: 0 }}
+                    // da scrivania anche il nome prende la famiglia
+                    // stretta: cosi' nome, tutor e pacchetto stanno sulla
+                    // stessa riga invece di andare a capo a meta' elenco
+                    style={{ ...fontBody, ...(isMobile ? null : { fontFamily: FAMIGLIA_STRETTA }), fontSize: isMobile ? 17 : 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", alignItems: "baseline", gap: isMobile ? 6 : 8, minWidth: 0 }}
                   >
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: isMobile ? 15 : 14, flexShrink: 0 }}>{idx + 1}.</span>
                     {/* il numero sta in una colonna sua: cosi' quello che
                         va a capo — il pacchetto — comincia sotto al nome
                         dell'allieva e non sotto al numero */}
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: isMobile ? 6 : 8, rowGap: isMobile ? 0 : undefined, lineHeight: isMobile ? 1.15 : undefined, minWidth: 0 }}>
-                      <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                    <div style={{ display: "flex", flexWrap: isMobile ? "wrap" : "nowrap", alignItems: "baseline", gap: isMobile ? 6 : 8, rowGap: isMobile ? 0 : undefined, lineHeight: isMobile ? 1.15 : undefined, minWidth: 0, overflow: isMobile ? undefined : "hidden" }}>
+                      {/* il nome non si accorcia mai: se lo spazio finisce
+                          a farsi da parte e' il pacchetto, non l'allieva */}
+                      <span style={isMobile ? undefined : { whiteSpace: "nowrap", flexShrink: 0 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                       {/* da scrivania tutor e pacchetto prendono la
                           famiglia stretta (Cabin Condensed) e il grigio
                           cupo: due righe di servizio accanto a un nome in
                           grassetto, che devono leggersi senza rubargli il
                           posto */}
-                      {i.tutor && <span style={{ ...(isMobile ? null : { fontFamily: FAMIGLIA_STRETTA }), fontSize: isMobile ? 13 : 13.5, fontWeight: isMobile ? 400 : 600, color: isMobile ? MUTED : GRIGIO_LEGGIBILE }}>· Tutor: {i.tutor}</span>}
+                      {i.tutor && <span style={{ ...(isMobile ? null : { fontFamily: FAMIGLIA_STRETTA }), fontSize: isMobile ? 13 : 12.5, fontWeight: isMobile ? 400 : 600, color: isMobile ? MUTED : GRIGIO_LEGGIBILE, whiteSpace: isMobile ? undefined : "nowrap", flexShrink: 0 }}>· Tutor: {i.tutor}</span>}
                       {/* dal telefono il pacchetto va SEMPRE a capo, sotto
                           al nome: a seconda di quanto e' lungo il nome
                           finiva a volte in fondo alla prima riga e a volte
                           sotto, e le schede non erano piu' uguali fra loro.
                           Un elemento largo quanto la riga forza il capo. */}
                       {isMobile && i.pacchetto_kit && <span style={{ flexBasis: "100%", height: 0 }} />}
-                      {i.pacchetto_kit && <span style={{ ...(isMobile ? null : { fontFamily: FAMIGLIA_STRETTA }), fontSize: isMobile ? 13 : 13.5, fontWeight: isMobile ? 400 : 600, color: GRIGIO_LEGGIBILE }}>· Pacchetto: {i.pacchetto_kit}</span>}
+                      {i.pacchetto_kit && <span style={{ ...(isMobile ? null : { fontFamily: FAMIGLIA_STRETTA }), fontSize: isMobile ? 13 : 12.5, fontWeight: isMobile ? 400 : 600, color: GRIGIO_LEGGIBILE, whiteSpace: isMobile ? undefined : "nowrap", overflow: isMobile ? undefined : "hidden", textOverflow: isMobile ? undefined : "ellipsis" }}>· Pacchetto: {i.pacchetto_kit}</span>}
                       {dermografoAcquistato(i) && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
                       {i.note && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                     </div>
                   </div>
-                  <span style={{ fontSize: isMobile ? 13.5 : 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: isMobile ? 10 : 12, marginLeft: "auto" }}>
+                  <span style={{ fontSize: isMobile ? 13.5 : 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: isMobile ? 10 : 12, marginLeft: "auto", flexShrink: 0 }}>
                     {i.telefono && (
                       <>
                         <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
