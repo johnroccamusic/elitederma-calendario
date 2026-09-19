@@ -47619,8 +47619,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       // accanto alla riga — perche' "fixed" non sa niente di quanto si e'
       // scorso. Qui si somma lo scorrimento e la scheda resta appesa alla
       // riga, sempre.
-      const base = rifElenco.current?.getBoundingClientRect().top ?? 0;
-      setSchedaAncorata({ top: Math.max(0, rect.top - base), prodottoId: p.id });
+      // Il bordo alto della riga COSI' COM'E' A SCHERMO, e basta.
+      //
+      // Prima lo calcolavo rispetto alla cima dell'elenco, per farla
+      // restare attaccata anche scorrendo. Ma quel conto dipende da quanto
+      // si e' scorso e da chi sono i contenitori intorno, e sbagliava di
+      // un pezzo fisso: la scheda usciva parecchio piu' in basso della
+      // riga. Ancorata allo schermo non c'e' niente da calcolare —
+      // il bordo della scheda e' il bordo della riga.
+      setSchedaAncorata({ top: Math.round(rect.top), prodottoId: p.id });
     } else {
       setSchedaAncorata(null);
       if (vistaProdotti !== "categorie") setVistaPrimaDellaScheda(vistaProdotti);
@@ -48526,7 +48533,17 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           // tabella, a destra della colonna dei nomi — cosi' il prodotto
           // cliccato resta visibile a sinistra mentre lo si modifica.
           const cornice = appesa
-            ? { ...cardStyle, padding: isMobile ? 12 : 16, margin: 0, position: "absolute", top: schedaAncorata.top, left: isMobile ? 8 : 300, right: isMobile ? 8 : "auto", width: isMobile ? "auto" : 640, maxWidth: "calc(100vw - 32px)", zIndex: 2600, border: `2px solid ${NAVY}`, borderTopLeftRadius: 0, boxShadow: "0 22px 60px -14px rgba(14,27,51,0.45)" }
+            ? {
+                ...cardStyle, padding: isMobile ? 12 : 16, margin: 0,
+                position: "fixed", top: schedaAncorata.top,
+                left: isMobile ? 8 : 300, right: isMobile ? 8 : "auto",
+                width: isMobile ? "auto" : 640, maxWidth: "calc(100vw - 32px)",
+                // si apre fin dove c'e' posto sotto la riga; se non ne
+                // basta, scorre dentro invece di uscire dallo schermo
+                maxHeight: `calc(100vh - ${schedaAncorata.top + 16}px)`, overflowY: "auto",
+                zIndex: 2600, border: `2px solid ${NAVY}`, borderTopLeftRadius: 0,
+                boxShadow: "0 22px 60px -14px rgba(14,27,51,0.45)",
+              }
             : { ...cardStyle, padding: 14, marginTop: 10, marginBottom: 22, display: vistaProdotti === "categorie" ? "block" : "none" };
           return (
             <>
@@ -61211,6 +61228,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
           </div>
         )}
+        {/* Nella scheda appesa la testata della pagina shop non si disegna
+            proprio: il tasto "Front Office" portava altrove chi stava solo
+            correggendo un prodotto preso dall'elenco del magazzino. */}
+        {!soloScheda && (
         <div style={{ paddingLeft: incorporata ? 0 : 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: incorporata ? "flex-end" : "space-between", gap: 10, flexWrap: "wrap", marginBottom: incorporata ? 12 : 18 }}>
           {!incorporata && (
           <div>
@@ -61229,6 +61250,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             </Button>
           </div>
         </div>
+        )}
 
         {vista === "frontoffice" ? (
           isMobile ? (
