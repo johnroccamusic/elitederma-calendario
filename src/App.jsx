@@ -29265,9 +29265,14 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               )
             ) : (
               <>
-                <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: spaziIscrizioni.dopoDivider }} />
+                {/* Niente filo sotto il riquadro delle date e niente
+                    vassoio crema sotto i tasti: adesso i tasti hanno un
+                    rilievo loro, e ci stavano dentro come in un cassetto.
+                    Senza il vassoio partono e finiscono esattamente dove
+                    parte e finisce il riquadro qui sopra. */}
+                <div style={{ position: "relative", marginBottom: spaziIscrizioni.dopoDivider }} />
                 {manigliaSpazio("dopoDivider")}
-                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: isMobile ? 5 : 10, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: spaziIscrizioni.dopoSecondari, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 5 : 8 }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: isMobile ? 5 : 10, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: spaziIscrizioni.dopoSecondari }}>
                   {secondariVisibili.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("dopoSecondari")}
