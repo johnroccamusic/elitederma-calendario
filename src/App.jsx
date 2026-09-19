@@ -11,6 +11,7 @@ import {
   GIALLO_MATTINA, ARANCIO_POMERIGGIO, VERDE_TROVATA, ROSSO_DA_TROVARE,
   fontDisplay, stileTitoloPagina, fontBody, fontHero, fontCondensato,
   inputStyle, campoCompattoStyle, round2, numeroFascia, corpoTestoInFila,
+  FAMIGLIA_STRETTA, GRIGIO_LEGGIBILE,
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import { caricaKitInAula, kitDaAprireAutomaticamente, registraPrelieviDaVendita } from "./rientri/pos";
@@ -20304,21 +20305,32 @@ function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, sc
 // sta chiudendo uno per conto di un altro. La master, sul suo POS,
 // continua a vedere la lista di sempre — il margine di un prodotto non
 // e' una cosa che le serve mentre incassa.
-function TabellaContoCarrello({ conto, minWidth = 460 }) {
-  const cella = { ...fontBody, fontSize: 11.5, color: NAVY, padding: "4px 0", whiteSpace: "nowrap" };
-  const intest = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, padding: "0 0 4px", whiteSpace: "nowrap" };
+function TabellaContoCarrello({ conto, minWidth = 460, grigio = MUTED, stretto = false }) {
+  // Sul telefono il carattere si stringe e il grigio si scurisce: sono
+  // sette colonne su una larghezza da pollice, e con le misure del
+  // computer si leggevano una sopra l'altra.
+  const famiglia = stretto ? { fontFamily: FAMIGLIA_STRETTA } : {};
+  // Le colonne dei numeri respirano a sinistra: senza, "AL PUBBLICO",
+  // "MARGINE" e "SCONTO" si toccavano e sembravano una parola sola —
+  // e sotto, la quantita' si incollava al prezzo ("425,00 €" per
+  // 4 pezzi da 25,00).
+  const aria = stretto ? 7 : 10;
+  const cella = { ...fontBody, ...famiglia, fontSize: stretto ? 12 : 11.5, color: NAVY, padding: "4px 0", whiteSpace: "nowrap" };
+  const cellaNum = { ...cella, textAlign: "right", paddingLeft: aria };
+  const intest = { ...fontBody, ...famiglia, fontSize: stretto ? 10 : 9.5, fontWeight: 700, color: grigio, textTransform: "uppercase", letterSpacing: stretto ? 0.2 : 0.4, padding: "0 0 4px", whiteSpace: "nowrap" };
+  const intestNum = { ...intest, textAlign: "right", paddingLeft: aria };
   return (
     <div style={{ overflowX: "auto", marginTop: 4 }}>
       <table style={{ borderCollapse: "collapse", width: "100%", minWidth }}>
         <thead>
           <tr>
             <th style={{ ...intest, textAlign: "left" }}>Prodotto</th>
-            <th style={{ ...intest, textAlign: "right" }}>Qtà</th>
-            <th style={{ ...intest, textAlign: "right" }}>Al pubblico</th>
-            <th style={{ ...intest, textAlign: "right" }}>Margine</th>
-            <th style={{ ...intest, textAlign: "right" }}>Sconto</th>
-            <th style={{ ...intest, textAlign: "right" }}>Pagato</th>
-            <th style={{ ...intest, textAlign: "right" }}>Punti</th>
+            <th style={intestNum}>Qtà</th>
+            <th style={intestNum}>Al pubblico</th>
+            <th style={intestNum}>Margine</th>
+            <th style={intestNum}>Sconto</th>
+            <th style={intestNum}>Pagato</th>
+            <th style={intestNum}>Punti</th>
           </tr>
         </thead>
         <tbody>
@@ -20326,27 +20338,27 @@ function TabellaContoCarrello({ conto, minWidth = 460 }) {
             <tr key={i} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
               <td style={{ ...cella, whiteSpace: "normal", paddingRight: 8 }}>
                 {d.nome}
-                {d.sku ? <span style={{ color: MUTED }}> · {d.sku}</span> : null}
+                {d.sku ? <span style={{ color: grigio }}> · {d.sku}</span> : null}
               </td>
-              <td style={{ ...cella, textAlign: "right" }}>{d.quantita}</td>
-              <td style={{ ...cella, textAlign: "right" }}>
+              <td style={cellaNum}>{d.quantita}</td>
+              <td style={cellaNum}>
                 {fmtEuroErp2(d.unitario)}
-                {d.quantita > 1 && <span style={{ color: MUTED }}> · {fmtEuroErp2(d.lordo)}</span>}
+                {d.quantita > 1 && <span style={{ color: grigio }}> · {fmtEuroErp2(d.lordo)}</span>}
               </td>
-              <td style={{ ...cella, textAlign: "right", color: d.margine == null ? "#C0392B" : MUTED }}>
+              <td style={{ ...cellaNum, color: d.margine == null ? "#C0392B" : grigio }}>
                 {d.margine == null ? "sconosciuto" : fmtPctErp2(d.margine)}
               </td>
-              <td style={{ ...cella, textAlign: "right", color: d.sconto > 0 ? "#C0392B" : MUTED }}>
+              <td style={{ ...cellaNum, color: d.sconto > 0 ? "#C0392B" : grigio }}>
                 {d.sconto > 0 ? `− ${fmtEuroErp2(d.sconto)}` : "—"}
-                {d.scontoPct > 0 && <span style={{ color: MUTED }}> · {fmtPctErp2(d.scontoPct)}</span>}
+                {d.scontoPct > 0 && <span style={{ color: grigio }}> · {fmtPctErp2(d.scontoPct)}</span>}
               </td>
-              <td style={{ ...cella, textAlign: "right", fontWeight: 700 }}>
+              <td style={{ ...cellaNum, fontWeight: 700 }}>
                 {fmtEuroErp2(d.pagatoUnitario)}
-                {d.quantita > 1 && <span style={{ color: MUTED, fontWeight: 400 }}> · {fmtEuroErp2(round2(d.lordo - d.sconto))}</span>}
+                {d.quantita > 1 && <span style={{ color: grigio, fontWeight: 400 }}> · {fmtEuroErp2(round2(d.lordo - d.sconto))}</span>}
               </td>
-              <td style={{ ...cella, textAlign: "right", color: d.punti ? GOLD : MUTED, fontWeight: d.punti ? 700 : 400 }}>
+              <td style={{ ...cellaNum, color: d.punti ? GOLD : grigio, fontWeight: d.punti ? 700 : 400 }}>
                 {d.punti == null ? "—" : fmtPunti(d.punti)}
-                {d.teorici != null && d.teorici !== d.punti && <span style={{ color: MUTED, fontWeight: 400 }}> / {fmtPunti(d.teorici)}</span>}
+                {d.teorici != null && d.teorici !== d.punti && <span style={{ color: grigio, fontWeight: 400 }}> / {fmtPunti(d.teorici)}</span>}
               </td>
             </tr>
           ))}
@@ -20358,7 +20370,7 @@ function TabellaContoCarrello({ conto, minWidth = 460 }) {
           senza margine non prend{conto.senzaMargine === 1 ? "e" : "ono"} sconto e non fa{conto.senzaMargine === 1 ? "" : "nno"} punti.
         </div>
       )}
-      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 6, lineHeight: 1.4 }}>
+      <div style={{ ...fontBody, ...famiglia, fontSize: stretto ? 11 : 10.5, color: grigio, marginTop: 6, lineHeight: 1.4 }}>
         Sconto e punti sono ricalcolati adesso, con le regole di oggi: il carrello parcheggiato non li congela.
       </div>
     </div>
@@ -56736,6 +56748,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // corpo del carrello (righe, sconto, totali, pagamento, note, conferma):
   // identico sia nel pannello laterale desktop sia nel foglio mobile, solo
   // l'involucro intorno cambia
+  // Nel carrello sul telefono il grigio spento diventa leggibile: stessa
+  // tinta, piu' cupa. Sul computer resta quello di sempre — la' lo schermo
+  // e' grande, il testo piu' grosso e la luce quella di una stanza.
+  const grigioCarrello = isMobile ? GRIGIO_LEGGIBILE : MUTED;
   const contenutoCarrelloCorpo = (
     <>
       {/* Quando chi amministra sta chiudendo il carrello di un altro, il
@@ -56777,7 +56793,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: simulazione ? "#8A6D1D" : NAVY, display: "block" }}>
               {simulazione ? "MODALITÀ SIMULAZIONE ATTIVA" : "Modalità simulazione"}
             </span>
-            <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2, lineHeight: 1.4 }}>
+            <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: grigioCarrello, marginTop: 2, lineHeight: 1.4 }}>
               {simulazione
                 ? "Quello che vendi ora è una prova: nessun incasso nei conti, nessun pezzo scaricato dal magazzino. Si cancella da Logistica, senza lasciare traccia."
                 : "Solo per chi programma: registra vendite di prova che non toccano né i conti né il magazzino."}
@@ -56828,7 +56844,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
                   Vendita di {toTitleCase(masterDelCorso.nome)}
                 </span>
-                <span style={{ ...fontBody, fontSize: 12, color: MUTED, display: "block", lineHeight: 1.35, marginTop: 2 }}>
+                <span style={{ ...fontBody, fontSize: 12, color: grigioCarrello, display: "block", lineHeight: 1.35, marginTop: 2 }}>
                   {attribuisciAllaMaster
                     ? "Punti e provvigione vanno a lei; resta scritto che l’hai battuta tu."
                     : "La vendita resta legata al corso, ma non conta come vendita della master."}
@@ -56842,7 +56858,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           {corsoPosSel && couponAttivo && couponAttivo.corsi_date_id === corsoPosSel.id && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
               Sconto del corso applicato: −{fmtPctErp2(percentualeErogata)}
-              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
               {fasceContantiInUso && (
                 <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{couponPersonaleAttivo && metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
               )}
@@ -56862,7 +56878,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <input type="checkbox" checked={prelevatoDaiKit} onChange={(e) => setPrelevatoDaiKit(e.target.checked)} style={{ marginTop: 3 }} />
               <span>
                 Prelevato dai kit in loco
-                <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>
+                <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: grigioCarrello, marginTop: 1 }}>
                   Il pezzo è stato preso da un kit presente in aula: il magazzino non si scarica di nuovo, il pezzo esce dall'atteso di rientro.
                 </span>
               </span>
@@ -56880,7 +56896,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <span style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Il carrello è vuoto</span>
             <span style={{ flex: 1, height: 1, background: CREAM_BORDER }} />
           </div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: grigioCarrello }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
         </div>
       ) : (
         <div style={{ marginBottom: isMobile ? 8 : 16 }}>
@@ -56889,12 +56905,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 10, padding: isMobile ? "6px 0" : "10px 0" }}>
               {isMobile && (
                 <div style={{ width: 32, height: 32, borderRadius: 6, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {immagineUrlPerProdotto[r.prodottoId] ? <img src={immagineUrlPerProdotto[r.prodottoId]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={13} color={MUTED} />}
+                  {immagineUrlPerProdotto[r.prodottoId] ? <img src={immagineUrlPerProdotto[r.prodottoId]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={13} color={grigioCarrello} />}
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</div>
-                <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: MUTED }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
                 <button onClick={() => decrementaRiga(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
@@ -56911,7 +56927,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 magazzino, e chiederlo dopo non si puo' piu'. */}
             {disponibileNeiKit(r.prodottoId)?.residuo > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", padding: isMobile ? "0 0 7px" : "0 0 10px" }}>
-                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Da dove esce</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.4 }}>Da dove esce</span>
                 {[
                   { v: "kit", testo: "Dal kit qui", colore: "#2E7D32", sfondo: "#E9F6EC" },
                   { v: "magazzino", testo: "Lo spediamo", colore: NAVY, sfondo: "#fff" },
@@ -56933,7 +56949,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 {dalKitPerProdotto[r.prodottoId] === undefined && (
                   <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: "#C0392B" }}>da dire prima di incassare</span>
                 )}
-                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, color: MUTED }}>
+                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, color: grigioCarrello }}>
                   ne {disponibileNeiKit(r.prodottoId).residuo === 1 ? "resta 1" : `restano ${disponibileNeiKit(r.prodottoId).residuo}`} nei kit
                 </span>
               </div>
@@ -56951,10 +56967,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           margine di un prodotto non le serve mentre incassa. */}
       {perContoDiAltri && carrello.length > 0 && (
         <div style={{ border: `1px solid ${CREAM_BORDER}`, background: "#FBF9F4", borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: isMobile ? 10 : 14 }}>
-          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
+          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
             Dettaglio per chi amministra
           </div>
-          <TabellaContoCarrello conto={contoCarrelloVivo} minWidth={isMobile ? 420 : 460} />
+          <TabellaContoCarrello conto={contoCarrelloVivo} minWidth={isMobile ? 420 : 460} grigio={grigioCarrello} stretto={isMobile} />
         </div>
       )}
 
@@ -57033,7 +57049,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     {/* quanto durera': un codice a uso singolo sparisce dopo
                         questo carrello, e saperlo prima evita di cercarlo
                         alla vendita dopo credendo che sia sparito per errore */}
-                    <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, marginTop: 2 }}>
+                    <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: grigioCarrello, marginTop: 2 }}>
                       {couponAttivo.utilizzi_max === 1
                         ? "Uso singolo: dopo questa vendita si toglie da solo."
                         : couponAttivo.valido_fino_a
@@ -57049,7 +57065,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         )}
         {(couponNum > 0 || scontoNum > 0) && (
-          <div style={{ flexBasis: "100%", ...fontBody, fontSize: 11.5, color: MUTED }}>
+          <div style={{ flexBasis: "100%", ...fontBody, fontSize: 11.5, color: grigioCarrello }}>
             {couponNum > 0 ? "Svuota il campo Coupon per inserire uno sconto manuale." : "Svuota lo sconto vendita per usare un coupon."}
           </div>
         )}
@@ -57081,7 +57097,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <div style={{ flex: 1, minWidth: 0 }}>
           {[["Subtotale (IVA incl.)", subtotale], ["Imponibile", imponibile], ["IVA 22%", iva]].map(([etichetta, valore], i) => (
             <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, ...fontBody, fontSize: isMobile ? 12 : 13, lineHeight: 1.15, color: NAVY, marginBottom: isMobile && i === 2 ? 0 : (isMobile ? 4 : 5) }}>
-              <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: MUTED, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700 }}>{etichetta}</span>
+              <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: grigioCarrello, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700 }}>{etichetta}</span>
               <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{fmtEuroErp2(valore)}</span>
             </div>
           ))}
@@ -57092,7 +57108,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", minWidth: 120 }}>
               <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.25 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
               <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, marginTop: 4 }}>{fmtEuroErp2(totaleDaIncassare)}</span>
-              {speseSpedizione > 0 && <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>di cui spedizione {fmtEuroErp2(speseSpedizione)}</span>}
+              {speseSpedizione > 0 && <span style={{ ...fontBody, fontSize: 10, color: grigioCarrello }}>di cui spedizione {fmtEuroErp2(speseSpedizione)}</span>}
               {puntiCarrello && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginTop: 3 }}>Punti maturati {fmtPunti(puntiCarrello.maturati)}</span>}
             </div>
           </>
@@ -57101,7 +57117,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ height: 1, background: CREAM_BORDER, margin: "10px 0" }} />
             {speseSpedizione > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Spedizione</span>
+                <span style={{ ...fontBody, fontSize: 12.5, color: grigioCarrello }}>Spedizione</span>
                 <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(speseSpedizione)}</span>
               </div>
             )}
@@ -57111,7 +57127,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             </div>
             {puntiCarrello && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 6 }} title={`Punti teorici ${fmtPunti(puntiCarrello.teorici)}: cedibile meno sicurezza, ridotti dello sconto dato all'allieva. Sono punti interi, non la quota della master`}>
-                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Punti maturati con questo carrello</span>
+                <span style={{ ...fontBody, fontSize: 12, color: grigioCarrello }}>Punti maturati con questo carrello</span>
                 <span style={{ ...fontBody, fontSize: 15, fontWeight: 800, color: GOLD }}>{fmtPunti(puntiCarrello.maturati)}</span>
               </div>
             )}
@@ -57191,7 +57207,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               Completare i dati cliente: {campiClienteMancanti.join(", ")}.
             </div>
           )}
-          <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Genera un ordine di spedizione visibile in Logistica prodotti → Ordini in arrivo.</div>
+          <div style={{ ...fontBody, fontSize: 11, color: grigioCarrello, marginTop: 6 }}>Genera un ordine di spedizione visibile in Logistica prodotti → Ordini in arrivo.</div>
         </div>
       )}
 
@@ -57251,7 +57267,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               Per la fattura manca: {campiFatturaMancanti.join(", ")}.
             </div>
           )}
-          <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: grigioCarrello, marginTop: 6 }}>
             Alla conferma il cliente finisce in anagrafica: la prossima volta lo scegli dalla tendina qui sopra.
           </div>
         </div>
@@ -57299,7 +57315,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               style={{ ...inputStyle, background: BG, resize: "vertical", paddingRight: 34, ...(omaggioAttivo && !note.trim() ? { border: "1px solid #C0392B" } : {}) }}
               placeholder={omaggioAttivo ? "Perché questo prodotto viene regalato?" : "Aggiungi note sulla vendita…"}
             />
-            <span style={{ position: "absolute", right: 10, bottom: 10, color: MUTED, pointerEvents: "none" }}><IconaMatitaNota size={15} /></span>
+            <span style={{ position: "absolute", right: 10, bottom: 10, color: grigioCarrello, pointerEvents: "none" }}><IconaMatitaNota size={15} /></span>
           </div>
         </div>
       )}
@@ -57362,8 +57378,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         );
       })()}
-      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-        <IconaScudoSicurezza size={14} color={MUTED} />
+      <div style={{ ...fontBody, fontSize: 11.5, color: grigioCarrello, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+        <IconaScudoSicurezza size={14} color={grigioCarrello} />
         La vendita aggiornerà automaticamente le giacenze di magazzino.
       </div>
     </>
@@ -57648,7 +57664,23 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     </button>
                   )}
                 </div>
-                {contenutoCarrelloCorpo}
+                {/* Il carattere stretto, e solo qui dentro.
+                    Ogni riga del carrello porta nome, quantita', prezzo,
+                    margine, sconto e punti su una larghezza da pollice: col
+                    carattere di tutta l'app le colonne si toccano.
+
+                    Va per forza da un foglio di stile con !important: nel
+                    carrello ogni pezzo si scrive la sua famiglia nello
+                    style della riga (fontBody, fontDisplay), e uno stile
+                    scritto sulla riga batte qualunque cosa eredita dal
+                    contenitore. Non e' un'eccezione elegante, e' l'unico
+                    modo di dirlo una volta invece che in sessanta punti.
+
+                    Sul computer non si applica: la' lo schermo e' largo,
+                    le colonne respirano e il carattere resta quello di
+                    tutta l'app. */}
+                <style>{`.pos-carrello-stretto, .pos-carrello-stretto * { font-family: ${FAMIGLIA_STRETTA} !important; }`}</style>
+                <div className="pos-carrello-stretto">{contenutoCarrelloCorpo}</div>
               </div>
             </div>
           </div>

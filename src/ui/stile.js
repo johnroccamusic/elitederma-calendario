@@ -44,6 +44,17 @@ export const fontHero = { fontFamily: "'Playfair Display',serif", fontWeight: 70
 // vicina, usata qui in grassetto bianco per i nomi dei corsi sulle barre
 // del calendario
 export const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, color: "#fff" };
+// La famiglia stretta del carrello sul telefono. Nel carrello ogni riga
+// porta nome, quantita', prezzo, margine, sconto e punti su una larghezza
+// da pollice: con un carattere normale le colonne si toccano e
+// "AL PUBBLICO MARGINE SCONTO" si legge come una parola sola. Sofia Sans
+// Condensed e' la riserva perche' e' gia' scaricata da sempre.
+export const FAMIGLIA_STRETTA = "'Cabin Condensed','Sofia Sans Condensed','Roboto Condensed',sans-serif";
+// Il grigio spento del carrello sul telefono. MUTED (#8B8FA3) su bianco
+// sta sotto il rapporto di contrasto che serve a un testo da leggere, e
+// sul telefono, con la luce vera e il carattere piccolo, sparisce: SKU,
+// prezzi barrati e percentuali diventavano ombre. Stessa tinta, piu' cupa.
+export const GRIGIO_LEGGIBILE = "#5C6273";
 
 export const inputStyle = {
   ...fontBody,
