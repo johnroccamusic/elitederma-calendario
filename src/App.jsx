@@ -12480,7 +12480,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
             <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Consumabili</div>
               <div style={labelStyleInv}>Dischetti, rotoli, guanti… con il livello di utilizzo rimasto.</div>
-              <div ref={rifElenco} style={{ position: "relative" }}>
+              <div style={{ position: "relative" }}>
                 <CampoRicerca value={ricercaConsumabile} onChange={(e) => setRicercaConsumabile(e.target.value)} placeholder="Cerca prodotto…" />
                 {risultatiConsumabile.length > 0 && (
                   <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
@@ -48518,7 +48518,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             dietro modifiche che nessuno vede. */}
         {/* Il riferimento della scheda appesa: la sua posizione si misura
             da qui, cosi' resta attaccata alla riga anche scorrendo la pagina */}
-        <div style={{ position: "relative" }}>
+        <div ref={rifElenco} style={{ position: "relative" }}>
         {categorieMontate && (() => {
           const appesa = !!schedaAncorata && vistaProdotti === "elenco";
           // Tutta la scheda, aperta: niente altezza massima che la
