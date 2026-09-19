@@ -13787,8 +13787,163 @@ function PaginaCrmModelle({ corsi, location, corsiDate, iscritti }) {
 // (Dashboard | Calendario corsi | Archivio corsi | CRM modelle). Cliccando una
 // data si entra direttamente nella scheda "Assegna modelle" di
 // quell'edizione (onApriData qui è apriDataModelle, non apriData)
+// ---------- Provvigioni da avere per chi cerca le modelle ----------
+//
+// Quanto deve incassare Andrea, corso per corso. E' lo stesso numero della
+// riga "Commissione ricerca modelle" del Riepilogo Amministrativo — non un
+// conto parallelo: la formula sta scritta una volta sola, qui sotto e in
+// calcolaRigheSpeseCorso, e le due devono dire la stessa cifra.
+//
+// La regola, che e' la cosa che conta: si viene pagati per le modelle
+// TROVATE, non per quelle richieste. Il valore di una modella e' la quota
+// di quell'allievo divisa per quante ne ha chieste, cosi' un prezzo
+// speciale (150 per tre invece di 180) resta rispettato. Meta' di quel
+// valore e' la provvigione.
+function provvigioneModelleDi(listaIscritti) {
+  let reperiteTot = 0, chiesteTot = 0, quota = 0;
+  (listaIscritti || []).forEach((i) => {
+    const chieste = i.numero_modelle || 0;
+    if (!chieste) return;
+    chiesteTot += chieste;
+    const reperite = Math.min(modelleReperiteDi(i), chieste);
+    if (!reperite) return;
+    reperiteTot += reperite;
+    quota += reperite * (modelleTotaleDi(i) / chieste) * 0.5;
+  });
+  return { reperite: reperiteTot, chieste: chiesteTot, provvigione: round2(quota) };
+}
+
+function PannelloProvvigioniModelle({ corsi, location, corsiDate, iscritti, spese = [], isMobile, CampoRicerca }) {
+  const [ricerca, setRicerca] = useState("");
+  const [soloDaPagare, setSoloDaPagare] = useState(false);
+  const nomeCorso = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c.nome])), [corsi]);
+  const nomeSede = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l.nome])), [location]);
+  // Le chiavi con cui una provvigione risulta gia' registrata come spesa:
+  // "modelle_<classe>" quando si paga dal Riepilogo, "cash_modelle_<classe>"
+  // quando esce dalla busta del corso. Se c'e' una delle due, e' pagata.
+  const pagate = useMemo(() => {
+    const dentro = new Set();
+    (spese || []).forEach((sp) => {
+      const k = String(sp.origine_scadenziario_chiave || "");
+      if (k.startsWith("modelle_")) dentro.add(k.slice(8));
+      else if (k.startsWith("cash_modelle_")) dentro.add(k.slice(13));
+    });
+    return dentro;
+  }, [spese]);
+
+  const righe = useMemo(() => {
+    const perClasse = {};
+    (iscritti || []).forEach((i) => { (perClasse[i.corso_data_id] = perClasse[i.corso_data_id] || []).push(i); });
+    return (corsiDate || [])
+      .map((cd) => {
+        const { reperite, chieste, provvigione } = provvigioneModelleDi(perClasse[cd.id] || []);
+        if (provvigione <= 0) return null;
+        return {
+          cd, reperite, chieste, provvigione,
+          corso: nomeCorso[cd.corso_id] || "—",
+          sede: nomeSede[cd.location_id] ? toTitleCase(nomeSede[cd.location_id]) : "—",
+          pagata: pagate.has(cd.id),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(b.cd.data_inizio || "").localeCompare(String(a.cd.data_inizio || "")));
+  }, [corsiDate, iscritti, nomeCorso, nomeSede, pagate]);
+
+  const parole = ricerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const viste = righe
+    .filter((r) => !soloDaPagare || !r.pagata)
+    .filter((r) => parole.length === 0 || parole.every((q) => `${r.corso} ${r.sede} ${fmtData(r.cd.data_inizio)}`.toLowerCase().includes(q)));
+
+  const daPagare = righe.filter((r) => !r.pagata);
+  const totaleDaPagare = round2(daPagare.reduce((s, r) => s + r.provvigione, 0));
+  const totalePagate = round2(righe.filter((r) => r.pagata).reduce((s, r) => s + r.provvigione, 0));
+  const modelleTot = daPagare.reduce((s, r) => s + r.reperite, 0);
+
+  // la griglia: una sola, per l'intestazione e per tutte le righe, o le
+  // cifre non cadono incolonnate
+  const GRIGLIA = isMobile ? "76px minmax(0,1fr) 60px 78px" : "108px minmax(0,1fr) 150px 92px 116px";
+  const intest = { ...fontBody, fontSize: isMobile ? 8.5 : 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" };
+
+  return (
+    <div>
+      <RigaSegnalatoriInLinea isMobile={isMobile} perRigaTelefono={2} style={{ marginBottom: isMobile ? 28 : 44 }} riquadri={[
+        { chiave: "daavere", etichetta: "Da incassare", valore: fmtEuroErp(totaleDaPagare), unita: `su ${daPagare.length} cors${daPagare.length === 1 ? "o" : "i"}`, colore: "#B8860B", disco: "#B8860B", sfondo: "#FBF3E0", Icona: IconaAvvisoMonete },
+        { chiave: "modelle", etichetta: "Modelle procurate", valore: modelleTot, unita: "non ancora pagate", colore: "#6E7391", disco: "#6E7391", sfondo: "#FFFFFF", Icona: IconaSegnalatorePersona },
+        { chiave: "incassato", etichetta: "Già incassato", valore: fmtEuroErp(totalePagate), colore: "#2E7D32", disco: "#2E7D32", sfondo: "#EAF4EA", Icona: IconaAvvisoSpunta },
+      ]} />
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+          {CampoRicerca
+            ? <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca corso, città, data…" />
+            : <input value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca corso, città, data…" style={{ ...fontBody, width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, fontSize: 14 }} />}
+        </div>
+        <button
+          type="button" onClick={() => setSoloDaPagare((x) => !x)}
+          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, flexShrink: 0, color: soloDaPagare ? "#fff" : NAVY, background: soloDaPagare ? NAVY : "#fff", border: `1px solid ${soloDaPagare ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "9px 14px", cursor: "pointer" }}
+        >
+          Solo da incassare{daPagare.length ? ` (${daPagare.length})` : ""}
+        </button>
+      </div>
+
+      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflowX: "auto", background: "#fff" }}>
+        <div style={{ display: "grid", gridTemplateColumns: GRIGLIA, gap: isMobile ? 6 : 10, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, padding: isMobile ? "8px 10px" : "9px 14px", alignItems: "center" }}>
+          <div style={intest}>Data</div>
+          <div style={intest}>Corso</div>
+          {!isMobile && <div style={intest}>Località</div>}
+          <div style={{ ...intest, textAlign: "right" }}>Modelle</div>
+          <div style={{ ...intest, textAlign: "right" }}>Provvigione</div>
+        </div>
+        {viste.length === 0 && (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: 18, textAlign: "center" }}>
+            {righe.length === 0 ? "Nessuna provvigione: non risultano modelle trovate." : "Nessun corso con queste parole."}
+          </div>
+        )}
+        {viste.map((r) => (
+          <div key={r.cd.id} style={{ display: "grid", gridTemplateColumns: GRIGLIA, gap: isMobile ? 6 : 10, alignItems: "center", padding: isMobile ? "9px 10px" : "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: NAVY, fontWeight: 700, whiteSpace: "nowrap" }}>{fmtData(r.cd.data_inizio)}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.corso}>{r.corso}</div>
+              {isMobile && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{r.sede}</div>}
+            </div>
+            {!isMobile && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.sede}</div>}
+            {/* trovate su richieste: "3 / 8" dice piu' di "3", perche' la
+                provvigione matura solo su quelle trovate */}
+            <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, color: NAVY, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {r.reperite}<span style={{ color: MUTED }}> / {r.chieste}</span>
+            </div>
+            <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+              <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 14, fontWeight: 700, color: r.pagata ? MUTED : NAVY, fontVariantNumeric: "tabular-nums", textDecoration: r.pagata ? "line-through" : "none" }}>
+                {fmtEuroErp2(r.provvigione)}
+              </div>
+              {r.pagata && <div style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 0.4 }}>Pagata</div>}
+            </div>
+          </div>
+        ))}
+        {viste.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: GRIGLIA, gap: isMobile ? 6 : 10, alignItems: "center", padding: isMobile ? "10px" : "12px 14px", background: "#FBF9F4" }}>
+            <div style={{ ...intest, gridColumn: isMobile ? "1 / 3" : "1 / 4" }}>Totale da incassare</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, color: MUTED, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+              {viste.filter((r) => !r.pagata).reduce((s, r) => s + r.reperite, 0)}
+            </div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {fmtEuroErp2(round2(viste.filter((r) => !r.pagata).reduce((s, r) => s + r.provvigione, 0)))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10, lineHeight: 1.5, maxWidth: 680 }}>
+        La provvigione è metà della quota delle modelle <b style={{ color: NAVY }}>effettivamente trovate</b>, non di quelle richieste:
+        il valore di una modella è la quota dell'allievo divisa per quante ne ha chieste, così i prezzi speciali restano rispettati.
+        È lo stesso numero della riga “Commissione ricerca modelle” nel Riepilogo amministrativo del corso.
+      </div>
+    </div>
+  );
+}
+
 function PaginaGestioneModelle({
-  corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, onBack, apriDataModelle, onApriIscritto,
+  corsi, location, corsiDate, iscritti, master, corsiGiorni, spese = [], ricarica, onBack, apriDataModelle, onApriIscritto,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
   cronologicoHome, setCronologicoHome,
   apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
@@ -13810,6 +13965,7 @@ function PaginaGestioneModelle({
     { chiave: "crm", testo: "CRM modelle" },
     { chiave: "dasistemare", testo: `Da sistemare${quantiDaSistemare > 0 ? ` (${quantiDaSistemare})` : ""}` },
     { chiave: "consensi", testo: "Archivio consensi" },
+    { chiave: "provvigioni", testo: "Provvigioni da avere" },
   ];
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -13850,7 +14006,12 @@ function PaginaGestioneModelle({
         )}
         <div style={{ marginBottom: 20 }} />
 
-        {tabGM === "consensi" ? (
+        {tabGM === "provvigioni" ? (
+          <PannelloProvvigioniModelle
+            corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} spese={spese}
+            isMobile={isMobile} CampoRicerca={CampoRicerca}
+          />
+        ) : tabGM === "consensi" ? (
           <ArchivioConsensi isMobile={isMobile} CampoRicerca={CampoRicerca} />
         ) : tabGM === "dasistemare" ? (
           <PaginaModelleDaSistemare
@@ -66798,7 +66959,7 @@ export default function App() {
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
     dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
-    gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
+    gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
     gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
@@ -68924,6 +69085,7 @@ export default function App() {
       {view === "gestionemodelle" && (
         <PaginaGestioneModelle
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} corsiGiorni={corsiGiorni}
+          spese={spese}
           ricarica={fetchDati} onBack={() => setView("home")} apriDataModelle={apriDataModelle}
           onApriIscritto={apriIscrittoDaModelle}
           filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
