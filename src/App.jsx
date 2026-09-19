@@ -20305,7 +20305,7 @@ function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, sc
 // sta chiudendo uno per conto di un altro. La master, sul suo POS,
 // continua a vedere la lista di sempre — il margine di un prodotto non
 // e' una cosa che le serve mentre incassa.
-function TabellaContoCarrello({ conto, minWidth = 460, grigio = MUTED, stretto = false }) {
+function TabellaContoCarrello({ conto, minWidth = 380, grigio = MUTED, stretto = false }) {
   // Sul telefono il carattere si stringe e il grigio si scurisce: sono
   // sette colonne su una larghezza da pollice, e con le misure del
   // computer si leggevano una sopra l'altra.
@@ -20341,10 +20341,13 @@ function TabellaContoCarrello({ conto, minWidth = 460, grigio = MUTED, stretto =
                 {d.sku ? <span style={{ color: grigio }}> · {d.sku}</span> : null}
               </td>
               <td style={cellaNum}>{d.quantita}</td>
-              <td style={cellaNum}>
-                {fmtEuroErp2(d.unitario)}
-                {d.quantita > 1 && <span style={{ color: grigio }}> · {fmtEuroErp2(d.lordo)}</span>}
-              </td>
+              {/* Il totale della riga, non il prezzo del pezzo. Il prezzo
+                  del pezzo stava qui e poi tornava tre colonne dopo, in
+                  "Pagato": due volte lo stesso numero, e su un telefono
+                  due volte lo stesso numero sono una colonna che non ci
+                  sta. Quanti pezzi lo dice la colonna accanto, e il
+                  prezzo del singolo si ricava dividendo. */}
+              <td style={cellaNum}>{fmtEuroErp2(d.lordo)}</td>
               <td style={{ ...cellaNum, color: d.margine == null ? "#C0392B" : grigio }}>
                 {d.margine == null ? "sconosciuto" : fmtPctErp2(d.margine)}
               </td>
@@ -20352,10 +20355,7 @@ function TabellaContoCarrello({ conto, minWidth = 460, grigio = MUTED, stretto =
                 {d.sconto > 0 ? `− ${fmtEuroErp2(d.sconto)}` : "—"}
                 {d.scontoPct > 0 && <span style={{ color: grigio }}> · {fmtPctErp2(d.scontoPct)}</span>}
               </td>
-              <td style={{ ...cellaNum, fontWeight: 700 }}>
-                {fmtEuroErp2(d.pagatoUnitario)}
-                {d.quantita > 1 && <span style={{ color: grigio, fontWeight: 400 }}> · {fmtEuroErp2(round2(d.lordo - d.sconto))}</span>}
-              </td>
+              <td style={{ ...cellaNum, fontWeight: 700 }}>{fmtEuroErp2(round2(d.lordo - d.sconto))}</td>
               <td style={{ ...cellaNum, color: d.punti ? GOLD : grigio, fontWeight: d.punti ? 700 : 400 }}>
                 {d.punti == null ? "—" : fmtPunti(d.punti)}
                 {d.teorici != null && d.teorici !== d.punti && <span style={{ color: grigio, fontWeight: 400 }}> / {fmtPunti(d.teorici)}</span>}
@@ -56970,7 +56970,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
             Dettaglio per chi amministra
           </div>
-          <TabellaContoCarrello conto={contoCarrelloVivo} minWidth={isMobile ? 420 : 460} grigio={grigioCarrello} stretto={isMobile} />
+          <TabellaContoCarrello conto={contoCarrelloVivo} minWidth={isMobile ? 330 : 420} grigio={grigioCarrello} stretto={isMobile} />
         </div>
       )}
 
