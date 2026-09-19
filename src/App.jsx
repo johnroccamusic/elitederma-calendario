@@ -30775,14 +30775,19 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                         dell'allieva e non sotto al numero */}
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: isMobile ? 6 : 8, rowGap: isMobile ? 0 : undefined, lineHeight: isMobile ? 1.15 : undefined, minWidth: 0 }}>
                       <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
-                      {i.tutor && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
+                      {/* da scrivania tutor e pacchetto prendono la
+                          famiglia stretta (Cabin Condensed) e il grigio
+                          cupo: due righe di servizio accanto a un nome in
+                          grassetto, che devono leggersi senza rubargli il
+                          posto */}
+                      {i.tutor && <span style={{ ...(isMobile ? null : { fontFamily: FAMIGLIA_STRETTA }), fontSize: isMobile ? 13 : 13.5, fontWeight: isMobile ? 400 : 600, color: isMobile ? MUTED : GRIGIO_LEGGIBILE }}>· Tutor: {i.tutor}</span>}
                       {/* dal telefono il pacchetto va SEMPRE a capo, sotto
                           al nome: a seconda di quanto e' lungo il nome
                           finiva a volte in fondo alla prima riga e a volte
                           sotto, e le schede non erano piu' uguali fra loro.
                           Un elemento largo quanto la riga forza il capo. */}
                       {isMobile && i.pacchetto_kit && <span style={{ flexBasis: "100%", height: 0 }} />}
-                      {i.pacchetto_kit && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: isMobile ? GRIGIO_LEGGIBILE : MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
+                      {i.pacchetto_kit && <span style={{ ...(isMobile ? null : { fontFamily: FAMIGLIA_STRETTA }), fontSize: isMobile ? 13 : 13.5, fontWeight: isMobile ? 400 : 600, color: GRIGIO_LEGGIBILE }}>· Pacchetto: {i.pacchetto_kit}</span>}
                       {dermografoAcquistato(i) && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
                       {i.note && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                     </div>
