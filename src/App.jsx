@@ -47144,8 +47144,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
             style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
           />
           <span
-            title={generaSingoli(p) ? "Si apre: da questa confezione si ricavano i pezzi singoli" : undefined}
-            style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis", color: generaSingoli(p) ? ARANCIO_GENERA_SINGOLI : undefined }}
+            title={eSfuso(p) ? `Pezzo singolo${p.boxCollegato ? `: esce da "${p.boxCollegato.nome}"` : ""}` : undefined}
+            style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis", color: eSfuso(p) ? ARANCIO_SFUSI : undefined }}
           >{p.nome}</span>
         </td>
     ),
@@ -48394,9 +48394,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                   title={acceso ? "Torna a vedere tutti i prodotti" : "Mostra solo le confezioni da aprire e i pezzi singoli che ne escono"}
                   style={{
                     display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600,
-                    color: acceso ? "#fff" : ARANCIO_GENERA_SINGOLI,
-                    background: acceso ? ARANCIO_GENERA_SINGOLI : "#fff",
-                    border: `1px solid ${acceso ? ARANCIO_GENERA_SINGOLI : "#E3C9AC"}`,
+                    color: acceso ? "#fff" : ARANCIO_SFUSI,
+                    background: acceso ? ARANCIO_SFUSI : "#fff",
+                    border: `1px solid ${acceso ? ARANCIO_SFUSI : "#E3C9AC"}`,
                     borderRadius: 18, padding: "8px 13px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
                   }}
                 >
@@ -49074,14 +49074,22 @@ function bundleVirtuale(p) {
 // "Semplice che genera singoli": il pacco che si compra e si vende
 // intero e che, aperto, diventa pezzi sfusi. E' la stessa condizione che
 // la scheda prodotto chiama con quel nome nella tendina.
-//
-// Negli elenchi di magazzino il nome di questi prodotti si scrive in
-// arancio scuro: in mezzo a duecento righe uguali serve riconoscere al
-// volo quali si possono aprire, senza aprire la scheda di ognuno.
 function generaSingoli(p) {
   return p?.tipo_prodotto === "semplice" && !!p?.bundle_con_giacenza_fisica;
 }
-const ARANCIO_GENERA_SINGOLI = "#B4530A";
+// Il pezzo singolo che esce da una confezione. Negli elenchi di
+// magazzino il suo nome si scrive in arancio scuro: in mezzo a duecento
+// righe uguali lo sfuso va riconosciuto al volo, perche' e' l'unica
+// giacenza che non si riordina dal fornitore — si rifa' aprendo un pacco.
+//
+// Due modi di esserlo, e valgono tutti e due: la natura dichiarata
+// "Sfuso", oppure il fatto che una confezione lo indichi come proprio
+// pezzo singolo. Il secondo prende anche quelli rimasti "semplice" da
+// prima che la natura esistesse.
+function eSfuso(p) {
+  return p?.tipo_prodotto === "sfuso" || !!p?.boxCollegato;
+}
+const ARANCIO_SFUSI = "#B4530A";
 // avvisi azionabili del magazzino, in ordine di gravità: giacenze rimaste
 // negative (da sistemare), sfusi sotto soglia con pacchi sigillati da
 // aprire, box/sfusi da riordinare dal fornitore. I prodotti "normali"
