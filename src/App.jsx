@@ -59929,7 +59929,13 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // modificabili a mano
   function cambiaTipo(nuovo) {
     if (nuovo === "bundle") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: true, costo: "" });
-    else if (nuovo === "componente") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: false });
+    // "sfuso" e "componente" vivono nello stesso modo: hanno una giacenza
+    // loro, non si vendono singolarmente. Cambia da dove ARRIVANO — lo
+    // sfuso nasce aprendo una confezione (una scatola da 20 aghi che
+    // diventa 20 pezzi) — e tenerli distinti serve a sapere, guardando
+    // l'anagrafica, quali pezzi esistono solo perche' qualcuno ha aperto
+    // un pacco.
+    else if (nuovo === "componente" || nuovo === "sfuso") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: false });
     else if (nuovo === "vetrina") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: false, costo: "" });
     else aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true });
   }
@@ -60475,6 +60481,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           <option value="semplice">Semplice — prodotto normale, si vende e si scarica da solo</option>
           <option value="bundle">Bundle — kit venduto come un pezzo unico, composto da altri prodotti che vengono scaricati insieme</option>
           <option value="componente">Componente — fa parte di un bundle, non si vende singolarmente</option>
+          <option value="sfuso">Sfuso — pezzo singolo ricavato aprendo una confezione, usato come componente nei kit</option>
           <option value="vetrina">Vetrina — prodotto padre mostrato sullo shop, la vendita avviene sulle sue varianti</option>
           <option value="variante">Variante — una versione specifica di un prodotto vetrina (es. una taglia), è questa che si vende e si scarica</option>
         </select>
@@ -60532,7 +60539,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                     <TendinaRicerca
                       valore={prodottoForm.prodottoSfusoId}
                       opzioni={prodottiScelta
-                        .filter((pp) => pp.tipo_prodotto === "componente" || pp.tipo_prodotto === "semplice")
+                        .filter((pp) => pp.tipo_prodotto === "componente" || pp.tipo_prodotto === "sfuso" || pp.tipo_prodotto === "semplice")
                         .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
                       onCambia={(v) => aggiornaForm({ prodottoSfusoId: v })}
                       etichettaVuoto="— scegli il prodotto sfuso —"
