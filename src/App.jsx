@@ -12177,7 +12177,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         {/* il tondo a sinistra, il titolo accanto e centrato con lui, e
             la foto della master all'altro capo della riga */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 10, flexWrap: "wrap" }}>
+        {/* la foto si appoggia in fondo al blocco del testo, non in cima:
+            il suo bordo basso finisce sulla stessa riga di "Area master",
+            appena sopra il filo che chiude l'intestazione */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 10, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 240px", minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
               <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
