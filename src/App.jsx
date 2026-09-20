@@ -7158,6 +7158,9 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
   const quotaCorso = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiSalvate || {}) }.corso;
   const fasceCorso = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
   const [tabellaCedibileSalvata] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
+  // l'incidenza dei costi entra fra le dipendenze del conto: senza, i
+  // punti simulati restavano quelli di prima finche' non si ricaricava
+  const [incidenzaCostiSalvata] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
   const trovaProdottoStorico = useMemo(() => indiceProdottiPerOrdiniStorici(prodottiShop), [prodottiShop]);
   const [usi, setUsi] = useState(() => CACHE_ANALISI_CODICI?.usi ?? null);
   const [coupon, setCoupon] = useState(() => CACHE_ANALISI_CODICI?.coupon ?? []);
@@ -7297,7 +7300,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
       .filter((c) => !ricerca.trim() || c.codice.includes(ricerca.trim().toLowerCase()) || (c.coupon?.master_id && (masterById[c.coupon.master_id]?.nome || "").toLowerCase().includes(ricerca.trim().toLowerCase())))
       .filter((c) => sezioneAttiva === "tutte" ? true : sezioneAttiva === "senza" ? !sezioneDiCodice(c.codice) : sezioneDiCodice(c.codice) === sezioneAttiva)
       .sort((a, b) => b.incasso - a.incasso);
-  }, [usi, anno, ricerca, couponPerCodice, masterById, sezioneAttiva, assegnazioni, trovaProdottoStorico, sicurezzaPunti, fasceCorso, quotaCorso, tabellaCedibileSalvata]);
+  }, [usi, anno, ricerca, couponPerCodice, masterById, sezioneAttiva, assegnazioni, trovaProdottoStorico, sicurezzaPunti, fasceCorso, quotaCorso, tabellaCedibileSalvata, incidenzaCostiSalvata]);
   // I nomi dentro i codici: quelli delle master in anagrafica e la forma
   // "<nome>elite"; solo i nomi che non hanno ancora una sezione
   const nomiProposti = useMemo(() => {
@@ -12013,6 +12016,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const fasceReferralDash = regolaReferralMasterDash?.fasce;
   const [fasceContantiDash] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const [tabellaCedibileDash] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
+  const [incidenzaCostiDash] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -12146,7 +12150,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       euroTotale: round2(euroCorso + euroReferral + premi.euro),
       pezzi, premi, gruppi,
     };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash, fasceContantiDash, tabellaCedibileDash]);
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash, fasceContantiDash, tabellaCedibileDash, incidenzaCostiDash]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
   // la contabilita' di una classe, aperta dal tasto sulla card: e' la
   // stessa pagina del link che si manda alla master, con lo stesso
@@ -44384,7 +44388,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // qui sotto la segue perche' sta fra le dipendenze
   const [tabellaCedibileSalvata, salvaTabellaCedibile] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
   const tabellaCedibile = tabellaCedibileAttiva();
-  const [, salvaIncidenzaCosti] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
+  const [incidenzaCostiSalvata, salvaIncidenzaCosti] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
   const [estremoPrimo, setEstremoPrimo] = useState(null);
   const [estremoUltimo, setEstremoUltimo] = useState(null);
   const [msgTabella, setMsgTabella] = useState("");
@@ -44567,7 +44571,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
       const puntiMaster = round2((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
       return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici: round2(puntiTeorici), puntiCorso: round2(puntiCorso), puntiFuori: round2(puntiFuori), punti: round2(puntiCorso + puntiFuori), puntiMaster, euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster, tabellaCedibileSalvata]);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster, tabellaCedibileSalvata, incidenzaCostiSalvata]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
