@@ -12220,12 +12220,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
 
         {masterSel && puntiMasterImpostazioni && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Le tue provvigioni</div>
-              {/* a destra del titolo, basso due terzi di un tasto normale */}
-              <button onClick={() => setMostraDettaglioPunti(true)} data-niente-ombra style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "transparent", border: `1.5px solid ${NAVY}`, borderRadius: 10, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: 1.2 }}>Dettaglio per codice</button>
-            </div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}.</div>
+            {/* Niente titolo, niente periodo e niente "Dettaglio per
+                codice": i tre riquadri si spiegano da soli, e il dettaglio
+                per codice e' roba da amministrazione — la master ci
+                trovava dentro gli euro, che dal 12/09/2026 non le si
+                mostrano piu'. */}
             {(() => {
               // le 4 card stanno su una riga sola a qualunque larghezza: sul
               // telefono con font e imbottitura ridotti, su desktop larghe
@@ -12278,12 +12277,12 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               const numPunti = { ...fontDisplay, fontSize: isMobile ? 18 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", textAlign: "center" };
               const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
               return (
-            // quattro colonne uguali, non quattro flex che possono andare a
-            // capo: su desktop la quarta card finiva sotto le altre appena la
+            // tre colonne uguali, non tre flex che possono andare a capo:
+            // su desktop l'ultima card finiva sotto le altre appena la
             // finestra si stringeva. "start" le tiene attaccate in alto, cosi'
             // le etichette partono dalla stessa riga anche quando una va a capo
             // e le altre no
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
                   qui contano le vendite, i punti arriveranno con una regola
                   loro (da definire), e la quarta scheda resta vuota in
@@ -12305,14 +12304,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                     lei — quella si decide sul ranking, guardando questo
                     numero */}
                 <div style={{ ...numPunti, color: NAVY }}>{fmtPunti(provvigioniMaster.puntiMaturati)}</div>
-              </div>
-              {/* Punti bonus: tutti i punti dei prodotti venduti, interi,
-                  senza le detrazioni per lo sconto usato dagli allievi e
-                  senza le quote per canale. Se un prodotto vale 100 punti
-                  e alla master ne restano 80, qui contano 100 */}
-              <div style={cardPunti}>
-                <div style={lblPunti}>Punti<br />bonus</div>
-                <div style={{ ...numPunti, color: GOLD }}>{fmtPunti(provvigioniMaster.puntiAccumulati)}</div>
               </div>
             </div>
               );
