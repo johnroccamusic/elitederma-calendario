@@ -449,6 +449,16 @@ const QUOTE_COLONNE_PUNTI_DEFAULT = [25, 30, 50];
 // sono dieci per ogni euro di massimo cedibile — cosi' la conversione e'
 // immediata: 10 punti, 1 euro. La percentuale accantonata si decide in
 // Gestione punti
+// I punti nella dashboard della master: SPENTI dal 20/09/2026.
+//
+// Il numero nasce dalla tabella del cedibile per margine, e in questo
+// momento non e' una sola: quella salvata nel database (da 2% a 35%) e
+// quella rimasta su un telefono (tetto ~37%) danno alla stessa master due
+// totali diversi — 205,16 e 215,06. Finche' la tabella non e' una per
+// tutti, un numero che cambia col dispositivo e' peggio di nessun numero.
+//
+// Per riaccenderli: rimettere true qui. Non c'e' altro da toccare.
+const PUNTI_MASTER_VISIBILI = false;
 const CHIAVE_SCHEMA_PUNTI_MASTER = "puntiMaster_schema";
 const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
 // Le fasce dello sconto d'aula per chi paga in CONTANTI al POS dell'app
@@ -12282,7 +12292,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             // finestra si stringeva. "start" le tiene attaccate in alto, cosi'
             // le etichette partono dalla stessa riga anche quando una va a capo
             // e le altre no
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${PUNTI_MASTER_VISIBILI ? 3 : 2}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
                   qui contano le vendite, i punti arriveranno con una regola
                   loro (da definire), e la quarta scheda resta vuota in
@@ -12296,6 +12306,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 <div style={lblPunti}>Vendite con<br />referral</div>
                 <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
               </div>
+              {PUNTI_MASTER_VISIBILI && (
               <div style={cardPunti}>
                 <div style={lblPunti}>Punti<br />accumulati</div>
                 {/* i punti INTERI generati dai carrelli: il cedibile dei
@@ -12305,6 +12316,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                     numero */}
                 <div style={{ ...numPunti, color: NAVY }}>{fmtPunti(provvigioniMaster.puntiMaturati)}</div>
               </div>
+              )}
             </div>
               );
             })()}
