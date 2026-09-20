@@ -29,6 +29,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { svuotaCacheSito } from "../_shared/cacheSito.ts";
+import { decodificaEntita } from "../_shared/testo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
         .from("categorie_prodotti")
         .insert({
           woo_category_id: creata.id,
-          nome: creata.name,
+          nome: decodificaEntita(creata.name),
           descrizione: creata.description || null,
           immagine_url: creata.image?.src || null,
           ordine: creata.menu_order ?? 0,

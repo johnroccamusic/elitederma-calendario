@@ -35,6 +35,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { svuotaCacheSito } from "../_shared/cacheSito.ts";
+import { decodificaEntita } from "../_shared/testo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -167,7 +168,7 @@ Deno.serve(async (req) => {
         .from("prodotti_shop")
         .insert({
           woo_product_id: creato.id,
-          nome: creato.name,
+          nome: decodificaEntita(creato.name),
           // il prezzo NON si scrive qui. "prezzo_vendita" in anagrafica e'
           // il NETTO; quello che WooCommerce restituisce e' il LORDO
           // pubblicato. Scriverlo qui metteva un lordo dentro un campo
@@ -233,7 +234,7 @@ Deno.serve(async (req) => {
     const aggiornato = await rispostaWoo.json();
 
     const aggiornamentoLocale: Record<string, unknown> = { ts_sync: new Date().toISOString() };
-    if (nome != null) aggiornamentoLocale.nome = aggiornato.name;
+    if (nome != null) aggiornamentoLocale.nome = decodificaEntita(aggiornato.name);
     if (descrizione != null) aggiornamentoLocale.descrizione = aggiornato.description || null;
     if (descrizioneBreve != null) aggiornamentoLocale.descrizione_breve = aggiornato.short_description || null;
     // il prezzo locale non si tocca mai da qui: vedi la nota in "crea".

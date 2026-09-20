@@ -17,6 +17,7 @@
 // sono dati inseriti a mano nell'app, WooCommerce non li conosce.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decodificaEntita } from "../_shared/testo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -81,7 +82,7 @@ Deno.serve(async (req) => {
     if (categorieWoo.length > 0) {
       const righeCategorie = categorieWoo.map((c, indice) => ({
         woo_category_id: c.id,
-        nome: c.name,
+        nome: decodificaEntita(c.name),
         descrizione: c.description || null,
         immagine_url: c.image?.src || null,
         ordine: indice,
@@ -117,7 +118,7 @@ Deno.serve(async (req) => {
 
       const righeProdotti = prodottiWoo.map((p: any) => ({
         woo_product_id: p.id,
-        nome: p.name,
+        nome: decodificaEntita(p.name),
         sku: p.sku || null,
         // NÉ il prezzo NÉ lo stock si importano più da WooCommerce: la fonte
         // di verità è l'app, il sito ne è lo specchio.

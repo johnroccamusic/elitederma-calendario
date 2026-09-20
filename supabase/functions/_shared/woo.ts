@@ -1,4 +1,5 @@
 import { provvigioneVendita } from "./provvigioni-master.js";
+import { decodificaEntita } from "./testo.ts";
 // Logica condivisa tra "woo-webhook" (in tempo reale) e
 // "woo-import-storico" (una tantum): entrambi ricevono un ordine
 // WooCommerce con la stessa identica forma (è lo stesso oggetto "Order"
@@ -27,7 +28,7 @@ export function mappaOrdine(ordine: any): Record<string, unknown> | null {
   // quello in anagrafica
   const prodotti = Array.isArray(ordine.line_items)
     ? ordine.line_items.map((voce: any) => ({
-        nome: voce.name || null,
+        nome: decodificaEntita(voce.name) || null,
         quantita: voce.quantity ?? null,
         prezzo_unitario: voce.price != null ? Number(voce.price) : null,
         totale_riga: voce.total != null ? parseFloat(voce.total) : null,
