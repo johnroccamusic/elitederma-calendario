@@ -67418,6 +67418,10 @@ export default function App() {
   // le tabelle che ha davvero toccato invece di rifare tutte le query di
   // fetchDati (vedi sotto) — stesso select/order di sempre, solo spostato
   // qui in modo che sia richiamabile singolarmente
+  // da quando in qua le vendite stanno in memoria fuori dalle statistiche
+  const DA_QUANDO_VENDITE_IN_MEMORIA = "2026-06-01";
+  // le statistiche hanno chiesto lo storico intero: da qui in poi resta
+  const venditeStoricoIntero = useRef(false);
   const CARICATORI_TABELLA = {
     corsi: async () => setCorsi(ordinaCorsi((await supabase.from("corsi").select("*").order("nome")).data)),
     location: async () => setLocation((await supabase.from("location").select("*").order("nome")).data || []),
@@ -67471,7 +67475,24 @@ export default function App() {
     // referral" su tutto — le vendite c'erano, i soldi no
     // oltre 4000 righe: senza leggiTutte ne arriverebbero mille, e le
     // vendite piu' vecchie sparirebbero da totali, provvigioni e buste
-    vendite_shop: async () => setVenditeShop(await leggiTutte(() => supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi, busta_numero").eq("simulazione", false).order("data_ordine", { ascending: false }).order("id"))),
+    // Le vendite in memoria partono da giugno 2026: al magazzino, al POS e
+    // alla dashboard delle master serve il presente, non quattromila righe
+    // di storico (4 MB a ogni apertura). Lo storico intero lo chiede da
+    // sola la sezione Statistiche, tramite "vendite_shop_storico" qui
+    // sotto: da quel momento anche le ricariche dopo una vendita portano
+    // tutto, cosi' le pagine di statistica non si ritrovano un elenco
+    // corto a meta' lavoro.
+    vendite_shop: async () => {
+      const query = () => {
+        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi, busta_numero").eq("simulazione", false);
+        return (venditeStoricoIntero.current ? q : q.gte("data_ordine", DA_QUANDO_VENDITE_IN_MEMORIA)).order("data_ordine", { ascending: false }).order("id");
+      };
+      setVenditeShop(await leggiTutte(query));
+    },
+    vendite_shop_storico: async () => {
+      venditeStoricoIntero.current = true;
+      await CARICATORI_TABELLA.vendite_shop();
+    },
     // le prove, a parte: servono solo a Logistica, per mostrarle e per
     // poterle buttare
     vendite_simulate: async () => setVenditeSimulate((await supabase.from("vendite_shop").select("*").eq("simulazione", true).order("data_ordine", { ascending: false })).data || []),
@@ -67667,13 +67688,13 @@ export default function App() {
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
-    statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
-    statvenditeshop: ["vendite_shop", "woo_coupon"],
+    statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
+    statvenditeshop: ["vendite_shop_storico", "woo_coupon"],
     // gli ordini con codice li legge la pagina da sola (vista); anagrafica
     // e regole del coupon d'aula servono per simulare i punti
     statanalisicodici: ["corsi", "location", "corsi_date", "master", "prodotti_shop", "regole_referral_automatico"],
-    statvenditealbanco: ["vendite_shop"],
-    statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
+    statvenditealbanco: ["vendite_shop_storico"],
+    statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop_storico"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta"],
     venditeshop: ["vendite_shop"],
@@ -67711,7 +67732,7 @@ export default function App() {
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
     spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location"],
     contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
-    statisticamaster: ["vendite_shop", "prodotti_shop", "master", "target_vendite_prodotti"],
+    statisticamaster: ["vendite_shop_storico", "prodotti_shop", "master", "target_vendite_prodotti"],
     gestionemaster: ["master", "venditori", "corsi", "corsi_date", "master_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionevenditori: ["venditori", "master"],
     gestioneleve: ["leva", "corsi", "corsi_date", "corsi_date_docenti"],
