@@ -44751,7 +44751,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ flex: "0 1 220px" }}>
               <Field label="Incidenza dei costi aziendali (%)">
-                <input type="number" min="0" max="100" step="1" style={inputStyle} value={incidenzaCostiAttiva()} onChange={(e) => { const n = Math.max(0, Math.min(100, Number(String(e.target.value).replace(",", ".")) || 0)); salvaIncidenzaCosti(n); }} />
+                <CampoNumero valore={incidenzaCostiAttiva()} min={0} max={100} onCambia={(n) => salvaIncidenzaCosti(Math.max(0, Math.min(100, n)))} style={inputStyle} />
               </Field>
             </div>
             <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, paddingBottom: 14, lineHeight: 1.5 }}>
@@ -47513,8 +47513,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Incidenza costi aziendali": (
         <td style={tdStyle} title="La percentuale di costi aziendali che si toglie dal ricavo lordo. E' una sola per tutti i prodotti: scrivendola qui cambia su tutte le righe" onClick={(e) => e.stopPropagation()}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
-            <input type="number" min="0" max="100" step="1" value={incidenzaCostiPct} onChange={(e) => onIncidenzaCosti && onIncidenzaCosti(e.target.value)} onClick={(e) => e.stopPropagation()}
-              style={{ ...fontBody, width: 44, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "center", padding: "3px 4px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+            <CampoNumero valore={incidenzaCostiPct} min={0} max={100} onCambia={(n) => onIncidenzaCosti && onIncidenzaCosti(n)}
+              style={{ ...fontBody, width: 44, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "center", padding: "3px 4px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
             <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>%</span>
           </div>
         </td>
@@ -48896,8 +48896,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         // prodotti, si scrive qui o su una riga qualsiasi
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
                           onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                          <input type="number" min="0" max="100" step="1" value={incidenzaCostiPct} onChange={(e) => cambiaIncidenzaCosti(e.target.value)} draggable={false} title="Percentuale di costi aziendali tolta dal ricavo lordo di ogni prodotto"
-                            style={{ ...fontBody, width: 40, fontSize: 11.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+                          <CampoNumero valore={incidenzaCostiPct} min={0} max={100} onCambia={(n) => cambiaIncidenzaCosti(n)} titolo="Percentuale di costi aziendali tolta dal ricavo lordo di ogni prodotto"
+                            style={{ ...fontBody, width: 40, fontSize: 11.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
                           <span style={{ fontSize: 11, color: NAVY }}>%</span>
                         </div>
                       )}
