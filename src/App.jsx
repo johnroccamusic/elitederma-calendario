@@ -57189,7 +57189,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // resterebbe sbagliato in un senso o nell'altro.
     const senzaProvenienza = carrello.filter((r) => disponibileNeiKit(r.prodottoId)?.residuo > 0 && dalKitPerProdotto[r.prodottoId] === undefined);
     if (senzaProvenienza.length > 0) {
-      setMsg(`Di ${senzaProvenienza.map((r) => `"${r.nome}"`).join(", ")} manca da dove esce: dal kit che hai lì o lo spediamo.`);
+      setMsg(`Di ${senzaProvenienza.map((r) => `"${r.nome}"`).join(", ")} manca da dove esce: premi "Dal kit in aula" o "Lo spediamo dal magazzino" sulla riga del pezzo, nella fascia gialla.`);
       return;
     }
     // scarico in due tempi: prima si verifica TUTTO il carrello (magazzino
@@ -57673,35 +57673,42 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 davvero. Fuori sede o si prende da un kit che e' li' o il
                 pezzo deve viaggiare: sono due cose diverse per il
                 magazzino, e chiederlo dopo non si puo' piu'. */}
-            {disponibileNeiKit(r.prodottoId)?.residuo > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", padding: isMobile ? "0 0 7px" : "0 0 10px" }}>
-                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.4 }}>Da dove esce</span>
-                {[
-                  { v: "kit", testo: "Dal kit qui", colore: "#2E7D32", sfondo: "#E9F6EC" },
-                  { v: "magazzino", testo: "Lo spediamo", colore: NAVY, sfondo: "#fff" },
-                ].map((o) => {
-                  const scelto = o.v === "kit" ? !!dalKitPerProdotto[r.prodottoId] : dalKitPerProdotto[r.prodottoId] === null;
-                  return (
-                    <button
-                      key={o.v}
-                      onClick={() => scegliProvenienza(r.prodottoId, o.v)}
-                      style={{
-                        ...fontBody, fontSize: isMobile ? 11 : 11.5, fontWeight: 700,
-                        color: scelto ? "#fff" : o.colore, background: scelto ? o.colore : o.sfondo,
-                        border: `1px solid ${scelto ? o.colore : CREAM_BORDER}`, borderRadius: 999,
-                        padding: isMobile ? "4px 10px" : "5px 12px", cursor: "pointer", whiteSpace: "nowrap",
-                      }}
-                    >{o.testo}</button>
-                  );
-                })}
-                {dalKitPerProdotto[r.prodottoId] === undefined && (
-                  <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: "#C0392B" }}>da dire prima di incassare</span>
-                )}
-                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, color: grigioCarrello }}>
-                  ne {disponibileNeiKit(r.prodottoId).residuo === 1 ? "resta 1" : `restano ${disponibileNeiKit(r.prodottoId).residuo}`} nei kit
-                </span>
-              </div>
-            )}
+            {disponibileNeiKit(r.prodottoId)?.residuo > 0 && (() => {
+              // Finche' non si e' risposto, la domanda sta in una fascia
+              // gialla con due tasti grandi: due pastiglie sottili con la
+              // scritta piccola, in aula, sul telefono, si leggevano come
+              // etichette e non come una cosa da premere — e la master
+              // scriveva la risposta nelle note del carrello.
+              const risposta = dalKitPerProdotto[r.prodottoId];
+              const daRispondere = risposta === undefined;
+              const residuo = disponibileNeiKit(r.prodottoId).residuo;
+              const tasto = (attivo, colore, sfondo) => ({
+                ...fontBody, fontSize: isMobile ? 12.5 : 12.5, fontWeight: 700, flex: "1 1 0", minWidth: 0,
+                minHeight: isMobile ? 38 : 34, padding: "6px 10px", borderRadius: 10, cursor: "pointer", lineHeight: 1.15,
+                color: attivo ? "#fff" : colore, background: attivo ? colore : sfondo,
+                border: `1.5px solid ${attivo ? colore : colore}`,
+              });
+              return (
+                <div style={{ margin: isMobile ? "0 0 8px" : "0 0 10px", padding: isMobile ? "8px 9px" : "9px 11px", borderRadius: 12, background: daRispondere ? "#FFF6DA" : "#F7F8FA", border: `1px solid ${daRispondere ? "#F0D98A" : CREAM_BORDER}` }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 7, flexWrap: "wrap" }}>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 12.5, fontWeight: 800, color: daRispondere ? "#8A6A1B" : NAVY }}>
+                      {daRispondere ? "Questo pezzo da dove esce? Scegli qui sotto." : "Da dove esce"}
+                    </span>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 11 : 11, color: grigioCarrello, whiteSpace: "nowrap" }}>
+                      ne {residuo === 1 ? "resta 1" : `restano ${residuo}`} nei kit in aula
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => scegliProvenienza(r.prodottoId, "kit")} style={tasto(!!risposta, "#2E7D32", "#fff")}>
+                      Dal kit in aula
+                    </button>
+                    <button onClick={() => scegliProvenienza(r.prodottoId, "magazzino")} style={tasto(risposta === null, NAVY, "#fff")}>
+                      Lo spediamo dal magazzino
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
             </div>
           ))}
         </div>
