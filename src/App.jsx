@@ -4389,10 +4389,10 @@ function incidenzaCostiAttiva() {
 }
 // I contanti hanno un'incidenza di costi piu' bassa: chi paga in contanti
 // non porta le commissioni della carta, di Scalapay e del conto. Per
-// convenzione (dal 20/09/2026) e' il 40% dell'incidenza generale scritta
-// sopra la colonna: cambiando quella, il contante la segue da solo. Con
-// generale al 40% il contante e' 16, al 65% e' 26.
-const FRAZIONE_INCIDENZA_CONTANTI = 0.40;
+// convenzione (dal 20/09/2026) e' il 62,5% dell'incidenza generale
+// scritta sopra la colonna: cambiando quella, il contante la segue da
+// solo. Con generale al 40% il contante e' 25, al 65% e' 40,6.
+const FRAZIONE_INCIDENZA_CONTANTI = 0.625;
 function incidenzaCostiContantiAttiva() {
   return round2(incidenzaCostiAttiva() * FRAZIONE_INCIDENZA_CONTANTI);
 }
@@ -47649,8 +47649,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Prezzo netto vendita": <td style={tdContanti} title="In contanti si tiene tutto il prezzo al pubblico: e' questa la base del conto">{lordo != null ? fmtEuroErp2(lordo) : "—"}</td>,
     "Margine %": <td style={tdContanti} title="Quanto resta del prezzo al pubblico, tolto il costo di acquisto">{p.margineContanti != null ? fmtPctErp(p.margineContanti) : "N/D"}</td>,
     "Ricavo lordo": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
-    "Incidenza costi aziendali": <td style={tdContanti} title="In contanti l'incidenza e' il 40% della generale: niente commissioni di carta, Scalapay e conto">{numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%</td>,
-    "Guadagno netto teorico": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%, il 40% della generale): in contanti si tiene tutto il prezzo e non ci sono commissioni` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
+    "Incidenza costi aziendali": <td style={tdContanti} title="In contanti l'incidenza e' il 62,5% della generale: niente commissioni di carta, Scalapay e conto">{numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%</td>,
+    "Guadagno netto teorico": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%, il 62,5% della generale): in contanti si tiene tutto il prezzo e non ci sono commissioni` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * p.sicurezzaProdotto) / 100))}` : "—"}</td>,
     "Riallinea": <td style={tdContanti} />,
     "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
