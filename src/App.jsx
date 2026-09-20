@@ -4371,14 +4371,25 @@ function lordoVendita(vendita) {
   }, 0);
   return somma > 0 ? round2(somma) : round2(Number(vendita?.totale) || 0);
 }
+// Dal 20/09/2026 la tabella per fascia di margine non si usa piu'. Il
+// cedibile e' il guadagno netto teorico: il ricavo lordo (prezzo meno
+// costo) meno l'incidenza dei costi aziendali, una percentuale sola per
+// tutti i prodotti, scritta in Gestione punti o in cima alla colonna di
+// Dettaglio prodotti. La tabella nasceva da una stima di quei costi al
+// 65%; ora la stima e' un numero che si legge e si cambia.
+//
+// Restituisce ancora una percentuale del prezzo, come prima, cosi' tutti
+// i conti che passano di qui (carta, contanti, scontato) restano uguali:
+// margine% x (1 - incidenza) del prezzo = (prezzo - costo) x (1 - incidenza).
+const CHIAVE_INCIDENZA_COSTI = "puntiMaster_incidenzaCostiPct";
+const INCIDENZA_COSTI_DEFAULT = 65;
+function incidenzaCostiAttiva() {
+  const n = Number(LAYOUT_CACHE[CHIAVE_INCIDENZA_COSTI]);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : INCIDENZA_COSTI_DEFAULT;
+}
 function percentualeCedibileDi(marginePct) {
-  const tabella = tabellaCedibileAttiva();
-  if (marginePct == null || !(marginePct >= tabella[0][0])) return 0;
-  const ultimo = tabella[tabella.length - 1];
-  if (marginePct > ultimo[0]) return ultimo[1];
-  let cedibile = 0;
-  for (const [soglia, pct] of tabella) { if (marginePct >= soglia) cedibile = pct; else break; }
-  return cedibile;
+  if (marginePct == null || !(marginePct > 0)) return 0;
+  return round2(marginePct * (1 - incidenzaCostiAttiva() / 100));
 }
 
 // ---------- Sconto a fasce ----------
@@ -44373,6 +44384,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // qui sotto la segue perche' sta fra le dipendenze
   const [tabellaCedibileSalvata, salvaTabellaCedibile] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
   const tabellaCedibile = tabellaCedibileAttiva();
+  const [, salvaIncidenzaCosti] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
   const [estremoPrimo, setEstremoPrimo] = useState(null);
   const [estremoUltimo, setEstremoUltimo] = useState(null);
   const [msgTabella, setMsgTabella] = useState("");
@@ -44717,9 +44729,32 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           </div>
         </div>
 
-        {/* La tabella con cui si e' deciso quanto cedere, pubblicata per
-            poterla rileggere nel tempo: e' CEDIBILE_PER_MARGINE, la stessa
-            che usa Dettaglio prodotti per tutte e due le righe di conto */}
+        {/* L'incidenza dei costi aziendali: dal 20/09/2026 prende il posto
+            della tabella del cedibile per fascia di margine. Un numero
+            solo, per tutti i prodotti, che si puo' rileggere e cambiare */}
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Incidenza dei costi aziendali</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            Quanto del ricavo lordo di un prodotto (prezzo meno costo di acquisto) se ne va in costi aziendali. Quello che resta è il <b>guadagno netto teorico</b>: da lì si toglie la sicurezza qui sotto e il resto sono i punti. Vale per tutti i prodotti, in tutta l'app, e si cambia anche in cima alla colonna di Dettaglio prodotti.
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div style={{ flex: "0 1 220px" }}>
+              <Field label="Incidenza dei costi aziendali (%)">
+                <input type="number" min="0" max="100" step="1" style={inputStyle} value={incidenzaCostiAttiva()} onChange={(e) => { const n = Math.max(0, Math.min(100, Number(String(e.target.value).replace(",", ".")) || 0)); salvaIncidenzaCosti(n); }} />
+              </Field>
+            </div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, paddingBottom: 14, lineHeight: 1.5 }}>
+              {(() => {
+                const es = (prodottiShop || []).find((x) => /^nairobi$/i.test(x.nome || "")) || (prodottiShop || []).find((x) => x.prezzo_vendita != null && Number(x.costo_acquisto) > 0);
+                if (!es) return null;
+                const ricavo = round2(Number(es.prezzo_vendita) - Number(es.costo_acquisto));
+                const guadagno = round2(ricavo * (1 - incidenzaCostiAttiva() / 100));
+                return <>Esempio, {es.nome}: ricavo lordo {fmtEuroErp2(ricavo)} → guadagno netto teorico <b>{fmtEuroErp2(guadagno)}</b></>;
+              })()}
+            </div>
+          </div>
+        </div>
+
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Quota cedibile per fascia di margine</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
@@ -44838,7 +44873,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               I punti teorici della master nascono <b>sempre</b> dalla formula generale: Cedibile € meno la percentuale di sicurezza, con due decimali. Lo sconto dell'allievo non cambia questo metodo: interviene <b>solo dopo</b>, riducendo i punti teorici già calcolati.
             </p>
             <ol style={{ margin: "0 0 10px", paddingLeft: 22 }}>
-              <li>Si calcola il Cedibile € del prodotto.</li>
+              <li>Si calcola il guadagno netto teorico del prodotto: ricavo lordo (prezzo netto meno costo) meno l'incidenza dei costi aziendali, oggi il {incidenzaCostiAttiva()}%. È il "Cedibile €".</li>
               <li>Si sottrae la percentuale di sicurezza configurata, oggi il {schema.accantonamentoPct}%.</li>
               <li>Il risultato, con due decimali, sono i <b>punti teorici</b> della master, i "Punti bonus" della sua dashboard: un punto è un euro.</li>
               <li>Se l'allievo usa il coupon e riceve uno sconto, lo stesso conto si <b>rifà sul prezzo davvero pagato</b>: lo sconto esce tutto dal margine, quindi il pezzo scontato ha un margine più basso, cade in un gradino più basso della tabella del cedibile, e rende meno punti.</li>
@@ -46915,12 +46950,15 @@ const COLONNE_MAGAZZINO = [
   { label: "Prezzo netto vendita", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 78 },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
-  { label: "Margine €", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 70 },
+  { label: "Ricavo lordo", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 72 },
+  // la percentuale di costi aziendali che si toglie dal ricavo: una per
+  // tutti i prodotti, si scrive nel titolo o su una riga qualsiasi
+  { label: "Incidenza costi aziendali", campo: null, larghezza: 88, incidenza: true },
   // due righe di conto: carta e shop online versano l'IVA e stanno sul
   // netto, e sono queste colonne; il contante tiene il lordo e sta nella
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
   // la tabella. Vedi cedibileContantiDi
-  { label: "Cedibile carta/shop", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 74 },
+  { label: "Guadagno netto teorico", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 80 },
   // la sicurezza che si toglie dal cedibile prima di fare i punti: la
   // percentuale e' quella di Gestione punti, si cambia anche qui nel
   // titolo, e vale in tutta l'app
@@ -46951,7 +46989,7 @@ const COLONNE_MAGAZZINO = [
 // significherebbe perdere quello che l'utente ci ha gia' sistemato sopra
 // — la colonna finirebbe in fondo alla tabella, larga come al primo
 // giorno. Qui il vecchio nome continua a valere per quel che e' salvato
-const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop", "Cedibile €": "Cedibile carta/shop", "Punti": "Punti totali prodotto", "Punti carta/shop": "Punti totali prodotto" };
+const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop", "Margine €": "Ricavo lordo", "Cedibile €": "Guadagno netto teorico", "Cedibile carta/shop": "Guadagno netto teorico", "Punti": "Punti totali prodotto", "Punti carta/shop": "Punti totali prodotto" };
 const COLONNE_MAGAZZINO_NOME_VECCHIO = Object.fromEntries(
   Object.entries(COLONNE_MAGAZZINO_RINOMINATE).map(([vecchio, nuovo]) => [nuovo, vecchio])
 );
@@ -47211,7 +47249,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
 
 // sicurezzaPunti, pctQuotaColonna ed euroQuota arrivano dalla pagina: sono
 // le percentuali scritte nei titoli delle colonne "Sicurezza" e "Quota"
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
   // la percentuale di sicurezza di QUESTO prodotto: si scrive nella cella
   // "Sicurezza" e si salva quando si esce dal campo (o con Invio). Vuota
   // = torna a quella generale
@@ -47458,11 +47496,20 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Margine %": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title="Quanto resta del prezzo netto, tolto il costo di acquisto">{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
     ),
-    "Margine €": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title="Prezzo netto di vendita meno costo di acquisto: quanto si guadagna su un pezzo">{p.margineEuro != null ? fmtEuroErp2(p.margineEuro) : "N/D"}</td>
+    "Ricavo lordo": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title="Prezzo netto di vendita meno costo di acquisto: quanto resta su un pezzo prima dei costi aziendali">{p.margineEuro != null ? fmtEuroErp2(p.margineEuro) : "N/D"}</td>
     ),
-    "Cedibile carta/shop": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Pagamento con carta o dal sito: si versa l'IVA, quindi il ${numeroFascia(p.cedibilePct)}% del prezzo netto, per un margine del ${fmtPctErp(p.margine)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
+    "Incidenza costi aziendali": (
+        <td style={tdStyle} title="La percentuale di costi aziendali che si toglie dal ricavo lordo. E' una sola per tutti i prodotti: scrivendola qui cambia su tutte le righe" onClick={(e) => e.stopPropagation()}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+            <input type="number" min="0" max="100" step="1" value={incidenzaCostiPct} onChange={(e) => onIncidenzaCosti && onIncidenzaCosti(e.target.value)} onClick={(e) => e.stopPropagation()}
+              style={{ ...fontBody, width: 44, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "center", padding: "3px 4px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+            <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>%</span>
+          </div>
+        </td>
+    ),
+    "Guadagno netto teorico": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Ricavo lordo meno l'incidenza dei costi aziendali (${incidenzaCostiPct}%): e' quello che resta davvero su un pezzo, e da qui nascono i punti` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
     ),
     "Sicurezza": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: "#B8860B", whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile carta/shop (${fmtEuroErp2(p.cedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
@@ -47580,8 +47627,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     ),
     "Prezzo netto vendita": <td style={tdContanti} title="In contanti si tiene tutto il prezzo al pubblico: e' questa la base del conto">{lordo != null ? fmtEuroErp2(lordo) : "—"}</td>,
     "Margine %": <td style={tdContanti} title="Quanto resta del prezzo al pubblico, tolto il costo di acquisto">{p.margineContanti != null ? fmtPctErp(p.margineContanti) : "N/D"}</td>,
-    "Margine €": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
-    "Cedibile carta/shop": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Cedibile in contanti: il ${numeroFascia(p.cedibileContantiPct)}% del prezzo al pubblico, per un margine sul lordo del ${fmtPctErp(p.margineContanti)}` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
+    "Ricavo lordo": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
+    "Incidenza costi aziendali": <td style={tdContanti} title="La stessa percentuale della riga sopra">{incidenzaCostiPct}%</td>,
+    "Guadagno netto teorico": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi aziendali (${incidenzaCostiPct}%): in contanti si tiene tutto il prezzo` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * p.sicurezzaProdotto) / 100))}` : "—"}</td>,
     "Riallinea": <td style={tdContanti} />,
     "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
@@ -47703,6 +47751,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const cambiaSicurezzaPunti = (valore) => {
     const n = Math.max(0, Math.min(100, Number(String(valore).replace(",", ".")) || 0));
     salvaSchemaPunti({ ...(schemaPuntiSalvato || SCHEMA_PUNTI_MASTER_DEFAULT), accantonamentoPct: n });
+  };
+  // l'incidenza dei costi aziendali: una percentuale per tutti i
+  // prodotti, la stessa che legge percentualeCedibileDi. Si scrive nel
+  // titolo della colonna o su una riga qualsiasi, e vale in tutta l'app
+  const [incidenzaSalvata, salvaIncidenzaCosti] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
+  const incidenzaCostiPct = incidenzaCostiAttiva();
+  const cambiaIncidenzaCosti = (valore) => {
+    if (valore === "" || valore == null) return;
+    const n = Math.max(0, Math.min(100, Number(String(valore).replace(",", ".")) || 0));
+    if (n !== Number(incidenzaSalvata)) salvaIncidenzaCosti(n);
   };
   // le percentuali delle tre colonne "Quota": si scrivono in cima alla
   // colonna e valgono per tutti
@@ -48157,10 +48215,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // percentuale da sola non risponde — il 69% di 3,50 e il 69% di 39,90
     // sono lo stesso margine e due affari diversi
     const margineEuro = costoEffettivo != null && p.prezzo_vendita != null ? round2(p.prezzo_vendita - costoEffettivo) : null;
-    // la quota massima per chi vende, in euro: la percentuale della
-    // tabella CEDIBILE_PER_MARGINE applicata al prezzo netto. Si parte
-    // dal margine gia' arrotondato, cosi' la riga scelta e' quella che si
-    // legge nella colonna accanto
+    // il guadagno netto teorico, in euro: il ricavo lordo meno
+    // l'incidenza dei costi aziendali (percentualeCedibileDi la esprime
+    // come quota del prezzo netto, cosi' la riga dei contanti fa lo
+    // stesso conto sul lordo)
     const cedibilePct = margine != null ? percentualeCedibileDi(margine) : null;
     const cedibileEuro = cedibilePct != null && p.prezzo_vendita != null ? round2((p.prezzo_vendita * cedibilePct) / 100) : null;
     // i punti valgono solo per quello che si vende attraverso l'app: al
@@ -48822,6 +48880,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                           <span style={{ width: 56, paddingLeft: 4 }} />
                         </div>
                       )}
+                      {col.incidenza && (
+                        // l'incidenza dei costi aziendali: una per tutti i
+                        // prodotti, si scrive qui o su una riga qualsiasi
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
+                          onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                          <input type="number" min="0" max="100" step="1" value={incidenzaCostiPct} onChange={(e) => cambiaIncidenzaCosti(e.target.value)} draggable={false} title="Percentuale di costi aziendali tolta dal ricavo lordo di ogni prodotto"
+                            style={{ ...fontBody, width: 40, fontSize: 11.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff" }} />
+                          <span style={{ fontSize: 11, color: NAVY }}>%</span>
+                        </div>
+                      )}
                       {col.quotaIndice != null && (
                         // la percentuale della quota si scrive qui, nel
                         // titolo: click e trascinamento non devono
@@ -48861,7 +48929,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
