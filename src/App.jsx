@@ -4387,15 +4387,18 @@ function incidenzaCostiAttiva() {
   const n = Number(LAYOUT_CACHE[CHIAVE_INCIDENZA_COSTI]);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : INCIDENZA_COSTI_DEFAULT;
 }
-// I contanti hanno un'incidenza di costi FISSA e piu' bassa: chi paga in
-// contanti non porta le commissioni della carta, di Scalapay e del conto
-// (dal 20/09/2026, deciso guardando l'estratto conto). Restano quindi 25
-// punti di costo su cento, contro l'incidenza generale che vale per carta
-// e shop. Non e' una casella da riempire: e' una regola.
-const INCIDENZA_COSTI_CONTANTI = 25;
+// I contanti hanno un'incidenza di costi piu' bassa: chi paga in contanti
+// non porta le commissioni della carta, di Scalapay e del conto. Per
+// convenzione (dal 20/09/2026) e' il 40% dell'incidenza generale scritta
+// sopra la colonna: cambiando quella, il contante la segue da solo. Con
+// generale al 40% il contante e' 16, al 65% e' 26.
+const FRAZIONE_INCIDENZA_CONTANTI = 0.40;
+function incidenzaCostiContantiAttiva() {
+  return round2(incidenzaCostiAttiva() * FRAZIONE_INCIDENZA_CONTANTI);
+}
 function percentualeCedibileDi(marginePct, contanti = false) {
   if (marginePct == null || !(marginePct > 0)) return 0;
-  const incidenza = contanti ? INCIDENZA_COSTI_CONTANTI : incidenzaCostiAttiva();
+  const incidenza = contanti ? incidenzaCostiContantiAttiva() : incidenzaCostiAttiva();
   return round2(marginePct * (1 - incidenza / 100));
 }
 
@@ -47646,8 +47649,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Prezzo netto vendita": <td style={tdContanti} title="In contanti si tiene tutto il prezzo al pubblico: e' questa la base del conto">{lordo != null ? fmtEuroErp2(lordo) : "—"}</td>,
     "Margine %": <td style={tdContanti} title="Quanto resta del prezzo al pubblico, tolto il costo di acquisto">{p.margineContanti != null ? fmtPctErp(p.margineContanti) : "N/D"}</td>,
     "Ricavo lordo": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
-    "Incidenza costi aziendali": <td style={tdContanti} title="In contanti l'incidenza e' fissa e piu' bassa: niente commissioni di carta, Scalapay e conto">{INCIDENZA_COSTI_CONTANTI}%</td>,
-    "Guadagno netto teorico": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${INCIDENZA_COSTI_CONTANTI}%, fissa): in contanti si tiene tutto il prezzo e non ci sono commissioni` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
+    "Incidenza costi aziendali": <td style={tdContanti} title="In contanti l'incidenza e' il 40% della generale: niente commissioni di carta, Scalapay e conto">{numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%</td>,
+    "Guadagno netto teorico": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%, il 40% della generale): in contanti si tiene tutto il prezzo e non ci sono commissioni` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * p.sicurezzaProdotto) / 100))}` : "—"}</td>,
     "Riallinea": <td style={tdContanti} />,
     "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
