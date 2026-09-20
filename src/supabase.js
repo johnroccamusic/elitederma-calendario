@@ -21,13 +21,33 @@ export const supabase = createClient(
 // query si ricostruisce a ogni giro perche' un builder di supabase-js
 // si consuma quando lo si attende: riusarlo restituirebbe sempre la
 // stessa pagina.
+// Le pagine dopo la prima si chiedono a gruppi, tutte insieme. Una dopo
+// l'altra erano cinque viaggi di andata e ritorno per le vendite (4.100
+// righe): due secondi buoni di attesa a ogni apertura di Gestione
+// magazzino o della Dashboard master, spesi ad aspettare la rete e non a
+// leggere. A gruppi di quattro i viaggi diventano due.
+//
+// Non si sa quante pagine ci sono finche' non ne arriva una corta: si
+// chiede un gruppo, e se sono tutte piene se ne chiede un altro. Nel caso
+// normale — tabelle sotto le mille righe — resta una chiamata sola, come
+// prima.
+const PAGINE_INSIEME = 4;
 export async function leggiTutte(costruisciQuery, pagina = 1000) {
-  let righe = [];
-  for (let da = 0; ; da += pagina) {
-    const { data, error } = await costruisciQuery().range(da, da + pagina - 1);
-    if (error || !data || data.length === 0) break;
-    righe = righe.concat(data);
-    if (data.length < pagina) break;
+  const prima = await costruisciQuery().range(0, pagina - 1);
+  if (prima.error || !prima.data) return [];
+  if (prima.data.length < pagina) return prima.data;
+  let righe = prima.data;
+  for (let da = pagina; ; da += PAGINE_INSIEME * pagina) {
+    const inizi = Array.from({ length: PAGINE_INSIEME }, (_, i) => da + i * pagina);
+    const risposte = await Promise.all(
+      inizi.map((da) => costruisciQuery().range(da, da + pagina - 1)),
+    );
+    let finito = false;
+    for (const { data, error } of risposte) {
+      if (error || !data || data.length === 0) { finito = true; break; }
+      righe = righe.concat(data);
+      if (data.length < pagina) { finito = true; break; }
+    }
+    if (finito) return righe;
   }
-  return righe;
 }
