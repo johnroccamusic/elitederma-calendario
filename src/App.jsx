@@ -32254,7 +32254,11 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
               style={{ display: "flex", alignItems: "center", gap: 5, background: BG_CHIARO, border: "none", borderRadius: 20, padding: "4px 9px", cursor: "pointer", flexShrink: 0 }}
             >
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED }}>{righeAggiornamenti.length}</span>
-              <svg width={latoPiccola} height={latoPiccola} viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: aggiornamentiAperti ? "rotate(-90deg)" : "rotate(90deg)" }}>
+              {/* la freccetta e' misurata qui, come le altre icone della
+                  riga: "latoPiccola" vive dentro il Riepilogo Cash ed era
+                  arrivata qui con un copia-incolla — a schermo faceva
+                  saltare tutta la pagina dei progetti */}
+              <svg width={isMobile ? 12 : 13} height={isMobile ? 12 : 13} viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: aggiornamentiAperti ? "rotate(-90deg)" : "rotate(90deg)" }}>
                 <polyline points="9 18 15 12 9 6" />
               </svg>
             </button>
