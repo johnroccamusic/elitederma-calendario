@@ -4546,11 +4546,18 @@ function marginePercentualeDi(prodotto) {
 // "spesa": quanto vale il carrello. Senza, si resta alla prima fascia di
 // spesa — che e' quella di chi compra poco, cioe' la piu' prudente
 function percentualeFasciaDi(prodotto, fasce, spesa = 0) {
-  const m = marginePercentualeDi(prodotto);
-  if (m == null) return 0;
+  const margine = marginePercentualeDi(prodotto);
+  if (margine == null) return 0;
+  // Dal 20/09/2026 la fascia si sceglie sul GUADAGNO NETTO TEORICO, non
+  // sul margine: e' il margine meno l'incidenza dei costi aziendali,
+  // come quota del prezzo. Un pigmento col 69% di margine e il 25% di
+  // incidenza ha un guadagno del 52%: cade nella fascia 49,5–66, non in
+  // quella 66–82,5. Lo sconto al cliente si misura su quello che resta
+  // davvero, non su quello che resta prima dei costi.
+  const m = margine * (1 - incidenzaCostiAttiva() / 100);
   const elenco = fasceMargineDiSpesa(fasce, spesa);
   // la prima fascia che lo contiene; oltre l'ultimo confine resta
-  // l'ultima, perche' un margine del 100% non deve cadere nel vuoto
+  // l'ultima, perche' un guadagno del 100% non deve cadere nel vuoto
   const i = FASCE_MARGINE.findIndex((f) => m <= f.a);
   return elenco[i === -1 ? elenco.length - 1 : i].percentuale;
 }
@@ -35496,7 +35503,7 @@ function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = fal
         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: isMobile ? 560 : 0 }}>
           <thead>
             <tr>
-              <th style={{ ...intestazione, textAlign: "left", paddingLeft: 0 }}>Spesa \ margine</th>
+              <th style={{ ...intestazione, textAlign: "left", paddingLeft: 0 }} title="Fasce di guadagno netto teorico: margine meno l'incidenza dei costi aziendali, come quota del prezzo">Spesa \ guadagno teorico</th>
               {FASCE_MARGINE.map((f) => (
                 <th key={f.da} style={intestazione} title={etichettaFasciaMargine(f, FASCE_MARGINE.indexOf(f))}>
                   {FASCE_MARGINE.indexOf(f) === 0 ? "" : ">"}{numeroFascia(f.da)}–{numeroFascia(f.a)}%
@@ -35514,7 +35521,7 @@ function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = fal
                   <td key={f.da} style={cella}>
                     <CampoNumero
                       valore={f.percentuale} min={0} max={100}
-                      titolo={`Spesa ${etichettaFasciaSpesa(i, g.soglie).toLowerCase()}, margine ${etichettaFasciaMargine(f, FASCE_MARGINE.indexOf(f))}`}
+                      titolo={`Spesa ${etichettaFasciaSpesa(i, g.soglie).toLowerCase()}, guadagno teorico ${etichettaFasciaMargine(f, FASCE_MARGINE.indexOf(f))}`}
                       onCambia={(n) => cambiaPercentuale(i, k, n)}
                       style={{ ...inputStyle, width: "100%", minWidth: isMobile ? 46 : 58, textAlign: "center", padding: isMobile ? "5px 2px" : "6px 4px", fontWeight: 700, fontSize: isMobile ? 12 : 13 }}
                     />
@@ -35621,7 +35628,7 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
           <div style={{ display: "flex", gap: isMobile ? 8 : 14, flexWrap: "wrap" }}>
             {elenco.map((f, i) => (
               <div key={f.da} style={{ flex: "1 1 110px", minWidth: 96 }}>
-                <Field label={`Margine ${etichettaFasciaMargine(f, FASCE_MARGINE.indexOf(f))}`}>
+                <Field label={`Guadagno teorico ${etichettaFasciaMargine(f, FASCE_MARGINE.indexOf(f))}`}>
                   <CampoNumero
                     valore={f.percentuale} min={0} max={100} style={inputStyle}
                     titolo="Scrivi la percentuale e premi Invio, o esci dal campo"
@@ -44668,7 +44675,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto ai corsi, con il codice d'aula</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app. La prima è la stessa di Generazione automatica in Genera coupon: cambiarla qui o là è lo stesso.
+            Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di guadagno netto teorico (il margine meno l'incidenza dei costi aziendali). Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app. La prima è la stessa di Generazione automatica in Genera coupon: cambiarla qui o là è lo stesso.
           </div>
           {fasceCorso == null ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
