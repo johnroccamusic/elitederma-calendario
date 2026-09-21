@@ -47116,6 +47116,8 @@ const COLONNE_MAGAZZINO = [
   // la somma delle tre percentuali che non si possono cedere: costo di
   // acquisto, margine operativo dell'azienda, costi aziendali
   { label: "Incidenza costi non cedibili", campo: "incidenzaNonCedibilePct", direzioneIniziale: "desc", larghezza: 86 },
+  // cento meno quella somma: lo spazio che resta da elargire
+  { label: "Residuo cedibile %", campo: "cedibileResiduoPct", direzioneIniziale: "desc", larghezza: 84 },
   // due righe di conto: carta e shop online versano l'IVA e stanno sul
   // netto, e sono queste colonne; il contante tiene il lordo e sta nella
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
@@ -47720,6 +47722,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={tdStyle} title={p.incidenzaNonCedibilePct != null ? `Costo di acquisto ${fmtPctErp(p.costoSulPrezzoPct)} + margine operativo ${margineOperativoPct}% + costi aziendali ${incidenzaCostiPct}%${p.incidenzaNonCedibilePct > 100 ? " — oltre il 100%: a questo prezzo non resta niente da cedere" : ""}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>
           <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: p.incidenzaNonCedibilePct == null ? MUTED : (p.incidenzaNonCedibilePct > 100 ? "#C0392B" : NAVY) }}>
             {p.incidenzaNonCedibilePct != null ? fmtPctErp(p.incidenzaNonCedibilePct) : "N/D"}
+          </span>
+        </td>
+    ),
+    "Residuo cedibile %": (
+        <td style={tdStyle} title={p.cedibileResiduoPct != null ? `Cento meno il ${fmtPctErp(p.incidenzaNonCedibilePct)} che non si puo' cedere: e' lo spazio che resta da elargire sul prezzo netto${p.cedibileResiduoPct < 0 ? " — negativo: a questo prezzo si e' gia' sotto" : ""}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: p.cedibileResiduoPct == null ? MUTED : (p.cedibileResiduoPct < 0 ? "#C0392B" : "#2E7D32") }}>
+            {p.cedibileResiduoPct != null ? fmtPctErp(p.cedibileResiduoPct) : "N/D"}
           </span>
         </td>
     ),
@@ -48458,6 +48467,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // l'incidenza dei costi aziendali. Sopra il 100% vuol dire che a quel
     // prezzo non resta niente — e va detto, non nascosto.
     const incidenzaNonCedibilePct = costoSulPrezzoPct != null ? round1Erp(costoSulPrezzoPct + margineOperativoPct + incidenzaCostiPct) : null;
+    // Quello che resta, in percentuale sul prezzo netto, da poter
+    // elargire: cento meno tutto cio' che non si puo' cedere. Negativo
+    // significa che a quel prezzo si e' gia' sotto.
+    const cedibileResiduoPct = incidenzaNonCedibilePct != null ? round1Erp(100 - incidenzaNonCedibilePct) : null;
     // gli stessi due numeri della percentuale, in euro: e' la domanda che
     // si fa davanti a un ordine ("quanto ci guadagno su un pezzo"), e una
     // percentuale da sola non risponde — il 69% di 3,50 e il 69% di 39,90
@@ -48508,6 +48521,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       margine,
       costoSulPrezzoPct,
       incidenzaNonCedibilePct,
+      cedibileResiduoPct,
       margineEuro,
       cedibilePct,
       cedibileEuro,
