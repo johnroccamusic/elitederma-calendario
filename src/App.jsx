@@ -47559,7 +47559,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Prezzo vendita (IVA incl.)": (
         <td style={{ ...tdStyle }} onClick={(e) => e.stopPropagation()} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Scrivilo qui: aggiorna la scheda, la vista a tessere${p.woo_product_id != null && p.stato === "publish" ? " e anche il sito" : ""}.`}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-            <CampoNumero valore={prezzoOttimistico != null ? prezzoOttimistico : prezzoAlPubblico(p)} min={0} onCambia={(n) => salvaPrezzoVendita(n)}
+            <CampoNumero valore={prezzoOttimistico != null ? prezzoOttimistico : prezzoAlPubblico(p)} min={0} decimali={2} onCambia={(n) => salvaPrezzoVendita(n)}
               style={{ ...fontBody, width: 60, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "right", padding: "3px 5px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
             <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>€</span>
             {!p.iva_verificata && (

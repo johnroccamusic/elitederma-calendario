@@ -46,9 +46,13 @@ export function Field({ label, children, minLabelHeight, compatto = false, etich
   );
 }
 
-export function CampoNumero({ valore, onCambia, min = 0, max = null, step = "any", style, titolo }) {
+export function CampoNumero({ valore, onCambia, min = 0, max = null, step = "any", style, titolo, decimali = null }) {
   const [bozza, setBozza] = useState(null);
-  const testo = bozza != null ? bozza : (valore == null ? "" : numeroFascia(valore));
+  // a riposo il numero puo' essere mostrato con un numero fisso di decimali
+  // (i prezzi vogliono sempre due cifre: 14,80 non 14,8); mentre si scrive
+  // comanda la bozza e non si tocca niente
+  const aRiposo = valore == null ? "" : (decimali != null ? Number(valore).toFixed(decimali).replace(".", ",") : numeroFascia(valore));
+  const testo = bozza != null ? bozza : aRiposo;
   function fissa() {
     if (bozza == null) return;
     const pulito = String(bozza).trim().replace(",", ".");
