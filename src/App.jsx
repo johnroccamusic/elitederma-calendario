@@ -48070,9 +48070,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     setOrdineColonne(etichette);
   }
   function etichettaColonna(label) { return etichetteColonne[label] || etichetteColonne[COLONNE_MAGAZZINO_NOME_VECCHIO[label]] || label; }
-  function rinominaColonna(e, label) {
+  // Il titolo si rinomina col doppio clic, ma un clic sul titolo ordina:
+  // il primo dei due gira gia' la tabella. Teniamo da parte com'era, cosi'
+  // quando arriva il doppio clic la rimettiamo dov'era — chi fa doppio
+  // clic vuole cambiare un nome, non cambiare l'ordinamento.
+  const ordinamentoPrimaDelClic = useRef(null);
+  function rinominaColonna(e, label, ripristinaOrdinamento = false) {
     if (ruoloUtente !== "programmatore" || !label) return;
     e.preventDefault();
+    if (ripristinaOrdinamento && ordinamentoPrimaDelClic.current) setOrdinamento(ordinamentoPrimaDelClic.current);
     const nuovo = window.prompt(`Nome della colonna "${etichettaColonna(label)}":`, etichettaColonna(label));
     if (nuovo === null) return;
     const aggiornate = { ...etichetteColonne };
@@ -48126,6 +48132,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
 
   function ordinaPer(campo) {
     if (!campo) return;
+    ordinamentoPrimaDelClic.current = ordinamento;
     setOrdinamento((prev) => (prev.campo === campo ? { campo, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: COLONNE_MAGAZZINO.find((c) => c.campo === campo)?.direzioneIniziale || "desc" }));
   }
   const larghezzaTabellaMagazzino = colonneMagazzino.reduce((tot, col) => tot + larghezzaDi(col.label, col.larghezza), 0);
@@ -48939,9 +48946,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                       onDragLeave={() => setColonnaSopra((attuale) => (attuale === col.label ? null : attuale))}
                       onDrop={(e) => { e.preventDefault(); spostaColonna(colonnaTrascinata || e.dataTransfer.getData("text/plain"), col.label); setColonnaTrascinata(null); setColonnaSopra(null); }}
                       onDragEnd={() => { setColonnaTrascinata(null); setColonnaSopra(null); }}
-                      onClick={() => ordinaPer(col.campo)}
+                      // e.detail e' quante volte si e' cliccato di fila: al
+                      // secondo clic non riordiniamo, ci pensa onDoubleClick
+                      onClick={(e) => { if (e.detail > 1) return; ordinaPer(col.campo); }}
+                      onDoubleClick={(e) => rinominaColonna(e, col.label, true)}
                       onContextMenu={(e) => rinominaColonna(e, col.label)}
-                      title={`${col.campo ? (ruoloUtente === "programmatore" ? "Clicca per ordinare · tasto destro per rinominare · " : "Clicca per ordinare · ") : ""}trascina il titolo per spostare la colonna`}
+                      title={`${col.campo ? (ruoloUtente === "programmatore" ? "Clicca per ordinare · doppio clic per rinominare · " : "Clicca per ordinare · ") : ""}trascina il titolo per spostare la colonna`}
                       style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, borderLeft: colonnaSopra === col.label ? `2px solid ${NAVY}` : "2px solid transparent",
                         // i titoli vanno a capo: tagliati con i puntini
                         // ("PREZZO V…", "COSTO ACQ…") si leggevano solo
