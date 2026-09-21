@@ -48126,6 +48126,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
   const [categoriaSel, setCategoriaSel] = useState("");
   const [fornitoreSel, setFornitoreSel] = useState("");
+  // dove si vende un prodotto: al banco (POS), sul sito, tutti e due o
+  // da nessuna parte
+  const [canaleSel, setCanaleSel] = useState("");
   const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
@@ -48685,6 +48688,20 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // "senza fornitore" e' una scelta utile quanto le altre: sono i prodotti
   // che l'Advisor non sa a chi ordinare
   if (fornitoreSel) prodottiVisti = prodottiVisti.filter((p) => (fornitoreSel === "__nessuno" ? !p.fornitore_id : p.fornitore_id === fornitoreSel));
+  // Al banco ci va un prodotto che ha un prezzo e non e' escluso dalla
+  // vendita diretta (ne' lui ne' una sua categoria). Sul sito ci sta se
+  // e' pubblicato su WooCommerce e non e' tenuto fuori dallo shop.
+  if (canaleSel) {
+    prodottiVisti = prodottiVisti.filter((p) => {
+      const suPos = p.prezzo_vendita != null && !(p.forzatoEscludi || p.escludi_vendita_diretta);
+      const suShop = p.woo_product_id != null && p.stato === "publish" && !(p.forzatoSoloOffline || p.solo_offline);
+      if (canaleSel === "invendita") return suPos || suShop;
+      if (canaleSel === "solopos") return suPos && !suShop;
+      if (canaleSel === "soloshop") return suShop && !suPos;
+      if (canaleSel === "nonvendita") return !suPos && !suShop;
+      return true;
+    });
+  }
   if (ricercaProdotto.trim()) { const q = ricercaProdotto.trim().toLowerCase(); prodottiVisti = prodottiVisti.filter((p) => p.nome.toLowerCase().includes(q)); }
   if (filtroRapido === "sottoscorta") prodottiVisti = prodottiVisti.filter((p) => p.sottoScorta);
   if (filtroRapido === "esauriti") prodottiVisti = prodottiVisti.filter((p) => p.esaurito);
@@ -49016,7 +49033,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             value={ricercaProdotto}
             onChange={(e) => setRicercaProdotto(e.target.value)}
             placeholder="Cerca prodotto…"
-            style={{ flex: "1 1 260px", minWidth: 200, maxWidth: isMobile ? "100%" : "50%" }}
+            style={{ flex: "1 1 180px", minWidth: 150, maxWidth: isMobile ? "100%" : "28%" }}
           />
           {/* categorie e fornitori dividono la riga a meta': impilati uno
               sopra l'altro si prendevano due fasce intere per due tendine
@@ -49040,6 +49057,17 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 { valore: "__nessuno", etichetta: "— senza fornitore —" },
               ]}
             />
+            {/* dove si vende: al banco, sul sito, tutti e due o da
+                nessuna parte. Sta in fila con gli altri due, e la
+                ricerca si e' stretta per fargli posto */}
+            <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={canaleSel} onChange={(e) => setCanaleSel(e.target.value)}
+              title="Filtra per dove il prodotto e' in vendita">
+              <option value="">Ovunque in vendita e non</option>
+              <option value="invendita">In vendita (POS + shop online)</option>
+              <option value="solopos">Solo sul POS</option>
+              <option value="soloshop">Solo sullo shop online</option>
+              <option value="nonvendita">Non in vendita</option>
+            </select>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
@@ -49122,10 +49150,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 in un colpo ricerca, categoria, fornitore e filtro di stato —
                 capita di non vedere un prodotto e non ricordare quale dei
                 filtri lo stava nascondendo */}
-            {(ricercaProdotto.trim() || categoriaSel || fornitoreSel || filtroRapido !== "tutti") && (
+            {(ricercaProdotto.trim() || categoriaSel || fornitoreSel || canaleSel || filtroRapido !== "tutti") && (
               <button
-                onClick={() => { setRicercaProdotto(""); setCategoriaSel(""); setFornitoreSel(""); setFiltroRapido("tutti"); }}
-                title="Togli ricerca, categoria, fornitore e filtro di stato"
+                onClick={() => { setRicercaProdotto(""); setCategoriaSel(""); setFornitoreSel(""); setCanaleSel(""); setFiltroRapido("tutti"); }}
+                title="Togli ricerca, categoria, fornitore, canale di vendita e filtro di stato"
                 style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
