@@ -61053,14 +61053,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         </div>
         <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Trascina per riordinare le immagini. La prima è la copertina mostrata sullo shop. L'icona con la fotocamera sostituisce l'immagine senza doverla prima cancellare.</div>
       </Field>
-      {/* nome e descrizione breve affiancati: sono due righe corte, e
-          da sole si prendevano due fasce alte di scheda */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(0, 1.25fr)", gap: 12, alignItems: "start" }}>
-        <Field label="Nome prodotto"><input style={inputStyle} value={prodottoForm.nome} onChange={(e) => setProdottoForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
-        <Field label="Descrizione breve">
-          <EditorRicco key={`breve-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizioneBreve} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizioneBreve: html }))} minHeight={60} />
-        </Field>
-      </div>
+      {/* nome e descrizione breve uno sopra l'altro */}
+      <Field label="Nome prodotto"><input style={inputStyle} value={prodottoForm.nome} onChange={(e) => setProdottoForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
+      <Field label="Descrizione breve">
+        <EditorRicco key={`breve-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizioneBreve} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizioneBreve: html }))} minHeight={60} />
+      </Field>
       <Field label="Descrizione completa">
         <EditorRicco key={`completa-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizione} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizione: html }))} minHeight={110} />
       </Field>
