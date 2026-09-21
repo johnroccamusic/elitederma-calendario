@@ -101,14 +101,122 @@ if ( ! function_exists( 'elitederma_accorcia_cache_cdn' ) ) {
 	}
 }
 
-// "template_redirect" e non "send_headers": send_headers scatta prima
-// che WordPress abbia eseguito la query principale, e li' is_product() e
-// compagni non sanno ancora dire su che pagina siamo. A
-// template_redirect la query c'e', e l'output non e' ancora cominciato.
-add_action( 'template_redirect', 'elitederma_accorcia_cache_cdn', 9999 );
+// ---------------------------------------------------------------
+// Prendersi l'ultima parola
+//
+// Misurato il 21/09/2026: il nostro Cache-Control parte, ma Breeze ne
+// appende un altro subito dopo sulla stessa riga, e la riga finale
+// diventa "... s-maxage=60 ... s-maxage=2592000". Fra due direttive in
+// conflitto Cloudflare tiene l'ultima, quindi vincono i trenta giorni.
+// Verificato campionando una pagina per 200 secondi: l'eta' sale sempre
+// e non si azzera mai.
+//
+// Non lo aggiunge il server: le richieste che nginx serve da solo
+// (immagini, jquery.min.js) non ce l'hanno. Lo aggiunge PHP, e in
+// Breeze non esiste un'opzione per spegnerlo — cinque schede guardate
+// una per una.
+//
+// Quindi la strada e' arrivare dopo di lui. Ci proviamo da tre punti
+// diversi, perche' quale sia l'ultimo utile dipende da come Breeze
+// tiene i buffer, e non e' cosa che si possa dedurre da fuori. Ogni
+// tentativo riscrive l'intestazione INTERA (replace = true), quindi chi
+// arriva per ultimo cancella anche il doppione.
+// ---------------------------------------------------------------
 
-// Breeze rimette la propria intestazione piu' avanti, quando la pagina e'
-// gia' composta. Con il buffer di output attivo i byte partono solo alla
-// fine, quindi qui siamo ancora in tempo a riscriverla; se invece sono
-// gia' partiti, headers_sent() ci fa uscire senza danni.
-add_action( 'shutdown', 'elitederma_accorcia_cache_cdn', 0 );
+// Decidiamo presto (qui le condizionali di WooCommerce rispondono) e
+// applichiamo tardi: la decisione viaggia in una variabile.
+if ( ! isset( $GLOBALS['elitederma_cache_decisa'] ) ) {
+	$GLOBALS['elitederma_cache_decisa'] = null;
+}
+
+add_action( 'template_redirect', function () {
+	$GLOBALS['elitederma_cache_decisa'] = elitederma_intestazione_cache();
+	elitederma_applica_cache( 'template_redirect' );
+}, 9999 );
+
+if ( ! function_exists( 'elitederma_applica_cache' ) ) {
+	function elitederma_applica_cache( $da_dove ) {
+		if ( headers_sent() || empty( $GLOBALS['elitederma_cache_decisa'] ) ) {
+			return;
+		}
+		header( 'Cache-Control: ' . $GLOBALS['elitederma_cache_decisa'], true );
+		// cosi' da fuori, con un curl, si vede quale dei tre tentativi ha
+		// parlato per ultimo: senza questo si tira a indovinare
+		header( 'X-Elitederma-Via: ' . $da_dove, true );
+	}
+}
+
+// Tentativo 1 — il buffer di output. Se il nostro parte prima di quello
+// di Breeze, il nostro e' il piu' esterno e la sua chiusura e' l'ultima
+// cosa che succede prima che i byte partano.
+if ( ! function_exists( 'elitederma_ultima_parola' ) ) {
+	function elitederma_ultima_parola( $buffer ) {
+		elitederma_applica_cache( 'buffer' );
+		return $buffer;  // il contenuto non lo tocchiamo
+	}
+}
+if ( ! is_admin() && PHP_SAPI !== 'cli' && ! defined( 'DOING_CRON' ) ) {
+	ob_start( 'elitederma_ultima_parola' );
+}
+
+// Tentativo 2 e 3 — la chiusura della richiesta, prima in coda all'azione
+// di WordPress, poi come funzione di spegnimento registrata quando ormai
+// tutte le altre lo sono gia'.
+add_action( 'shutdown', function () {
+	elitederma_applica_cache( 'shutdown' );
+	register_shutdown_function( function () {
+		elitederma_applica_cache( 'shutdown-tardi' );
+	} );
+}, PHP_INT_MAX );
+
+// ---------------------------------------------------------------
+// La sonda
+//
+// Se anche i tre tentativi perdono, la forza bruta non basta e bisogna
+// disinnescare l'aggancio di Breeze per nome. Questa elenca i suoi
+// agganci sui ganci che possono toccare le intestazioni e li spedisce in
+// una riga di risposta, dove si leggono da fuori con un curl. Non cambia
+// niente: guarda e riferisce.
+// ---------------------------------------------------------------
+if ( ! function_exists( 'elitederma_nome_callback' ) ) {
+	function elitederma_nome_callback( $f ) {
+		if ( is_string( $f ) ) {
+			return $f;
+		}
+		if ( is_array( $f ) && count( $f ) === 2 ) {
+			$oggetto = is_object( $f[0] ) ? get_class( $f[0] ) : (string) $f[0];
+			return $oggetto . '::' . (string) $f[1];
+		}
+		if ( $f instanceof Closure ) {
+			return 'Closure';
+		}
+		return '';
+	}
+}
+
+add_action( 'shutdown', function () {
+	if ( headers_sent() || empty( $GLOBALS['elitederma_cache_decisa'] ) ) {
+		return;
+	}
+	global $wp_filter;
+	$ganci  = array( 'send_headers', 'template_redirect', 'wp', 'wp_loaded', 'shutdown', 'wp_headers' );
+	$trovati = array();
+	foreach ( $ganci as $gancio ) {
+		if ( empty( $wp_filter[ $gancio ] ) || ! isset( $wp_filter[ $gancio ]->callbacks ) ) {
+			continue;
+		}
+		foreach ( $wp_filter[ $gancio ]->callbacks as $priorita => $elenco ) {
+			foreach ( $elenco as $voce ) {
+				$nome = elitederma_nome_callback( $voce['function'] );
+				if ( $nome && preg_match( '/breeze|cloudflare|cdn/i', $nome ) ) {
+					$trovati[] = $gancio . '@' . $priorita . '=' . $nome;
+				}
+			}
+		}
+	}
+	$riga = $trovati ? implode( ' ~ ', $trovati ) : 'nessuno';
+	// una riga di intestazione non puo' contenere a capo, e conviene non
+	// farla chilometrica
+	$riga = substr( preg_replace( '/[^A-Za-z0-9_:@=~\. -]/', '', $riga ), 0, 900 );
+	header( 'X-Elitederma-Ganci: ' . $riga, true );
+}, PHP_INT_MAX );
