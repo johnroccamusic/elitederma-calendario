@@ -47153,6 +47153,8 @@ const COLONNE_MAGAZZINO = [
   { label: "Incidenza costi non cedibili", campo: "incidenzaNonCedibilePct", direzioneIniziale: "desc", larghezza: 86 },
   // cento meno quella somma: lo spazio che resta da elargire
   { label: "Residuo cedibile %", campo: "cedibileResiduoPct", direzioneIniziale: "desc", larghezza: 84 },
+  // gli stessi euro, letti sul prezzo che paga il cliente
+  { label: "Residuo cedibile sul lordo", campo: "cedibileResiduoLordoPct", direzioneIniziale: "desc", larghezza: 84 },
   // due righe di conto: carta e shop online versano l'IVA e stanno sul
   // netto, e sono queste colonne; il contante tiene il lordo e sta nella
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
@@ -47783,6 +47785,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={tdStyle} title={p.cedibileResiduoPct != null ? `Cento meno il ${fmtPctErp(p.incidenzaNonCedibilePct)} che non si puo' cedere: e' lo spazio che resta da elargire sul prezzo netto${p.cedibileResiduoPct < 0 ? " — negativo: a questo prezzo si e' gia' sotto" : ""}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>
           <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: p.cedibileResiduoPct == null ? MUTED : (p.cedibileResiduoPct < 0 ? "#C0392B" : "#2E7D32") }}>
             {p.cedibileResiduoPct != null ? fmtPctErp(p.cedibileResiduoPct) : "N/D"}
+          </span>
+        </td>
+    ),
+    "Residuo cedibile sul lordo": (
+        <td style={tdStyle} title={p.cedibileResiduoLordoPct != null ? `Gli stessi ${fmtEuroErp2(p.sommaMassimaCedibileEuro)} letti sul prezzo al pubblico: e' la percentuale di sconto massima che puoi fare sul prezzo esposto senza sforare il cedibile` : "Senza prezzo al pubblico non si puo' calcolare"}>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: p.cedibileResiduoLordoPct == null ? MUTED : (p.cedibileResiduoLordoPct < 0 ? "#C0392B" : "#2E7D32") }}>
+            {p.cedibileResiduoLordoPct != null ? fmtPctErp(p.cedibileResiduoLordoPct) : "N/D"}
           </span>
         </td>
     ),
@@ -48546,6 +48555,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // il residuo meno quello che si lascia al negoziante: lo spazio che
     // rimane per il venditore. Senza quota negoziante resta tutto a lui
     const restaVenditorePct = cedibileResiduoPct != null ? round1Erp(cedibileResiduoPct - (Number(p.quota_negoziante_pct) || 0)) : null;
+    // La stessa cifra in euro, ma letta sul prezzo che paga il cliente.
+    // Serve per applicare uno sconto sul prezzo esposto senza sforare il
+    // cedibile: 9,61 euro sono il 29,4% di 32,70 netti e il 24,1% di
+    // 39,90 lordi. Si ricava dagli euro e non dalla percentuale, cosi'
+    // non si accumulano due arrotondamenti.
+    const lordoPubblico = prezzoAlPubblico(p);
+    const cedibileResiduoLordoPct = cedibile.euro != null && lordoPubblico != null && lordoPubblico > 0
+      ? round1Erp((cedibile.euro / Number(lordoPubblico)) * 100)
+      : null;
     const sommaMassimaCedibileEuro = cedibile.euro;
     // gli stessi due numeri della percentuale, in euro: e' la domanda che
     // si fa davanti a un ordine ("quanto ci guadagno su un pezzo"), e una
@@ -48598,6 +48616,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       costoSulPrezzoPct,
       incidenzaNonCedibilePct,
       cedibileResiduoPct,
+      cedibileResiduoLordoPct,
       restaVenditorePct,
       sommaMassimaCedibileEuro,
       margineEuro,
