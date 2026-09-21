@@ -49223,7 +49223,13 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
         {vistaProdotti === "elenco" && (<div style={{ minWidth: 0 }}>
         <div ref={rifElencoCard} style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: larghezzaTabellaMagazzino, borderCollapse: "collapse", tableLayout: "fixed" }}>
+            {/* Il font stretto su tutta la tabella. Le colonne sono
+                diventate tante e i titoli si spezzavano in mezzo alle
+                parole ("UNITA' DI MISUR A", "QUOTA NEGOZIANT E %"): con
+                Cabin Condensed ci stanno. E' lo stesso metodo del
+                carrello del POS, che aveva lo stesso problema. */}
+            <style>{`.magazzino-stretto, .magazzino-stretto * { font-family: ${FAMIGLIA_STRETTA} !important; }`}</style>
+            <table className="magazzino-stretto" style={{ width: larghezzaTabellaMagazzino, borderCollapse: "collapse", tableLayout: "fixed" }}>
               <colgroup>{colonneMagazzino.map((col) => <col key={col.label} style={{ width: larghezzaDi(col.label, col.larghezza) }} />)}</colgroup>
               <thead>
                 <tr>
