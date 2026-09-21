@@ -20835,7 +20835,7 @@ function TabellaContoCarrello({ conto, minWidth = 380, grigio = MUTED, stretto =
   );
 }
 
-function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, onEntraNelPos, isMobile, prodottiShop = [], coupon = [] }) {
+function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, onEntraNelPos, isMobile, prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onAssociaCorso = null }) {
   // Un carrello fermo non e' solo una lista della spesa: e' materiale che
   // nessuno puo' vendere, e per decidere se sollecitarlo o buttarlo serve
   // sapere quanto vale davvero — quanto sconto sta promettendo, con che
@@ -20848,6 +20848,25 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, on
   const [fasceReferralContantiAmm] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const [schemaPuntiAmm] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const prodottoPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((x) => [x.id, x])), [prodottiShop]);
+  const corsoNomePerId = useMemo(() => Object.fromEntries((corsi || []).map((x) => [x.id, x.nome])), [corsi]);
+  const luogoNomePerId = useMemo(() => Object.fromEntries((location || []).map((x) => [x.id, x.nome])), [location]);
+  const cdPerId = useMemo(() => Object.fromEntries((corsiDate || []).map((x) => [x.id, x])), [corsiDate]);
+  // corsi a cui si puo' legare un carrello: quelli di oggi e quelli
+  // conclusi negli ultimi 5 giorni, per rettificare una vendita
+  const corsiAssociabili = useMemo(() => {
+    const oggi = dataOggiStr(); const cinqueFa = addGiorni(oggi, -5);
+    return (corsiDate || [])
+      .filter((cd) => (cd.data_inizio <= oggi && cd.data_fine >= oggi) || (cd.data_fine < oggi && cd.data_fine >= cinqueFa))
+      .sort((a, b) => String(b.data_inizio).localeCompare(String(a.data_inizio)));
+  }, [corsiDate]);
+  const etichettaCd = (cd) => {
+    if (!cd) return "—";
+    const oggi = dataOggiStr();
+    const nome = corsoNomePerId[cd.corso_id] || "—";
+    const loc = toTitleCase(luogoNomePerId[cd.location_id] || "—");
+    const quando = cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)}–${fmtData(cd.data_fine)}`;
+    return `${nome} · ${loc} · ${quando}${cd.data_fine < oggi ? " · concluso" : ""}`;
+  };
   const [aperti, setAperti] = useState({});
   const ordinati = [...lista].sort((a, b) => String(b.creato || "").localeCompare(String(a.creato || "")));
   const contoDi = (c) => contoCarrello(c, { prodottoPerId, coupon, fasceCarta: fasceCartaAmm, fasceContanti: fasceContantiAmm, schemaPunti: schemaPuntiAmm, regolaReferral: regolaReferralAmm, fasceReferralContanti: fasceReferralContantiAmm });
@@ -20939,6 +20958,27 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, on
                     <b style={{ color: NAVY }}>{c.operatore?.nome ? toTitleCase(c.operatore.nome) : "operatore sconosciuto"}</b>
                     {c.operatore?.tipo ? ` (${c.operatore.tipo})` : ""} · creato il {quando(c.creato)}{c.aggiornato && c.aggiornato !== c.creato ? ` · ultima modifica ${quando(c.aggiornato)}` : ""}
                   </div>
+                  {onAssociaCorso && (
+                    // rettifica: lega la vendita a un corso, anche concluso
+                    // entro 5 giorni. Se il carrello ne ha gia' uno fuori
+                    // finestra, lo si mostra lo stesso per non perderlo
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Corso</span>
+                      <select
+                        value={c.corsoPosId || ""}
+                        onChange={(e) => onAssociaCorso(c.id, e.target.value)}
+                        style={{ ...fontBody, fontSize: 12.5, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 8px", background: "#fff", maxWidth: "100%" }}
+                      >
+                        <option value="">— non legato a un corso —</option>
+                        {c.corsoPosId && !corsiAssociabili.some((cd) => cd.id === c.corsoPosId) && cdPerId[c.corsoPosId] && (
+                          <option value={c.corsoPosId}>{etichettaCd(cdPerId[c.corsoPosId])}</option>
+                        )}
+                        {corsiAssociabili.map((cd) => (
+                          <option key={cd.id} value={cd.id}>{etichettaCd(cd)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(totaleCarrelloSospeso(c))}</div>
@@ -34629,7 +34669,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS: un carrello
   // dimenticato tiene fermo materiale che nessuno puo' vendere, e da qui
@@ -34649,11 +34689,22 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], onEntraNelPosCome
     const attuali = Array.isArray(LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI]) ? LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI] : [];
     salvaCarrelliSospesiTutti(attuali.filter((x) => x.id !== c.id));
   }
+  // Rettifica: chi amministra puo' legare un carrello sospeso a un corso,
+  // anche uno concluso negli ultimi 5 giorni. Scrive l'edizione scelta
+  // sul carrello (corsoPosId): entrando poi nel POS la vendita si chiude
+  // gia' attribuita a quel corso.
+  function associaCorsoASospeso(cartId, corsoDataId) {
+    const attuali = Array.isArray(LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI]) ? LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI] : [];
+    salvaCarrelliSospesiTutti(attuali.map((x) => (x.id === cartId
+      ? { ...x, corsoPosId: corsoDataId || "", scontoCorsoAttivo: !!corsoDataId, aggiornato: new Date().toISOString() }
+      : x)));
+  }
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
       {mostraSospesi && (
         <PannelloCarrelliSospesiAmministrazione
           lista={sospesiTutti} isMobile={isMobile} prodottiShop={prodottiShop} coupon={coupon}
+          corsi={corsi} corsiDate={corsiDate} location={location} onAssociaCorso={associaCorsoASospeso}
           onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso}
           onEntraNelPos={onEntraNelPosCome ? (operatore, carrelloId) => { setMostraSospesi(false); onEntraNelPosCome(operatore, carrelloId); } : null}
         />
@@ -56491,10 +56542,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     }, 60000);
     return () => clearInterval(t);
   }, []);
+  // I corsi che il POS puo' collegare a una vendita: quelli di oggi e —
+  // per rettificare — quelli conclusi negli ultimi 5 giorni.
+  const cinqueGgFaPos = addGiorni(oggiStrPos, -5);
   const corsiInCorsoOggi = (corsiDate || []).filter((cd) => cd.data_inizio <= oggiStrPos && cd.data_fine >= oggiStrPos);
+  const corsiFinestraPos = (corsiDate || []).filter((cd) =>
+    (cd.data_inizio <= oggiStrPos && cd.data_fine >= oggiStrPos)
+    || (cd.data_fine < oggiStrPos && cd.data_fine >= cinqueGgFaPos));
   const corsiEleggibiliPos = operatore?.tipo === "master"
-    ? corsiInCorsoOggi.filter((cd) => cd.master_id === operatore.id)
-    : corsiInCorsoOggi;
+    ? corsiFinestraPos.filter((cd) => cd.master_id === operatore.id)
+    : corsiFinestraPos;
   const [corsoPosId, setCorsoPosId] = useState("");
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
   // Capita che un amministratore dia una mano a una master vendendo dal
@@ -57678,7 +57735,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             }}>
               <option value="">— vendita non legata a un corso —</option>
               {corsiEleggibiliPos.map((cd) => (
-                <option key={cd.id} value={cd.id}>{corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}</option>
+                <option key={cd.id} value={cd.id}>{corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}{cd.data_fine < oggiStrPos ? ` · concluso il ${fmtData(cd.data_fine)}` : ""}</option>
               ))}
             </select>
           </Field>
@@ -67793,7 +67850,7 @@ export default function App() {
     modulistica: [],
     // "coupon" serve ai carrelli sospesi: senza, il pannello non trova il
     // codice del corso e mostra tutti gli sconti a zero
-    magazzinoshop: ["prodotti_shop", "riordini_in_corso", "coupon"],
+    magazzinoshop: ["prodotti_shop", "riordini_in_corso", "coupon", "corsi", "corsi_date", "location"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
     // "password_menu"/"utenti_app" (gia' fra le essenziali) servono
@@ -69536,6 +69593,7 @@ export default function App() {
       {view === "magazzinoshop" && (
         <PaginaMagazzinoShop
           prodottiShop={prodottiShop} coupon={coupon}
+          corsi={corsi} corsiDate={corsiDate} location={location}
           onEntraNelPosCome={entraNelPosCome}
           onBack={() => setView("home")}
           onApriMagazzino={apriMagazzino}
