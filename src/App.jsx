@@ -25997,7 +25997,7 @@ function PannelloRiepilogoAmministrativo({
     ...fontBody, fontSize: 8.5, fontWeight: 700, color: MUTED,
     textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.4, minWidth: 0,
   };
-  // i numeri tre punti piu' grandi dei titoli: nel quadro sono in Special
+  // i numeri tre punti piu' grandi dei titoli: nel quadro sono in Sofia Sans
   // Condensed, che a parita' di punti rende piu' piccolo, e sono la cosa
   // che si va a leggere
   const cifraRiga = {
@@ -30982,7 +30982,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                           a farsi da parte e' il pacchetto, non l'allieva */}
                       <span style={isMobile ? undefined : { whiteSpace: "nowrap", flexShrink: 0 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                       {/* da scrivania tutor e pacchetto prendono la
-                          famiglia stretta (Special Gothic Condensed One) e il grigio
+                          famiglia stretta (Sofia Sans Condensed) e il grigio
                           cupo: due righe di servizio accanto a un nome in
                           grassetto, che devono leggersi senza rubargli il
                           posto */}
@@ -49240,7 +49240,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             {/* Il font stretto su tutta la tabella. Le colonne sono
                 diventate tante e i titoli si spezzavano in mezzo alle
                 parole ("UNITA' DI MISUR A", "QUOTA NEGOZIANT E %"): con
-                Special Gothic Condensed One ci stanno. E' lo stesso metodo del
+                Sofia Sans Condensed ci stanno. E' lo stesso metodo del
                 carrello del POS, che aveva lo stesso problema. */}
             <style>{`.magazzino-stretto, .magazzino-stretto * { font-family: ${FAMIGLIA_STRETTA} !important; }`}</style>
             <table className="magazzino-stretto" style={{ width: larghezzaTabellaMagazzino, borderCollapse: "collapse", tableLayout: "fixed" }}>

@@ -49,10 +49,11 @@ export const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 70
 // da pollice: con un carattere normale le colonne si toccano e
 // "AL PUBBLICO MARGINE SCONTO" si legge come una parola sola. Sofia Sans
 // Condensed e' la riserva perche' e' gia' scaricata da sempre.
-// Special Gothic Condensed One ha un peso solo (400): dove si chiede il
-// grassetto lo sintetizza il browser. Le due di scorta restano sotto, per
-// quando il primo non e' ancora arrivato.
-export const FAMIGLIA_STRETTA = "'Special Gothic Condensed One','Sofia Sans Condensed','Roboto Condensed',sans-serif";
+// Sofia Sans Condensed ha cinque pesi veri (400-800), quindi il
+// grassetto e' disegnato e non sintetizzato dal browser: su un
+// condensato si vede. Provato Special Gothic Condensed One il
+// 21/09/2026 e scartato, ha un peso solo.
+export const FAMIGLIA_STRETTA = "'Sofia Sans Condensed','Roboto Condensed',sans-serif";
 // Il grigio spento del carrello sul telefono. MUTED (#8B8FA3) su bianco
 // sta sotto il rapporto di contrasto che serve a un testo da leggere, e
 // sul telefono, con la luce vera e il carattere piccolo, sparisce: SKU,
