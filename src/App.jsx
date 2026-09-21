@@ -47353,6 +47353,33 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     if (error) { window.alert("Errore: " + testoErrore(error)); setScortaMin(p.soglia_riordino != null ? String(p.soglia_riordino) : ""); return; }
     ricarica(["prodotti_shop"]);
   }
+  // Il prezzo di vendita, modificabile direttamente dall'elenco. Si scrive
+  // il prezzo al pubblico (IVA inclusa, come lo si legge): da qui si ricava
+  // il netto (che regge margine e punti) con la stessa regola della scheda —
+  // il numero digitato resta esatto, e il lordo si "forza" solo se il giro
+  // netto→lordo perde un centesimo. Aggiornando prezzo_vendita cambiano da
+  // sole tutte le viste che lo leggono: tessere, scheda, calcolo punti. Se il
+  // prodotto e' pubblicato, si allinea anche WooCommerce, come fa la scheda.
+  async function salvaPrezzoVendita(nuovoLordo) {
+    const lordo = round2(Number(nuovoLordo) || 0);
+    if (!(lordo > 0)) return;
+    if (lordo === round2(prezzoAlPubblico(p) || 0)) return;
+    const iva = Number(p.aliquota_iva_vendita ?? 22) || 0;
+    const netto = round2(lordo / (1 + iva / 100));
+    const lordoRicalcolato = round2(netto * (1 + iva / 100));
+    const forzato = lordoRicalcolato === lordo ? null : lordo;
+    // pubblicato sul sito: si spinge il prezzo al pubblico (regular_price,
+    // IVA inclusa) con l'editor rapido, che aggiorna WooCommerce e svuota la
+    // cache. Prima il sito (puo' rifiutare), poi il locale — se il sito non
+    // accetta, meglio restare indietro che divergere
+    if (p.woo_product_id != null && p.stato === "publish") {
+      const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: p.id, prezzoVendita: lordo } });
+      if (error || data?.errore) { window.alert("Prezzo non aggiornato sul sito: " + (data?.errore || error?.message || "errore")); return; }
+    }
+    const { error } = await supabase.from("prodotti_shop").update({ prezzo_vendita: netto, prezzo_lordo_forzato: forzato }).eq("id", p.id);
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    ricarica(["prodotti_shop"]);
+  }
   // "Non sul POS" e "Solo offline" possono arrivare anche dalla categoria
   // (forzatoEscludi/forzatoSoloOffline, vedi PaginaMagazzino): in quel
   // caso la checkbox qui è bloccata a "true", perché toglierla va fatto
@@ -47524,13 +47551,15 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         </td>
     ),
     "Prezzo vendita (IVA incl.)": (
-        <td style={{ ...tdStyle }} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
-          <span style={{ ...fontBody, fontSize: 12, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
-            {prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}
+        <td style={{ ...tdStyle }} onClick={(e) => e.stopPropagation()} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Scrivilo qui: aggiorna la scheda, la vista a tessere${p.woo_product_id != null && p.stato === "publish" ? " e anche il sito" : ""}.`}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+            <CampoNumero valore={prezzoAlPubblico(p)} min={0} onCambia={(n) => salvaPrezzoVendita(n)}
+              style={{ ...fontBody, width: 60, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "right", padding: "3px 5px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
+            <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>€</span>
             {!p.iva_verificata && (
               <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 13, lineHeight: 1 }}>⚠</span>
             )}
-          </span>
+          </div>
         </td>
     ),
     "Prezzo netto vendita": (
