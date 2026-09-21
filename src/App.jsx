@@ -4359,7 +4359,7 @@ function scontoPctRigaVenduta(riga, vendita, prodotto, fasceCanale) {
   }
   // la fascia di spesa e' quella di QUELLA vendita: il lordo delle sue
   // righe, non il carrello di oggi
-  if (vendita?.codice_coupon) return percentualeFasciaDi(prodotto, fasceCanale, lordoVendita(vendita));
+  if (vendita?.codice_coupon) return percentualeFasciaDi(prodotto, fasceCanale, lordoVendita(vendita), pagamentoContaComeContanti(vendita?.metodo_pagamento));
   return 0;
 }
 // quanto valeva il carrello di una vendita gia' fatta, a listino
@@ -4553,30 +4553,41 @@ function marginePercentualeDi(prodotto) {
   if (!(netto > 0) || costo == null || costo === "") return null;
   return ((netto - Number(costo)) / netto) * 100;
 }
+// Il margine dei CONTANTI: sul prezzo al pubblico, non sul netto. In
+// contanti l'IVA resta in cassa, quindi la base e' il lordo — la stessa
+// differenza che fa cedibileContantiDi. Serve a scegliere la fascia di
+// sconto quando si paga in contanti.
+function marginePercentualeContantiDi(prodotto) {
+  const lordo = prezzoAlPubblico(prodotto);
+  const costo = costoAcquistoDi(prodotto);
+  if (!(lordo > 0) || costo == null || costo === "") return null;
+  return ((lordo - Number(costo)) / lordo) * 100;
+}
 // "spesa": quanto vale il carrello. Senza, si resta alla prima fascia di
 // spesa — che e' quella di chi compra poco, cioe' la piu' prudente
-function percentualeFasciaDi(prodotto, fasce, spesa = 0) {
-  const margine = marginePercentualeDi(prodotto);
-  if (margine == null) return 0;
+function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false) {
   // Dal 20/09/2026 la fascia si sceglie sul GUADAGNO NETTO TEORICO, non
   // sul margine: e' il margine meno l'incidenza dei costi aziendali,
-  // come quota del prezzo. Un pigmento col 69% di margine e il 25% di
-  // incidenza ha un guadagno del 52%: cade nella fascia 49,5–66, non in
-  // quella 66–82,5. Lo sconto al cliente si misura su quello che resta
-  // davvero, non su quello che resta prima dei costi.
-  const m = margine * (1 - incidenzaCostiAttiva() / 100);
+  // come quota del prezzo. Lo sconto al cliente si misura su quello che
+  // resta davvero, non su quello che resta prima dei costi. In contanti
+  // si usano il margine sul lordo e l'incidenza dei contanti (piu' bassa),
+  // gli stessi valori della tabella cash del prodotto.
+  const margine = contanti ? marginePercentualeContantiDi(prodotto) : marginePercentualeDi(prodotto);
+  if (margine == null) return 0;
+  const incidenza = contanti ? incidenzaCostiContantiAttiva() : incidenzaCostiAttiva();
+  const m = margine * (1 - incidenza / 100);
   const elenco = fasceMargineDiSpesa(fasce, spesa);
   // la prima fascia che lo contiene; oltre l'ultimo confine resta
   // l'ultima, perche' un guadagno del 100% non deve cadere nel vuoto
   const i = FASCE_MARGINE.findIndex((f) => m <= f.a);
   return elenco[i === -1 ? elenco.length - 1 : i].percentuale;
 }
-function scontoAFasceCarrello(righe, prodottoPerId, fasce) {
+function scontoAFasceCarrello(righe, prodottoPerId, fasce, contanti = false) {
   // prima si somma quanto si spende, poi si sceglie la serie: la fascia
   // di spesa la decide il carrello intero, non la singola riga
   const spesa = round2((righe || []).reduce((s, r) => s + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
   return round2((righe || []).reduce((s, r) => {
-    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce, spesa);
+    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce, spesa, contanti);
     return s + (pct > 0 ? (r.prezzo * r.quantita * pct) / 100 : 0);
   }, 0));
 }
@@ -20720,7 +20731,7 @@ function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, sc
     const lordo = round2(unitario * (Number(r.quantita) || 0));
     const margine = marginePercentualeDi(prodotto);
     const scontoPct = aFasce
-      ? percentualeFasciaDi(prodotto, fasce, subtotale)
+      ? percentualeFasciaDi(prodotto, fasce, subtotale, contanti)
       : (pctSecca > 0 ? percentualeSeccaDiRiga(prodotto, r, pctSecca, baseSecca) : 0);
     const sconto = round2((lordo * scontoPct) / 100);
     // quanto si incassa per UN pezzo: e' il numero che chi guarda
@@ -57173,13 +57184,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     ? serieScontoScritta(fasceReferralContantiPos)
     : serieScontoScritta(fasceContantiCorsiPos));
   const scontoCoupon = couponAFasce
-    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive)
+    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento))
     : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
   const righeSenzaMargine = couponAFasce
-    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale) <= 0)
+    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento)) <= 0)
     : couponNum > 0 && couponSulMargine
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
@@ -57255,7 +57266,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       const quantita = Number(r.quantita) || 0;
       teorici += pp * quantita;
       const scontoPct = couponAFasce
-        ? percentualeFasciaDi(prodotto, fasceCouponAttive, subtotale)
+        ? percentualeFasciaDi(prodotto, fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento))
         : couponNum > 0 ? couponNum
         : scontoNum > 0 ? (scontoTipo === "percentuale" ? scontoNum : (subtotale > 0 ? (scontoNum / subtotale) * 100 : 0))
         : 0;
@@ -57314,7 +57325,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     let scontiRiga = carrello.map((r, i) => {
       const lordoRiga = lordiRiga[i];
       if (omaggioAttivo || lordoRiga <= 0) return 0;
-      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale)) / 100);
+      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento))) / 100);
       if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
       if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
       return 0;
@@ -57939,10 +57950,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         display: isMobile ? "flex" : "block", alignItems: "stretch", gap: 14,
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {[["Subtotale (IVA incl.)", subtotale], ["Imponibile", imponibile], ["IVA 22%", iva]].map(([etichetta, valore], i) => (
-            <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, ...fontBody, fontSize: isMobile ? 12 : 13, lineHeight: 1.15, color: NAVY, marginBottom: isMobile && i === 2 ? 0 : (isMobile ? 4 : 5) }}>
-              <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: grigioCarrello, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700 }}>{etichetta}</span>
-              <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{fmtEuroErp2(valore)}</span>
+          {[
+            { etichetta: senzaIva ? "Subtotale" : "Subtotale (IVA incl.)", valore: subtotale },
+            ...(scontoApplicato > 0 ? [{ etichetta: "Sconto", valore: scontoApplicato, negativo: true }] : []),
+            // in contanti o buono Amazon senza fattura l'IVA non c'e': le
+            // righe Imponibile e IVA non si mostrano proprio
+            ...(senzaIva ? [] : [{ etichetta: "Imponibile", valore: imponibile }, { etichetta: "IVA 22%", valore: iva }]),
+          ].map(({ etichetta, valore, negativo }, i) => (
+            <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, ...fontBody, fontSize: isMobile ? 12 : 13, lineHeight: 1.15, color: negativo ? "#C0392B" : NAVY, marginBottom: isMobile && i === 2 ? 0 : (isMobile ? 4 : 5) }}>
+              <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: negativo ? "#C0392B" : grigioCarrello, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700 }}>{etichetta}</span>
+              <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{negativo ? "− " : ""}{fmtEuroErp2(valore)}</span>
             </div>
           ))}
         </div>
