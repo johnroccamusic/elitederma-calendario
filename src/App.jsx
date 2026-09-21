@@ -47122,7 +47122,7 @@ const COLONNE_MAGAZZINO = [
   // netto, e sono queste colonne; il contante tiene il lordo e sta nella
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
   // la tabella. Vedi cedibileContantiDi
-  { label: "Guadagno netto teorico", campo: "cedibileEuro", direzioneIniziale: "desc", larghezza: 80 },
+  { label: "Somma massima cedibile", campo: "sommaMassimaCedibileEuro", direzioneIniziale: "desc", larghezza: 80 },
   // la sicurezza che si toglie dal cedibile prima di fare i punti: la
   // percentuale e' quella di Gestione punti, si cambia anche qui nel
   // titolo, e vale in tutta l'app
@@ -47153,7 +47153,7 @@ const COLONNE_MAGAZZINO = [
 // significherebbe perdere quello che l'utente ci ha gia' sistemato sopra
 // — la colonna finirebbe in fondo alla tabella, larga come al primo
 // giorno. Qui il vecchio nome continua a valere per quel che e' salvato
-const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop", "Margine €": "Ricavo lordo", "Cedibile €": "Guadagno netto teorico", "Cedibile carta/shop": "Guadagno netto teorico", "Punti": "Punti totali prodotto", "Punti carta/shop": "Punti totali prodotto" };
+const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "No POS", "Solo offline": "No shop", "Margine €": "Ricavo lordo", "Cedibile €": "Somma massima cedibile", "Cedibile carta/shop": "Somma massima cedibile", "Guadagno netto teorico": "Somma massima cedibile", "Punti": "Punti totali prodotto", "Punti carta/shop": "Punti totali prodotto" };
 const COLONNE_MAGAZZINO_NOME_VECCHIO = Object.fromEntries(
   Object.entries(COLONNE_MAGAZZINO_RINOMINATE).map(([vecchio, nuovo]) => [nuovo, vecchio])
 );
@@ -47732,8 +47732,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           </span>
         </td>
     ),
-    "Guadagno netto teorico": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Ricavo lordo meno l'incidenza dei costi aziendali (${incidenzaCostiPct}%): e' quello che resta davvero su un pezzo, e da qui nascono i punti` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileEuro != null ? fmtEuroErp2(p.cedibileEuro) : "N/D"}</td>
+    "Somma massima cedibile": (
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, fontWeight: 700, color: p.sommaMassimaCedibileEuro == null ? MUTED : (p.sommaMassimaCedibileEuro < 0 ? "#C0392B" : NAVY), whiteSpace: "nowrap" }} title={p.sommaMassimaCedibileEuro != null ? `Il ${fmtPctErp(p.cedibileResiduoPct)} che resta, applicato al prezzo netto di ${fmtEuroErp2(p.prezzo_vendita)}${p.sommaMassimaCedibileEuro < 0 ? " — negativo: a questo prezzo non c'e' niente da cedere" : ""}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>{p.sommaMassimaCedibileEuro != null ? fmtEuroErp2(p.sommaMassimaCedibileEuro) : "N/D"}</td>
     ),
     "Sicurezza": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: "#B8860B", whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile carta/shop (${fmtEuroErp2(p.cedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
@@ -47859,7 +47859,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     })(),
     "Ricavo lordo": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
     "Incidenza costi aziendali": <td style={tdContanti} title="In contanti l'incidenza e' il 62,5% della generale: niente commissioni di carta, Scalapay e conto">{numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%</td>,
-    "Guadagno netto teorico": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%, il 62,5% della generale): in contanti si tiene tutto il prezzo e non ci sono commissioni` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
+    "Somma massima cedibile": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%, il 62,5% della generale): in contanti si tiene tutto il prezzo e non ci sono commissioni` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * p.sicurezzaProdotto) / 100))}` : "—"}</td>,
     "Riallinea": <td style={tdContanti} />,
     "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
@@ -48471,6 +48471,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // elargire: cento meno tutto cio' che non si puo' cedere. Negativo
     // significa che a quel prezzo si e' gia' sotto.
     const cedibileResiduoPct = incidenzaNonCedibilePct != null ? round1Erp(100 - incidenzaNonCedibilePct) : null;
+    // La stessa percentuale, in euro. ATTENZIONE: non e' `cedibileEuro`,
+    // che resta il numero da cui nascono i punti — quello si cambia solo
+    // quando si rivede tutta la catena, mostrando prima l'effetto.
+    const sommaMassimaCedibileEuro = cedibileResiduoPct != null && p.prezzo_vendita != null ? round2((Number(p.prezzo_vendita) * cedibileResiduoPct) / 100) : null;
     // gli stessi due numeri della percentuale, in euro: e' la domanda che
     // si fa davanti a un ordine ("quanto ci guadagno su un pezzo"), e una
     // percentuale da sola non risponde — il 69% di 3,50 e il 69% di 39,90
@@ -48522,6 +48526,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       costoSulPrezzoPct,
       incidenzaNonCedibilePct,
       cedibileResiduoPct,
+      sommaMassimaCedibileEuro,
       margineEuro,
       cedibilePct,
       cedibileEuro,
