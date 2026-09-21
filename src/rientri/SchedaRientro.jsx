@@ -73,7 +73,7 @@ const DESTINI = [
 ];
 
 export default function SchedaRientro({
-  corsoData, corso, location, iscritti, prodottiShop, kitDefinizioni, masterLoggataId, isMobile = false, onBack,
+  corsoData, corso, location, iscritti, prodottiShop, kitDefinizioni, masterLoggataId, venditeShop = [], isMobile = false, onBack,
 }) {
   const [dati, setDati] = useState(null);
   const [caricando, setCaricando] = useState(true);
@@ -96,6 +96,27 @@ export default function SchedaRientro({
   const timerBozza = useRef(null);
 
   const prodottoById = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
+  // i pezzi venduti col POS per questo corso e dichiarati presi dai kit,
+  // non ancora attribuiti a un kit preciso: sono quelli che la master
+  // dovra' associare, uno per uno, al kit da cui li ha tirati fuori.
+  const vendutiDaAssociare = useMemo(() => {
+    if (!corsoData?.id) return [];
+    const perProdotto = {};
+    (venditeShop || []).forEach((v) => {
+      if (v.corso_data_id !== corsoData.id) return;
+      if (!v.prelevato_dai_kit) return;
+      if (v.kit_riserva_id) return; // gia' associata a un kit
+      if (v.tipo_movimento === "omaggio") return;
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+        if (r.spedizione || !r.prodotto_id) return;
+        const q = Number(r.quantita) || 0;
+        if (q <= 0) return;
+        const k = r.prodotto_id;
+        perProdotto[k] = (perProdotto[k] || 0) + q;
+      });
+    });
+    return Object.entries(perProdotto).map(([prodottoId, quantita]) => ({ prodottoId, quantita }));
+  }, [venditeShop, corsoData]);
   const kitById = useMemo(() => Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k])), [kitDefinizioni]);
   const iscrittiEdizione = useMemo(
     () => (iscritti || []).filter((i) => i.corso_data_id === corsoData?.id),
@@ -356,6 +377,26 @@ export default function SchedaRientro({
                     </div>
                   );
                 })}
+
+                {/* i venduti dal POS dichiarati presi dai kit: qui SOLO
+                    l'elenco, non ancora associati. La master dira' lei da
+                    quale kit li ha presi (passo successivo). */}
+                {vendutiDaAssociare.length > 0 && (
+                  <div style={{ marginTop: 10, border: `1px dashed ${GOLD}`, borderRadius: 12, padding: 12, background: "#FDF8EC" }}>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
+                      Venduti dal POS, presi dai kit — da associare
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.4 }}>
+                      Questi pezzi li hai venduti e dichiarati presi dai kit. Dimmi tu da quale kit li hai tirati fuori: per ora sono qui, non ancora assegnati.
+                    </div>
+                    {vendutiDaAssociare.map((r) => (
+                      <div key={r.prodottoId} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                        <span>{nomeProdotto(r.prodottoId)}</span>
+                        <span style={{ color: "#8A6A1B", fontWeight: 700, whiteSpace: "nowrap" }}>{r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"} · da associare</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Blocco>
             )}
 

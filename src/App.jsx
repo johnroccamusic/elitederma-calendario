@@ -69931,7 +69931,7 @@ export default function App() {
         <SchedaRientro
           corsoData={corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId) || null}
           corso={corsi.find((c) => c.id === corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId)?.corso_id)}
-          location={location} iscritti={iscritti} prodottiShop={prodottiShop}
+          location={location} iscritti={iscritti} prodottiShop={prodottiShop} venditeShop={venditeShop}
           kitDefinizioni={kitDefinizioni} masterLoggataId={utenteLoggato?.masterId || null}
           isMobile={isMobile}
           onBack={() => setView("dashboardmaster")}
