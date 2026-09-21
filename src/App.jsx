@@ -444,6 +444,12 @@ const QUOTA_PUNTI_PER_MASTER_DEFAULT = 25;
 // Le percentuali si scrivono in cima alle colonne e restano per tutti
 const CHIAVE_QUOTE_COLONNE_PUNTI = "dettaglioProdotti_quoteColonnePunti";
 const QUOTE_COLONNE_PUNTI_DEFAULT = [25, 30, 50];
+// Il margine operativo (21/09/2026): una fetta del prezzo netto di
+// vendita che si mette da parte prima di ragionare sul resto. La
+// percentuale si scrive in cima alla colonna e vale per tutti i
+// prodotti, come l'incidenza dei costi aziendali.
+const CHIAVE_MARGINE_OPERATIVO = "dettaglioProdotti_margineOperativoPct";
+const MARGINE_OPERATIVO_DEFAULT = 25;
 // Lo schema dei punti: dal cedibile (il 100%) si accantona subito una
 // parte di sicurezza, quel che resta e' il massimo cedibile, e i punti
 // sono dieci per ogni euro di massimo cedibile — cosi' la conversione e'
@@ -47007,6 +47013,9 @@ const COLONNE_MAGAZZINO = [
   // 32,70, che e' il netto. Ora quel numero sta li' e il conto si legge.
   { label: "Prezzo netto vendita", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 78 },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
+  // una percentuale del prezzo netto di vendita, scritta nel titolo:
+  // vale per tutti i prodotti, come l'incidenza
+  { label: "Margine operativo", campo: "margineOperativoEuro", direzioneIniziale: "desc", larghezza: 80, margineOperativo: true },
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
   { label: "Ricavo lordo", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 72 },
   // la percentuale di costi aziendali che si toglie dal ricavo: una per
@@ -47307,7 +47316,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
 
 // sicurezzaPunti, pctQuotaColonna ed euroQuota arrivano dalla pagina: sono
 // le percentuali scritte nei titoli delle colonne "Sicurezza" e "Quota"
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, margineOperativoPct = MARGINE_OPERATIVO_DEFAULT, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
   // la percentuale di sicurezza di QUESTO prodotto: si scrive nella cella
   // "Sicurezza" e si salva quando si esce dal campo (o con Invio). Vuota
   // = torna a quella generale
@@ -47587,6 +47596,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={tdStyle} title={p.isBundle ? "Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" : "Si modifica solo dalla scheda prodotto (clic sul nome)"}>
           <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 12, color: p.isBundle ? MUTED : NAVY }}>
             {p.costo_acquisto != null ? fmtEuroErp2(p.costo_acquisto) : "—"}
+          </span>
+        </td>
+    ),
+    "Margine operativo": (
+        <td style={tdStyle} title={p.prezzo_vendita != null ? `Il ${margineOperativoPct}% del prezzo netto di vendita (${fmtEuroErp2(p.prezzo_vendita)})` : "Senza prezzo di vendita non c'e' margine operativo"}>
+          <span style={{ ...fontBody, fontSize: 12, color: NAVY }}>
+            {p.margineOperativoEuro != null ? fmtEuroErp2(p.margineOperativoEuro) : "—"}
           </span>
         </td>
     ),
@@ -47872,6 +47888,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     salvaQuoteColonne(nuove);
   };
   const euroQuota = (punti, i) => (punti != null ? round2((punti * pctQuotaColonna(i)) / 100) : null);
+  // il margine operativo: una percentuale del prezzo netto di vendita,
+  // scritta in cima alla sua colonna e valida per tutti i prodotti
+  const [margineOperativoSalvato, salvaMargineOperativo] = useImpostazioneCondivisa(CHIAVE_MARGINE_OPERATIVO, MARGINE_OPERATIVO_DEFAULT);
+  const margineOperativoPct = Number.isFinite(Number(margineOperativoSalvato)) ? Number(margineOperativoSalvato) : MARGINE_OPERATIVO_DEFAULT;
+  const cambiaMargineOperativo = (valore) => {
+    if (valore === "" || valore == null) return;
+    const n = Math.max(0, Math.min(100, Number(String(valore).replace(",", ".")) || 0));
+    if (n !== Number(margineOperativoSalvato)) salvaMargineOperativo(n);
+  };
   // tutti i prodotti con una percentuale propria tornano a quella generale
   async function riallineaSicurezzaTutti() {
     const ids = (prodottiShop || []).filter((x) => x.sicurezza_punti_pct != null).map((x) => x.id);
@@ -48345,6 +48370,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     const puntiContanti = puntiContantiPezzo != null ? round2(puntiContantiPezzo * 2) : null;
     // le tre quote in euro dei punti totali, per ordinare e mostrare
     const quota1 = euroQuota(punti, 0), quota2 = euroQuota(punti, 1), quota3 = euroQuota(punti, 2);
+    // il margine operativo in euro: la sua percentuale del prezzo netto
+    // di vendita. Senza prezzo non c'e' niente da calcolare
+    const margineOperativoEuro = p.prezzo_vendita != null ? round2((Number(p.prezzo_vendita) * margineOperativoPct) / 100) : null;
     // quanto si toglie dal cedibile per la sicurezza, in euro
     const sicurezzaEuro = cedibileEuro != null ? round2((Number(cedibileEuro) * sicurezzaProdotto) / 100) : null;
 
@@ -48364,6 +48392,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       cedibileEuro,
       punti,
       quota1, quota2, quota3,
+      margineOperativoEuro,
       sicurezzaEuro,
       sicurezzaProdotto,
       margineContanti: contanti.margine,
@@ -48997,6 +49026,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                           <span style={{ fontSize: 11, color: NAVY }}>%</span>
                         </div>
                       )}
+                      {col.margineOperativo && (
+                        // la percentuale del margine operativo: una per
+                        // tutti i prodotti, si scrive qui nel titolo
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
+                          onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                          <CampoNumero valore={margineOperativoPct} min={0} max={100} onCambia={(n) => cambiaMargineOperativo(n)} titolo="Percentuale del prezzo netto di vendita messa da parte come margine operativo"
+                            style={{ ...fontBody, width: 40, fontSize: 11.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
+                          <span style={{ fontSize: 11, color: NAVY }}>%</span>
+                        </div>
+                      )}
                       {col.quotaIndice != null && (
                         // la percentuale della quota si scrive qui, nel
                         // titolo: click e trascinamento non devono
@@ -49036,7 +49075,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} margineOperativoPct={margineOperativoPct} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
