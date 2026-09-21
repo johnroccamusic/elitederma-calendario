@@ -1102,6 +1102,20 @@ function puoForzareLaVista(ruoloUtente, utenteLoggato, venditoreLoggato) {
     .some((n) => NOMI_VISTA_FORZATA.includes(String(n).trim().split(/\s+/)[0].toLowerCase()));
 }
 
+// Chi puo' vedere, nelle dashboard delle master, il totale in euro dei
+// carrelli venduti: solo la modalita' programmatore e Chiara Colonnelli (che
+// entra col codice "cc"). Le master no — a loro l'importo resta nascosto,
+// vedono le vendite e i punti. E' un permesso personale, come la vista
+// forzata: si riconosce dal nome (robusto quando l'utenza verra' creata) o,
+// per sicurezza, dal codice d'ingresso "cc".
+function vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato) {
+  if (ruoloUtente === "programmatore") return true;
+  const nomi = [utenteLoggato?.nome, venditoreLoggato?.nome].filter(Boolean).map((n) => String(n).toLowerCase());
+  if (nomi.some((n) => n.includes("chiara") && n.includes("colonnelli"))) return true;
+  const codici = [utenteLoggato?.password, venditoreLoggato?.password].filter(Boolean).map((p) => String(p).trim().toLowerCase());
+  return codici.includes("cc");
+}
+
 function TastoVistaForzata({ abilitato = false }) {
   // Se la vista era rimasta forzata da un accesso precedente e ora chi
   // entra non puo' cambiarla, si torna normali da soli: altrimenti
@@ -11959,7 +11973,10 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+  // il totale in euro dei carrelli lo vedono solo programmatore e Chiara
+  // Colonnelli; le master vedono vendite e punti, mai l'importo
+  const mostraEuroCarrelli = vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato);
   // le edizioni per cui un pacco e' davvero partito: il tasto "Cambi e
   // integrazioni" compare solo li', perche' altrove non c'e' una scorta
   // da cui prendere e il quadro sarebbe vuoto
@@ -12036,10 +12053,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // "acquisto effettuato"); i punti invece riflettono anche i resi
   // (negativi), perché sono la sostanza vera della raccolta punti
   const provvigioniMaster = useMemo(() => {
-    const vuoto = { venditeTotale: 0, venditeCorso: 0, venditeReferral: 0, puntiAccumulati: 0, puntiMaturati: 0, euroCorso: 0, euroReferral: 0, euroTotale: 0, pezzi: 0, premi: premiVolumeRaggiunti(0), gruppi: [] };
+    const vuoto = { venditeTotale: 0, venditeCorso: 0, venditeReferral: 0, puntiAccumulati: 0, puntiMaturati: 0, euroCorso: 0, euroReferral: 0, euroTotale: 0, valoreCarrelli: 0, pezzi: 0, premi: premiVolumeRaggiunti(0), gruppi: [] };
     if (!masterSelId || !puntiMasterImpostazioni) return vuoto;
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
-    let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, euroCorso = 0, euroReferral = 0, pezzi = 0, puntiAccumulati = 0;
+    let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, euroCorso = 0, euroReferral = 0, pezzi = 0, puntiAccumulati = 0, valoreCarrelli = 0;
     const perGruppo = {};
     // i punti BONUS: per ogni riga venduta, i punti pieni del prodotto
     // per i pezzi, senza detrazioni per lo sconto usato ne' quote per
@@ -12089,6 +12106,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       // con se' una provvigione negativa, quindi si sottrae da sola
       const euro = Number(v.provvigione_master) || 0;
       if ((v.totale || 0) > 0) venditeTotale += 1;
+      // il valore vero dei carrelli di questa dashboard: la somma dei totali
+      // incassati (un reso col totale negativo si sottrae da solo). Non e' la
+      // provvigione: e' quanto hanno pagato i clienti
+      valoreCarrelli += Number(v.totale) || 0;
       if (v.provvigione_canale === "corso") euroCorso += euro; else euroReferral += euro;
       pezzi += Number(v.provvigione_pezzi) || 0;
       const chiave = v.codice_coupon ? v.codice_coupon.toUpperCase() : "__pos_senza_referral__";
@@ -12112,6 +12133,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       // il premio a volume e' maturato quanto le provvigioni: sta nel
       // totale, non in una riga a parte che nessuno somma
       euroTotale: round2(euroCorso + euroReferral + premi.euro),
+      valoreCarrelli: round2(valoreCarrelli),
       pezzi, premi, gruppi,
     };
   }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash, fasceContantiDash, tabellaCedibileDash, incidenzaCostiDash]);
@@ -12271,7 +12293,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             // finestra si stringeva. "start" le tiene attaccate in alto, cosi'
             // le etichette partono dalla stessa riga anche quando una va a capo
             // e le altre no
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${puntiVisibiliMaster ? 3 : 2}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${(() => { const n = 2 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli ? 1 : 0); return isMobile && n > 2 ? 2 : n; })()}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
                   qui contano le vendite, i punti arriveranno con una regola
                   loro (da definire), e la quarta scheda resta vuota in
@@ -12293,6 +12315,14 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                     sconto dell'allieva non li riduce piu'. Non e' la fetta
                     che spetta a lei — quella la decide la quota per canale */}
                 <div style={{ ...numPunti, color: NAVY }}>{fmtPunti(provvigioniMaster.puntiMaturati)}</div>
+              </div>
+              )}
+              {/* il totale in euro dei carrelli venduti: solo programmatore e
+                  Chiara Colonnelli lo vedono, mai le master */}
+              {mostraEuroCarrelli && (
+              <div style={cardPunti}>
+                <div style={lblPunti}>Totale<br />carrelli</div>
+                <div style={{ ...numPunti, color: "#2E7D32" }}>{fmtEuroErp2(provvigioniMaster.valoreCarrelli)}</div>
               </div>
               )}
             </div>
@@ -69808,6 +69838,7 @@ export default function App() {
           sceltaLibera={!!utenteLoggato?.masterId && (utenteLoggato.permessi || []).includes("impostazioni")}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           puntiMasterImpostazioni={puntiMasterImpostazioni} regoleReferralAutomatico={regoleReferralAutomatico}
+          ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato}
           onApriInventarioSede={apriInventarioSede}
           onApriCambi={apriCambiIntegrazioni}
           onApriInventarioFineCorso={apriInventarioFineCorso}
