@@ -288,6 +288,18 @@ export async function associaVenditaAKit({
   venditaId: string;
 }): Promise<string | null> {
   if (!(quantita > 0)) return null;
+
+  // La regola dura: da un kit puo' uscire solo cio' che contiene, e solo
+  // fino a quanto ne aveva. Se il pezzo non e' nella distinta, o non ne
+  // resta abbastanza, non si associa — o il magazzino racconterebbe che da
+  // quella scatola e' uscito qualcosa che dentro non c'era.
+  const { data: componente } = await supabase
+    .from("kit_riserva_componenti").select("id, quantita_iniziale, quantita_prelevata")
+    .eq("kit_riserva_id", istanzaId).eq("prodotto_id", prodottoId).maybeSingle();
+  if (!componente) return "questo kit non contiene quel prodotto";
+  const residuo = (componente.quantita_iniziale || 0) - (componente.quantita_prelevata || 0);
+  if (quantita > residuo) return "in questo kit non ne resta abbastanza";
+
   const { error: errorePrelievo } = await supabase.from("prelievi_kit_riserva").insert({
     kit_riserva_id: istanzaId,
     prodotto_id: prodottoId,
@@ -298,14 +310,9 @@ export async function associaVenditaAKit({
   });
   if (errorePrelievo) return errorePrelievo.message;
 
-  const { data: componente } = await supabase
-    .from("kit_riserva_componenti").select("id, quantita_prelevata")
-    .eq("kit_riserva_id", istanzaId).eq("prodotto_id", prodottoId).maybeSingle();
-  if (componente) {
-    await supabase.from("kit_riserva_componenti")
-      .update({ quantita_prelevata: (componente.quantita_prelevata || 0) + quantita })
-      .eq("id", componente.id);
-  }
+  await supabase.from("kit_riserva_componenti")
+    .update({ quantita_prelevata: (componente.quantita_prelevata || 0) + quantita })
+    .eq("id", componente.id);
   await supabase.from("kit_riserva_istanze").update({ stato: "aperto" }).eq("id", istanzaId);
   return null;
 }

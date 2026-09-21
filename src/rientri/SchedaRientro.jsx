@@ -10,7 +10,7 @@
 // mano. Qui si conferma.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina } from "../ui/stile.js";
+import { NAVY, CREAM_BORDER, MUTED, GOLD, BG_CHIARO, fontBody, fontDisplay, stileTitoloPagina } from "../ui/stile.js";
 import { Button, ContatoreQuantita, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano, salvaBozzaRientro, associaVenditaAKit, disassociaVenditaDaKit, dissociaVenditeDaKit, materializzaKitAllievoNonConsegnato, smaterializzaKitAllievoNonConsegnato } from "./rientro";
 
@@ -80,6 +80,9 @@ export default function SchedaRientro({
   const [valori, setValori] = useState({}); // rigaId -> { rientrata, guasta, consegnata }
   const [consegne, setConsegne] = useState({}); // iscrittoId -> bool
   const [sceltaKit, setSceltaKit] = useState(null);
+  // la tendina per attribuire i venduti dal POS a una scatola aperta:
+  // { kit, righe: [{ venditaId, prodottoId, quantita, giaAssociato, scelto }] }
+  const [assocKit, setAssocKit] = useState(null);
   // il nome libero di chi ha ricevuto un kit intero, quando non e' una delle
   // iscritte del corso
   const [nomeAltra, setNomeAltra] = useState("");
@@ -275,22 +278,57 @@ export default function SchedaRientro({
     await ricarica();
   }
 
-  // La master attribuisce un pezzo venduto alla scatola giusta, mentre la
-  // sta aprendo.
-  async function associa(riga, istanzaId) {
-    if (!istanzaId) return;
-    setMessaggio("");
-    const err = await associaVenditaAKit({ istanzaId, prodottoId: riga.prodottoId, quantita: riga.quantita, venditaId: riga.venditaId });
-    if (err) { setMessaggio("Non riesco ad associare: " + err); return; }
-    ricaricaApp?.(["vendite_shop"]);
-    await ricarica();
+  // Aprire una scatola vuol dire dire cosa ne e' uscito: si apre la tendina
+  // coi venduti dal POS. In alto quelli gia' presi da questo kit (spuntati);
+  // sotto quelli ancora da attribuire che QUESTO kit contiene davvero e in
+  // numero sufficiente — gli altri non si possono spuntare, perche' da qui
+  // non potevano uscire.
+  function apriAssociazione(k) {
+    setSceltaKit(null);
+    const residuo = {};
+    (k.componenti || []).forEach((c) => { residuo[c.prodottoId] = (c.iniziale || 0) - (c.prelevata || 0); });
+    const associati = Object.values((dati?.prelieviVendita || []).reduce((acc, p) => {
+      if (p.kitRiservaId !== k.id || !p.venditaId || !p.prodottoId) return acc;
+      const key = `${p.venditaId}|${p.prodottoId}`;
+      (acc[key] || (acc[key] = { venditaId: p.venditaId, prodottoId: p.prodottoId, quantita: 0 })).quantita += p.quantita || 0;
+      return acc;
+    }, {}));
+    const candidati = vendutiDaAssociare.filter((r) => (residuo[r.prodottoId] || 0) >= r.quantita);
+    const righe = [
+      ...associati.map((a) => ({ venditaId: a.venditaId, prodottoId: a.prodottoId, quantita: a.quantita, giaAssociato: true, scelto: true })),
+      ...candidati.map((r) => ({ venditaId: r.venditaId, prodottoId: r.prodottoId, quantita: r.quantita, giaAssociato: false, scelto: false })),
+    ];
+    setAssocKit({ kit: k, righe });
   }
-  // Si era sbagliata: quel pezzo da questa scatola non era uscito. Torna
-  // fra i "da associare".
-  async function disassocia(istanzaId, prodottoId, venditaId) {
+  function toggleSelezioneAssoc(venditaId, prodottoId) {
+    setAssocKit((prev) => prev && ({
+      ...prev,
+      righe: prev.righe.map((x) => (x.venditaId === venditaId && x.prodottoId === prodottoId ? { ...x, scelto: !x.scelto } : x)),
+    }));
+  }
+  // Confermare la tendina: la scatola passa ad "aperto" e si applica la
+  // differenza — si attribuisce quello che e' stato spuntato ora, si stacca
+  // quello che e' stato tolto. Poi i venduti sotto calano da soli.
+  async function confermaAssociazione() {
+    if (!assocKit) return;
+    const { kit, righe } = assocKit;
+    setAssocKit(null);
     setMessaggio("");
-    const err = await disassociaVenditaDaKit({ istanzaId, prodottoId, venditaId });
-    if (err) { setMessaggio("Non riesco a disassociare: " + err); return; }
+    if (kit.stato !== "aperto") {
+      const e = await segnaDestinoKit(kit.id, "aperto", { preservaIscritto: kit.origine === "allievo_non_consegnato" });
+      if (e) { setMessaggio("Non riesco ad aprire il kit: " + e); return; }
+    }
+    let intoppo = "";
+    for (const r of righe) {
+      if (r.scelto && !r.giaAssociato) {
+        const e = await associaVenditaAKit({ istanzaId: kit.id, prodottoId: r.prodottoId, quantita: r.quantita, venditaId: r.venditaId });
+        if (e) intoppo = `${nomeProdotto(r.prodottoId)}: ${e}`;
+      } else if (!r.scelto && r.giaAssociato) {
+        const e = await disassociaVenditaDaKit({ istanzaId: kit.id, prodottoId: r.prodottoId, venditaId: r.venditaId });
+        if (e) intoppo = `${nomeProdotto(r.prodottoId)}: ${e}`;
+      }
+    }
+    if (intoppo) setMessaggio("Qualcosa non è andato — " + intoppo);
     ricaricaApp?.(["vendite_shop"]);
     await ricarica();
   }
@@ -449,78 +487,40 @@ export default function SchedaRientro({
                           </div>
                         );
                       })()}
-                      {usciti.length > 0 && k.stato !== "aperto" && (
+                      {/* Cosa e' uscito da questa scatola: sola lettura. Le
+                          vendite si attribuiscono/tolgono dalla tendina che si
+                          apre con "L'ho aperto", non da qui. */}
+                      {usciti.length > 0 && (
                         <div style={{ marginTop: 8 }}>
                           <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                            Già uscito da questo kit
+                            Venduti presi da questo kit
                           </div>
                           {usciti.map((c) => (
                             <div key={c.prodottoId} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
                               <span>{nomeProdotto(c.prodottoId)}</span>
-                              <span style={{ color: MUTED, whiteSpace: "nowrap" }}>{c.prelevata} di {c.iniziale} · registrato</span>
+                              <span style={{ color: MUTED, whiteSpace: "nowrap" }}>{c.prelevata} {c.prelevata === 1 ? "pezzo" : "pezzi"}</span>
                             </div>
                           ))}
                         </div>
                       )}
 
-                      {/* Il kit e' aperto: e' QUI che si attribuiscono i pezzi
-                          venduti dal POS. Sopra, quelli ancora da assegnare, da
-                          prendere da questa scatola; sotto, quelli gia' messi
-                          qui, da togliere se ci si era sbagliati. */}
-                      {k.stato === "aperto" && !chiusa && (() => {
-                        const associatiKit = Object.values((dati?.prelieviVendita || []).reduce((acc, p) => {
-                          if (p.kitRiservaId !== k.id || !p.venditaId || !p.prodottoId) return acc;
-                          const key = `${p.venditaId}|${p.prodottoId}`;
-                          (acc[key] || (acc[key] = { venditaId: p.venditaId, prodottoId: p.prodottoId, quantita: 0 })).quantita += p.quantita || 0;
-                          return acc;
-                        }, {}));
-                        return (
-                          <div style={{ marginTop: 8, border: `1px dashed ${GOLD}`, borderRadius: 10, padding: 10, background: "#FDF8EC" }}>
-                            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>
-                              Venduti dal POS: quali sono usciti da qui?
-                            </div>
-                            {vendutiDaAssociare.length === 0 && associatiKit.length === 0 && (
-                              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 4 }}>Nessun pezzo venduto dai kit da attribuire.</div>
-                            )}
-                            {vendutiDaAssociare.map((r) => (
-                              <div key={`ass|${r.venditaId}|${r.prodottoId}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "5px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
-                                <span style={{ flex: "1 1 130px", minWidth: 0 }}>
-                                  {nomeProdotto(r.prodottoId)}
-                                  <span style={{ color: "#8A6A1B", fontWeight: 700 }}> · {r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"}</span>
-                                </span>
-                                <button onClick={() => associa(r, k.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 9, padding: "7px 12px", minHeight: 36, cursor: "pointer" }}>
-                                  Preso da qui
-                                </button>
-                              </div>
-                            ))}
-                            {associatiKit.length > 0 && (
-                              <div style={{ marginTop: vendutiDaAssociare.length ? 8 : 4, paddingTop: vendutiDaAssociare.length ? 8 : 0, borderTop: vendutiDaAssociare.length ? `1px solid #EFE2C4` : "none" }}>
-                                <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>
-                                  Attribuiti a questo kit
-                                </div>
-                                {associatiKit.map((r) => (
-                                  <div key={`dis|${r.venditaId}|${r.prodottoId}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "5px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
-                                    <span style={{ flex: "1 1 130px", minWidth: 0 }}>
-                                      {nomeProdotto(r.prodottoId)}
-                                      <span style={{ color: MUTED, fontWeight: 700 }}> · {r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"}</span>
-                                    </span>
-                                    <button onClick={() => disassocia(k.id, r.prodottoId, r.venditaId)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #E7B7AE`, borderRadius: 9, padding: "7px 12px", minHeight: 36, cursor: "pointer" }}>
-                                      Non da qui
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
                       {!chiusa && (
-                        <button
-                          onClick={() => { setNomeAltra(""); setSceltaKit(k); }}
-                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 12px", marginTop: 8, cursor: "pointer", width: "100%", minHeight: 44 }}
-                        >
-                          {k.stato === "sigillato" ? "Che fine ha fatto?" : "Cambia"}
-                        </button>
+                        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                          {k.stato === "aperto" && (
+                            <button
+                              onClick={() => apriAssociazione(k)}
+                              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 10, padding: "9px 12px", cursor: "pointer", flex: "1 1 160px", minHeight: 44 }}
+                            >
+                              Venduti presi da qui
+                            </button>
+                          )}
+                          <button
+                            onClick={() => { setNomeAltra(""); setSceltaKit(k); }}
+                            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 12px", cursor: "pointer", flex: "1 1 120px", minHeight: 44 }}
+                          >
+                            {k.stato === "sigillato" ? "Che fine ha fatto?" : "Cambia"}
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -652,7 +652,11 @@ export default function SchedaRientro({
             {DESTINI.map((d) => (
               <button
                 key={d.chiave}
-                onClick={() => (d.chiave === "consegnato_intero" ? setSceltaKit({ ...sceltaKit, chiediAllieva: true }) : destino(sceltaKit, d.chiave))}
+                onClick={() => {
+                  if (d.chiave === "consegnato_intero") { setSceltaKit({ ...sceltaKit, chiediAllieva: true }); return; }
+                  if (d.chiave === "aperto") { apriAssociazione(sceltaKit); return; }
+                  destino(sceltaKit, d.chiave);
+                }}
                 style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 8, minHeight: 60, ...fontBody, fontSize: 15, fontWeight: 700, padding: "14px 16px", borderRadius: 14, cursor: "pointer", background: "#fff", color: NAVY, border: `1px solid ${CREAM_BORDER}` }}
               >
                 {d.chiave === "consegnato_intero" && sceltaKit.origine === "allievo_non_consegnato" ? "Data ad un'altra allieva" : d.testo}
@@ -685,6 +689,56 @@ export default function SchedaRientro({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* La tendina dei venduti dal POS da attribuire alla scatola aperta.
+          Spunta cio' che e' uscito da qui; puoi spuntare solo quello che
+          questo kit contiene davvero e in numero sufficiente. */}
+      {assocKit && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", alignItems: "center", padding: 20, zIndex: 1100, overflowY: "auto" }}
+          onClick={() => setAssocKit(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: isMobile ? 18 : 24, width: "100%", maxWidth: 460, margin: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
+              {kitById[assocKit.kit.kitId]?.nome || "Kit"}{assocKit.kit.origine === "allievo_non_consegnato" ? " — non consegnato" : ` #${assocKit.kit.progressivo}`}
+            </div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.4 }}>
+              Quali venduti dal POS sono usciti da questa scatola? Spunta i pezzi.
+            </div>
+            {assocKit.righe.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, background: BG_CHIARO, borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                Nessun venduto dal POS che questa scatola potesse contenere.
+              </div>
+            ) : (
+              assocKit.righe.map((r) => (
+                <button
+                  key={`${r.venditaId}|${r.prodottoId}`}
+                  onClick={() => toggleSelezioneAssoc(r.venditaId, r.prodottoId)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", background: r.scelto ? "#E9F6EC" : "#fff", border: `1px solid ${r.scelto ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 12, padding: "11px 12px", marginBottom: 8, minHeight: 48, cursor: "pointer" }}
+                >
+                  <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: 6, border: `2px solid ${r.scelto ? "#2E7D32" : "#C7CBD4"}`, background: r.scelto ? "#2E7D32" : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900 }}>
+                    {r.scelto ? "✓" : ""}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 600, color: NAVY }}>
+                    {nomeProdotto(r.prodottoId)}
+                    <span style={{ color: MUTED, fontWeight: 700 }}> · {r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"}</span>
+                  </span>
+                </button>
+              ))
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <button
+                onClick={() => setAssocKit(null)}
+                style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 16px", minHeight: 48, cursor: "pointer", flex: "1 1 0" }}
+              >Annulla</button>
+              <button
+                onClick={confermaAssociazione}
+                style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 12, padding: "12px 16px", minHeight: 48, cursor: "pointer", flex: "1 1 0" }}
+              >Conferma</button>
+            </div>
           </div>
         </div>
       )}
