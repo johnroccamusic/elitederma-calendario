@@ -2,7 +2,8 @@
 /**
  * Plugin Name: Elitederma — Cache breve sulle pagine prodotto
  * Description: Accorcia la vita in cache CDN delle pagine che mostrano prezzi e disponibilita', cosi' una modifica fatta dal gestionale si vede in un minuto invece che fra trenta giorni.
- * Version: 1.0
+ * Version: 3.0
+ * Note: 3.0 usa header_register_callback() per avere l'ultima parola sul Cache-Control.
  */
 
 // Perche' esiste questo snippet.
