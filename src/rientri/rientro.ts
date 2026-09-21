@@ -36,6 +36,10 @@ export interface IstanzaRientro {
   kitId: string;
   stato: string;
   iscrittoId: string | null;
+  /** 'riserva' oppure 'allievo_non_consegnato' */
+  origine: string;
+  /** nome libero di chi ha ricevuto il kit intero, se non e' un'iscritta */
+  consegnatoANome: string | null;
   componenti: { prodottoId: string; iniziale: number; prelevata: number }[];
 }
 
@@ -140,7 +144,10 @@ export async function caricaRientro(corsoDataId: string | null): Promise<DatiRie
     righe: righeRientro,
     istanze: (istanze || []).map((i) => ({
       id: i.id, progressivo: i.progressivo, kitId: i.kit_id, stato: i.stato,
-      iscrittoId: i.iscritto_id || null, componenti: perIstanza[i.id] || [],
+      iscrittoId: i.iscritto_id || null,
+      origine: i.origine || "riserva",
+      consegnatoANome: i.consegnato_a_nome || null,
+      componenti: perIstanza[i.id] || [],
     })),
     difettosiAttesi: (sostituzioni || [])
       .filter((s) => s.difettoso_rientra)
@@ -160,17 +167,103 @@ export async function caricaRientro(corsoDataId: string | null): Promise<DatiRie
   };
 }
 
-/** Il destino di un kit di riserva: e' un tap, e cambia solo lo stato. */
+/**
+ * Il destino di un kit: e' un tap, e cambia lo stato. Se e' stato dato intero
+ * a qualcuno si scrive a chi — un'iscritta del corso (iscrittoId) o un nome
+ * libero (consegnatoANome), anche fuori dal corso.
+ *
+ * Su un kit materializzato da un'allieva non consegnata, `iscritto_id` e' gia'
+ * l'allieva a cui era assegnato e non va perso: `preservaIscritto` lo lascia
+ * dov'e' e usa solo il nome libero per dire a chi altri e' finito.
+ */
 export async function segnaDestinoKit(
   istanzaId: string,
   stato: "rientrato_chiuso" | "consegnato_intero" | "aperto",
-  iscrittoId: string | null = null,
+  opts: { iscrittoId?: string | null; consegnatoANome?: string | null; preservaIscritto?: boolean } = {},
 ): Promise<string | null> {
-  const { error } = await supabase
-    .from("kit_riserva_istanze")
-    .update({ stato, iscritto_id: stato === "consegnato_intero" ? iscrittoId : null })
-    .eq("id", istanzaId);
+  const { iscrittoId = null, consegnatoANome = null, preservaIscritto = false } = opts;
+  const patch: Record<string, unknown> = {
+    stato,
+    consegnato_a_nome: stato === "consegnato_intero" ? (consegnatoANome || null) : null,
+  };
+  // il kit dell'allieva tiene sempre segnato a chi era assegnato; su un kit
+  // di riserva vero, invece, iscritto_id e' proprio il destinatario
+  if (!preservaIscritto) patch.iscritto_id = stato === "consegnato_intero" ? iscrittoId : null;
+  const { error } = await supabase.from("kit_riserva_istanze").update(patch).eq("id", istanzaId);
   return error ? error.message : null;
+}
+
+/**
+ * Un kit di un'allieva dichiarato "non consegnato" diventa una scatola a se':
+ * si materializza come istanza di kit, col contenuto preso dalla distinta del
+ * corso, cosi' la master puo' dichiararne il destino e associarci le vendite.
+ * Idempotente: se la scatola per quell'allieva c'e' gia', non ne crea un'altra.
+ */
+export async function materializzaKitAllievoNonConsegnato({
+  spedizioneId, kitId, iscrittoId,
+}: {
+  spedizioneId: string;
+  kitId: string;
+  iscrittoId: string;
+}): Promise<string | null> {
+  if (!spedizioneId || !kitId || !iscrittoId) return "dati mancanti";
+  const { data: gia } = await supabase.from("kit_riserva_istanze").select("id")
+    .eq("spedizione_id", spedizioneId).eq("kit_id", kitId)
+    .eq("iscritto_id", iscrittoId).eq("origine", "allievo_non_consegnato").maybeSingle();
+  if (gia) return null;
+
+  const { data: distinta } = await supabase
+    .from("corsi_kit_prodotti").select("prodotto_id, quantita")
+    .eq("kit_id", kitId).eq("tipo", "kit");
+
+  // progressivo: unico su (spedizione, kit). I kit di riserva prendono 1,2…,
+  // le scatole materializzate proseguono da li' in poi — il numero non si
+  // mostra, serve solo al vincolo di unicita'.
+  const { data: esistenti } = await supabase.from("kit_riserva_istanze")
+    .select("progressivo").eq("spedizione_id", spedizioneId).eq("kit_id", kitId);
+  const prossimo = (esistenti || []).reduce((m, r) => Math.max(m, r.progressivo || 0), 0) + 1;
+
+  const { data: istanza, error } = await supabase.from("kit_riserva_istanze").insert({
+    spedizione_id: spedizioneId, kit_id: kitId, iscritto_id: iscrittoId,
+    stato: "sigillato", origine: "allievo_non_consegnato", progressivo: prossimo,
+  }).select("id").single();
+  if (error || !istanza) return error?.message || "non riesco a creare la scheda del kit";
+
+  const componenti = (distinta || [])
+    .filter((d) => d.prodotto_id && (d.quantita || 0) > 0)
+    .map((d) => ({ kit_riserva_id: istanza.id, prodotto_id: d.prodotto_id, quantita_iniziale: d.quantita, quantita_prelevata: 0 }));
+  if (componenti.length > 0) {
+    const { error: e2 } = await supabase.from("kit_riserva_componenti").insert(componenti);
+    if (e2) return e2.message;
+  }
+  return null;
+}
+
+/**
+ * L'allieva alla fine il kit l'ha ricevuto: la scatola materializzata non
+ * serve piu' e si toglie. Ma se nel frattempo ci erano state associate delle
+ * vendite non si cancella: prima vanno staccate, o quei prelievi resterebbero
+ * orfani. Torna { bloccato: true } in quel caso.
+ */
+export async function smaterializzaKitAllievoNonConsegnato({
+  spedizioneId, kitId, iscrittoId,
+}: {
+  spedizioneId: string;
+  kitId: string;
+  iscrittoId: string;
+}): Promise<{ errore?: string; bloccato?: boolean }> {
+  const { data: istanza } = await supabase.from("kit_riserva_istanze").select("id")
+    .eq("spedizione_id", spedizioneId).eq("kit_id", kitId)
+    .eq("iscritto_id", iscrittoId).eq("origine", "allievo_non_consegnato").maybeSingle();
+  if (!istanza) return {};
+
+  const { data: prelievi } = await supabase
+    .from("prelievi_kit_riserva").select("id").eq("kit_riserva_id", istanza.id).limit(1);
+  if (prelievi && prelievi.length > 0) return { bloccato: true };
+
+  await supabase.from("kit_riserva_componenti").delete().eq("kit_riserva_id", istanza.id);
+  const { error } = await supabase.from("kit_riserva_istanze").delete().eq("id", istanza.id);
+  return { errore: error?.message };
 }
 
 /**
@@ -640,8 +733,12 @@ export async function calcolaRipristino(
         somma(guastiModello, sped.modello, r.quantita_guasta || 0);
       }
     } else if (sped.tipo === "kit_allievo" && sped.kit_id) {
-      // i kit non consegnati tornano interi, e si sciolgono nel contenuto
-      const quanti = r.quantita_rientrata || 0;
+      // i kit non consegnati tornano interi, e si sciolgono nel contenuto.
+      // Ma quelli materializzati come scatole a se' (per aprirli o darli ad
+      // altri) li conta il ciclo delle istanze qui sotto, secondo il loro
+      // destino: qui vanno tolti, o tornerebbero due volte.
+      const materializzati = (istanze || []).filter((i) => i.origine === "allievo_non_consegnato" && i.kit_id === sped.kit_id).length;
+      const quanti = Math.max(0, (r.quantita_rientrata || 0) - materializzati);
       if (quanti > 0) distinta(sped.kit_id).forEach((c) => somma(perProdotto, c.prodotto_id, (c.quantita || 0) * quanti));
     }
   });

@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina } from "../ui/stile.js";
 import { Button, ContatoreQuantita, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano, salvaBozzaRientro, associaVenditaAKit, disassociaVenditaDaKit, dissociaVenditeDaKit } from "./rientro";
+import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano, salvaBozzaRientro, associaVenditaAKit, disassociaVenditaDaKit, dissociaVenditeDaKit, materializzaKitAllievoNonConsegnato, smaterializzaKitAllievoNonConsegnato } from "./rientro";
 
 // La scialuppa.
 //
@@ -80,6 +80,9 @@ export default function SchedaRientro({
   const [valori, setValori] = useState({}); // rigaId -> { rientrata, guasta, consegnata }
   const [consegne, setConsegne] = useState({}); // iscrittoId -> bool
   const [sceltaKit, setSceltaKit] = useState(null);
+  // il nome libero di chi ha ricevuto un kit intero, quando non e' una delle
+  // iscritte del corso
+  const [nomeAltra, setNomeAltra] = useState("");
   const [messaggio, setMessaggio] = useState("");
   const [salvando, setSalvando] = useState(false);
   // "fermo" | "salvo" | "salvato" | "in_ritardo": lo stato della bozza,
@@ -131,6 +134,7 @@ export default function SchedaRientro({
     () => (iscritti || []).filter((i) => i.corso_data_id === corsoData?.id),
     [iscritti, corsoData],
   );
+  const iscrittoById = useMemo(() => Object.fromEntries((iscritti || []).map((i) => [i.id, i])), [iscritti]);
   const loc = (location || []).find((l) => l.id === corsoData?.location_id) || null;
   const nomeProdotto = (id) => prodottoById[id]?.nome || "—";
   const nomeIscritto = (i) => `${i.nome || ""} ${i.cognome || ""}`.trim();
@@ -165,6 +169,14 @@ export default function SchedaRientro({
         toccata.current = true;
         setStatoBozza("in_ritardo");
       }
+      // un kit gia' materializzato come scatola "non consegnata" tiene il suo
+      // flag anche dopo un ricarico, che la bozza sia arrivata o no: la
+      // scatola sul database e' la verita'
+      const nonConsegnatiDaIstanze = {};
+      (d.istanze || []).forEach((k) => {
+        if (k.origine === "allievo_non_consegnato" && k.iscrittoId) nonConsegnatiDaIstanze[k.iscrittoId] = false;
+      });
+      if (Object.keys(nonConsegnatiDaIstanze).length > 0) setConsegne((prev) => ({ ...prev, ...nonConsegnatiDaIstanze }));
       setValori(iniziali);
     }
     setCaricando(false);
@@ -243,9 +255,14 @@ export default function SchedaRientro({
     return () => clearTimeout(t);
   }, [statoBozza, tentativo, dati, chiusa]);
 
-  async function destino(istanza, chiave, iscrittoId = null) {
+  async function destino(istanza, chiave, opts = {}) {
     setSceltaKit(null);
-    const errore = await segnaDestinoKit(istanza.id, chiave, iscrittoId);
+    const materializzato = istanza.origine === "allievo_non_consegnato";
+    const errore = await segnaDestinoKit(istanza.id, chiave, {
+      iscrittoId: opts.iscrittoId || null,
+      consegnatoANome: opts.nome || null,
+      preservaIscritto: materializzato,
+    });
     if (errore) { setMessaggio("Non è andata: " + errore); return; }
     // "rientra chiuso" vuol dire "non ne e' uscito niente": se a questo kit
     // erano stati attribuiti dei venduti, era uno sbaglio e vanno rimessi
@@ -276,6 +293,33 @@ export default function SchedaRientro({
     if (err) { setMessaggio("Non riesco a disassociare: " + err); return; }
     ricaricaApp?.(["vendite_shop"]);
     await ricarica();
+  }
+
+  // Flag "consegnato" di un'allieva. Toglierlo non e' solo una spunta: quel
+  // kit diventa una scatola a se', da aprire o dare ad altri, con le sue
+  // vendite. Rimetterlo consegnato la fa sparire — ma non se ci sono gia'
+  // vendite attaccate.
+  async function toggleConsegna(i) {
+    if (chiusa) return;
+    toccata.current = true;
+    const eraConsegnato = consegnato(i.id);
+    setConsegne((p) => ({ ...p, [i.id]: !eraConsegnato }));
+    const kitId = i.kit_id || righePerTipo("kit_allievo")[0]?.kitId || null;
+    if (!dati || !kitId) return;
+    if (eraConsegnato) {
+      const err = await materializzaKitAllievoNonConsegnato({ spedizioneId: dati.spedizioneId, kitId, iscrittoId: i.id });
+      if (err) setMessaggio("Segnato non consegnato, ma non ho creato la scheda del kit: " + err);
+      await ricarica();
+    } else {
+      const esito = await smaterializzaKitAllievoNonConsegnato({ spedizioneId: dati.spedizioneId, kitId, iscrittoId: i.id });
+      if (esito.bloccato) {
+        setConsegne((p) => ({ ...p, [i.id]: false }));
+        setMessaggio("Questo kit ha delle vendite associate: staccale prima di rimetterlo come consegnato.");
+        return;
+      }
+      if (esito.errore) setMessaggio("Non riesco a togliere la scheda del kit: " + esito.errore);
+      await ricarica();
+    }
   }
 
   async function chiudi() {
@@ -356,7 +400,7 @@ export default function SchedaRientro({
                 {iscrittiEdizione.map((i) => (
                   <button
                     key={i.id} disabled={chiusa}
-                    onClick={() => { toccata.current = true; setConsegne((p) => ({ ...p, [i.id]: !consegnato(i.id) })); }}
+                    onClick={() => toggleConsegna(i)}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%",
                       textAlign: "left", background: consegnato(i.id) ? "#E9F6EC" : "#fff",
@@ -380,16 +424,31 @@ export default function SchedaRientro({
                   const usciti = k.componenti.filter((c) => c.prelevata > 0);
                   return (
                     <div key={k.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 8 }}>
-                      <div style={{ textAlign: "center", marginBottom: 6 }}>
-                        <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: "#000", lineHeight: 1.15 }}>
-                          {kitById[k.kitId]?.nome || "Kit"} #{k.progressivo}
-                        </div>
-                        <div style={{ marginTop: 5 }}>
-                          {k.stato === "sigillato"
-                            ? <Pastiglia testo="da dichiarare" colore="#8A6A1B" sfondo="#F7EEDE" />
-                            : <Pastiglia testo={DESTINI.find((d) => d.chiave === k.stato)?.testo || k.stato} colore="#2E7D32" sfondo="#E9F6EC" />}
-                        </div>
-                      </div>
+                      {(() => {
+                        const nonConsegnato = k.origine === "allievo_non_consegnato";
+                        const nomeAllieva = nonConsegnato ? nomeIscritto(iscrittoById[k.iscrittoId] || {}) : "";
+                        const base = DESTINI.find((d) => d.chiave === k.stato)?.testo || k.stato;
+                        const chi = k.stato === "consegnato_intero"
+                          ? (k.consegnatoANome || (!nonConsegnato ? nomeIscritto(iscrittoById[k.iscrittoId] || {}) : ""))
+                          : "";
+                        return (
+                          <div style={{ textAlign: "center", marginBottom: 6 }}>
+                            <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: "#000", lineHeight: 1.15 }}>
+                              {kitById[k.kitId]?.nome || "Kit"}{nonConsegnato ? "" : ` #${k.progressivo}`}
+                            </div>
+                            {nonConsegnato && (
+                              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 2 }}>
+                                Non consegnato{nomeAllieva ? ` · ${nomeAllieva}` : ""}
+                              </div>
+                            )}
+                            <div style={{ marginTop: 5 }}>
+                              {k.stato === "sigillato"
+                                ? <Pastiglia testo="da dichiarare" colore="#8A6A1B" sfondo="#F7EEDE" />
+                                : <Pastiglia testo={chi ? `${base}: ${chi}` : base} colore="#2E7D32" sfondo="#E9F6EC" />}
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {usciti.length > 0 && k.stato !== "aperto" && (
                         <div style={{ marginTop: 8 }}>
                           <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>
@@ -457,7 +516,7 @@ export default function SchedaRientro({
                       })()}
                       {!chiusa && (
                         <button
-                          onClick={() => setSceltaKit(k)}
+                          onClick={() => { setNomeAltra(""); setSceltaKit(k); }}
                           style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 12px", marginTop: 8, cursor: "pointer", width: "100%", minHeight: 44 }}
                         >
                           {k.stato === "sigillato" ? "Che fine ha fatto?" : "Cambia"}
@@ -588,7 +647,7 @@ export default function SchedaRientro({
         >
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: isMobile ? 18 : 24, width: "100%", maxWidth: 460, margin: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
             <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, marginBottom: 14 }}>
-              {kitById[sceltaKit.kitId]?.nome || "Kit"} #{sceltaKit.progressivo}
+              {kitById[sceltaKit.kitId]?.nome || "Kit"}{sceltaKit.origine === "allievo_non_consegnato" ? " — non consegnato" : ` #${sceltaKit.progressivo}`}
             </div>
             {DESTINI.map((d) => (
               <button
@@ -596,7 +655,7 @@ export default function SchedaRientro({
                 onClick={() => (d.chiave === "consegnato_intero" ? setSceltaKit({ ...sceltaKit, chiediAllieva: true }) : destino(sceltaKit, d.chiave))}
                 style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 8, minHeight: 60, ...fontBody, fontSize: 15, fontWeight: 700, padding: "14px 16px", borderRadius: 14, cursor: "pointer", background: "#fff", color: NAVY, border: `1px solid ${CREAM_BORDER}` }}
               >
-                {d.testo}
+                {d.chiave === "consegnato_intero" && sceltaKit.origine === "allievo_non_consegnato" ? "Data ad un'altra allieva" : d.testo}
                 <span style={{ display: "block", ...fontBody, fontSize: 11.5, fontWeight: 400, color: MUTED, marginTop: 2 }}>{d.nota}</span>
               </button>
             ))}
@@ -605,10 +664,25 @@ export default function SchedaRientro({
                 <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>A chi</div>
                 {iscrittiEdizione.map((i) => (
                   <button
-                    key={i.id} onClick={() => destino(sceltaKit, "consegnato_intero", i.id)}
+                    key={i.id} onClick={() => destino(sceltaKit, "consegnato_intero", { iscrittoId: i.id })}
                     style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13.5, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "11px 12px", marginBottom: 6, cursor: "pointer", minHeight: 44 }}
                   >{nomeIscritto(i)}</button>
                 ))}
+                {/* anche a qualcuno che non e' fra le iscritte del corso: nome a mano */}
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "10px 0 6px" }}>Oppure un altro nome</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    value={nomeAltra}
+                    onChange={(e) => setNomeAltra(e.target.value)}
+                    placeholder="Nome e cognome"
+                    style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "11px 12px", minHeight: 44 }}
+                  />
+                  <button
+                    disabled={!nomeAltra.trim()}
+                    onClick={() => { const n = nomeAltra.trim(); setNomeAltra(""); destino(sceltaKit, "consegnato_intero", { nome: n }); }}
+                    style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: nomeAltra.trim() ? "#2E7D32" : "#B7C3BA", border: "none", borderRadius: 10, padding: "11px 16px", minHeight: 44, cursor: nomeAltra.trim() ? "pointer" : "default" }}
+                  >Conferma</button>
+                </div>
               </div>
             )}
           </div>
