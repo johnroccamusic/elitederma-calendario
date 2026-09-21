@@ -26878,9 +26878,9 @@ function PannelloRiepilogoAmministrativo({
                                 sposta nessuna cifra. */}
                             {quoteVenditoreDettaglio.map((v) => (
                               <div key={v.nome} style={{ display: "grid", gridTemplateColumns: grigliaCosti, gap: isMobile ? 4 : 6, alignItems: "center", minHeight: ALTEZZA_RIGA, padding: isMobile ? "0 6px" : "0 10px" }}>
-                                <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 18 : 32 }}>
+                                <span style={{ ...fontBody, fontSize: isMobile ? 12 : 13, color: v.senzaNome ? MUTED : NAVY, fontStyle: v.senzaNome ? "italic" : "normal", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: isMobile ? 18 : 32 }}>
                                   {v.nome}
-                                  <span style={{ ...fontBody, fontSize: isMobile ? 8 : 9, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
+                                  <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, color: MUTED, whiteSpace: "nowrap" }}> · {v.quanti} {v.quanti === 1 ? "iscritto" : "iscritti"}</span>
                                 </span>
                                 {/* stesso rientro interno della casella del
                                     totale qui sopra: senza, le cifre cadono
