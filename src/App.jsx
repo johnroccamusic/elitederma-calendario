@@ -10871,15 +10871,10 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   // lampeggia.
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
-  // Il coupon di questa classe vive dal primo giorno di corso a una
-  // settimana dopo l'ultimo: prima non esiste ancora — lo genera il cron
-  // la mattina in cui il corso comincia — e dopo non serve piu'. Lasciarlo
-  // scritto sulla scheda per sempre vorrebbe dire farlo dettare a
-  // un'allieva a novembre per un corso di settembre.
-  const GIORNI_CODA_COUPON = 7;
-  const couponVisibile = !!codiceReferral
-    && oggiStr >= corsoData.data_inizio
-    && oggiStr <= addGiorni(corsoData.data_fine, GIORNI_CODA_COUPON);
+  // Il coupon di questa classe lo genera il cron la mattina in cui il corso
+  // comincia: prima non esiste ancora (codiceReferral e' null), e da allora
+  // resta scritto accanto al nome per sempre — anche nello storico, a codice
+  // scaduto, dove e' un dato d'archivio e non piu' un codice da dettare.
   // Il tasto della contabilita' lo accende l'ufficio, con A.C.M. dentro la
   // scheda del corso: prima compariva da solo il giorno prima e restava li'
   // per sempre, e quella pagina dice quanto ha pagato ogni allievo. Ora
@@ -10954,9 +10949,10 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 29, fontWeight: 700, color: NAVY, lineHeight: 1.1, textTransform: "uppercase", overflowWrap: "anywhere" }}>
             {corso?.nome || "—"}
             {/* il codice sconto della classe: non un tasto, ma un codice da
-                leggere e dettare — attaccato al nome, in rosso, a corpo meta'
-                del titolo */}
-            {couponVisibile && (
+                leggere — attaccato al nome, in rosso, a corpo meta' del
+                titolo. Resta scritto anche nei corsi dello storico, a codice
+                scaduto: li' e' un dato di archivio, non piu' da dettare */}
+            {!!codiceReferral && (
               <span title="Codice sconto di questa classe" style={{ fontSize: isMobile ? 10.5 : 14.5, fontWeight: 700, color: "#C0392B", marginLeft: 8, whiteSpace: "nowrap" }}>
                 {String(codiceReferral || "").toUpperCase()}
               </span>
