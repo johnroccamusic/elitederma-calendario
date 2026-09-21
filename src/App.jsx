@@ -12120,13 +12120,12 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     });
     const premi = premiVolumeRaggiunti(pezzi);
     const gruppi = Object.values(perGruppo).map((g) => ({ ...g, euro: round2(g.euro) })).sort((a, b) => b.euro - a.euro);
-    // I punti che la master vede sono INTERI: quelli che il carrello ha
-    // generato, non la sua fetta. Quanto gliene spetta — 25, 20, 40% a
-    // seconda del ranking — lo decide chi amministra, dopo, guardando
-    // questo numero. Mostrarle gia' la quota significherebbe farle vedere
-    // un traguardo che si sposta quando cambia il suo ranking, e nascondere
-    // quanto ha prodotto davvero.
-    const puntiMaturati = round2(puntiCorsoLordi + puntiFuoriLordi);
+    // I punti accumulati della master sono la sua fetta: i punti pieni
+    // generati dai carrelli, ridotti dalla quota per canale (Al corso /
+    // Fuori corso) decisa in Gestione punti. Dal 21/09/2026 la quota e'
+    // l'unica leva sui punti della master, quindi qui va applicata: cambiare
+    // "Al corso" da 100 a 70 deve far scendere subito questo numero.
+    const puntiMaturati = round2((puntiCorsoLordi * quotePunti.corso) / 100 + (puntiFuoriLordi * quotePunti.fuoriCorso) / 100);
     return {
       venditeTotale, venditeCorso, venditeReferral, puntiAccumulati, puntiMaturati,
       euroCorso: round2(euroCorso), euroReferral: round2(euroReferral),
@@ -44673,9 +44672,8 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <button onClick={() => cambiaQuota(q.canale, quote[q.canale] - 5)} title="Cinque punti in meno"
                     style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
-                  <input
-                    type="number" min="0" max="100" value={quote[q.canale]}
-                    onChange={(e) => cambiaQuota(q.canale, e.target.value)}
+                  <CampoNumero
+                    valore={quote[q.canale]} onCambia={(n) => cambiaQuota(q.canale, n)} min={0} max={100}
                     style={{ ...inputStyle, width: 70, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
                   />
                   <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
