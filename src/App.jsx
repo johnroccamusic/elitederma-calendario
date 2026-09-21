@@ -47113,6 +47113,9 @@ const COLONNE_MAGAZZINO = [
   // la percentuale di costi aziendali che si toglie dal ricavo: una per
   // tutti i prodotti, si scrive nel titolo o su una riga qualsiasi
   { label: "Incidenza costi aziendali", campo: null, larghezza: 88, incidenza: true },
+  // la somma delle tre percentuali che non si possono cedere: costo di
+  // acquisto, margine operativo dell'azienda, costi aziendali
+  { label: "Incidenza costi non cedibili", campo: "incidenzaNonCedibilePct", direzioneIniziale: "desc", larghezza: 86 },
   // due righe di conto: carta e shop online versano l'IVA e stanno sul
   // netto, e sono queste colonne; il contante tiene il lordo e sta nella
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
@@ -47711,6 +47714,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
               style={{ ...fontBody, width: 44, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "center", padding: "3px 4px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
             <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>%</span>
           </div>
+        </td>
+    ),
+    "Incidenza costi non cedibili": (
+        <td style={tdStyle} title={p.incidenzaNonCedibilePct != null ? `Costo di acquisto ${fmtPctErp(p.costoSulPrezzoPct)} + margine operativo ${margineOperativoPct}% + costi aziendali ${incidenzaCostiPct}%${p.incidenzaNonCedibilePct > 100 ? " — oltre il 100%: a questo prezzo non resta niente da cedere" : ""}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: p.incidenzaNonCedibilePct == null ? MUTED : (p.incidenzaNonCedibilePct > 100 ? "#C0392B" : NAVY) }}>
+            {p.incidenzaNonCedibilePct != null ? fmtPctErp(p.incidenzaNonCedibilePct) : "N/D"}
+          </span>
         </td>
     ),
     "Guadagno netto teorico": (
@@ -48443,6 +48453,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // valore a se' perche' `margine` serve ancora al riquadro "Miglior
     // margine", dove il piu' alto dev'essere il migliore.
     const costoSulPrezzoPct = costoEffettivo != null && p.prezzo_vendita > 0 ? round1Erp((Number(costoEffettivo) / p.prezzo_vendita) * 100) : null;
+    // Tutto quello che, in percentuale sul prezzo netto, non si puo'
+    // cedere: il costo di acquisto, il margine operativo dell'azienda e
+    // l'incidenza dei costi aziendali. Sopra il 100% vuol dire che a quel
+    // prezzo non resta niente — e va detto, non nascosto.
+    const incidenzaNonCedibilePct = costoSulPrezzoPct != null ? round1Erp(costoSulPrezzoPct + margineOperativoPct + incidenzaCostiPct) : null;
     // gli stessi due numeri della percentuale, in euro: e' la domanda che
     // si fa davanti a un ordine ("quanto ci guadagno su un pezzo"), e una
     // percentuale da sola non risponde — il 69% di 3,50 e il 69% di 39,90
@@ -48492,6 +48507,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       fatturato: round2(venduto.fatturato),
       margine,
       costoSulPrezzoPct,
+      incidenzaNonCedibilePct,
       margineEuro,
       cedibilePct,
       cedibileEuro,
