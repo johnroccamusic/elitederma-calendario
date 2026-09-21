@@ -218,6 +218,48 @@ export async function associaVenditaAKit({
 }
 
 /**
+ * Toglie a un kit un pezzo venduto che gli era stato attribuito — perche' la
+ * master si accorge, aprendo la scatola, che quel pezzo da qui non era uscito.
+ * Cancella il prelievo di quella vendita per quel prodotto, la fotografia del
+ * contenuto torna piena, e la vendita non punta piu' a questo kit: cosi' il
+ * pezzo torna fra i "da associare". Non tocca il magazzino centrale ne'
+ * l'incasso.
+ */
+export async function disassociaVenditaDaKit({
+  istanzaId, prodottoId, venditaId,
+}: {
+  istanzaId: string;
+  prodottoId: string;
+  venditaId: string;
+}): Promise<string | null> {
+  const { data: prelievi } = await supabase
+    .from("prelievi_kit_riserva").select("*")
+    .eq("kit_riserva_id", istanzaId).eq("motivo", "vendita")
+    .eq("prodotto_id", prodottoId).eq("vendita_id", venditaId);
+  const righe = prelievi || [];
+  if (righe.length === 0) return null;
+  const q = righe.reduce((n, p) => n + (p.quantita || 0), 0);
+
+  const { data: comp } = await supabase
+    .from("kit_riserva_componenti").select("id, quantita_prelevata")
+    .eq("kit_riserva_id", istanzaId).eq("prodotto_id", prodottoId).maybeSingle();
+  if (comp) {
+    await supabase.from("kit_riserva_componenti")
+      .update({ quantita_prelevata: Math.max(0, (comp.quantita_prelevata || 0) - q) })
+      .eq("id", comp.id);
+  }
+  // stacca la vendita da questo kit, ma solo se era proprio qui che puntava
+  await supabase.from("vendite_shop").update({ kit_riserva_id: null })
+    .eq("id", venditaId).eq("kit_riserva_id", istanzaId);
+
+  const { error } = await supabase
+    .from("prelievi_kit_riserva").delete()
+    .eq("kit_riserva_id", istanzaId).eq("motivo", "vendita")
+    .eq("prodotto_id", prodottoId).eq("vendita_id", venditaId);
+  return error ? error.message : null;
+}
+
+/**
  * Un kit dichiarato "rientra chiuso" non ha fatto uscire niente: se qualcuno
  * gli aveva attribuito dei pezzi venduti — a mano o col vecchio automatismo —
  * era un errore, e riscrivere quello stato vuol dire ritrattare quelle

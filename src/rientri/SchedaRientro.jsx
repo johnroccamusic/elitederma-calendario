@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina } from "../ui/stile.js";
 import { Button, ContatoreQuantita, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano, salvaBozzaRientro, associaVenditaAKit, dissociaVenditeDaKit } from "./rientro";
+import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano, salvaBozzaRientro, associaVenditaAKit, disassociaVenditaDaKit, dissociaVenditeDaKit } from "./rientro";
 
 // La scialuppa.
 //
@@ -258,12 +258,22 @@ export default function SchedaRientro({
     await ricarica();
   }
 
-  // La master attribuisce un pezzo venduto alla scatola giusta.
+  // La master attribuisce un pezzo venduto alla scatola giusta, mentre la
+  // sta aprendo.
   async function associa(riga, istanzaId) {
     if (!istanzaId) return;
     setMessaggio("");
     const err = await associaVenditaAKit({ istanzaId, prodottoId: riga.prodottoId, quantita: riga.quantita, venditaId: riga.venditaId });
     if (err) { setMessaggio("Non riesco ad associare: " + err); return; }
+    ricaricaApp?.(["vendite_shop"]);
+    await ricarica();
+  }
+  // Si era sbagliata: quel pezzo da questa scatola non era uscito. Torna
+  // fra i "da associare".
+  async function disassocia(istanzaId, prodottoId, venditaId) {
+    setMessaggio("");
+    const err = await disassociaVenditaDaKit({ istanzaId, prodottoId, venditaId });
+    if (err) { setMessaggio("Non riesco a disassociare: " + err); return; }
     ricaricaApp?.(["vendite_shop"]);
     await ricarica();
   }
@@ -380,7 +390,7 @@ export default function SchedaRientro({
                             : <Pastiglia testo={DESTINI.find((d) => d.chiave === k.stato)?.testo || k.stato} colore="#2E7D32" sfondo="#E9F6EC" />}
                         </div>
                       </div>
-                      {usciti.length > 0 && (
+                      {usciti.length > 0 && k.stato !== "aperto" && (
                         <div style={{ marginTop: 8 }}>
                           <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>
                             Già uscito da questo kit
@@ -393,6 +403,58 @@ export default function SchedaRientro({
                           ))}
                         </div>
                       )}
+
+                      {/* Il kit e' aperto: e' QUI che si attribuiscono i pezzi
+                          venduti dal POS. Sopra, quelli ancora da assegnare, da
+                          prendere da questa scatola; sotto, quelli gia' messi
+                          qui, da togliere se ci si era sbagliati. */}
+                      {k.stato === "aperto" && !chiusa && (() => {
+                        const associatiKit = Object.values((dati?.prelieviVendita || []).reduce((acc, p) => {
+                          if (p.kitRiservaId !== k.id || !p.venditaId || !p.prodottoId) return acc;
+                          const key = `${p.venditaId}|${p.prodottoId}`;
+                          (acc[key] || (acc[key] = { venditaId: p.venditaId, prodottoId: p.prodottoId, quantita: 0 })).quantita += p.quantita || 0;
+                          return acc;
+                        }, {}));
+                        return (
+                          <div style={{ marginTop: 8, border: `1px dashed ${GOLD}`, borderRadius: 10, padding: 10, background: "#FDF8EC" }}>
+                            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>
+                              Venduti dal POS: quali sono usciti da qui?
+                            </div>
+                            {vendutiDaAssociare.length === 0 && associatiKit.length === 0 && (
+                              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 4 }}>Nessun pezzo venduto dai kit da attribuire.</div>
+                            )}
+                            {vendutiDaAssociare.map((r) => (
+                              <div key={`ass|${r.venditaId}|${r.prodottoId}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "5px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                                <span style={{ flex: "1 1 130px", minWidth: 0 }}>
+                                  {nomeProdotto(r.prodottoId)}
+                                  <span style={{ color: "#8A6A1B", fontWeight: 700 }}> · {r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"}</span>
+                                </span>
+                                <button onClick={() => associa(r, k.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 9, padding: "7px 12px", minHeight: 36, cursor: "pointer" }}>
+                                  Preso da qui
+                                </button>
+                              </div>
+                            ))}
+                            {associatiKit.length > 0 && (
+                              <div style={{ marginTop: vendutiDaAssociare.length ? 8 : 4, paddingTop: vendutiDaAssociare.length ? 8 : 0, borderTop: vendutiDaAssociare.length ? `1px solid #EFE2C4` : "none" }}>
+                                <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>
+                                  Attribuiti a questo kit
+                                </div>
+                                {associatiKit.map((r) => (
+                                  <div key={`dis|${r.venditaId}|${r.prodottoId}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "5px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                                    <span style={{ flex: "1 1 130px", minWidth: 0 }}>
+                                      {nomeProdotto(r.prodottoId)}
+                                      <span style={{ color: MUTED, fontWeight: 700 }}> · {r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"}</span>
+                                    </span>
+                                    <button onClick={() => disassocia(k.id, r.prodottoId, r.venditaId)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #E7B7AE`, borderRadius: 9, padding: "7px 12px", minHeight: 36, cursor: "pointer" }}>
+                                      Non da qui
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {!chiusa && (
                         <button
                           onClick={() => setSceltaKit(k)}
@@ -405,46 +467,27 @@ export default function SchedaRientro({
                   );
                 })}
 
-                {/* i venduti dal POS dichiarati presi dai kit: il sistema
-                    NON sceglie la scatola. La master dice lei, qui, da quale
-                    kit li ha tirati fuori — e finche' non lo dice restano
-                    "da associare". */}
-                {vendutiDaAssociare.length > 0 && (() => {
-                  // le scatole a cui si puo' attribuire: quelle di questa
-                  // spedizione, tranne una data intera a un'allieva (da li'
-                  // non e' uscito un pezzo alla volta)
-                  const kitAssegnabili = (dati?.istanze || []).filter((i) => i.stato !== "consegnato_intero");
-                  return (
+                {/* Solo un promemoria: i pezzi venduti dal POS e dichiarati
+                    presi dai kit che nessun kit si e' ancora preso. Non si
+                    associano da qui — lo si fa aprendo la scatola giusta,
+                    sopra, dov'e' anche il tasto per togliere un pezzo messo
+                    li' per sbaglio. */}
+                {vendutiDaAssociare.length > 0 && (
                   <div style={{ marginTop: 10, border: `1px dashed ${GOLD}`, borderRadius: 12, padding: 12, background: "#FDF8EC" }}>
                     <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
-                      Venduti dal POS, presi dai kit — da associare
+                      Venduti dal POS, presi dai kit — ancora da attribuire
                     </div>
                     <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.4 }}>
-                      Questi pezzi li hai venduti e dichiarati presi dai kit. Dimmi tu da quale kit li hai tirati fuori: scegli la scatola qui a fianco.
+                      Questi li hai venduti e dichiarati presi dai kit. Aprendo la scatola giusta qui sopra (“L’ho aperto”) li assegni da lì.
                     </div>
                     {vendutiDaAssociare.map((r) => (
-                      <div key={`${r.venditaId}|${r.prodottoId}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "5px 0", borderTop: `1px solid #EFE2C4`, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                        <span style={{ flex: "1 1 140px", minWidth: 0 }}>
-                          {nomeProdotto(r.prodottoId)}
-                          <span style={{ color: "#8A6A1B", fontWeight: 700, whiteSpace: "nowrap" }}> · {r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"}</span>
-                        </span>
-                        {!chiusa && (
-                          <select
-                            defaultValue=""
-                            onChange={(e) => { const v = e.target.value; e.target.value = ""; if (v) associa(r, v); }}
-                            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 9, padding: "7px 9px", minHeight: 38, cursor: "pointer", maxWidth: "100%" }}
-                          >
-                            <option value="">Da quale kit?</option>
-                            {kitAssegnabili.map((i) => (
-                              <option key={i.id} value={i.id}>{kitById[i.kitId]?.nome || "Kit"} #{i.progressivo}</option>
-                            ))}
-                          </select>
-                        )}
+                      <div key={`${r.venditaId}|${r.prodottoId}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                        <span>{nomeProdotto(r.prodottoId)}</span>
+                        <span style={{ color: "#8A6A1B", fontWeight: 700, whiteSpace: "nowrap" }}>{r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"}</span>
                       </div>
                     ))}
                   </div>
-                  );
-                })()}
+                )}
               </Blocco>
             )}
 
