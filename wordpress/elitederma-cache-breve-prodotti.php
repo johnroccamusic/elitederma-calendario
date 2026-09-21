@@ -66,6 +66,26 @@ if ( ! function_exists( 'elitederma_pagina_personale' ) ) {
 	}
 }
 
+// Decide che intestazione merita questa pagina, e basta: niente effetti
+// collaterali. Tenerla separata da chi la spedisce permette di provarla
+// davvero, con le condizionali di WooCommerce finte, invece di fidarsi.
+// Restituisce null quando la pagina non ci riguarda: in quel caso non si
+// tocca niente e vale quello che ha deciso Breeze.
+if ( ! function_exists( 'elitederma_intestazione_cache' ) ) {
+	function elitederma_intestazione_cache() {
+		if ( elitederma_pagina_personale() ) {
+			// via anche s-maxage: e' proprio la direttiva che oggi rende
+			// cacheabile /carrello/ mentre /cart/, che non ce l'ha, resta
+			// DYNAMIC e non viene mai messo in cache
+			return 'no-store, no-cache, must-revalidate, max-age=0, private';
+		}
+		if ( elitederma_pagina_con_prezzi() ) {
+			return 'public, max-age=0, s-maxage=' . ELITEDERMA_CDN_SECONDI . ', stale-while-revalidate=30';
+		}
+		return null;
+	}
+}
+
 if ( ! function_exists( 'elitederma_accorcia_cache_cdn' ) ) {
 	function elitederma_accorcia_cache_cdn() {
 		// se i byte sono gia' partiti non c'e' piu' niente da fare, ed e'
@@ -74,17 +94,9 @@ if ( ! function_exists( 'elitederma_accorcia_cache_cdn' ) ) {
 		if ( headers_sent() ) {
 			return;
 		}
-
-		if ( elitederma_pagina_personale() ) {
-			// via anche s-maxage: e' proprio la direttiva che oggi rende
-			// cacheabile /carrello/ mentre /cart/, che non ce l'ha, resta
-			// DYNAMIC e non viene mai messo in cache
-			header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private', true );
-			return;
-		}
-
-		if ( elitederma_pagina_con_prezzi() ) {
-			header( 'Cache-Control: public, max-age=0, s-maxage=' . ELITEDERMA_CDN_SECONDI . ', stale-while-revalidate=30', true );
+		$intestazione = elitederma_intestazione_cache();
+		if ( null !== $intestazione ) {
+			header( 'Cache-Control: ' . $intestazione, true );
 		}
 	}
 }
