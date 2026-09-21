@@ -47158,6 +47158,11 @@ const COLONNE_MAGAZZINO = [
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
   // la tabella. Vedi cedibileContantiDi
   { label: "Somma massima cedibile", campo: "sommaMassimaCedibileEuro", direzioneIniziale: "desc", larghezza: 80 },
+  // quanto si lascia al negoziante che rivende: si scrive a mano, riga
+  // per riga, e si scala dal residuo cedibile
+  { label: "Quota negoziante %", campo: "quota_negoziante_pct", direzioneIniziale: "desc", larghezza: 76 },
+  // quel che resta dopo il negoziante: e' lo spazio del venditore
+  { label: "Resta al venditore %", campo: "restaVenditorePct", direzioneIniziale: "desc", larghezza: 78 },
   // la sicurezza che si toglie dal cedibile prima di fare i punti: la
   // percentuale e' quella di Gestione punti, si cambia anche qui nel
   // titolo, e vale in tutta l'app
@@ -47472,6 +47477,20 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     setSicurezzaBozza("");
     if (ricarica) ricarica(["prodotti_shop"]);
   }
+  // la percentuale lasciata al negoziante per QUESTO prodotto: si scrive
+  // nella cella e si salva uscendo dal campo (o con Invio). Vuota = non
+  // si lascia niente, e il residuo resta tutto al venditore
+  const [negozianteBozza, setNegozianteBozza] = useState(p.quota_negoziante_pct != null ? String(p.quota_negoziante_pct) : "");
+  useEffect(() => { setNegozianteBozza(p.quota_negoziante_pct != null ? String(p.quota_negoziante_pct) : ""); }, [p.id, p.quota_negoziante_pct]);
+  async function salvaQuotaNegoziante() {
+    const testo = String(negozianteBozza ?? "").trim().replace(",", ".");
+    const nuovo = testo === "" ? null : Math.max(0, Math.min(100, Number(testo) || 0));
+    const attuale = p.quota_negoziante_pct != null ? Number(p.quota_negoziante_pct) : null;
+    if (nuovo === attuale) return;
+    const { error } = await supabase.from("prodotti_shop").update({ quota_negoziante_pct: nuovo }).eq("id", p.id);
+    if (error) { window.alert("Quota negoziante non salvata: " + testoErrore(error)); return; }
+    if (ricarica) ricarica(["prodotti_shop"]);
+  }
   // il prezzo di vendita si modifica anche da qui (colonna "Prezzo vendita
   // (IVA incl.)"); il costo di acquisto no, resta solo dalla scheda prodotto
   const [unitaMisura, setUnitaMisura] = useState(p.unita_misura || "");
@@ -47764,6 +47783,28 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={tdStyle} title={p.cedibileResiduoPct != null ? `Cento meno il ${fmtPctErp(p.incidenzaNonCedibilePct)} che non si puo' cedere: e' lo spazio che resta da elargire sul prezzo netto${p.cedibileResiduoPct < 0 ? " — negativo: a questo prezzo si e' gia' sotto" : ""}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>
           <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: p.cedibileResiduoPct == null ? MUTED : (p.cedibileResiduoPct < 0 ? "#C0392B" : "#2E7D32") }}>
             {p.cedibileResiduoPct != null ? fmtPctErp(p.cedibileResiduoPct) : "N/D"}
+          </span>
+        </td>
+    ),
+    "Quota negoziante %": (
+        <td style={tdStyle} title="La percentuale che lasci a un negoziante che compra per rivendere. Si scala dal residuo cedibile; vuota = non gli lasci niente" onClick={(e) => e.stopPropagation()}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+            <input
+              value={negozianteBozza}
+              onChange={(e) => setNegozianteBozza(e.target.value)}
+              onBlur={salvaQuotaNegoziante}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              inputMode="decimal"
+              placeholder="—"
+              style={{ ...fontBody, width: 44, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "center", padding: "3px 4px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
+            <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>%</span>
+          </div>
+        </td>
+    ),
+    "Resta al venditore %": (
+        <td style={tdStyle} title={p.restaVenditorePct != null ? `Residuo cedibile ${fmtPctErp(p.cedibileResiduoPct)} meno il ${Number(p.quota_negoziante_pct) || 0}% del negoziante${p.restaVenditorePct < 0 ? " — negativo: stai lasciando al negoziante piu' di quanto c'e'" : ""}` : "Senza residuo cedibile non c'e' niente da dividere"}>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: p.restaVenditorePct == null ? MUTED : (p.restaVenditorePct < 0 ? "#C0392B" : "#2E7D32") }}>
+            {p.restaVenditorePct != null ? fmtPctErp(p.restaVenditorePct) : "N/D"}
           </span>
         </td>
     ),
@@ -48502,6 +48543,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     const costoSulPrezzoPct = cedibile.costoPct;
     const incidenzaNonCedibilePct = cedibile.nonCedibilePct;
     const cedibileResiduoPct = cedibile.residuoPct;
+    // il residuo meno quello che si lascia al negoziante: lo spazio che
+    // rimane per il venditore. Senza quota negoziante resta tutto a lui
+    const restaVenditorePct = cedibileResiduoPct != null ? round1Erp(cedibileResiduoPct - (Number(p.quota_negoziante_pct) || 0)) : null;
     const sommaMassimaCedibileEuro = cedibile.euro;
     // gli stessi due numeri della percentuale, in euro: e' la domanda che
     // si fa davanti a un ordine ("quanto ci guadagno su un pezzo"), e una
@@ -48554,6 +48598,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       costoSulPrezzoPct,
       incidenzaNonCedibilePct,
       cedibileResiduoPct,
+      restaVenditorePct,
       sommaMassimaCedibileEuro,
       margineEuro,
       cedibilePct,
