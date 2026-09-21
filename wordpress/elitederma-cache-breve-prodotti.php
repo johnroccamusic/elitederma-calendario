@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Elitederma — Cache breve sulle pagine prodotto
  * Description: Accorcia la vita in cache CDN delle pagine che mostrano prezzi e disponibilita', cosi' una modifica fatta dal gestionale si vede in un minuto invece che fra trenta giorni.
- * Version: 3.0
- * Note: 3.0 usa header_register_callback() per avere l'ultima parola sul Cache-Control.
+ * Version: 4.0
+ * Note: 4.0 non prova piu' ad accorciare il TTL — dice a Cloudflare di non tenersi affatto le pagine con prezzi.
  */
 
 // Perche' esiste questo snippet.
@@ -34,13 +34,6 @@
 // la pagina poco. Solo dove conta — prodotti, negozio, categorie,
 // carrello e account — il resto del sito (pagine fisse, articoli)
 // continua a stare in cache trenta giorni come prima.
-
-if ( ! defined( 'ELITEDERMA_CDN_SECONDI' ) ) {
-	// Quanto Cloudflare puo' tenersi una pagina che mostra prezzi. Un
-	// minuto e' un buon compromesso: le raffiche di visite restano
-	// servite dal CDN, ma una correzione di prezzo si vede subito.
-	define( 'ELITEDERMA_CDN_SECONDI', 60 );
-}
 
 if ( ! function_exists( 'elitederma_pagina_con_prezzi' ) ) {
 	function elitederma_pagina_con_prezzi() {
@@ -74,14 +67,27 @@ if ( ! function_exists( 'elitederma_pagina_personale' ) ) {
 // tocca niente e vale quello che ha deciso Breeze.
 if ( ! function_exists( 'elitederma_intestazione_cache' ) ) {
 	function elitederma_intestazione_cache() {
-		if ( elitederma_pagina_personale() ) {
-			// via anche s-maxage: e' proprio la direttiva che oggi rende
-			// cacheabile /carrello/ mentre /cart/, che non ce l'ha, resta
-			// DYNAMIC e non viene mai messo in cache
+		// Perche' la stessa riga per il carrello e per le pagine prodotto.
+		//
+		// Accorciare il TTL non funziona: qualcosa dopo PHP appende sempre
+		// "s-maxage=2592000" alla riga, e fra due s-maxage in conflitto
+		// Cloudflare tiene l'ultimo. Verificato il 21/09/2026 arrivando fino
+		// a header_register_callback(), che e' l'ultima cosa che PHP tocca
+		// prima di spedire: il doppione ricompare lo stesso, quindi non lo
+		// mette WordPress e da qui non lo si toglie.
+		//
+		// Quello che invece Cloudflare rispetta, anche con i 30 giorni
+		// appesi in coda, sono no-store / no-cache / private — e lo si vede
+		// sul sito stesso: il carrello, che li ha, viene riverificato di
+		// continuo (eta' 2-4 secondi), mentre una pagina prodotto che
+		// diceva "public" veniva servita con 38 minuti sul groppone.
+		//
+		// Quindi non chiediamo una cache breve: chiediamo di non tenersela.
+		// Le pagine restano veloci lo stesso, perche' Breeze e Varnish le
+		// servono dalla cache del server, che lo snippet "Svuota cache dal
+		// gestionale" ripulisce a ogni salvataggio.
+		if ( elitederma_pagina_personale() || elitederma_pagina_con_prezzi() ) {
 			return 'no-store, no-cache, must-revalidate, max-age=0, private';
-		}
-		if ( elitederma_pagina_con_prezzi() ) {
-			return 'public, max-age=0, s-maxage=' . ELITEDERMA_CDN_SECONDI . ', stale-while-revalidate=30';
 		}
 		return null;
 	}
