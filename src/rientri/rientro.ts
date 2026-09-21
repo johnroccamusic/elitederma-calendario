@@ -306,7 +306,7 @@ export async function associaVenditaAKit({
     quantita,
     motivo: "vendita",
     vendita_id: venditaId,
-    origine: "master_manuale",
+    origine: "dichiarato_al_rientro",
   });
   if (errorePrelievo) return errorePrelievo.message;
 
