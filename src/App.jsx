@@ -10989,7 +10989,17 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
         </div>
 
         <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 29, fontWeight: 700, color: NAVY, lineHeight: 1.1, textTransform: "uppercase", overflowWrap: "anywhere" }}>{corso?.nome || "—"}</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 29, fontWeight: 700, color: NAVY, lineHeight: 1.1, textTransform: "uppercase", overflowWrap: "anywhere" }}>
+            {corso?.nome || "—"}
+            {/* il codice sconto della classe: non un tasto, ma un codice da
+                leggere e dettare — attaccato al nome, in rosso, a corpo meta'
+                del titolo */}
+            {couponVisibile && (
+              <span title="Codice sconto di questa classe" style={{ fontSize: isMobile ? 10.5 : 14.5, fontWeight: 700, color: "#C0392B", marginLeft: 8, whiteSpace: "nowrap" }}>
+                {String(codiceReferral || "").toUpperCase()}
+              </span>
+            )}
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
             <IconaPin size={isMobile ? 14 : 17} color={MUTED} />
             <span style={{ ...fontDisplay, fontSize: isMobile ? 15 : 19, fontWeight: 500, color: MUTED, overflowWrap: "anywhere" }}>{toTitleCase(loc?.nome || "—")}</span>
@@ -11199,14 +11209,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       // corpo e la riga resta una riga, non una scaletta. Il tetto in px
       // e' la misura di sempre, che su schermo largo vince — da
       // desktop non cambia niente.
-      const parolePiuLunghe = [
-        ...tastiRiga.map((t) => t.testo),
-        ...(couponVisibile ? ["Coupon", String(codiceReferral || "")] : []),
-      ].flatMap((x) => x.split(" ")).map((x) => x.length);
+      const parolePiuLunghe = tastiRiga.map((t) => t.testo)
+        .flatMap((x) => x.split(" ")).map((x) => x.length);
       const piuLunga = Math.max(1, ...parolePiuLunghe);
       const gap = isMobile ? 6 : 12;
       const paddingOrizzontale = (isMobile ? 6 : 16) * 2 + 2; // padding dei due lati + bordo
-      const quantiTotali = tastiRiga.length + (couponVisibile ? 1 : 0);
+      const quantiTotali = tastiRiga.length;
       // da telefono tre punti in meno: 9 invece di 12. Su schermo largo
       // la misura resta quella di sempre
       const misura = (quanti) => corpoTestoInFila({
@@ -11240,9 +11248,6 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       const aCapo = isMobile && quantiTotali > 2 && corpoUnaFila < SOGLIA_LEGGIBILE;
       const perFila = aCapo ? Math.ceil(quantiTotali / 2) : quantiTotali;
       const corpo = aCapo ? misura(perFila) : corpoUnaFila;
-      // la parola "Coupon" sopra il codice e' sempre stata piu' piccola
-      // del codice: scende con lo stesso passo, non per conto suo
-      const corpoPiccolo = Math.max(1, corpo * (isMobile ? 10 / 12 : 12 / 15));
       return (
       <div ref={rigaTastiRef} data-riga="tasti" style={{ display: "flex", alignItems: "stretch", gap, flexWrap: aCapo ? "wrap" : "nowrap", padding: spaziatura }}>
         {tastiRiga.map((t) => (
@@ -11265,24 +11270,6 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             ))}
           </button>
         ))}
-        {couponVisibile && (
-          // Il coupon ha la stessa scatola dei pulsanti perche' sta sulla
-          // stessa riga, ma non si preme: e' un codice da leggere e
-          // dettare. Il colore lo tiene distinto dagli altri tre.
-          <div
-            title="Il codice sconto da dare agli allievi di questa classe"
-            style={{
-              ...fontBody, fontSize: corpo, fontWeight: 700, color: "#C0392B", lineHeight: 1.15,
-              background: "#FBF5F3", border: "1px solid #F0D4CE", borderRadius: 12,
-              padding: isMobile ? "8px 6px" : "10px 16px", marginLeft: aCapo ? 0 : "auto", textAlign: "center",
-              flex: aCapo ? `1 1 calc(${(100 / perFila).toFixed(2)}% - ${gap}px)` : "1 1 0",
-              minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center",
-            }}
-          >
-            <span style={{ fontSize: corpoPiccolo, fontWeight: 600, whiteSpace: "nowrap" }}>Coupon</span>
-            <span style={{ whiteSpace: "nowrap" }}>{codiceReferral.toUpperCase()}</span>
-          </div>
-        )}
       </div>
       );
       })()}
