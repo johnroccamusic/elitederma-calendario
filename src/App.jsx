@@ -47016,7 +47016,7 @@ const COLONNE_MAGAZZINO = [
   // una percentuale del prezzo netto di vendita, scritta nel titolo:
   // vale per tutti i prodotti, come l'incidenza
   { label: "Margine operativo", campo: "margineOperativoEuro", direzioneIniziale: "desc", larghezza: 80, margineOperativo: true },
-  { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
+  { label: "Margine %", campo: "costoSulPrezzoPct", direzioneIniziale: "desc", larghezza: 62 },
   { label: "Ricavo lordo", campo: "margineEuro", direzioneIniziale: "desc", larghezza: 72 },
   // la percentuale di costi aziendali che si toglie dal ricavo: una per
   // tutti i prodotti, si scrive nel titolo o su una riga qualsiasi
@@ -47607,7 +47607,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         </td>
     ),
     "Margine %": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title="Quanto resta del prezzo netto, tolto il costo di acquisto">{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title={p.costoSulPrezzoPct != null ? `Quanto pesa il costo di acquisto sul prezzo netto di vendita: ${fmtEuroErp2(p.costo_acquisto)} su ${fmtEuroErp2(p.prezzo_vendita)}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>{p.costoSulPrezzoPct != null ? fmtPctErp(p.costoSulPrezzoPct) : "N/D"}</td>
     ),
     "Ricavo lordo": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }} title="Prezzo netto di vendita meno costo di acquisto: quanto resta su un pezzo prima dei costi aziendali">{p.margineEuro != null ? fmtEuroErp2(p.margineEuro) : "N/D"}</td>
@@ -47739,7 +47739,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         </td>
     ),
     "Prezzo netto vendita": <td style={tdContanti} title="In contanti si tiene tutto il prezzo al pubblico: e' questa la base del conto">{lordo != null ? fmtEuroErp2(lordo) : "—"}</td>,
-    "Margine %": <td style={tdContanti} title="Quanto resta del prezzo al pubblico, tolto il costo di acquisto">{p.margineContanti != null ? fmtPctErp(p.margineContanti) : "N/D"}</td>,
+    "Margine %": (() => {
+      // stessa domanda della riga sopra, ma sulla base del contante: qui
+      // il prezzo e' quello al pubblico. Calcolato qui e non in
+      // cedibileContantiDi, che da' il margine ai punti e non si tocca
+      const costoSuLordo = p.costo_acquisto != null && lordo > 0 ? round1Erp((Number(p.costo_acquisto) / lordo) * 100) : null;
+      return <td style={tdContanti} title={costoSuLordo != null ? `Quanto pesa il costo di acquisto sul prezzo al pubblico: ${fmtEuroErp2(p.costo_acquisto)} su ${fmtEuroErp2(lordo)}` : "Senza costo o senza prezzo al pubblico non si puo' calcolare"}>{costoSuLordo != null ? fmtPctErp(costoSuLordo) : "N/D"}</td>;
+    })(),
     "Ricavo lordo": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
     "Incidenza costi aziendali": <td style={tdContanti} title="In contanti l'incidenza e' il 62,5% della generale: niente commissioni di carta, Scalapay e conto">{numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%</td>,
     "Guadagno netto teorico": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(round2(incidenzaCostiPct * FRAZIONE_INCIDENZA_CONTANTI))}%, il 62,5% della generale): in contanti si tiene tutto il prezzo e non ci sono commissioni` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
@@ -48339,6 +48345,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       : null;
     const costoEffettivo = isBundle ? costoBundleCalcolato : p.costo_acquisto;
     const margine = costoEffettivo != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - costoEffettivo) / p.prezzo_vendita) * 100) : null;
+    // Quanto pesa il costo sul prezzo netto (21/09/2026): e' quello che
+    // mostra la colonna "Margine %". E' il complemento di `margine` — se
+    // il costo pesa il 33,6%, quel che resta e' il 66,4% — e resta un
+    // valore a se' perche' `margine` serve ancora al riquadro "Miglior
+    // margine", dove il piu' alto dev'essere il migliore.
+    const costoSulPrezzoPct = costoEffettivo != null && p.prezzo_vendita > 0 ? round1Erp((Number(costoEffettivo) / p.prezzo_vendita) * 100) : null;
     // gli stessi due numeri della percentuale, in euro: e' la domanda che
     // si fa davanti a un ordine ("quanto ci guadagno su un pezzo"), e una
     // percentuale da sola non risponde — il 69% di 3,50 e il 69% di 39,90
@@ -48387,6 +48399,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       quantitaVenduta: venduto.quantita,
       fatturato: round2(venduto.fatturato),
       margine,
+      costoSulPrezzoPct,
       margineEuro,
       cedibilePct,
       cedibileEuro,
