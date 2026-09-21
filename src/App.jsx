@@ -4288,10 +4288,13 @@ function tabellaCedibileEOriginale(t) {
 // con due decimali. 9,16 euro cedibili, col 10% di sicurezza, sono 8,24
 // punti. Un prodotto senza costo di acquisto non ha margine, quindi ne'
 // quota cedibile ne' punti.
-function puntiDaCedibile(cedibileEuro, sicurezzaPct = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct) {
+// Dal 21/09/2026 non si accantona piu' niente per sicurezza: quello che
+// l'azienda si tiene sta gia' nel margine operativo e nell'incidenza dei
+// costi aziendali, sottratti a monte nella somma massima cedibile.
+// Toglierlo da qui evita di contarlo due volte.
+function puntiDaCedibile(cedibileEuro) {
   if (cedibileEuro == null || !Number.isFinite(Number(cedibileEuro))) return null;
-  const massimoCedibile = Number(cedibileEuro) * (1 - sicurezzaPct / 100);
-  return round2(massimoCedibile * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
+  return round2(Number(cedibileEuro) * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
 }
 // Il cedibile quando si paga in CONTANTI. Con la carta o sul sito l'IVA
 // si versa, quindi margine e quota si calcolano sul prezzo netto. In
@@ -4328,14 +4331,14 @@ function puntiProdotto(p, sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accant
   if (!inVenditaViaApp) return null;
   if (contanti) {
     const { euro } = cedibileContantiDi(p);
-    return euro == null ? null : puntiDaCedibile(euro, sicurezzaPct);
+    return euro == null ? null : puntiDaCedibile(euro);
   }
   // dal 21/09/2026 il cedibile e' la somma massima cedibile: prezzo netto
   // meno costo, margine operativo e costi aziendali. Sotto zero non ci
   // sono punti negativi, ci sono zero punti
   const { euro } = sommaMassimaCedibileDi(p);
   if (euro == null) return null;
-  return puntiDaCedibile(Math.max(0, euro), sicurezzaPct);
+  return puntiDaCedibile(Math.max(0, euro));
 }
 // Dal 21/09/2026 lo sconto dell'allievo NON decurta piu' i punti della
 // master: un pezzo vale i suoi punti interi (puntiProdotto) che sia venduto
@@ -47158,10 +47161,10 @@ const COLONNE_MAGAZZINO = [
   // la sicurezza che si toglie dal cedibile prima di fare i punti: la
   // percentuale e' quella di Gestione punti, si cambia anche qui nel
   // titolo, e vale in tutta l'app
-  { label: "Sicurezza", campo: "sicurezzaEuro", direzioneIniziale: "desc", larghezza: 66, sicurezza: true },
+
   // il tasto che riporta la percentuale del prodotto a quella generale
   // scritta nel titolo di "Sicurezza"; nel titolo, quello per tutti
-  { label: "Riallinea", campo: null, larghezza: 78, riallinea: true },
+
   // "Punti totali prodotto" (dal 16/09/2026): il doppio dei punti del
   // pezzo, vedi il conto piu' sotto
   { label: "Punti totali prodotto", campo: "punti", direzioneIniziale: "desc", larghezza: 74 },
@@ -48522,12 +48525,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // per la sua riga dei contanti: dashboard, POS e Gestione punti
     // continuano a leggere puntiProdotto, che non raddoppia
     const sicurezzaProdotto = sicurezzaDelProdotto(p, sicurezzaPunti);
-    const puntiPezzo = inVenditaViaApp && sommaMassimaCedibileEuro != null ? puntiDaCedibile(Math.max(0, sommaMassimaCedibileEuro), sicurezzaProdotto) : null;
+    const puntiPezzo = inVenditaViaApp && sommaMassimaCedibileEuro != null ? puntiDaCedibile(Math.max(0, sommaMassimaCedibileEuro)) : null;
     const punti = puntiPezzo != null ? round2(puntiPezzo * 2) : null;
     // la seconda riga di conto, per chi paga in contanti: stesso costo
     // (per i bundle quello ricavato dai componenti), ma sul prezzo lordo
     const contanti = cedibileContantiDi(p, costoEffettivo);
-    const puntiContantiPezzo = inVenditaViaApp && contanti.euro != null ? puntiDaCedibile(contanti.euro, sicurezzaProdotto) : null;
+    const puntiContantiPezzo = inVenditaViaApp && contanti.euro != null ? puntiDaCedibile(contanti.euro) : null;
     const puntiContanti = puntiContantiPezzo != null ? round2(puntiContantiPezzo * 2) : null;
     // le tre quote in euro dei punti totali, per ordinare e mostrare
     const quota1 = euroQuota(punti, 0), quota2 = euroQuota(punti, 1), quota3 = euroQuota(punti, 2);
