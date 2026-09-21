@@ -11981,6 +11981,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
+  // I punti nella dashboard restano nascosti per tutte le master, tranne
+  // che nella dashboard di Andrea (ripristinati su sua richiesta il
+  // 21/09/2026). Il flag globale, se mai riacceso, li mostra comunque a tutte.
+  const puntiVisibiliMaster = PUNTI_MASTER_VISIBILI || /\bandrea\b/i.test(masterSel?.nome || "");
   // target vendite prodotti in corso per la master selezionata (mai per
   // il team vendite corsi: i due silos restano separati, vedi Target
   // Master in Impostazioni)
@@ -12267,7 +12271,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             // finestra si stringeva. "start" le tiene attaccate in alto, cosi'
             // le etichette partono dalla stessa riga anche quando una va a capo
             // e le altre no
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${PUNTI_MASTER_VISIBILI ? 3 : 2}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${puntiVisibiliMaster ? 3 : 2}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
                   qui contano le vendite, i punti arriveranno con una regola
                   loro (da definire), e la quarta scheda resta vuota in
@@ -12281,14 +12285,13 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 <div style={lblPunti}>Vendite con<br />referral</div>
                 <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
               </div>
-              {PUNTI_MASTER_VISIBILI && (
+              {puntiVisibiliMaster && (
               <div style={cardPunti}>
                 <div style={lblPunti}>Punti<br />accumulati</div>
                 {/* i punti INTERI generati dai carrelli: il cedibile dei
-                    prodotti venduti meno la sicurezza, ridotto dello sconto
-                    che l'allieva ha ottenuto. Non e' la fetta che spetta a
-                    lei — quella si decide sul ranking, guardando questo
-                    numero */}
+                    prodotti venduti meno la sicurezza. Dal 21/09/2026 lo
+                    sconto dell'allieva non li riduce piu'. Non e' la fetta
+                    che spetta a lei — quella la decide la quota per canale */}
                 <div style={{ ...numPunti, color: NAVY }}>{fmtPunti(provvigioniMaster.puntiMaturati)}</div>
               </div>
               )}
