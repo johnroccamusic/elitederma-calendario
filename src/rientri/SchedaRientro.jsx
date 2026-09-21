@@ -665,20 +665,17 @@ export default function SchedaRientro({
             ))}
             {sceltaKit.chiediAllieva && (
               <div style={{ marginTop: 10 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>A chi</div>
-                {iscrittiEdizione.map((i) => (
-                  <button
-                    key={i.id} onClick={() => destino(sceltaKit, "consegnato_intero", { iscrittoId: i.id })}
-                    style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13.5, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "11px 12px", marginBottom: 6, cursor: "pointer", minHeight: 44 }}
-                  >{nomeIscritto(i)}</button>
-                ))}
-                {/* anche a qualcuno che non e' fra le iscritte del corso: nome a mano */}
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "10px 0 6px" }}>Oppure un altro nome</div>
+                {/* chi l'ha avuto scrivi solo il nome: se fosse una delle
+                    iscritte il kit l'avrebbe comprato, e lo si troverebbe fra
+                    i venduti — qui e' proprio una persona nuova */}
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>A chi è stato dato</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <input
                     value={nomeAltra}
                     onChange={(e) => setNomeAltra(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && nomeAltra.trim()) { const n = nomeAltra.trim(); setNomeAltra(""); destino(sceltaKit, "consegnato_intero", { nome: n }); } }}
                     placeholder="Nome e cognome"
+                    autoFocus
                     style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "11px 12px", minHeight: 44 }}
                   />
                   <button
