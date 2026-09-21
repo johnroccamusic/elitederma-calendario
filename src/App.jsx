@@ -47327,12 +47327,19 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     setSicurezzaBozza("");
     if (ricarica) ricarica(["prodotti_shop"]);
   }
-  // prezzo di vendita e costo di acquisto non sono più modificabili da
-  // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
-  // anche cosa mandare a WooCommerce (il lordo, mai il netto)
+  // il prezzo di vendita si modifica anche da qui (colonna "Prezzo vendita
+  // (IVA incl.)"); il costo di acquisto no, resta solo dalla scheda prodotto
   const [unitaMisura, setUnitaMisura] = useState(p.unita_misura || "");
   const [scortaMin, setScortaMin] = useState(p.soglia_riordino != null ? String(p.soglia_riordino) : "");
   const [stockTotaleInput, setStockTotaleInput] = useState(String(p.stockTotale));
+  // il prezzo appena scritto, tenuto a vista finche' il salvataggio (che per
+  // i prodotti online passa da WooCommerce e puo' metterci un paio di secondi)
+  // non torna dal ricarico: senza, il campo tornerebbe subito al vecchio
+  // valore e sembrerebbe che la cifra si sia cancellata
+  const [prezzoOttimistico, setPrezzoOttimistico] = useState(null);
+  useEffect(() => {
+    if (prezzoOttimistico != null && round2(prezzoAlPubblico(p) || 0) === prezzoOttimistico) setPrezzoOttimistico(null);
+  }, [p.prezzo_vendita, p.prezzo_lordo_forzato]); // eslint-disable-line react-hooks/exhaustive-deps
   // lo stock cambia anche senza passare da questa casella: una vendita al
   // banco, un ordine online, lo scarico dei kit, "Apri confezione". Senza
   // questo riallineamento la casella resterebbe ferma al valore letto
@@ -47368,16 +47375,19 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     const netto = round2(lordo / (1 + iva / 100));
     const lordoRicalcolato = round2(netto * (1 + iva / 100));
     const forzato = lordoRicalcolato === lordo ? null : lordo;
+    // tieni a vista subito la cifra scritta, cosi' non "sparisce" mentre il
+    // salvataggio e' in corso
+    setPrezzoOttimistico(lordo);
     // pubblicato sul sito: si spinge il prezzo al pubblico (regular_price,
     // IVA inclusa) con l'editor rapido, che aggiorna WooCommerce e svuota la
     // cache. Prima il sito (puo' rifiutare), poi il locale — se il sito non
     // accetta, meglio restare indietro che divergere
     if (p.woo_product_id != null && p.stato === "publish") {
       const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: p.id, prezzoVendita: lordo } });
-      if (error || data?.errore) { window.alert("Prezzo non aggiornato sul sito: " + (data?.errore || error?.message || "errore")); return; }
+      if (error || data?.errore) { setPrezzoOttimistico(null); window.alert("Prezzo non aggiornato sul sito: " + (data?.errore || error?.message || "errore")); return; }
     }
     const { error } = await supabase.from("prodotti_shop").update({ prezzo_vendita: netto, prezzo_lordo_forzato: forzato }).eq("id", p.id);
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    if (error) { setPrezzoOttimistico(null); window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["prodotti_shop"]);
   }
   // "Non sul POS" e "Solo offline" possono arrivare anche dalla categoria
@@ -47553,7 +47563,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Prezzo vendita (IVA incl.)": (
         <td style={{ ...tdStyle }} onClick={(e) => e.stopPropagation()} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Scrivilo qui: aggiorna la scheda, la vista a tessere${p.woo_product_id != null && p.stato === "publish" ? " e anche il sito" : ""}.`}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-            <CampoNumero valore={prezzoAlPubblico(p)} min={0} onCambia={(n) => salvaPrezzoVendita(n)}
+            <CampoNumero valore={prezzoOttimistico != null ? prezzoOttimistico : prezzoAlPubblico(p)} min={0} onCambia={(n) => salvaPrezzoVendita(n)}
               style={{ ...fontBody, width: 60, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "right", padding: "3px 5px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
             <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>€</span>
             {!p.iva_verificata && (
