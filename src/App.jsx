@@ -44541,7 +44541,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // li ricalcola tutti — il tasto rende esplicito quel momento
   const [bozzaSicurezza, setBozzaSicurezza] = useState(null);
   const [msgRicalcolo, setMsgRicalcolo] = useState("");
-  const [incidenzaCostiSalvata, salvaIncidenzaCosti] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
+  // solo in lettura: la percentuale si scrive dalla colonna in Dettaglio
+  // prodotti, qui serve perche' la classifica qui sotto si ridisegni
+  // quando cambia
+  const [incidenzaCostiSalvata] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
   const sicurezzaInBozza = bozzaSicurezza == null ? String(sicurezzaPunti) : bozzaSicurezza;
   function salvaERicalcola() {
     const n = Math.max(0, Math.min(100, Math.round(Number(String(sicurezzaInBozza).replace(",", ".")) || 0)));
@@ -44821,32 +44824,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce su tutti i codici personali delle master, nell'app e sul sito.
             </span>
             {msgCodiciPersonali && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciPersonali.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciPersonali}</span>}
-          </div>
-        </div>
-
-        {/* L'incidenza dei costi aziendali: dal 20/09/2026 prende il posto
-            della tabella del cedibile per fascia di margine. Un numero
-            solo, per tutti i prodotti, che si puo' rileggere e cambiare */}
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Incidenza dei costi aziendali</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Quanto del ricavo lordo di un prodotto (prezzo meno costo di acquisto) se ne va in costi aziendali. Quello che resta è il <b>guadagno netto teorico</b>: da lì si toglie la sicurezza qui sotto e il resto sono i punti. Vale per tutti i prodotti, in tutta l'app, e si cambia anche in cima alla colonna di Dettaglio prodotti.
-          </div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div style={{ flex: "0 1 220px" }}>
-              <Field label="Incidenza dei costi aziendali (%)">
-                <CampoNumero valore={incidenzaCostiAttiva()} min={0} max={100} onCambia={(n) => salvaIncidenzaCosti(Math.max(0, Math.min(100, n)))} style={inputStyle} />
-              </Field>
-            </div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, paddingBottom: 14, lineHeight: 1.5 }}>
-              {(() => {
-                const es = (prodottiShop || []).find((x) => /^nairobi$/i.test(x.nome || "")) || (prodottiShop || []).find((x) => x.prezzo_vendita != null && Number(x.costo_acquisto) > 0);
-                if (!es) return null;
-                const ricavo = round2(Number(es.prezzo_vendita) - Number(es.costo_acquisto));
-                const guadagno = round2(ricavo * (1 - incidenzaCostiAttiva() / 100));
-                return <>Esempio, {es.nome}: ricavo lordo {fmtEuroErp2(ricavo)} → guadagno netto teorico <b>{fmtEuroErp2(guadagno)}</b></>;
-              })()}
-            </div>
           </div>
         </div>
 
