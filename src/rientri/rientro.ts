@@ -49,6 +49,12 @@ export interface DatiRientro {
   difettosiAttesi: { prodottoId: string; nota: string | null }[];
   /** quante righe erano gia' state dichiarate: serve a non ripartire da zero */
   dichiarazioni: Record<string, { rientrata: number; guasta: number; consegnata: number }>;
+  /**
+   * I prelievi "vendita" gia' attribuiti a un kit di questa spedizione,
+   * riga per riga: servono a sapere quanto di ogni vendita e' gia' stato
+   * associato, e quindi cosa resta da associare.
+   */
+  prelieviVendita: { venditaId: string | null; prodottoId: string; quantita: number; kitRiservaId: string | null }[];
   /** quando la bozza e' arrivata sul server, null se non ne e' mai arrivata una */
   bozzaTs: string | null;
   /** chi il kit NON l'ha ricevuto: solo le eccezioni, { iscrittoId: false } */
@@ -140,6 +146,14 @@ export async function caricaRientro(corsoDataId: string | null): Promise<DatiRie
       .filter((s) => s.difettoso_rientra)
       .map((s) => ({ prodottoId: s.prodotto_sostituito_id, nota: s.nota || null })),
     dichiarazioni,
+    prelieviVendita: miei
+      .filter((p) => p.motivo === "vendita")
+      .map((p) => ({
+        venditaId: p.vendita_id || null,
+        prodottoId: p.prodotto_id,
+        quantita: p.quantita || 0,
+        kitRiservaId: p.kit_riserva_id || null,
+      })),
     bozzaTs: rientro?.bozza_ts || null,
     bozzaConsegne: (rientro?.bozza_consegne && typeof rientro.bozza_consegne === "object")
       ? rientro.bozza_consegne : {},
@@ -156,6 +170,98 @@ export async function segnaDestinoKit(
     .from("kit_riserva_istanze")
     .update({ stato, iscritto_id: stato === "consegnato_intero" ? iscrittoId : null })
     .eq("id", istanzaId);
+  return error ? error.message : null;
+}
+
+/**
+ * La master dice, a fine corso, da quale scatola e' uscito davvero un pezzo
+ * che al POS aveva solo dichiarato "preso da un kit". E' lei a decidere, non
+ * il banco: al momento della vendita fra due scatole identiche non c'e' una
+ * risposta giusta, e indovinarla vuol dire attribuire un ammanco alla scatola
+ * sbagliata.
+ *
+ * Tre effetti, gli stessi del vecchio prelievo automatico ma decisi a mano:
+ * una riga di prelievo con l'id della vendita, la fotografia del contenuto
+ * che cala, e il kit che passa ad "aperto" — perche' se ne e' uscito un pezzo,
+ * aperto lo e'. Non tocca il magazzino centrale: quei pezzi ne sono usciti
+ * col pacco del corso.
+ */
+export async function associaVenditaAKit({
+  istanzaId, prodottoId, quantita, venditaId,
+}: {
+  istanzaId: string;
+  prodottoId: string;
+  quantita: number;
+  venditaId: string;
+}): Promise<string | null> {
+  if (!(quantita > 0)) return null;
+  const { error: errorePrelievo } = await supabase.from("prelievi_kit_riserva").insert({
+    kit_riserva_id: istanzaId,
+    prodotto_id: prodottoId,
+    quantita,
+    motivo: "vendita",
+    vendita_id: venditaId,
+    origine: "master_manuale",
+  });
+  if (errorePrelievo) return errorePrelievo.message;
+
+  const { data: componente } = await supabase
+    .from("kit_riserva_componenti").select("id, quantita_prelevata")
+    .eq("kit_riserva_id", istanzaId).eq("prodotto_id", prodottoId).maybeSingle();
+  if (componente) {
+    await supabase.from("kit_riserva_componenti")
+      .update({ quantita_prelevata: (componente.quantita_prelevata || 0) + quantita })
+      .eq("id", componente.id);
+  }
+  await supabase.from("kit_riserva_istanze").update({ stato: "aperto" }).eq("id", istanzaId);
+  return null;
+}
+
+/**
+ * Un kit dichiarato "rientra chiuso" non ha fatto uscire niente: se qualcuno
+ * gli aveva attribuito dei pezzi venduti — a mano o col vecchio automatismo —
+ * era un errore, e riscrivere quello stato vuol dire ritrattare quelle
+ * attribuzioni.
+ *
+ * Qui le attribuzioni si sciolgono: spariscono i prelievi di vendita del kit,
+ * la fotografia del contenuto torna piena, e le vendite non puntano piu' a
+ * questo kit — cosi' quei pezzi tornano nella lista "da associare", pronti a
+ * essere riattribuiti alla scatola giusta. Non tocca il magazzino centrale e
+ * non tocca l'incasso: sposta solo da quale scatola si dice che sia uscito il
+ * pezzo.
+ */
+export async function dissociaVenditeDaKit(istanzaId: string): Promise<string | null> {
+  const { data: prelievi } = await supabase
+    .from("prelievi_kit_riserva").select("*")
+    .eq("kit_riserva_id", istanzaId).eq("motivo", "vendita");
+  const righe = prelievi || [];
+  if (righe.length === 0) return null;
+
+  // la fotografia del contenuto torna piena di quanto era stato segnato
+  // come prelevato per queste vendite
+  const perProdotto: Record<string, number> = {};
+  righe.forEach((p) => { perProdotto[p.prodotto_id] = (perProdotto[p.prodotto_id] || 0) + (p.quantita || 0); });
+  for (const [prodottoId, q] of Object.entries(perProdotto)) {
+    const { data: comp } = await supabase
+      .from("kit_riserva_componenti").select("id, quantita_prelevata")
+      .eq("kit_riserva_id", istanzaId).eq("prodotto_id", prodottoId).maybeSingle();
+    if (comp) {
+      await supabase.from("kit_riserva_componenti")
+        .update({ quantita_prelevata: Math.max(0, (comp.quantita_prelevata || 0) - q) })
+        .eq("id", comp.id);
+    }
+  }
+
+  // le vendite che puntavano a questo kit non lo fanno piu': cosi'
+  // ricompaiono fra i "da associare"
+  const venditeCoinvolte = [...new Set(righe.map((p) => p.vendita_id).filter(Boolean))];
+  if (venditeCoinvolte.length > 0) {
+    await supabase.from("vendite_shop").update({ kit_riserva_id: null }).in("id", venditeCoinvolte as string[]);
+  }
+
+  const { error } = await supabase
+    .from("prelievi_kit_riserva").delete()
+    .eq("kit_riserva_id", istanzaId).eq("motivo", "vendita");
   return error ? error.message : null;
 }
 

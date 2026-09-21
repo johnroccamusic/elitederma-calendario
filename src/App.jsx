@@ -14,7 +14,7 @@ import {
   FAMIGLIA_STRETTA, GRIGIO_LEGGIBILE,
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
-import { caricaKitInAula, kitDaAprireAutomaticamente, registraPrelieviDaVendita } from "./rientri/pos";
+import { caricaKitInAula } from "./rientri/pos";
 import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
 import SchedaRientro from "./rientri/SchedaRientro.jsx";
 import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
@@ -56968,9 +56968,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       setDalKitPerProdotto((prev) => ({ ...prev, [prodottoId]: null }));
       return;
     }
-    const istanza = kitDaAprireAutomaticamente(disponibileNeiKit(prodottoId));
-    if (!istanza) { setMsg("Di questo pezzo non ne resta nei kit."); return; }
-    setDalKitPerProdotto((prev) => ({ ...prev, [prodottoId]: istanza.id }));
+    // "dal kit" segna soltanto che il pezzo esce da una scatola in aula:
+    // DA QUALE, lo dice la master a fine corso nella scheda di rientro. Al
+    // banco, fra due scatole identiche, non c'e' una risposta giusta — e
+    // indovinarla vuol dire attribuire un ammanco alla scatola sbagliata.
+    if (!disponibileNeiKit(prodottoId)) { setMsg("Di questo pezzo non ce n'è nei kit in aula."); return; }
+    setDalKitPerProdotto((prev) => ({ ...prev, [prodottoId]: true }));
   }
   function incrementaRiga(prodottoId) {
     const disponibili = disponibiliDi(prodottoId);
@@ -57467,13 +57470,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
       richiede_fattura: fattAttiva,
+      // se qualche riga esce da un kit in aula la vendita porta la
+      // provenienza e la spedizione del corso, cosi' la scheda di fine
+      // corso la ritrova fra i pezzi da attribuire. DA QUALE scatola sono
+      // usciti lo dira' la master li', non il banco.
+      ...(carrello.some((r) => dalKitPerProdotto[r.prodottoId])
+        ? { provenienza: "kit_riserva", spedizione_id: kitInAula?.spedizioneId || null }
+        : {}),
     };
-    // da fotografare adesso come tutto il resto: fra un attimo il carrello
-    // e' vuoto e non si saprebbe piu' da quale kit e' uscito cosa
-    const scelteDalKit = carrello
-      .filter((r) => dalKitPerProdotto[r.prodottoId])
-      .map((r) => ({ prodottoId: r.prodottoId, kitRiservaId: dalKitPerProdotto[r.prodottoId], quantita: r.quantita }));
-    const spedizioneKitId = kitInAula?.spedizioneId || null;
 
     const datiSpedizione = spedizioneAttiva ? {
       simulazione: puoSimulare && simulazione,
@@ -57564,16 +57568,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         ricarica(["prodotti_shop", "vendite_shop"]);
         return;
       }
-      // i pezzi usciti dai kit: una riga di prelievo ciascuno, il kit
-      // diventa "aperto" e la fotografia del contenuto si aggiorna. E' da
-      // qui che la scheda di fine corso nascera' gia' compilata.
-      if (scelteDalKit.length > 0 && spedizioneKitId && venditaCreata) {
-        const errorePrelievi = await registraPrelieviDaVendita({
-          venditaId: venditaCreata.id, spedizioneId: spedizioneKitId, scelte: scelteDalKit,
-        });
-        if (errorePrelievi) window.alert("La vendita è registrata, ma il prelievo dai kit non è stato scritto: " + errorePrelievi);
-        caricaKitInAula(corsoPosSel?.id || null).then(setKitInAula);
-      }
+      // i pezzi dichiarati "dal kit" NON vengono attribuiti a una scatola
+      // qui: restano segnati sulla vendita (dal_kit riga per riga) e la
+      // master, a fine corso, dira' da quale kit sono usciti. Nessun
+      // prelievo automatico: e' proprio la scelta al posto suo che non
+      // deve piu' succedere.
       if (datiSpedizione) {
         const { error: erroreSped } = await supabase.from("spedizioni_pos").insert({ ...datiSpedizione, vendita_id: venditaCreata.id });
         if (erroreSped) {
@@ -69933,6 +69932,7 @@ export default function App() {
           corso={corsi.find((c) => c.id === corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId)?.corso_id)}
           location={location} iscritti={iscritti} prodottiShop={prodottiShop} venditeShop={venditeShop}
           kitDefinizioni={kitDefinizioni} masterLoggataId={utenteLoggato?.masterId || null}
+          ricaricaApp={fetchDati}
           isMobile={isMobile}
           onBack={() => setView("dashboardmaster")}
         />

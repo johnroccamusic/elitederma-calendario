@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina } from "../ui/stile.js";
 import { Button, ContatoreQuantita, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano, salvaBozzaRientro } from "./rientro";
+import { caricaRientro, segnaDestinoKit, chiudiRientro, dermografiNonQuadrano, salvaBozzaRientro, associaVenditaAKit, dissociaVenditeDaKit } from "./rientro";
 
 // La scialuppa.
 //
@@ -73,7 +73,7 @@ const DESTINI = [
 ];
 
 export default function SchedaRientro({
-  corsoData, corso, location, iscritti, prodottiShop, kitDefinizioni, masterLoggataId, venditeShop = [], isMobile = false, onBack,
+  corsoData, corso, location, iscritti, prodottiShop, kitDefinizioni, masterLoggataId, venditeShop = [], ricaricaApp, isMobile = false, onBack,
 }) {
   const [dati, setDati] = useState(null);
   const [caricando, setCaricando] = useState(true);
@@ -98,25 +98,34 @@ export default function SchedaRientro({
   const prodottoById = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
   // i pezzi venduti col POS per questo corso e dichiarati presi dai kit,
   // non ancora attribuiti a un kit preciso: sono quelli che la master
-  // dovra' associare, uno per uno, al kit da cui li ha tirati fuori.
+  // dovra' associare, uno per uno, alla scatola da cui li ha tirati fuori.
+  //
+  // Il conto e' semplice: per ogni riga di vendita "dal kit" si guarda
+  // quanto e' gia' stato attribuito con un prelievo, e resta da associare
+  // solo la differenza. Cosi' quando un kit rimesso su "rientra chiuso"
+  // ritratta i suoi prelievi, i pezzi ricompaiono qui da soli.
   const vendutiDaAssociare = useMemo(() => {
     if (!corsoData?.id) return [];
-    const perProdotto = {};
+    const associato = {};
+    (dati?.prelieviVendita || []).forEach((p) => {
+      if (!p.venditaId || !p.prodottoId) return;
+      const k = `${p.venditaId}|${p.prodottoId}`;
+      associato[k] = (associato[k] || 0) + (p.quantita || 0);
+    });
+    const righe = [];
     (venditeShop || []).forEach((v) => {
       if (v.corso_data_id !== corsoData.id) return;
-      if (!v.prelevato_dai_kit) return;
-      if (v.kit_riserva_id) return; // gia' associata a un kit
-      if (v.tipo_movimento === "omaggio") return;
+      if (v.tipo_movimento === "omaggio" || v.tipo_movimento === "annullamento") return;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
-        if (r.spedizione || !r.prodotto_id) return;
-        const q = Number(r.quantita) || 0;
-        if (q <= 0) return;
-        const k = r.prodotto_id;
-        perProdotto[k] = (perProdotto[k] || 0) + q;
+        if (!r?.dal_kit || !r.prodotto_id) return;
+        const venduti = Number(r.quantita) || 0;
+        if (venduti <= 0) return;
+        const resta = venduti - (associato[`${v.id}|${r.prodotto_id}`] || 0);
+        if (resta > 0) righe.push({ venditaId: v.id, prodottoId: r.prodotto_id, quantita: resta, numeroOrdine: v.numero_ordine || null });
       });
     });
-    return Object.entries(perProdotto).map(([prodottoId, quantita]) => ({ prodottoId, quantita }));
-  }, [venditeShop, corsoData]);
+    return righe;
+  }, [venditeShop, corsoData, dati]);
   const kitById = useMemo(() => Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k])), [kitDefinizioni]);
   const iscrittiEdizione = useMemo(
     () => (iscritti || []).filter((i) => i.corso_data_id === corsoData?.id),
@@ -238,6 +247,24 @@ export default function SchedaRientro({
     setSceltaKit(null);
     const errore = await segnaDestinoKit(istanza.id, chiave, iscrittoId);
     if (errore) { setMessaggio("Non è andata: " + errore); return; }
+    // "rientra chiuso" vuol dire "non ne e' uscito niente": se a questo kit
+    // erano stati attribuiti dei venduti, era uno sbaglio e vanno rimessi
+    // fra i "da associare".
+    if (chiave === "rientrato_chiuso") {
+      const err = await dissociaVenditeDaKit(istanza.id);
+      if (err) { setMessaggio("Stato cambiato, ma non ho potuto sciogliere le attribuzioni: " + err); }
+      else ricaricaApp?.(["vendite_shop"]);
+    }
+    await ricarica();
+  }
+
+  // La master attribuisce un pezzo venduto alla scatola giusta.
+  async function associa(riga, istanzaId) {
+    if (!istanzaId) return;
+    setMessaggio("");
+    const err = await associaVenditaAKit({ istanzaId, prodottoId: riga.prodottoId, quantita: riga.quantita, venditaId: riga.venditaId });
+    if (err) { setMessaggio("Non riesco ad associare: " + err); return; }
+    ricaricaApp?.(["vendite_shop"]);
     await ricarica();
   }
 
@@ -378,25 +405,46 @@ export default function SchedaRientro({
                   );
                 })}
 
-                {/* i venduti dal POS dichiarati presi dai kit: qui SOLO
-                    l'elenco, non ancora associati. La master dira' lei da
-                    quale kit li ha presi (passo successivo). */}
-                {vendutiDaAssociare.length > 0 && (
+                {/* i venduti dal POS dichiarati presi dai kit: il sistema
+                    NON sceglie la scatola. La master dice lei, qui, da quale
+                    kit li ha tirati fuori — e finche' non lo dice restano
+                    "da associare". */}
+                {vendutiDaAssociare.length > 0 && (() => {
+                  // le scatole a cui si puo' attribuire: quelle di questa
+                  // spedizione, tranne una data intera a un'allieva (da li'
+                  // non e' uscito un pezzo alla volta)
+                  const kitAssegnabili = (dati?.istanze || []).filter((i) => i.stato !== "consegnato_intero");
+                  return (
                   <div style={{ marginTop: 10, border: `1px dashed ${GOLD}`, borderRadius: 12, padding: 12, background: "#FDF8EC" }}>
                     <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
                       Venduti dal POS, presi dai kit — da associare
                     </div>
                     <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.4 }}>
-                      Questi pezzi li hai venduti e dichiarati presi dai kit. Dimmi tu da quale kit li hai tirati fuori: per ora sono qui, non ancora assegnati.
+                      Questi pezzi li hai venduti e dichiarati presi dai kit. Dimmi tu da quale kit li hai tirati fuori: scegli la scatola qui a fianco.
                     </div>
                     {vendutiDaAssociare.map((r) => (
-                      <div key={r.prodottoId} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
-                        <span>{nomeProdotto(r.prodottoId)}</span>
-                        <span style={{ color: "#8A6A1B", fontWeight: 700, whiteSpace: "nowrap" }}>{r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"} · da associare</span>
+                      <div key={`${r.venditaId}|${r.prodottoId}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "5px 0", borderTop: `1px solid #EFE2C4`, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                        <span style={{ flex: "1 1 140px", minWidth: 0 }}>
+                          {nomeProdotto(r.prodottoId)}
+                          <span style={{ color: "#8A6A1B", fontWeight: 700, whiteSpace: "nowrap" }}> · {r.quantita} {r.quantita === 1 ? "pezzo" : "pezzi"}</span>
+                        </span>
+                        {!chiusa && (
+                          <select
+                            defaultValue=""
+                            onChange={(e) => { const v = e.target.value; e.target.value = ""; if (v) associa(r, v); }}
+                            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 9, padding: "7px 9px", minHeight: 38, cursor: "pointer", maxWidth: "100%" }}
+                          >
+                            <option value="">Da quale kit?</option>
+                            {kitAssegnabili.map((i) => (
+                              <option key={i.id} value={i.id}>{kitById[i.kitId]?.nome || "Kit"} #{i.progressivo}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     ))}
                   </div>
-                )}
+                  );
+                })()}
               </Blocco>
             )}
 
