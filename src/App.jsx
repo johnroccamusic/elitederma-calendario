@@ -433,12 +433,6 @@ const CHIAVE_REGOLA_REFERRAL_MASTER = "referralMaster_regolaSconto";
 // casa). Due percentuali, decise in Gestione punti
 const CHIAVE_QUOTE_PUNTI_MASTER = "puntiMaster_quotePerCanale";
 const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
-// La percentuale dei "punti totali prodotto" che ogni master percepira'
-// nella sua dashboard (dal 16/09/2026): una per master, 25% se non e'
-// stata ancora toccata. Si regola dall'elenco in Gestione punti; per ora
-// e' un'impostazione, la dashboard non la applica ancora
-const CHIAVE_QUOTA_PUNTI_PER_MASTER = "puntiMaster_quotaPerMaster";
-const QUOTA_PUNTI_PER_MASTER_DEFAULT = 25;
 // Le tre colonne "Quota" di Dettaglio prodotti (16/09/2026): una
 // percentuale dei punti totali prodotto, in euro (un punto e' un euro).
 // Le percentuali si scrivono in cima alle colonne e restano per tutti
@@ -44620,18 +44614,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     const n = Math.max(0, Math.min(100, Math.round(Number(valore) || 0)));
     salvaQuote({ ...quote, [canale]: n });
   };
-  // la percentuale dei punti totali di ogni master: chiave = id master,
-  // valore = percentuale; chi non c'e' vale il 25%
-  const [quotePerMasterSalvate, salvaQuotePerMaster] = useImpostazioneCondivisa(CHIAVE_QUOTA_PUNTI_PER_MASTER, {});
-  const quotaDiMaster = (id) => {
-    const n = Number((quotePerMasterSalvate || {})[id]);
-    return Number.isFinite(n) ? n : QUOTA_PUNTI_PER_MASTER_DEFAULT;
-  };
-  const cambiaQuotaMaster = (id, valore) => {
-    const n = Math.max(0, Math.min(100, Math.round(Number(valore) || 0)));
-    salvaQuotePerMaster({ ...(quotePerMasterSalvate || {}), [id]: n });
-  };
-  const masterInElenco = [...(master || [])].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "it"));
   // Le due tabelle di sconto vivono qui perche' decidono i punti: lo
   // sconto che l'allievo usa e' cedibile che se ne va, e quello che resta
   // e' della master. Sono le stesse regole che stanno in Genera coupon —
@@ -44827,38 +44809,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               </div>
             ))}
           </div>
-        </div>
-
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Percentuale dei punti totali per master</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Per ogni master, quanta parte dei punti totali prodotto le sarà riconosciuta nella sua dashboard. Se non la cambi vale il {QUOTA_PUNTI_PER_MASTER_DEFAULT}%. Si salva da sola.
-          </div>
-          {masterInElenco.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master in anagrafica.</div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-              {masterInElenco.map((m) => {
-                const q = quotaDiMaster(m.id);
-                const personalizzata = (quotePerMasterSalvate || {})[m.id] != null;
-                return (
-                  <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: BG, borderRadius: 12, padding: "8px 12px" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toTitleCase(m.nome || "")}</div>
-                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{personalizzata ? "percentuale impostata a mano" : "percentuale di default"}</div>
-                    </div>
-                    <button onClick={() => cambiaQuotaMaster(m.id, q - 5)} title="Cinque punti in meno"
-                      style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>−</button>
-                    <input type="number" min="0" max="100" value={q} onChange={(e) => cambiaQuotaMaster(m.id, e.target.value)}
-                      style={{ ...inputStyle, width: 64, textAlign: "center", padding: "5px 6px", fontWeight: 700 }} />
-                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
-                    <button onClick={() => cambiaQuotaMaster(m.id, q + 5)} title="Cinque punti in più"
-                      style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 15, lineHeight: 1 }}>+</button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
