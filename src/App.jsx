@@ -46984,7 +46984,9 @@ const COLONNE_MAGAZZINO = [
   // cento meno quella somma: lo spazio che resta da elargire
   { label: "Residuo cedibile %", campo: "cedibileResiduoPct", direzioneIniziale: "desc", larghezza: 84 },
   // gli stessi euro, letti sul prezzo che paga il cliente
-  { label: "Residuo cedibile sul lordo", campo: "cedibileResiduoLordoPct", direzioneIniziale: "desc", larghezza: 84 },
+  // due punti piu' grande del resto: e' il numero che si va a cercare
+  // quando si decide uno sconto sul prezzo esposto
+  { label: "Residuo cedibile sul lordo", campo: "cedibileResiduoLordoPct", direzioneIniziale: "desc", larghezza: 84, piuGrande: true },
   // due righe di conto: carta e shop online versano l'IVA e stanno sul
   // netto, e sono queste colonne; il contante tiene il lordo e sta nella
   // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
@@ -47620,7 +47622,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     ),
     "Residuo cedibile sul lordo": (
         <td style={tdStyle} title={p.cedibileResiduoLordoPct != null ? `Gli stessi ${fmtEuroErp2(p.sommaMassimaCedibileEuro)} letti sul prezzo al pubblico: e' la percentuale di sconto massima che puoi fare sul prezzo esposto senza sforare il cedibile` : "Senza prezzo al pubblico non si puo' calcolare"}>
-          <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: p.cedibileResiduoLordoPct == null ? MUTED : (p.cedibileResiduoLordoPct < 0 ? "#C0392B" : "#2E7D32") }}>
+          <span style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: p.cedibileResiduoLordoPct == null ? MUTED : (p.cedibileResiduoLordoPct < 0 ? "#C0392B" : "#2E7D32") }}>
             {p.cedibileResiduoLordoPct != null ? fmtPctErp(p.cedibileResiduoLordoPct) : "N/D"}
           </span>
         </td>
@@ -47777,7 +47779,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Margine operativo": <td style={tdContanti} title={lordo != null ? `Il ${margineOperativoPct}% del prezzo al pubblico (${fmtEuroErp2(lordo)}): in contanti la base e' questa` : "Senza prezzo al pubblico non si puo' calcolare"}>{lordo != null ? fmtEuroErp2(round2((Number(lordo) * margineOperativoPct) / 100)) : "—"}</td>,
     "Incidenza costi non cedibili": <td style={{ ...tdContanti, fontWeight: 700, color: p.nonCedibileContantiPct != null && p.nonCedibileContantiPct > 100 ? "#C0392B" : undefined }} title={p.nonCedibileContantiPct != null ? `Costo ${fmtPctErp(p.costoContantiPct)} + margine operativo ${margineOperativoPct}% + costi aziendali ${incidenzaCostiPct}%, tutto sul prezzo al pubblico` : "Senza costo o senza prezzo al pubblico non si puo' calcolare"}>{p.nonCedibileContantiPct != null ? fmtPctErp(p.nonCedibileContantiPct) : "N/D"}</td>,
     "Residuo cedibile %": <td style={{ ...tdContanti, fontWeight: 700, color: p.cedibileContantiPct != null && p.cedibileContantiPct < 0 ? "#C0392B" : undefined }} title="In contanti si tiene tutto il prezzo al pubblico, quindi netto e lordo coincidono: e' questa la percentuale che resta">{p.cedibileContantiPct != null ? fmtPctErp(p.cedibileContantiPct) : "N/D"}</td>,
-    "Residuo cedibile sul lordo": <td style={{ ...tdContanti, fontWeight: 700, color: p.cedibileContantiPct != null && p.cedibileContantiPct < 0 ? "#C0392B" : undefined }} title="In contanti la base e' gia' il prezzo al pubblico: e' lo stesso numero della colonna accanto">{p.cedibileContantiPct != null ? fmtPctErp(p.cedibileContantiPct) : "N/D"}</td>,
+    "Residuo cedibile sul lordo": <td style={{ ...tdContanti, fontSize: 15.5, fontWeight: 700, color: p.cedibileContantiPct != null && p.cedibileContantiPct < 0 ? "#C0392B" : undefined }} title="In contanti la base e' gia' il prezzo al pubblico: e' lo stesso numero della colonna accanto">{p.cedibileContantiPct != null ? fmtPctErp(p.cedibileContantiPct) : "N/D"}</td>,
     "Resta al venditore %": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.cedibileContantiPct != null ? `Residuo in contanti meno il ${Number(p.quota_negoziante_pct) || 0}% del negoziante` : "Senza residuo non c'e' niente da dividere"}>{p.cedibileContantiPct != null ? fmtPctErp(round1Erp(p.cedibileContantiPct - (Number(p.quota_negoziante_pct) || 0))) : "N/D"}</td>,
     "Somma massima cedibile": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(incidenzaCostiPct)}%): in contanti si tiene tutto il prezzo al pubblico, IVA compresa` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * p.sicurezzaProdotto) / 100))}` : "—"}</td>,
@@ -49091,7 +49093,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                       onDoubleClick={(e) => rinominaColonna(e, col.label, true)}
                       onContextMenu={(e) => rinominaColonna(e, col.label)}
                       title={`${col.campo ? (ruoloUtente === "programmatore" ? "Clicca per ordinare · doppio clic per rinominare · " : "Clicca per ordinare · ") : ""}trascina il titolo per spostare la colonna`}
-                      style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, borderLeft: colonnaSopra === col.label ? `2px solid ${NAVY}` : "2px solid transparent",
+                      style={{ ...fontBody, fontSize: col.piuGrande ? 14 : 12, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, borderLeft: colonnaSopra === col.label ? `2px solid ${NAVY}` : "2px solid transparent",
                         // i titoli vanno a capo: tagliati con i puntini
                         // ("PREZZO V…", "COSTO ACQ…") si leggevano solo
                         // allargando la colonna, e due colonne di prezzo
