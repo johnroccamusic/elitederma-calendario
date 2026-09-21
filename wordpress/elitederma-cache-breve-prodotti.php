@@ -146,9 +146,28 @@ if ( ! function_exists( 'elitederma_applica_cache' ) ) {
 	}
 }
 
-// Tentativo 1 — il buffer di output. Se il nostro parte prima di quello
-// di Breeze, il nostro e' il piu' esterno e la sua chiusura e' l'ultima
-// cosa che succede prima che i byte partano.
+// Il gancio giusto: PHP chiama questa funzione nell'istante in cui sta
+// per spedire le intestazioni, dopo chiunque altro le abbia toccate,
+// buffer o non buffer. E' esattamente il momento che serve a noi.
+//
+// Misurato il 21/09/2026: i tentativi su ob_start e su shutdown non
+// incidevano, perche' a shutdown le intestazioni erano gia' partite (la
+// sonda, agganciata li', non riusciva nemmeno a rispondere).
+//
+// Attenzione: PHP ne tiene UNA sola, e chi registra per ultimo sostituisce
+// il precedente. Registriamo tardi per questo.
+add_action( 'template_redirect', function () {
+	if ( ! function_exists( 'header_register_callback' ) || empty( $GLOBALS['elitederma_cache_decisa'] ) ) {
+		return;
+	}
+	header_register_callback( function () {
+		elitederma_applica_cache( 'header_callback' );
+	} );
+}, PHP_INT_MAX );
+
+// Restano come rete di sicurezza, nel caso header_register_callback sia
+// disattivato o gia' occupato da un altro plugin. Non fanno danno: se le
+// intestazioni sono partite, escono subito.
 if ( ! function_exists( 'elitederma_ultima_parola' ) ) {
 	function elitederma_ultima_parola( $buffer ) {
 		elitederma_applica_cache( 'buffer' );
@@ -158,24 +177,19 @@ if ( ! function_exists( 'elitederma_ultima_parola' ) ) {
 if ( ! is_admin() && PHP_SAPI !== 'cli' && ! defined( 'DOING_CRON' ) ) {
 	ob_start( 'elitederma_ultima_parola' );
 }
-
-// Tentativo 2 e 3 — la chiusura della richiesta, prima in coda all'azione
-// di WordPress, poi come funzione di spegnimento registrata quando ormai
-// tutte le altre lo sono gia'.
 add_action( 'shutdown', function () {
 	elitederma_applica_cache( 'shutdown' );
-	register_shutdown_function( function () {
-		elitederma_applica_cache( 'shutdown-tardi' );
-	} );
 }, PHP_INT_MAX );
 
 // ---------------------------------------------------------------
 // La sonda
 //
-// Se anche i tre tentativi perdono, la forza bruta non basta e bisogna
+// Se anche il gancio giusto perde, bisogna
 // disinnescare l'aggancio di Breeze per nome. Questa elenca i suoi
 // agganci sui ganci che possono toccare le intestazioni e li spedisce in
-// una riga di risposta, dove si leggono da fuori con un curl. Non cambia
+// una riga di risposta, dove si leggono da fuori con un curl. Sta su
+// template_redirect e non su shutdown perche' li' le intestazioni sono
+// gia' partite e non si riuscirebbe nemmeno a rispondere. Non cambia
 // niente: guarda e riferisce.
 // ---------------------------------------------------------------
 if ( ! function_exists( 'elitederma_nome_callback' ) ) {
@@ -194,7 +208,7 @@ if ( ! function_exists( 'elitederma_nome_callback' ) ) {
 	}
 }
 
-add_action( 'shutdown', function () {
+add_action( 'template_redirect', function () {
 	if ( headers_sent() || empty( $GLOBALS['elitederma_cache_decisa'] ) ) {
 		return;
 	}
