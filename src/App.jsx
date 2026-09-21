@@ -34744,6 +34744,15 @@ function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione,
       if (v.tipo_movimento === "omaggio") return; // nessun incasso reale, niente IVA a debito
       const d = (v.data_ordine || "").slice(0, 10);
       if (!d || d < range.inizio || d > range.fine) return;
+      // L'IVA la si LEGGE da come e' stata registrata la vendita, non la
+      // si ricalcola dall'aliquota: una vendita chiusa senza imposta (il
+      // canale esente — contanti/buono Amazon senza fattura, dove
+      // imponibile = totale e IVA = 0) resta senza imposta anche qui.
+      // Con fattura o con carta l'IVA c'e', registrata, e si conta. Cosi'
+      // il report riflette l'imposta davvero dovuta, non una teorica.
+      const venditaEsente = v.totale_imponibile != null
+        && Number(v.totale_iva || 0) === 0
+        && Math.abs(Number(v.totale || 0) - Number(v.totale_imponibile)) < 0.02;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
         const nome = (riga?.nome || "").trim();
         const lordo = Number(riga?.totale_riga) || 0;
@@ -34751,8 +34760,8 @@ function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione,
         const tipoVoce = mappaTipoVoce[nome] || "prodotto";
         if (tipoVoce === "corso" || tipoVoce === "escluso") return;
         const prod = prodottiPerNome[nome.toLowerCase()];
-        const aliquota = prod?.aliquota_iva_vendita;
-        const netto = aliquota != null ? nettoDaLordo(lordo, aliquota) : lordo;
+        const aliquota = venditaEsente ? 0 : prod?.aliquota_iva_vendita;
+        const netto = venditaEsente ? lordo : (aliquota != null ? nettoDaLordo(lordo, aliquota) : lordo);
         const iva = round2(lordo - netto);
         ivaTot += iva; imponibileTot += netto;
         const chiaveAliquota = aliquota != null ? String(aliquota) : "sconosciuta";
