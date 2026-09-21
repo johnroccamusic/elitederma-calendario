@@ -4330,9 +4330,12 @@ function puntiProdotto(p, sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accant
     const { euro } = cedibileContantiDi(p);
     return euro == null ? null : puntiDaCedibile(euro, sicurezzaPct);
   }
-  const margine = marginePercentualeDi(p);
-  if (margine == null) return null;
-  return puntiDaCedibile(round2((Number(p.prezzo_vendita) * percentualeCedibileDi(margine)) / 100), sicurezzaPct);
+  // dal 21/09/2026 il cedibile e' la somma massima cedibile: prezzo netto
+  // meno costo, margine operativo e costi aziendali. Sotto zero non ci
+  // sono punti negativi, ci sono zero punti
+  const { euro } = sommaMassimaCedibileDi(p);
+  if (euro == null) return null;
+  return puntiDaCedibile(Math.max(0, euro), sicurezzaPct);
 }
 // Dal 21/09/2026 lo sconto dell'allievo NON decurta piu' i punti della
 // master: un pezzo vale i suoi punti interi (puntiProdotto) che sia venduto
@@ -4355,6 +4358,35 @@ const INCIDENZA_COSTI_DEFAULT = 65;
 function incidenzaCostiAttiva() {
   const n = Number(LAYOUT_CACHE[CHIAVE_INCIDENZA_COSTI]);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : INCIDENZA_COSTI_DEFAULT;
+}
+function margineOperativoAttivo() {
+  const n = Number(LAYOUT_CACHE[CHIAVE_MARGINE_OPERATIVO]);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : MARGINE_OPERATIVO_DEFAULT;
+}
+// La somma massima cedibile di un pezzo (21/09/2026).
+//
+// Sul prezzo netto ci sono tre cose che non si possono cedere: il costo
+// di acquisto, il margine operativo dell'azienda e l'incidenza dei costi
+// aziendali. Quel che resta e' lo spazio da elargire, ed e' da qui che
+// nascono i punti.
+//
+// Sta qui, fuori dai componenti, perche' la stessa risposta la devono
+// dare la tabella di Dettaglio prodotti, il POS e le dashboard delle
+// master: due definizioni vicine finirebbero per divergere, e
+// divergerebbero sui soldi.
+//
+// Puo' venire negativa: a quel prezzo il prodotto non copre nemmeno i
+// suoi costi. Il numero si mostra com'e', ma i punti si fermano a zero —
+// una vendita non puo' togliere punti a chi la fa.
+function sommaMassimaCedibileDi(p, costoAcquisto = costoAcquistoDi(p)) {
+  const netto = Number(p?.prezzo_vendita);
+  if (!(netto > 0) || costoAcquisto == null || costoAcquisto === "" || !Number.isFinite(Number(costoAcquisto))) {
+    return { costoPct: null, nonCedibilePct: null, residuoPct: null, euro: null };
+  }
+  const costoPct = round1Erp((Number(costoAcquisto) / netto) * 100);
+  const nonCedibilePct = round1Erp(costoPct + margineOperativoAttivo() + incidenzaCostiAttiva());
+  const residuoPct = round1Erp(100 - nonCedibilePct);
+  return { costoPct, nonCedibilePct, residuoPct, euro: round2((netto * residuoPct) / 100) };
 }
 // I contanti hanno un'incidenza di costi piu' bassa: chi paga in contanti
 // non porta le commissioni della carta, di Scalapay e del conto. Per
@@ -47736,7 +47768,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         <td style={{ ...tdStyle, ...fontBody, fontSize: 12, fontWeight: 700, color: p.sommaMassimaCedibileEuro == null ? MUTED : (p.sommaMassimaCedibileEuro < 0 ? "#C0392B" : NAVY), whiteSpace: "nowrap" }} title={p.sommaMassimaCedibileEuro != null ? `Il ${fmtPctErp(p.cedibileResiduoPct)} che resta, applicato al prezzo netto di ${fmtEuroErp2(p.prezzo_vendita)}${p.sommaMassimaCedibileEuro < 0 ? " — negativo: a questo prezzo non c'e' niente da cedere" : ""}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>{p.sommaMassimaCedibileEuro != null ? fmtEuroErp2(p.sommaMassimaCedibileEuro) : "N/D"}</td>
     ),
     "Sicurezza": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: "#B8860B", whiteSpace: "nowrap" }} title={p.cedibileEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile carta/shop (${fmtEuroErp2(p.cedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, color: "#B8860B", whiteSpace: "nowrap" }} title={p.sommaMassimaCedibileEuro != null ? `Il ${p.sicurezzaProdotto}% della somma massima cedibile (${fmtEuroErp2(p.sommaMassimaCedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
           {/* casella e % sulla prima riga, allineate a quelle del titolo;
               gli euro accantonati sotto, cosi' la colonna resta dritta */}
           {/* casella, % e poi gli euro accantonati a destra, in uno spazio
@@ -47764,7 +47796,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         </td>
     ),
     "Punti totali prodotto": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Cedibile carta/shop ${fmtEuroErp2(p.cedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
+        <td style={{ ...tdStyle, ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Somma massima cedibile ${fmtEuroErp2(p.sommaMassimaCedibileEuro)} meno la percentuale di sicurezza di Gestione punti, per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
     ...Object.fromEntries([0, 1, 2].map((i) => [`Quota ${i + 1}`, (
         <td key={`q${i}`} style={{ ...tdStyle, ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }} title={p.punti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.punti)} punti totali, in euro` : "Senza punti non c'e' quota"}>{p.punti != null ? fmtEuroErp2(euroQuota(p.punti, i)) : "—"}</td>
@@ -48461,20 +48493,13 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // il costo pesa il 33,6%, quel che resta e' il 66,4% — e resta un
     // valore a se' perche' `margine` serve ancora al riquadro "Miglior
     // margine", dove il piu' alto dev'essere il migliore.
-    const costoSulPrezzoPct = costoEffettivo != null && p.prezzo_vendita > 0 ? round1Erp((Number(costoEffettivo) / p.prezzo_vendita) * 100) : null;
-    // Tutto quello che, in percentuale sul prezzo netto, non si puo'
-    // cedere: il costo di acquisto, il margine operativo dell'azienda e
-    // l'incidenza dei costi aziendali. Sopra il 100% vuol dire che a quel
-    // prezzo non resta niente — e va detto, non nascosto.
-    const incidenzaNonCedibilePct = costoSulPrezzoPct != null ? round1Erp(costoSulPrezzoPct + margineOperativoPct + incidenzaCostiPct) : null;
-    // Quello che resta, in percentuale sul prezzo netto, da poter
-    // elargire: cento meno tutto cio' che non si puo' cedere. Negativo
-    // significa che a quel prezzo si e' gia' sotto.
-    const cedibileResiduoPct = incidenzaNonCedibilePct != null ? round1Erp(100 - incidenzaNonCedibilePct) : null;
-    // La stessa percentuale, in euro. ATTENZIONE: non e' `cedibileEuro`,
-    // che resta il numero da cui nascono i punti — quello si cambia solo
-    // quando si rivede tutta la catena, mostrando prima l'effetto.
-    const sommaMassimaCedibileEuro = cedibileResiduoPct != null && p.prezzo_vendita != null ? round2((Number(p.prezzo_vendita) * cedibileResiduoPct) / 100) : null;
+    // una sola fonte per tutti e quattro i numeri, la stessa che usano il
+    // POS e le dashboard: cosi' la tabella non puo' raccontare altro
+    const cedibile = sommaMassimaCedibileDi(p, costoEffettivo);
+    const costoSulPrezzoPct = cedibile.costoPct;
+    const incidenzaNonCedibilePct = cedibile.nonCedibilePct;
+    const cedibileResiduoPct = cedibile.residuoPct;
+    const sommaMassimaCedibileEuro = cedibile.euro;
     // gli stessi due numeri della percentuale, in euro: e' la domanda che
     // si fa davanti a un ordine ("quanto ci guadagno su un pezzo"), e una
     // percentuale da sola non risponde — il 69% di 3,50 e il 69% di 39,90
@@ -48497,7 +48522,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // per la sua riga dei contanti: dashboard, POS e Gestione punti
     // continuano a leggere puntiProdotto, che non raddoppia
     const sicurezzaProdotto = sicurezzaDelProdotto(p, sicurezzaPunti);
-    const puntiPezzo = inVenditaViaApp ? puntiDaCedibile(cedibileEuro, sicurezzaProdotto) : null;
+    const puntiPezzo = inVenditaViaApp && sommaMassimaCedibileEuro != null ? puntiDaCedibile(Math.max(0, sommaMassimaCedibileEuro), sicurezzaProdotto) : null;
     const punti = puntiPezzo != null ? round2(puntiPezzo * 2) : null;
     // la seconda riga di conto, per chi paga in contanti: stesso costo
     // (per i bundle quello ricavato dai componenti), ma sul prezzo lordo
@@ -48510,7 +48535,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // di vendita. Senza prezzo non c'e' niente da calcolare
     const margineOperativoEuro = p.prezzo_vendita != null ? round2((Number(p.prezzo_vendita) * margineOperativoPct) / 100) : null;
     // quanto si toglie dal cedibile per la sicurezza, in euro
-    const sicurezzaEuro = cedibileEuro != null ? round2((Number(cedibileEuro) * sicurezzaProdotto) / 100) : null;
+    const sicurezzaEuro = sommaMassimaCedibileEuro != null ? round2((Math.max(0, sommaMassimaCedibileEuro) * sicurezzaProdotto) / 100) : null;
 
     // stock totale = magazzino fisico + shop online per un prodotto con
     // giacenza propria; per un bundle è quanti se ne possono comporre;
