@@ -322,13 +322,15 @@ export default function SchedaRientro({
                   const usciti = k.componenti.filter((c) => c.prelevata > 0);
                   return (
                     <div key={k.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                        <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
+                      <div style={{ textAlign: "center", marginBottom: 6 }}>
+                        <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: "#000", lineHeight: 1.15 }}>
                           {kitById[k.kitId]?.nome || "Kit"} #{k.progressivo}
-                        </span>
-                        {k.stato === "sigillato"
-                          ? <Pastiglia testo="da dichiarare" colore="#8A6A1B" sfondo="#F7EEDE" />
-                          : <Pastiglia testo={DESTINI.find((d) => d.chiave === k.stato)?.testo || k.stato} colore="#2E7D32" sfondo="#E9F6EC" />}
+                        </div>
+                        <div style={{ marginTop: 5 }}>
+                          {k.stato === "sigillato"
+                            ? <Pastiglia testo="da dichiarare" colore="#8A6A1B" sfondo="#F7EEDE" />
+                            : <Pastiglia testo={DESTINI.find((d) => d.chiave === k.stato)?.testo || k.stato} colore="#2E7D32" sfondo="#E9F6EC" />}
+                        </div>
                       </div>
                       {usciti.length > 0 && (
                         <div style={{ marginTop: 8 }}>
@@ -336,7 +338,7 @@ export default function SchedaRientro({
                             Già uscito da questo kit
                           </div>
                           {usciti.map((c) => (
-                            <div key={c.prodottoId} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "5px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                            <div key={c.prodottoId} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
                               <span>{nomeProdotto(c.prodottoId)}</span>
                               <span style={{ color: MUTED, whiteSpace: "nowrap" }}>{c.prelevata} di {c.iniziale} · registrato</span>
                             </div>
