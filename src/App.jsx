@@ -4305,11 +4305,12 @@ function puntiDaCedibile(cedibileEuro) {
 // carta. Il costo si puo' passare a parte (i bundle lo ricavano dai
 // componenti), altrimenti e' quello dell'anagrafica.
 function cedibileContantiDi(p, costoAcquisto = costoAcquistoDi(p)) {
-  const lordo = prezzoAlPubblico(p);
-  if (lordo == null || !(lordo > 0) || costoAcquisto == null || costoAcquisto === "") return { pct: null, euro: null, margine: null };
-  const margine = round1Erp(((lordo - Number(costoAcquisto)) / lordo) * 100);
-  const pct = percentualeCedibileDi(margine, true);
-  return { pct, euro: round2((lordo * pct) / 100), margine };
+  const c = sommaMassimaCedibileDi(p, costoAcquisto, true);
+  if (c.euro == null) return { pct: null, euro: null, margine: null, costoPct: null, nonCedibilePct: null };
+  // `margine` resta quello che era — quanto resta del lordo tolto il
+  // costo — perche' lo legge ancora chi mostra il margine in contanti
+  const margine = round1Erp(100 - c.costoPct);
+  return { pct: c.residuoPct, euro: c.euro, margine, costoPct: c.costoPct, nonCedibilePct: c.nonCedibilePct };
 }
 // I punti di UN pezzo di un prodotto, letti dalla sua anagrafica di oggi:
 // margine -> quota cedibile -> meno la sicurezza. E' la stessa regola
@@ -4381,15 +4382,18 @@ function margineOperativoAttivo() {
 // Puo' venire negativa: a quel prezzo il prodotto non copre nemmeno i
 // suoi costi. Il numero si mostra com'e', ma i punti si fermano a zero —
 // una vendita non puo' togliere punti a chi la fa.
-function sommaMassimaCedibileDi(p, costoAcquisto = costoAcquistoDi(p)) {
-  const netto = Number(p?.prezzo_vendita);
+// `contanti` cambia solo la base: con la carta e sul sito l'IVA si versa
+// e si ragiona sul netto, in contanti si tiene tutto il prezzo al
+// pubblico. I tre addendi che si tolgono sono gli stessi.
+function sommaMassimaCedibileDi(p, costoAcquisto = costoAcquistoDi(p), contanti = false) {
+  const netto = contanti ? Number(prezzoAlPubblico(p)) : Number(p?.prezzo_vendita);
   if (!(netto > 0) || costoAcquisto == null || costoAcquisto === "" || !Number.isFinite(Number(costoAcquisto))) {
-    return { costoPct: null, nonCedibilePct: null, residuoPct: null, euro: null };
+    return { costoPct: null, nonCedibilePct: null, residuoPct: null, euro: null, base: null };
   }
   const costoPct = round1Erp((Number(costoAcquisto) / netto) * 100);
   const nonCedibilePct = round1Erp(costoPct + margineOperativoAttivo() + incidenzaCostiAttiva());
   const residuoPct = round1Erp(100 - nonCedibilePct);
-  return { costoPct, nonCedibilePct, residuoPct, euro: round2((netto * residuoPct) / 100) };
+  return { costoPct, nonCedibilePct, residuoPct, euro: round2((netto * residuoPct) / 100), base: netto };
 }
 // I contanti hanno un'incidenza di costi piu' bassa: chi paga in contanti
 // non porta le commissioni della carta, di Scalapay e del conto. Per
@@ -47947,6 +47951,11 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     })(),
     "Ricavo lordo": <td style={tdContanti} title="Prezzo al pubblico meno costo di acquisto">{margineContantiEuro != null ? fmtEuroErp2(margineContantiEuro) : "N/D"}</td>,
     "Incidenza costi aziendali": <td style={tdContanti} title="L'incidenza dei costi aziendali e' una sola: vale uguale in contanti e sulla carta">{numeroFascia(incidenzaCostiPct)}%</td>,
+    "Margine operativo": <td style={tdContanti} title={lordo != null ? `Il ${margineOperativoPct}% del prezzo al pubblico (${fmtEuroErp2(lordo)}): in contanti la base e' questa` : "Senza prezzo al pubblico non si puo' calcolare"}>{lordo != null ? fmtEuroErp2(round2((Number(lordo) * margineOperativoPct) / 100)) : "—"}</td>,
+    "Incidenza costi non cedibili": <td style={{ ...tdContanti, fontWeight: 700, color: p.nonCedibileContantiPct != null && p.nonCedibileContantiPct > 100 ? "#C0392B" : undefined }} title={p.nonCedibileContantiPct != null ? `Costo ${fmtPctErp(p.costoContantiPct)} + margine operativo ${margineOperativoPct}% + costi aziendali ${incidenzaCostiPct}%, tutto sul prezzo al pubblico` : "Senza costo o senza prezzo al pubblico non si puo' calcolare"}>{p.nonCedibileContantiPct != null ? fmtPctErp(p.nonCedibileContantiPct) : "N/D"}</td>,
+    "Residuo cedibile %": <td style={{ ...tdContanti, fontWeight: 700, color: p.cedibileContantiPct != null && p.cedibileContantiPct < 0 ? "#C0392B" : undefined }} title="In contanti si tiene tutto il prezzo al pubblico, quindi netto e lordo coincidono: e' questa la percentuale che resta">{p.cedibileContantiPct != null ? fmtPctErp(p.cedibileContantiPct) : "N/D"}</td>,
+    "Residuo cedibile sul lordo": <td style={{ ...tdContanti, fontWeight: 700, color: p.cedibileContantiPct != null && p.cedibileContantiPct < 0 ? "#C0392B" : undefined }} title="In contanti la base e' gia' il prezzo al pubblico: e' lo stesso numero della colonna accanto">{p.cedibileContantiPct != null ? fmtPctErp(p.cedibileContantiPct) : "N/D"}</td>,
+    "Resta al venditore %": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.cedibileContantiPct != null ? `Residuo in contanti meno il ${Number(p.quota_negoziante_pct) || 0}% del negoziante` : "Senza residuo non c'e' niente da dividere"}>{p.cedibileContantiPct != null ? fmtPctErp(round1Erp(p.cedibileContantiPct - (Number(p.quota_negoziante_pct) || 0))) : "N/D"}</td>,
     "Somma massima cedibile": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(incidenzaCostiPct)}%): in contanti si tiene tutto il prezzo al pubblico, IVA compresa` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * p.sicurezzaProdotto) / 100))}` : "—"}</td>,
     "Riallinea": <td style={tdContanti} />,
@@ -48636,6 +48645,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       margineContanti: contanti.margine,
       cedibileContantiPct: contanti.pct,
       cedibileContantiEuro: contanti.euro,
+      costoContantiPct: contanti.costoPct,
+      nonCedibileContantiPct: contanti.nonCedibilePct,
       puntiContanti,
       categorieIds,
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
