@@ -4687,9 +4687,17 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
     if (nuovoModo === modo) return;
     // converte il valore digitato nell'equivalente del nuovo modo, invece
     // di lasciarlo lì a significare qualcos'altro
-    if (nuovoModo === "lordo") onCambiaInputTesto(lordo != null ? String(lordo) : "");
-    else onCambiaInputTesto(netto != null ? String(netto) : "");
+    if (nuovoModo === "lordo") onCambiaInputTesto(lordo != null ? lordo.toFixed(2).replace(".", ",") : "");
+    else onCambiaInputTesto(netto != null ? netto.toFixed(2).replace(".", ",") : "");
     onCambiaModo(nuovoModo);
+  }
+  // quando si esce dal campo il prezzo si mostra a due decimali fissi
+  // all'italiana (2,80, non 2.8); mentre si scrive comanda quello che digiti
+  function fissaDueDecimali() {
+    const t = inputTesto.trim();
+    if (t === "") return;
+    const n = parseNum(t);
+    if (Number.isFinite(n)) onCambiaInputTesto(n.toFixed(2).replace(".", ","));
   }
 
   // sul telefono i due blocchi (Acquisto e Vendita) stanno affiancati come
@@ -4726,7 +4734,7 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
         {/* sei decimi alla cifra, quattro all'aliquota: lasciato a se', il
             menu' si allargava quanto voleva e la cifra spariva */}
         <div style={{ position: "relative", flex: "6 1 0", minWidth: 0 }}>
-          <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
+          <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} onBlur={fissaDueDecimali} placeholder="0,00" />
           <span style={{ position: "absolute", right: stretto ? 8 : 9, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: stretto ? 12 : 12, color: MUTED, pointerEvents: "none" }}>€</span>
         </div>
         <select
@@ -59904,13 +59912,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       // il prezzo di vendita si apre sempre sul LORDO: è il numero che paga
       // il cliente, quello che si legge sul sito e quello che sta in testa a
       // chi lavora. Salvato resta comunque il netto (vedi BloccoPrezzoIva)
+      // i prezzi si aprono a due decimali all'italiana (39,90 non 39.9)
       prezzo: p.prezzo_vendita != null
-        ? String(prezzoAlPubblico(p))
+        ? Number(prezzoAlPubblico(p)).toFixed(2).replace(".", ",")
         : "",
       modoVendita: "lordo",
       aliquotaVendita: p.aliquota_iva_vendita ?? aliquotaIvaDefault,
-      prezzoLordoForzato: p.prezzo_lordo_forzato != null ? String(p.prezzo_lordo_forzato) : "",
-      costo: p.costo_acquisto != null ? String(p.costo_acquisto) : "",
+      prezzoLordoForzato: p.prezzo_lordo_forzato != null ? Number(p.prezzo_lordo_forzato).toFixed(2).replace(".", ",") : "",
+      costo: p.costo_acquisto != null ? Number(p.costo_acquisto).toFixed(2).replace(".", ",") : "",
       modoAcquisto: "netto",
       aliquotaAcquisto: p.aliquota_iva_acquisto ?? aliquotaIvaDefault,
       stato: p.stato || "publish",
@@ -61103,6 +61112,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               placeholder={calcoloPrezzi.prezzoNetto != null ? `es. ${round2(calcoloPrezzi.prezzoNetto * (1 + (prodottoForm.aliquotaVendita || 0) / 100)).toFixed(2)}` : "es. 39.90"}
               value={prodottoForm.prezzoLordoForzato || ""}
               onChange={(e) => aggiornaForm({ prezzoLordoForzato: e.target.value })}
+              onBlur={() => { const t = String(prodottoForm.prezzoLordoForzato ?? "").trim(); if (t === "") return; const n = parseNum(t); if (Number.isFinite(n)) aggiornaForm({ prezzoLordoForzato: n.toFixed(2).replace(".", ",") }); }}
             />
           </Field>
         </div>
