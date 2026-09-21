@@ -23017,6 +23017,98 @@ function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 8 }) {
 // finché non si tocca esplicitamente altrove — il tasto (e il tasto
 // "invio"/lente della tastiera stessa, grazie a enterKeyHint) tolgono il
 // focus dal campo, così la tastiera si chiude subito
+// Una tendina in cui si puo' scrivere per restringere l'elenco.
+//
+// Serve dove le voci sono troppe per cercarle a occhio: i fornitori sono
+// decine, e una <select> nativa costringe a scorrerle tutte. Qui si
+// scrive due lettere e resta quello che serve.
+//
+// Le voci arrivano come { valore, etichetta }. Il valore vuoto e' la
+// voce "tutti", quella che non filtra niente.
+function TendinaCercabile({ valore, onCambia, voci, placeholder = "Tutti", style, titolo }) {
+  const [aperta, setAperta] = useState(false);
+  const [scritto, setScritto] = useState("");
+  const [evidenziata, setEvidenziata] = useState(0);
+  const contenitore = useRef(null);
+  const campo = useRef(null);
+  const selezionata = (voci || []).find((v) => v.valore === valore) || null;
+
+  const filtrate = useMemo(() => {
+    const q = scritto.trim().toLowerCase();
+    if (!q) return voci || [];
+    return (voci || []).filter((v) => String(v.etichetta || "").toLowerCase().includes(q));
+  }, [voci, scritto]);
+
+  // un clic fuori chiude senza scegliere: senza questo la tendina
+  // restava aperta dietro al resto della pagina
+  useEffect(() => {
+    if (!aperta) return;
+    function fuori(e) { if (contenitore.current && !contenitore.current.contains(e.target)) chiudi(); }
+    document.addEventListener("mousedown", fuori);
+    return () => document.removeEventListener("mousedown", fuori);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aperta]);
+
+  function apri() { setScritto(""); setEvidenziata(0); setAperta(true); }
+  function chiudi() { setAperta(false); setScritto(""); }
+  function scegli(v) { onCambia(v.valore); chiudi(); campo.current?.blur(); }
+
+  function daTastiera(e) {
+    if (!aperta && (e.key === "ArrowDown" || e.key === "Enter")) { apri(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); setEvidenziata((i) => Math.min(i + 1, filtrate.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setEvidenziata((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); if (filtrate[evidenziata]) scegli(filtrate[evidenziata]); }
+    else if (e.key === "Escape") { e.preventDefault(); chiudi(); campo.current?.blur(); }
+  }
+
+  return (
+    <div ref={contenitore} style={{ position: "relative", ...style }}>
+      <input
+        ref={campo}
+        value={aperta ? scritto : (selezionata ? selezionata.etichetta : "")}
+        onChange={(e) => { setScritto(e.target.value); setEvidenziata(0); if (!aperta) setAperta(true); }}
+        onFocus={apri}
+        onClick={() => { if (!aperta) apri(); }}
+        onKeyDown={daTastiera}
+        placeholder={selezionata ? selezionata.etichetta : placeholder}
+        title={titolo}
+        style={{ ...inputStyle, width: "100%", boxSizing: "border-box", paddingRight: 30, cursor: "pointer" }}
+      />
+      {/* la freccetta della tendina, e se c'e' una scelta il modo per
+          toglierla senza dover riaprire l'elenco */}
+      <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 4, pointerEvents: valore ? "auto" : "none" }}>
+        {valore ? (
+          <button type="button" title="Togli il filtro" aria-label="Togli il filtro"
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onClick={(e) => { e.stopPropagation(); onCambia(""); chiudi(); }}
+            style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+        ) : (
+          <span style={{ color: MUTED, fontSize: 10 }}>▾</span>
+        )}
+      </div>
+      {aperta && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 40, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.12)", maxHeight: 260, overflowY: "auto" }}>
+          {filtrate.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 12px" }}>Nessun risultato per “{scritto.trim()}”</div>
+          ) : filtrate.map((v, i) => (
+            <div key={v.valore || `__${i}`}
+              // mousedown e non click: il click arriverebbe dopo il blur
+              // del campo, e la tendina si sarebbe gia' chiusa
+              onMouseDown={(e) => { e.preventDefault(); scegli(v); }}
+              onMouseEnter={() => setEvidenziata(i)}
+              style={{ ...fontBody, fontSize: 12.5, padding: "8px 12px", cursor: "pointer",
+                background: i === evidenziata ? "#F4F1EA" : "#fff",
+                color: v.valore === valore ? NAVY : "#2B2B2B",
+                fontWeight: v.valore === valore ? 700 : 400 }}>
+              {v.etichetta}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CampoRicerca({ value, onChange, placeholder, style }) {
   const ref = React.useRef(null);
   return (
@@ -48794,13 +48886,20 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               <option value="">Tutte le categorie</option>
               {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
-            <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={fornitoreSel} onChange={(e) => setFornitoreSel(e.target.value)}>
-              <option value="">Tutti i fornitori</option>
-              {[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")).map((f) => (
-                <option key={f.id} value={f.id}>{f.nome}</option>
-              ))}
-              <option value="__nessuno">— senza fornitore —</option>
-            </select>
+            {/* i fornitori sono decine: qui si scrive e l'elenco si
+                stringe, invece di scorrerlo tutto a occhio */}
+            <TendinaCercabile
+              style={{ flex: "1 1 0", minWidth: 0 }}
+              valore={fornitoreSel}
+              onCambia={setFornitoreSel}
+              placeholder="Tutti i fornitori"
+              titolo="Scrivi le prime lettere del fornitore per trovarlo"
+              voci={[
+                { valore: "", etichetta: "Tutti i fornitori" },
+                ...[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")).map((f) => ({ valore: f.id, etichetta: f.nome || "(senza nome)" })),
+                { valore: "__nessuno", etichetta: "— senza fornitore —" },
+              ]}
+            />
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
