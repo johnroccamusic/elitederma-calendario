@@ -31,6 +31,8 @@
 //     nome, descrizioneBreve, descrizione, prezzo, stato,  // 'stato': 'publish'|'draft'
 //     categorieIds: [uuid, ...],  // opzionale in modifica (solo se passato viene sostituito)
 //     immagini: [{ url, wooImageId }],  // ordine = ordine di visualizzazione, opzionale in modifica
+//     backorder: true|false,      // ordinabile anche a scorte zero
+//     backorderMessaggio: string, // testo al posto della disponibilita' (vuoto = predefinito del sito)
 //   }})
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -73,7 +75,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ errore: "JSON non valido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const { azione, prodottoId, nome, descrizioneBreve, descrizione, prezzo, stato, categorieIds, immagini } = corpo || {};
+  const { azione, prodottoId, nome, descrizioneBreve, descrizione, prezzo, stato, categorieIds, immagini, backorder, backorderMessaggio } = corpo || {};
   if (!["crea", "modifica"].includes(azione)) {
     return new Response(JSON.stringify({ errore: "Parametro 'azione' non valido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -102,6 +104,28 @@ Deno.serve(async (req) => {
     if (!idsLocali?.length) return [];
     const { data } = await supabase.from("categorie_prodotti").select("id, woo_category_id").in("id", idsLocali);
     return (data || []).map((c: any) => c.woo_category_id).filter((id: any) => id != null);
+  }
+
+  // Back order su WooCommerce.
+  //
+  // Tre campi che devono muoversi insieme: senza manage_stock Woo non
+  // guarda nemmeno la giacenza, e backorders da solo non servirebbe a
+  // niente. Con manage_stock acceso e backorders 'yes', a zero pezzi Woo
+  // passa da solo lo stock_status a 'onbackorder' e lascia comprare.
+  //
+  // Il messaggio viaggia come meta del prodotto: WooCommerce non ha un
+  // campo suo per il testo di disponibilita'. A leggerlo e a metterlo al
+  // posto di "Non disponibile" ci pensa uno snippet sul sito — vedi
+  // wordpress/elitederma-backorder-messaggio.php. Si scrive SEMPRE, anche
+  // vuoto: cancellarlo dalla scheda deve cancellarlo anche sul sito.
+  function campiBackorder(): Record<string, unknown> {
+    if (backorder === undefined) return {};
+    const acceso = !!backorder;
+    return {
+      manage_stock: true,
+      backorders: acceso ? "yes" : "no",
+      meta_data: [{ key: "_elitederma_backorder_messaggio", value: acceso ? String(backorderMessaggio || "") : "" }],
+    };
   }
 
   function immaginiPerWoo(lista: any[] | undefined): { id?: number; src?: string }[] | undefined {
@@ -152,6 +176,7 @@ Deno.serve(async (req) => {
       if (categorieWooIds.length > 0) payloadWoo.categories = categorieWooIds.map((id) => ({ id }));
       const immaginiWoo = immaginiPerWoo(immagini);
       if (immaginiWoo?.length) payloadWoo.images = immaginiWoo;
+      Object.assign(payloadWoo, campiBackorder());
 
       const rispostaWoo = await fetch(`${siteUrl}/wp-json/wc/v3/products`, {
         method: "POST",
@@ -217,6 +242,7 @@ Deno.serve(async (req) => {
     }
     const immaginiWoo = immaginiPerWoo(immagini);
     if (immaginiWoo !== undefined) payloadWoo.images = immaginiWoo;
+    Object.assign(payloadWoo, campiBackorder());
 
     if (Object.keys(payloadWoo).length === 0) {
       return new Response(JSON.stringify({ errore: "Nulla da aggiornare" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });

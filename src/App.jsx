@@ -51156,6 +51156,23 @@ function disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerI
   }));
 }
 
+// ---------- Back order ----------
+// Un prodotto in back order resta ordinabile anche a zero pezzi: il
+// cliente ordina, noi riordiniamo, il pezzo arriva. Al suo posto non si
+// scrive "Esaurito" ne' "Disponibili 0": si scrive quando arriva, ed e'
+// l'unica cosa che al cliente interessi sapere.
+//
+// Il testo sta qui e non nel database perche' e' una promessa
+// commerciale, non un dato del prodotto: il giorno che i giorni
+// lavorativi diventano tre si cambia questa riga, non duecento schede.
+const BACKORDER_TESTO_PREDEFINITO = "Disponibile in circa 4 giorni lavorativi";
+function backorderAttivo(p) {
+  return !!p?.backorder_attivo;
+}
+function backorderMessaggio(p) {
+  const scritto = String(p?.backorder_messaggio || "").trim();
+  return scritto || BACKORDER_TESTO_PREDEFINITO;
+}
 // ---------- Regola unica di scarico dello stock ----------
 // Nessuna giacenza può finire sotto zero, da nessun punto dell'app.
 // Quando il magazzino fisico non basta, i pezzi mancanti si tolgono dallo
@@ -51178,9 +51195,21 @@ function pianoScarico(prodotto, quantita, { sogliaInvalicabile = false } = {}) {
   // pezzo lo stai consegnando davvero a un cliente
   const pavimento = sogliaInvalicabile ? Math.min(soglia, disponibile) : 0;
   const daScaricare = Math.max(0, Math.min(quantita, disponibile - pavimento));
+  const nonCoperti = quantita - daScaricare;
+  // I pezzi che mancano su un prodotto in back order non bloccano: sono
+  // venduti da riordinare. Non si scaricano — non ci sono — e la giacenza
+  // resta a zero, mai sotto: la regola non si piega, si aggira dicendo la
+  // verita', cioe' che quei pezzi dal magazzino non sono usciti.
+  //
+  // Vale solo per le vendite. Un kit corso NON si allestisce col back
+  // order: la scatola deve partire piena il giorno del corso, e "arriva
+  // fra quattro giorni" li' non e' una risposta. Per questo la deroga e'
+  // legata a sogliaInvalicabile, che e' esattamente il segno "sto
+  // preparando un corso".
+  const inBackorder = !sogliaInvalicabile && backorderAttivo(prodotto) ? nonCoperti : 0;
   return {
-    disponibile, soglia, daScaricare,
-    mancanti: quantita - daScaricare,
+    disponibile, soglia, daScaricare, inBackorder,
+    mancanti: nonCoperti - inBackorder,
     restano: disponibile - daScaricare,
   };
 }
@@ -57755,11 +57784,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   function aggiungiAlCarrello(p) {
     const disponibili = disponibiliQui(p.id);
-    if (disponibili <= 0) return;
+    // il tetto della disponibilita' non vale per chi e' in back order:
+    // li' il numero di pezzi in casa non e' il limite di quanti se ne
+    // possono vendere, e' solo quanti ne partono subito
+    const senzaTetto = backorderAttivo(p);
+    if (disponibili <= 0 && !senzaTetto) return;
     setCarrello((prev) => {
       const esistente = prev.find((r) => r.prodottoId === p.id);
       if (esistente) {
-        if (esistente.quantita >= disponibili) return prev;
+        if (!senzaTetto && esistente.quantita >= disponibili) return prev;
         return prev.map((r) => (r.prodottoId === p.id ? { ...r, quantita: r.quantita + 1 } : r));
       }
       // il POS incassa il prezzo che paga il cliente: prezzo_vendita è il
@@ -57786,7 +57819,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   function incrementaRiga(prodottoId) {
     const disponibili = disponibiliDi(prodottoId);
-    setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId && r.quantita < disponibili ? { ...r, quantita: r.quantita + 1 } : r)));
+    const senzaTetto = backorderAttivo(trovaProdotto(prodottoId));
+    setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId && (senzaTetto || r.quantita < disponibili) ? { ...r, quantita: r.quantita + 1 } : r)));
   }
   function decrementaRiga(prodottoId) {
     setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId ? { ...r, quantita: Math.max(1, r.quantita - 1) } : r)));
@@ -58614,7 +58648,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       ) : (
         <div style={{ marginBottom: isMobile ? 8 : 16 }}>
-          {carrello.map((r) => (
+          {carrello.map((r) => {
+          // il "+" si spegne quando i pezzi finiscono — ma non su un
+          // prodotto in back order, dove finire i pezzi non e' un limite
+          const tettoRiga = backorderAttivo(trovaProdotto(r.prodottoId)) ? Infinity : disponibiliDi(r.prodottoId);
+          return (
             <div key={r.prodottoId} style={{ borderBottom: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 10, padding: isMobile ? "6px 0" : "10px 0" }}>
               {isMobile && (
@@ -58629,7 +58667,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
                 <button onClick={() => decrementaRiga(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
                 <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, minWidth: 16, textAlign: "center" }}>{r.quantita}</span>
-                <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= disponibiliDi(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: r.quantita >= disponibiliDi(r.prodottoId) ? "default" : "pointer", opacity: r.quantita >= disponibiliDi(r.prodottoId) ? 0.4 : 1 }}>+</button>
+                <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= tettoRiga} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: r.quantita >= tettoRiga ? "default" : "pointer", opacity: r.quantita >= tettoRiga ? 0.4 : 1 }}>+</button>
               </div>
               <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, width: isMobile ? 52 : 62, textAlign: "right" }}>{fmtEuroErp2(round2(r.prezzo * r.quantita))}</div>
               <button onClick={() => rimuoviRiga(r.prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: isMobile ? 13 : 15, padding: 2 }}>✕</button>
@@ -58676,7 +58714,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               );
             })()}
             </div>
-          ))}
+          );})}
         </div>
       )}
 
@@ -59124,7 +59162,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     <div>
       {prodottiPagina.map((p) => {
         const disponibili = disponibiliQui(p.id);
-        const esaurito = disponibili <= 0;
+        // a zero pezzi un prodotto in back order non e' esaurito: e' da
+        // ordinare. La riga della disponibilita' lascia il posto al
+        // messaggio — "Disponibili 0 pz" accanto a "arriva in quattro
+        // giorni" sono due frasi che si smentiscono a vicenda
+        const inBackorder = disponibili <= 0 && backorderAttivo(p);
+        const esaurito = disponibili <= 0 && !inBackorder;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
           <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
@@ -59137,7 +59180,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   troncavano quasi tutti prima del calibro, che e' proprio
                   la parte che serve a chi vende */}
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</div>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: esaurito ? "#C0392B" : "#2E7D32" }}>{esaurito ? "Esaurito" : `Disponibili ${disponibili} pz`}</div>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: esaurito ? "#C0392B" : inBackorder ? "#B8860B" : "#2E7D32" }}>
+                {esaurito ? "Esaurito" : inBackorder ? backorderMessaggio(p) : `Disponibili ${disponibili} pz`}
+              </div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
               <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(prezzoAlPubblico(p))}</div>
@@ -59158,7 +59203,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${colonneProdottiPos}, minmax(0, 1fr))`, gap: 12 }}>
       {prodottiPagina.map((p) => {
         const disponibili = disponibiliQui(p.id);
-        const esaurito = disponibili <= 0;
+        const inBackorder = disponibili <= 0 && backorderAttivo(p);
+        const esaurito = disponibili <= 0 && !inBackorder;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
           // la tessera e' una colonna e il prezzo si appoggia in fondo: un
@@ -59176,10 +59222,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(prezzoAlPubblico(p))}</div>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>IVA incl.</div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Disponibili</div>
-                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: esaurito ? "#C0392B" : NAVY }}>{esaurito ? "Esaurito" : `${disponibili} pz`}</div>
-              </div>
+              {inBackorder ? (
+                // niente etichetta "Disponibili" sopra: il messaggio la
+                // sostituisce del tutto, e da solo si prende le due righe
+                <div style={{ textAlign: "right", maxWidth: "58%" }}>
+                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#B8860B", lineHeight: 1.2 }}>{backorderMessaggio(p)}</div>
+                </div>
+              ) : (
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Disponibili</div>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: esaurito ? "#C0392B" : NAVY }}>{esaurito ? "Esaurito" : `${disponibili} pz`}</div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -60747,6 +60801,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       fornitoreId: p.fornitore_id || "",
       lottoMinimo: p.lotto_minimo_ordine != null ? String(p.lotto_minimo_ordine) : "",
       quantitaRiordino: p.quantita_riordino != null ? String(p.quantita_riordino) : "",
+      backorder: !!p.backorder_attivo,
+      // vuoto vuol dire "usa il predefinito": non si riempie il campo col
+      // testo di serie, o alla prima riapertura sembrerebbe scritto a mano
+      // e nessuno lo aggiornerebbe piu' cambiando la riga nel codice
+      backorderTesto: p.backorder_messaggio || "",
       wooProductId: p.woo_product_id || null,
       categorieIds: categoriePer[p.id] || [],
       immagini: (immaginiPer[p.id] || []).map((im) => ({ chiave: im.id, url: im.url, wooImageId: im.woo_image_id })),
@@ -60817,6 +60876,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       prodottoPadreId: padreId || "",
       bundleFisica: false, componentiAccompagnano: false, prodottoSfusoId: "", pezziConfezione: "",
       scortaMinima: "", leadTime: "", giorniSicurezza: "", fornitoreId: "", lottoMinimo: "", quantitaRiordino: "",
+      backorder: false, backorderTesto: "",
       wooProductId: null,
       categorieIds: categoriaSelId ? [categoriaSelId] : [],
       immagini: [],
@@ -61167,6 +61227,8 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       pezzi_per_confezione: bundleConFisica && parseNum(f.pezziConfezione) > 0 ? parseInt(parseNum(f.pezziConfezione), 10) : null,
       solo_offline: !!f.soloOffline,
       escludi_vendita_diretta: !!f.nonSulPos,
+      backorder_attivo: !!f.backorder,
+      backorder_messaggio: String(f.backorderTesto || "").trim() || null,
     };
     // anche il vuoto e' una modifica: scrivendo solo quando c'e' un
     // numero, cancellare il prezzo di vendita non lo cancellava e alla
@@ -61243,6 +61305,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           stato: f.stato,
           categorieIds: categorieIdsDaSalvare,
           immagini: f.immagini.map((im) => ({ url: im.url, wooImageId: im.wooImageId })),
+          // il back order va detto al sito nello stesso salvataggio: se
+          // restasse solo qui, il POS venderebbe a scorte zero e lo shop
+          // continuerebbe a dire "Non disponibile"
+          backorder: !!f.backorder,
+          backorderMessaggio: String(f.backorderTesto || "").trim() || BACKORDER_TESTO_PREDEFINITO,
         },
       });
       if (error || data?.errore) return { errore: "Salvataggio non riuscito, riprova. " + (data?.errore || error.message) };
@@ -62403,6 +62470,78 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             );
           })()}
         </div>
+      )}
+
+      {/* ---- Back order ----
+          In fondo alla scheda perche' e' una decisione che si prende dopo
+          aver visto prezzo, scorte e fornitore: "questo lo riordino in
+          fretta, posso venderlo anche quando e' finito".
+
+          Solo per chi ha una giacenza sua. Un bundle virtuale non ne ha:
+          la sua disponibilita' e' quella dei componenti, e la spunta qui
+          sopra non la cambierebbe di un pezzo — accenderebbe solo un
+          messaggio su una vendita che resta bloccata. Il back order, su
+          un bundle, si mette sui componenti. */}
+      {prodottoForm.giacenzaPropria && (
+      <div style={{ background: "#F8F9FB", border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+        <SpBlocco
+          icona={<SpIcoCarrello s={22} />}
+          titolo="Ordinabile senza scorte (back order)"
+          sottotitolo="Il cliente può ordinarlo anche quando i pezzi sono zero, sul sito e al banco."
+          style={{ marginBottom: prodottoForm.backorder ? 14 : 0 }}
+        >
+          <label style={spRiga}>
+            <input
+              type="checkbox" checked={!!prodottoForm.backorder} style={spSpunta}
+              onChange={(e) => aggiornaForm({ backorder: e.target.checked })}
+            />
+            Attiva il back order su questo prodotto
+          </label>
+        </SpBlocco>
+        {prodottoForm.backorder && (() => {
+          // i messaggi gia' scritti sugli altri prodotti in back order:
+          // si riprende quello, invece di riscriverlo a memoria ogni volta
+          // e ritrovarsi quattro versioni della stessa frase
+          const giaUsati = [...new Set(
+            (prodottiShop || [])
+              .filter((pp) => pp.backorder_attivo && pp.id !== prodottoForm.id)
+              .map((pp) => String(pp.backorder_messaggio || "").trim())
+              .filter(Boolean)
+          )].sort((x, y) => x.localeCompare(y, "it"));
+          return (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <div style={spEtichetta}>Messaggio al posto della disponibilità</div>
+                <input
+                  style={spCampo}
+                  value={prodottoForm.backorderTesto}
+                  onChange={(e) => aggiornaForm({ backorderTesto: e.target.value })}
+                  placeholder={BACKORDER_TESTO_PREDEFINITO}
+                />
+              </div>
+              {giaUsati.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                  <span style={{ ...fontBody, fontSize: 12.5, color: SP_SPENTO }}>Riprendi un messaggio già usato:</span>
+                  {giaUsati.map((t) => (
+                    <button
+                      key={t} onClick={() => aggiornaForm({ backorderTesto: t })}
+                      title="Copia questo testo nel campo qui sopra"
+                      style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: SP_TESTO, background: "#fff", border: `1px solid ${SP_BORDO}`, borderRadius: 999, padding: "5px 11px", cursor: "pointer" }}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <SpNota sfondo="#F1F3F6">
+                Quando i pezzi sono <b style={{ color: SP_TESTO }}>zero</b>, questo messaggio prende il posto della disponibilità: il cliente legge “{(String(prodottoForm.backorderTesto || "").trim() || BACKORDER_TESTO_PREDEFINITO)}” e non vede né “Esaurito” né “0 pezzi”. Finché i pezzi ci sono, la scheda resta quella di sempre.
+                <div style={{ marginTop: 6 }}>Lasciando il campo vuoto vale il testo predefinito, uguale per tutti: <b style={{ color: SP_TESTO }}>{BACKORDER_TESTO_PREDEFINITO}</b>.</div>
+                <div style={{ marginTop: 6 }}>I kit dei corsi <b style={{ color: SP_TESTO }}>non</b> usano il back order: la scatola deve partire piena il giorno del corso.</div>
+              </SpNota>
+            </>
+          );
+        })()}
+      </div>
       )}
 
       {messaggi}
