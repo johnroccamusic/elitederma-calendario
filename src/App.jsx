@@ -44276,7 +44276,16 @@ function PaginaInserimentoCostiRicavi({
       // la nota sta sotto il titolo: per la quota venditori e' il dettaglio
       // "Katia - 260 · Gina - 260"
       sottotitolo: [categoria?.nome, fornitore?.nome, s.note].filter(Boolean).join(" · ") || "—",
-      chips: [sottocategoria?.nome, fornitore?.nome].filter(Boolean),
+      chips: [
+        // Da dove sono usciti i soldi, quando non e' il conto: le quote
+        // pagate in contanti con la busta del corso. In prima nota
+        // stavano in mezzo ai bonifici senza niente che le distinguesse,
+        // e per sapere se una riga era uscita dal cassetto o dalla banca
+        // bisognava aprirla.
+        spesaUscitaDallaBusta(s) && (s.importo_pagato_cash || 0) > 0 ? { testo: "Da cassa CASH" } : null,
+        sottocategoria?.nome,
+        fornitore?.nome,
+      ].filter(Boolean),
       importo: s.totale, spesaReale: s,
     };
   }
