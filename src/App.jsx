@@ -38043,7 +38043,7 @@ function PannelloAmbitoSpesa({ valori, onChange, corsi = [], location = [], cors
     </div>
   );
 }
-function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [], spese = [], fornitoreId = null, categoriaSpesa = null }) {
+function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onAssociaASpesaEsistente, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [], spese = [], fornitoreId = null, categoriaSpesa = null }) {
   const isMobile = useIsMobile();
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
@@ -38053,6 +38053,35 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   const [pannello, setPannello] = useState(null);
   const [docScelto, setDocScelto] = useState(null);
   const [ricercaDoc, setRicercaDoc] = useState("");
+  // Capita di aver gia' pagato una cosa e registrata a mano in prima
+  // nota: poi arriva la fattura, qualcuno preme Paga, e la stessa uscita
+  // finisce scritta due volte. Prima di aprire il modulo si guarda se
+  // qualcosa le somiglia — per importo o per intestazione — e si chiede.
+  const speseSimili = useMemo(() => {
+    const atteso = Math.abs(Number(totale) || 0);
+    if (!(atteso > 0)) return [];
+    return (spese || [])
+      .filter((sp) => sp.stato === "pagata" && !sp.origine_scadenziario_chiave)
+      .map((sp) => {
+        const tot = Math.abs(Number(sp.totale) || 0);
+        const scarto = tot > 0 ? Math.abs(tot - atteso) / atteso : 1;
+        const stessoFornitore = !!fornitoreId && sp.fornitore_id === fornitoreId;
+        // l'importo vicino basta da solo; con lo stesso fornitore si
+        // allarga la maglia, perche' li' la coincidenza pesa di piu'
+        if (!(scarto <= 0.10 || (stessoFornitore && scarto <= 0.30))) return null;
+        return { spesa: sp, scarto, stessoFornitore, punteggio: (scarto === 0 ? 3 : scarto <= 0.02 ? 2 : 1) + (stessoFornitore ? 3 : 0) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.punteggio - a.punteggio || a.scarto - b.scarto)
+      .slice(0, 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spese, totale, fornitoreId]);
+  // una volta che si e' risposto "e' una spesa nuova" non si richiede piu'
+  const [similiGiaViste, setSimiliGiaViste] = useState(false);
+  function apriPannello(p) {
+    if (p === "paga" && !similiGiaViste && speseSimili.length > 0) { setPannello("simili"); return; }
+    setPannello(p);
+  }
   // l'attribuzione arriva gia' compilata con quello che la riga sa — di
   // solito la classe del corso da cui nasce — ma si puo' cambiare: una
   // fattura di telefonia intestata alla struttura centrale non e' un
@@ -38110,7 +38139,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   ) : (
     <TastiPiedeScadenzario
       fatturaAssociata={fatturaAssociata} numeroDocumento={numeroDocumento} salvando={salvando}
-      pannello={pannello} onPannello={setPannello}
+      pannello={pannello} onPannello={apriPannello}
     />
   );
   return (
@@ -38167,6 +38196,52 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
               {salvando ? "Salvo…" : docScelto ? `Associa la n. ${docScelto.numero || "—"}` : "Scegli un documento"}
             </button>
             <button onClick={chiudiPannello} disabled={salvando} style={{ ...stileTastoCardChiaro(isMobile), flex: "0 1 auto", padding: "12px 16px" }}>Annulla</button>
+          </div>
+        </div>
+      )}
+      {/* L'avviso: prima di creare una spesa nuova si guarda se in prima
+          nota ce n'e' gia' una che somiglia. Si sceglie una di quelle e
+          il documento le si aggancia, oppure si tira dritto. */}
+      {pannello === "simili" && !disabilitato && (
+        <div style={{ ...cardStyle, padding: 14, marginTop: 10, borderLeft: `3px solid ${GOLD}` }}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
+            In prima nota c'e' gia' {speseSimili.length === 1 ? "una spesa che somiglia" : `${speseSimili.length} spese che somigliano`} a questa
+          </div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.45 }}>
+            Importo simile o stessa intestazione. Se l'hai gia' pagata, associa il documento a quella invece di scriverne
+            un'altra: cosi' non ti ritrovi la stessa uscita contata due volte.
+          </div>
+          {speseSimili.map(({ spesa: sp, stessoFornitore, scarto }) => (
+            <div key={sp.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{sp.descrizione || "(senza descrizione)"}</div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>
+                  {fmtEuroErp2(Number(sp.totale) || 0)}
+                  {sp.data_pagamento ? ` · pagata il ${new Date(sp.data_pagamento).toLocaleDateString("it-IT")}` : ""}
+                  {stessoFornitore ? " · stesso fornitore" : ""}
+                  {scarto === 0 ? " · importo identico" : ""}
+                  {sp.numero_documento ? ` · ha gia' il documento n. ${sp.numero_documento}` : ""}
+                </div>
+              </div>
+              <button
+                disabled={salvando || !onAssociaASpesaEsistente}
+                title={onAssociaASpesaEsistente ? "Aggancia il documento a questa spesa, senza crearne un'altra" : "Non disponibile per questa riga"}
+                onClick={async () => { setSalvando(true); await onAssociaASpesaEsistente(sp); setSalvando(false); chiudiPannello(); }}
+                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "7px 14px", cursor: salvando ? "default" : "pointer" }}>
+                Associa a questa
+              </button>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 6 }}>
+            <button
+              onClick={() => { setSimiliGiaViste(true); setPannello("paga"); }}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "8px 16px", cursor: "pointer" }}>
+              Nessuna di queste, e' una spesa nuova
+            </button>
+            <button onClick={chiudiPannello}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: MUTED, background: "transparent", border: "none", cursor: "pointer" }}>
+              Annulla
+            </button>
           </div>
         </div>
       )}
@@ -42401,6 +42476,27 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     await supabase.from("impegno").update({ stato: "chiuso", importo_effettivo: round2(item.totale), updated_at: new Date().toISOString() }).eq("id", item.impegno.id);
     ricarica(["spese", "impegno"]);
   }
+  // L'impegno si chiude su una spesa che era gia' in prima nota, invece
+  // di scriverne una seconda. Se all'impegno e' agganciata una fattura,
+  // il documento segue la stessa strada che gia' esisteva
+  // (associaDocumentoASpesaPagata); in ogni caso la spesa si prende la
+  // chiave dell'impegno, cosi' l'impegno sparisce da "da pagare".
+  async function associaImpegnoASpesaEsistente(item, spesa) {
+    setMsg("");
+    const numero = item.spesaReale?.numero_documento || item.numeroDocumento || null;
+    const doc = numero
+      ? (documentoFornitoreTabella || []).find((d) => String(d.numero || "") === String(numero) && (!item.fornitoreId || d.fornitore_id === item.fornitoreId))
+      : null;
+    if (doc) await associaDocumentoASpesaPagata(doc, [spesa]);
+    const marchio = "Impegno dello scadenziario chiuso su questa spesa";
+    const note = String(spesa.note || "").includes(marchio) ? spesa.note : [spesa.note || "", marchio].filter(Boolean).join(" · ");
+    const { error } = await supabase.from("spese").update({ origine_scadenziario_chiave: item.chiave, note }).eq("id", spesa.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(doc
+      ? `Fattura n. ${numero} agganciata a "${spesa.descrizione || "la spesa"}", gia' in prima nota: non ne e' stata creata un'altra.`
+      : `Impegno chiuso su "${spesa.descrizione || "la spesa"}", gia' in prima nota: non ne e' stata creata un'altra.`);
+    ricarica?.(["spese"]);
+  }
   function confermaPagato(item, dati) {
     if (item.tipo === "reale") return segnaPagataReale(item, dati);
     if (item.tipo === "abbonamento") return segnaPagataAbbonamento(item, dati);
@@ -42732,6 +42828,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     onConferma={(dati) => confermaPagato(item, dati)}
                     onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento([item], doc) : null}
+                    onAssociaASpesaEsistente={item.tipo && item.tipo !== "reale" ? (spesa) => associaImpegnoASpesaEsistente(item, spesa) : null}
                     onCambiaScadenza={item.tipo === "abbonamento" ? null : (nuova) => cambiaScadenza(item, nuova)}
                     documentiFornitore={documentoFornitoreTabella}
                     nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
