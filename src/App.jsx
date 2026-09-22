@@ -34134,7 +34134,8 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia3", tipo: "sezione", testo: "Il link da mandare all'allievo" },
   { id: "ia4", tipo: "link", titolo: "Modulo di iscrizione ai corsi", url: "https://elitederma.eu/modulo-iscrizione-corsi/", testo: "Premi \u201cCopia link\u201d e incollalo nella chat dell\u2019allievo: lo compila lui, da telefono." },
   { id: "ia5", tipo: "sezione", testo: "Acconto in aula \u2014 solo durante il corso" },
-  { id: "ia6", tipo: "link", titolo: "Acconto 152,50 \u20ac", url: "https://elitederma.eu/shop/kit-formazione-150/", testo: "Henn\u00e8, Laminazione, Extension e Gemme Dentali. Si usa con l\u2019allievo davanti, mentre il corso \u00e8 in aula: finito il corso questo link non vale pi\u00f9." },
+  { id: "ia6", tipo: "link", titolo: "Acconto 152,50 \u20ac \u2014 Henn\u00e8, Laminazione, Extension, Gemme Dentali", url: "https://elitederma.eu/shop/kit-formazione-150/", testo: "125 \u20ac + IVA. Si usa con l\u2019allievo davanti, mentre il corso \u00e8 in aula: finito il corso questo link non vale pi\u00f9." },
+  { id: "ia7", tipo: "link", titolo: "Acconto 201,30 \u20ac \u2014 tutti gli altri corsi", url: "https://elitederma.eu/shop/kit-formazione-200/", testo: "165 \u20ac + IVA. Stessa regola: con l\u2019allievo davanti, mentre il corso \u00e8 in aula." },
   { id: "ia2", tipo: "nota", testo: "Il resto della pagina è da scrivere. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — compreso un altro link da copiare." },
 ];
 
