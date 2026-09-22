@@ -3996,7 +3996,12 @@ function IntestazioneArea({ Icona, children }) {
 // scorrere a mano fino alla lettera giusta. Qui la lista si apre con una
 // riga di ricerca in testa e si filtra per parola mentre si scrive.
 // opzioni = [{ id, nome }]; valore "" significa nessuna scelta
-function TendinaRicerca({ valore, opzioni, onCambia, etichettaVuoto = "— nessuno —", placeholderRicerca = "Cerca per parola…", stile = null }) {
+// `onAggiungi`, se c'e', permette di creare la voce che manca senza
+// uscire dalla tendina: si scrive il nome, non lo trova, e in fondo
+// all'elenco compare la riga per aggiungerlo. Riceve il testo scritto e
+// deve restituire l'id di quello che ha creato (o null se non ci riesce).
+function TendinaRicerca({ valore, opzioni, onCambia, etichettaVuoto = "— nessuno —", placeholderRicerca = "Cerca per parola…", stile = null, onAggiungi = null, etichettaAggiungi = "Aggiungi" }) {
+  const [aggiungendo, setAggiungendo] = useState(false);
   const [aperta, setAperta] = useState(false);
   const [filtro, setFiltro] = useState("");
   const contenitore = useRef(null);
@@ -4043,8 +4048,23 @@ function TendinaRicerca({ valore, opzioni, onCambia, etichettaVuoto = "— nessu
                 {o.nome}
               </button>
             ))}
-            {filtrate.length === 0 && (
+            {filtrate.length === 0 && !(q && onAggiungi) && (
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 10px" }}>Nessun risultato per "{filtro.trim()}".</div>
+            )}
+            {/* quello che si cerca non c'e': lo si crea da qui, senza
+                uscire dal modulo e senza perdere quello che si e' gia'
+                scritto dentro */}
+            {q && onAggiungi && !filtrate.some((o) => String(o.nome || "").trim().toLowerCase() === q) && (
+              <button type="button" disabled={aggiungendo}
+                onClick={async () => {
+                  setAggiungendo(true);
+                  const id = await onAggiungi(filtro.trim());
+                  setAggiungendo(false);
+                  if (id) { onCambia(id); setAperta(false); setFiltro(""); }
+                }}
+                style={{ ...rigaStile(false), color: "#fff", background: NAVY, fontWeight: 700, marginTop: 4 }}>
+                {aggiungendo ? "Aggiungo…" : `${etichettaAggiungi} "${filtro.trim()}"`}
+              </button>
             )}
           </div>
         </div>
@@ -66755,6 +66775,24 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     if (!imp) { setMsg("Inserisci un imponibile."); return; }
     if (ripartisci && sommaPercentuali !== 100) { setMsg(`Le percentuali di ripartizione devono sommare 100% (ora ${sommaPercentuali}%).`); return; }
 
+  // Crea un fornitore al volo dalla tendina, quando quello che serve non
+  // c'e' ancora. Nasce col solo nome: il resto (IBAN, categoria di
+  // default, partita IVA) si completa da Anagrafiche quando serve —
+  // fermare qui chi sta scrivendo una spesa per chiedergli otto campi
+  // era il motivo per cui il fornitore finiva scritto nella descrizione.
+  async function aggiungiFornitoreAlVolo(nome) {
+    const pulito = String(nome || "").trim();
+    if (!pulito) return null;
+    // se esiste gia' con un altro giro di maiuscole si riusa quello,
+    // invece di creare il doppione
+    const gia = (fornitori || []).find((f) => String(f.nome || "").trim().toLowerCase() === pulito.toLowerCase());
+    if (gia) return gia.id;
+    const { data, error } = await supabase.from("fornitori").insert({ nome: pulito }).select().single();
+    if (error) { setMsg("Fornitore non creato: " + testoErrore(error)); return null; }
+    ricarica?.(["fornitori"]);
+    return data.id;
+  }
+
     setSalvando(true);
     let fornitoreIdFinale = fornitoreId;
     if (!fornitoreIdFinale && nuovoFornitore.trim()) {
@@ -66916,22 +66954,28 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <Field label="Fornitore">
-                <select style={inputStyle} value={fornitoreId} onChange={(e) => {
-                  const id = e.target.value;
-                  setFornitoreId(id);
-                  const f = (fornitori || []).find((x) => x.id === id);
-                  setIbanFornitore(f?.iban || "");
-                  // categoria/sottocategoria di default del fornitore (Anagrafiche):
-                  // si propone da sola scegliendo il fornitore, resta comunque
-                  // modificabile qui sotto se questa spesa è di un'altra categoria
-                  if (!ambitoBloccato && f?.sottocategoria_id) {
-                    setCategoriaId(f.categoria_id || "");
-                    setSottocategoriaId(f.sottocategoria_id);
-                  }
-                }}>
-                  <option value="">— nessuno —</option>
-                  {fornitori.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                </select>
+                {/* i fornitori sono centinaia: si scrivono le iniziali e
+                    l'elenco si stringe. Se quello che serve non c'e', in
+                    fondo compare la riga per crearlo senza uscire di qui */}
+                <TendinaRicerca
+                  valore={fornitoreId}
+                  opzioni={[...(fornitori || [])].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "it")).map((f) => ({ id: f.id, nome: f.nome || "(senza nome)" }))}
+                  placeholderRicerca="Scrivi le iniziali del fornitore…"
+                  etichettaAggiungi="Aggiungi il fornitore"
+                  onAggiungi={aggiungiFornitoreAlVolo}
+                  onCambia={(id) => {
+                    setFornitoreId(id);
+                    const f = (fornitori || []).find((x) => x.id === id);
+                    setIbanFornitore(f?.iban || "");
+                    // categoria/sottocategoria di default del fornitore (Anagrafiche):
+                    // si propone da sola scegliendo il fornitore, resta comunque
+                    // modificabile qui sotto se questa spesa è di un'altra categoria
+                    if (!ambitoBloccato && f?.sottocategoria_id) {
+                      setCategoriaId(f.categoria_id || "");
+                      setSottocategoriaId(f.sottocategoria_id);
+                    }
+                  }}
+                />
               </Field>
             </div>
             <div style={{ flex: 1 }}>
