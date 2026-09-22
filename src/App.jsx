@@ -38456,7 +38456,10 @@ function AzioneTesto({ onClick, colore = NAVY, children, title }) {
 // testi sottolineati. Niente riquadri, niente pastiglie, niente cuscino:
 // la prima nota e' un registro, non una vetrina, e venti righe di schede
 // colorate una sotto l'altra non si leggono come un elenco di conti.
-function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children, sobrio = false, onCambiaData = null, dataStimata = false }) {
+// `barraSinistra`, se c'e', disegna una striscia verticale colorata sul
+// bordo sinistro della riga: serve a far vedere uno stato senza doverlo
+// leggere, scorrendo l'elenco con la coda dell'occhio.
+function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children, sobrio = false, onCambiaData = null, dataStimata = false, barraSinistra = null, titoloBarra = null }) {
   const rif = useRef(null);
   const [larghezza, setLarghezza] = useState(null);
   const [dataInModifica, setDataInModifica] = useState(false);
@@ -38483,7 +38486,8 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
     return (
       <ScalaRigaContabilita.Provider value={k}>
       <RigaSobria.Provider value={true}>
-        <div ref={rif} style={{ padding: `${q(12)}px 0`, borderBottom: `1px solid ${CREAM_BORDER}`, boxSizing: "border-box" }}>
+        <div ref={rif} title={titoloBarra || undefined} style={{ padding: `${q(12)}px 0`, borderBottom: `1px solid ${CREAM_BORDER}`, boxSizing: "border-box",
+          ...(barraSinistra ? { borderLeft: `3px solid ${barraSinistra}`, paddingLeft: q(10), marginLeft: -q(10) } : null) }}>
           <div style={{ display: "flex", gap: q(16), alignItems: "flex-start" }}>
             <div style={{ flex: `0 0 ${q(92)}px`, minWidth: 0 }}>
               <div
@@ -43892,6 +43896,12 @@ function PaginaInserimentoCostiRicavi({
                     corsoLabel={m.sottotitolo && m.sottotitolo !== "—" ? m.sottotitolo : null}
                     chips={m.chips}
                     importo={`− ${fmtEuroErp(m.importo)}`} etichettaImporto="Uscita" coloreImporto="#C0392B"
+                    {...(() => {
+                      // striscia verde a sinistra quando la spesa ha gia' la sua
+                      // fattura addosso: si vede scorrendo, senza leggere
+                      const ft = fatturaDiRiga(m);
+                      return ft ? { barraSinistra: "#2E7D32", titoloBarra: `Associata a ${ft.fornitore_nome || "fornitore"} — ${ft.numero_documento || "senza numero"}` } : {};
+                    })()}
                     piede={(
                       <>
                         {/* lo stato non e' un'azione: resta scritto, nel suo
