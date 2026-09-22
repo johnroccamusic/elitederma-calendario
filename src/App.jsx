@@ -34136,6 +34136,9 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia5", tipo: "sezione", testo: "Acconto in aula \u2014 solo durante il corso" },
   { id: "ia6", tipo: "link", titolo: "Acconto 152,50 \u20ac \u2014 Henn\u00e8, Laminazione, Extension, Gemme Dentali", url: "https://elitederma.eu/shop/kit-formazione-150/", testo: "125 \u20ac + IVA. Si usa con l\u2019allievo davanti, mentre il corso \u00e8 in aula: finito il corso questo link non vale pi\u00f9." },
   { id: "ia7", tipo: "link", titolo: "Acconto 201,30 \u20ac \u2014 tutti gli altri corsi", url: "https://elitederma.eu/shop/kit-formazione-200/", testo: "165 \u20ac + IVA. Stessa regola: con l\u2019allievo davanti, mentre il corso \u00e8 in aula." },
+  { id: "ia8", tipo: "sezione", testo: "Se non hanno la carta: bonifico" },
+  { id: "ia9", tipo: "copia", titolo: "Dati per il bonifico", spiega: "Copiali e mandali in chat all\u2019allievo cos\u00ec come sono.", testo: "ELITEDERMA SRL\nBanca Popolare del Lazio\nIBAN: IT69T0510439499CC0010523827\nBIC: BPLZIT3V\nCausale: nome e cognome acquisto formazione" },
+  { id: "ia10", tipo: "nota", testo: "Appena l\u2019allievo ha fatto il bonifico, avvisa Elena: la fattura la emette lei, e senza che qualcuno glielo dica non parte." },
   { id: "ia2", tipo: "nota", testo: "Il resto della pagina è da scrivere. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — compreso un altro link da copiare." },
 ];
 
@@ -34145,6 +34148,7 @@ const CAMPI_BLOCCO_NORMATIVA = {
   testata: [["titolo", "Titolo"], ["sottotitolo", "Sottotitolo"], ["claim", "Frase in oro"], ["lato", "Frase di lato"]],
   tappa: [["numero", "Numero (es. 01, lascia vuoto per una tappa a tempo)"], ["quando", "Quando (es. Entro 16 mesi)"], ["sotto", "Sotto (es. Dalla fine del corso)"], ["titolo", "Titolo"], ["testo", "Testo"]],
   link: [["titolo", "Titolo"], ["url", "Indirizzo (https://…)"], ["testo", "A cosa serve, in una riga"]],
+  copia: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il testo da copiare, riga per riga"]],
 };
 const ICONE_TAPPA_NORMATIVA = ["infinito", "persone", "calendario", "cappello", "ricomincia", "bersaglio", "etichetta", "grafico", "lampadina", "germoglio", "diamante"];
 
@@ -34238,6 +34242,47 @@ function LinkNormativa({ blocco, isMobile }) {
         <Button variant="ghost" onClick={(e) => { e.stopPropagation(); if (url) window.open(url, "_blank", "noopener"); }} disabled={!url}>Apri</Button>
         {copiato && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>Incollalo in chat all'allievo.</span>}
         {errore && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>Copia non riuscita: seleziona l'indirizzo qui sopra.</span>}
+      </div>
+    </div>
+  );
+}
+
+// Un pezzo di testo da passare com'e': i dati per il bonifico, riga per
+// riga. Fratello del blocco "link" — stessa idea, stesso tasto — ma qui
+// quello che si copia sono piu' righe, e non c'e' niente da aprire.
+//
+// Il riquadro e' a spaziatura fissa apposta: un IBAN di ventisette
+// caratteri nel font del testo si legge come un serpente, e chi lo
+// controlla a occhio prima di mandare i soldi ha bisogno di vedere i
+// gruppi. Copiandolo, comunque, non lo legge nessuno — ed e' il punto.
+function BloccoDaCopiare({ blocco, isMobile }) {
+  const [copiato, setCopiato] = useState(false);
+  const [errore, setErrore] = useState(false);
+  const contenuto = String(blocco.testo || "").trim();
+  async function copia(e) {
+    e.stopPropagation();
+    setErrore(false);
+    try {
+      await navigator.clipboard.writeText(contenuto);
+      setCopiato(true);
+      setTimeout(() => setCopiato(false), 2200);
+    } catch {
+      setErrore(true);
+    }
+  }
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "14px 16px" }}>
+      <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{blocco.titolo}</div>
+      {blocco.spiega && <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>{blocco.spiega}</div>}
+      {contenuto && (
+        <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: isMobile ? 12 : 13, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "10px 12px", marginTop: 9, whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.6 }}>
+          {contenuto}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+        <Button onClick={copia} disabled={!contenuto}>{copiato ? "Copiato ✓" : "Copia i dati"}</Button>
+        {copiato && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>Incollali in chat così come sono.</span>}
+        {errore && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>Copia non riuscita: seleziona i dati qui sopra.</span>}
       </div>
     </div>
   );
@@ -34392,6 +34437,16 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
       if (righeTitolo.length) yDx -= 2;
       righeTesto.forEach((r) => { pagina.drawText(r, { x: xTesto, y: yDx - 9.5, size: 9.5, font: normale, color: GRIGIO_PDF }); yDx -= 9.5 * 1.45; });
       y = cima - altezza - 8;
+    } else if (b.tipo === "copia") {
+      y -= 4;
+      scriviRighe(righeDi(String(b.titolo || "").toUpperCase(), grassetto, 11, LARGHEZZA), { size: 11, font: grassetto, interlinea: 1.3 });
+      if (b.spiega) scriviRighe(righeDi(b.spiega, normale, 9.5, LARGHEZZA), { size: 9.5, colore: GRIGIO_PDF });
+      // ogni riga per conto suo: un IBAN mandato a capo a meta' e' un
+      // IBAN da ricopiare a mano, e chi ricopia sbaglia
+      String(b.testo || "").split("\n").forEach((riga) => {
+        scriviRighe(spezzaSenzaSpazi(riga, grassetto, 9.5, LARGHEZZA), { size: 9.5, font: grassetto, interlinea: 1.5 });
+      });
+      y -= 8;
     } else if (b.tipo === "link") {
       // sulla carta un tasto "Copia" non esiste: resta l'indirizzo, che
       // va scritto per intero e spezzato dove serve, non troncato
@@ -34518,6 +34573,8 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
       ? { id: `b${Date.now()}`, tipo, icona: "infinito", quando: "Quando", sotto: "Dalla fine del corso", titolo: "Cosa succede", testo: "Scrivi qui le condizioni…" }
       : tipo === "link"
         ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo link", url: "https://", testo: "A cosa serve, in una riga" }
+      : tipo === "copia"
+        ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo blocco da copiare", spiega: "A cosa serve, in una riga", testo: "Scrivi qui il testo da copiare,\nriga per riga." }
         : { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
     if (await salvaBlocchi([...blocchi, nuovo])) apriModifica(nuovo);
   }
@@ -34530,7 +34587,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
     if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
     if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#5E5039", background: "#F5EEDD", border: "1px solid #E6D9B8", borderRadius: 12, padding: "12px 14px 12px 46px", lineHeight: 1.6, margin: "14px 0 22px", position: "relative" };
     if (tipo === "tappa") return { marginBottom: 12 };
-    if (tipo === "link") return { marginBottom: 14 };
+    if (tipo === "link" || tipo === "copia") return { marginBottom: 14 };
     if (tipo === "testata") return {};
     return { ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, marginBottom: 12 };
   }
@@ -34631,6 +34688,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
               {b.tipo === "testata" ? <TestataNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "tappa" ? <TappaNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "link" ? <LinkNormativa blocco={b} isMobile={isMobile} />
+                : b.tipo === "copia" ? <BloccoDaCopiare blocco={b} isMobile={isMobile} />
                 : b.tipo === "nota" ? (
                   <>
                     {/* la "i" nel tondo, come sulla locandina */}
@@ -34650,6 +34708,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             <Button variant="ghost" onClick={() => aggiungiBlocco("nota")}>+ Nota</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("tappa")}>+ Tappa</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("link")}>+ Link da copiare</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("copia")}>+ Testo da copiare</Button>
           </div>
         )}
 
