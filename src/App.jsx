@@ -38154,12 +38154,20 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   // fornitore giusto, poi quelli d'importo piu' vicino. Di fatture da
   // riconciliare ce ne sono centinaia: senza un ordine e una ricerca la
   // scelta sarebbe a occhio in mezzo a tutte
-  // Da quando esiste questo costo. Una fattura emessa PRIMA non puo'
-  // essere la sua: il corso non si era ancora tenuto, la sala non era
-  // ancora stata usata. Proporle significa invitare a sbagliare, e fra
-  // documenti dello stesso importo si sbaglia facile.
+  // Da quando esiste questo costo. Una fattura molto piu' vecchia non
+  // puo' essere la sua — il corso non si era ancora tenuto, la sala non
+  // era ancora stata usata — e proporla significa invitare a sbagliare,
+  // cosa che fra documenti dello stesso importo capita facile.
+  //
+  // Una settimana di margine all'indietro pero' ci vuole: capita che la
+  // fattura sia emessa qualche giorno prima della fine del corso, o
+  // all'atto della prenotazione. Piu' indietro di cosi' non e' coeva.
   const dataNascitaCosto = dataDebito || scadenza || null;
-  const documentoNonPrecedente = (d) => !dataNascitaCosto || !d.data_documento || String(d.data_documento) >= String(dataNascitaCosto);
+  const GIORNI_FATTURA_ANTICIPATA = 7;
+  const primaUtileDocumento = dataNascitaCosto
+    ? new Date(Date.parse(dataNascitaCosto) - GIORNI_FATTURA_ANTICIPATA * 86400000).toISOString().slice(0, 10)
+    : null;
+  const documentoNonPrecedente = (d) => !primaUtileDocumento || !d.data_documento || String(d.data_documento) >= primaUtileDocumento;
 
   const candidatiDoc = useMemo(() => {
     const cerca = ricercaDoc.trim().toLowerCase();
@@ -38246,8 +38254,8 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Associa la fattura del fornitore</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
             Scegliendola, questa riga prende numero, data e termine di pagamento del documento: la scadenza smette di essere stimata.
-            Ci sono i documenti ancora scoperti <strong>arrivati dal {dataNascitaCosto ? fmtData(dataNascitaCosto) : "principio"} in poi</strong> ({candidatiDoc.length}):
-            una fattura emessa prima che questo costo esistesse non puo' essere la sua. In cima quelli del fornitore giusto e d'importo piu' vicino a {fmtEuroErp(totale)}.
+            Ci sono i documenti ancora scoperti <strong>emessi dal {primaUtileDocumento ? fmtData(primaUtileDocumento) : "principio"} in poi</strong> ({candidatiDoc.length}):
+            una settimana prima che il costo maturasse, o dopo. Piu' vecchia di cosi', una fattura non puo' essere la sua. In cima quelli del fornitore giusto e d'importo piu' vicino a {fmtEuroErp(totale)}.
           </div>
           <div style={{ marginTop: 12 }}>
             <CampoRicerca value={ricercaDoc} onChange={(e) => setRicercaDoc(e.target.value)} placeholder="Cerca numero o fornitore…" />
@@ -38256,7 +38264,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
             {candidatiDoc.length === 0 && (
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
                 {dataNascitaCosto
-                  ? `Nessuna fattura ancora scoperta arrivata dal ${fmtData(dataNascitaCosto)} in poi. Se la fattura di questo costo non e' ancora arrivata, e' normale: si associa quando arriva.`
+                  ? `Nessuna fattura ancora scoperta emessa dal ${fmtData(primaUtileDocumento)} in poi. Se quella di questo costo non e' ancora arrivata, e' normale: si associa quando arriva.`
                   : "Nessun documento da associare."}
               </div>
             )}
