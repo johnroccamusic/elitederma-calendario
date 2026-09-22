@@ -34294,10 +34294,14 @@ function TestataNormativa({ blocco, isMobile }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ ...fontDisplay, fontSize: blocco.sottotitolo ? (isMobile ? 34 : 50) : (isMobile ? 24 : 36), fontWeight: 800, color: NAVY, lineHeight: 1.05, textTransform: "uppercase", letterSpacing: 0.5 }}>{blocco.titolo}</div>
         {blocco.sottotitolo && <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 30, fontWeight: 400, color: NAVY, lineHeight: 1.15, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6 }}>{blocco.sottotitolo}</div>}
-        {blocco.claim && <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 10 }}>{blocco.claim}</div>}
+        {/* l'oro sul chiaro non si legge: queste due righe stanno sullo
+            sfondo della pagina, non dentro una tessera bianca, e li'
+            spariscono. Restano in oro i filetti e i numeri delle tappe,
+            che vivono su bianco. */}
+        {blocco.claim && <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 10 }}>{blocco.claim}</div>}
       </div>
       {blocco.lato && (
-        <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 600, color: GOLD, textTransform: "uppercase", letterSpacing: 2.5, lineHeight: 1.55, ...(isMobile ? { borderTop: `1px solid ${GOLD}`, paddingTop: 10 } : { borderLeft: `1px solid ${GOLD}`, paddingLeft: 22, width: 180, flexShrink: 0, display: "flex", alignItems: "center" }) }}>
+        <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 2.5, lineHeight: 1.55, ...(isMobile ? { borderTop: `1px solid ${GOLD}`, paddingTop: 10 } : { borderLeft: `1px solid ${GOLD}`, paddingLeft: 22, width: 180, flexShrink: 0, display: "flex", alignItems: "center" }) }}>
           {blocco.lato}
         </div>
       )}
@@ -34584,7 +34588,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
   function stileDi(tipo) {
     if (tipo === "titolo") return { ...fontDisplay, fontSize: isMobile ? 24 : 34, fontWeight: 700, color: NAVY, lineHeight: 1.2, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 18 };
     if (tipo === "titolo2") return { ...fontDisplay, fontSize: isMobile ? 20 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.25, textTransform: "uppercase", letterSpacing: 0.3, margin: "30px 0 14px" };
-    if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
+    if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
     if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#5E5039", background: "#F5EEDD", border: "1px solid #E6D9B8", borderRadius: 12, padding: "12px 14px 12px 46px", lineHeight: 1.6, margin: "14px 0 22px", position: "relative" };
     if (tipo === "tappa") return { marginBottom: 12 };
     if (tipo === "link" || tipo === "copia") return { marginBottom: 14 };
