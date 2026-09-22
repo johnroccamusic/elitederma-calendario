@@ -26618,6 +26618,16 @@ function PannelloRiepilogoAmministrativo({
   }
 
   async function segnaBustaRientrata(rientrata) {
+    // L'importo della busta si congela al clic. Se ci sono ancora quote
+    // in contanti da disporre, quel numero nasce gia' sbagliato: sono
+    // soldi che devono uscire dalla busta e finirebbero in cassa, e
+    // disponendoli dopo la busta non si ricalcola piu'. L'appendice
+    // questo controllo ce l'aveva dal primo giorno; la prima busta no,
+    // ed e' cosi' che in cassa e' entrato del contante gia' promesso.
+    if (rientrata && cashDaDisporreClasse > 0) {
+      setMsg(`Prima disponi i pagamenti: ci sono ${fmtEuroErp2(cashDaDisporreClasse)} di quote in contanti ancora da pagare, e in cassa entrerebbero anche quelli.`);
+      return;
+    }
     // La prima busta non si riapre se dopo di lei e' gia' nata
     // un'appendice: il suo importo e' stato contato, e quello che e'
     // arrivato dopo ha la sua lista
@@ -26639,6 +26649,24 @@ function PannelloRiepilogoAmministrativo({
     }
     setMsg(rientrata ? "Busta segnata come rientrata: il contante è in cassa." : "Busta rimessa fuori dalla cassa.");
     ricarica(["corsi_date", "vendite_shop"]);
+  }
+
+  // Quanto dicono OGGI i conti della classe, contro quello che e' stato
+  // congelato al clic. Il congelamento e' voluto — la cassa ha contato
+  // delle banconote e ricalcolare in silenzio le farebbe ballare — ma
+  // quando i due numeri si separano qualcuno deve poterlo vedere e
+  // decidere. Succede soprattutto con le quote disposte DOPO aver messo
+  // la busta in cassa: allora in cassa e' entrato anche il contante gia'
+  // promesso a qualcun altro.
+  const bustaImportoCongelato = round2(corsoData.busta_importo || 0);
+  const bustaImportoOggi = round2(cassaContantiClasse);
+  const bustaScostamento = round2(bustaImportoCongelato - bustaImportoOggi);
+  async function aggiornaImportoBusta() {
+    if (!window.confirm(`Aggiornare l'importo della busta da ${fmtEuroErp2(bustaImportoCongelato)} a ${fmtEuroErp2(bustaImportoOggi)}?\n\nIn cassa contanti ${bustaScostamento > 0 ? "entreranno" : "entreranno"} ${fmtEuroErp2(bustaImportoOggi)} invece di ${fmtEuroErp2(bustaImportoCongelato)}.`)) return;
+    const { error } = await supabase.from("corsi_date").update({ busta_importo: bustaImportoOggi }).eq("id", corsoData.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(`Importo della busta aggiornato a ${fmtEuroErp2(bustaImportoOggi)}.`);
+    ricarica(["corsi_date"]);
   }
 
   // ----- Appendice: la busta aperta dopo la prima -----
@@ -27429,6 +27457,22 @@ function PannelloRiepilogoAmministrativo({
                       {corsoData.busta_rientrata_il ? "Busta in cassa" : "Ok, busta in cassa"}
                     </label>
                   </div>
+
+                  {/* l'avviso che i due numeri si sono separati. Non
+                      ricalcola niente da solo: mostra i due importi e
+                      lascia decidere, perche' dall'altra parte c'e' un
+                      cassetto con dentro delle banconote vere */}
+                  {corsoData.busta_rientrata_il && Math.abs(bustaScostamento) > 0.01 && (
+                    <div style={{ marginTop: 10, background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", flex: "1 1 240px", lineHeight: 1.5 }}>
+                        In cassa sono entrati <b style={{ color: NAVY }}>{euroRiepilogo(bustaImportoCongelato)}</b>, ma i conti di oggi dicono <b style={{ color: NAVY }}>{euroRiepilogo(bustaImportoOggi)}</b>
+                        {bustaScostamento > 0
+                          ? ` — ${euroRiepilogo(bustaScostamento)} di troppo. Succede quando le quote in contanti sono state disposte dopo aver messo la busta in cassa: quei soldi erano già promessi a qualcuno.`
+                          : ` — ${euroRiepilogo(Math.abs(bustaScostamento))} in meno di quello che risulta ora.`}
+                      </div>
+                      <Button variant="ghost" onClick={aggiornaImportoBusta} style={{ flexShrink: 0 }}>Aggiorna l'importo</Button>
+                    </div>
+                  )}
 
                   {/* Appendice vendite al corso: solo a prima busta chiusa.
                       Le buste gia' in cassa stanno sopra, ripiegate su una
