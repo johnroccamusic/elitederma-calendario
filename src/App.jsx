@@ -41918,6 +41918,10 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // di Scadenziario Attivo/Passivo, sulla data documento delle fatture
   // ricevute da Fatture in Cloud
   const [annoDocFic, setAnnoDocFic] = useState(Number(oggiStr.slice(0, 4)));
+  // Chi arriva qui vuole vedere il lavoro che resta, non l'archivio: le
+  // fatture gia' legate a una spesa stanno nella loro scheda e non
+  // sporcano l'elenco. Si trovano sempre, basta cambiare scheda.
+  const [vistaFic, setVistaFic] = useState("da_associare");
   const [meseDocFic, setMeseDocFic] = useState(Number(oggiStr.slice(5, 7)));
   const [ricercaDocFic, setRicercaDocFic] = useState("");
   async function sincronizzaFatturaInCloud() {
@@ -42234,7 +42238,16 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
         return (f.fornitore_nome || "").toLowerCase().includes(q) || (f.descrizione || "").toLowerCase().includes(q) || (f.categoria || "").toLowerCase().includes(q) || (f.numero_documento || "").toLowerCase().includes(q);
       })
     : elencoMeseFic;
-  const riepilogoMeseFiltratoFic = riepilogoMensileScadenze(elencoFiltratoFic, dataDiFic, importoDiFic);
+  // Associata vuol dire due cose, perche' i sistemi sono due: o la
+  // fattura e' stata trasformata in una spesa (spesa_id), o la sua
+  // gemella in documento_fornitore risulta riconciliata. Guardarne uno
+  // solo lascerebbe fuori quasi tutto: al 22/09/2026 le fatture con una
+  // spesa collegata erano 6, quelle riconciliate 72.
+  const ficAssociata = (f) => !!f.spesa_id || documentoFornitorePerFicId[f.fic_id]?.stato === "riconciliato";
+  const elencoVistaFic = elencoFiltratoFic.filter((f) => (vistaFic === "associate" ? ficAssociata(f) : !ficAssociata(f)));
+  const quanteDaAssociareFic = elencoFiltratoFic.filter((f) => !ficAssociata(f)).length;
+  const quanteAssociateFic = elencoFiltratoFic.length - quanteDaAssociareFic;
+  const riepilogoMeseFiltratoFic = riepilogoMensileScadenze(elencoVistaFic, dataDiFic, importoDiFic);
 
   // Note di credito ricevute: stessa logica anno/mese/ricerca, qui sulla
   // colonna "data"/"totale" di fic_documenti
@@ -42781,6 +42794,24 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
             </div>
             {msgFic && <div style={{ ...fontBody, fontSize: 13, color: msgFic.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgFic}</div>}
 
+            {/* Due schede: quello che resta da fare, e l'archivio di
+                quello che e' gia' a posto. Prima stavano mescolate e
+                l'elenco cresceva per sempre. */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+              {[
+                { chiave: "da_associare", testo: `Da associare${quanteDaAssociareFic ? ` (${quanteDaAssociareFic})` : ""}` },
+                { chiave: "associate", testo: `Associate${quanteAssociateFic ? ` (${quanteAssociateFic})` : ""}` },
+              ].map((t) => (
+                <button key={t.chiave} onClick={() => setVistaFic(t.chiave)}
+                  style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "8px 16px", borderRadius: 999, cursor: "pointer",
+                    border: `1px solid ${vistaFic === t.chiave ? NAVY : CREAM_BORDER}`,
+                    background: vistaFic === t.chiave ? NAVY : "#fff",
+                    color: vistaFic === t.chiave ? "#fff" : NAVY }}>
+                  {t.testo}
+                </button>
+              ))}
+            </div>
+
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <button onClick={() => setAnnoDocFic((a) => a - 1)} title="Anno precedente" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}><IconaFrecciaSinistra size={14} /></button>
@@ -42809,8 +42840,14 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
             </div>
 
             <div style={{ ...cardStyle }}>
-              {elencoFiltratoFic.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun documento per il periodo selezionato.</div>}
-              {elencoScadenzeConIntestazioni(elencoFiltratoFic, riepilogoMeseFiltratoFic, (f) => (
+              {elencoVistaFic.length === 0 && (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>
+                  {vistaFic === "associate"
+                    ? "Nessuna fattura gia' associata in questo periodo."
+                    : "Nessuna fattura da associare in questo periodo: sono tutte gia' legate a una spesa."}
+                </div>
+              )}
+              {elencoScadenzeConIntestazioni(elencoVistaFic, riepilogoMeseFiltratoFic, (f) => (
                 <RigaAmministrazione
                   key={f.id}
                   data={f.data_documento}
