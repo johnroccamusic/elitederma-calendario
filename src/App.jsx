@@ -38167,6 +38167,29 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
       .sort((a, b) => (Number(b.stessoFornitore) - Number(a.stessoFornitore))
         || (Math.abs(Number(a.d.totale || 0) - totale) - Math.abs(Number(b.d.totale || 0) - totale)));
   }, [documentiFornitore, ricercaDoc, fornitore, totale, nomeFornitoreDi]);
+  // Una fattura arrivata che potrebbe essere questa scadenza: stesso
+  // importo e ancora scoperta. Serve solo a colorare la riga — non
+  // associa niente da sola, e' un invito a guardarla.
+  const fatturaPossibile = useMemo(() => {
+    if (fatturaAssociata) return null;
+    const atteso = Math.abs(Number(totale) || 0);
+    if (!(atteso > 0)) return null;
+    const scoperte = (documentiFornitore || []).filter((d) => d.tipo !== "nota_credito"
+      && Number(d.importo_allocato || 0) < Number(d.totale || 0) - 0.01
+      // margine stretto di proposito: con 761 documenti ancora scoperti,
+      // allargarlo colorerebbe di giallo mezzo scadenziario e il segnale
+      // non direbbe piu' niente. Meglio perdersi qualche caso che
+      // segnalarli tutti.
+      && Math.abs(Math.abs(Number(d.totale) || 0) - atteso) / atteso <= 0.01);
+    if (scoperte.length === 0) return null;
+    // se ce n'e' una dello stesso fornitore vale quella, e' la piu' probabile
+    const nomeRiga = String(fornitore || "").trim().toLowerCase();
+    const delFornitore = nomeRiga
+      ? scoperte.find((d) => String(nomeFornitoreDi ? nomeFornitoreDi(d.fornitore_id) : "").toLowerCase().includes(nomeRiga))
+      : null;
+    return delFornitore || scoperte[0];
+  }, [documentiFornitore, fatturaAssociata, totale, fornitore, nomeFornitoreDi]);
+
   function cambiaClassificazione(campo, valore) { setClassificazione((c) => ({ ...c, [campo]: valore })); }
   // I due tasti non si bloccano a vicenda: si paga anche senza fattura
   // (finira' in prima nota fra le spese da riconciliare) e si associa la
@@ -38193,6 +38216,14 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
         iban ? `IBAN ${iban}` : null,
       ]}
       importo={fmtEuroErp(totale)} piede={piede}
+      {...(() => {
+        // verdino: la fattura c'e' gia' ed e' attaccata a questa riga.
+        // giallino: ne e' arrivata una dello stesso importo, ancora
+        // libera — vale la pena aprirla e guardare.
+        if (fatturaAssociata) return { sfondo: "#EFF6EF", titoloBarra: `Fattura n. ${numeroDocumento || "—"} gia' associata` };
+        if (fatturaPossibile) return { sfondo: "#FDF8E7", titoloBarra: `C'e' una fattura arrivata dello stesso importo: n. ${fatturaPossibile.numero || "—"}${nomeFornitoreDi ? ` di ${nomeFornitoreDi(fatturaPossibile.fornitore_id) || "un fornitore"}` : ""}. Premi "Associa fattura" per guardarla.` };
+        return {};
+      })()}
     >
       {pannello === "documento" && !disabilitato && (
         <div style={{ marginTop: 12, padding: isMobile ? 14 : 16, background: "#fff", border: `1.5px solid ${NAVY}`, borderRadius: 16 }}>
@@ -38459,7 +38490,7 @@ function AzioneTesto({ onClick, colore = NAVY, children, title }) {
 // `barraSinistra`, se c'e', disegna una striscia verticale colorata sul
 // bordo sinistro della riga: serve a far vedere uno stato senza doverlo
 // leggere, scorrendo l'elenco con la coda dell'occhio.
-function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children, sobrio = false, onCambiaData = null, dataStimata = false, barraSinistra = null, titoloBarra = null }) {
+function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], importo, etichettaImporto = "Importo", coloreImporto, piede, children, sobrio = false, onCambiaData = null, dataStimata = false, barraSinistra = null, titoloBarra = null, sfondo = null }) {
   const rif = useRef(null);
   const [larghezza, setLarghezza] = useState(null);
   const [dataInModifica, setDataInModifica] = useState(false);
@@ -38486,7 +38517,7 @@ function CardAmministrazione({ data, titolo, sede, corsoLabel, chips = [], impor
     return (
       <ScalaRigaContabilita.Provider value={k}>
       <RigaSobria.Provider value={true}>
-        <div ref={rif} title={titoloBarra || undefined} style={{ padding: `${q(12)}px 0`, borderBottom: `1px solid ${CREAM_BORDER}`, boxSizing: "border-box",
+        <div ref={rif} title={titoloBarra || undefined} style={{ padding: `${q(12)}px 0`, borderBottom: `1px solid ${CREAM_BORDER}`, boxSizing: "border-box", background: sfondo || undefined,
           ...(barraSinistra ? { borderLeft: `3px solid ${barraSinistra}`, paddingLeft: q(10), marginLeft: -q(10) } : null) }}>
           <div style={{ display: "flex", gap: q(16), alignItems: "flex-start" }}>
             <div style={{ flex: `0 0 ${q(92)}px`, minWidth: 0 }}>
