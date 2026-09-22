@@ -49171,13 +49171,26 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // Al banco ci va un prodotto che ha un prezzo e non e' escluso dalla
   // vendita diretta (ne' lui ne' una sua categoria). Sul sito ci sta se
   // e' pubblicato su WooCommerce e non e' tenuto fuori dallo shop.
+  //
+  // "Sul POS" vuol dire TUTTO quello che si vende al banco, non quello
+  // che si vende SOLTANTO al banco: i 170 articoli che stanno in tutti e
+  // due i posti piu' le due consulenze e le taglie della T-Shirt, che al
+  // banco ci sono e sul sito no. Cosi' per "Sullo shop online". La prima
+  // versione li leggeva in esclusiva — "solo al banco" — e rispondeva
+  // sette prodotti su centosettantasette: una domanda che nessuno aveva
+  // fatto. Chi ha due canali di solito vuole sapere cosa c'e' su un
+  // canale, non cosa c'e' su quello e basta.
+  //
+  // L'esclusiva resta disponibile: e' la differenza fra le due liste, e
+  // "Su POS e shop" da' l'incrocio per chi la cerca.
   if (canaleSel) {
     prodottiVisti = prodottiVisti.filter((p) => {
       const suPos = p.prezzo_vendita != null && !(p.forzatoEscludi || p.escludi_vendita_diretta);
       const suShop = p.woo_product_id != null && p.stato === "publish" && !(p.forzatoSoloOffline || p.solo_offline);
       if (canaleSel === "invendita") return suPos || suShop;
-      if (canaleSel === "solopos") return suPos && !suShop;
-      if (canaleSel === "soloshop") return suShop && !suPos;
+      if (canaleSel === "pos") return suPos;
+      if (canaleSel === "shop") return suShop;
+      if (canaleSel === "posshop") return suPos && suShop;
       if (canaleSel === "nonvendita") return !suPos && !suShop;
       return true;
     });
@@ -49543,9 +49556,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={canaleSel} onChange={(e) => setCanaleSel(e.target.value)}
               title="Filtra per dove il prodotto e' in vendita">
               <option value="">Ovunque in vendita e non</option>
-              <option value="invendita">In vendita (POS + shop online)</option>
-              <option value="solopos">Solo sul POS</option>
-              <option value="soloshop">Solo sullo shop online</option>
+              <option value="invendita">In vendita (POS o shop online)</option>
+              <option value="pos">Sul POS</option>
+              <option value="shop">Sullo shop online</option>
+              <option value="posshop">Su POS e shop</option>
               <option value="nonvendita">Non in vendita</option>
             </select>
           </div>
