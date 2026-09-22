@@ -38255,12 +38255,12 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
             <div key={sp.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
               <div style={{ flex: "1 1 240px", minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{sp.descrizione || "(senza descrizione)"}</div>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>
-                  {fmtEuroErp2(Number(sp.totale) || 0)}
-                  {sp.data_pagamento ? ` · pagata il ${new Date(sp.data_pagamento).toLocaleDateString("it-IT")}` : ""}
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{sp.data_pagamento ? new Date(sp.data_pagamento).toLocaleDateString("it-IT") : "senza data"}</span>
+                  <span>{fmtEuroErp2(Number(sp.totale) || 0)}
                   {stessoFornitore ? " · stesso fornitore" : ""}
                   {scarto === 0 ? " · importo identico" : ""}
-                  {sp.numero_documento ? ` · ha gia' il documento n. ${sp.numero_documento}` : ""}
+                  {sp.numero_documento ? ` · ha gia' il documento n. ${sp.numero_documento}` : ""}</span>
                 </div>
               </div>
               <button
@@ -40906,7 +40906,7 @@ function PannelloDoppioniPrimaNota({ coppie = [], fornitoriById = {}, onUnisci, 
     <div style={{ flex: "1 1 280px", minWidth: 0, background: "#FAF8F3", borderRadius: 10, padding: 12 }}>
       <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{sp.descrizione || "(senza descrizione)"}</div>
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
-        pagata il {data(sp.data_pagamento)} · {sp.metodo_pagamento || "metodo non indicato"}<br />
+        <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{data(sp.data_pagamento)}</span> · {sp.metodo_pagamento || "metodo non indicato"}<br />
         documento: <b style={{ color: sp.numero_documento ? NAVY : MUTED }}>{sp.numero_documento || "nessuno"}</b>
         {sp.allegato_path ? " · ha un allegato" : ""}
       </div>
@@ -40989,10 +40989,11 @@ function PannelloAllineamentoBanca({ coppie = [], senzaCorrispondenza = 0, forni
               <div key={sp.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0" }}>
                 <div style={{ flex: "1 1 260px", minWidth: 0 }}>
                   <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{sp.descrizione || "(senza descrizione)"}</div>
-                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                    {c.fornitore || "senza fornitore"} · {data(sp.data_pagamento || sp.data_documento)} · {fmtEuroErp2(Number(sp.totale) || 0)}
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{data(sp.data_pagamento || sp.data_documento)}</span>
+                    <span>{c.fornitore || "senza fornitore"} · {fmtEuroErp2(Number(sp.totale) || 0)}
                     {differenza > 0.009 && ` · differenza ${fmtEuroErp2(differenza)}`}
-                    {c.giorni <= 3 && " · stessi giorni"}
+                    {c.giorni <= 3 && " · stessi giorni"}</span>
                   </div>
                 </div>
                 <button onClick={() => onAllinea(m, sp)}
@@ -41557,8 +41558,15 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
                       <div key={c.spesa.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
                         <div style={{ flex: "1 1 220px", minWidth: 0 }}>
                           <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{c.fornitore ? `${c.fornitore} · ` : ""}{c.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, c.spesa.sottocategoria_id)?.nome || "Spesa"}</div>
-                          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                            {fmtData(c.spesa.data_pagamento || c.spesa.data_documento)} · {c.spesa.metodo_pagamento || "—"}{c.scarto > 0 ? ` · importo diverso del ${(c.scarto * 100).toFixed(1)}%` : " · stesso importo"}{c.comuni > 0 ? " · intestazione che combacia" : ""}
+                          {/* la data e' il riferimento con cui si decide se
+                              due righe sono la stessa cosa: sta prima, ed e'
+                              leggibile quanto il resto invece che grigia in
+                              mezzo alle altre informazioni */}
+                          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                              {fmtData(c.spesa.data_pagamento || c.spesa.data_documento)}
+                            </span>
+                            <span>{c.spesa.metodo_pagamento || "—"}{c.scarto > 0 ? ` · importo diverso del ${(c.scarto * 100).toFixed(1)}%` : " · stesso importo"}{c.comuni > 0 ? " · intestazione che combacia" : ""}</span>
                           </div>
                         </div>
                         <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(Number(c.spesa.totale))}</div>
