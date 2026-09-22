@@ -34179,6 +34179,47 @@ const NORMATIVA_RITORNO_AL_CORSO = [
 // Il testo vero non c'e': lo scrive chi di dovere, cliccando i pezzi in
 // modalita' programmatore. Questo scheletro serve a non far nascere una
 // pagina bianca e a dire che e' da scrivere.
+// Il configuratore del messaggio di benvenuto.
+//
+// Chi lo usa ha appena finito di iscrivere un allievo e deve mandargli
+// due righe. Scriverle a mano ogni volta vuol dire sbagliare il nome del
+// corso, la sede o le date — e quelle tre cose l'app le sa gia'.
+//
+// Una master vede SOLO le sue classi: e' riconosciuta dall'utenza con cui
+// e' entrata (utenteLoggato.masterId). Chi non e' una master — l'ufficio,
+// chi programma — le vede tutte, perche' capita di mandare il messaggio
+// per conto di qualcun altro.
+//
+// Il testo del messaggio NON sta nel codice: sta nel blocco, come tutto
+// il resto della pagina, e si riscrive dalla pagina stessa. E' la
+// ragione per cui e' un blocco e non un componente cablato qui dentro.
+const SEGNAPOSTO_BENVENUTO = [
+  ["{allievo}", "il nome di battesimo dell’allievo"],
+  ["{corso}", "il nome del corso"],
+  ["{sede}", "la città della sede"],
+  ["{date}", "le date, per esteso (es. 18–19 ottobre 2026)"],
+  ["{master}", "il nome della master della classe"],
+];
+// In anagrafica i corsi stanno tutti in maiuscolo — "PMU BASE", "HENNE
+// INDIVI" — ed e' giusto cosi' per le tabelle. Dentro una frase mandata
+// a un cliente pero' sembra di gridare. Qui si rimettono in tondo, con
+// due eccezioni: le sigle vere restano sigle (PMU, IKE) e le paroline
+// non prendono la maiuscola ("Colori e Correzioni", non "Colori E").
+// Provato su tutti e 28 i nomi a catalogo.
+const SIGLE_CORSI = new Set(["PMU", "IKE"]);
+const PAROLINE_CORSI = new Set(["e", "di", "del", "della", "dei", "con", "per", "a", "al", "il", "la", "in"]);
+function nomeCorsoLeggibile(nome) {
+  return String(nome || "").split(/([^A-Za-zÀ-ÿ0-9]+)/).map((pezzo, i) => {
+    if (!pezzo || /^[^A-Za-zÀ-ÿ0-9]+$/.test(pezzo)) return pezzo;
+    const su = pezzo.toUpperCase();
+    if (SIGLE_CORSI.has(su)) return su;
+    const giu = pezzo.toLowerCase();
+    if (i > 0 && PAROLINE_CORSI.has(giu)) return giu;
+    return toTitleCase(pezzo);
+  }).join("");
+}
+const MESSAGGIO_BENVENUTO_PREDEFINITO = "Congratulazioni {allievo}! Elitederma è lieta di confermare la tua iscrizione al corso di {corso}, che si svolgerà nella sede di {sede}. Il corso si terrà il {date}.";
+
 const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia1", tipo: "testata", titolo: "Iscrizione allievi", sottotitolo: "Come la master iscrive un allievo a un corso", claim: "Pagina per le master — non va mandata all'allievo", lato: "Uso interno" },
   { id: "pr0", tipo: "sezione", testo: "Procedura" },
@@ -34186,9 +34227,7 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "pr2", tipo: "tappa", icona: "etichetta", numero: "02", titolo: "Manda il modulo", testo: "Invia il link del modulo di iscrizione. L’allievo lo compila DOPO aver pagato l’acconto: nel modulo c’è da indicare anche quale importo ha versato per l’iscrizione." },
   { id: "pr3", tipo: "tappa", icona: "diamante", numero: "03", titolo: "Se paga con carta", testo: "Non serve comunicare i dati per la fattura: viene emessa in automatico." },
   { id: "pr4", tipo: "tappa", icona: "persone", numero: "04", titolo: "Se paga con bonifico", testo: "Avvisa Elena e manda la ricevuta di pagamento insieme ai dati dell’allievo. Senza quella, la fattura non parte." },
-  { id: "pr5", tipo: "paragrafo", testo: "Completata l’iscrizione, inserisci l’allievo nella classe da Genyon, nella sezione “Iscrivi allievo”. È semplice: ti serve solo il modulo di iscrizione che ti dà l’allievo. Caricalo nell’apposita sezione — molte voci si compilano da sole leggendolo — rispondi ai dettagli che ti vengono chiesti, e l’iscrizione è finalizzata." },
-  { id: "pr6", tipo: "paragrafo", testo: "Prima o dopo l’inserimento puoi chiedere supporto a Elena per qualsiasi dubbio o chiarimento." },
-  { id: "pr7", tipo: "paragrafo", testo: "Inserito l’allievo, manda uno dei messaggi di recap qui sotto: quello giusto per il corso e la località scelti." },
+  { id: "pr5", tipo: "riquadro", titolo: "Completamento iscrizione", testo: "Completata l’iscrizione, inserisci l’allievo nella classe da Genyon, nella sezione “Iscrivi allievo”. È semplice: ti serve solo il modulo di iscrizione che ti dà l’allievo. Caricalo nell’apposita sezione — molte voci si compilano da sole leggendolo — rispondi ai dettagli che ti vengono chiesti, e l’iscrizione è finalizzata.\n\nPrima o dopo l’inserimento puoi chiedere supporto a Elena per qualsiasi dubbio o chiarimento.\n\nInserito l’allievo, manda il messaggio di benvenuto che trovi in fondo a questa pagina." },
   { id: "ia3", tipo: "sezione", testo: "Il link da mandare all'allievo" },
   { id: "ia4", tipo: "link", titolo: "Modulo di iscrizione ai corsi", url: "https://elitederma.eu/modulo-iscrizione-corsi/", testo: "Premi \u201cCopia link\u201d e incollalo nella chat dell\u2019allievo: si compila da telefono." },
   { id: "ia5", tipo: "sezione", testo: "Acconto in aula \u2014 solo durante il corso" },
@@ -34210,6 +34249,7 @@ const CAMPI_BLOCCO_NORMATIVA = {
   link: [["titolo", "Titolo"], ["url", "Indirizzo (https://…)"], ["testo", "A cosa serve, in una riga"]],
   copia: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il testo da copiare, riga per riga"]],
   benvenuto: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il messaggio. Segnaposto: {allievo} {corso} {sede} {date} {master}"]],
+  riquadro: [["titolo", "Titolo del riquadro"], ["testo", "Testo (una riga vuota separa i capoversi)"]],
 };
 const ICONE_TAPPA_NORMATIVA = ["infinito", "persone", "calendario", "cappello", "ricomincia", "bersaglio", "etichetta", "grafico", "lampadina", "germoglio", "diamante"];
 
@@ -34349,46 +34389,6 @@ function BloccoDaCopiare({ blocco, isMobile }) {
   );
 }
 
-// Il configuratore del messaggio di benvenuto.
-//
-// Chi lo usa ha appena finito di iscrivere un allievo e deve mandargli
-// due righe. Scriverle a mano ogni volta vuol dire sbagliare il nome del
-// corso, la sede o le date — e quelle tre cose l'app le sa gia'.
-//
-// Una master vede SOLO le sue classi: e' riconosciuta dall'utenza con cui
-// e' entrata (utenteLoggato.masterId). Chi non e' una master — l'ufficio,
-// chi programma — le vede tutte, perche' capita di mandare il messaggio
-// per conto di qualcun altro.
-//
-// Il testo del messaggio NON sta nel codice: sta nel blocco, come tutto
-// il resto della pagina, e si riscrive dalla pagina stessa. E' la
-// ragione per cui e' un blocco e non un componente cablato qui dentro.
-const SEGNAPOSTO_BENVENUTO = [
-  ["{allievo}", "il nome di battesimo dell’allievo"],
-  ["{corso}", "il nome del corso"],
-  ["{sede}", "la città della sede"],
-  ["{date}", "le date, per esteso (es. 18–19 ottobre 2026)"],
-  ["{master}", "il nome della master della classe"],
-];
-// In anagrafica i corsi stanno tutti in maiuscolo — "PMU BASE", "HENNE
-// INDIVI" — ed e' giusto cosi' per le tabelle. Dentro una frase mandata
-// a un cliente pero' sembra di gridare. Qui si rimettono in tondo, con
-// due eccezioni: le sigle vere restano sigle (PMU, IKE) e le paroline
-// non prendono la maiuscola ("Colori e Correzioni", non "Colori E").
-// Provato su tutti e 28 i nomi a catalogo.
-const SIGLE_CORSI = new Set(["PMU", "IKE"]);
-const PAROLINE_CORSI = new Set(["e", "di", "del", "della", "dei", "con", "per", "a", "al", "il", "la", "in"]);
-function nomeCorsoLeggibile(nome) {
-  return String(nome || "").split(/([^A-Za-zÀ-ÿ0-9]+)/).map((pezzo, i) => {
-    if (!pezzo || /^[^A-Za-zÀ-ÿ0-9]+$/.test(pezzo)) return pezzo;
-    const su = pezzo.toUpperCase();
-    if (SIGLE_CORSI.has(su)) return su;
-    const giu = pezzo.toLowerCase();
-    if (i > 0 && PAROLINE_CORSI.has(giu)) return giu;
-    return toTitleCase(pezzo);
-  }).join("");
-}
-const MESSAGGIO_BENVENUTO_PREDEFINITO = "Congratulazioni {allievo}! Elitederma è lieta di confermare la tua iscrizione al corso di {corso}, che si svolgerà nella sede di {sede}. Il corso si terrà il {date}.";
 
 function ConfiguratoreBenvenuto({ blocco, isMobile, dati, programmatore, onModifica }) {
   const { corsi = [], location = [], corsiDate = [], iscritti = [], master = [], corsiDateDocenti = [], masterId = null } = dati || {};
@@ -34519,6 +34519,22 @@ function ConfiguratoreBenvenuto({ blocco, isMobile, dati, programmatore, onModif
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Un blocco di testo dentro una scheda bianca, col suo titolino sopra.
+// Serve a staccare dal filo del discorso un pezzo che si legge a se' —
+// una procedura dentro una pagina di procedure. Sullo sfondo dell'app il
+// testo corrente si appoggia al colore e si confonde; qui sopra il
+// bianco si stacca, e il titolo dice dove comincia e dove finisce.
+function RiquadroNormativa({ blocco, isMobile }) {
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? "14px 16px" : "18px 22px", boxShadow: "var(--ombra-aree, none)" }}>
+      {blocco.titolo && (
+        <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.9, marginBottom: 9 }}>{blocco.titolo}</div>
+      )}
+      <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, whiteSpace: "pre-line" }}>{blocco.testo}</div>
     </div>
   );
 }
@@ -34676,6 +34692,17 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
       if (righeTitolo.length) yDx -= 2;
       righeTesto.forEach((r) => { pagina.drawText(r, { x: xTesto, y: yDx - 9.5, size: 9.5, font: normale, color: GRIGIO_PDF }); yDx -= 9.5 * 1.45; });
       y = cima - altezza - 8;
+    } else if (b.tipo === "riquadro") {
+      const righeTesto = righeDi(b.testo, normale, 10, LARGHEZZA - 28);
+      const righeTitolo = b.titolo ? righeDi(String(b.titolo).toUpperCase(), grassetto, 9.5, LARGHEZZA - 28) : [];
+      const altezza = righeTitolo.length * 9.5 * 1.4 + righeTesto.length * 10 * 1.5 + 26;
+      serve(altezza + 10);
+      const cima = y;
+      pagina.drawRectangle({ x: MARGINE, y: cima - altezza, width: LARGHEZZA, height: altezza, color: rgb(1, 1, 1), borderColor: BORDO_PDF, borderWidth: 0.8 });
+      y -= 13;
+      if (righeTitolo.length) { scriviRighe(righeTitolo, { x: MARGINE + 14, size: 9.5, font: grassetto, interlinea: 1.4 }); y -= 3; }
+      scriviRighe(righeTesto, { x: MARGINE + 14, size: 10, interlinea: 1.5 });
+      y = cima - altezza - 10;
     } else if (b.tipo === "benvenuto") {
       // sulla carta i menu non esistono: resta il modello com'e' scritto,
       // segnaposto compresi. E' comunque l'unica cosa che vale la pena
@@ -34823,6 +34850,8 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
         ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo link", url: "https://", testo: "A cosa serve, in una riga" }
       : tipo === "copia"
         ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo blocco da copiare", spiega: "A cosa serve, in una riga", testo: "Scrivi qui il testo da copiare,\nriga per riga." }
+      : tipo === "riquadro"
+        ? { id: `b${Date.now()}`, tipo, titolo: "Titolo del riquadro", testo: "Scrivi qui il testo." }
       : tipo === "benvenuto"
         ? { id: `b${Date.now()}`, tipo, titolo: "Messaggio di benvenuto", spiega: "Scegli la classe e l’allievo: il messaggio si compila da solo.", testo: MESSAGGIO_BENVENUTO_PREDEFINITO }
         : { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
@@ -34837,7 +34866,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
     if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
     if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#5E5039", background: "#F5EEDD", border: "1px solid #E6D9B8", borderRadius: 12, padding: "12px 14px 12px 46px", lineHeight: 1.6, margin: "14px 0 22px", position: "relative" };
     if (tipo === "tappa") return { marginBottom: 12 };
-    if (tipo === "link" || tipo === "copia" || tipo === "benvenuto") return { marginBottom: 14 };
+    if (tipo === "link" || tipo === "copia" || tipo === "benvenuto" || tipo === "riquadro") return { marginBottom: 14 };
     if (tipo === "testata") return {};
     return { ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, marginBottom: 12 };
   }
@@ -34939,6 +34968,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
                 : b.tipo === "tappa" ? <TappaNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "link" ? <LinkNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "copia" ? <BloccoDaCopiare blocco={b} isMobile={isMobile} />
+                : b.tipo === "riquadro" ? <RiquadroNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "benvenuto" ? (
                   <ConfiguratoreBenvenuto
                     blocco={b} isMobile={isMobile} dati={datiBenvenuto}
@@ -34962,6 +34992,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             <Button variant="ghost" onClick={() => aggiungiBlocco("sezione")}>+ Titolo di sezione</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("paragrafo")}>+ Paragrafo</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("nota")}>+ Nota</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("riquadro")}>+ Riquadro bianco</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("tappa")}>+ Tappa</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("link")}>+ Link da copiare</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("copia")}>+ Testo da copiare</Button>
