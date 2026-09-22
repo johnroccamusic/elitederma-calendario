@@ -34131,15 +34131,24 @@ const NORMATIVA_RITORNO_AL_CORSO = [
 // pagina bianca e a dire che e' da scrivere.
 const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia1", tipo: "testata", titolo: "Iscrizione allievi", sottotitolo: "Come la master iscrive un allievo a un corso", claim: "Pagina per le master — non va mandata all'allievo", lato: "Uso interno" },
+  { id: "pr0", tipo: "sezione", testo: "Procedura" },
+  { id: "pr1", tipo: "tappa", icona: "bersaglio", numero: "01", titolo: "Manda il pagamento", testo: "Invia all’allievo il link per pagare con carta, oppure i dati per il bonifico." },
+  { id: "pr2", tipo: "tappa", icona: "etichetta", numero: "02", titolo: "Manda il modulo", testo: "Invia il link del modulo di iscrizione. L’allievo lo compila DOPO aver pagato l’acconto: nel modulo c’è da indicare anche quale importo ha versato per l’iscrizione." },
+  { id: "pr3", tipo: "tappa", icona: "diamante", numero: "03", titolo: "Se paga con carta", testo: "Non serve comunicare i dati per la fattura: viene emessa in automatico." },
+  { id: "pr4", tipo: "tappa", icona: "persone", numero: "04", titolo: "Se paga con bonifico", testo: "Avvisa Elena e manda la ricevuta di pagamento insieme ai dati dell’allievo. Senza quella, la fattura non parte." },
+  { id: "pr5", tipo: "paragrafo", testo: "Completata l’iscrizione, inserisci l’allievo nella classe da Genyon, nella sezione “Iscrivi allievo”. È semplice: ti serve solo il modulo di iscrizione che ti dà l’allievo. Caricalo nell’apposita sezione — molte voci si compilano da sole leggendolo — rispondi ai dettagli che ti vengono chiesti, e l’iscrizione è finalizzata." },
+  { id: "pr6", tipo: "paragrafo", testo: "Prima o dopo l’inserimento puoi chiedere supporto a Elena per qualsiasi dubbio o chiarimento." },
+  { id: "pr7", tipo: "paragrafo", testo: "Inserito l’allievo, manda uno dei messaggi di recap qui sotto: quello giusto per il corso e la località scelti." },
   { id: "ia3", tipo: "sezione", testo: "Il link da mandare all'allievo" },
-  { id: "ia4", tipo: "link", titolo: "Modulo di iscrizione ai corsi", url: "https://elitederma.eu/modulo-iscrizione-corsi/", testo: "Premi \u201cCopia link\u201d e incollalo nella chat dell\u2019allievo: lo compila lui, da telefono." },
+  { id: "ia4", tipo: "link", titolo: "Modulo di iscrizione ai corsi", url: "https://elitederma.eu/modulo-iscrizione-corsi/", testo: "Premi \u201cCopia link\u201d e incollalo nella chat dell\u2019allievo: si compila da telefono." },
   { id: "ia5", tipo: "sezione", testo: "Acconto in aula \u2014 solo durante il corso" },
   { id: "ia6", tipo: "link", titolo: "Acconto 152,50 \u20ac \u2014 Henn\u00e8, Laminazione, Extension, Gemme Dentali", url: "https://elitederma.eu/shop/kit-formazione-150/", testo: "125 \u20ac + IVA. Si usa con l\u2019allievo davanti, mentre il corso \u00e8 in aula: finito il corso questo link non vale pi\u00f9." },
   { id: "ia7", tipo: "link", titolo: "Acconto 201,30 \u20ac \u2014 tutti gli altri corsi", url: "https://elitederma.eu/shop/kit-formazione-200/", testo: "165 \u20ac + IVA. Stessa regola: con l\u2019allievo davanti, mentre il corso \u00e8 in aula." },
   { id: "ia8", tipo: "sezione", testo: "Se non hanno la carta: bonifico" },
   { id: "ia9", tipo: "copia", titolo: "Dati per il bonifico", spiega: "Copiali e mandali in chat all\u2019allievo cos\u00ec come sono.", testo: "ELITEDERMA SRL\nBanca Popolare del Lazio\nIBAN: IT69T0510439499CC0010523827\nBIC: BPLZIT3V\nCausale: nome e cognome acquisto formazione" },
-  { id: "ia10", tipo: "nota", testo: "Appena l\u2019allievo ha fatto il bonifico, avvisa Elena: la fattura la emette lei, e senza che qualcuno glielo dica non parte." },
-  { id: "ia2", tipo: "nota", testo: "Il resto della pagina è da scrivere. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — compreso un altro link da copiare." },
+  { id: "ia10", tipo: "nota", testo: "Appena l\u2019allievo ha fatto il bonifico, avvisa Elena: senza quell\u2019avviso la fattura non viene emessa." },
+  { id: "ia11", tipo: "sezione", testo: "Messaggi di recap" },
+  { id: "ia2", tipo: "nota", testo: "I messaggi di recap sono da scrivere, uno per corso e località. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — “Testo da copiare” è quello giusto per un messaggio da mandare in chat." },
 ];
 
 // I campi che si riscrivono di un blocco a piu' voci. Gli altri tipi
