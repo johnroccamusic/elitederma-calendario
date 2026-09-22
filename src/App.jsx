@@ -37921,7 +37921,7 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
 // i due tasti del piede: leggono la scala dalla card che li contiene,
 // cosi' si rimpiccioliscono con lei invece di restare grandi dentro una
 // riga piccola
-function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pannello, onPannello }) {
+function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pannello, onPannello, quanteSimili = 0 }) {
   const k = useContext(ScalaRigaContabilita);
   const q = (n) => Math.round(n * k * 10) / 10;
   const isMobile = useIsMobile();
@@ -37953,6 +37953,16 @@ function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pa
           title="Apre la scheda della spesa: si conferma la classificazione, poi si sceglie come e quando e' stata pagata"
           style={{ ...tastino(true), outline: pannello === "paga" ? `2px solid ${NAVY}` : "none" }}
         >Paga</button>
+        {/* Se in prima nota c'e' gia' un pagamento che somiglia, il tasto
+            si vede: nasconderlo dietro "Paga" voleva dire scoprirlo solo
+            premendo, e chi era convinto di aver gia' pagato non premeva */}
+        {quanteSimili > 0 && (
+          <button
+            onClick={() => onPannello(pannello === "simili" ? null : "simili")}
+            title={`In prima nota ci sono ${quanteSimili} spese gia' pagate che somigliano a questa`}
+            style={{ ...tastino(true), color: "#8A6A1B", borderColor: "#E3C97A", background: "#FFFBF0", outline: pannello === "simili" ? `2px solid #8A6A1B` : "none" }}
+          >Unisci al pagamento</button>
+        )}
       </>
     );
   }
@@ -37975,6 +37985,16 @@ function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pa
       >
         <IconaQiPortafoglio size={q(17)} /><span>Paga</span>
       </button>
+      {quanteSimili > 0 && (
+        <button
+          onClick={() => onPannello(pannello === "simili" ? null : "simili")}
+          disabled={salvando}
+          title={`In prima nota ci sono ${quanteSimili} spese gia' pagate che somigliano a questa`}
+          style={{ ...stileTastoCardChiaro(isMobile), width: "100%", padding: `${q(9)}px ${q(12)}px`, fontSize: q(12.5), gap: q(6), borderRadius: q(12), justifyContent: "center", whiteSpace: "nowrap", color: "#8A6A1B", borderColor: "#E3C97A", background: "#FFFBF0", outline: pannello === "simili" ? `2px solid #8A6A1B` : "none" }}
+        >
+          <span>Unisci al pagamento</span>
+        </button>
+      )}
     </>
   );
 }
@@ -38159,7 +38179,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   ) : (
     <TastiPiedeScadenzario
       fatturaAssociata={fatturaAssociata} numeroDocumento={numeroDocumento} salvando={salvando}
-      pannello={pannello} onPannello={apriPannello}
+      pannello={pannello} onPannello={apriPannello} quanteSimili={speseSimili.length}
     />
   );
   return (
