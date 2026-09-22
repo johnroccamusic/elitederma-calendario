@@ -24686,6 +24686,7 @@ const AREA_MADRE_VISTA = {
   ritornoalcorso: ["normative"],
   mappanormativepmu: ["normative"],
   modulistica: ["normative"],
+  iscrizioneallievi: ["normative"],
   prossimecontabilita: ["gestionedate"],
   amministrazione: ["erp"],
   catalogocategoriecosti: ["erp"],
@@ -34117,6 +34118,17 @@ const NORMATIVA_RITORNO_AL_CORSO = [
   { id: "p7", tipo: "tappa", icona: "diamante", numero: "07", titolo: "Formazione d'eccellenza", testo: "Solo così possiamo garantire agli studenti una formazione sempre allineata alle innovazioni del settore e fornire loro strumenti e tecniche all'avanguardia." },
 ];
 
+// "Iscrizione allievi": lo scheletro con cui la pagina nasce. Non e' il
+// documento — quello lo scrive chi di dovere, cliccando i pezzi di testo
+// in modalita' programmatore. Serve solo a non far nascere una pagina
+// bianca, e a dire a chiare lettere che e' da scrivere: il tasto "Copia
+// per l'allievo" compare appena c'e' un blocco, e un documento a meta'
+// mandato a un allievo e' peggio di nessun documento.
+const NORMATIVA_ISCRIZIONE_ALLIEVI = [
+  { id: "ia1", tipo: "testata", titolo: "Iscrizione allievi", sottotitolo: "Come ci si iscrive a un corso Elitederma", claim: "Tutto quello che serve sapere prima di partire", lato: "Chiaro fin dall'inizio" },
+  { id: "ia2", tipo: "nota", testo: "Pagina da scrivere. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri. Finché c'è questa nota, il documento non è pronto per essere mandato a un allievo." },
+];
+
 // I campi che si riscrivono di un blocco a piu' voci. Gli altri tipi
 // hanno il solo "testo".
 const CAMPI_BLOCCO_NORMATIVA = {
@@ -34742,7 +34754,7 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
 // documenti che le accompagnano. Per ora ospita un solo argomento —
 // "Ritorno al Corso" — ed e' fatta con la stessa griglia di tessere delle
 // altre aree, cosi' aggiungerne altri e' solo una riga in piu'.
-function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onApriMappaNormative, onApriModulistica, onBack, titolo = "Normative" }) {
+function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onApriMappaNormative, onApriModulistica, onApriIscrizioneAllievi, onBack, titolo = "Normative" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -34761,6 +34773,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
             { chiave: "ritornoalcorso", title: "Regole Ritorno al Corso", descrizione: "Le regole per chi torna a frequentare un corso già fatto.", Icona: IconaTileNormative, attivo: true, onClick: onApriRitornoAlCorso || (() => {}) },
             { chiave: "mappanormativepmu", title: "Mappa normative regionali", descrizione: "Cosa serve per esercitare il trucco permanente, regione per regione.", Icona: IconaPin, attivo: true, onClick: onApriMappaNormative || (() => {}) },
             { chiave: "modulistica", title: "Modulistica", descrizione: "Moduli, contratti e documenti da scaricare e compilare.", Icona: IconaTileLoghi, attivo: true, onClick: onApriModulistica || (() => {}) },
+            { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come ci si iscrive a un corso: condizioni, tempi e cosa serve.", Icona: IconaPersonaAggiungi, attivo: true, onClick: onApriIscrizioneAllievi || (() => {}) },
           ]}
         />
       </div>
@@ -69904,6 +69917,7 @@ export default function App() {
       { chiave: "ritornoalcorso", titolo: etichettaTasto("normative", "ritornoalcorso", "Regole Ritorno al Corso"), apri: () => setView("ritornoalcorso") },
       { chiave: "mappanormativepmu", titolo: etichettaTasto("normative", "mappanormativepmu", "Mappa normative regionali"), apri: () => setView("mappanormativepmu") },
       { chiave: "modulistica", titolo: etichettaTasto("normative", "modulistica", "Modulistica"), apri: () => setView("modulistica") },
+      { chiave: "iscrizioneallievi", titolo: etichettaTasto("normative", "iscrizioneallievi", "Iscrizione Allievi"), apri: () => setView("iscrizioneallievi") },
     ] },
     { chiave: "progettiincorso", titolo: etichettaTasto("home", "progettiincorso", "Progetti in corso"), apri: apriProgetti, figli: [] },
   ].map((area) => ({
@@ -71078,6 +71092,7 @@ export default function App() {
           onApriRitornoAlCorso={() => setView("ritornoalcorso")}
           onApriMappaNormative={() => setView("mappanormativepmu")}
           onApriModulistica={() => setView("modulistica")}
+          onApriIscrizioneAllievi={() => setView("iscrizioneallievi")}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "normative", "Normative")}
         />
@@ -71100,6 +71115,18 @@ export default function App() {
           ricarica={fetchDati}
           onBack={() => setView("normative")}
           titolo="Regole Ritorno al Corso"
+        />
+      )}
+
+      {view === "iscrizioneallievi" && (
+        <PaginaNormativa
+          chiave="iscrizione_allievi"
+          ruoloUtente={ruoloUtente}
+          testi={normativeTesti}
+          testoIniziale={NORMATIVA_ISCRIZIONE_ALLIEVI}
+          ricarica={fetchDati}
+          onBack={() => setView("normative")}
+          titolo={etichettaTasto("normative", "iscrizioneallievi", "Iscrizione Allievi")}
         />
       )}
 
