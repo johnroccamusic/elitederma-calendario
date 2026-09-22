@@ -40871,6 +40871,69 @@ function catalogazioneEreditata(ultima) {
 //
 // I movimenti che non somigliano a niente non compaiono: quelli non sono
 // doppioni, sono spese nuove, e si contabilizzano dall'altra scheda.
+// I doppioni dentro la prima nota: la stessa uscita scritta due volte,
+// una arrivata dal bonifico e una dalla fattura.
+//
+// Qui non si decide da soli. Stesso importo e stesso fornitore, anche a
+// pochi giorni, capita fra cose diverse: due parcelle dello stesso
+// consulente pagate insieme, due fatture consecutive dello stesso
+// professionista. Per questo ogni riga mostra numero di documento, data
+// e descrizione per esteso: e' quello che distingue un doppione da due
+// spese vere che si somigliano.
+function PannelloDoppioniPrimaNota({ coppie = [], fornitoriById = {}, onUnisci, isMobile, msg }) {
+  const data = (d) => (d ? new Date(d).toLocaleDateString("it-IT") : "—");
+  const riga = (sp, altra) => (
+    <div style={{ flex: "1 1 280px", minWidth: 0, background: "#FAF8F3", borderRadius: 10, padding: 12 }}>
+      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{sp.descrizione || "(senza descrizione)"}</div>
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
+        pagata il {data(sp.data_pagamento)} · {sp.metodo_pagamento || "metodo non indicato"}<br />
+        documento: <b style={{ color: sp.numero_documento ? NAVY : MUTED }}>{sp.numero_documento || "nessuno"}</b>
+        {sp.allegato_path ? " · ha un allegato" : ""}
+      </div>
+      <button type="button" onClick={() => onUnisci(sp, altra)}
+        title={`Tieni questa e cancella l'altra. Quello che manca a questa (documento, allegato) lo prende dall'altra.`}
+        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "7px 14px", cursor: "pointer", marginTop: 10 }}>
+        Tieni questa
+      </button>
+    </div>
+  );
+  return (
+    <div>
+      <div style={{ ...cardStyle, padding: isMobile ? 14 : 18, marginBottom: 14 }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 6 }}>
+          {coppie.length === 0 ? "Nessun doppione in prima nota" : `${coppie.length} coppie da guardare`}
+        </div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
+          Stesso importo, stesso fornitore, pagate a non piu' di sette giorni di distanza. <b>Non sono per forza doppioni</b>:
+          due parcelle dello stesso consulente pagate insieme si somigliano allo stesso modo. Guarda il numero di documento —
+          se sono due numeri diversi, sono due spese vere e vanno lasciate stare.
+        </div>
+        {msg && <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 10, fontWeight: 600 }}>{msg}</div>}
+      </div>
+
+      {coppie.map(({ a, b, giorni }) => (
+        <div key={`${a.id}-${b.id}`} style={{ ...cardStyle, padding: isMobile ? 12 : 16, marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+            <span style={{ ...fontBody, fontSize: 16, fontWeight: 800, color: NAVY }}>{fmtEuroErp2(Number(a.totale) || 0)}</span>
+            <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600 }}>{fornitoriById[a.fornitore_id]?.nome || "senza fornitore"}</span>
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{giorni === 0 ? "stesso giorno" : `${giorni} giorn${giorni === 1 ? "o" : "i"} di distanza`}</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {riga(a, b)}
+            {riga(b, a)}
+          </div>
+        </div>
+      ))}
+
+      {coppie.length === 0 && (
+        <div style={{ ...cardStyle, padding: 18, ...fontBody, fontSize: 13, color: MUTED }}>
+          Nessuna coppia di spese con lo stesso importo, lo stesso fornitore e date vicine.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PannelloAllineamentoBanca({ coppie = [], senzaCorrispondenza = 0, fornitoriById = {}, onAllinea, onScarta, onContabilizza, isMobile, msg }) {
   const data = (d) => (d ? new Date(d).toLocaleDateString("it-IT") : "—");
   return (
@@ -41194,6 +41257,59 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movimenti, spese, coppieScartate]);
   const senzaCorrispondenza = (movimenti || []).filter((m) => m.stato === "nuovo" && Number(m.importo) < 0).length - coppieSospette.length;
+  // Doppioni dentro la prima nota: la stessa uscita scritta due volte,
+  // una arrivata dal bonifico e una dalla fattura.
+  //
+  // Stesso importo e stesso fornitore NON bastano: un canone mensile ha
+  // sempre lo stesso importo e lo stesso fornitore, e senza la data
+  // questo elenco proporrebbe di cancellare mensilita' vere (provato sui
+  // dati il 22/09/2026: 77 coppie, quasi tutte legittime). Con la data
+  // vicina restano i casi veri — e anche li' decide chi guarda, per
+  // questo si mostrano i numeri di documento.
+  const doppioniPrimaNota = useMemo(() => {
+    const pagate = (spese || []).filter((sp) => sp.stato === "pagata" && Number(sp.totale) > 0 && sp.data_pagamento);
+    const coppie = [];
+    for (let i = 0; i < pagate.length; i++) {
+      for (let j = i + 1; j < pagate.length; j++) {
+        const a = pagate[i], b = pagate[j];
+        if (round2(Number(a.totale)) !== round2(Number(b.totale))) continue;
+        if (!a.fornitore_id || a.fornitore_id !== b.fornitore_id) continue;
+        const giorni = Math.abs(Date.parse(a.data_pagamento) - Date.parse(b.data_pagamento)) / 86400000;
+        if (giorni > 7) continue;
+        coppie.push({ a, b, giorni: Math.round(giorni) });
+      }
+    }
+    return coppie.sort((x, y) => x.giorni - y.giorni || Number(y.a.totale) - Number(x.a.totale));
+  }, [spese]);
+
+  // Unisce: quella che si tiene si prende quello che le manca e che
+  // l'altra ha (numero e data del documento, allegato), poi l'altra si
+  // cancella. E' una riga di contabilita' che sparisce, quindi si chiede
+  // con i due importi e le due date davanti.
+  async function unisciSpese(tenere, buttare) {
+    const euro = fmtEuroErp2(Number(buttare.totale) || 0);
+    const quando = buttare.data_pagamento ? new Date(buttare.data_pagamento).toLocaleDateString("it-IT") : "senza data";
+    if (!window.confirm(
+      `Tieni: "${tenere.descrizione || "senza descrizione"}"\n` +
+      `Cancelli: "${buttare.descrizione || "senza descrizione"}" — ${euro}, pagata il ${quando}` +
+      `${buttare.numero_documento ? `, documento n. ${buttare.numero_documento}` : ""}\n\n` +
+      `La spesa cancellata sparisce dalla prima nota e non si recupera. Procedo?`
+    )) return;
+    const completa = {};
+    if (!tenere.numero_documento && buttare.numero_documento) completa.numero_documento = buttare.numero_documento;
+    if (!tenere.data_documento && buttare.data_documento) completa.data_documento = buttare.data_documento;
+    if (!tenere.allegato_path && buttare.allegato_path) completa.allegato_path = buttare.allegato_path;
+    const marchio = "Unita a un doppione in prima nota";
+    completa.note = String(tenere.note || "").includes(marchio) ? tenere.note : [tenere.note || "", marchio, buttare.descrizione ? `(era anche: ${buttare.descrizione})` : ""].filter(Boolean).join(" · ");
+    if (Object.keys(completa).length > 0) {
+      const { error } = await supabase.from("spese").update(completa).eq("id", tenere.id);
+      if (error) { setMsg(`Non unite: ${testoErrore(error)}`); return; }
+    }
+    const { error: erroreCanc } = await supabase.from("spese").delete().eq("id", buttare.id);
+    if (erroreCanc) { setMsg(`La spesa doppia non e' stata cancellata: ${testoErrore(erroreCanc)}`); return; }
+    setMsg(`Unite: resta "${tenere.descrizione || "la spesa"}", l'altra e' stata cancellata.`);
+    ricarica?.(["spese"]);
+  }
 
   return (
     <div>
@@ -41205,6 +41321,7 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
         {[
           { chiave: "movimenti", testo: "Estratto conto" },
           { chiave: "allineamento", testo: `Da allineare${coppieSospette.length ? ` (${coppieSospette.length})` : ""}` },
+          { chiave: "doppioni", testo: `Doppioni in prima nota${doppioniPrimaNota.length ? ` (${doppioniPrimaNota.length})` : ""}` },
         ].map((t) => (
           <button key={t.chiave} onClick={() => setVista(t.chiave)}
             style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "8px 16px", borderRadius: 999, cursor: "pointer",
@@ -41216,7 +41333,9 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
         ))}
       </div>
 
-      {vista === "allineamento" ? (
+      {vista === "doppioni" ? (
+        <PannelloDoppioniPrimaNota coppie={doppioniPrimaNota} fornitoriById={fornitoriById} onUnisci={unisciSpese} isMobile={isMobile} msg={msg} />
+      ) : vista === "allineamento" ? (
         <PannelloAllineamentoBanca
           coppie={coppieSospette}
           senzaCorrispondenza={senzaCorrispondenza}
