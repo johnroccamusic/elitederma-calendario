@@ -34227,7 +34227,7 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "pr2", tipo: "tappa", icona: "etichetta", numero: "02", titolo: "Manda il modulo", testo: "Invia il link del modulo di iscrizione. L’allievo lo compila DOPO aver pagato l’acconto: nel modulo c’è da indicare anche quale importo ha versato per l’iscrizione." },
   { id: "pr3", tipo: "tappa", icona: "diamante", numero: "03", titolo: "Se paga con carta", testo: "Non serve comunicare i dati per la fattura: viene emessa in automatico." },
   { id: "pr4", tipo: "tappa", icona: "persone", numero: "04", titolo: "Se paga con bonifico", testo: "Avvisa Elena e manda la ricevuta di pagamento insieme ai dati dell’allievo. Senza quella, la fattura non parte." },
-  { id: "pr5", tipo: "riquadro", titolo: "Completamento iscrizione", testo: "Completata l’iscrizione, inserisci l’allievo nella classe da Genyon, nella sezione “Iscrivi allievo”. È semplice: ti serve solo il modulo di iscrizione che ti dà l’allievo. Caricalo nell’apposita sezione — molte voci si compilano da sole leggendolo — rispondi ai dettagli che ti vengono chiesti, e l’iscrizione è finalizzata.\n\nPrima o dopo l’inserimento puoi chiedere supporto a Elena per qualsiasi dubbio o chiarimento.\n\nInserito l’allievo, manda il messaggio di benvenuto che trovi in fondo a questa pagina." },
+  { id: "pr5", tipo: "passi", occhiello: "Completamento", titolo: "Completamento iscrizione", sottotitolo: "Segui i passaggi qui sotto per inserire l’allievo e completare l’iscrizione.", bollo: "Iscrizione finalizzata", importante: "L’iscrizione è finalizzata solo dopo aver completato tutti i passaggi.", testo: "Inserisci l’allievo nella classe su [Genyon] nella sezione <“Iscrivi allievo”>\n\nCarica il modulo di iscrizione compilato dall’allievo.\nMolti dati si compilano automaticamente: verifica le informazioni richieste e completa quelle mancanti.\n\nPer dubbi o chiarimenti\nPrima o dopo l’inserimento puoi chiedere supporto a <Elena>.\n\nInvia il messaggio di benvenuto.\nUna volta completata l’iscrizione, manda all’allievo il [messaggio di benvenuto] che trovi in fondo a questa pagina." },
   { id: "ia3", tipo: "sezione", testo: "Il link da mandare all'allievo" },
   { id: "ia4", tipo: "link", titolo: "Modulo di iscrizione ai corsi", url: "https://elitederma.eu/modulo-iscrizione-corsi/", testo: "Premi \u201cCopia link\u201d e incollalo nella chat dell\u2019allievo: si compila da telefono." },
   { id: "ia5", tipo: "sezione", testo: "Acconto in aula \u2014 solo durante il corso" },
@@ -34250,6 +34250,14 @@ const CAMPI_BLOCCO_NORMATIVA = {
   copia: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il testo da copiare, riga per riga"]],
   benvenuto: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il messaggio. Segnaposto: {allievo} {corso} {sede} {date} {master}"]],
   riquadro: [["titolo", "Titolo del riquadro"], ["testo", "Testo (una riga vuota separa i capoversi)"]],
+  passi: [
+    ["occhiello", "Occhiello in oro (es. COMPLETAMENTO)"],
+    ["titolo", "Titolo grande"],
+    ["sottotitolo", "Sottotitolo"],
+    ["bollo", "Bollo in alto a destra (due parole)"],
+    ["importante", "La striscia in fondo"],
+    ["testo", "I passi: uno per capoverso, prima riga il titolo. [azzurro] <crema> fanno le pastiglie"],
+  ],
 };
 const ICONE_TAPPA_NORMATIVA = ["infinito", "persone", "calendario", "cappello", "ricomincia", "bersaglio", "etichetta", "grafico", "lampadina", "germoglio", "diamante"];
 
@@ -34539,6 +34547,121 @@ function RiquadroNormativa({ blocco, isMobile }) {
   );
 }
 
+// La scheda a passi: l'occhiello in oro, il titolone, il bollo in alto a
+// destra, i passi numerati e la striscia "importante" in fondo.
+//
+// Nasce per "Completamento iscrizione", ma non ha niente di suo: titolo,
+// passi e avvertenza si riscrivono dalla pagina come ogni altro blocco.
+// I passi stanno in un campo solo — un passo per capoverso, prima riga il
+// titolo, il resto la spiegazione — perche' un modulo con sei caselle per
+// passo non lo compila nessuno.
+//
+// Dentro il testo due marcatori fanno le pastiglie colorate, quelle che
+// nel disegno tengono il nome dell'app o della persona:
+//   [Genyon]              -> pastiglia azzurra, per l'app e le sue sezioni
+//   <Elena>               -> pastiglia crema, per le persone
+const PASTIGLIA_AZZURRA = { colore: "#12284C", sfondo: "#E4ECF8" };
+const PASTIGLIA_CREMA = { colore: "#12284C", sfondo: "#F7EEDD" };
+function testoConPastiglie(testo, chiave) {
+  const pezzi = String(testo || "").split(/(\[[^\]\n]+\]|<[^>\n]+>)/);
+  return pezzi.map((pezzo, i) => {
+    const azzurra = /^\[[^\]\n]+\]$/.test(pezzo);
+    const crema = /^<[^>\n]+>$/.test(pezzo);
+    if (!azzurra && !crema) return <span key={`${chiave}-${i}`}>{pezzo}</span>;
+    const stile = azzurra ? PASTIGLIA_AZZURRA : PASTIGLIA_CREMA;
+    return (
+      <span key={`${chiave}-${i}`} style={{ display: "inline-block", background: stile.sfondo, color: stile.colore, borderRadius: 8, padding: "1px 9px", fontWeight: 700, margin: "0 1px" }}>
+        {pezzo.slice(1, -1)}
+      </span>
+    );
+  });
+}
+// le icone dei passi, in ordine: si prende quella del posto occupato dal
+// passo. Un settimo passo ricomincia dalla prima — meglio un'icona
+// ripetuta che un passo senza
+const IconaPassoCappello = ({ s = 22 }) => <SpDisegno s={s}><path d="M2.5 9.5 12 5l9.5 4.5L12 14z" /><path d="M6.5 11.5V16c0 1.7 2.5 3 5.5 3s5.5-1.3 5.5-3v-4.5M21.5 9.5V15" /></SpDisegno>;
+const IconaPassoFoglio = ({ s = 22 }) => <SpDisegno s={s}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 12h6M9 16h4" /></SpDisegno>;
+const IconaPassoPersona = ({ s = 22 }) => <SpDisegno s={s}><circle cx="12" cy="8" r="3.4" /><path d="M5 20c0-3.4 3.1-5.6 7-5.6s7 2.2 7 5.6" /></SpDisegno>;
+const IconaPassoAereo = ({ s = 22 }) => <SpDisegno s={s}><path d="M21 3 3 10.5l7 2.6 2.6 7z" /><path d="m10 13.1 4.4-4.4" /></SpDisegno>;
+const IconaPassoLampadina = ({ s = 22 }) => <SpDisegno s={s}><path d="M9.5 18h5M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5.9 1.1.9 1.8V16h5.2v-.3c0-.7.3-1.3.9-1.8A6 6 0 0 0 12 3Z" /></SpDisegno>;
+const IconaPassoSpunta = ({ s = 22 }) => <SpDisegno s={s}><circle cx="12" cy="12" r="9" /><path d="m8.2 12.3 2.6 2.6 5-5.2" /></SpDisegno>;
+const ICONE_PASSI = [IconaPassoCappello, IconaPassoFoglio, IconaPassoPersona, IconaPassoAereo, IconaPassoLampadina, IconaPassoSpunta];
+
+function SchedaPassi({ blocco, isMobile }) {
+  // un passo per capoverso: righe vuote a separare, prima riga il titolo
+  const passi = String(blocco.testo || "")
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => {
+      const righe = p.split("\n");
+      return { titolo: righe[0].trim(), corpo: righe.slice(1).join("\n").trim() };
+    });
+
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "18px 16px" : "26px 30px", boxShadow: "var(--ombra-aree, none)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {blocco.occhiello && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <span style={{ width: 26, height: 2, background: GOLD, flexShrink: 0, borderRadius: 2 }} />
+              <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 3 }}>{blocco.occhiello}</span>
+            </div>
+          )}
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 25 : 38, fontWeight: 800, color: NAVY, lineHeight: 1.1 }}>{blocco.titolo}</div>
+          {blocco.sottotitolo && (
+            <div style={{ ...fontBody, fontSize: isMobile ? 13.5 : 16, color: "#5B6577", lineHeight: 1.45, marginTop: 7 }}>{blocco.sottotitolo}</div>
+          )}
+        </div>
+        {blocco.bollo && !isMobile && (
+          <div style={{ flexShrink: 0, width: 140, textAlign: "center" }}>
+            <div style={{ position: "relative", width: 62, height: 62, margin: "0 auto 10px" }}>
+              <span style={{ color: GOLD, display: "block" }}><IconaPassoFoglio s={62} /></span>
+              <span style={{ position: "absolute", right: -4, bottom: -2, width: 28, height: 28, borderRadius: "50%", background: NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>
+              </span>
+            </div>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 2.2, lineHeight: 1.6 }}>{blocco.bollo}</div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: isMobile ? 16 : 22 }}>
+        {passi.map((passo, i) => {
+          const Icona = ICONE_PASSI[i % ICONE_PASSI.length];
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 10 : 16, padding: isMobile ? "14px 0" : "17px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ flexShrink: 0, width: isMobile ? 26 : 32, height: isMobile ? 26 : 32, borderRadius: "50%", background: NAVY, color: "#fff", ...fontDisplay, fontSize: isMobile ? 13 : 15, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
+              <span style={{ flexShrink: 0, width: isMobile ? 34 : 48, height: isMobile ? 34 : 48, borderRadius: 12, background: "#F4F6FA", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icona s={isMobile ? 19 : 25} />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: isMobile ? 14 : 16.5, fontWeight: 700, color: NAVY, lineHeight: 1.6 }}>{testoConPastiglie(passo.titolo, `t${i}`)}</div>
+                {passo.corpo && (
+                  <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, color: "#5B6577", lineHeight: 1.6, marginTop: 3, whiteSpace: "pre-line" }}>{testoConPastiglie(passo.corpo, `c${i}`)}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {blocco.importante && (
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 18, background: "#F4EFE6", borderRadius: 16, padding: isMobile ? "14px 14px" : "18px 22px", marginTop: isMobile ? 14 : 18 }}>
+          <span style={{ flexShrink: 0, width: isMobile ? 40 : 52, height: isMobile ? 40 : 52, borderRadius: "50%", background: "#E3D3B6", color: "#6B5424", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <IconaPassoLampadina s={isMobile ? 21 : 27} />
+          </span>
+          {!isMobile && <span style={{ width: 1, alignSelf: "stretch", background: GOLD, opacity: 0.55, flexShrink: 0 }} />}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 2.2, marginBottom: 4 }}>Importante</div>
+            <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, color: NAVY, lineHeight: 1.55 }}>{testoConPastiglie(blocco.importante, "imp")}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TestataNormativa({ blocco, isMobile }) {
   return (
     <div style={{ display: "flex", gap: isMobile ? 14 : 28, alignItems: "stretch", marginBottom: 22, marginTop: blocco.sottotitolo ? 0 : 30, flexDirection: isMobile ? "column" : "row" }}>
@@ -34692,6 +34815,32 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
       if (righeTitolo.length) yDx -= 2;
       righeTesto.forEach((r) => { pagina.drawText(r, { x: xTesto, y: yDx - 9.5, size: 9.5, font: normale, color: GRIGIO_PDF }); yDx -= 9.5 * 1.45; });
       y = cima - altezza - 8;
+    } else if (b.tipo === "passi") {
+      const senzaPastiglie = (t) => String(t || "").replace(/\[([^\]\n]+)\]/g, "$1").replace(/<([^>\n]+)>/g, "$1");
+      y -= 4;
+      if (b.occhiello) scriviRighe(righeDi(String(b.occhiello).toUpperCase(), grassetto, 9, LARGHEZZA), { size: 9, font: grassetto, colore: GOLD_PDF, interlinea: 1.5 });
+      scriviRighe(righeDi(b.titolo, grassetto, 18, LARGHEZZA), { size: 18, font: grassetto, interlinea: 1.2 });
+      if (b.sottotitolo) scriviRighe(righeDi(b.sottotitolo, normale, 10.5, LARGHEZZA), { size: 10.5, colore: GRIGIO_PDF });
+      y -= 6;
+      String(b.testo || "").split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean).forEach((passo, i) => {
+        const righe = passo.split("\n");
+        scriviRighe(righeDi(`${i + 1}. ${senzaPastiglie(righe[0])}`, grassetto, 10.5, LARGHEZZA - 16), { x: MARGINE + 16, size: 10.5, font: grassetto, interlinea: 1.4 });
+        const corpo = righe.slice(1).join("\n").trim();
+        if (corpo) scriviRighe(righeDi(senzaPastiglie(corpo), normale, 9.5, LARGHEZZA - 32), { x: MARGINE + 32, size: 9.5, colore: GRIGIO_PDF });
+        y -= 5;
+      });
+      if (b.importante) {
+        const righeImp = righeDi(senzaPastiglie(b.importante), normale, 9.5, LARGHEZZA - 48);
+        const altezza = righeImp.length * 9.5 * 1.45 + 30;
+        serve(altezza + 10);
+        const cima = y;
+        pagina.drawRectangle({ x: MARGINE, y: cima - altezza, width: LARGHEZZA, height: altezza, color: CREMA_PDF, borderColor: BORDO_PDF, borderWidth: 0.8 });
+        y -= 11;
+        scriviRighe(righeDi("IMPORTANTE", grassetto, 9, LARGHEZZA - 48), { x: MARGINE + 22, size: 9, font: grassetto, colore: GOLD_PDF, interlinea: 1.5 });
+        scriviRighe(righeImp, { x: MARGINE + 22, size: 9.5, colore: rgb(94 / 255, 80 / 255, 57 / 255) });
+        y = cima - altezza - 10;
+      }
+      y -= 6;
     } else if (b.tipo === "riquadro") {
       const righeTesto = righeDi(b.testo, normale, 10, LARGHEZZA - 28);
       const righeTitolo = b.titolo ? righeDi(String(b.titolo).toUpperCase(), grassetto, 9.5, LARGHEZZA - 28) : [];
@@ -34850,6 +34999,8 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
         ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo link", url: "https://", testo: "A cosa serve, in una riga" }
       : tipo === "copia"
         ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo blocco da copiare", spiega: "A cosa serve, in una riga", testo: "Scrivi qui il testo da copiare,\nriga per riga." }
+      : tipo === "passi"
+        ? { id: `b${Date.now()}`, tipo, occhiello: "OCCHIELLO", titolo: "Titolo grande", sottotitolo: "Una riga di spiegazione.", bollo: "Fatto", importante: "Quello che non va dimenticato.", testo: "Primo passo\nLa spiegazione del primo passo.\n\nSecondo passo\nLa spiegazione del secondo." }
       : tipo === "riquadro"
         ? { id: `b${Date.now()}`, tipo, titolo: "Titolo del riquadro", testo: "Scrivi qui il testo." }
       : tipo === "benvenuto"
@@ -34866,7 +35017,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
     if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
     if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#5E5039", background: "#F5EEDD", border: "1px solid #E6D9B8", borderRadius: 12, padding: "12px 14px 12px 46px", lineHeight: 1.6, margin: "14px 0 22px", position: "relative" };
     if (tipo === "tappa") return { marginBottom: 12 };
-    if (tipo === "link" || tipo === "copia" || tipo === "benvenuto" || tipo === "riquadro") return { marginBottom: 14 };
+    if (tipo === "link" || tipo === "copia" || tipo === "benvenuto" || tipo === "riquadro" || tipo === "passi") return { marginBottom: 14 };
     if (tipo === "testata") return {};
     return { ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, marginBottom: 12 };
   }
@@ -34969,6 +35120,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
                 : b.tipo === "link" ? <LinkNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "copia" ? <BloccoDaCopiare blocco={b} isMobile={isMobile} />
                 : b.tipo === "riquadro" ? <RiquadroNormativa blocco={b} isMobile={isMobile} />
+                : b.tipo === "passi" ? <SchedaPassi blocco={b} isMobile={isMobile} />
                 : b.tipo === "benvenuto" ? (
                   <ConfiguratoreBenvenuto
                     blocco={b} isMobile={isMobile} dati={datiBenvenuto}
@@ -34993,6 +35145,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             <Button variant="ghost" onClick={() => aggiungiBlocco("paragrafo")}>+ Paragrafo</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("nota")}>+ Nota</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("riquadro")}>+ Riquadro bianco</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("passi")}>+ Scheda a passi</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("tappa")}>+ Tappa</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("link")}>+ Link da copiare</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("copia")}>+ Testo da copiare</Button>
