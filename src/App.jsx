@@ -4244,6 +4244,14 @@ function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
 // La chiave resta perche' due pagine ci sono ancora in ascolto per
 // ridisegnarsi; quello che c'e' scritto nel database non lo legge nessuno.
 const CHIAVE_TABELLA_CEDIBILE = "cedibile_tabellaPerMargine";
+// Le coppie movimento-spesa che qualcuno ha guardato e giudicato diverse.
+// Stanno fra le impostazioni condivise e non su movimenti_banca, che ha
+// gia' stato e nota e non va allargato: una chiave "idMovimento:idSpesa"
+// per ogni no detto, cosi' quella coppia non si ripropone piu'.
+const CHIAVE_COPPIE_SCARTATE_BANCA = "banca_coppieScartate";
+// doppione = importo entro il 10% e non piu' di 30 giorni di distanza
+const TOLLERANZA_DOPPIONE_PCT = 10;
+const GIORNI_DOPPIONE = 30;
 // I punti che un prodotto genera a chi lo vende: dal cedibile si toglie la
 // percentuale di sicurezza, e il resto (il massimo cedibile) sono i punti,
 // con due decimali. 9,16 euro cedibili, col 10% di sicurezza, sono 8,24
@@ -40517,7 +40525,7 @@ function paroleChiaveBanca(testo) {
 // importo piu' o meno il 5%, pagate non in contanti, non gia' collegate
 // a un altro movimento, entro 60 giorni. Prima quelle con l'intestazione
 // che combacia e la data piu' vicina
-function candidatiSpesaPerMovimento(m, spese, fornitoriById, collegateIds, tolleranzaPct = 5) {
+function candidatiSpesaPerMovimento(m, spese, fornitoriById, collegateIds, tolleranzaPct = 5, giorniMax = 60) {
   const importo = Math.abs(Number(m.importo) || 0);
   if (!(importo > 0)) return [];
   const paroleMov = new Set(paroleChiaveBanca(`${controparteBanca(m.descrizione, m.causale)} ${m.descrizione}`));
@@ -40533,7 +40541,7 @@ function candidatiSpesaPerMovimento(m, spese, fornitoriById, collegateIds, tolle
       const comuni = paroleSp.filter((w) => paroleMov.has(w)).length;
       const dataSp = sp.data_pagamento || sp.data_documento || "";
       const giorni = dataSp ? Math.abs(Date.parse(dataSp) / 86400000 - giorniMov) : 999;
-      if (giorni > 60) return null;
+      if (giorni > giorniMax) return null;
       // punteggio: importo esatto vale molto, nome che combacia di piu',
       // data vicina un po'
       const punteggio = (scarto === 0 ? 3 : scarto < 0.01 ? 2 : 1) + comuni * 3 + (giorni <= 3 ? 2 : giorni <= 15 ? 1 : 0);
@@ -40740,6 +40748,89 @@ function catalogazioneEreditata(ultima) {
     ereditataDa: ultima.id,
   };
 }
+// La sottopagina dell'allineamento: le coppie movimento-spesa che si
+// somigliano, una per una, con la domanda secca.
+//
+// Nasce da una richiesta precisa: quando si importa l'estratto conto
+// capita che un'uscita sia gia' stata registrata a mano, e senza un posto
+// dove accorgersene si finisce con due voci uguali in prima nota. Qui la
+// coppia si guarda e si decide: "Allinea" se sono la stessa cosa, "Non e'
+// lo stesso" se si somigliano per caso.
+//
+// I movimenti che non somigliano a niente non compaiono: quelli non sono
+// doppioni, sono spese nuove, e si contabilizzano dall'altra scheda.
+function PannelloAllineamentoBanca({ coppie = [], senzaCorrispondenza = 0, fornitoriById = {}, onAllinea, onScarta, onContabilizza, isMobile, msg }) {
+  const data = (d) => (d ? new Date(d).toLocaleDateString("it-IT") : "—");
+  return (
+    <div>
+      <div style={{ ...cardStyle, padding: isMobile ? 14 : 18, marginBottom: 14 }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 6 }}>
+          {coppie.length === 0 ? "Niente da allineare" : `${coppie.length} movimenti somigliano a una spesa che hai gia'`}
+        </div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
+          Importo entro il {TOLLERANZA_DOPPIONE_PCT}% e non piu' di {GIORNI_DOPPIONE} giorni di distanza. Allineando, la spesa si
+          porta dentro la descrizione della banca e resta segnata come allineata: niente doppioni in prima nota.
+          {senzaCorrispondenza > 0 && ` Altri ${senzaCorrispondenza} movimenti non somigliano a niente di gia' registrato: quelli sono spese nuove e si contabilizzano dall'estratto conto.`}
+        </div>
+        {msg && <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 10, fontWeight: 600 }}>{msg}</div>}
+      </div>
+
+      {coppie.map(({ movimento: m, candidati }) => (
+        <div key={m.id} style={{ ...cardStyle, padding: isMobile ? 12 : 16, marginBottom: 10 }}>
+          {/* a sinistra la banca, a destra quello che hai gia' scritto tu */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6, color: "#8A6A1B", background: "#F3E7CB", borderRadius: 6, padding: "2px 7px" }}>Banca</span>
+            <span style={{ ...fontBody, fontSize: 15, fontWeight: 800, color: NAVY }}>{fmtEuroErp2(Math.abs(Number(m.importo) || 0))}</span>
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{data(m.data_operazione)}</span>
+            <span style={{ ...fontBody, fontSize: 12.5, color: "#2B2B2B", flex: "1 1 240px", minWidth: 0 }}>
+              {controparteBanca(m.descrizione, m.causale) || m.descrizione || "—"}
+            </span>
+          </div>
+
+          {candidati.map((c) => {
+            const sp = c.spesa;
+            const differenza = Math.abs((Number(sp.totale) || 0) - Math.abs(Number(m.importo) || 0));
+            return (
+              <div key={sp.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0" }}>
+                <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{sp.descrizione || "(senza descrizione)"}</div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                    {c.fornitore || "senza fornitore"} · {data(sp.data_pagamento || sp.data_documento)} · {fmtEuroErp2(Number(sp.totale) || 0)}
+                    {differenza > 0.009 && ` · differenza ${fmtEuroErp2(differenza)}`}
+                    {c.giorni <= 3 && " · stessi giorni"}
+                  </div>
+                </div>
+                <button onClick={() => onAllinea(m, sp)}
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "8px 16px", cursor: "pointer" }}>
+                  Allinea
+                </button>
+                <button onClick={() => onScarta(m, sp)} title="Si somigliano per caso: non riproporre questa coppia"
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer" }}>
+                  Non e' lo stesso
+                </button>
+              </div>
+            );
+          })}
+
+          <div style={{ paddingTop: 8 }}>
+            <button onClick={() => onContabilizza?.(m)} title="Nessuna di queste: e' una spesa nuova"
+              style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: "transparent", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+              Nessuna di queste, e' una spesa nuova
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {coppie.length === 0 && (
+        <div style={{ ...cardStyle, padding: 18, ...fontBody, fontSize: 13, color: MUTED }}>
+          Nessun movimento da sistemare somiglia a una spesa gia' registrata. Se hai appena importato l'estratto conto, i
+          movimenti nuovi si contabilizzano dalla scheda "Estratto conto".
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [], costiSottocategorie = [], ricarica, onContabilizza }) {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
@@ -40755,6 +40846,11 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   const [leggendo, setLeggendo] = useState(false);
   const [regole, setRegole] = useState([]);
   const [regoleAperte, setRegoleAperte] = useState(false);
+  // la sottopagina: l'elenco dei movimenti oppure l'allineamento, dove si
+  // guardano le coppie sospette una per una
+  const [vista, setVista] = useState("movimenti");
+  const [coppieScartate, salvaCoppieScartate] = useImpostazioneCondivisa(CHIAVE_COPPIE_SCARTATE_BANCA, []);
+  const scartate = new Set(Array.isArray(coppieScartate) ? coppieScartate : []);
   const [applicandoRegole, setApplicandoRegole] = useState(false);
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
 
@@ -40789,6 +40885,32 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
     const { error } = await supabase.from("movimenti_banca").update({ stato: "nuovo", collegato_tipo: null, collegato_id: null, nota: null }).eq("id", m.id);
     if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
     setMovimenti((prec) => (prec || []).map((x) => (x.id === m.id ? { ...x, stato: "nuovo", collegato_tipo: null, collegato_id: null, nota: null } : x)));
+  }
+  // Allinea: il movimento e' quella spesa che avevi gia' registrato a
+  // mano. Oltre a collegarli, porta dentro la descrizione della spesa
+  // quella della banca — cosi' guardando la voce si vede da dove viene —
+  // e la marchia come allineata.
+  async function allinea(m, spesa) {
+    const testoBanca = (controparteBanca(m.descrizione, m.causale) || m.descrizione || "").trim();
+    const marchio = "Movimento allineato con la banca";
+    const descrizione = [spesa.descrizione || "", testoBanca && !String(spesa.descrizione || "").includes(testoBanca) ? `Banca: ${testoBanca}` : ""].filter(Boolean).join(" · ");
+    // il marchio non si ripete se c'e' gia': allineare due volte non deve
+    // lasciare la nota piena di ripetizioni
+    const note = String(spesa.note || "").includes(marchio) ? spesa.note : [spesa.note || "", marchio].filter(Boolean).join(" · ");
+    const { error: erroreSpesa } = await supabase.from("spese").update({ descrizione, note }).eq("id", spesa.id);
+    if (erroreSpesa) { setMsg(`Spesa non aggiornata: ${testoErrore(erroreSpesa)}`); return; }
+    const { error } = await supabase.from("movimenti_banca").update({ stato: "riconciliato", collegato_tipo: "spesa", collegato_id: spesa.id, nota: "allineata" }).eq("id", m.id);
+    if (error) { setMsg(`Movimento non collegato: ${testoErrore(error)}`); return; }
+    setMovimenti((prec) => (prec || []).map((x) => (x.id === m.id ? { ...x, stato: "riconciliato", collegato_tipo: "spesa", collegato_id: spesa.id, nota: "allineata" } : x)));
+    setMsg(`Allineato: "${spesa.descrizione || "spesa"}" adesso porta scritto da dove viene.`);
+    ricarica?.(["spese"]);
+  }
+  // "Non e' lo stesso": quella coppia non si ripropone piu', ma il
+  // movimento resta da sistemare e puo' accoppiarsi con un'altra spesa
+  function scartaCoppia(m, spesa) {
+    const chiave = `${m.id}:${spesa.id}`;
+    if (scartate.has(chiave)) return;
+    salvaCoppieScartate([...scartate, chiave]);
   }
   async function applicaRegoleAiNuovi() {
     setApplicandoRegole(true); setMsg("");
@@ -40945,8 +41067,56 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   };
   const freccia = { width: 40, height: 40, borderRadius: "50%", border: "none", background: BG_CHIARO, color: NAVY, fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
 
+  // le coppie sospette: per ogni movimento in uscita ancora da sistemare,
+  // le spese che gli somigliano. Una coppia gia' scartata non si ripropone
+  const coppieSospette = useMemo(() => {
+    if (!movimenti) return [];
+    return (movimenti || [])
+      .filter((m) => m.stato === "nuovo" && Number(m.importo) < 0)
+      .map((m) => ({
+        movimento: m,
+        candidati: candidatiSpesaPerMovimento(m, spese, fornitoriById, spesaCollegateIds, TOLLERANZA_DOPPIONE_PCT, GIORNI_DOPPIONE)
+          .filter((c) => !scartate.has(`${m.id}:${c.spesa.id}`)),
+      }))
+      .filter((r) => r.candidati.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [movimenti, spese, coppieScartate]);
+  const senzaCorrispondenza = (movimenti || []).filter((m) => m.stato === "nuovo" && Number(m.importo) < 0).length - coppieSospette.length;
+
   return (
     <div>
+      {/* Due sottopagine: l'estratto conto com'e' sempre stato, e
+          l'allineamento, dove si guardano le coppie sospette una per una.
+          La seconda porta il numero addosso, cosi' si sa se c'e' lavoro
+          da fare senza entrarci */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        {[
+          { chiave: "movimenti", testo: "Estratto conto" },
+          { chiave: "allineamento", testo: `Da allineare${coppieSospette.length ? ` (${coppieSospette.length})` : ""}` },
+        ].map((t) => (
+          <button key={t.chiave} onClick={() => setVista(t.chiave)}
+            style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "8px 16px", borderRadius: 999, cursor: "pointer",
+              border: `1px solid ${vista === t.chiave ? NAVY : CREAM_BORDER}`,
+              background: vista === t.chiave ? NAVY : "#fff",
+              color: vista === t.chiave ? "#fff" : NAVY }}>
+            {t.testo}
+          </button>
+        ))}
+      </div>
+
+      {vista === "allineamento" ? (
+        <PannelloAllineamentoBanca
+          coppie={coppieSospette}
+          senzaCorrispondenza={senzaCorrispondenza}
+          fornitoriById={fornitoriById}
+          onAllinea={allinea}
+          onScarta={scartaCoppia}
+          onContabilizza={onContabilizza}
+          isMobile={isMobile}
+          msg={msg}
+        />
+      ) : (
+      <>
       {/* il caricamento: sta in cima perche' e' la prima cosa che si fa
           entrando, e sparisce visivamente appena la lista si riempie */}
       <div style={{ ...cardStyle, padding: isMobile ? 14 : 18 }}>
@@ -41156,6 +41326,8 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
