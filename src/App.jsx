@@ -3546,9 +3546,15 @@ function TileHome({
   // opzionali: i 27+ usi esistenti di TileHome non li passano e restano
   // identici a prima
   maniglia, draggableTasto = false, onDragStartTasto, onDragEndTasto, onDragOverTasto, onDropTasto, attenuato = false, evidenziato = false,
-  // rinomina del tasto (solo programmatore, solo mobile — vedi
-  // GrigliaTasti): toccando il testo sotto l'icona invece di aprire il
-  // tasto. Assente per chi non è programmatore o per le cartelle.
+  // rinomina del tasto (solo programmatore, vedi GrigliaTasti): col
+  // TASTO DESTRO sulla tessera. Prima stava sul clic sinistro del solo
+  // nome sotto l'icona, e li' era un tranello: meta' del tasto apriva la
+  // pagina e meta' apriva la finestrella del nome, senza che si vedesse
+  // dove passava il confine. Col destro il clic normale fa sempre la
+  // stessa cosa — entra — e la rinomina sta in un gesto che nessuno fa
+  // per sbaglio. Il nome resta sottolineato punteggiato, ma tenue: e'
+  // solo il segno che quel tasto si puo' rinominare.
+  // Assente per chi non è programmatore o per le cartelle.
   onRinominaEtichetta,
   // sul telefono l'etichetta su due righe con lo spazio riservato: solo
   // per le schede di Contabilita', dove i nomi sono lunghi e si
@@ -3589,6 +3595,7 @@ function TileHome({
       <button
         data-niente-ombra="1"
         onClick={attivo ? onClick : undefined}
+        onContextMenu={onRinominaEtichetta ? (e) => { e.preventDefault(); e.stopPropagation(); onRinominaEtichetta(); } : undefined}
         disabled={!attivo}
         draggable={draggableTasto}
         onDragStart={draggableTasto ? onDragStartTasto : undefined}
@@ -3632,8 +3639,7 @@ function TileHome({
           )}
         </div>
         <div
-          onClick={onRinominaEtichetta ? (e) => { e.stopPropagation(); onRinominaEtichetta(); } : undefined}
-          title={onRinominaEtichetta ? "Tocca per rinominare questo tasto" : undefined}
+          title={onRinominaEtichetta ? "Tasto destro (o dito tenuto premuto) per rinominare" : undefined}
           style={{
             ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center",
             // in Contabilita' due righe con lo spazio riservato anche a chi
@@ -3642,7 +3648,7 @@ function TileHome({
             ...(etichettaDueRighe
               ? { width: "100%", minHeight: "2.5em", whiteSpace: "normal", overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }
               : { width: "max-content", maxWidth: "none", whiteSpace: "nowrap" }),
-            ...(onRinominaEtichetta ? { cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 } : {}),
+            ...(onRinominaEtichetta ? { textDecoration: "underline dotted", textUnderlineOffset: 2, textDecorationColor: CREAM_BORDER } : {}),
           }}
         >
           {title}
@@ -3655,6 +3661,7 @@ function TileHome({
       ref={rifTasto}
       data-niente-ombra="1"
       onClick={attivo ? onClick : undefined}
+      onContextMenu={onRinominaEtichetta ? (e) => { e.preventDefault(); e.stopPropagation(); onRinominaEtichetta(); } : undefined}
       disabled={!attivo}
       draggable={draggableTasto}
       onDragStart={draggableTasto ? onDragStartTasto : undefined}
@@ -16119,14 +16126,14 @@ function PaginaAspettoApp() {
           <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Modifica dei titoli dei tasti</div>
           <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
             {rinominaTastiAttiva !== false
-              ? "Accesa: toccando il nome sotto l'icona si riscrive il titolo del tasto. Solo chi programma, in tutta l'app."
-              : "Spenta: toccando il nome il tasto si apre e basta. I titoli già cambiati restano come sono."}
+              ? "Accesa: tasto destro su una tessera — dal telefono, dito tenuto premuto — e si riscrive il suo titolo. Solo chi programma, in tutta l'app."
+              : "Spenta: il tasto destro apre il menu del browser come su ogni altra cosa. I titoli già cambiati restano come sono."}
           </div>
         </div>
         <button
           type="button"
           onClick={() => salvaRinominaTasti(rinominaTastiAttiva === false)}
-          title="Accende o spegne la rinomina dei tasti col tocco sul nome, in tutta l'app. I titoli già dati non si toccano"
+          title="Accende o spegne la rinomina dei tasti col tasto destro, in tutta l'app. I titoli già dati non si toccano"
           style={{
             display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0,
             ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY,
