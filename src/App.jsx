@@ -44245,6 +44245,26 @@ function PaginaInserimentoCostiRicavi({
   const costiSottocategorieById = Object.fromEntries((costiSottocategorie || []).map((v) => [v.id, v]));
   const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+  // corsiDateById ed etichettaCorsoPN stanno QUI e non piu' in mezzo alle
+  // entrate: servono anche alla ricerca delle spese, che viene prima, e
+  // una const di componente usata sopra la riga in cui nasce e' una
+  // pagina bianca, non un avviso
+  const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const etichettaCorsoPN = (cd) => cd ? `${corsiById[cd.corso_id]?.nome || "?"} · ${locationById[cd.location_id]?.nome ? toTitleCase(locationById[cd.location_id].nome) : "?"} · ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}` : null;
+
+  // La ricerca a parole. Scrivendo "pmu roma" la vecchia versione cercava
+  // quella frase intera dentro il testo, e "Costo Master — MARTINA MEI -
+  // Pmu Base, Roma, 13-18 set 2026" non la contiene: in mezzo c'e'
+  // "Base,". Chi cerca non ha in mente la riga scritta per esteso, ha in
+  // mente due o tre parole — il corso, la citta', il nome della master —
+  // e le scrive nell'ordine che gli viene. Ora ogni parola deve esserci,
+  // l'ordine no.
+  const paroleRicercaPN = ricercaPN.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const trovaPN = (...pezzi) => {
+    if (paroleRicercaPN.length === 0) return true;
+    const testo = pezzi.filter(Boolean).join(" ").toLowerCase();
+    return paroleRicercaPN.every((parola) => testo.includes(parola));
+  };
 
   function normalizzaRigaReale(s) {
     const categoria = costiCategorieById[s.categoria_id];
@@ -44286,13 +44306,16 @@ function PaginaInserimentoCostiRicavi({
   // (elenco, conteggio, totale, top categorie) resta coerente con
   // quello che si è cercato — non solo l'elenco delle righe
   const speseRealiRicercate = ricercaPN.trim()
-    ? speseRealiFiltrate.filter((s) => {
-        const q = ricercaPN.trim().toLowerCase();
-        const cat = costiCategorieById[s.categoria_id]?.nome || "";
-        const sott = costiSottocategorieById[s.sottocategoria_id]?.nome || "";
-        const forn = s.fornitore_id ? fornitoriById[s.fornitore_id]?.nome || "" : "";
-        return (s.descrizione || "").toLowerCase().includes(q) || cat.toLowerCase().includes(q) || sott.toLowerCase().includes(q) || forn.toLowerCase().includes(q);
-      })
+    ? speseRealiFiltrate.filter((s) => trovaPN(
+        s.descrizione,
+        costiCategorieById[s.categoria_id]?.nome,
+        costiSottocategorieById[s.sottocategoria_id]?.nome,
+        s.fornitore_id ? fornitoriById[s.fornitore_id]?.nome : null,
+        s.note,
+        // la classe a cui la spesa appartiene: una quota disposta dalla
+        // busta porta il corso nel nome, una spesa scritta a mano no
+        etichettaCorsoPN(corsiDateById[s.classe_id]),
+      ))
     : speseRealiFiltrate;
   // In prima nota un bonifico e' UN movimento. Le spese coperte dalla
   // stessa fattura sono uscite dal conto insieme, con una disposizione
@@ -44336,8 +44359,6 @@ function PaginaInserimentoCostiRicavi({
   // separate per allievo, con corso, citta', data e tipo di pagamento.
   // Le vendite POS, anche quelle di un corso, con la data dell'incasso.
   // Tolto il "pagato", la voce sparisce; rimesso, ricompare.
-  const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
-  const etichettaCorsoPN = (cd) => cd ? `${corsiById[cd.corso_id]?.nome || "?"} · ${locationById[cd.location_id]?.nome ? toTitleCase(locationById[cd.location_id].nome) : "?"} · ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}` : null;
   const entrateTutte = [];
   (iscritti || []).forEach((i) => {
     const cd = corsiDateById[i.corso_data_id] || null;
@@ -44369,7 +44390,7 @@ function PaginaInserimentoCostiRicavi({
   });
   const entrateNelPeriodo = entrateTutte.filter((e) => e.data && e.data >= range.inizio && e.data <= range.fine);
   const entrateRicercate = ricercaPN.trim()
-    ? entrateNelPeriodo.filter((e) => { const q = ricercaPN.trim().toLowerCase(); return `${e.titolo} ${e.fase} ${e.metodo} ${etichettaCorsoPN(e.corsoData) || ""}`.toLowerCase().includes(q); })
+    ? entrateNelPeriodo.filter((e) => trovaPN(e.titolo, e.fase, e.metodo, etichettaCorsoPN(e.corsoData)))
     : entrateNelPeriodo;
   const totaleEntrate = round2(entrateRicercate.reduce((s, e) => s + e.importo, 0));
   const saldoPeriodo = round2(totaleEntrate - totaleSpese);
