@@ -42680,6 +42680,35 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // chiave dell'impegno, cosi' l'impegno sparisce da "da pagare".
   async function associaImpegnoASpesaEsistente(item, spesa) {
     setMsg("");
+    // Se l'impegno E' gia' una riga di spesa (una fattura registrata, in
+    // stato "fatturata"), associarlo a un pagamento gia' fatto vuol dire
+    // fondere le due righe: quella pagata si prende quello che le manca e
+    // quella dell'impegno sparisce. Lasciarla vivere significherebbe
+    // tenersi in prima nota un'uscita prevista che non arrivera' mai, e
+    // nello scadenziario una scadenza gia' saldata.
+    const reale = item.tipo === "reale" ? item.spesaReale : null;
+    if (reale) {
+      if (reale.id === spesa.id) { setMsg("E' la stessa riga: per chiuderla basta segnarla pagata."); return; }
+      const quando = spesa.data_pagamento ? new Date(spesa.data_pagamento).toLocaleDateString("it-IT") : "senza data";
+      if (!window.confirm(
+        `Il pagamento c'e' gia': "${spesa.descrizione || "senza descrizione"}" — ${fmtEuroErp(Number(spesa.totale) || 0)}, pagata il ${quando}.\n\n` +
+        `La riga dello scadenziario "${reale.descrizione || "senza descrizione"}" viene unita a quella e sparisce da prima nota e da scadenziario.\n\nProcedo?`
+      )) return;
+      const completa = {};
+      if (!spesa.numero_documento && reale.numero_documento) completa.numero_documento = reale.numero_documento;
+      if (!spesa.data_documento && reale.data_documento) completa.data_documento = reale.data_documento;
+      if (!spesa.allegato_path && reale.allegato_path) completa.allegato_path = reale.allegato_path;
+      if (!spesa.fornitore_id && reale.fornitore_id) completa.fornitore_id = reale.fornitore_id;
+      const marchio = "Scadenza chiusa su questo pagamento";
+      completa.note = String(spesa.note || "").includes(marchio) ? spesa.note : [spesa.note || "", marchio, reale.descrizione ? `(era anche: ${reale.descrizione})` : ""].filter(Boolean).join(" · ");
+      const { error: e1 } = await supabase.from("spese").update(completa).eq("id", spesa.id);
+      if (e1) { setMsg("Errore: " + testoErrore(e1)); return; }
+      const { error: e2 } = await supabase.from("spese").delete().eq("id", reale.id);
+      if (e2) { setMsg("La riga dello scadenziario non e' stata tolta: " + testoErrore(e2)); return; }
+      setMsg(`Unita a "${spesa.descrizione || "il pagamento"}": la scadenza non c'e' piu'.`);
+      ricarica?.(["spese"]);
+      return;
+    }
     const numero = item.spesaReale?.numero_documento || item.numeroDocumento || null;
     const doc = numero
       ? (documentoFornitoreTabella || []).find((d) => String(d.numero || "") === String(numero) && (!item.fornitoreId || d.fornitore_id === item.fornitoreId))
@@ -43049,7 +43078,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     onConferma={(dati) => confermaPagato(item, dati)}
                     onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento([item], doc) : null}
-                    onAssociaASpesaEsistente={item.tipo && item.tipo !== "reale" ? (spesa) => associaImpegnoASpesaEsistente(item, spesa) : null}
+                    onAssociaASpesaEsistente={(spesa) => associaImpegnoASpesaEsistente(item, spesa)}
                     onCambiaScadenza={item.tipo === "abbonamento" ? null : (nuova) => cambiaScadenza(item, nuova)}
                     documentiFornitore={documentoFornitoreTabella}
                     nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
