@@ -38083,7 +38083,7 @@ function PannelloAmbitoSpesa({ valori, onChange, corsi = [], location = [], cors
     </div>
   );
 }
-function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onAssociaASpesaEsistente, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [], spese = [], fornitoreId = null, categoriaSpesa = null }) {
+function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onAssociaASpesaEsistente, onAnnullaAssociazione, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [], spese = [], fornitoreId = null, categoriaSpesa = null }) {
   const isMobile = useIsMobile();
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
@@ -38154,11 +38154,18 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
   // fornitore giusto, poi quelli d'importo piu' vicino. Di fatture da
   // riconciliare ce ne sono centinaia: senza un ordine e una ricerca la
   // scelta sarebbe a occhio in mezzo a tutte
+  // Da quando esiste questo costo. Una fattura emessa PRIMA non puo'
+  // essere la sua: il corso non si era ancora tenuto, la sala non era
+  // ancora stata usata. Proporle significa invitare a sbagliare, e fra
+  // documenti dello stesso importo si sbaglia facile.
+  const dataNascitaCosto = dataDebito || scadenza || null;
+  const documentoNonPrecedente = (d) => !dataNascitaCosto || !d.data_documento || String(d.data_documento) >= String(dataNascitaCosto);
+
   const candidatiDoc = useMemo(() => {
     const cerca = ricercaDoc.trim().toLowerCase();
     const nomeRiga = (fornitore || "").trim().toLowerCase();
     return (documentiFornitore || [])
-      .filter((d) => d.tipo !== "nota_credito" && Number(d.importo_allocato || 0) < Number(d.totale || 0) - 0.01)
+      .filter((d) => d.tipo !== "nota_credito" && Number(d.importo_allocato || 0) < Number(d.totale || 0) - 0.01 && documentoNonPrecedente(d))
       .map((d) => {
         const nomeDoc = (nomeFornitoreDi ? nomeFornitoreDi(d.fornitore_id) : "") || "";
         return { d, nomeDoc, stessoFornitore: !!nomeRiga && nomeDoc.toLowerCase().includes(nomeRiga) };
@@ -38166,7 +38173,8 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
       .filter(({ d, nomeDoc }) => !cerca || `${d.numero || ""} ${nomeDoc}`.toLowerCase().includes(cerca))
       .sort((a, b) => (Number(b.stessoFornitore) - Number(a.stessoFornitore))
         || (Math.abs(Number(a.d.totale || 0) - totale) - Math.abs(Number(b.d.totale || 0) - totale)));
-  }, [documentiFornitore, ricercaDoc, fornitore, totale, nomeFornitoreDi]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentiFornitore, ricercaDoc, fornitore, totale, nomeFornitoreDi, dataNascitaCosto]);
   // Una fattura arrivata che potrebbe essere questa scadenza.
   //
   // Il solo importo non basta, e si e' visto: con 761 documenti ancora
@@ -38189,12 +38197,14 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
     if (paroleRiga.size === 0) return null;
     const candidate = (documentiFornitore || []).filter((d) => d.tipo !== "nota_credito"
       && Number(d.importo_allocato || 0) < Number(d.totale || 0) - 0.01
+      && documentoNonPrecedente(d)
       && Math.abs(Math.abs(Number(d.totale) || 0) - atteso) / atteso <= 0.02);
     return candidate.find((d) => {
       const nomeDoc = nomeFornitoreDi ? nomeFornitoreDi(d.fornitore_id) : "";
       return parole(nomeDoc).some((w) => paroleRiga.has(w));
     }) || null;
-  }, [documentiFornitore, fatturaAssociata, totale, fornitore, nomeFornitoreDi]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentiFornitore, fatturaAssociata, totale, fornitore, nomeFornitoreDi, dataNascitaCosto]);
 
   function cambiaClassificazione(campo, valore) { setClassificazione((c) => ({ ...c, [campo]: valore })); }
   // I due tasti non si bloccano a vicenda: si paga anche senza fattura
@@ -38235,13 +38245,21 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
         <div style={{ marginTop: 12, padding: isMobile ? 14 : 16, background: "#fff", border: `1.5px solid ${NAVY}`, borderRadius: 16 }}>
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Associa la fattura del fornitore</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
-            Scegliendola, questa riga prende numero, data e termine di pagamento del documento: la scadenza smette di essere stimata. Ci sono <strong>tutti</strong> i documenti ancora scoperti ({candidatiDoc.length}), coi documenti del fornitore giusto e quelli d'importo piu' vicino a {fmtEuroErp(totale)} in cima.
+            Scegliendola, questa riga prende numero, data e termine di pagamento del documento: la scadenza smette di essere stimata.
+            Ci sono i documenti ancora scoperti <strong>arrivati dal {dataNascitaCosto ? fmtData(dataNascitaCosto) : "principio"} in poi</strong> ({candidatiDoc.length}):
+            una fattura emessa prima che questo costo esistesse non puo' essere la sua. In cima quelli del fornitore giusto e d'importo piu' vicino a {fmtEuroErp(totale)}.
           </div>
           <div style={{ marginTop: 12 }}>
             <CampoRicerca value={ricercaDoc} onChange={(e) => setRicercaDoc(e.target.value)} placeholder="Cerca numero o fornitore…" />
           </div>
           <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, maxHeight: 360, overflowY: "auto" }}>
-            {candidatiDoc.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun documento da associare.</div>}
+            {candidatiDoc.length === 0 && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
+                {dataNascitaCosto
+                  ? `Nessuna fattura ancora scoperta arrivata dal ${fmtData(dataNascitaCosto)} in poi. Se la fattura di questo costo non e' ancora arrivata, e' normale: si associa quando arriva.`
+                  : "Nessun documento da associare."}
+              </div>
+            )}
             {candidatiDoc.map(({ d, nomeDoc, stessoFornitore }) => {
               const scelto = docScelto?.id === d.id;
               return (
@@ -38254,9 +38272,18 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
                     <span style={{ display: "block", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {nomeDoc || "Fornitore non in anagrafica"}{stessoFornitore ? " ·" : ""}
                     </span>
-                    <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED }}>
-                      n. {d.numero || "—"} · {d.data_documento ? fmtData(d.data_documento) : "—"}
-                      {d.data_scadenza_prevista ? ` · scade ${fmtData(d.data_scadenza_prevista)}` : ""}
+                    {/* La data e' quello con cui si decide se e' la
+                        fattura giusta: sta per prima, grande quanto il
+                        nome, e scritta per esteso. Prima era in grigio
+                        chiaro fra due puntini e si sbagliava. */}
+                    <span style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                        {d.data_documento ? fmtData(d.data_documento) : "senza data"}
+                      </span>
+                      <span>fattura n. {d.numero || "—"}</span>
+                      {d.data_scadenza_prevista && (
+                        <span style={{ whiteSpace: "nowrap" }}>· scade il {fmtData(d.data_scadenza_prevista)}</span>
+                      )}
                     </span>
                   </span>
                   <span style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{fmtEuroErp(Number(d.totale) || 0)}</span>
@@ -38274,6 +38301,21 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
             </button>
             <button onClick={chiudiPannello} disabled={salvando} style={{ ...stileTastoCardChiaro(isMobile), flex: "0 1 auto", padding: "12px 16px" }}>Annulla</button>
           </div>
+          {/* Sbagliare fattura e' facile, soprattutto fra documenti dello
+              stesso importo: si stacca e si riprova, senza dover disfare
+              niente altrove. La spesa resta dov'e', torna solo senza
+              documento, e la fattura torna disponibile per un'altra. */}
+          {fatturaAssociata && onAnnullaAssociazione && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <button
+                onClick={async () => { setSalvando(true); await onAnnullaAssociazione(); setSalvando(false); chiudiPannello(); }}
+                disabled={salvando}
+                title={`Stacca la fattura n. ${numeroDocumento || "—"} da questa riga`}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #E7BDB5", borderRadius: 999, padding: "9px 16px", cursor: salvando ? "default" : "pointer" }}>
+                Annulla l'associazione con la n. {numeroDocumento || "—"}
+              </button>
+            </div>
+          )}
         </div>
       )}
       {/* L'avviso: prima di creare una spesa nuova si guarda se in prima
@@ -42764,6 +42806,30 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
       : `Impegno chiuso su "${spesa.descrizione || "la spesa"}", gia' in prima nota: non ne e' stata creata un'altra.`);
     ricarica?.(["spese"]);
   }
+  // Stacca la fattura da una riga: la spesa resta dov'e' e torna senza
+  // documento, il documento torna disponibile per un'altra riga.
+  // Sbagliare fattura fra documenti dello stesso importo e' facile, e
+  // senza questo l'unico rimedio era rifare tutto dalla schermata della
+  // riconciliazione.
+  async function annullaAssociazioneFattura(item) {
+    setMsg("");
+    const reale = item.spesaReale || null;
+    const numero = reale?.numero_documento || item.numeroDocumento || null;
+    if (!reale || !numero) { setMsg("Questa riga non ha una fattura da staccare."); return; }
+    if (!window.confirm(`Staccare la fattura n. ${numero} da "${reale.descrizione || "questa spesa"}"?\n\nLa spesa resta in prima nota e torna senza documento; la fattura torna disponibile per un'altra riga.`)) return;
+    const { error } = await supabase.from("spese").update({ numero_documento: null, data_documento: null }).eq("id", reale.id);
+    if (error) { setMsg("Non staccata: " + testoErrore(error)); return; }
+    // il documento si riprende la quota che questa spesa gli aveva preso
+    const doc = (documentoFornitoreTabella || []).find((d) => String(d.numero || "") === String(numero) && (!reale.fornitore_id || d.fornitore_id === reale.fornitore_id));
+    if (doc) {
+      const allocato = round2(Math.max(0, Number(doc.importo_allocato || 0) - (Number(reale.totale) || 0)));
+      await supabase.from("documento_fornitore")
+        .update({ importo_allocato: allocato, stato: allocato <= 0.01 ? "da_riconciliare" : doc.stato })
+        .eq("id", doc.id);
+    }
+    setMsg(`Fattura n. ${numero} staccata: la riga torna in attesa di fattura.`);
+    ricarica?.(["spese", "documento_fornitore"]);
+  }
   function confermaPagato(item, dati) {
     if (item.tipo === "reale") return segnaPagataReale(item, dati);
     if (item.tipo === "abbonamento") return segnaPagataAbbonamento(item, dati);
@@ -43120,6 +43186,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                     onConferma={(dati) => confermaPagato(item, dati)}
                     onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento([item], doc) : null}
                     onAssociaASpesaEsistente={(spesa) => associaImpegnoASpesaEsistente(item, spesa)}
+                    onAnnullaAssociazione={item.spesaReale?.numero_documento ? () => annullaAssociazioneFattura(item) : null}
                     onCambiaScadenza={item.tipo === "abbonamento" ? null : (nuova) => cambiaScadenza(item, nuova)}
                     documentiFornitore={documentoFornitoreTabella}
                     nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
