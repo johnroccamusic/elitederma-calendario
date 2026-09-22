@@ -12085,10 +12085,17 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
-  // I punti nella dashboard restano nascosti per tutte le master, tranne
-  // che nella dashboard di Andrea (ripristinati su sua richiesta il
-  // 21/09/2026). Il flag globale, se mai riacceso, li mostra comunque a tutte.
-  const puntiVisibiliMaster = PUNTI_MASTER_VISIBILI || /\bandrea\b/i.test(masterSel?.nome || "");
+  // I punti nella dashboard restano nascosti per TUTTE le master, senza
+  // eccezioni. Andrea Paura ne aveva una, aperta il 21/09/2026 e richiusa
+  // il giorno dopo: finche' la tabella del cedibile non e' una sola per
+  // tutti, un totale che cambia col dispositivo e' peggio di nessun
+  // totale — e vale per lei come per le altre.
+  //
+  // Per riaccenderli a tutte: PUNTI_MASTER_VISIBILI a true, in cima al
+  // file. Non c'e' altro da toccare, e non si riapre una porta per una
+  // sola persona: due master che leggono due regole diverse sono la cosa
+  // che poi nessuno sa piu' spiegare.
+  const puntiVisibiliMaster = PUNTI_MASTER_VISIBILI;
   // target vendite prodotti in corso per la master selezionata (mai per
   // il team vendite corsi: i due silos restano separati, vedi Target
   // Master in Impostazioni)
