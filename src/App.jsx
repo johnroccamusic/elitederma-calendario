@@ -46121,6 +46121,18 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
             Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine del prodotto: piu' alto il margine, piu' alto lo sconto. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app. La prima è la stessa di Generazione automatica in Genera coupon: cambiarla qui o là è lo stesso.
           </div>
+          {/* Dal 22/09/2026 i codici d'aula possono stare a percentuale
+              fissa invece che a fasce. Questa tabella resta scritta e
+              intatta, ma non la guarda nessuno finche' la regola e'
+              fissa — e toccarla la rimetterebbe a fasce senza dirlo,
+              perche' ogni numero cambiato si salva da solo. Meglio
+              avvisare qui, dove la mano sta per posarsi. */}
+          {regoleReferralAutomatico && regoleReferralAutomatico.tipo_regola_sconto !== "fasce" && (
+            <div style={{ background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 12px", marginBottom: 14, ...fontBody, fontSize: 12.5, color: "#8A6D1D", lineHeight: 1.5 }}>
+              Adesso i codici d'aula fanno <b style={{ color: NAVY }}>{fmtPctErp(Number(regoleReferralAutomatico.percentuale_sconto) || 0)} fisso su tutto</b>, non a fasce.
+              Questa tabella resta com'è, ma non la usa nessuno: <b style={{ color: NAVY }}>cambiando anche un solo numero qui si torna alle fasce</b>.
+            </div>
+          )}
           {fasceCorso == null ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
           ) : (
