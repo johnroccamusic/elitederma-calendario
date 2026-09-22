@@ -478,6 +478,22 @@ const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
 // c'e' una seconda serie, fra le impostazioni condivise. Vuota = uguale
 // a carta e shop.
 const CHIAVE_FASCE_CORSI_CONTANTI = "fasceSconto_corsi_contanti";
+// Quando i codici d'aula sono a percentuale FISSA invece che a fasce, la
+// percentuale dei contanti e' un numero solo e sta qui — stessa ragione
+// della serie di sopra: in contanti l'IVA resta in cassa e si puo'
+// scontare di piu'. Sul coupon e sul sito viaggia sempre quella della
+// carta: WooCommerce non sa con che cosa pagherai al banco.
+// Vuoto = i contanti prendono la stessa percentuale della carta.
+const CHIAVE_SCONTO_CORSI_CONTANTI_PCT = "scontoSecco_corsi_contantiPct";
+// La percentuale secca da applicare adesso: quella del codice, o quella
+// dei contanti se si sta pagando in contanti e il codice e' di una
+// classe. Un codice personale della master non c'entra: ha le sue regole.
+function pctSeccaPerPagamento(couponAttivo, pctContanti, contanti) {
+  const dalCodice = Number(couponAttivo?.valore) || 0;
+  if (!contanti || !couponAttivo?.corsi_date_id) return dalCodice;
+  const perContanti = Number(pctContanti);
+  return Number.isFinite(perContanti) && perContanti > 0 ? perContanti : dalCodice;
+}
 // E la tabella intera dei codici d'aula per carta e shop: quattro righe
 // di spesa e tre soglie. Sta qui e non su regole_referral_automatico
 // perche' quel campo lo leggono anche il frammento del sito e il cron
@@ -20781,7 +20797,7 @@ function Riquadrino({ etichetta, valore, colore = NAVY, forte = false }) {
 // carrello e dalle fasce di OGGI, e si rifanno ogni volta che lo si
 // guarda. Scriverli una volta per tutte vorrebbe dire mostrare numeri
 // calcolati con le regole di ieri.
-function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, schemaPunti, regolaReferral = null, fasceReferralContanti = null }) {
+function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, schemaPunti, regolaReferral = null, fasceReferralContanti = null, pctContantiCorsi = null }) {
   const righe = Array.isArray(c?.carrello) ? c.carrello : [];
   const subtotale = round2(righe.reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
   const contanti = pagamentoContaComeContanti(c?.metodoPagamento);
@@ -20819,7 +20835,7 @@ function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, sc
   // il coupon a percentuale secca: la percentuale sta sul coupon, e su
   // cosa si legge (prezzo, netto o margine) lo dice il coupon stesso
   const pctSecca = !aFasce && !c?.omaggioAttivo && couponAttivo && couponAttivo.tipo_regola_sconto !== "fasce"
-    ? (Number(couponAttivo.valore) || 0) : 0;
+    ? pctSeccaPerPagamento(couponAttivo, pctContantiCorsi, contanti) : 0;
   const baseSecca = BASE_SCONTO_VALIDA(couponAttivo?.base_sconto);
   const sicurezza = sicurezzaPuntiDi(schemaPunti);
   const dettaglio = righe.map((r) => {
@@ -45939,6 +45955,8 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   const fasceContantiCorso = fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, true);
   const contantiUgualiACarta = !serieScontoScritta(fasceContantiSalvate);
   // e la seconda serie del referral personale, per contanti e buono Amazon
+  // la percentuale dei contanti quando i codici d'aula sono a secco
+  const [pctContantiCorsi, salvaPctContantiCorsi] = useImpostazioneCondivisa(CHIAVE_SCONTO_CORSI_CONTANTI_PCT, null);
   const [salvandoFasceCorso, setSalvandoFasceCorso] = useState(false);
   const [msgFasceCorso, setMsgFasceCorso] = useState("");
   // ogni numero che cambia si scrive subito, senza aspettare il tasto:
@@ -46129,8 +46147,25 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               avvisare qui, dove la mano sta per posarsi. */}
           {regoleReferralAutomatico && regoleReferralAutomatico.tipo_regola_sconto !== "fasce" && (
             <div style={{ background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 12px", marginBottom: 14, ...fontBody, fontSize: 12.5, color: "#8A6D1D", lineHeight: 1.5 }}>
-              Adesso i codici d'aula fanno <b style={{ color: NAVY }}>{fmtPctErp(Number(regoleReferralAutomatico.percentuale_sconto) || 0)} fisso su tutto</b>, non a fasce.
+              Adesso i codici d'aula fanno una <b style={{ color: NAVY }}>percentuale fissa su tutto</b>, non le fasce.
               Questa tabella resta com'è, ma non la usa nessuno: <b style={{ color: NAVY }}>cambiando anche un solo numero qui si torna alle fasce</b>.
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D" }}>Con carta, POS e sito:</span>
+                <b style={{ ...fontDisplay, fontSize: 15, color: NAVY }}>{fmtPctErp(Number(regoleReferralAutomatico.percentuale_sconto) || 0)}</b>
+                <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", marginLeft: 8 }}>In contanti al banco:</span>
+                <input
+                  inputMode="decimal"
+                  value={pctContantiCorsi == null ? "" : String(pctContantiCorsi)}
+                  onChange={(e) => { const v = e.target.value.trim(); salvaPctContantiCorsi(v === "" ? null : parseNum(v)); }}
+                  placeholder="uguale"
+                  title="Vuoto = in contanti vale la stessa percentuale della carta"
+                  style={{ ...inputStyle, width: 78, padding: "6px 8px", fontSize: 13, textAlign: "right" }}
+                />
+                <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D" }}>%</span>
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", marginTop: 6 }}>
+                Al sito va sempre quella della carta: WooCommerce non sa con che cosa pagherai al banco.
+              </div>
             </div>
           )}
           {fasceCorso == null ? (
@@ -58422,6 +58457,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   // la seconda serie di fasce dei codici d'aula, per chi paga in contanti
   const [fasceContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const [pctContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_SCONTO_CORSI_CONTANTI_PCT, null);
   // e la tabella della carta: sul coupon e' congelata la sola riga di
   // base, le quattro righe di spesa stanno qui
   const [fasceCorsiCartaPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
@@ -58727,9 +58763,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const contoCarrelloVivo = useMemo(
     () => contoCarrello(
       { carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, couponCodiceTesto, referralPersonaleAttivo },
-      { prodottoPerId: prodottiPerId, coupon, fasceCarta: fasceCorsiCartaPos, fasceContanti: fasceContantiCorsiPos, schemaPunti: schemaPuntiPos, regolaReferral: regolaReferralPos, fasceReferralContanti: fasceReferralContantiPos },
+      { prodottoPerId: prodottiPerId, coupon, fasceCarta: fasceCorsiCartaPos, fasceContanti: fasceContantiCorsiPos, schemaPunti: schemaPuntiPos, regolaReferral: regolaReferralPos, fasceReferralContanti: fasceReferralContantiPos, pctContantiCorsi: pctContantiCorsiPos },
     ),
-    [carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, couponCodiceTesto, referralPersonaleAttivo, prodottiPerId, coupon, fasceCorsiCartaPos, fasceContantiCorsiPos, schemaPuntiPos, regolaReferralPos, fasceReferralContantiPos],
+    [carrello, metodoPagamento, corsoPosId, scontoCorsoAttivo, omaggioAttivo, couponCodiceTesto, referralPersonaleAttivo, prodottiPerId, coupon, fasceCorsiCartaPos, fasceContantiCorsiPos, schemaPuntiPos, regolaReferralPos, fasceReferralContantiPos, pctContantiCorsiPos],
   );
   function commutaReferralPersonale(acceso) {
     setReferralPersonaleAttivo(acceso);
@@ -58758,10 +58794,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   function applicaCouponDelCorso(corsoDataId) {
     const c = couponDellEdizione(corsoDataId);
-    setCouponValore(c ? String(c.valore) : "");
+    setCouponValore(c ? String(pctSeccaPerPagamento(c, pctContantiCorsiPos, pagamentoContaComeContanti(metodoPagamento))) : "");
     setCouponAttivo(c || null);
     setCouponCodiceTesto(c ? String(c.codice || "").toUpperCase() : "");
   }
+  // Cambiando metodo di pagamento con un codice d'aula a percentuale
+  // fissa addosso, la percentuale cambia con lui: in contanti l'IVA resta
+  // in cassa e l'allieva prende di piu'. Si riscrive nel campo, non
+  // sottobanco: chi vende deve VEDERE il numero che sta applicando, e
+  // poterlo correggere se serve.
+  useEffect(() => {
+    if (!couponAttivo || couponAttivo.tipo_regola_sconto === "fasce" || !couponAttivo.corsi_date_id) return;
+    const pct = pctSeccaPerPagamento(couponAttivo, pctContantiCorsiPos, pagamentoContaComeContanti(metodoPagamento));
+    setCouponValore(String(pct));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metodoPagamento, couponAttivo?.id, pctContantiCorsiPos]);
   function nuovaVendita() {
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
     // la provenienza vale per i pezzi di quel carrello, non e' una regola
