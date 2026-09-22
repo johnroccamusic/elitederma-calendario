@@ -34275,7 +34275,7 @@ function BloccoDaCopiare({ blocco, isMobile }) {
       <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{blocco.titolo}</div>
       {blocco.spiega && <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>{blocco.spiega}</div>}
       {contenuto && (
-        <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: isMobile ? 12 : 13, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "10px 12px", marginTop: 9, whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.6 }}>
+        <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: isMobile ? 12.5 : 14, fontWeight: 700, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "12px 14px", marginTop: 9, whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.75 }}>
           {contenuto}
         </div>
       )}
