@@ -2275,6 +2275,34 @@ function IconaTileStatistiche({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+// Il marchio Elitederma ridotto a icona: la D come mezza circonferenza
+// col suo gambo al centro, la E come due archi spezzati a sinistra e le
+// due sopracciglia in mezzo.
+//
+// Nel marchio vero i tratti sono rastremati — sottili a sinistra, pieni a
+// destra — e il gambo finisce a punta. Qui no: sono linee di spessore
+// unico come in tutte le altre icone della home, altrimenti questo tasto
+// sarebbe l'unico disegnato con un'altra mano. Si perde la rastremazione
+// e si guadagna una fila di tasti che sembra una fila.
+//
+// Gli archi si staccano dal gambo di mezzo tratto: attaccati, a 44 pixel
+// diventavano una macchia sola.
+function IconaTileMarchio({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      {/* il gambo della D, che scende oltre il cerchio */}
+      <path d="M12 2.7L12 22.4" />
+      {/* la pancia della D */}
+      <path d="M12 3a9 9 0 0 1 2.18 17.73" />
+      {/* i due archi spezzati della E */}
+      <path d="M9.98 3.23a9 9 0 0 0 -6 4.68" />
+      <path d="M4.63 17.16a9 9 0 0 0 5.19 3.57" />
+      {/* le due sopracciglia */}
+      <path d="M3.15 10.5q2.95 -2.3 6.55 -0.4" />
+      <path d="M3.15 14.6q3.15 -2.3 6.55 0" />
+    </svg>
+  );
+}
 // Le versioni "da tasto" di tre icone condivise: stesso disegno, ma
 // tratto a 1,8 e colore passato, come tutte le altre della home
 function IconaTileLoghi({ size = 44, color = NAVY }) {
@@ -71040,7 +71068,7 @@ export default function App() {
               { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos, badge: numeroCarrelliSospesi },
               { chiave: "logisticaprodotti", title: "Logistica prodotti", descrizione: "Spedizioni, tracciamenti e documenti", Icona: IconaTileLogistica, attivo: tastoAbilitato("logisticaprodotti"), onClick: apriLogisticaProdotti, badge: pacchiDaSpedire },
               { chiave: "compensipremi", title: "Area compensi e premi", descrizione: "Coupon, referral, provvigioni e premi", Icona: IconaTileOmaggio, attivo: tastoAbilitato("compensipremi"), onClick: apriCompensiPremi },
-              { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaTileLoghi, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
+              { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaTileMarchio, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
               { chiave: "gestionemodelle", title: "Gestione modelle", descrizione: "Organizza modelle, disponibilità e assegnazioni", Icona: IconaTileModelle, attivo: tastoAbilitato("gestionemodelle"), onClick: apriGestioneModelle },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
