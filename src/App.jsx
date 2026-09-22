@@ -39515,7 +39515,13 @@ function RigaCassaVuota({ testo }) {
 // interrompere mentre una domiciliazione va revocata. Sulla riconciliazione
 // e' l'unica informazione che spiega perche' quella spesa e' gia' uscita
 // senza che nessuno l'abbia mandata.
-const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico", "Bonifico periodico", "Domiciliazione bancaria", "Cassa contanti"];
+//
+// "Spesa bancaria su C/C" e' quello che si prende la banca da sola:
+// commissioni, imposta di bollo, canone del conto. Non e' un bonifico —
+// nessuno l'ha disposto e non c'e' un fornitore a cui chiedere la
+// fattura — e tenerla separata evita di cercare per sempre un documento
+// che non esistera' mai.
+const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico", "Bonifico periodico", "Domiciliazione bancaria", "Spesa bancaria su C/C", "Cassa contanti"];
 const METODI_SPESA_DALLA_CASSA = new Set(["Cassa contanti", "Contanti", "Cash no iva"]);
 // Una spesa di classe pagata in contanti e' uscita dalla BUSTA di quel
 // corso, non dalla cassa contanti: la busta entra in cassa gia' al netto
@@ -40587,6 +40593,17 @@ function unisciEstrattoBanca(ofx, righeCsv, nomeFile) {
 function metodoDaMovimentoBanca(m) {
   const d = String(m?.descrizione || "").toLowerCase();
   if (/con carta|pos\b|pagamento carta/.test(d)) return "Carta Nexi";
+  // Quello che si prende la banca: lo dice lei stessa nel testo, e
+  // riconoscerlo risparmia di sceglierlo a mano ogni mese.
+  //
+  // Le parole vanno cercate strette e mai dentro un bonifico: un
+  // bonifico a un fornitore con scritto "NOTE: CANONE" non e' una spesa
+  // bancaria. Con la versione larga ci finivano dentro 23 movimenti per
+  // 5.940 euro, fra cui 2.000 euro a una persona; con questa ne restano
+  // 10 per 265 euro, e sono tutti davvero della banca. Provato sui
+  // movimenti veri il 22/09/2026.
+  const bonifico = /a favore di|da voi disposto|vs\. disp/.test(d);
+  if (!bonifico && /imposta di bollo|competenze complessive|spese tenuta conto|canone mensile banca|costo per postazione|oneri bancari|spese bancarie|commissioni su bonifico/.test(d)) return "Spesa bancaria su C/C";
   if (/sdd|addebito diretto|domiciliaz/.test(d)) return "Domiciliazione bancaria";
   if (/paypal/.test(d)) return "PayPal";
   return "Bonifico";
