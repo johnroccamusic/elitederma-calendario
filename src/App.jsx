@@ -51166,8 +51166,21 @@ function disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerI
 // commerciale, non un dato del prodotto: il giorno che i giorni
 // lavorativi diventano tre si cambia questa riga, non duecento schede.
 const BACKORDER_TESTO_PREDEFINITO = "Disponibile in circa 4 giorni lavorativi";
+// Il back order vale solo dove il prodotto e' davvero in vendita: sullo
+// shop online o al banco. Su un articolo che non si vende da nessuna
+// parte — un componente di magazzino, una bozza, un prodotto ritirato —
+// non c'e' nessun cliente che possa ordinarlo, e la spunta direbbe una
+// cosa che non succede. Tenerlo qui e non solo nella scheda vuol dire
+// che anche il flag rimasto acceso su un prodotto ritirato dalla vendita
+// smette di contare da solo, senza doverlo andare a spegnere.
+//
+// Il limite di questo controllo: l'esclusione dal POS decisa a livello di
+// CATEGORIA non sta sulla riga del prodotto, quindi qui non si vede. La
+// scheda prodotto, che le categorie le conosce, ne tiene conto.
 function backorderAttivo(p) {
-  return !!p?.backorder_attivo;
+  if (!p?.backorder_attivo) return false;
+  const alBanco = !p?.escludi_vendita_diretta;
+  return alBanco || pubblicatoSuShop(p);
 }
 function backorderMessaggio(p) {
   const scritto = String(p?.backorder_messaggio || "").trim();
@@ -62482,23 +62495,48 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           sopra non la cambierebbe di un pezzo — accenderebbe solo un
           messaggio su una vendita che resta bloccata. Il back order, su
           un bundle, si mette sui componenti. */}
-      {prodottoForm.giacenzaPropria && (
+      {prodottoForm.giacenzaPropria && (() => {
+        // Il back order presuppone un cliente che ordini. Un prodotto che
+        // non e' in vendita da nessuna parte — niente shop, niente POS —
+        // un cliente non ce l'ha: la spunta prometterebbe una cosa che
+        // non puo' succedere. Al suo posto si dice perche', e dove
+        // andare a cambiarlo: il riquadro "Vendite" e' li' sopra.
+        //
+        // Sullo shop conta solo "publish": una bozza non la vede nessuno
+        // e un prodotto privato lo vede solo chi entra da amministratore.
+        const sulloShop = calcoloPrezzi.vaSuWoo && prodottoForm.stato === "publish";
+        const alBanco = !calcoloPrezzi.nonSulPos;
+        const inVendita = sulloShop || alBanco;
+        const dove = sulloShop && alBanco ? "sullo shop e al banco" : sulloShop ? "sullo shop" : "al banco";
+        return (
       <div style={{ background: "#F8F9FB", border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
         <SpBlocco
           icona={<SpIcoCarrello s={22} />}
           titolo="Ordinabile senza scorte (back order)"
-          sottotitolo="Il cliente può ordinarlo anche quando i pezzi sono zero, sul sito e al banco."
-          style={{ marginBottom: prodottoForm.backorder ? 14 : 0 }}
+          sottotitolo={inVendita
+            ? `Il cliente può ordinarlo anche quando i pezzi sono zero, ${dove}.`
+            : "Vale solo per i prodotti in vendita: sullo shop online o al banco."}
+          style={{ marginBottom: inVendita && prodottoForm.backorder ? 14 : 0 }}
         >
-          <label style={spRiga}>
-            <input
-              type="checkbox" checked={!!prodottoForm.backorder} style={spSpunta}
-              onChange={(e) => aggiornaForm({ backorder: e.target.checked })}
-            />
-            Attiva il back order su questo prodotto
-          </label>
+          {inVendita ? (
+            <label style={spRiga}>
+              <input
+                type="checkbox" checked={!!prodottoForm.backorder} style={spSpunta}
+                onChange={(e) => aggiornaForm({ backorder: e.target.checked })}
+              />
+              Attiva il back order su questo prodotto
+            </label>
+          ) : (
+            <SpNota sfondo="#F1F3F6">
+              Questo prodotto non è in vendita: non è sullo shop{prodottoForm.stato !== "publish" && calcoloPrezzi.vaSuWoo ? ` (è ${prodottoForm.stato === "private" ? "privato" : "in bozza"})` : ""} e non è sul POS. Senza un posto dove il cliente possa ordinarlo, il back order non ha nulla da fare.
+              <div style={{ marginTop: 6 }}>Rimettilo in vendita nel riquadro <b style={{ color: SP_TESTO }}>Vendite</b>, qui sopra, e la spunta ricompare.</div>
+              {!!prodottoForm.backorder && (
+                <div style={{ marginTop: 6 }}>Resta segnato come back order: se torna in vendita riparte da acceso, senza rimetterlo a mano.</div>
+              )}
+            </SpNota>
+          )}
         </SpBlocco>
-        {prodottoForm.backorder && (() => {
+        {inVendita && prodottoForm.backorder && (() => {
           // i messaggi gia' scritti sugli altri prodotti in back order:
           // si riprende quello, invece di riscriverlo a memoria ogni volta
           // e ritrovarsi quattro versioni della stessa frase
@@ -62542,7 +62580,8 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           );
         })()}
       </div>
-      )}
+        );
+      })()}
 
       {messaggi}
       {/* la scheda è lunga: i tasti stanno anche in fondo, non solo in testa.
