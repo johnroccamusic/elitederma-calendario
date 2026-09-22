@@ -34131,7 +34131,9 @@ const NORMATIVA_RITORNO_AL_CORSO = [
 // pagina bianca e a dire che e' da scrivere.
 const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia1", tipo: "testata", titolo: "Iscrizione allievi", sottotitolo: "Come la master iscrive un allievo a un corso", claim: "Pagina per le master — non va mandata all'allievo", lato: "Uso interno" },
-  { id: "ia2", tipo: "nota", testo: "Pagina da scrivere. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri." },
+  { id: "ia3", tipo: "sezione", testo: "Il link da mandare all'allievo" },
+  { id: "ia4", tipo: "link", titolo: "Modulo di iscrizione ai corsi", url: "https://elitederma.eu/modulo-iscrizione-corsi/", testo: "Premi \u201cCopia link\u201d e incollalo nella chat dell\u2019allievo: lo compila lui, da telefono." },
+  { id: "ia2", tipo: "nota", testo: "Il resto della pagina è da scrivere. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — compreso un altro link da copiare." },
 ];
 
 // I campi che si riscrivono di un blocco a piu' voci. Gli altri tipi
@@ -34139,6 +34141,7 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
 const CAMPI_BLOCCO_NORMATIVA = {
   testata: [["titolo", "Titolo"], ["sottotitolo", "Sottotitolo"], ["claim", "Frase in oro"], ["lato", "Frase di lato"]],
   tappa: [["numero", "Numero (es. 01, lascia vuoto per una tappa a tempo)"], ["quando", "Quando (es. Entro 16 mesi)"], ["sotto", "Sotto (es. Dalla fine del corso)"], ["titolo", "Titolo"], ["testo", "Testo"]],
+  link: [["titolo", "Titolo"], ["url", "Indirizzo (https://…)"], ["testo", "A cosa serve, in una riga"]],
 };
 const ICONE_TAPPA_NORMATIVA = ["infinito", "persone", "calendario", "cappello", "ricomincia", "bersaglio", "etichetta", "grafico", "lampadina", "germoglio", "diamante"];
 
@@ -34197,6 +34200,46 @@ function TappaNormativa({ blocco, isMobile }) {
 
 // La testata della locandina: il titolone, il sottotitolo, il claim in
 // oro e la frase di lato oltre un filetto.
+// Un link da passare a qualcun altro. Nasce per il modulo d'iscrizione:
+// la master lo copia e lo incolla in chat all'allievo, e il tasto serve
+// proprio a quello — un indirizzo lungo riscritto a mano in una chat e'
+// un indirizzo sbagliato.
+//
+// Il tondo al dito: i tasti fermano il clic (stopPropagation) perche' in
+// modalita' programmatore l'intero blocco e' cliccabile per riscriverlo,
+// e "Copia" aprirebbe il modulo di modifica invece di copiare.
+function LinkNormativa({ blocco, isMobile }) {
+  const [copiato, setCopiato] = useState(false);
+  const [errore, setErrore] = useState(false);
+  const url = String(blocco.url || "").trim();
+  async function copia(e) {
+    e.stopPropagation();
+    setErrore(false);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiato(true);
+      setTimeout(() => setCopiato(false), 2200);
+    } catch {
+      setErrore(true);
+    }
+  }
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "14px 16px" }}>
+      <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{blocco.titolo}</div>
+      {blocco.testo && <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>{blocco.testo}</div>}
+      {url && (
+        <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: NAVY, marginTop: 8, wordBreak: "break-all", opacity: 0.75 }}>{url}</div>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+        <Button onClick={copia} disabled={!url}>{copiato ? "Copiato ✓" : "Copia link"}</Button>
+        <Button variant="ghost" onClick={(e) => { e.stopPropagation(); if (url) window.open(url, "_blank", "noopener"); }} disabled={!url}>Apri</Button>
+        {copiato && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>Incollalo in chat all'allievo.</span>}
+        {errore && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>Copia non riuscita: seleziona l'indirizzo qui sopra.</span>}
+      </div>
+    </div>
+  );
+}
+
 function TestataNormativa({ blocco, isMobile }) {
   return (
     <div style={{ display: "flex", gap: isMobile ? 14 : 28, alignItems: "stretch", marginBottom: 22, marginTop: blocco.sottotitolo ? 0 : 30, flexDirection: isMobile ? "column" : "row" }}>
@@ -34254,6 +34297,21 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
       });
       if (riga) righe.push(riga);
     });
+    return righe;
+  }
+  // righeDi manda a capo fra una parola e l'altra: un indirizzo non ha
+  // spazi, resterebbe una riga sola e uscirebbe dal foglio. Qui si taglia
+  // carattere per carattere — senza aggiungere niente dentro l'indirizzo,
+  // che dal PDF qualcuno lo ricopia a mano.
+  function spezzaSenzaSpazi(testo, font, size, larghezza) {
+    const pulito = pulisci(testo);
+    const righe = [];
+    let riga = "";
+    for (const carattere of pulito) {
+      if (riga && font.widthOfTextAtSize(riga + carattere, size) > larghezza) { righe.push(riga); riga = ""; }
+      riga += carattere;
+    }
+    if (riga) righe.push(riga);
     return righe;
   }
   function serve(altezza) {
@@ -34331,6 +34389,14 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
       if (righeTitolo.length) yDx -= 2;
       righeTesto.forEach((r) => { pagina.drawText(r, { x: xTesto, y: yDx - 9.5, size: 9.5, font: normale, color: GRIGIO_PDF }); yDx -= 9.5 * 1.45; });
       y = cima - altezza - 8;
+    } else if (b.tipo === "link") {
+      // sulla carta un tasto "Copia" non esiste: resta l'indirizzo, che
+      // va scritto per intero e spezzato dove serve, non troncato
+      y -= 4;
+      scriviRighe(righeDi(String(b.titolo || "").toUpperCase(), grassetto, 11, LARGHEZZA), { size: 11, font: grassetto, interlinea: 1.3 });
+      if (b.testo) scriviRighe(righeDi(b.testo, normale, 9.5, LARGHEZZA), { size: 9.5, colore: GRIGIO_PDF });
+      if (b.url) scriviRighe(spezzaSenzaSpazi(b.url, normale, 9.5, LARGHEZZA), { size: 9.5, colore: GOLD_PDF });
+      y -= 8;
     } else {
       scriviRighe(righeDi(b.testo, normale, 10.5, LARGHEZZA), { size: 10.5, colore: GRIGIO_PDF });
       y -= 6;
@@ -34447,7 +34513,9 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
   async function aggiungiBlocco(tipo) {
     const nuovo = tipo === "tappa"
       ? { id: `b${Date.now()}`, tipo, icona: "infinito", quando: "Quando", sotto: "Dalla fine del corso", titolo: "Cosa succede", testo: "Scrivi qui le condizioni…" }
-      : { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
+      : tipo === "link"
+        ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo link", url: "https://", testo: "A cosa serve, in una riga" }
+        : { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
     if (await salvaBlocchi([...blocchi, nuovo])) apriModifica(nuovo);
   }
 
@@ -34459,6 +34527,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
     if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
     if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#5E5039", background: "#F5EEDD", border: "1px solid #E6D9B8", borderRadius: 12, padding: "12px 14px 12px 46px", lineHeight: 1.6, margin: "14px 0 22px", position: "relative" };
     if (tipo === "tappa") return { marginBottom: 12 };
+    if (tipo === "link") return { marginBottom: 14 };
     if (tipo === "testata") return {};
     return { ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, marginBottom: 12 };
   }
@@ -34558,6 +34627,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             >
               {b.tipo === "testata" ? <TestataNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "tappa" ? <TappaNormativa blocco={b} isMobile={isMobile} />
+                : b.tipo === "link" ? <LinkNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "nota" ? (
                   <>
                     {/* la "i" nel tondo, come sulla locandina */}
@@ -34576,6 +34646,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             <Button variant="ghost" onClick={() => aggiungiBlocco("paragrafo")}>+ Paragrafo</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("nota")}>+ Nota</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("tappa")}>+ Tappa</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("link")}>+ Link da copiare</Button>
           </div>
         )}
 
