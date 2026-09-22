@@ -66675,6 +66675,9 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   // scelta: una regola che contabilizza da sola i prossimi movimenti con
   // lo stesso importo (piu' o meno una tolleranza) e lo stesso testo
   const [creaRegola, setCreaRegola] = useState(false);
+  // la regola vale da qui in avanti; spuntando questa vale anche per i
+  // movimenti gia' importati e ancora da sistemare
+  const [regolaAnchePassato, setRegolaAnchePassato] = useState(false);
   const [regolaTolleranza, setRegolaTolleranza] = useState("5");
   const [regolaTesto, setRegolaTesto] = useState(prefill?.movimentoControparte || "");
   const [note, setNote] = useState(spesaEsistente?.note || "");
@@ -66878,13 +66881,26 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     if (prefill?.movimentoBancaId && !spesaId) {
       await supabase.from("movimenti_banca").update({ stato: "riconciliato", collegato_tipo: "spesa", collegato_id: idSpesa, nota: "contabilizzata" }).eq("id", prefill.movimentoBancaId);
       if (creaRegola) {
-        await supabase.from("regole_banca").insert({
+        const { data: regolaCreata } = await supabase.from("regole_banca").insert({
           descrizione_contiene: regolaTesto.trim() || null,
           importo: payload.totale, tolleranza_pct: Math.max(0, parseNum(regolaTolleranza) || 0), solo_uscite: true,
           spesa_descrizione: payload.descrizione, categoria_id: payload.categoria_id || null, sottocategoria_id: payload.sottocategoria_id || null, fornitore_id: payload.fornitore_id || null,
           tipo_ambito: payload.tipo_ambito || "generale", sede_id: payload.sede_id || null, corso_id: payload.corso_id || null, classe_id: payload.classe_id || null, evento_id: payload.evento_id || null,
           iva_percentuale: payload.iva_percentuale || 0, metodo_pagamento: payload.metodo_pagamento || null,
-        });
+        }).select().single();
+        // anche all'indietro: si guarda quanti ne prende, si dice il
+        // numero, e solo dopo un si' si scrivono le spese. Sono righe di
+        // contabilita', non si creano a sorpresa
+        if (regolaAnchePassato && regolaCreata) {
+          const { data: daSistemare } = await supabase.from("movimenti_banca").select("*").eq("stato", "nuovo");
+          const presi = (daSistemare || []).filter((m) => regolaCorrispondeAlMovimento(regolaCreata, m));
+          if (presi.length === 0) {
+            window.alert("Regola creata. Fra i movimenti gia' importati non ce n'e' nessuno che le corrisponde.");
+          } else if (window.confirm(`La regola prende ${presi.length} movimenti gia' importati e ancora da sistemare.\n\nContabilizzarli adesso? Nascono ${presi.length} spese in prima nota.`)) {
+            const fatti = await applicaRegoleBanca(presi, [regolaCreata]);
+            window.alert(`Contabilizzati ${fatti} movimenti con la regola appena creata.`);
+          }
+        }
       }
     }
 
@@ -67001,6 +67017,14 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                   <label style={{ ...fontBody, fontSize: 12.5, color: NAVY, display: "flex", alignItems: "center", gap: 6, flex: "1 1 260px", minWidth: 0 }}>
                     e la descrizione contiene
                     <input type="text" value={regolaTesto} onChange={(e) => setRegolaTesto(e.target.value)} placeholder="vuoto = qualunque descrizione" style={{ ...inputStyle, flex: "1 1 auto", minWidth: 0, padding: "6px 8px" }} />
+                  </label>
+                  {/* la regola nasce per i prossimi, ma quasi sempre in
+                      estratto conto ci sono gia' decine di righe uguali:
+                      questa le prende in un colpo, dopo aver detto quante
+                      sono e aver chiesto conferma */}
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, flex: "1 1 100%", marginTop: 2 }}>
+                    <input type="checkbox" checked={regolaAnchePassato} onChange={(e) => setRegolaAnchePassato(e.target.checked)} style={{ width: 16, height: 16, marginTop: 1, flexShrink: 0 }} />
+                    <span>Applicala anche ai movimenti <b>gia' importati</b> e ancora da sistemare. Prima di scrivere ti dico quanti sono e chiedo conferma.</span>
                   </label>
                 </div>
               )}
