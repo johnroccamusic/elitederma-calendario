@@ -34118,15 +34118,20 @@ const NORMATIVA_RITORNO_AL_CORSO = [
   { id: "p7", tipo: "tappa", icona: "diamante", numero: "07", titolo: "Formazione d'eccellenza", testo: "Solo così possiamo garantire agli studenti una formazione sempre allineata alle innovazioni del settore e fornire loro strumenti e tecniche all'avanguardia." },
 ];
 
-// "Iscrizione allievi": lo scheletro con cui la pagina nasce. Non e' il
-// documento — quello lo scrive chi di dovere, cliccando i pezzi di testo
-// in modalita' programmatore. Serve solo a non far nascere una pagina
-// bianca, e a dire a chiare lettere che e' da scrivere: il tasto "Copia
-// per l'allievo" compare appena c'e' un blocco, e un documento a meta'
-// mandato a un allievo e' peggio di nessun documento.
+// "Iscrizione allievi": lo scheletro con cui la pagina nasce.
+//
+// E' una pagina INTERNA, scritta per le master: come si iscrive un
+// allievo, cosa serve, in che ordine. Non va all'allievo — per quello
+// c'e' la Modulistica. La prima versione la intestava "come ci si
+// iscrive a un corso Elitederma", che parla al futuro allievo: chi la
+// apriva credeva di avere in mano un documento da inoltrare.
+//
+// Il testo vero non c'e': lo scrive chi di dovere, cliccando i pezzi in
+// modalita' programmatore. Questo scheletro serve a non far nascere una
+// pagina bianca e a dire che e' da scrivere.
 const NORMATIVA_ISCRIZIONE_ALLIEVI = [
-  { id: "ia1", tipo: "testata", titolo: "Iscrizione allievi", sottotitolo: "Come ci si iscrive a un corso Elitederma", claim: "Tutto quello che serve sapere prima di partire", lato: "Chiaro fin dall'inizio" },
-  { id: "ia2", tipo: "nota", testo: "Pagina da scrivere. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri. Finché c'è questa nota, il documento non è pronto per essere mandato a un allievo." },
+  { id: "ia1", tipo: "testata", titolo: "Iscrizione allievi", sottotitolo: "Come la master iscrive un allievo a un corso", claim: "Pagina per le master — non va mandata all'allievo", lato: "Uso interno" },
+  { id: "ia2", tipo: "nota", testo: "Pagina da scrivere. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri." },
 ];
 
 // I campi che si riscrivono di un blocco a piu' voci. Gli altri tipi
@@ -34338,7 +34343,13 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
 // In modalita' programmatore ogni blocco si apre cliccandoci sopra e si
 // riscrive li' dentro; quello che si salva lo vedono tutti, perche' sta
 // sul database e non nel browser di chi ha scritto.
-function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative" }) {
+// perAllievo: questa normativa e' un documento da consegnare (Ritorno al
+// Corso lo e'), oppure una pagina interna allo staff? Sul documento resta
+// "Copia per l'allievo", che apre la finestra di condivisione del sistema
+// con WhatsApp dentro; sulla pagina interna quel tasto e' un invito a
+// sbagliare, e il PDF si scarica e basta — anche da telefono, dove per il
+// documento era nascosto perche' li' si condivide.
+function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative", perAllievo = true }) {
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   const riga = (testi || []).find((t) => t.chiave === chiave) || null;
@@ -34459,8 +34470,10 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
           <TastoLivelloPrecedente titolo={titoloIndietro} onClick={onBack} />
           {blocchi.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <Button onClick={copiaPerAllievo} disabled={copiando}>{copiando ? "Preparo…" : "Copia per l'allievo"}</Button>
-              {!isMobile && <Button variant="ghost" onClick={scaricaPdf} disabled={copiando}>Scarica PDF</Button>}
+              {perAllievo && <Button onClick={copiaPerAllievo} disabled={copiando}>{copiando ? "Preparo…" : "Copia per l'allievo"}</Button>}
+              {(!perAllievo || !isMobile) && (
+                <Button variant={perAllievo ? "ghost" : undefined} onClick={scaricaPdf} disabled={copiando}>{copiando ? "Preparo…" : "Scarica PDF"}</Button>
+              )}
             </div>
           )}
         </div>
@@ -34773,7 +34786,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
             { chiave: "ritornoalcorso", title: "Regole Ritorno al Corso", descrizione: "Le regole per chi torna a frequentare un corso già fatto.", Icona: IconaTileNormative, attivo: true, onClick: onApriRitornoAlCorso || (() => {}) },
             { chiave: "mappanormativepmu", title: "Mappa normative regionali", descrizione: "Cosa serve per esercitare il trucco permanente, regione per regione.", Icona: IconaPin, attivo: true, onClick: onApriMappaNormative || (() => {}) },
             { chiave: "modulistica", title: "Modulistica", descrizione: "Moduli, contratti e documenti da scaricare e compilare.", Icona: IconaTileLoghi, attivo: true, onClick: onApriModulistica || (() => {}) },
-            { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come ci si iscrive a un corso: condizioni, tempi e cosa serve.", Icona: IconaPersonaAggiungi, attivo: true, onClick: onApriIscrizioneAllievi || (() => {}) },
+            { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Per le master: come si iscrive un allievo a un corso, e cosa serve.", Icona: IconaPersonaAggiungi, attivo: true, onClick: onApriIscrizioneAllievi || (() => {}) },
           ]}
         />
       </div>
@@ -71125,6 +71138,7 @@ export default function App() {
           testi={normativeTesti}
           testoIniziale={NORMATIVA_ISCRIZIONE_ALLIEVI}
           ricarica={fetchDati}
+          perAllievo={false}
           onBack={() => setView("normative")}
           titolo={etichettaTasto("normative", "iscrizioneallievi", "Iscrizione Allievi")}
         />
