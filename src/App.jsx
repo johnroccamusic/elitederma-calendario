@@ -308,6 +308,16 @@ function useManiglieAttive() {
   const [attive] = useLayoutCondiviso(CHIAVE_MANIGLIE, false);
   return attive === true;
 }
+// Rinominare un tasto toccandone il testo. Lo puo' fare solo chi
+// programma, ed e' comodo — ma il bersaglio e' il testo sotto l'icona,
+// cioe' meta' del tasto: dal telefono, dove si tocca con un dito, capita
+// di aprire la finestrella del nome mentre si voleva solo entrare nella
+// pagina. Acceso di serie, perche' e' sempre stato cosi'.
+const CHIAVE_RINOMINA_TASTI = "rinomina_tasti_attiva";
+function useRinominaTastiAttiva() {
+  const [attiva] = useLayoutCondiviso(CHIAVE_RINOMINA_TASTI, true);
+  return attiva !== false;
+}
 
 // restituisce [valore, salva]: il valore parte dal predefinito, poi
 // arriva quello condiviso appena il database risponde
@@ -3781,6 +3791,7 @@ function IconaColonne({ n, size = 16, color = "currentColor" }) {
 //   dentro un'altra cartella, per restare semplice.
 function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ruoloUtente, onSalvaOrdine, onSalvaColonne, onSalvaEtichetta, consentiCartelle = false, colonneDesktop = 3 }) {
   const maniglieAttive = useManiglieAttive();
+  const rinominaAttiva = useRinominaTastiAttiva();
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   // scelta del programmatore per QUESTA pagina, salvata — se non ha mai
@@ -3950,7 +3961,7 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
               onDropTasto={() => programmatore && rilasciaSuChiave(chiave)}
               attenuato={trascinata === chiave}
               evidenziato={!!dragRef.current && dragRef.current.chiave !== chiave && suCursore === chiave}
-              onRinominaEtichetta={programmatore && !isCartella && onSalvaEtichetta ? () => {
+              onRinominaEtichetta={programmatore && rinominaAttiva && !isCartella && onSalvaEtichetta ? () => {
                 const attuale = etichette[chiave] || def.title;
                 const nuovo = window.prompt("Testo per questo tasto (vuoto = nome originale):", attuale);
                 if (nuovo !== null) onSalvaEtichetta(chiave, nuovo);
@@ -15950,6 +15961,8 @@ function PaginaAspettoApp() {
   // e i cerchietti "i" con le istruzioni dei tasti, stessa cosa
   const [aiutiVisibili, salvaAiutiVisibili] = useLayoutCondiviso(CHIAVE_AIUTI, true);
   const [tastoStileAcceso, salvaTastoStile] = useLayoutCondiviso(CHIAVE_TASTO_STILE, true);
+  // e la rinomina dei tasti col tocco sul nome, stessa cosa
+  const [rinominaTastiAttiva, salvaRinominaTasti] = useLayoutCondiviso(CHIAVE_RINOMINA_TASTI, true);
   // Lo sfondo dell'app: una foto per il computer (16:9) e una per il
   // telefono (verticale). Si caricano nel bucket "sfondi-app" e l'indirizzo
   // si ricorda fra le impostazioni condivise; l'app le adatta da sola a
@@ -16092,6 +16105,43 @@ function PaginaAspettoApp() {
             background: aiutiVisibili !== false ? "#E7F3E9" : BG,
             borderRadius: 12, padding: "3px 9px",
           }}>{aiutiVisibili !== false ? "ON" : "OFF"}</span>
+        </button>
+      </div>
+
+      {/* Rinominare i tasti toccandone il nome. E' l'unico modo che c'e'
+          per cambiare le scritte, quindi acceso di serie — ma il
+          bersaglio e' il testo sotto l'icona, meta' del tasto, e dal
+          telefono capita di aprire la finestrella del nome mentre si
+          voleva solo entrare. Spento, i nomi gia' dati restano: si
+          spegne l'attrezzo, non il lavoro fatto. */}
+      <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Modifica dei titoli dei tasti</div>
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+            {rinominaTastiAttiva !== false
+              ? "Accesa: toccando il nome sotto l'icona si riscrive il titolo del tasto. Solo chi programma, in tutta l'app."
+              : "Spenta: toccando il nome il tasto si apre e basta. I titoli già cambiati restano come sono."}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => salvaRinominaTasti(rinominaTastiAttiva === false)}
+          title="Accende o spegne la rinomina dei tasti col tocco sul nome, in tutta l'app. I titoli già dati non si toccano"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0,
+            ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY,
+            background: "#fff", border: `1px solid ${rinominaTastiAttiva !== false ? "#1F7A33" : CREAM_BORDER}`, borderRadius: 22,
+            padding: "9px 14px", cursor: "pointer",
+          }}
+        >
+          <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0, color: rinominaTastiAttiva !== false ? "#1F7A33" : MUTED }}>Aa</span>
+          {rinominaTastiAttiva !== false ? "Spegni la modifica" : "Accendi la modifica"}
+          <span style={{
+            ...fontBody, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.6,
+            color: rinominaTastiAttiva !== false ? "#1F7A33" : MUTED,
+            background: rinominaTastiAttiva !== false ? "#E7F3E9" : BG,
+            borderRadius: 12, padding: "3px 9px",
+          }}>{rinominaTastiAttiva !== false ? "ON" : "OFF"}</span>
         </button>
       </div>
 
