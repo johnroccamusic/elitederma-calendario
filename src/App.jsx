@@ -34147,8 +34147,9 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia8", tipo: "sezione", testo: "Se non hanno la carta: bonifico" },
   { id: "ia9", tipo: "copia", titolo: "Dati per il bonifico", spiega: "Copiali e mandali in chat all\u2019allievo cos\u00ec come sono.", testo: "ELITEDERMA SRL\nBanca Popolare del Lazio\nIBAN: IT69T0510439499CC0010523827\nBIC: BPLZIT3V\nCausale: nome e cognome acquisto formazione" },
   { id: "ia10", tipo: "nota", testo: "Appena l\u2019allievo ha fatto il bonifico, avvisa Elena: senza quell\u2019avviso la fattura non viene emessa." },
-  { id: "ia11", tipo: "sezione", testo: "Messaggi di recap" },
-  { id: "ia2", tipo: "nota", testo: "I messaggi di recap sono da scrivere, uno per corso e località. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — “Testo da copiare” è quello giusto per un messaggio da mandare in chat." },
+  { id: "ia11", tipo: "sezione", testo: "Messaggio di benvenuto" },
+  { id: "ia12", tipo: "benvenuto", titolo: "Messaggio di benvenuto", spiega: "Scegli la classe e l\u2019allievo: il messaggio si compila da solo, poi copialo e mandalo in chat.", testo: MESSAGGIO_BENVENUTO_PREDEFINITO },
+  { id: "ia2", tipo: "nota", testo: "Il messaggio si riscrive da qui, col tasto “Modifica messaggio di benvenuto”. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — “Testo da copiare” è quello giusto per un messaggio da mandare in chat." },
 ];
 
 // I campi che si riscrivono di un blocco a piu' voci. Gli altri tipi
@@ -34158,6 +34159,7 @@ const CAMPI_BLOCCO_NORMATIVA = {
   tappa: [["numero", "Numero (es. 01, lascia vuoto per una tappa a tempo)"], ["quando", "Quando (es. Entro 16 mesi)"], ["sotto", "Sotto (es. Dalla fine del corso)"], ["titolo", "Titolo"], ["testo", "Testo"]],
   link: [["titolo", "Titolo"], ["url", "Indirizzo (https://…)"], ["testo", "A cosa serve, in una riga"]],
   copia: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il testo da copiare, riga per riga"]],
+  benvenuto: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il messaggio. Segnaposto: {allievo} {corso} {sede} {date} {master}"]],
 };
 const ICONE_TAPPA_NORMATIVA = ["infinito", "persone", "calendario", "cappello", "ricomincia", "bersaglio", "etichetta", "grafico", "lampadina", "germoglio", "diamante"];
 
@@ -34293,6 +34295,180 @@ function BloccoDaCopiare({ blocco, isMobile }) {
         {copiato && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>Incollali in chat così come sono.</span>}
         {errore && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>Copia non riuscita: seleziona i dati qui sopra.</span>}
       </div>
+    </div>
+  );
+}
+
+// Il configuratore del messaggio di benvenuto.
+//
+// Chi lo usa ha appena finito di iscrivere un allievo e deve mandargli
+// due righe. Scriverle a mano ogni volta vuol dire sbagliare il nome del
+// corso, la sede o le date — e quelle tre cose l'app le sa gia'.
+//
+// Una master vede SOLO le sue classi: e' riconosciuta dall'utenza con cui
+// e' entrata (utenteLoggato.masterId). Chi non e' una master — l'ufficio,
+// chi programma — le vede tutte, perche' capita di mandare il messaggio
+// per conto di qualcun altro.
+//
+// Il testo del messaggio NON sta nel codice: sta nel blocco, come tutto
+// il resto della pagina, e si riscrive dalla pagina stessa. E' la
+// ragione per cui e' un blocco e non un componente cablato qui dentro.
+const SEGNAPOSTO_BENVENUTO = [
+  ["{allievo}", "il nome di battesimo dell’allievo"],
+  ["{corso}", "il nome del corso"],
+  ["{sede}", "la città della sede"],
+  ["{date}", "le date, per esteso (es. 18–19 ottobre 2026)"],
+  ["{master}", "il nome della master della classe"],
+];
+// In anagrafica i corsi stanno tutti in maiuscolo — "PMU BASE", "HENNE
+// INDIVI" — ed e' giusto cosi' per le tabelle. Dentro una frase mandata
+// a un cliente pero' sembra di gridare. Qui si rimettono in tondo, con
+// due eccezioni: le sigle vere restano sigle (PMU, IKE) e le paroline
+// non prendono la maiuscola ("Colori e Correzioni", non "Colori E").
+// Provato su tutti e 28 i nomi a catalogo.
+const SIGLE_CORSI = new Set(["PMU", "IKE"]);
+const PAROLINE_CORSI = new Set(["e", "di", "del", "della", "dei", "con", "per", "a", "al", "il", "la", "in"]);
+function nomeCorsoLeggibile(nome) {
+  return String(nome || "").split(/([^A-Za-zÀ-ÿ0-9]+)/).map((pezzo, i) => {
+    if (!pezzo || /^[^A-Za-zÀ-ÿ0-9]+$/.test(pezzo)) return pezzo;
+    const su = pezzo.toUpperCase();
+    if (SIGLE_CORSI.has(su)) return su;
+    const giu = pezzo.toLowerCase();
+    if (i > 0 && PAROLINE_CORSI.has(giu)) return giu;
+    return toTitleCase(pezzo);
+  }).join("");
+}
+const MESSAGGIO_BENVENUTO_PREDEFINITO = "Congratulazioni {allievo}! Elitederma è lieta di confermare la tua iscrizione al corso di {corso}, che si svolgerà nella sede di {sede}. Il corso si terrà il {date}.";
+
+function ConfiguratoreBenvenuto({ blocco, isMobile, dati, programmatore, onModifica }) {
+  const { corsi = [], location = [], corsiDate = [], iscritti = [], master = [], corsiDateDocenti = [], masterId = null } = dati || {};
+  const [classeId, setClasseId] = useState("");
+  const [iscrittoId, setIscrittoId] = useState("");
+  const [copiato, setCopiato] = useState(false);
+  const [erroreCopia, setErroreCopia] = useState(false);
+
+  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
+
+  // Le classi da cui si puo' pescare: le proprie se chi guarda e' una
+  // master, tutte altrimenti. Si fermano trenta giorni indietro — il
+  // benvenuto si manda prima del corso, e un elenco lungo due anni e'
+  // un elenco in cui non si trova niente.
+  const classi = useMemo(() => {
+    const limite = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const miaClasse = (cd) => !masterId
+      || cd.master_id === masterId
+      || (corsiDateDocenti || []).some((d) => d.corso_data_id === cd.id && d.tipo === "master" && d.persona_id === masterId);
+    return (corsiDate || [])
+      .filter((cd) => cd.data_inizio && (cd.data_fine || cd.data_inizio) >= limite && miaClasse(cd))
+      .sort((a, b) => String(a.data_inizio).localeCompare(String(b.data_inizio)));
+  }, [corsiDate, corsiDateDocenti, masterId]);
+
+  const classe = classi.find((cd) => cd.id === classeId) || null;
+  const alliviDellaClasse = useMemo(
+    () => (iscritti || [])
+      .filter((i) => i.corso_data_id === classeId)
+      .sort((a, b) => `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it")),
+    [iscritti, classeId]
+  );
+  const iscritto = alliviDellaClasse.find((i) => i.id === iscrittoId) || null;
+
+  const etichettaClasse = (cd) => [
+    corsoById[cd.corso_id]?.nome || "corso senza nome",
+    locById[cd.location_id]?.nome ? toTitleCase(locById[cd.location_id].nome) : null,
+    fmtDataCompatta(cd.data_inizio, cd.data_fine || cd.data_inizio),
+  ].filter(Boolean).join(" · ");
+
+  const modello = String(blocco.testo || "").trim() || MESSAGGIO_BENVENUTO_PREDEFINITO;
+  const valori = {
+    "{allievo}": iscritto ? toTitleCase(String(iscritto.nome || "").trim()) : "",
+    "{corso}": classe ? nomeCorsoLeggibile(corsoById[classe.corso_id]?.nome) : "",
+    "{sede}": classe && locById[classe.location_id]?.nome ? toTitleCase(locById[classe.location_id].nome) : "",
+    "{date}": classe ? fmtIntervalloEsteso(classe.data_inizio, classe.data_fine || classe.data_inizio) : "",
+    "{master}": classe && masterById[classe.master_id] ? toTitleCase(masterById[classe.master_id].nome || "") : "",
+  };
+  const pronto = !!(classe && iscritto);
+  // finche' non si e' scelto tutto il messaggio resta col segnaposto in
+  // vista: fa capire cosa manca meglio di uno spazio vuoto
+  const messaggio = Object.entries(valori).reduce(
+    (testo, [segno, valore]) => (valore ? testo.split(segno).join(valore) : testo),
+    modello
+  );
+
+  async function copia(e) {
+    e.stopPropagation();
+    setErroreCopia(false);
+    try {
+      await navigator.clipboard.writeText(messaggio);
+      setCopiato(true);
+      setTimeout(() => setCopiato(false), 2400);
+    } catch {
+      setErroreCopia(true);
+    }
+  }
+
+  const stileSelect = { ...fontBody, width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 9, border: `1px solid ${CREAM_BORDER}`, fontSize: isMobile ? 13 : 13.5, color: NAVY, background: "#fff" };
+
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "16px 18px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{blocco.titolo || "Messaggio di benvenuto"}</div>
+          {blocco.spiega && <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>{blocco.spiega}</div>}
+        </div>
+        {programmatore && (
+          <Button variant="ghost" onClick={(e) => { e.stopPropagation(); onModifica?.(); }}>Modifica messaggio di benvenuto</Button>
+        )}
+      </div>
+
+      {/* i segnaposto si vedono solo a chi puo' riscrivere il messaggio:
+          per chi lo manda e basta sono rumore */}
+      {programmatore && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.6, marginTop: 8, background: BG, borderRadius: 8, padding: "8px 10px" }}>
+          Nel messaggio puoi usare: {SEGNAPOSTO_BENVENUTO.map(([segno, cosa], i) => (
+            <span key={segno}>{i > 0 ? " · " : ""}<b style={{ color: NAVY }}>{segno}</b> {cosa}</span>
+          ))}
+        </div>
+      )}
+
+      {classi.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 12, lineHeight: 1.5 }}>
+          {masterId
+            ? "Non risultano tue classi da qui in avanti. Se dovresti averne una, avvisa la sede: la classe va assegnata a te in Operativo corsi."
+            : "Non ci sono classi da qui in avanti."}
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
+            <label style={{ display: "block" }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Classe</div>
+              <select style={stileSelect} value={classeId} onChange={(e) => { setClasseId(e.target.value); setIscrittoId(""); }}>
+                <option value="">— scegli la classe —</option>
+                {classi.map((cd) => <option key={cd.id} value={cd.id}>{etichettaClasse(cd)}</option>)}
+              </select>
+            </label>
+            <label style={{ display: "block" }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Allievo</div>
+              <select style={{ ...stileSelect, opacity: classeId ? 1 : 0.55 }} value={iscrittoId} disabled={!classeId} onChange={(e) => setIscrittoId(e.target.value)}>
+                <option value="">{classeId ? (alliviDellaClasse.length ? "— scegli l’allievo —" : "nessun iscritto in questa classe") : "prima scegli la classe"}</option>
+                {alliviDellaClasse.map((i) => <option key={i.id} value={i.id}>{toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim()) || "(senza nome)"}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "12px 14px", marginTop: 12, whiteSpace: "pre-wrap", lineHeight: 1.65, opacity: pronto ? 1 : 0.7 }}>
+            {messaggio}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+            <Button onClick={copia} disabled={!pronto}>{copiato ? "Copiato ✓" : "Copia messaggio"}</Button>
+            {!pronto && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Scegli classe e allievo: i segnaposto si riempiono da soli.</span>}
+            {copiato && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>Incollalo nella chat dell’allievo.</span>}
+            {erroreCopia && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>Copia non riuscita: seleziona il testo qui sopra.</span>}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -34450,6 +34626,15 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
       if (righeTitolo.length) yDx -= 2;
       righeTesto.forEach((r) => { pagina.drawText(r, { x: xTesto, y: yDx - 9.5, size: 9.5, font: normale, color: GRIGIO_PDF }); yDx -= 9.5 * 1.45; });
       y = cima - altezza - 8;
+    } else if (b.tipo === "benvenuto") {
+      // sulla carta i menu non esistono: resta il modello com'e' scritto,
+      // segnaposto compresi. E' comunque l'unica cosa che vale la pena
+      // rileggere di questo blocco.
+      y -= 4;
+      scriviRighe(righeDi(String(b.titolo || "").toUpperCase(), grassetto, 11, LARGHEZZA), { size: 11, font: grassetto, interlinea: 1.3 });
+      if (b.spiega) scriviRighe(righeDi(b.spiega, normale, 9.5, LARGHEZZA), { size: 9.5, colore: GRIGIO_PDF });
+      scriviRighe(righeDi(b.testo, normale, 10, LARGHEZZA), { size: 10, interlinea: 1.5 });
+      y -= 8;
     } else if (b.tipo === "copia") {
       y -= 4;
       scriviRighe(righeDi(String(b.titolo || "").toUpperCase(), grassetto, 11, LARGHEZZA), { size: 11, font: grassetto, interlinea: 1.3 });
@@ -34486,7 +34671,7 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
 // con WhatsApp dentro; sulla pagina interna quel tasto e' un invito a
 // sbagliare, e il PDF si scarica e basta — anche da telefono, dove per il
 // documento era nascosto perche' li' si condivide.
-function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative", perAllievo = true }) {
+function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative", perAllievo = true, datiBenvenuto = null }) {
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   const riga = (testi || []).find((t) => t.chiave === chiave) || null;
@@ -34588,6 +34773,8 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
         ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo link", url: "https://", testo: "A cosa serve, in una riga" }
       : tipo === "copia"
         ? { id: `b${Date.now()}`, tipo, titolo: "Nuovo blocco da copiare", spiega: "A cosa serve, in una riga", testo: "Scrivi qui il testo da copiare,\nriga per riga." }
+      : tipo === "benvenuto"
+        ? { id: `b${Date.now()}`, tipo, titolo: "Messaggio di benvenuto", spiega: "Scegli la classe e l’allievo: il messaggio si compila da solo.", testo: MESSAGGIO_BENVENUTO_PREDEFINITO }
         : { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
     if (await salvaBlocchi([...blocchi, nuovo])) apriModifica(nuovo);
   }
@@ -34600,7 +34787,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
     if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
     if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#5E5039", background: "#F5EEDD", border: "1px solid #E6D9B8", borderRadius: 12, padding: "12px 14px 12px 46px", lineHeight: 1.6, margin: "14px 0 22px", position: "relative" };
     if (tipo === "tappa") return { marginBottom: 12 };
-    if (tipo === "link" || tipo === "copia") return { marginBottom: 14 };
+    if (tipo === "link" || tipo === "copia" || tipo === "benvenuto") return { marginBottom: 14 };
     if (tipo === "testata") return {};
     return { ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, marginBottom: 12 };
   }
@@ -34702,6 +34889,12 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
                 : b.tipo === "tappa" ? <TappaNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "link" ? <LinkNormativa blocco={b} isMobile={isMobile} />
                 : b.tipo === "copia" ? <BloccoDaCopiare blocco={b} isMobile={isMobile} />
+                : b.tipo === "benvenuto" ? (
+                  <ConfiguratoreBenvenuto
+                    blocco={b} isMobile={isMobile} dati={datiBenvenuto}
+                    programmatore={programmatore} onModifica={() => apriModifica(b)}
+                  />
+                )
                 : b.tipo === "nota" ? (
                   <>
                     {/* la "i" nel tondo, come sulla locandina */}
@@ -34722,6 +34915,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             <Button variant="ghost" onClick={() => aggiungiBlocco("tappa")}>+ Tappa</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("link")}>+ Link da copiare</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("copia")}>+ Testo da copiare</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("benvenuto")}>+ Messaggio di benvenuto</Button>
           </div>
         )}
 
@@ -71285,6 +71479,13 @@ export default function App() {
           testoIniziale={NORMATIVA_ISCRIZIONE_ALLIEVI}
           ricarica={fetchDati}
           perAllievo={false}
+          datiBenvenuto={{
+            corsi, location, corsiDate, iscritti, master, corsiDateDocenti,
+            // chi e' entrato come master vede solo le SUE classi; l'ufficio
+            // e chi programma le vedono tutte, perche' capita di mandare il
+            // messaggio per conto di qualcun altro
+            masterId: utenteLoggato?.masterId || null,
+          }}
           onBack={() => setView("normative")}
           titolo={etichettaTasto("normative", "iscrizioneallievi", "Iscrizione Allievi")}
         />
