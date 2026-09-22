@@ -66769,12 +66769,6 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   function rimuoviRigaRipartizione(idx) { setRigheRipartizione((p) => p.filter((_, i) => i !== idx)); }
   const sommaPercentuali = round2(righeRipartizione.reduce((s, r) => s + (parseNum(r.percentuale) || 0), 0));
 
-  async function salva() {
-    if (!categoriaId || !sottocategoriaId) { setMsg("Scegli categoria e sotto-categoria."); return; }
-    const imp = parseNum(imponibile);
-    if (!imp) { setMsg("Inserisci un imponibile."); return; }
-    if (ripartisci && sommaPercentuali !== 100) { setMsg(`Le percentuali di ripartizione devono sommare 100% (ora ${sommaPercentuali}%).`); return; }
-
   // Crea un fornitore al volo dalla tendina, quando quello che serve non
   // c'e' ancora. Nasce col solo nome: il resto (IBAN, categoria di
   // default, partita IVA) si completa da Anagrafiche quando serve —
@@ -66792,6 +66786,12 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     ricarica?.(["fornitori"]);
     return data.id;
   }
+
+  async function salva() {
+    if (!categoriaId || !sottocategoriaId) { setMsg("Scegli categoria e sotto-categoria."); return; }
+    const imp = parseNum(imponibile);
+    if (!imp) { setMsg("Inserisci un imponibile."); return; }
+    if (ripartisci && sommaPercentuali !== 100) { setMsg(`Le percentuali di ripartizione devono sommare 100% (ora ${sommaPercentuali}%).`); return; }
 
     setSalvando(true);
     let fornitoreIdFinale = fornitoreId;
