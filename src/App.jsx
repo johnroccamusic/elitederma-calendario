@@ -66627,6 +66627,10 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   const [totale, setTotale] = useState(spesaEsistente?.totale != null ? String(spesaEsistente.totale) : (prefill?.totale != null ? String(prefill.totale) : ""));
   const [iva, setIva] = useState(spesaEsistente?.iva_percentuale ?? (prefill?.ivaPercentuale ?? 22));
   const [esenteIva, setEsenteIva] = useState(spesaEsistente ? spesaEsistente.iva_percentuale === 0 : prefill?.ivaPercentuale === 0);
+  // Stipendi e contributi non sono acquisti esenti: sono uscite fiscali o
+  // contributive, e l'importo vale per intero. Segnarle solo come "esente
+  // IVA" le confondeva con una fattura senza imposta, che e' un'altra cosa.
+  const [naturaFiscale, setNaturaFiscale] = useState(spesaEsistente?.natura_fiscale || "");
   const [stato, setStato] = useState(spesaEsistente?.stato || prefill?.statoIniziale || "pagata");
   const [metodoPagamento, setMetodoPagamento] = useState(spesaEsistente?.metodo_pagamento || prefill?.metodoPagamento || "");
   // Contabilizza da Movimenti banca: al salvataggio il movimento resta
@@ -66694,13 +66698,19 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     window.open(data.url, "_blank");
   }
 
-  const ivaBloccata = esenteIva;
+  const ivaBloccata = esenteIva || !!naturaFiscale;
   const ivaEffettiva = ivaBloccata ? 0 : iva;
   function totaleDaImponibile(v, ivaPct) { return v === "" ? "" : String(round2(parseNum(v) * (1 + ivaPct / 100))); }
   function imponibileDaTotale(v, ivaPct) { return v === "" ? "" : String(round2(parseNum(v) / (1 + ivaPct / 100))); }
   function onImponibileChange(v) { setImponibile(v); setTotale(ivaBloccata ? v : totaleDaImponibile(v, ivaEffettiva)); }
   function onTotaleChange(v) { setTotale(v); setImponibile(ivaBloccata ? v : imponibileDaTotale(v, ivaEffettiva)); }
   function onIvaChange(v) { setIva(v); if (!ivaBloccata) setTotale(totaleDaImponibile(imponibile, v)); }
+  function onNaturaFiscaleChange(valore) {
+    const nuova = valore === naturaFiscale ? "" : valore;
+    setNaturaFiscale(nuova);
+    // qui l'imponibile E' il totale: non c'e' imposta da aggiungere
+    if (nuova) { setEsenteIva(true); setTotale(imponibile); }
+  }
   function onEsenteChange(checked) { setEsenteIva(checked); setTotale(checked ? imponibile : totaleDaImponibile(imponibile, iva)); }
 
   const sottocategorieDisponibili = sottocategorieDiCategoria(costiSottocategorie, categoriaId);
@@ -66756,6 +66766,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       scadenza_pagamento: scadenzaPagamento || null,
       competenza_da: competenzaDa || null, competenza_a: competenzaA || null,
       imponibile: imp, iva_percentuale: ivaEffettiva, totale: totale === "" ? imp : round2(parseNum(totale)),
+      natura_fiscale: naturaFiscale || null,
       allegato_path: allegatoPath || null, note: note.trim() || null,
       stato, metodo_pagamento: metodoPagamento || null,
       origine_scadenziario_chiave: prefill?.origineScadenziarioChiave ?? spesaEsistente?.origine_scadenziario_chiave ?? null,
@@ -66952,8 +66963,34 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           </div>
 
           <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, margin: "12px 0 6px" }}>
-            <input type="checkbox" checked={esenteIva} onChange={(e) => onEsenteChange(e.target.checked)} /> Importo esente IVA
+            <input type="checkbox" checked={esenteIva} onChange={(e) => onEsenteChange(e.target.checked)} disabled={!!naturaFiscale} /> Importo esente IVA
           </label>
+          {/* Stipendi e contributi: non sono acquisti esenti, sono uscite
+              fiscali o contributive. L'IVA non si chiede proprio e
+              l'importo scritto vale per intero. Ricliccando si torna a una
+              spesa normale. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 2, marginBottom: 6 }}>
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Oppure registra come:</span>
+            {[
+              { valore: "stipendi", testo: "Stipendi", spiega: "Salario: l'importo e' quello, senza IVA" },
+              { valore: "contributi", testo: "Contributi", spiega: "Spesa contributiva o fiscale: l'importo e' quello, senza IVA" },
+            ].map((o) => (
+              <button key={o.valore} type="button" title={o.spiega}
+                onClick={() => onNaturaFiscaleChange(o.valore)}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 999, padding: "6px 14px", cursor: "pointer",
+                  border: `1px solid ${naturaFiscale === o.valore ? NAVY : CREAM_BORDER}`,
+                  background: naturaFiscale === o.valore ? NAVY : "#fff",
+                  color: naturaFiscale === o.valore ? "#fff" : NAVY }}>
+                {o.testo}
+              </button>
+            ))}
+          </div>
+          {naturaFiscale && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.45 }}>
+              {naturaFiscale === "stipendi" ? "Registrata come salario" : "Registrata come spesa fiscale o contributiva"}: l'IVA non
+              si applica e l'importo scritto qui sotto vale per intero. Riclicca il tasto per tornare a una spesa normale.
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <div style={{ flex: 1 }}><Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field></div>
             <div style={{ flex: 1 }}>
