@@ -38167,27 +38167,33 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
       .sort((a, b) => (Number(b.stessoFornitore) - Number(a.stessoFornitore))
         || (Math.abs(Number(a.d.totale || 0) - totale) - Math.abs(Number(b.d.totale || 0) - totale)));
   }, [documentiFornitore, ricercaDoc, fornitore, totale, nomeFornitoreDi]);
-  // Una fattura arrivata che potrebbe essere questa scadenza: stesso
-  // importo e ancora scoperta. Serve solo a colorare la riga — non
-  // associa niente da sola, e' un invito a guardarla.
+  // Una fattura arrivata che potrebbe essere questa scadenza.
+  //
+  // Il solo importo non basta, e si e' visto: con 761 documenti ancora
+  // scoperti, cifre comuni come 200 o 350 euro trovano sempre qualcosa e
+  // lo scadenziario diventava tutto giallo. Il segnale che serve
+  // all'operatore e' un altro: "di QUESTO fornitore e' arrivata una
+  // fattura di QUESTO importo". Senza il fornitore non si segnala niente.
   const fatturaPossibile = useMemo(() => {
     if (fatturaAssociata) return null;
     const atteso = Math.abs(Number(totale) || 0);
     if (!(atteso > 0)) return null;
-    const scoperte = (documentiFornitore || []).filter((d) => d.tipo !== "nota_credito"
+    // "Master ANDREA PAURA" e "ANDREA PAURA" sono la stessa persona: si
+    // confrontano le parole vere, togliendo i titoli e la forma
+    // societaria che non distinguono nessuno
+    const parole = (testo) => String(testo || "").toLowerCase()
+      .replace(/[^a-zàèéìòù0-9]+/g, " ")
+      .split(" ")
+      .filter((w) => w.length >= 4 && !/^(master|assistente|venditore|quota|costo|srl|srls|spa|snc|sas|societa|limitata|responsabilita)$/.test(w));
+    const paroleRiga = new Set(parole(fornitore));
+    if (paroleRiga.size === 0) return null;
+    const candidate = (documentiFornitore || []).filter((d) => d.tipo !== "nota_credito"
       && Number(d.importo_allocato || 0) < Number(d.totale || 0) - 0.01
-      // margine stretto di proposito: con 761 documenti ancora scoperti,
-      // allargarlo colorerebbe di giallo mezzo scadenziario e il segnale
-      // non direbbe piu' niente. Meglio perdersi qualche caso che
-      // segnalarli tutti.
-      && Math.abs(Math.abs(Number(d.totale) || 0) - atteso) / atteso <= 0.01);
-    if (scoperte.length === 0) return null;
-    // se ce n'e' una dello stesso fornitore vale quella, e' la piu' probabile
-    const nomeRiga = String(fornitore || "").trim().toLowerCase();
-    const delFornitore = nomeRiga
-      ? scoperte.find((d) => String(nomeFornitoreDi ? nomeFornitoreDi(d.fornitore_id) : "").toLowerCase().includes(nomeRiga))
-      : null;
-    return delFornitore || scoperte[0];
+      && Math.abs(Math.abs(Number(d.totale) || 0) - atteso) / atteso <= 0.02);
+    return candidate.find((d) => {
+      const nomeDoc = nomeFornitoreDi ? nomeFornitoreDi(d.fornitore_id) : "";
+      return parole(nomeDoc).some((w) => paroleRiga.has(w));
+    }) || null;
   }, [documentiFornitore, fatturaAssociata, totale, fornitore, nomeFornitoreDi]);
 
   function cambiaClassificazione(campo, valore) { setClassificazione((c) => ({ ...c, [campo]: valore })); }
