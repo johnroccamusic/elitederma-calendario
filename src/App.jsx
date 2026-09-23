@@ -35882,17 +35882,31 @@ function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione,
         <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 10 }}>
           IVA per trimestre · {annoIva}
         </div>
+        {/* gli stessi riquadri segnalatori degli avvisi di Contabilita':
+            disco col medaglione a sinistra, filetto, etichetta e numero
+            grande. Il colore dice il verso — rosso a debito, verde a
+            credito, grigio quando non c'e' niente */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 16 }}>
-          {ivaAnno.trimestri.map((t) => (
-            <TileHome
-              key={t.indice}
-              title={`${t.nome} · ${fmtEuroIva(Math.abs(t.saldo))} ${t.saldo >= 0 ? "a debito" : "a credito"}`}
-              Icona={IconaRicevutaErp}
-              onClick={() => setTrimestreScelto(t.indice)}
-              evidenziato={trimestreScelto === t.indice}
-              etichettaDueRighe
-            />
-          ))}
+          {ivaAnno.trimestri.map((t) => {
+            const nulla = Math.abs(t.saldo) < 0.005;
+            const debito = t.saldo > 0;
+            const colore = nulla ? "#6E7391" : debito ? "#C0392B" : "#2E7D32";
+            return (
+              <RiquadroSegnalatore
+                key={t.indice}
+                etichetta={`${t.nome} · ${t.mesi}`}
+                valore={fmtEuroIva(Math.abs(t.saldo))}
+                nota={nulla ? "niente da liquidare" : debito ? "a debito" : "a credito"}
+                Icona={IconaRicevutaErp}
+                colore={colore}
+                disco={nulla ? "#6E7391" : debito ? "#C0392B" : "#2E7D32"}
+                sfondo={trimestreScelto === t.indice ? "#FBF6EA" : "#fff"}
+                evidenziato={trimestreScelto === t.indice}
+                onClick={() => setTrimestreScelto(t.indice)}
+                titolo={`${t.nome}: ${fmtEuroIva(t.debito)} a debito, ${fmtEuroIva(t.acquisti)} a credito`}
+              />
+            );
+          })}
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 16 }}>
