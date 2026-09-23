@@ -31991,6 +31991,10 @@ function PaginaProssimeContabilita({
   // centotre riepiloghi da scorrere per trovarne uno: l'intestazione con
   // corso, data e citta' basta a riconoscerlo, e il semaforo dice se c'e'
   // da fare qualcosa senza doverlo aprire.
+  // "da fare / fatti / da riaprire" sono i tre colori del semaforo detti
+  // come li direbbe chi lavora: rosso = da fare, verde = fatto,
+  // arancione = riaperto da vendite o incassi arrivati dopo la busta.
+  const [filtroStato, setFiltroStato] = useState("tutti");
   const [aperte, setAperte] = useState(() => new Set());
   const apriChiudi = (id) => setAperte((prec) => {
     const n = new Set(prec);
@@ -32034,6 +32038,20 @@ function PaginaProssimeContabilita({
       });
   }, [corsi, corsiDate, location, iscritti, spese, venditeShop, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, hotel, tab, oggi]);
 
+  // Il colore si calcola qui e non nel disegno: serve tre volte — per
+  // filtrare, per contare le pillole e per accendere la luce — e
+  // ricalcolarlo tre volte su centotre classi si sente.
+  const righeConStato = useMemo(
+    () => righe.map((r) => ({ ...r, stato: semaforoContabilita(r.cd, venditeShop, spese, busteTutte) })),
+    [righe, venditeShop, spese, busteTutte]
+  );
+  const quantiStato = useMemo(() => {
+    const c = { tutti: righeConStato.length, rosso: 0, arancione: 0, verde: 0 };
+    righeConStato.forEach((r) => { c[r.stato] += 1; });
+    return c;
+  }, [righeConStato]);
+  const righeViste = filtroStato === "tutti" ? righeConStato : righeConStato.filter((r) => r.stato === filtroStato);
+
   const quanti = useMemo(() => {
     let inarrivo = 0, storico = 0;
     (corsiDate || []).forEach((cd) => {
@@ -32043,7 +32061,10 @@ function PaginaProssimeContabilita({
     return { inarrivo, storico };
   }, [corsiDate, oggi]);
 
-  const totali = righe.reduce((acc, r) => ({
+  // la riga dei totali conta quello che si sta GUARDANDO: con un filtro
+  // acceso, numeri presi da tutto l'elenco direbbero il contrario di
+  // quello che si ha sotto gli occhi
+  const totali = righeViste.reduce((acc, r) => ({
     lordo: acc.lordo + r.conti.incassoLordo, daIncassare: acc.daIncassare + r.conti.daIncassare, allievi: acc.allievi + r.conti.allievi,
   }), { lordo: 0, daIncassare: 0, allievi: 0 });
 
@@ -32060,7 +32081,7 @@ function PaginaProssimeContabilita({
 
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
           <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>
-            <b>{righe.length}</b> {righe.length === 1 ? "classe" : "classi"} · <b>{totali.allievi}</b> allievi · incassato <b>{fmtEuroErp(totali.lordo)}</b> · da incassare <b style={{ color: totali.daIncassare > 0 ? "#C0392B" : "#2E7D32" }}>{fmtEuroErp(totali.daIncassare)}</b>
+            <b>{righeViste.length}</b> {righeViste.length === 1 ? "classe" : "classi"} · <b>{totali.allievi}</b> allievi · incassato <b>{fmtEuroErp(totali.lordo)}</b> · da incassare <b style={{ color: totali.daIncassare > 0 ? "#C0392B" : "#2E7D32" }}>{fmtEuroErp(totali.daIncassare)}</b>
           </span>
           <span style={{ display: "inline-flex", gap: 6, marginLeft: "auto" }}>
             <TabPillola attivo={tab === "inarrivo"} onClick={() => setTab("inarrivo")}>In arrivo ({quanti.inarrivo})</TabPillola>
@@ -32068,17 +32089,50 @@ function PaginaProssimeContabilita({
           </span>
         </div>
 
-        {righe.length === 0 ? (
+        {/* I tre stati, con la loro luce accanto al numero: si sceglie il
+            colore che si sta cercando invece di scorrere. I conteggi sono
+            di QUESTO elenco — in arrivo o storico — non di tutto. */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+          {[
+            { k: "tutti", l: "Tutte", colore: null },
+            { k: "rosso", l: "Da fare", colore: SEMAFORO_CONTABILITA.rosso.colore },
+            { k: "arancione", l: "Da riaprire", colore: SEMAFORO_CONTABILITA.arancione.colore },
+            { k: "verde", l: "Fatte", colore: SEMAFORO_CONTABILITA.verde.colore },
+          ].map((o) => {
+            const scelto = filtroStato === o.k;
+            return (
+              <button
+                key={o.k}
+                onClick={() => setFiltroStato(o.k)}
+                title={o.colore ? SEMAFORO_CONTABILITA[o.k].testo : "Tutte le classi di questo elenco"}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 7,
+                  ...fontBody, fontSize: 12.5, fontWeight: 700,
+                  color: scelto ? "#fff" : NAVY, background: scelto ? NAVY : "#fff",
+                  border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`, borderRadius: 999,
+                  padding: "7px 13px", cursor: "pointer",
+                }}
+              >
+                {o.colore && <span style={{ width: 9, height: 9, borderRadius: "50%", background: o.colore, flexShrink: 0 }} />}
+                {o.l} ({quantiStato[o.k]})
+              </button>
+            );
+          })}
+        </div>
+
+        {righeViste.length === 0 ? (
           <div style={{ ...cardStyle, ...fontBody, fontSize: 13.5, color: MUTED }}>
-            {tab === "storico" ? "Nessun corso passato." : "Nessun corso in programma: le contabilità da chiudere sono nello storico."}
+            {filtroStato !== "tutti"
+              ? `Nessuna classe in questo stato fra quelle ${tab === "storico" ? "passate" : "in arrivo"}.`
+              : tab === "storico" ? "Nessun corso passato." : "Nessun corso in programma: le contabilità da chiudere sono nello storico."}
           </div>
-        ) : righe.map(({ cd, corso, loc, conti }) => {
+        ) : righeViste.map(({ cd, corso, loc, conti, stato: chiaveStato }) => {
           const coloreCorso = corso?.colore || NAVY;
           const { numero, sotto } = etichettaIntervalloGiorni(cd.data_inizio, cd.data_fine);
           const inCorso = oggi >= cd.data_inizio && oggi <= cd.data_fine;
           const terminato = oggi > cd.data_fine;
           const scheda = aperte.has(cd.id);
-          const stato = SEMAFORO_CONTABILITA[semaforoContabilita(cd, venditeShop, spese, busteTutte)];
+          const stato = SEMAFORO_CONTABILITA[chiaveStato];
           return (
             <div key={cd.id} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: isMobile ? 14 : 16, marginBottom: 14, background: "#fff" }}>
               {/* Da telefono l'intestazione sta su una riga sola: data,
