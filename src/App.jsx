@@ -31987,6 +31987,24 @@ function PaginaProssimeContabilita({
   // Un corso finito la sua contabilita' l'ha gia' vista: se resta in mezzo
   // agli altri, ogni volta bisogna scorrerlo per arrivare a quelli veri.
   const [tab, setTab] = useState("inarrivo"); // inarrivo | storico
+  // Le schede nascono CHIUSE. Aperte tutte, questa pagina e' un muro di
+  // centotre riepiloghi da scorrere per trovarne uno: l'intestazione con
+  // corso, data e citta' basta a riconoscerlo, e il semaforo dice se c'e'
+  // da fare qualcosa senza doverlo aprire.
+  const [aperte, setAperte] = useState(() => new Set());
+  const apriChiudi = (id) => setAperte((prec) => {
+    const n = new Set(prec);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  // le buste chiuse servono al semaforo: senza, un'appendice gia' messa
+  // in cassa risulterebbe ancora aperta
+  const [busteTutte, setBusteTutte] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("corsi_date_buste").select("*").then(({ data }) => { if (vivo) setBusteTutte(data || []); });
+    return () => { vivo = false; };
+  }, []);
   const righe = useMemo(() => {
     const corsoPerId = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
     const locPerId = Object.fromEntries((location || []).map((l) => [l.id, l]));
@@ -32059,6 +32077,8 @@ function PaginaProssimeContabilita({
           const { numero, sotto } = etichettaIntervalloGiorni(cd.data_inizio, cd.data_fine);
           const inCorso = oggi >= cd.data_inizio && oggi <= cd.data_fine;
           const terminato = oggi > cd.data_fine;
+          const scheda = aperte.has(cd.id);
+          const stato = SEMAFORO_CONTABILITA[semaforoContabilita(cd, venditeShop, spese, busteTutte)];
           return (
             <div key={cd.id} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: isMobile ? 14 : 16, marginBottom: 14, background: "#fff" }}>
               {/* Da telefono l'intestazione sta su una riga sola: data,
@@ -32068,7 +32088,11 @@ function PaginaProssimeContabilita({
                   IVA erano gia' scritti tre centimetri piu' giu' dentro
                   "Incassi": la scheda diceva due volte le stesse cifre e
                   cominciava a scorrere prima di aver detto qualcosa. */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap" }}>
+              <div
+                onClick={() => apriChiudi(cd.id)}
+                title={scheda ? "Chiudi il riepilogo" : "Apri il riepilogo"}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap", cursor: "pointer" }}
+              >
                 <div style={{ display: "flex", gap: isMobile ? 9 : 14, alignItems: "center", minWidth: 0, flex: isMobile ? "1 1 auto" : "0 1 auto" }}>
                   <div style={{ background: coloreCorso, borderRadius: 12, padding: isMobile ? "7px 10px" : "10px 14px", textAlign: "center", flexShrink: 0 }}>
                     <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? (isMobile ? 13 : 14) : (isMobile ? 17 : 20), fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numero}</div>
@@ -32097,9 +32121,19 @@ function PaginaProssimeContabilita({
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   {inCorso && <span style={{ ...fontDisplay, fontSize: isMobile ? 12 : 16, fontWeight: 700, color: "#2E7D32" }}>IN CORSO</span>}
                   {!inCorso && terminato && <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 700, color: MUTED }}>Terminato</span>}
+                  {/* la luce: tonda, piena, col suo alone. Il titolo dice
+                      cosa vuol dire, perche' un colore da solo lo si
+                      impara una volta e poi lo si dimentica */}
+                  <span
+                    title={stato.testo}
+                    style={{ width: isMobile ? 15 : 17, height: isMobile ? 15 : 17, borderRadius: "50%", background: stato.colore, boxShadow: `0 0 0 4px ${stato.sfondo}`, flexShrink: 0 }}
+                  />
+                  <span style={{ display: "inline-flex", color: MUTED, transform: scheda ? "rotate(180deg)" : "none", transition: "transform 120ms" }}>
+                    <SpIcoChevron aperto={false} s={isMobile ? 17 : 19} />
+                  </span>
                   <Button
                     variant="ghost"
-                    onClick={() => onApriClasse(cd)}
+                    onClick={(e) => { e.stopPropagation(); onApriClasse(cd); }}
                     style={isMobile ? { fontSize: 12, padding: "7px 12px", borderRadius: 12, border: `1px solid ${GOLD}`, whiteSpace: "nowrap" } : {}}
                   >
                     Vedi classe ›
@@ -32107,7 +32141,7 @@ function PaginaProssimeContabilita({
                 </div>
               </div>
 
-              {!isMobile && (
+              {scheda && !isMobile && (
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
                   {[
                     { etichetta: "Allievi", valore: String(conti.allievi), tinta: NAVY },
@@ -32126,6 +32160,7 @@ function PaginaProssimeContabilita({
               {/* il riepilogo amministrativo vero, non un riassunto: e' lo
                   stesso componente che si apre dentro la scheda del corso,
                   con gli stessi campi modificabili */}
+              {scheda && (
               <div style={{ marginTop: 14 }}>
                 <PannelloRiepilogoAmministrativo
                   quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni} corsi={corsi}
@@ -32136,6 +32171,7 @@ function PaginaProssimeContabilita({
                   ricarica={ricarica}
                 />
               </div>
+              )}
             </div>
           );
         })}
@@ -40482,6 +40518,27 @@ function contiAppendici({ cd, venditeShop, spese, buste }) {
     vuota: vendite.length === 0 && speseAperta.length === 0,
   };
   return { chiuse, aperta };
+}
+
+// Il semaforo della contabilita' di una classe. Tre stati, e si leggono
+// da lontano senza aprire niente:
+//   rosso     la busta non e' ancora in cassa: c'e' da lavorare
+//   arancione la busta e' in cassa, ma dopo sono arrivate vendite o
+//             incassi e c'e' un'appendice aperta da chiudere
+//   verde     tutto chiuso, niente in sospeso
+//
+// Vale per i corsi passati come per quelli futuri: un corso di domani e'
+// rosso perche' la sua busta non esiste ancora, ed e' giusto — il rosso
+// qui non vuol dire "sbagliato", vuol dire "non e' finita".
+const SEMAFORO_CONTABILITA = {
+  rosso: { colore: "#C0392B", sfondo: "#FBE4E1", testo: "Da chiudere: la busta non è ancora in cassa." },
+  arancione: { colore: "#C77A18", sfondo: "#FBEEDA", testo: "Busta in cassa, ma dopo sono arrivate vendite o incassi: c'è un'appendice da chiudere." },
+  verde: { colore: "#2E7D32", sfondo: "#E3F3E5", testo: "Chiuso: busta in cassa e niente in sospeso." },
+};
+function semaforoContabilita(cd, venditeShop, spese, buste) {
+  if (!cd?.busta_rientrata_il) return "rosso";
+  const { aperta } = contiAppendici({ cd, venditeShop, spese, buste });
+  return aperta && !aperta.vuota ? "arancione" : "verde";
 }
 
 // Una riga di pagamento dell'appendice: voce, importo, cestino. Piu'
