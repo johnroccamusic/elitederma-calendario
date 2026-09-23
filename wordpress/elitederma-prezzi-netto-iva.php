@@ -38,6 +38,12 @@ define( 'ELITEDERMA_PREZZI_JS', <<<'JS'
 (function () {
   var RADICE = (window.elitedermaPrezzi && window.elitedermaPrezzi.store) || "/wp-json/wc/store/v1/cart";
   var CLASSE = "elitederma-dettaglio";
+  // L'aliquota con cui scorporare, usata SOLO se il negozio non calcola
+  // l'IVA da se' (oggi e' cosi': in WooCommerce le imposte sono spente e
+  // i prezzi sono gia' lordi). Tutti i 171 prodotti a catalogo sono al
+  // 22%: se un giorno non lo fossero piu', questo numero non basta piu'
+  // e va acceso il calcolo delle imposte in WooCommerce.
+  var ALIQUOTA = 22;
   var dati = null;
   var inCorso = false;
 
@@ -67,26 +73,47 @@ define( 'ELITEDERMA_PREZZI_JS', <<<'JS'
   // il dettaglio di una voce: netto, sconto con la sua percentuale,
   // netto scontato, IVA e totale. I numeri sono quelli della Store API,
   // non ricalcolati dal prezzo a video
+  // Il dettaglio di una voce.
+  //
+  // Su questo negozio WooCommerce ha l'IVA SPENTA: i prezzi sono gia'
+  // lordi e line_total_tax torna zero. Quindi l'imponibile non ce lo da'
+  // nessuno e va ricavato dal lordo con l'aliquota qui sopra. E' l'unico
+  // numero che questo codice calcola invece di leggerlo, ed e' scritto
+  // in un posto solo: se un domani il negozio accende l'IVA, si cancella
+  // questa divisione e si torna a leggere line_total_tax.
+  //
+  // Le righe si leggono dall'alto in basso e tornano tutte:
+  //   netto + IVA = prezzo pieno; prezzo pieno - sconto = totale.
+  // Lo sconto NON si sottrae dal netto della prima riga: WooCommerce lo
+  // toglie dal lordo, e scriverlo fra due imponibili darebbe una
+  // sottrazione che non torna.
   function blocco(voce, t) {
-    var netto = Number(voce.totals.line_subtotal);
-    var dopo = Number(voce.totals.line_total);
-    var imposta = Number(voce.totals.line_total_tax || 0);
-    if (!(netto > 0)) return null;
-    var sconto = netto - dopo;
+    var lordo = Number(voce.totals.line_subtotal);
+    var daPagare = Number(voce.totals.line_total);
+    var impostaWoo = Number(voce.totals.line_total_tax || 0);
+    if (!(lordo > 0)) return null;
+
+    // se il negozio calcola l'IVA per conto suo si usa la sua, sempre
+    var conIvaDiWoo = impostaWoo > 0;
+    var aliquota = conIvaDiWoo
+      ? Math.round((impostaWoo / (daPagare)) * 1000) / 10
+      : ALIQUOTA;
+    var netto = conIvaDiWoo ? Number(voce.totals.line_subtotal) : lordo / (1 + aliquota / 100);
+    var pienoLordo = conIvaDiWoo ? lordo + Number(voce.totals.line_subtotal_tax || 0) : lordo;
+    var sconto = pienoLordo - (conIvaDiWoo ? daPagare + impostaWoo : daPagare);
+    var totale = conIvaDiWoo ? daPagare + impostaWoo : daPagare;
+
     var box = document.createElement("div");
     box.className = CLASSE;
     box.style.cssText = "margin-top:6px;font-size:.82em;line-height:1.5;opacity:.92;max-width:320px;";
     box.appendChild(riga("Netto", soldi(netto, t)));
+    box.appendChild(riga("IVA " + String(Math.round(aliquota * 10) / 10).replace(".", ",") + "%", soldi(pienoLordo - netto, t)));
     if (sconto > 0.5) {
-      var pct = Math.round(sconto / netto * 1000) / 10;
-      box.appendChild(riga("Sconto " + String(pct).replace(".", ",") + "%", "− " + soldi(sconto, t), "#2E7D32"));
-      box.appendChild(riga("Netto scontato", soldi(dopo, t)));
+      box.appendChild(riga("Prezzo pieno", soldi(pienoLordo, t)));
+      var pctSulNetto = Math.round(sconto / netto * 1000) / 10;
+      box.appendChild(riga("Sconto " + String(pctSulNetto).replace(".", ",") + "%", "− " + soldi(sconto, t), "#2E7D32"));
     }
-    if (imposta > 0) {
-      var aliq = Math.round(imposta / dopo * 1000) / 10;
-      box.appendChild(riga("IVA " + String(aliq).replace(".", ",") + "%", soldi(imposta, t)));
-    }
-    box.appendChild(riga("Totale", soldi(dopo + imposta, t), "", true));
+    box.appendChild(riga("Totale", soldi(totale, t), "", true));
     return box;
   }
 
