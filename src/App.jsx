@@ -43067,6 +43067,276 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
     </div>
   );
 }
+// ---------- Ciclo passivo ----------
+// Una riga per spesa e due semafori: i SOLDI (da pagare → disposto → in
+// estratto conto) e la CARTA (manca → arrivata → agganciata).
+//
+// I tre percorsi che sembravano tre processi diversi — pago e poi mi
+// fatturano, mi fatturano e poi pago, l'addebito arriva dalla banca senza
+// che nessuno l'avesse previsto — sono soltanto i tre ordini in cui
+// possono arrivare quei due fatti. Chi arriva primo fa nascere la riga,
+// chi arriva dopo ci si aggancia: l'ordine smette di contare, e conta
+// solo che i due semafori si riempiano.
+//
+// FASE 0: questa scheda legge e basta. Nessun tasto che scrive, nessuna
+// tabella nuova, nessuna migrazione. Sta in parallelo alle schermate di
+// sempre, che restano tutte dove sono: se un numero non torna si aggiusta
+// il calcolo qui, non i dati.
+const CICLO_TESTI_SOLDI = ["Da pagare", "Disposto", "In estratto conto"];
+const CICLO_TESTI_CARTA = ["Manca", "Arrivata", "Agganciata"];
+const CICLO_STATI = {
+  ritardo: { colore: "#C0392B", sfondo: "#FBE4E1", etichetta: "In ritardo", sotto: "scadute e non pagate" },
+  pronte: { colore: "#1F4E8C", sfondo: "#EEF3FA", etichetta: "Da disporre", sotto: "fattura in mano" },
+  attesa: { colore: "#C77A18", sfondo: "#FBEEDA", etichetta: "Manca la fattura", sotto: "soldi già usciti" },
+  chiuse: { colore: "#2E7D32", sfondo: "#E3F3E5", etichetta: "Chiuse", sotto: "niente in sospeso" },
+};
+
+// In quale casella cade una riga. "impegni" non è una coda di lavoro:
+// sono i costi che il Riepilogo ha già deciso e per cui la fattura non è
+// ancora arrivata — non chiedono niente a nessuno, servono perché la
+// fattura, quando arriva, sappia dove atterrare.
+function cicloGruppoDi(r) {
+  if (r.senzaDoc) return "chiuse";
+  if (r.carta === 2 && r.soldi >= 1) return "chiuse";
+  if (r.soldi >= 1) return "attesa";
+  return r.carta >= 1 ? "pronte" : "impegni";
+}
+// Il ritardo è un sottoinsieme delle non pagate, non una casella a sé:
+// continua a essere contato anche dalla sua casella di appartenenza, così
+// nessun totale perde dei pezzi.
+function cicloInRitardo(r, oggiStr) { return r.soldi === 0 && r.data && r.data < oggiStr; }
+
+// Unisce quello che c'è già: le voci calcolate dal Riepilogo delle
+// classi, le spese vere (pagate e non) e i movimenti di banca in uscita
+// che nessuno ha ancora contabilizzato. Funzione pura, senza I/O: chi
+// chiama passa dati già caricati e riceve indietro solo righe.
+function costruisciRigheCicloPassivo({ daPagareVirtuali, speseDaPagareReali, spese, movimentiBanca, fornitoriById, costiSottocategorie, etichettaCorso, importoVivoDiSpesa }) {
+  const righe = [];
+  // le spese che la banca ha già confermato: è il movimento che punta
+  // alla spesa, non il contrario
+  const speseViste = new Set((movimentiBanca || [])
+    .filter((m) => m.stato === "riconciliato" && m.collegato_tipo === "spesa" && m.collegato_id)
+    .map((m) => m.collegato_id));
+
+  // 1. le voci del Riepilogo: costo del corso già deciso, fattura non
+  //    arrivata, cassa ferma
+  (daPagareVirtuali || []).forEach((v) => {
+    righe.push({
+      key: `virt_${v.key}`, fonte: "Riepilogo",
+      fornitore: v.fornitore || v.nome || "—", descrizione: v.nome || "—",
+      ambito: v.corsoData ? etichettaCorso(v.corsoData) : "—",
+      importo: round2(v.totale || 0), data: v.scadenza || null,
+      soldi: 0, carta: 0,
+    });
+  });
+
+  // 2. le spese vere non ancora pagate: nate da "Registra fattura" o
+  //    scritte a mano. Col numero del documento la carta c'è già.
+  (speseDaPagareReali || []).forEach((x) => {
+    const s = x.spesa;
+    righe.push({
+      key: `spesa_${s.id}`, spesaId: s.id, fonte: s.numero_documento ? "Fatt.Cloud" : "Manuale",
+      fornitore: fornitoriById[s.fornitore_id]?.nome || "—",
+      descrizione: s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "Spesa",
+      ambito: x.corsoData ? etichettaCorso(x.corsoData) : "—",
+      importo: round2(importoVivoDiSpesa(s)), data: s.scadenza_pagamento || s.data_documento || null,
+      soldi: 0, carta: s.numero_documento ? 2 : 0,
+      gruppo: s.gruppo_pagamento || null,
+    });
+  });
+
+  // 3. le spese già pagate. Dalla cassa i soldi sono usciti e basta —
+  //    nessun istituto le vedrà mai, quindi il semaforo è pieno subito.
+  //    Con un altro metodo si ferma a "disposto" finché l'estratto conto
+  //    non lo conferma.
+  //    "Cash no iva" è oggi l'unico segnale che dice "fattura non
+  //    prevista": la casella esplicita arriva in fase 4, qui si legge
+  //    quello che c'è già.
+  (spese || [])
+    .filter((s) => s.stato === "pagata" && (s.data_pagamento || s.data_documento || "") >= INIZIO_CONTABILITA)
+    .forEach((s) => {
+      const dallaCassa = METODI_SPESA_DALLA_CASSA.has(s.metodo_pagamento || "");
+      const vistaInBanca = speseViste.has(s.id);
+      righe.push({
+        key: `pagata_${s.id}`, spesaId: s.id,
+        fonte: dallaCassa ? "Cassa" : (vistaInBanca ? "Banca" : "Manuale"),
+        fornitore: fornitoriById[s.fornitore_id]?.nome || "—",
+        descrizione: s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "Spesa",
+        ambito: s.classe_id ? "Costo di classe" : "Sede centrale",
+        importo: round2(s.totale || 0), data: s.data_pagamento || s.data_documento || null,
+        soldi: dallaCassa || vistaInBanca ? 2 : 1,
+        carta: s.numero_documento ? 2 : 0,
+        senzaDoc: String(s.metodo_pagamento || "").toLowerCase() === "cash no iva",
+        gruppo: s.gruppo_pagamento || null,
+      });
+    });
+
+  // 4. le uscite che la banca ha portato e che nessuno ha contabilizzato:
+  //    Trenitalia, carburante, addebiti che non erano previsti da nessuna
+  //    parte. I soldi sono usciti davvero, la carta manca.
+  (movimentiBanca || [])
+    .filter((m) => m.stato === "nuovo" && Number(m.importo) < 0)
+    .forEach((m) => {
+      righe.push({
+        key: `banca_${m.id}`, movimentoId: m.id, fonte: "Banca",
+        fornitore: controparteBanca(m.descrizione, m.causale) || "—",
+        descrizione: m.descrizione || "Movimento di banca", ambito: "Da classificare",
+        importo: round2(Math.abs(Number(m.importo) || 0)), data: m.data_operazione || null,
+        soldi: 2, carta: 0,
+      });
+    });
+
+  return righe;
+}
+
+// Il semaforo: tre tacche che si riempiono, con sopra la parola. Due
+// semafori affiancati si leggono con la coda dell'occhio scorrendo trenta
+// righe; due numeri no.
+function CicloSemaforo({ livello, testi, tinta }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: tinta, lineHeight: 1.2 }}>{testi[livello]}</span>
+      <span style={{ display: "flex", gap: 3 }}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} style={{ height: 5, flex: 1, borderRadius: 3, background: i <= livello ? tinta : "#E2DDD0" }} />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function SchedaCicloPassivo({ righe, caricando, oggiStr, onApriSpesa }) {
+  const isMobile = useIsMobile();
+  const [filtro, setFiltro] = useState(null);
+  const [ricerca, setRicerca] = useState("");
+
+  const conti = { ritardo: 0, pronte: 0, attesa: 0, chiuse: 0, impegni: 0 };
+  const somme = { ritardo: 0, pronte: 0, attesa: 0, chiuse: 0, impegni: 0 };
+  let inAttesaEstrattoConto = 0;
+  righe.forEach((r) => {
+    const g = cicloGruppoDi(r);
+    conti[g] += 1; somme[g] = round2(somme[g] + r.importo);
+    if (cicloInRitardo(r, oggiStr)) { conti.ritardo += 1; somme.ritardo = round2(somme.ritardo + r.importo); }
+    if (g === "chiuse" && r.soldi === 1) inAttesaEstrattoConto += 1;
+  });
+
+  const q = ricerca.trim().toLowerCase();
+  const visibili = righe
+    .filter((r) => (filtro === "ritardo" ? cicloInRitardo(r, oggiStr) : (!filtro || cicloGruppoDi(r) === filtro)))
+    .filter((r) => !q || `${r.fornitore} ${r.descrizione} ${r.ambito}`.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const ca = cicloGruppoDi(a) === "chiuse" ? 1 : 0, cb = cicloGruppoDi(b) === "chiuse" ? 1 : 0;
+      return ca - cb || String(a.data || "9999").localeCompare(String(b.data || "9999"));
+    });
+
+  function tintaLivello(l) { return l === 0 ? MUTED : l === 1 ? "#C77A18" : "#2E7D32"; }
+
+  if (caricando) return <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "28px 4px" }}>Carico i movimenti di banca…</div>;
+
+  return (
+    <div>
+      {/* le quattro caselle di lavoro: chi apre questa pagina vuole sapere
+          quanto lavoro c'e' e dove, non scorrere trecento righe */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 6 : 12, marginBottom: 10 }}>
+        {["ritardo", "pronte", "attesa", "chiuse"].map((k) => {
+          const s = CICLO_STATI[k];
+          const attivo = filtro === k;
+          const sotto = k === "chiuse"
+            ? (inAttesaEstrattoConto ? `${inAttesaEstrattoConto} attende l'estratto conto` : s.sotto)
+            : (conti[k] ? fmtEuroErp(somme[k]) : s.sotto);
+          return (
+            <button
+              key={k}
+              onClick={() => setFiltro(attivo ? null : k)}
+              title={s.sotto}
+              style={{
+                display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-start", textAlign: "left",
+                background: attivo ? s.sfondo : "#fff", border: `1px solid ${attivo ? s.colore : CREAM_BORDER}`,
+                borderTop: `3px solid ${s.colore}`, borderRadius: 14, padding: "12px 13px 11px", cursor: "pointer", minWidth: 0,
+              }}
+            >
+              <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: s.colore, lineHeight: 1 }}>{conti[k]}</span>
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{s.etichetta}</span>
+              <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, lineHeight: 1.3 }}>{sotto}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* i costi impegnati non stanno fra le caselle di lavoro: non
+          chiedono niente. Sono un promemoria — e l'appiglio a cui la
+          fattura si aggancera' quando arriva */}
+      <button
+        onClick={() => setFiltro(filtro === "impegni" ? null : "impegni")}
+        style={{
+          display: "flex", alignItems: "baseline", gap: 12, width: "100%", textAlign: "left", cursor: "pointer",
+          background: filtro === "impegni" ? "#FBF3E0" : "transparent",
+          border: filtro === "impegni" ? "1px solid #B8860B" : `1px dashed ${CREAM_BORDER}`,
+          borderRadius: 12, padding: "10px 14px", marginBottom: 16,
+        }}
+      >
+        <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: "#B8860B", flexShrink: 0 }}>{fmtEuroErp(somme.impegni)}</span>
+        <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>
+          <b style={{ color: GRAFITE }}>{conti.impegni} costi impegnati, fattura non arrivata.</b> Sono gia' nel riepilogo dei corsi e non chiedono niente: servono perche' la fattura, quando arriva, sappia dove atterrare.
+        </span>
+      </button>
+
+      <input
+        value={ricerca} onChange={(e) => setRicerca(e.target.value)}
+        placeholder="Cerca fornitore, classe, descrizione…"
+        style={{ ...inputStyle, marginBottom: 12 }}
+      />
+
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, overflow: "hidden" }}>
+        {visibili.length === 0 && (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "34px 16px", textAlign: "center" }}>Niente qui.</div>
+        )}
+        {visibili.map((r) => {
+          const tardi = cicloInRitardo(r, oggiStr);
+          const chiusa = cicloGruppoDi(r) === "chiuse";
+          return (
+            <div
+              key={r.key}
+              onClick={() => r.spesaId && onApriSpesa?.(r.spesaId)}
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "minmax(0,2.4fr) 120px 108px 150px 150px",
+                gap: isMobile ? 8 : 10, alignItems: "center",
+                padding: isMobile ? "12px 14px" : "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`,
+                cursor: r.spesaId ? "pointer" : "default",
+                background: tardi ? "linear-gradient(90deg, #FBE4E1 0 3px, transparent 3px)" : "transparent",
+                opacity: chiusa ? 0.72 : 1,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{r.fornitore}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.35, marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: GRAFITE, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 4, padding: "1px 5px" }}>{r.fonte}</span>
+                  {r.gruppo && <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 4, padding: "1px 5px" }}>Un bonifico solo</span>}
+                  <span>{r.descrizione} · {r.ambito}</span>
+                </div>
+              </div>
+              <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, textAlign: isMobile ? "left" : "right", fontVariantNumeric: "tabular-nums" }}>{fmtEuroErp(r.importo)}</div>
+              <div style={{ ...fontBody, fontSize: 12, color: tardi ? "#C0392B" : GRAFITE, fontWeight: tardi ? 700 : 400, fontVariantNumeric: "tabular-nums" }}>
+                <span style={{ display: "block", fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{r.soldi === 0 ? "scadenza" : "pagata il"}</span>
+                {r.data ? fmtData(r.data) : "—"}
+              </div>
+              <CicloSemaforo livello={r.soldi} testi={CICLO_TESTI_SOLDI} tinta={tintaLivello(r.soldi)} />
+              {r.senzaDoc
+                ? <CicloSemaforo livello={2} testi={["", "", "Non prevista"]} tinta="#B9B3A4" />
+                : <CicloSemaforo livello={r.carta} testi={CICLO_TESTI_CARTA} tinta={tintaLivello(r.carta)} />}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 14 }}>
+        Questa pagina legge soltanto: non scrive niente e non tocca nessuna delle schermate di sempre, che restano tutte al loro posto. Serve a vedere se il modello regge sui dati veri, prima di cambiare il modo di lavorare.
+      </div>
+    </div>
+  );
+}
+
 function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriNuovaSpesaDaMovimentoBanca, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "passivo");
@@ -43076,6 +43346,22 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // ripartire dall'ultimo tab attivo, non da quello di default
   useEffect(() => { onCambiaTab?.(tab); }, [tab]);
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
+  // Ciclo passivo: i movimenti di banca non sono fra i dati che questa
+  // pagina riceve gia' (li carica da se' la scheda "Movimenti banca"), e
+  // qui servono solo per sapere quali spese l'estratto conto ha gia'
+  // confermato. Si caricano alla prima apertura della scheda e non piu':
+  // aprire Contabilita' non deve costare una query in piu' a chi va da
+  // un'altra parte.
+  const [movimentiCiclo, setMovimentiCiclo] = useState(null);
+  useEffect(() => {
+    if (tab !== "ciclo" || movimentiCiclo) return;
+    let vivo = true;
+    supabase.from("movimenti_banca")
+      .select("id, data_operazione, importo, descrizione, causale, stato, collegato_tipo, collegato_id")
+      .order("data_operazione", { ascending: false }).limit(1500)
+      .then(({ data }) => { if (vivo) setMovimentiCiclo(data || []); });
+    return () => { vivo = false; };
+  }, [tab]);
   const [subTabAttivo, setSubTabAttivo] = useState("attive");
   const [msg, setMsg] = useState("");
 
@@ -43266,6 +43552,19 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
       oggetto: `${membri.length} spese: ${membri.map((m) => m.spesa.descrizione || "—").join(" · ")}`,
     });
   });
+
+  // Ciclo passivo: le righe delle quattro fonti in un elenco solo. Si
+  // calcola solo quando quella scheda e' aperta — e' l'unione di tutto il
+  // passivo, non c'e' ragione di farla per chi sta guardando altro.
+  const righeCicloPassivo = useMemo(
+    () => (tab === "ciclo" && movimentiCiclo
+      ? costruisciRigheCicloPassivo({
+          daPagareVirtuali, speseDaPagareReali, spese, movimentiBanca: movimentiCiclo,
+          fornitoriById, costiSottocategorie, etichettaCorso, importoVivoDiSpesa,
+        })
+      : []),
+    [tab, movimentiCiclo, daPagareVirtuali, speseDaPagareReali, spese, fornitori, costiSottocategorie],
+  );
 
   // occorrenze "da pagare" degli Abbonamenti e contratti: stessa logica
   // delle altre righe virtuali, una per scadenza di periodicità già
@@ -44013,6 +44312,31 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
             respirare invece di far sembrare le due file un unico blocco. */}
         <div style={{ height: 1, background: "#D5C9AF", margin: isMobile ? "14px 0" : "20px 0" }} />
 
+        {/* Il Ciclo passivo non e' una scheda fra le altre: e' il posto da
+            cui si guarda tutto il passivo insieme, e le nove schede qui
+            sotto diventano il dettaglio. Sta in una fascia sua, larga,
+            sopra la griglia — che resta di cinque per fila com'era. */}
+        <button
+          onClick={() => setTab(tab === "ciclo" ? "passivo" : "ciclo")}
+          style={{
+            display: "flex", alignItems: "center", gap: 12, width: "100%", maxWidth: LARGHEZZA_SCHEDE_CONTABILITA,
+            margin: "0 auto 12px", textAlign: "left", cursor: "pointer",
+            background: tab === "ciclo" ? NAVY : "#fff",
+            border: `1px solid ${tab === "ciclo" ? NAVY : CREAM_BORDER}`,
+            borderLeft: `3px solid ${GOLD}`, borderRadius: 14, padding: "13px 16px",
+          }}
+        >
+          <span style={{ width: 30, height: 30, borderRadius: 8, background: tab === "ciclo" ? "rgba(255,255,255,0.18)" : BG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <IconaTileCostiRicavi size={16} color={tab === "ciclo" ? "#fff" : GOLD} />
+          </span>
+          <span style={{ minWidth: 0 }}>
+            <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: tab === "ciclo" ? "#fff" : NAVY, display: "block" }}>Ciclo passivo</span>
+            <span style={{ ...fontBody, fontSize: 11.5, color: tab === "ciclo" ? "rgba(255,255,255,0.75)" : MUTED, display: "block", lineHeight: 1.35 }}>
+              Tutto il passivo in un elenco solo: una riga per spesa, i soldi e la carta
+            </span>
+          </span>
+        </button>
+
         <TabsAmministrazione
           schedaAttiva={tab}
           onApriPrimaNotaCassa={onApriPrimaNotaCassa}
@@ -44033,6 +44357,15 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
         <div style={{ height: 1, background: GOLD, opacity: 0.55, margin: `${Math.round(SPAZIO_TASTI_FILTRI / 2)}px 0` }} />
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
+
+        {tab === "ciclo" && (
+          <SchedaCicloPassivo
+            righe={righeCicloPassivo}
+            caricando={!movimentiCiclo}
+            oggiStr={oggiStr}
+            onApriSpesa={onApriModificaSpesa}
+          />
+        )}
 
         {tab === "fondocassa" && (
           <PannelloCassaContanti
