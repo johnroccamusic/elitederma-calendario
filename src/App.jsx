@@ -35656,6 +35656,76 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
   );
 }
 
+// ---------- IVA per trimestre ----------
+// I trimestri partono da gennaio: primo gen-mar, secondo apr-giu, terzo
+// lug-set, quarto ott-dic. E' il calendario della liquidazione, non uno
+// scorrimento di tre mesi all'indietro da oggi.
+//
+// Cosa entra, e con quale data:
+//   a debito   l'IVA delle vendite (shop e POS, dalla data dell'ordine) e
+//              quella delle quote dei corsi, contata quando la quota e'
+//              segnata pagata — la stessa regola della prima nota
+//   a credito  l'IVA delle spese, dalla DATA DEL DOCUMENTO: l'IVA si
+//              detrae per competenza della fattura, non di quando si paga
+//
+// Una spesa senza data documento non sta in nessun trimestre. Non si
+// inventa una data e non si nasconde: si conta a parte e si dice.
+const NOMI_TRIMESTRI = ["Primo trimestre", "Secondo trimestre", "Terzo trimestre", "Quarto trimestre"];
+const MESI_TRIMESTRE = ["gen–mar", "apr–giu", "lug–set", "ott–dic"];
+function trimestreDi(dataIso) {
+  if (!dataIso) return null;
+  const m = Number(String(dataIso).slice(5, 7));
+  return m >= 1 && m <= 12 ? Math.floor((m - 1) / 3) : null;
+}
+function ivaTrimestraleAnno({ anno, venditeShop, spese, iscritti, corsiDate }) {
+  const vuoto = () => ({ venditeShop: 0, quoteCorsi: 0, acquisti: 0 });
+  const t = [vuoto(), vuoto(), vuoto(), vuoto()];
+  const dentro = (d) => d && String(d).slice(0, 4) === String(anno);
+
+  (venditeShop || []).forEach((v) => {
+    if (v.tipo_movimento === "annullamento" || v.tipo_movimento === "omaggio") return;
+    const d = v.data_ordine ? String(v.data_ordine).slice(0, 10) : null;
+    if (!dentro(d)) return;
+    const q = trimestreDi(d);
+    if (q != null) t[q].venditeShop = round2(t[q].venditeShop + (Number(v.totale_iva) || 0));
+  });
+
+  const cdPerId = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const quota = (d, totale, imponibile) => {
+    if (!dentro(d)) return;
+    const q = trimestreDi(d);
+    if (q == null) return;
+    t[q].quoteCorsi = round2(t[q].quoteCorsi + Math.max(0, round2((Number(totale) || 0) - (Number(imponibile) || 0))));
+  };
+  (iscritti || []).forEach((i) => {
+    if (i.acconto_pagato) quota(i.acconto_pagato_il, i.acconto_totale, i.acconto_imponibile);
+    if (i.precorso_pagato) quota(i.precorso_pagato_il, i.precorso_totale, i.precorso_imponibile);
+    // il saldo si incassa in aula: senza la data dell'incasso vale il
+    // giorno del corso, che e' quando i soldi sono passati di mano
+    if (i.incassato) quota(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cdPerId[i.corso_data_id]?.data_inizio, i.saldo_totale, i.saldo_imponibile);
+  });
+
+  let senzaData = 0, quanteSenzaData = 0;
+  (spese || []).forEach((s) => {
+    const iva = round2((Number(s.totale) || 0) - (Number(s.imponibile) || 0));
+    if (!(Math.abs(iva) > 0.004)) return;
+    if (!s.data_documento) { senzaData = round2(senzaData + iva); quanteSenzaData += 1; return; }
+    if (!dentro(s.data_documento)) return;
+    const q = trimestreDi(s.data_documento);
+    if (q != null) t[q].acquisti = round2(t[q].acquisti + iva);
+  });
+
+  return {
+    trimestri: t.map((x, i) => ({
+      indice: i, nome: NOMI_TRIMESTRI[i], mesi: MESI_TRIMESTRE[i],
+      ...x,
+      debito: round2(x.venditeShop + x.quoteCorsi),
+      saldo: round2(x.venditeShop + x.quoteCorsi - x.acquisti),
+    })),
+    senzaData, quanteSenzaData,
+  };
+}
+
 // "Gestione IVA": vendite scorporate riga per riga nel periodo scelto
 // (imponibile/imposta ricavati dal totale realmente incassato, IVA
 // inclusa, con l'aliquota del prodotto EFFETTIVAMENTE venduto — un
@@ -35666,7 +35736,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
 // un'istantanea del magazzino ATTUALE (non esiste uno storico datato dei
 // carichi, quindi non è possibile un vero "IVA a credito del periodo" —
 // deciso esplicitamente con l'utente, vedi commit)
-function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione, onBack, titolo = "Gestione IVA" }) {
+function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione, spese, iscritti, corsiDate, onBack, titolo = "Gestione IVA" }) {
   const { ordine: ordineV, cambiaOrdine: cambiaOrdineV, ordina: ordinaV } = useOrdinamentoTabella();
   const { ordine: ordineA, cambiaOrdine: cambiaOrdineA, ordina: ordinaA } = useOrdinamentoTabella();
   const valoriIva = {
@@ -35679,6 +35749,15 @@ function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione,
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
   const [prodottoEspanso, setProdottoEspanso] = useState(null);
+  // il trimestre si apre su quello in corso: e' quello che si sta per
+  // liquidare, ed e' la ragione per cui si entra qui
+  const annoIva = Number(dataOggiStr().slice(0, 4));
+  const [trimestreScelto, setTrimestreScelto] = useState(() => Math.floor((new Date().getMonth()) / 3));
+  const ivaAnno = useMemo(
+    () => ivaTrimestraleAnno({ anno: annoIva, venditeShop, spese, iscritti, corsiDate }),
+    [annoIva, venditeShop, spese, iscritti, corsiDate]
+  );
+  const tScelto = ivaAnno.trimestri[trimestreScelto] || ivaAnno.trimestri[0];
 
   const range = useMemo(() => {
     const now = new Date();
@@ -35776,6 +35855,55 @@ function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione,
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>IVA su acquisti e vendite, per aliquota e per prodotto.</div>
+
+        {/* ---- La liquidazione per trimestre ---- */}
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 10 }}>
+          IVA per trimestre · {annoIva}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 16 }}>
+          {ivaAnno.trimestri.map((t) => (
+            <TileHome
+              key={t.indice}
+              title={`${t.nome} · ${fmtEuroIva(Math.abs(t.saldo))} ${t.saldo >= 0 ? "a debito" : "a credito"}`}
+              Icona={IconaRicevutaErp}
+              onClick={() => setTrimestreScelto(t.indice)}
+              evidenziato={trimestreScelto === t.indice}
+              etichettaDueRighe
+            />
+          ))}
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>{tScelto.nome} {annoIva} <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED }}>· {tScelto.mesi}</span></div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 14, marginTop: 14 }}>
+            <div style={{ borderLeft: `3px solid #C0392B`, paddingLeft: 12 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>IVA a debito</div>
+              <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroIva(tScelto.debito)}</div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 5, lineHeight: 1.5 }}>
+                Quote dei corsi {fmtEuroIva(tScelto.quoteCorsi)}<br />Vendite shop e POS {fmtEuroIva(tScelto.venditeShop)}
+              </div>
+            </div>
+            <div style={{ borderLeft: `3px solid #2E7D32`, paddingLeft: 12 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>IVA a credito</div>
+              <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroIva(tScelto.acquisti)}</div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 5 }}>Dalle spese, per data del documento</div>
+            </div>
+            <div style={{ borderLeft: `3px solid ${GOLD}`, paddingLeft: 12 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Saldo</div>
+              <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: tScelto.saldo >= 0 ? "#C0392B" : "#2E7D32" }}>{fmtEuroIva(Math.abs(tScelto.saldo))}</div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 5 }}>{tScelto.saldo >= 0 ? "A debito — da versare" : "A credito"}</div>
+            </div>
+          </div>
+          {/* Una spesa senza data documento non sta in nessun trimestre.
+              Non si inventa la data e non si nasconde la riga: si conta a
+              parte e si dice quanto pesa. */}
+          {ivaAnno.quanteSenzaData > 0 && (
+            <div style={{ marginTop: 14, background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 12px", ...fontBody, fontSize: 12, color: "#8A6D1D", lineHeight: 1.5 }}>
+              <b style={{ color: NAVY }}>{ivaAnno.quanteSenzaData} spese</b> portano <b style={{ color: NAVY }}>{fmtEuroIva(ivaAnno.senzaData)}</b> di IVA ma non hanno la data del documento:
+              non entrano in nessun trimestre. L’IVA si detrae per competenza della fattura, e senza quella data non si sa di quale trimestre sia.
+            </div>
+          )}
+        </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
           {[{ v: "mese", l: "Questo mese" }, { v: "trimestre", l: "Questo trimestre" }, { v: "anno", l: "Quest'anno" }, { v: "personalizzato", l: "Periodo personalizzato" }].map((p) => (
@@ -69956,7 +70084,7 @@ export default function App() {
     // "coupon" serve ai carrelli sospesi: senza, il pannello non trova il
     // codice del corso e mostra tutti gli sconti a zero
     magazzinoshop: ["prodotti_shop", "riordini_in_corso", "coupon", "corsi", "corsi_date", "location"],
-    gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
+    gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione", "spese", "iscritti", "corsi_date"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
     // "password_menu"/"utenti_app" (gia' fra le essenziali) servono
     // all'area "Utenti", che da ora vive qui dentro
@@ -71737,6 +71865,7 @@ export default function App() {
       {view === "gestioneiva" && (
         <PaginaGestioneIva
           venditeShop={venditeShop} prodottiShop={prodottiShop} vociShopClassificazione={vociShopClassificazione}
+          spese={spese} iscritti={iscritti} corsiDate={corsiDate}
           onBack={() => setView("erp")}
           titolo={etichettaTasto("amministrazione", "gestioneiva", "Gestione IVA")}
         />
