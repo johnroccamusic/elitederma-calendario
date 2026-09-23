@@ -93,15 +93,34 @@ define( 'ELITEDERMA_PREZZI_JS', <<<'JS'
   function chiaveDi(url) {
     try { return new URL(url, location.origin).pathname.replace(/\/+$/, ""); } catch (e) { return url || ""; }
   }
+  function ripulisci(t) {
+    return String(t || "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
 
   function disegna() {
     if (!dati || !dati.items) return;
     var perPermalink = {};
-    dati.items.forEach(function (v) { perPermalink[chiaveDi(v.permalink)] = v; });
+    var perNome = {};
+    dati.items.forEach(function (v) {
+      perPermalink[chiaveDi(v.permalink)] = v;
+      perNome[ripulisci(v.name)] = v;
+    });
 
-    document.querySelectorAll(".wc-block-cart-items__row, .wc-block-components-order-summary-item").forEach(function (r) {
-      var link = r.querySelector("a[href]");
-      var voce = link ? perPermalink[chiaveDi(link.getAttribute("href"))] : null;
+    var righe = document.querySelectorAll(
+      ".wc-block-cart-items__row, .wc-block-components-order-summary-item, .wc-block-cart-item"
+    );
+    righe.forEach(function (r) {
+      // prima per indirizzo del prodotto, che e' univoco; se il tema lo
+      // cambia o lo toglie, per nome, che nel carrello e' quello che si
+      // legge. Due strade perche' e' l'unico punto in cui questo codice
+      // dipende da com'e' fatto il tema
+      var voce = null;
+      var link = r.querySelector('a[href]');
+      if (link) voce = perPermalink[chiaveDi(link.getAttribute("href"))] || null;
+      if (!voce) {
+        var nome = r.querySelector(".wc-block-components-product-name") || link;
+        if (nome) voce = perNome[ripulisci(nome.textContent)] || null;
+      }
       if (!voce) return;
       var vecchio = r.querySelector("." + CLASSE);
       var nuovo = blocco(voce, dati.totals);
@@ -139,7 +158,28 @@ define( 'ELITEDERMA_PREZZI_JS', <<<'JS'
     }).observe(radice, { childList: true, subtree: true });
   }
 
-  function avvia() { carica(); osserva(); }
+  // Se qualcosa non torna, qui si vede: apri la console del browser e
+  // scrivi elitedermaPrezzi.stato(). Dice se lo script e' partito, se la
+  // Store API ha risposto, quante voci ha trovato e quante righe del
+  // carrello ha riconosciuto. Senza, un dettaglio che non compare non
+  // dice da che parte cercare.
+  function stato() {
+    var righe = document.querySelectorAll(".wc-block-cart-items__row, .wc-block-components-order-summary-item, .wc-block-cart-item");
+    return {
+      scriptCaricato: true,
+      indirizzoStoreApi: RADICE,
+      rispostaRicevuta: !!dati,
+      vociNelCarrello: dati && dati.items ? dati.items.length : 0,
+      righeTrovateInPagina: righe.length,
+      dettagliScritti: document.querySelectorAll("." + CLASSE).length,
+    };
+  }
+
+  function avvia() {
+    if (window.elitedermaPrezzi) window.elitedermaPrezzi.stato = stato;
+    carica();
+    osserva();
+  }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", avvia);
   else avvia();
 })();
@@ -149,12 +189,24 @@ JS
 add_action(
 	'wp_enqueue_scripts',
 	function () {
-		if ( ! function_exists( 'is_cart' ) || ( ! is_cart() && ! is_checkout() ) ) {
+		// Dove caricarlo. is_cart() e is_checkout() da soli non bastano:
+		// col carrello a blocchi la pagina puo' non essere quella
+		// impostata nelle opzioni di WooCommerce, e allora tornano false
+		// e lo script non parte. Si guarda anche se nella pagina c'e' il
+		// blocco. Se poi non trova nessun carrello, lo script si ferma
+		// da solo: costa meno di una pagina in cui non compare niente.
+		$e_carrello = function_exists( 'is_cart' ) && ( is_cart() || is_checkout() );
+		if ( ! $e_carrello && function_exists( 'has_block' ) ) {
+			$e_carrello = has_block( 'woocommerce/cart' ) || has_block( 'woocommerce/checkout' );
+		}
+		if ( ! $e_carrello ) {
 			return;
 		}
-		// un appiglio per lo script: l'indirizzo della Store API di
-		// QUESTO sito, che non e' detto stia sotto /wp-json
-		wp_register_script( 'elitederma-prezzi', '', array(), '1.0.0', true );
+		// src a FALSE, non stringa vuota: con la stringa vuota WordPress
+		// non stampa niente e gli inline script attaccati qui sotto non
+		// arrivano mai in pagina. E' il motivo per cui la prima versione
+		// non faceva vedere nulla.
+		wp_register_script( 'elitederma-prezzi', false, array(), '1.0.1', true );
 		wp_enqueue_script( 'elitederma-prezzi' );
 		wp_add_inline_script(
 			'elitederma-prezzi',
