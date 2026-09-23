@@ -35670,10 +35670,8 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
 //
 // Una spesa senza data documento non sta in nessun trimestre. Non si
 // inventa una data e non si nasconde: si conta a parte e si dice.
-// Il contante non porta IVA. Vale per le quote dei corsi ("Contanti",
-// "Cash no iva"), per le vendite al banco pagate in contanti o col buono
-// Amazon, e per le spese pagate dalla cassa contanti — di quelle non
-// c'e' una fattura da detrarre.
+// In contanti non c'e' IVA. Mai — a meno che il cliente non chieda la
+// fattura: allora la fattura c'e', e l'IVA con lei.
 //
 // Il controllo si fa sul METODO e non sulla differenza fra totale e
 // imponibile, perche' i due non vanno d'accordo: su 78 quote "Cash no
@@ -35681,8 +35679,15 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
 // com'erano portavano dentro 4.178 euro di IVA che non esiste. Comanda
 // il metodo di pagamento, che e' il fatto; l'imponibile scritto in
 // scheda e' un residuo.
+//
+// Sugli ACQUISTI questa regola non si applica: li' l'IVA e' quella
+// scritta nella qualificazione della spesa, e si prende com'e'. Un
+// acquisto estero sta a zero perche' e' a zero, non perche' lo
+// decidiamo noi — e una spesa in contanti con la sua fattura l'IVA ce
+// l'ha. Non si inventa in nessuno dei due versi.
 const METODI_SENZA_IVA = new Set(["contanti", "cash no iva", "buono_amazon", "buono amazon", "cassa contanti"]);
-function metodoSenzaIva(metodo) {
+function senzaIvaPerContanti(metodo, vuoleFattura) {
+  if (vuoleFattura) return false;
   return METODI_SENZA_IVA.has(String(metodo || "").trim().toLowerCase());
 }
 const NOMI_TRIMESTRI = ["Primo trimestre", "Secondo trimestre", "Terzo trimestre", "Quarto trimestre"];
@@ -35699,7 +35704,7 @@ function ivaTrimestraleAnno({ anno, venditeShop, spese, iscritti, corsiDate }) {
 
   (venditeShop || []).forEach((v) => {
     if (v.tipo_movimento === "annullamento" || v.tipo_movimento === "omaggio") return;
-    if (metodoSenzaIva(v.metodo_pagamento)) return;
+    if (senzaIvaPerContanti(v.metodo_pagamento, v.richiede_fattura)) return;
     const d = v.data_ordine ? String(v.data_ordine).slice(0, 10) : null;
     if (!dentro(d)) return;
     const q = trimestreDi(d);
@@ -35707,24 +35712,23 @@ function ivaTrimestraleAnno({ anno, venditeShop, spese, iscritti, corsiDate }) {
   });
 
   const cdPerId = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
-  const quota = (d, totale, imponibile, metodo) => {
-    if (metodoSenzaIva(metodo)) return;
+  const quota = (d, totale, imponibile, metodo, vuoleFattura) => {
+    if (senzaIvaPerContanti(metodo, vuoleFattura)) return;
     if (!dentro(d)) return;
     const q = trimestreDi(d);
     if (q == null) return;
     t[q].quoteCorsi = round2(t[q].quoteCorsi + Math.max(0, round2((Number(totale) || 0) - (Number(imponibile) || 0))));
   };
   (iscritti || []).forEach((i) => {
-    if (i.acconto_pagato) quota(i.acconto_pagato_il, i.acconto_totale, i.acconto_imponibile, i.acconto_metodo);
-    if (i.precorso_pagato) quota(i.precorso_pagato_il, i.precorso_totale, i.precorso_imponibile, i.precorso_metodo);
+    if (i.acconto_pagato) quota(i.acconto_pagato_il, i.acconto_totale, i.acconto_imponibile, i.acconto_metodo, i.richiede_fattura);
+    if (i.precorso_pagato) quota(i.precorso_pagato_il, i.precorso_totale, i.precorso_imponibile, i.precorso_metodo, i.richiede_fattura);
     // il saldo si incassa in aula: senza la data dell'incasso vale il
     // giorno del corso, che e' quando i soldi sono passati di mano
-    if (i.incassato) quota(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cdPerId[i.corso_data_id]?.data_inizio, i.saldo_totale, i.saldo_imponibile, i.saldo_metodo);
+    if (i.incassato) quota(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cdPerId[i.corso_data_id]?.data_inizio, i.saldo_totale, i.saldo_imponibile, i.saldo_metodo, i.richiede_fattura);
   });
 
   let senzaData = 0, quanteSenzaData = 0;
   (spese || []).forEach((s) => {
-    if (metodoSenzaIva(s.metodo_pagamento)) return;
     const iva = round2((Number(s.totale) || 0) - (Number(s.imponibile) || 0));
     if (!(Math.abs(iva) > 0.004)) return;
     if (!s.data_documento) { senzaData = round2(senzaData + iva); quanteSenzaData += 1; return; }
