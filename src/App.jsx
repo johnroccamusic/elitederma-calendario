@@ -43110,7 +43110,7 @@ function cicloInRitardo(r, oggiStr) { return r.soldi === 0 && r.data && r.data <
 // classi, le spese vere (pagate e non) e i movimenti di banca in uscita
 // che nessuno ha ancora contabilizzato. Funzione pura, senza I/O: chi
 // chiama passa dati già caricati e riceve indietro solo righe.
-function costruisciRigheCicloPassivo({ daPagareVirtuali, speseDaPagareReali, spese, movimentiBanca, fornitoriById, costiSottocategorie, etichettaCorso, importoVivoDiSpesa }) {
+function costruisciRigheCicloPassivo({ daPagareVirtuali, speseDaPagareReali, spese, movimentiBanca, fornitoriById, corsiDateById, costiSottocategorie, etichettaCorso, importoVivoDiSpesa }) {
   const righe = [];
   // le spese che la banca ha già confermato: è il movimento che punta
   // alla spesa, non il contrario
@@ -43162,7 +43162,7 @@ function costruisciRigheCicloPassivo({ daPagareVirtuali, speseDaPagareReali, spe
         fonte: dallaCassa ? "Cassa" : (vistaInBanca ? "Banca" : "Manuale"),
         fornitore: fornitoriById[s.fornitore_id]?.nome || "—",
         descrizione: s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "Spesa",
-        ambito: s.classe_id ? "Costo di classe" : "Sede centrale",
+        ambito: (s.classe_id && corsiDateById?.[s.classe_id] ? etichettaCorso(corsiDateById[s.classe_id]) : null) || "Sede centrale",
         importo: round2(s.totale || 0), data: s.data_pagamento || s.data_documento || null,
         soldi: dallaCassa || vistaInBanca ? 2 : 1,
         carta: s.numero_documento ? 2 : 0,
@@ -43221,13 +43221,20 @@ function SchedaCicloPassivo({ righe, caricando, oggiStr, onApriSpesa }) {
   });
 
   const q = ricerca.trim().toLowerCase();
-  const visibili = righe
+  const filtrate = righe
     .filter((r) => (filtro === "ritardo" ? cicloInRitardo(r, oggiStr) : (!filtro || cicloGruppoDi(r) === filtro)))
     .filter((r) => !q || `${r.fornitore} ${r.descrizione} ${r.ambito}`.toLowerCase().includes(q))
     .sort((a, b) => {
       const ca = cicloGruppoDi(a) === "chiuse" ? 1 : 0, cb = cicloGruppoDi(b) === "chiuse" ? 1 : 0;
       return ca - cb || String(a.data || "9999").localeCompare(String(b.data || "9999"));
     });
+  // Le chiuse sono archivio e dal primo luglio sono tante: disegnarle
+  // tutte rallenta la pagina e sommerge le poche righe che chiedono
+  // qualcosa. I conteggi qui sopra restano su TUTTE — si taglia solo
+  // quello che si disegna, e la riga sotto l'elenco lo dichiara.
+  const TETTO_RIGHE = 250;
+  const visibili = filtrate.slice(0, TETTO_RIGHE);
+  const tagliate = filtrate.length - visibili.length;
 
   function tintaLivello(l) { return l === 0 ? MUTED : l === 1 ? "#C77A18" : "#2E7D32"; }
 
@@ -43329,6 +43336,12 @@ function SchedaCicloPassivo({ righe, caricando, oggiStr, onApriSpesa }) {
           );
         })}
       </div>
+
+      {tagliate > 0 && (
+        <div style={{ ...fontBody, fontSize: 12, color: GRAFITE, marginTop: 10 }}>
+          Mostrate le prime {visibili.length} di {filtrate.length}: restringi con la ricerca o con le caselle qui sopra. I conteggi restano su tutte.
+        </div>
+      )}
 
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 14 }}>
         Questa pagina legge soltanto: non scrive niente e non tocca nessuna delle schermate di sempre, che restano tutte al loro posto. Serve a vedere se il modello regge sui dati veri, prima di cambiare il modo di lavorare.
@@ -43560,7 +43573,8 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     () => (tab === "ciclo" && movimentiCiclo
       ? costruisciRigheCicloPassivo({
           daPagareVirtuali, speseDaPagareReali, spese, movimentiBanca: movimentiCiclo,
-          fornitoriById, costiSottocategorie, etichettaCorso, importoVivoDiSpesa,
+          fornitoriById, corsiDateById: Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd])),
+          costiSottocategorie, etichettaCorso, importoVivoDiSpesa,
         })
       : []),
     [tab, movimentiCiclo, daPagareVirtuali, speseDaPagareReali, spese, fornitori, costiSottocategorie],

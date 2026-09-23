@@ -1,113 +1,101 @@
 <?php
 /**
- * Elitederma — il prezzo spiegato: netto, sconto, netto scontato, IVA
+ * Elitederma — il totale spiegato nel carrello e al checkout
  * ---------------------------------------------------------------------
  * Da incollare in Code Snippets (WordPress → Snippets → Aggiungi nuovo),
  * "Esegui ovunque". Non serve toccare il tema.
  *
  * COSA FA
- * Sotto il prezzo di ogni prodotto aggiunge un riquadrino con:
+ * Nel riepilogo del carrello e in quello del checkout, subito sopra il
+ * totale, aggiunge le righe che spiegano come ci si arriva:
  *
- *   Prezzo netto                     32,70 €
- *   Sconto codice AULA25  −8,5%     − 2,78 €
- *   Netto scontato                   29,92 €
- *   Totale con IVA 22%               36,50 €
+ *   Imponibile (netto)                   130,80 €
+ *   Sconto codice AULA25                −11,12 €
+ *   Netto scontato                       119,68 €
+ *   IVA 22%                               26,33 €
+ *   Totale                               146,01 €
  *
- * Le due righe dello sconto compaiono solo se nel carrello c'è davvero
- * un codice attivo, e solo se è uno sconto in percentuale: uno sconto a
- * importo fisso vale sul carrello intero e non si può spalmare su un
- * prodotto senza inventarsi come.
+ * Il dettaglio sta QUI e non sulla scheda del prodotto perché il codice
+ * promozionale il cliente lo inserisce alla fine: su un prodotto, lo
+ * sconto o non c'è ancora o è quello di un carrello che non si sta
+ * guardando.
  *
- * I prezzi li chiede a WooCommerce (wc_get_price_excluding_tax /
- * including_tax): così l'aliquota è quella vera del prodotto, anche se
- * un domani qualcuno ne avrà una diversa dal 22%. Niente divisioni per
- * 1,22 scritte a mano.
+ * I numeri sono quelli che WooCommerce ha già calcolato per il carrello
+ * — imponibile, sconto, imposta, totale. Non se ne ricalcola nessuno:
+ * se il totale qui sotto non tornasse con quello di WooCommerce, il
+ * cliente vedrebbe due conti diversi sulla stessa pagina.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * Il codice sconto attivo adesso, se è in percentuale.
- *
- * Torna [ 'codice' => 'AULA25', 'percentuale' => 8.5 ] oppure null.
- * Il carrello non esiste sempre (richieste REST, cron, pagine servite
- * dalla cache prima che la sessione parta): senza, non si sconta nulla.
- */
-function elitederma_coupon_percentuale_attivo() {
-	if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
-		return null;
-	}
-	foreach ( WC()->cart->get_applied_coupons() as $codice ) {
-		$coupon = new WC_Coupon( $codice );
-		if ( 'percent' !== $coupon->get_discount_type() ) {
-			continue;
-		}
-		$pct = (float) $coupon->get_amount();
-		if ( $pct > 0 ) {
-			return array( 'codice' => strtoupper( $codice ), 'percentuale' => $pct );
-		}
-	}
-	return null;
-}
-
-/** Una riga del riquadro: etichetta a sinistra, importo a destra. */
-function elitederma_riga_prezzo( $etichetta, $importo, $forte = false, $colore = '' ) {
+/** Una riga del riepilogo, nella stessa tabella dei totali di WooCommerce. */
+function elitederma_riga_totale( $etichetta, $importo, $classe = '', $colore = '' ) {
 	printf(
-		'<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;%s">'
-			. '<span style="%s">%s</span><span style="white-space:nowrap;%s">%s</span></div>',
-		$forte ? 'border-top:1px solid rgba(0,0,0,.08);margin-top:4px;padding-top:6px;' : '',
-		$colore ? 'color:' . esc_attr( $colore ) . ';' : '',
+		'<tr class="elitederma-riga %s"><th style="%s">%s</th><td style="%s">%s</td></tr>',
+		esc_attr( $classe ),
+		$colore ? 'color:' . esc_attr( $colore ) . ';font-weight:600;' : '',
 		wp_kses_post( $etichetta ),
-		( $forte ? 'font-weight:700;' : '' ) . ( $colore ? 'color:' . esc_attr( $colore ) . ';' : '' ),
+		$colore ? 'color:' . esc_attr( $colore ) . ';' : '',
 		wp_kses_post( $importo )
 	);
 }
 
 /**
- * Il riquadro sotto il prezzo, nella scheda del prodotto.
+ * Le righe del dettaglio, sopra il totale.
  *
- * Un prodotto con varianti ha un prezzo solo quando la variante è
- * scelta: sul padre il riquadro non compare, perché direbbe il prezzo
- * della taglia più economica spacciandolo per quello scelto.
+ * Imponibile e sconto sono al netto dell'IVA: sono le due grandezze su
+ * cui si ragiona, e sommarci l'imposta le renderebbe incomparabili con
+ * i prezzi di listino che stanno in anagrafica.
  */
-add_action(
-	'woocommerce_single_product_summary',
-	function () {
-		global $product;
-		if ( ! $product instanceof WC_Product || $product->is_type( 'variable' ) || $product->is_type( 'grouped' ) ) {
-			return;
-		}
-		$netto = (float) wc_get_price_excluding_tax( $product );
-		$lordo = (float) wc_get_price_including_tax( $product );
-		if ( $netto <= 0 ) {
-			return;
-		}
-		// l'aliquota vera del prodotto, ricavata dai due prezzi: così non
-		// c'è un 22 scritto da nessuna parte che un giorno sarà sbagliato
-		$aliquota = $netto > 0 ? round( ( ( $lordo / $netto ) - 1 ) * 100, 1 ) : 0;
+function elitederma_dettaglio_totale() {
+	if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+		return;
+	}
+	$cart = WC()->cart;
 
-		$coupon = elitederma_coupon_percentuale_attivo();
-		$sconto = $coupon ? round( $netto * $coupon['percentuale'] / 100, 2 ) : 0;
-		$netto_scontato = round( $netto - $sconto, 2 );
-		$iva = round( $netto_scontato * $aliquota / 100, 2 );
-		$totale = round( $netto_scontato + $iva, 2 );
+	$netto   = (float) $cart->get_subtotal();          // imponibile, IVA esclusa
+	$sconto  = (float) $cart->get_discount_total();    // sconto, IVA esclusa
+	$imposta = (float) $cart->get_total_tax();
+	$totale  = (float) $cart->get_total( 'edit' );
 
-		echo '<div class="elitederma-prezzo-dettaglio" style="margin:.75em 0 1em;padding:12px 14px;border:1px solid rgba(0,0,0,.10);border-radius:10px;font-size:.92em;line-height:1.5;max-width:360px;">';
-		elitederma_riga_prezzo( 'Prezzo netto', wc_price( $netto ) );
-		if ( $coupon ) {
-			elitederma_riga_prezzo(
-				sprintf( 'Sconto codice %s &minus;%s%%', esc_html( $coupon['codice'] ), esc_html( rtrim( rtrim( number_format_i18n( $coupon['percentuale'], 2 ), '0' ), ',' ) ) ),
-				'&minus; ' . wc_price( $sconto ),
-				false,
-				'#2E7D32'
-			);
-			elitederma_riga_prezzo( 'Netto scontato', wc_price( $netto_scontato ) );
+	if ( $netto <= 0 ) {
+		return;
+	}
+	$netto_scontato = round( $netto - $sconto, 2 );
+	// l'aliquota si legge dai numeri del carrello, non si scrive: un
+	// carrello con prodotti ad aliquote diverse non ne ha una sola, e
+	// allora si scrive "IVA" e basta invece di una percentuale falsa
+	$aliquota  = $netto_scontato > 0 ? round( $imposta / $netto_scontato * 100, 1 ) : 0;
+	$aliquote  = array();
+	foreach ( $cart->get_cart() as $riga ) {
+		$p = isset( $riga['data'] ) ? $riga['data'] : null;
+		if ( $p instanceof WC_Product ) {
+			$aliquote[ $p->get_tax_class() ] = true;
 		}
-		elitederma_riga_prezzo( sprintf( 'IVA %s%%', esc_html( rtrim( rtrim( number_format_i18n( $aliquota, 1 ), '0' ), ',' ) ) ), wc_price( $iva ) );
-		elitederma_riga_prezzo( 'Totale', wc_price( $totale ), true );
-		echo '</div>';
-	},
-	11
-);
+	}
+	$etichetta_iva = count( $aliquote ) === 1 && $aliquota > 0
+		? sprintf( 'IVA %s%%', esc_html( rtrim( rtrim( number_format_i18n( $aliquota, 1 ), '0' ), ',' ) ) )
+		: 'IVA';
+
+	elitederma_riga_totale( 'Imponibile (netto)', wc_price( $netto ) );
+
+	if ( $sconto > 0 ) {
+		$codici = array_map( 'strtoupper', (array) $cart->get_applied_coupons() );
+		elitederma_riga_totale(
+			$codici ? sprintf( 'Sconto codice %s', esc_html( implode( ', ', $codici ) ) ) : 'Sconto',
+			'&minus; ' . wc_price( $sconto ),
+			'elitederma-sconto',
+			'#2E7D32'
+		);
+		elitederma_riga_totale( 'Netto scontato', wc_price( $netto_scontato ) );
+	}
+
+	elitederma_riga_totale( $etichetta_iva, wc_price( $imposta ) );
+}
+
+// Carrello e checkout: sopra la riga del totale, dove il cliente guarda
+// prima di pagare.
+add_action( 'woocommerce_cart_totals_before_order_total', 'elitederma_dettaglio_totale' );
+add_action( 'woocommerce_review_order_before_order_total', 'elitederma_dettaglio_totale' );
