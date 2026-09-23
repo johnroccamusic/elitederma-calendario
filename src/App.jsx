@@ -33447,7 +33447,21 @@ const RUOLO_ANAGRAFICA = {
   location: { testo: "LOCATION", colore: "#2E7D5C", sfondo: "#E3F3EA" },
   venditore: { testo: "VENDITORE", colore: "#B5622C", sfondo: "#FBEADD" },
   fornitore: { testo: "FORNITORE", colore: "#8A6D1D", sfondo: "#FBF1DD" },
+  dipendente: { testo: "DIPENDENTE", colore: "#1F6F72", sfondo: "#E2F1F1" },
 };
+// Il ruolo che non sta nella tabella qui sopra non deve far saltare la
+// pagina. Mancava "dipendente" — la spunta esiste dal 22/09/2026, c'e'
+// perfino la scheda "Dipendenti" in cima all'elenco — e bastavano due
+// fornitori marcati cosi' perche' Anagrafiche non si aprisse piu' a
+// nessuno: `RUOLO_ANAGRAFICA[r].colore` su un ruolo sconosciuto e' un
+// errore che porta giu' tutta l'app, non solo quella riga.
+//
+// Adesso un ruolo che non conosciamo diventa una pastiglia grigia col
+// suo nome: si vede che c'e' e si capisce cosa manca, invece di trovarsi
+// davanti la schermata dell'errore.
+function ruoloAnagrafica(r) {
+  return RUOLO_ANAGRAFICA[r] || { testo: String(r || "?").toUpperCase(), colore: "#5B6577", sfondo: "#EFF1F4" };
+}
 
 // nome del gruppo di categoria di costo già associato a un tipo (master/
 // assistente/alloggio/venditore, vedi categoriaGruppoPer) — condiviso da
@@ -33955,7 +33969,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {s.ruoli.map((r) => (
-                  <span key={r} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: RUOLO_ANAGRAFICA[r].colore, background: RUOLO_ANAGRAFICA[r].sfondo, borderRadius: 10, padding: "3px 9px", whiteSpace: "nowrap" }}>{RUOLO_ANAGRAFICA[r].testo}</span>
+                  <span key={r} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: ruoloAnagrafica(r).colore, background: ruoloAnagrafica(r).sfondo, borderRadius: 10, padding: "3px 9px", whiteSpace: "nowrap" }}>{ruoloAnagrafica(r).testo}</span>
                 ))}
               </div>
               <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{s.categoria || "—"}</div>
