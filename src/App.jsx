@@ -44908,6 +44908,9 @@ function PaginaInserimentoCostiRicavi({
   // dice che non e' successo niente. Il database resta la verita': questa
   // e' solo la verita' che arriva prima.
   const [associateAdesso, setAssociateAdesso] = useState({});
+  // l'esito delle azioni sulle righe (riportare una spesa da pagare):
+  // in questa pagina non c'era nessun posto dove dirlo
+  const [msgPN, setMsgPN] = useState("");
   const fatturePerSpesa = useMemo(() => {
     const mappa = {};
     (fattureRicevuteFic || []).forEach((f) => { if (f.spesa_id && !mappa[f.spesa_id]) mappa[f.spesa_id] = f; });
@@ -44922,6 +44925,53 @@ function PaginaInserimentoCostiRicavi({
   const idSpeseDiRiga = (m) => (
     m?.speseGruppo?.length ? m.speseGruppo.map((x) => x.id) : [m?.spesaReale?.id || m?.id].filter(Boolean)
   );
+  // "Errore, non pagata": la riga torna da pagare nello Scadenziario, il
+  // pagamento sparisce e la fattura, se c'era, torna fra quelle da
+  // associare. Sono tre cose che si sono fatte insieme e vanno disfatte
+  // insieme: lasciarne una a meta' — la spesa da pagare ma la fattura
+  // ancora attaccata — e' peggio dell'errore che si sta correggendo.
+  //
+  // Non cancella niente: la spesa resta, con la sua data documento e il
+  // suo importo. Torna solo a essere un debito aperto.
+  async function riportaDaPagare(m) {
+    const spesa = m?.spesaReale || null;
+    if (!spesa?.id) { setMsgPN("Questa riga non è una spesa singola: aprila e correggila da lì."); return; }
+    const fattura = fatturaDiRiga(m);
+    const numero = spesa.numero_documento || fattura?.numero_documento || null;
+    if (!window.confirm(
+      `Segnare "${spesa.descrizione || "questa spesa"}" come NON pagata?\n\n` +
+      `• torna fra le spese da pagare nello Scadenziario passivo\n` +
+      `• il pagamento del ${spesa.data_pagamento ? fmtData(spesa.data_pagamento) : "—"} viene tolto\n` +
+      (numero ? `• la fattura n. ${numero} si stacca e torna fra quelle da associare\n` : "") +
+      `\nLa spesa non viene cancellata: torna a essere un debito aperto.`
+    )) return;
+
+    const { error } = await supabase.from("spese").update({
+      stato: "impegnata",
+      data_pagamento: null, metodo_pagamento: null,
+      importo_pagato_cash: null, percentuale_pagata_cash: null,
+      gruppo_pagamento: null,
+      numero_documento: null, data_documento: null,
+    }).eq("id", spesa.id);
+    if (error) { setMsgPN("Non riportata: " + testoErrore(error)); return; }
+
+    // la fattura di Fatture in Cloud torna in "Da associare"
+    await supabase.from("fatture_ricevute_fic").update({ spesa_id: null }).eq("spesa_id", spesa.id);
+    // e il documento fornitore si riprende la quota che questa spesa gli
+    // aveva preso, tornando da riconciliare se non ne resta nessuna
+    if (numero) {
+      const doc = (documentoFornitoreTabella || []).find((d) => String(d.numero || "") === String(numero) && (!spesa.fornitore_id || d.fornitore_id === spesa.fornitore_id));
+      if (doc) {
+        const allocato = round2(Math.max(0, Number(doc.importo_allocato || 0) - (Number(spesa.totale) || 0)));
+        await supabase.from("documento_fornitore")
+          .update({ importo_allocato: allocato, stato: allocato <= 0.01 ? "da_riconciliare" : doc.stato })
+          .eq("id", doc.id);
+      }
+    }
+    setMsgPN(`"${spesa.descrizione || "Spesa"}" torna fra quelle da pagare${numero ? `, e la fattura n. ${numero} fra quelle da associare` : ""}.`);
+    ricarica?.(["spese", "fatture_ricevute_fic", "documento_fornitore"]);
+  }
+
   const fatturaDiRiga = (m) => {
     if (associateAdesso[m?.id]) return associateAdesso[m.id];
     for (const id of idSpeseDiRiga(m)) {
@@ -45128,6 +45178,13 @@ function PaginaInserimentoCostiRicavi({
             ))}
           </div>
 
+          {msgPN && (
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgPN.startsWith("Non") || msgPN.startsWith("Questa") ? "#C0392B" : "#2E7D32", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ flex: 1, minWidth: 0 }}>{msgPN}</span>
+              <AzioneTesto onClick={() => setMsgPN("")} colore={MUTED}>chiudi</AzioneTesto>
+            </div>
+          )}
+
           {movimentiPN.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun movimento nel periodo.</div>
           ) : (
@@ -45173,11 +45230,35 @@ function PaginaInserimentoCostiRicavi({
                             conto" ha una fattura che le corrisponde, e
                             finche' non le si attacca resta un pezzo di
                             contabilita' a meta'. */}
-                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: stato.colore, whiteSpace: "nowrap" }}>
-                          {m.spesaReale.stato === "pagata"
-                            ? `Pagata ${spesaPagataInCash(m.spesaReale) ? "cash" : "conto"}`
-                            : etichettaOpzione(STATI_SPESA, m.spesaReale.stato)}
-                        </span>
+                        {/* Lo stato e' una tendina con una voce sola dentro:
+                            "Errore, non pagata". Un pagamento segnato per
+                            sbaglio prima si poteva solo disfare a mano, pezzo
+                            per pezzo — togliere la data, rimettere lo stato,
+                            staccare la fattura — e chi lo faceva ne
+                            dimenticava sempre uno. Su una riga di gruppo la
+                            tendina non c'e': li' le spese sono piu' d'una e si
+                            correggono dalla loro scheda. */}
+                        {m.spesaReale.stato === "pagata" && m.spesaReale.id && !m.speseGruppo?.length ? (
+                          <select
+                            value=""
+                            onChange={(e) => { if (e.target.value === "errore") riportaDaPagare(m); e.target.value = ""; }}
+                            title="Pagamento segnato per sbaglio? Riportala fra quelle da pagare"
+                            style={{
+                              ...fontBody, fontSize: 12.5, fontWeight: 700, color: stato.colore,
+                              background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                              WebkitAppearance: "none", appearance: "none", whiteSpace: "nowrap",
+                            }}
+                          >
+                            <option value="">{`Pagata ${spesaPagataInCash(m.spesaReale) ? "cash" : "conto"} ▾`}</option>
+                            <option value="errore">Errore, non pagata</option>
+                          </select>
+                        ) : (
+                          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: stato.colore, whiteSpace: "nowrap" }}>
+                            {m.spesaReale.stato === "pagata"
+                              ? `Pagata ${spesaPagataInCash(m.spesaReale) ? "cash" : "conto"}`
+                              : etichettaOpzione(STATI_SPESA, m.spesaReale.stato)}
+                          </span>
+                        )}
                         {m.spesaReale.stato === "pagata" && !spesaPagataInCash(m.spesaReale) && (() => {
                           const fattura = fatturaDiRiga(m);
                           return fattura ? (
