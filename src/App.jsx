@@ -33561,7 +33561,10 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   // coda) non coincide mai col nome puro del fornitore e resterebbe
   // un doppione anche dopo l'associazione
   function aggiungi(tabella, recordId, nome, ruolo, contatti, categoria, chiaveOverride) {
-    const chiave = chiaveOverride || (nome || "").trim().toLowerCase();
+    // String(): il nome arriva da sei tabelle diverse, e basta che una
+    // riga lo abbia in una forma che non sia testo perche' .trim() non
+    // esista e l'elenco non si disegni piu' — pagina intera, non la riga
+    const chiave = chiaveOverride || String(nome ?? "").trim().toLowerCase();
     if (!chiave) return null;
     if (!gruppi.has(chiave)) gruppi.set(chiave, { nome, voci: [] });
     gruppi.get(chiave).voci.push({ tabella, recordId, ruolo, contatti, categoria });
@@ -33686,7 +33689,11 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     .filter((s) => {
       if (!ricerca.trim()) return true;
       const q = ricerca.trim().toLowerCase();
-      return [s.nome, s.partitaIva, s.codiceFiscale, s.citta].filter(Boolean).some((v) => v.toLowerCase().includes(q));
+      // String() prima di toLowerCase: una partita IVA o un CAP letti come
+      // numero da una delle sei tabelle di origine non hanno toLowerCase,
+      // e qui basterebbe un record cosi' per far cadere la pagina intera
+      // mentre si scrive nella ricerca
+      return [s.nome, s.partitaIva, s.codiceFiscale, s.citta].filter(Boolean).some((v) => String(v).toLowerCase().includes(q));
     });
 
   function apriModifica(soggetto) {
