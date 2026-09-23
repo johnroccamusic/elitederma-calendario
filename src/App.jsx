@@ -32148,7 +32148,11 @@ function PaginaProssimeContabilita({
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap", cursor: "pointer" }}
               >
                 <div style={{ display: "flex", gap: isMobile ? 9 : 14, alignItems: "center", minWidth: 0, flex: isMobile ? "1 1 auto" : "0 1 auto" }}>
-                  <div style={{ background: coloreCorso, borderRadius: 12, padding: isMobile ? "7px 10px" : "10px 14px", textAlign: "center", flexShrink: 0 }}>
+                  {/* stessa larghezza per tutte le targhette: la piu' lunga e'
+                      un intervallo tipo "13-18", e senza un minimo le schede
+                      avevano ognuna il suo rientro, con i nomi dei corsi che
+                      partivano da nove punti diversi lungo la colonna */}
+                  <div style={{ background: coloreCorso, borderRadius: 12, padding: isMobile ? "7px 10px" : "10px 14px", minWidth: isMobile ? 68 : 90, boxSizing: "border-box", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", flexShrink: 0 }}>
                     <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? (isMobile ? 13 : 14) : (isMobile ? 17 : 20), fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numero}</div>
                     {sotto && <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sotto}</div>}
                   </div>
