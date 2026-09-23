@@ -37126,6 +37126,41 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   }, [prodottiShop, ricercaProdotti]);
   const categorieOrdinate = useMemo(() => [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome)), [categorieProdotti]);
 
+  // I prodotti gia' scelti, sempre in vista.
+  //
+  // La lista qui sotto mostra solo quelli che rispondono alla ricerca:
+  // scegli "A+B Peeling", scrivi un'altra parola per trovare il secondo
+  // e il primo sparisce dallo schermo. Restava selezionato — il numero
+  // accanto al titolo lo diceva — ma non si vedeva piu' e non si poteva
+  // togliere senza rifare la ricerca di prima. Da qui invece restano
+  // tutti davanti finche' non si salva, e si levano con la crocetta.
+  function pastiglieScelte(elenco, selId, setSelId) {
+    const scelti = (elenco || []).filter((el) => selId.has(el.id));
+    if (scelti.length === 0) return null;
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        {scelti.map((el) => (
+          <span key={el.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#E7EEFB", color: "#1F4E8C", borderRadius: 999, padding: "4px 6px 4px 11px", ...fontBody, fontSize: 12.5, fontWeight: 600 }}>
+            {el.nome}
+            <button
+              type="button"
+              onClick={() => toggleSet(setSelId, el.id)}
+              title={`Togli ${el.nome}`}
+              style={{ border: "none", background: "none", color: "#1F4E8C", cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 3px" }}
+            >×</button>
+          </span>
+        ))}
+        {scelti.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setSelId(new Set())}
+            style={{ border: "none", background: "none", ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, cursor: "pointer", textDecoration: "underline", padding: "4px 2px" }}
+          >togli tutti</button>
+        )}
+      </div>
+    );
+  }
+
   function listaCheckbox(elenco, selId, setSelId, vuoto) {
     return (
       <div style={{ maxHeight: 160, overflow: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 8 }}>
@@ -37218,7 +37253,8 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
           {ambito === "categorie" && <Field label={`Categorie incluse (${categorieSelId.size})`}>{listaCheckbox(categorieOrdinate, categorieSelId, setCategorieSelId, "Nessuna categoria disponibile.")}</Field>}
           {ambito === "prodotti" && (
             <Field label={`Prodotti inclusi (${prodottiSelId.size})`}>
-              <input style={{ ...inputStyle, marginBottom: 6 }} value={ricercaProdotti} onChange={(e) => setRicercaProdotti(e.target.value)} placeholder="Cerca prodotto…" />
+              {pastiglieScelte(prodottiShop, prodottiSelId, setProdottiSelId)}
+              <input style={{ ...inputStyle, marginBottom: 6 }} value={ricercaProdotti} onChange={(e) => setRicercaProdotti(e.target.value)} placeholder="Cerca e spunta: i prodotti scelti restano qui sopra" />
               {listaCheckbox(prodottiFiltrati, prodottiSelId, setProdottiSelId, "Nessun prodotto trovato.")}
             </Field>
           )}
