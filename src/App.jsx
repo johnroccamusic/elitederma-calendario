@@ -38577,7 +38577,7 @@ function elencoConIntestazioniMese(righe, dataDi, renderRiga) {
 // destra — così tutte le liste della pagina si leggono allo stesso modo.
 // "children" è lo spazio per ciò che cambia da lista a lista (pillola di
 // stato, bottoni) sulla stessa riga, dopo l'importo
-function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, coloreImporto, bordoSotto = true, senzaPadding = false, children }) {
+function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, coloreImporto, bordoSotto = true, senzaPadding = false, onApriTitolo = null, children }) {
   const [anno, mese, giorno] = (data || "").split("-").map(Number);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: senzaPadding ? 0 : "14px 0", borderBottom: bordoSotto ? `1px solid ${CREAM_BORDER}` : "none", flexWrap: "wrap" }}>
@@ -38587,10 +38587,22 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
         {anno ? <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{anno}</div> : null}
       </div>
       <div style={{ flex: "1 1 140px", minWidth: 0 }}>
-        <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{titolo}</div>
+        {/* col nome e le pastiglie si apre il documento originale, dove
+            chi ci ospita passa un onApriTitolo. Sottolineato punteggiato
+            tenue: si vede che si puo' cliccare, senza che la riga
+            sembri un link */}
+        <div
+          onClick={onApriTitolo || undefined}
+          title={onApriTitolo ? "Guarda il documento originale" : undefined}
+          style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(onApriTitolo ? { cursor: "pointer", textDecoration: "underline dotted", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 } : {}) }}
+        >{titolo}</div>
         {sottotitolo ? <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>{sottotitolo}</div> : null}
         {chips && chips.length > 0 && (
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5 }}>
+          <div
+            onClick={onApriTitolo || undefined}
+            title={onApriTitolo ? "Guarda il documento originale" : undefined}
+            style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5, ...(onApriTitolo ? { cursor: "pointer" } : {}) }}
+          >
             {chips.map((c, idx) => <ChipSpesa key={idx}>{c}</ChipSpesa>)}
           </div>
         )}
@@ -42482,6 +42494,128 @@ function PannelloCassaConsulenze() {
 // documento, e la sua scadenza smette di essere stimata), o appartiene a
 // qualcosa gia' pagato senza documento, che in prima nota aspettava
 // proprio questo per diventare riconciliata.
+// Il documento come Fatture in Cloud ce l'ha mandato: chi lo emette per
+// intero (partita IVA, codice fiscale, indirizzo), le righe, gli importi
+// e i pagamenti registrati.
+//
+// Non chiama FIC: tutto questo arriva col sync e sta gia' in
+// `payload_raw`. Un documento sincronizzato prima che quel campo
+// esistesse non ce l'ha, e allora si dice, invece di mostrare una
+// finestra vuota.
+function ModaleOriginaleFic({ fattura, onChiudi }) {
+  const isMobile = useIsMobile();
+  const p = fattura?.payload_raw || null;
+  const ente = p?.entity || null;
+  const righe = Array.isArray(p?.items_list) ? p.items_list : [];
+  const pagamenti = Array.isArray(p?.payments_list) ? p.payments_list : [];
+  const num = (v) => (v == null || v === "" ? null : Number(v));
+
+  const voce = (etichetta, valore) => valore == null || valore === "" ? null : (
+    <div key={etichetta} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "3px 0" }}>
+      <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "0 0 132px" }}>{etichetta}</span>
+      <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, wordBreak: "break-word" }}>{valore}</span>
+    </div>
+  );
+  const titoletto = (t) => (
+    <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.7, marginTop: 16, marginBottom: 6 }}>{t}</div>
+  );
+
+  return (
+    <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: isMobile ? "16px 10px" : "40px 16px", overflowY: "auto", zIndex: 2400 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 680, background: "#fff", borderRadius: 18, padding: isMobile ? 16 : 22, boxShadow: "0 18px 50px rgba(14,27,51,0.35)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 800, color: NAVY }}>{fattura?.fornitore_nome || "Documento"}</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
+              {[fattura?.numero_documento ? `n. ${fattura.numero_documento}` : null, fattura?.data_documento ? fmtData(fattura.data_documento) : null, fmtEuroErp(fattura?.totale)].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+          <Button variant="ghost" onClick={onChiudi}>Chiudi</Button>
+        </div>
+
+        {fattura?.fattura_elettronica && (
+          <span style={{ display: "inline-block", marginTop: 10, ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E5AAC", background: "#E7EEFB", borderRadius: 10, padding: "3px 9px" }}>Fattura elettronica</span>
+        )}
+
+        {!p ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.5, marginTop: 16 }}>
+            Di questo documento non è stato conservato l’originale: è arrivato prima che lo salvassimo.
+            Rilanciando la sincronizzazione da Fatture in Cloud l’originale si riprende.
+          </div>
+        ) : (
+          <>
+            {titoletto("Chi ha emesso")}
+            {voce("Ragione sociale", ente?.name || [ente?.first_name, ente?.last_name].filter(Boolean).join(" ") || null)}
+            {voce("Partita IVA", ente?.vat_number)}
+            {voce("Codice fiscale", ente?.tax_code)}
+            {voce("Indirizzo", [ente?.address_street, ente?.address_extra].filter(Boolean).join(", ") || null)}
+            {voce("Città", [ente?.address_postal_code, ente?.address_city, ente?.address_province ? `(${ente.address_province})` : null].filter(Boolean).join(" ") || null)}
+            {voce("Paese", ente?.country)}
+            {voce("Email", ente?.email)}
+            {voce("PEC", ente?.certified_email)}
+            {voce("Telefono", ente?.phone)}
+
+            {titoletto("Il documento")}
+            {voce("Tipo", p.type)}
+            {voce("Numero", p.invoice_number || fattura?.numero_documento)}
+            {voce("Data", p.date ? fmtData(p.date) : null)}
+            {voce("Descrizione", p.description)}
+            {voce("Categoria", p.category || fattura?.categoria)}
+            {voce("Valuta", p.currency)}
+            {voce("Prossima scadenza", p.next_due_date ? fmtData(p.next_due_date) : null)}
+            {voce("Deducibilità IVA", p.vat_deductibility == null ? null : `${p.vat_deductibility}%`)}
+            {voce("Deducibilità costo", p.tax_deductibility == null ? null : `${p.tax_deductibility}%`)}
+
+            {righe.length > 0 && (
+              <>
+                {titoletto(`Righe (${righe.length})`)}
+                <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+                  {righe.map((r, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "8px 11px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                      <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, flex: 1, minWidth: 0, wordBreak: "break-word" }}>
+                        {r.name || r.description || "—"}
+                        {r.qty ? <span style={{ color: MUTED }}> · {r.qty}{r.measure ? ` ${r.measure}` : ""}</span> : null}
+                      </span>
+                      <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>{r.vat?.value != null ? `IVA ${r.vat.value}%` : ""}</span>
+                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{num(r.amount_net) != null ? fmtEuroErp(num(r.amount_net)) : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {titoletto("Importi")}
+            {voce("Imponibile", num(p.amount_net) != null ? fmtEuroErp(num(p.amount_net)) : null)}
+            {voce("IVA", num(p.amount_vat) != null ? fmtEuroErp(num(p.amount_vat)) : null)}
+            {voce("Ritenuta", num(p.amount_withholding_tax) ? fmtEuroErp(num(p.amount_withholding_tax)) : null)}
+            {voce("Altra ritenuta", num(p.amount_other_withholding_tax) ? fmtEuroErp(num(p.amount_other_withholding_tax)) : null)}
+            {voce("Totale", num(p.amount_gross) != null ? fmtEuroErp(num(p.amount_gross)) : fmtEuroErp(fattura?.totale))}
+
+            {pagamenti.length > 0 && (
+              <>
+                {titoletto(`Pagamenti registrati su Fatture in Cloud (${pagamenti.length})`)}
+                {pagamenti.map((pg, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "3px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                    <span style={{ flex: "0 0 132px", color: MUTED, fontSize: 11.5 }}>{pg.due_date ? fmtData(pg.due_date) : "senza data"}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>{pg.status === "paid" ? `Pagato${pg.payment_date ? ` il ${fmtData(pg.payment_date)}` : ""}` : "Non pagato"}{pg.payment_terms?.days ? ` · ${pg.payment_terms.days} gg` : ""}</span>
+                    <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{num(pg.amount) != null ? fmtEuroErp(num(pg.amount)) : "—"}</span>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {(p.attachment_url || p.attachment_preview_url) && (
+              <div style={{ marginTop: 16 }}>
+                <Button onClick={() => window.open(p.attachment_url || p.attachment_preview_url, "_blank", "noopener")}>Apri l’allegato su Fatture in Cloud</Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagateSenzaDocumento, etichettaCorso, costiSottocategorie, onChiudi, onAssociaDaPagare, onAssociaPagata }) {
   const isMobile = useIsMobile();
   const [scheda, setScheda] = useState("dapagare");
@@ -43167,6 +43301,8 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
   // oppure a una spesa gia' pagata senza documento, che in prima nota
   // aspettava proprio questo per diventare riconciliata.
   const [docDaAssociare, setDocDaAssociare] = useState(null);
+  // la fattura di cui si sta guardando l'originale arrivato da Fatture in Cloud
+  const [originaleFic, setOriginaleFic] = useState(null);
   // Cambiare la scadenza a mano FISSA la riga: da voce ancora calcolata
   // diventa una spesa vera, in attesa di pagamento, con la data decisa da
   // una persona. Da quel momento l'importo non insegue piu' il calcolo
@@ -43540,6 +43676,8 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      {originaleFic && <ModaleOriginaleFic fattura={originaleFic} onChiudi={() => setOriginaleFic(null)} />}
+
       {docDaAssociare && (
         <ModaleAssociaDocumento
           documento={docDaAssociare}
@@ -43691,6 +43829,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
                   titolo={f.fornitore_nome || f.descrizione || "Documento"}
                   sottotitolo={[f.categoria, f.numero_documento ? `Doc. ${f.numero_documento}` : null].filter(Boolean).join(" · ") || null}
                   chips={[f.fattura_elettronica ? "Fattura elettronica" : null].filter(Boolean)}
+                  onApriTitolo={() => setOriginaleFic(f)}
                   importo={fmtEuroErp(f.totale)}
                 >
                   {(() => {
