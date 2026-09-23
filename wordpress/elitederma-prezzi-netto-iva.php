@@ -1,185 +1,167 @@
 <?php
 /**
- * Elitederma — il totale spiegato nel carrello e al checkout
+ * Elitederma — il prezzo spiegato nel carrello a blocchi
  * ---------------------------------------------------------------------
  * Da incollare in Code Snippets (WordPress → Snippets → Aggiungi nuovo),
  * "Esegui ovunque". Non serve toccare il tema.
  *
  * COSA FA
- * Nel riepilogo del carrello e in quello del checkout, subito sopra il
- * totale, aggiunge le righe che spiegano come ci si arriva:
+ * Sotto il nome di ogni prodotto, nel carrello e al checkout, aggiunge:
  *
- *   Imponibile (netto)                   130,80 €
- *   Sconto codice AULA25                −11,12 €
- *   Netto scontato                       119,68 €
- *   IVA 22%                               26,33 €
- *   Totale                               146,01 €
+ *   Netto                        51,64 €
+ *   Sconto 30%                 − 15,49 €
+ *   Netto scontato               36,15 €
+ *   IVA 22%                       7,95 €
+ *   Totale                       44,10 €
  *
- * Il dettaglio sta QUI e non sulla scheda del prodotto perché il codice
- * promozionale il cliente lo inserisce alla fine: su un prodotto, lo
- * sconto o non c'è ancora o è quello di un carrello che non si sta
- * guardando.
+ * Su un prodotto senza sconto restano netto, IVA e totale.
  *
- * I numeri sono quelli che WooCommerce ha già calcolato per il carrello
- * — imponibile, sconto, imposta, totale. Non se ne ricalcola nessuno:
- * se il totale qui sotto non tornasse con quello di WooCommerce, il
- * cliente vedrebbe due conti diversi sulla stessa pagina.
- */
-
-/**
- * ATTENZIONE — VERIFICATO IL 23/09/2026: SU elitederma.shop QUESTO
- * SNIPPET NON MOSTRA NIENTE.
+ * PERCHE' IN JAVASCRIPT
+ * Il carrello di elitederma.shop e' il BLOCCO di WooCommerce: lo disegna
+ * il browser leggendo la Store API, e gli hook PHP del carrello classico
+ * (woocommerce_cart_item_name e compagnia) li' non li chiama nessuno.
+ * Quindi i numeri si leggono dalla stessa Store API che usa il blocco —
+ * line_subtotal, line_total, line_total_tax — e si scrivono accanto al
+ * nome. Nessun conto rifatto a mano: se il blocco cambia idea sul
+ * totale, cambia idea anche questo.
  *
- * Il carrello del sito e' il BLOCCO di WooCommerce (nella pagina c'e'
- * wp-block-woocommerce-cart, e non c'e' woocommerce-cart-form): lo
- * disegna JavaScript leggendo la Store API, e gli hook PHP qui sotto —
- * woocommerce_cart_item_name, woocommerce_cart_totals_before_order_total
- * — appartengono al carrello classico, quello a shortcode. Nel blocco
- * non vengono chiamati da nessuno.
- *
- * Questo file resta valido e pronto per due strade:
- *   1. si riportano le pagine Carrello e Checkout agli shortcode
- *      [woocommerce_cart] / [woocommerce_checkout], e funziona com'e';
- *   2. si tiene il carrello a blocchi e si rifa' lo stesso dettaglio in
- *      JavaScript sulla Store API.
- * Finche' non si sceglie, tenerlo pure disattivato: non fa danni, ma
- * non fa nemmeno niente.
+ * Il blocco si ridisegna a ogni cambio di quantita' o di codice: un
+ * osservatore rimette il dettaglio quando sparisce e rilegge i numeri
+ * poco dopo, quando la Store API ha finito di aggiornarsi.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/** Una riga del riepilogo, nella stessa tabella dei totali di WooCommerce. */
-function elitederma_riga_totale( $etichetta, $importo, $classe = '', $colore = '' ) {
-	printf(
-		'<tr class="elitederma-riga %s"><th style="%s">%s</th><td style="%s">%s</td></tr>',
-		esc_attr( $classe ),
-		$colore ? 'color:' . esc_attr( $colore ) . ';font-weight:600;' : '',
-		wp_kses_post( $etichetta ),
-		$colore ? 'color:' . esc_attr( $colore ) . ';' : '',
-		wp_kses_post( $importo )
-	);
-}
+define( 'ELITEDERMA_PREZZI_JS', <<<'JS'
+(function () {
+  var RADICE = (window.elitedermaPrezzi && window.elitedermaPrezzi.store) || "/wp-json/wc/store/v1/cart";
+  var CLASSE = "elitederma-dettaglio";
+  var dati = null;
+  var inCorso = false;
 
-/**
- * Le righe del dettaglio, sopra il totale.
- *
- * Imponibile e sconto sono al netto dell'IVA: sono le due grandezze su
- * cui si ragiona, e sommarci l'imposta le renderebbe incomparabili con
- * i prezzi di listino che stanno in anagrafica.
- */
-function elitederma_dettaglio_totale() {
-	if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
-		return;
-	}
-	$cart = WC()->cart;
+  function soldi(minori, t) {
+    var unita = Math.pow(10, t.currency_minor_unit);
+    var n = (Number(minori) / unita).toFixed(t.currency_minor_unit);
+    var pezzi = n.split(".");
+    pezzi[0] = pezzi[0].replace(/\B(?=(\d{3})+(?!\d))/g, t.currency_thousand_separator);
+    var testo = pezzi.join(t.currency_decimal_separator);
+    return (t.currency_prefix || "") + testo + (t.currency_suffix || "");
+  }
 
-	$netto   = (float) $cart->get_subtotal();          // imponibile, IVA esclusa
-	$sconto  = (float) $cart->get_discount_total();    // sconto, IVA esclusa
-	$imposta = (float) $cart->get_total_tax();
-	$totale  = (float) $cart->get_total( 'edit' );
+  function riga(etichetta, valore, colore, forte) {
+    var d = document.createElement("div");
+    d.style.cssText = "display:flex;justify-content:space-between;gap:10px;" +
+      (forte ? "font-weight:700;border-top:1px solid rgba(0,0,0,.10);margin-top:3px;padding-top:3px;" : "");
+    var a = document.createElement("span");
+    var b = document.createElement("span");
+    a.textContent = etichetta;
+    b.textContent = valore;
+    b.style.whiteSpace = "nowrap";
+    if (colore) { a.style.color = colore; b.style.color = colore; }
+    d.appendChild(a); d.appendChild(b);
+    return d;
+  }
 
-	if ( $netto <= 0 ) {
-		return;
-	}
-	$netto_scontato = round( $netto - $sconto, 2 );
-	// l'aliquota si legge dai numeri del carrello, non si scrive: un
-	// carrello con prodotti ad aliquote diverse non ne ha una sola, e
-	// allora si scrive "IVA" e basta invece di una percentuale falsa
-	$aliquota  = $netto_scontato > 0 ? round( $imposta / $netto_scontato * 100, 1 ) : 0;
-	$aliquote  = array();
-	foreach ( $cart->get_cart() as $riga ) {
-		$p = isset( $riga['data'] ) ? $riga['data'] : null;
-		if ( $p instanceof WC_Product ) {
-			$aliquote[ $p->get_tax_class() ] = true;
-		}
-	}
-	$etichetta_iva = count( $aliquote ) === 1 && $aliquota > 0
-		? sprintf( 'IVA %s%%', esc_html( rtrim( rtrim( number_format_i18n( $aliquota, 1 ), '0' ), ',' ) ) )
-		: 'IVA';
+  // il dettaglio di una voce: netto, sconto con la sua percentuale,
+  // netto scontato, IVA e totale. I numeri sono quelli della Store API,
+  // non ricalcolati dal prezzo a video
+  function blocco(voce, t) {
+    var netto = Number(voce.totals.line_subtotal);
+    var dopo = Number(voce.totals.line_total);
+    var imposta = Number(voce.totals.line_total_tax || 0);
+    if (!(netto > 0)) return null;
+    var sconto = netto - dopo;
+    var box = document.createElement("div");
+    box.className = CLASSE;
+    box.style.cssText = "margin-top:6px;font-size:.82em;line-height:1.5;opacity:.92;max-width:320px;";
+    box.appendChild(riga("Netto", soldi(netto, t)));
+    if (sconto > 0.5) {
+      var pct = Math.round(sconto / netto * 1000) / 10;
+      box.appendChild(riga("Sconto " + String(pct).replace(".", ",") + "%", "− " + soldi(sconto, t), "#2E7D32"));
+      box.appendChild(riga("Netto scontato", soldi(dopo, t)));
+    }
+    if (imposta > 0) {
+      var aliq = Math.round(imposta / dopo * 1000) / 10;
+      box.appendChild(riga("IVA " + String(aliq).replace(".", ",") + "%", soldi(imposta, t)));
+    }
+    box.appendChild(riga("Totale", soldi(dopo + imposta, t), "", true));
+    return box;
+  }
 
-	elitederma_riga_totale( 'Imponibile (netto)', wc_price( $netto ) );
+  function chiaveDi(url) {
+    try { return new URL(url, location.origin).pathname.replace(/\/+$/, ""); } catch (e) { return url || ""; }
+  }
 
-	if ( $sconto > 0 ) {
-		$codici = array_map( 'strtoupper', (array) $cart->get_applied_coupons() );
-		elitederma_riga_totale(
-			$codici ? sprintf( 'Sconto codice %s', esc_html( implode( ', ', $codici ) ) ) : 'Sconto',
-			'&minus; ' . wc_price( $sconto ),
-			'elitederma-sconto',
-			'#2E7D32'
-		);
-		elitederma_riga_totale( 'Netto scontato', wc_price( $netto_scontato ) );
-	}
+  function disegna() {
+    if (!dati || !dati.items) return;
+    var perPermalink = {};
+    dati.items.forEach(function (v) { perPermalink[chiaveDi(v.permalink)] = v; });
 
-	elitederma_riga_totale( $etichetta_iva, wc_price( $imposta ) );
-}
+    document.querySelectorAll(".wc-block-cart-items__row, .wc-block-components-order-summary-item").forEach(function (r) {
+      var link = r.querySelector("a[href]");
+      var voce = link ? perPermalink[chiaveDi(link.getAttribute("href"))] : null;
+      if (!voce) return;
+      var vecchio = r.querySelector("." + CLASSE);
+      var nuovo = blocco(voce, dati.totals);
+      if (!nuovo) return;
+      if (vecchio) {
+        if (vecchio.textContent === nuovo.textContent) return;   // gia' giusto: non si tocca
+        vecchio.replaceWith(nuovo);
+        return;
+      }
+      var nome = r.querySelector(".wc-block-components-product-name") || link;
+      var dove = nome && nome.parentNode ? nome.parentNode : r;
+      dove.appendChild(nuovo);
+    });
+  }
 
-/**
- * Il dettaglio riga per riga, sotto il nome del prodotto nel carrello.
- *
- * Il totale in fondo dice quanto si paga; questo dice perche'. Con un
- * codice che vale solo su certi prodotti serve vedere su quale riga lo
- * sconto e' caduto e su quale no — dal totale non si capisce.
- *
- * I numeri sono quelli che WooCommerce ha gia' messo nella riga:
- * line_subtotal e' l'imponibile prima dello sconto, line_total quello
- * dopo, line_tax l'imposta sul secondo. La percentuale si ricava dai
- * due imponibili, cosi' e' quella vera anche quando il coupon e' a
- * importo fisso o si ferma a una parte della riga.
- */
-add_filter(
-	'woocommerce_cart_item_name',
-	function ( $nome, $riga, $chiave ) {
-		if ( ! is_array( $riga ) || ! isset( $riga['line_subtotal'] ) ) {
-			return $nome;
-		}
-		$netto  = (float) $riga['line_subtotal'];
-		$dopo   = (float) ( isset( $riga['line_total'] ) ? $riga['line_total'] : $riga['line_subtotal'] );
-		$imposta = (float) ( isset( $riga['line_tax'] ) ? $riga['line_tax'] : 0 );
-		if ( $netto <= 0 ) {
-			return $nome;
-		}
-		$sconto = round( $netto - $dopo, 2 );
-		$pct    = $sconto > 0 ? round( $sconto / $netto * 100, 1 ) : 0;
-		$totale = round( $dopo + $imposta, 2 );
-		$aliq   = $dopo > 0 ? round( $imposta / $dopo * 100, 1 ) : 0;
-		$num    = function ( $v, $d = 1 ) {
-			return rtrim( rtrim( number_format_i18n( $v, $d ), '0' ), ',' );
-		};
+  function carica() {
+    if (inCorso) return;
+    inCorso = true;
+    fetch(RADICE, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { inCorso = false; if (j) { dati = j; disegna(); } })
+      .catch(function () { inCorso = false; });
+  }
 
-		$righe = array();
-		$righe[] = array( 'Netto', wc_price( $netto ), '' );
-		if ( $sconto > 0 ) {
-			$righe[] = array( sprintf( 'Sconto %s%%', esc_html( $num( $pct ) ) ), '&minus; ' . wc_price( $sconto ), '#2E7D32' );
-			$righe[] = array( 'Netto scontato', wc_price( $dopo ), '' );
-		}
-		if ( $imposta > 0 ) {
-			$righe[] = array( sprintf( 'IVA %s%%', esc_html( $num( $aliq ) ) ), wc_price( $imposta ), '' );
-		}
-		$righe[] = array( 'Totale', wc_price( $totale ), '' );
+  // il blocco si ridisegna da solo a ogni cambio di quantita' o codice:
+  // si riattacca il dettaglio quando sparisce, e si rileggono i numeri
+  // poco dopo, quando la Store API ha finito di aggiornarsi
+  var attesa = null;
+  function osserva() {
+    var radice = document.querySelector(".wp-block-woocommerce-cart, .wp-block-woocommerce-checkout") || document.body;
+    new MutationObserver(function () {
+      disegna();
+      clearTimeout(attesa);
+      attesa = setTimeout(carica, 600);
+    }).observe(radice, { childList: true, subtree: true });
+  }
 
-		$html = '<div class="elitederma-riga-prodotto" style="margin-top:6px;font-size:.82em;line-height:1.5;opacity:.92;">';
-		$ultima = count( $righe ) - 1;
-		foreach ( $righe as $i => $r ) {
-			$html .= sprintf(
-				'<div style="display:flex;justify-content:space-between;gap:10px;%s"><span style="%s">%s</span><span style="white-space:nowrap;%s">%s</span></div>',
-				$i === $ultima ? 'font-weight:700;border-top:1px solid rgba(0,0,0,.08);margin-top:3px;padding-top:3px;' : '',
-				$r[2] ? 'color:' . esc_attr( $r[2] ) . ';' : '',
-				wp_kses_post( $r[0] ),
-				$r[2] ? 'color:' . esc_attr( $r[2] ) . ';' : '',
-				wp_kses_post( $r[1] )
-			);
-		}
-		$html .= '</div>';
-
-		return $nome . $html;
-	},
-	20,
-	3
+  function avvia() { carica(); osserva(); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", avvia);
+  else avvia();
+})();
+JS
 );
 
-// Carrello e checkout: sopra la riga del totale, dove il cliente guarda
-// prima di pagare.
-add_action( 'woocommerce_cart_totals_before_order_total', 'elitederma_dettaglio_totale' );
-add_action( 'woocommerce_review_order_before_order_total', 'elitederma_dettaglio_totale' );
+add_action(
+	'wp_enqueue_scripts',
+	function () {
+		if ( ! function_exists( 'is_cart' ) || ( ! is_cart() && ! is_checkout() ) ) {
+			return;
+		}
+		// un appiglio per lo script: l'indirizzo della Store API di
+		// QUESTO sito, che non e' detto stia sotto /wp-json
+		wp_register_script( 'elitederma-prezzi', '', array(), '1.0.0', true );
+		wp_enqueue_script( 'elitederma-prezzi' );
+		wp_add_inline_script(
+			'elitederma-prezzi',
+			'window.elitedermaPrezzi = ' . wp_json_encode( array( 'store' => rest_url( 'wc/store/v1/cart' ) ) ) . ';',
+			'before'
+		);
+		wp_add_inline_script( 'elitederma-prezzi', ELITEDERMA_PREZZI_JS );
+	},
+	20
+);
