@@ -36345,18 +36345,12 @@ async function generaCodiceReferralUnivoco(nome) {
 // si leggono come quattro righe — quanto spendi, quanto ti sconto.
 function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = false }) {
   const g = gruppiFasceValidi(valore);
-  // Le quattro righe si scrivevano a mano una cifra per volta: ventiquattro
-  // numeri per tabella, e l'incremento tra una fascia e l'altra andava
-  // ricalcolato in testa colonna per colonna. Qui si dice di quanto deve
-  // crescere e le tre righe sotto la prima si riscrivono da sole.
-  const [passoFasce, setPassoFasce] = useState(0.5);
-  function applicaPasso() {
-    const base = g.gruppi[0];
-    const gruppi = g.gruppi.map((gr, i) =>
-      i === 0 ? gr : gr.map((f, k) => ({ ...f, percentuale: round2(Math.min(100, Math.max(0, (base[k]?.percentuale || 0) + passoFasce * i))) }))
-    );
-    onCambia({ soglie: g.soglie, gruppi });
-  }
+  // C'era un "passo": si dava un incremento e le tre righe sotto la prima si
+  // riscrivevano da sole, tutte con lo stesso salto. Tolto il 22/09/2026: un
+  // passo costante non tiene conto ne' del margine della colonna ne' della
+  // soglia che si attraversa, e produceva scale in cui un carrello appena
+  // sopra la soglia pagava meno di uno appena sotto. Le percentuali ora si
+  // calcolano fuori, fascia per fascia, e si scrivono qui.
   function cambiaSoglia(i, n) {
     const soglie = g.soglie.slice();
     soglie[i] = n;
@@ -36428,23 +36422,6 @@ function FasceDiSpesa({ valore, onCambia, prodottiShop, isMobile, senzaWoo = fal
         ))}
         <span style={{ ...fontBody, fontSize: 11, color: MUTED, flex: "1 1 160px", minWidth: 0 }}>
           Decide la riga il totale del carrello a listino, prima dello sconto.
-        </span>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${CREAM_BORDER}` }}>
-        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>Passo</span>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 12, color: MUTED }}>
-          ogni fascia
-          <CampoNumero
-            valore={passoFasce} min={0} max={100}
-            titolo="Di quanto cresce lo sconto passando alla fascia di spesa successiva"
-            onCambia={(n) => setPassoFasce(n)}
-            style={{ ...inputStyle, width: 64, textAlign: "center", padding: "5px 6px", fontWeight: 700, fontSize: 12.5 }}
-          />
-          <span style={{ fontWeight: 700, color: NAVY }}>punti in più</span>
-        </label>
-        <Button variant="ghost" onClick={applicaPasso}>Applica alla tabella</Button>
-        <span style={{ ...fontBody, fontSize: 11, color: MUTED, flex: "1 1 160px", minWidth: 0 }}>
-          Tiene ferma la prima riga e riscrive le altre tre, colonna per colonna.
         </span>
       </div>
       {!senzaWoo && (
@@ -70300,7 +70277,18 @@ export default function App() {
     const rigaPassword = passwordMenu.find((p) => p.vista === nomeView);
     const codiceRichiesto = (rigaPassword?.password || "").trim();
     const codiceAdmin = passwordAmministratoreAttuale();
-    const codice = window.prompt("Codice per accedere:");
+    // Chi arriva qui con un utente suo NON ha il permesso dell'area
+    // madre: chiedergli "Codice per accedere:" e rispondere "Codice non
+    // corretto" e' un muro senza porta — non c'e' nessun codice che lui
+    // possa sapere, e dall'altra parte sembra che l'app si sia rotta.
+    // Il codice amministratore continua a valere, perche' serve a chi
+    // amministra e passa di li' ad aprirla a mano; ma adesso la
+    // finestrella dice di chi e' il problema e come si risolve.
+    const nomeArea = areeMadri ? areeMadri.map((a) => etichettaTasto("home", a, a)).join(" o ") : null;
+    const spiegaAccesso = utenteLoggato && nomeArea
+      ? `Questa sezione sta dentro "${nomeArea}", e l'utente ${utenteLoggato.nome || "collegato"} non ha quel permesso.\n\nChiedi a chi gestisce gli accessi di aggiungere "${nomeArea}" ai tuoi permessi, oppure fatti digitare il codice amministratore.\n\nCodice per accedere:`
+      : "Codice per accedere:";
+    const codice = window.prompt(spiegaAccesso);
     if (codice === null) return;
     if (codiceRichiesto && codice === codiceRichiesto) {
       sessionStorage.setItem(chiaveSessione, "1");
@@ -70310,7 +70298,9 @@ export default function App() {
       sessionStorage.setItem("edc_admin_ok", "1");
       setView(nomeView);
     } else {
-      window.alert("Codice non corretto.");
+      window.alert(utenteLoggato && nomeArea
+        ? `Codice non corretto.\n\nNon e' una password tua: e' il codice dell'utente "Amministratore", quello scritto nel pannello degli accessi. Se e' stato cambiato di recente, e' cambiato anche qui.`
+        : "Codice non corretto.");
     }
   }
   // rotellina in home: codice distinto da quello amministratore (anche lui
