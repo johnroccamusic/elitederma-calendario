@@ -34547,7 +34547,7 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia9", tipo: "copia", titolo: "Dati per il bonifico", spiega: "Copiali e mandali in chat all\u2019allievo cos\u00ec come sono.", testo: "ELITEDERMA SRL\nBanca Popolare del Lazio\nIBAN: IT69T0510439499CC0010523827\nBIC: BPLZIT3V\nCausale: nome e cognome acquisto formazione" },
   { id: "ia10", tipo: "nota", testo: "Appena l\u2019allievo ha fatto il bonifico, avvisa Elena: senza quell\u2019avviso la fattura non viene emessa." },
   { id: "ia13", tipo: "sezione", testo: "Definizione messaggi" },
-  { id: "ia14", tipo: "messaggikit", titolo: "Definizione messaggi", spiega: "Un messaggio per ogni kit. Finché un kit non ha il suo, chi manda il benvenuto si ritrova in mano il testo generico." },
+  { id: "ia14", tipo: "messaggikit", titolo: "Definizione messaggi", spiega: "Un messaggio per ogni kit, in una pagina a parte. Finché un kit non ha il suo, chi manda il benvenuto si ritrova in mano il testo generico." },
   { id: "ia11", tipo: "sezione", testo: "Messaggio di benvenuto" },
   { id: "ia12", tipo: "benvenuto", titolo: "Messaggio di benvenuto", spiega: "Scegli la classe e l\u2019allievo: il messaggio si compila da solo, poi copialo e mandalo in chat.", testo: MESSAGGIO_BENVENUTO_PREDEFINITO },
   { id: "ia2", tipo: "nota", testo: "Il messaggio si riscrive da qui, col tasto “Modifica messaggio di benvenuto”. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — “Testo da copiare” è quello giusto per un messaggio da mandare in chat." },
@@ -34722,7 +34722,7 @@ function BloccoDaCopiare({ blocco, isMobile }) {
 // che manca, e infatti sta scritto in cima quanti ne restano. Finche'
 // sono vuoti il configuratore qui sotto non ha niente di specifico da
 // dare e ripiega sul testo generico, dicendolo.
-function AreaDefinizioneMessaggi({ blocco, isMobile, dati, puoScrivere, ricarica, onModifica }) {
+function AreaDefinizioneMessaggi({ isMobile, dati, puoScrivere, ricarica }) {
   const { corsi = [], kitDefinizioni = [], messaggiKit = [] } = dati || {};
   const [corsoAperto, setCorsoAperto] = useState(null);
   const [inModifica, setInModifica] = useState(null); // kit_id
@@ -34802,23 +34802,18 @@ function AreaDefinizioneMessaggi({ blocco, isMobile, dati, puoScrivere, ricarica
 
   const stileSelect = { ...fontBody, width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 9, border: `1px solid ${CREAM_BORDER}`, fontSize: isMobile ? 13 : 13.5, color: NAVY, background: "#fff" };
 
+  const tutti = tuttiIKit.length;
+  const completo = tutti > 0 && conMessaggio === tutti;
+
   return (
-    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "16px 18px" }} onClick={(e) => e.stopPropagation()}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{blocco?.titolo || "Definizione messaggi"}</div>
-          {blocco?.spiega && <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>{blocco.spiega}</div>}
-        </div>
-        {onModifica && <Button variant="ghost" onClick={() => onModifica()}>Riscrivi il titolo</Button>}
-      </div>
-
-      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: conMessaggio === tuttiIKit.length && tuttiIKit.length ? "#2E7D32" : "#8A6D1D", background: conMessaggio === tuttiIKit.length && tuttiIKit.length ? "#EAF5EA" : "#FDF8EC", border: `1px solid ${conMessaggio === tuttiIKit.length && tuttiIKit.length ? "#C7E3C7" : "#EBD9AE"}`, borderRadius: 10, padding: "9px 11px", marginTop: 12 }}>
-        {tuttiIKit.length === 0
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "16px 18px" }}>
+      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: completo ? "#2E7D32" : "#8A6D1D", background: completo ? "#EAF5EA" : "#FDF8EC", border: `1px solid ${completo ? "#C7E3C7" : "#EBD9AE"}`, borderRadius: 10, padding: "9px 11px" }}>
+        {tutti === 0
           ? "Non c'è nessun kit a catalogo: i messaggi si scrivono da qui appena ce ne sarà uno."
-          : `${conMessaggio} kit su ${tuttiIKit.length} hanno il loro messaggio. I kit senza messaggio ricevono il testo generico.`}
+          : `${conMessaggio} kit su ${tutti} hanno il loro messaggio. I kit senza messaggio ricevono il testo generico.`}
       </div>
 
-      {!puoScrivere && tuttiIKit.length > 0 && (
+      {!puoScrivere && tutti > 0 && (
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>
           Qui puoi leggere i messaggi; a riscriverli ci pensano amministrazione e chi programma.
         </div>
@@ -34899,6 +34894,63 @@ function AreaDefinizioneMessaggi({ blocco, isMobile, dati, puoScrivere, ricarica
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+
+// La stessa area, ma come pagina sua. Cinquantatre kit sotto il testo
+// della procedura erano un muro: chi apriva "Iscrizione allievi" per
+// mandare due righe a un'allieva si trovava davanti l'archivio intero.
+// Qui dentro invece ci si entra apposta, quando i messaggi si scrivono.
+function PaginaDefinizioneMessaggi({ dati, ruoloUtente, ricarica, onBack, titolo = "Definizione messaggi", titoloIndietro = "Iscrizione Allievi" }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 80px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo={titoloIndietro} onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 14 : 22, lineHeight: 1.6 }}>
+          Un messaggio per ogni kit. Apri il corso, scegli il kit e scrivi il testo che l’allievo riceverà dopo l’iscrizione.
+        </div>
+        <AreaDefinizioneMessaggi
+          isMobile={isMobile}
+          dati={dati}
+          puoScrivere={ruoloUtente === "programmatore" || ruoloUtente === "amministratore"}
+          ricarica={ricarica}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Dentro la pagina dell'iscrizione resta solo la porta: quanti kit
+// hanno il loro messaggio, e il tasto per andare a scriverli.
+function SchedaDefinizioneMessaggi({ blocco, isMobile, dati, onApri, onModifica }) {
+  const { kitDefinizioni = [], messaggiKit = [] } = dati || {};
+  const kitVeri = (kitDefinizioni || []).filter((k) => k.tipo !== "divisore" && String(k.nome || "").trim());
+  const scritti = new Set((messaggiKit || []).filter((r) => String(r.testo || "").trim()).map((r) => r.kit_id));
+  const conMessaggio = kitVeri.filter((k) => scritti.has(k.id)).length;
+  const completo = kitVeri.length > 0 && conMessaggio === kitVeri.length;
+
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "16px 18px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{blocco?.titolo || "Definizione messaggi"}</div>
+          {blocco?.spiega && <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>{blocco.spiega}</div>}
+        </div>
+        {onModifica && <Button variant="ghost" onClick={(e) => { e.stopPropagation(); onModifica(); }}>Riscrivi il titolo</Button>}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
+        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: completo ? "#2E7D32" : "#8A6D1D", background: completo ? "#EAF5EA" : "#FDF8EC", border: `1px solid ${completo ? "#C7E3C7" : "#EBD9AE"}`, borderRadius: 999, padding: "6px 12px" }}>
+          {kitVeri.length === 0 ? "nessun kit a catalogo" : `${conMessaggio} kit su ${kitVeri.length}`}
+        </span>
+        <Button onClick={() => onApri?.()}>Apri la definizione messaggi</Button>
       </div>
     </div>
   );
@@ -35563,7 +35615,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
       : tipo === "benvenuto"
         ? { id: `b${Date.now()}`, tipo, titolo: "Messaggio di benvenuto", spiega: "Scegli l’allievo: il messaggio si compila da solo.", testo: MESSAGGIO_BENVENUTO_PREDEFINITO }
       : tipo === "messaggikit"
-        ? { id: `b${Date.now()}`, tipo, titolo: "Definizione messaggi", spiega: "Un messaggio per ogni kit." }
+        ? { id: `b${Date.now()}`, tipo, titolo: "Definizione messaggi", spiega: "Un messaggio per ogni kit, in una pagina a parte." }
         : { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
     if (await salvaBlocchi([...blocchi, nuovo])) apriModifica(nuovo);
   }
@@ -35687,10 +35739,9 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
                   />
                 )
                 : b.tipo === "messaggikit" ? (
-                  <AreaDefinizioneMessaggi
+                  <SchedaDefinizioneMessaggi
                     blocco={b} isMobile={isMobile} dati={datiBenvenuto}
-                    puoScrivere={programmatore || ruoloUtente === "amministratore"}
-                    ricarica={ricarica}
+                    onApri={datiBenvenuto?.apriDefinizioneMessaggi}
                     onModifica={programmatore ? () => apriModifica(b) : null}
                   />
                 )
@@ -71028,6 +71079,7 @@ export default function App() {
     // il configuratore pesca dagli iscritti, dai kit e dai messaggi
     // scritti per ogni kit: senza questi la pagina si apre vuota
     iscrizioneallievi: ["normative_testi", "kit_definizioni", "messaggi_kit", "iscritti", "corsi", "corsi_date", "location", "master", "corsi_date_docenti"],
+    definizionemessaggi: ["corsi", "kit_definizioni", "messaggi_kit"],
     mappanormativepmu: [],
     modulistica: [],
     // "coupon" serve ai carrelli sospesi: senza, il pannello non trova il
@@ -73251,10 +73303,21 @@ export default function App() {
             // messaggio per conto di qualcun altro
             operatore: operatoreApp,
             ruoloUtente,
+            apriDefinizioneMessaggi: () => setView("definizionemessaggi"),
           }}
           onBack={() => setView("home")}
           titoloIndietro="Home"
           titolo={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {view === "definizionemessaggi" && (
+        <PaginaDefinizioneMessaggi
+          dati={{ corsi, kitDefinizioni, messaggiKit }}
+          ruoloUtente={ruoloUtente}
+          ricarica={fetchDati}
+          onBack={() => setView("iscrizioneallievi")}
+          titoloIndietro={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
         />
       )}
 
