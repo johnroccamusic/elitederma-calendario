@@ -12368,13 +12368,18 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // numero sulla mezzeria e basta, qualunque sia la lunghezza
               // dell'etichetta sopra: una riga o tre, il numero non si
               // sposta.
+              const schedePunti = 2 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli ? 1 : 0);
               const cardPunti = {
                 ...cardStyle, minWidth: 0, boxSizing: "border-box",
                 padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
                 textAlign: "center",
                 ...(isMobile
                   ? {
-                    aspectRatio: "1 / 1", overflow: "hidden",
+                    // il quadrato regge con due schede per riga; con tre o
+                    // quattro in fila si stringe troppo e il numero non ci
+                    // sta piu'. Allora l'altezza la decide il contenuto.
+                    ...(schedePunti > 2 ? { minHeight: 92 } : { aspectRatio: "1 / 1" }),
+                    overflow: "hidden",
                     display: "grid", gridTemplateRows: "1fr auto 1fr",
                     alignItems: "center", justifyItems: "center",
                   }
@@ -12393,8 +12398,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // l'etichetta vive nella prima fascia e si appoggia in
               // basso, cioe' appena sopra il numero: cosi' gli sta vicina
               // invece di galleggiare in cima al quadrato
-              const lblPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, overflowWrap: "anywhere", textAlign: "center", ...(isMobile ? { alignSelf: "end", paddingBottom: 3 } : {}) };
-              const numPunti = { ...fontDisplay, fontSize: isMobile ? 18 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", textAlign: "center" };
+              const lblPunti = { ...fontBody, fontSize: isMobile ? (schedePunti > 2 ? 9.5 : 11.5) : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, overflowWrap: "anywhere", textAlign: "center", ...(isMobile ? { alignSelf: "end", paddingBottom: 3 } : {}) };
+              const numPunti = { ...fontDisplay, fontSize: isMobile ? (schedePunti > 2 ? 15 : 18) : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", textAlign: "center" };
               const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
               return (
             // tre colonne uguali, non tre flex che possono andare a capo:
@@ -12402,7 +12407,13 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             // finestra si stringeva. "start" le tiene attaccate in alto, cosi'
             // le etichette partono dalla stessa riga anche quando una va a capo
             // e le altre no
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${(() => { const n = 2 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli ? 1 : 0); return isMobile && n > 2 ? 2 : n; })()}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+            //
+            // Su telefono stavano su due colonne: con tre schede la terza
+            // finiva da sola sulla riga sotto, accanto a un buco. Ora
+            // stanno tutte in fila — e il quadrato lascia il posto a una
+            // scheda piu' bassa, altrimenti tre quadrati affiancati su uno
+            // schermo stretto diventano tre francobolli.
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${(() => { const n = 2 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli ? 1 : 0); return n; })()}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
                   qui contano le vendite, i punti arriveranno con una regola
                   loro (da definire), e la quarta scheda resta vuota in
