@@ -31,7 +31,7 @@ const soloData = (g) => {
 };
 
 /** Il codice da far inquadrare, uno per consenso. */
-function Codice({ modello, isMobile }) {
+export function Codice({ modello, isMobile }) {
   const indirizzo = `${window.location.origin}${window.location.pathname}?consenso=${modello.codice}`;
   const svg = useMemo(() => qrSvg(indirizzo, { lato: isMobile ? 190 : 220 }), [indirizzo, isMobile]);
 

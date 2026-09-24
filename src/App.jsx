@@ -27,6 +27,7 @@ import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
 import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
 import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
+import QrConsensi from "./consensi/QrConsensi.jsx";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -72208,6 +72209,14 @@ export default function App() {
               { chiave: "compensipremi", title: "Area compensi e premi", descrizione: "Coupon, referral, provvigioni e premi", Icona: IconaTileOmaggio, attivo: tastoAbilitato("compensipremi"), onClick: apriCompensiPremi },
               { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaTileMarchio, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
               { chiave: "gestionemodelle", title: "Gestione modelle", descrizione: "Organizza modelle, disponibilità e assegnazioni", Icona: IconaTileModelle, attivo: tastoAbilitato("gestionemodelle"), onClick: apriGestioneModelle },
+              // Aperto a TUTTI, senza permesso: qui ci sono solo i codici
+              // da far inquadrare, nessun documento e nessun dato di
+              // nessuno. Serve a chi sta in aula con la modella davanti,
+              // che spesso e' proprio chi in Gestione modelle non entra.
+              // L'archivio dei consensi firmati resta dov'e', protetto.
+              // (commento con //, non {/* */}: qui siamo dentro un array
+              // JavaScript, non dentro il JSX)
+              { chiave: "qrconsensi", title: "QR consensi modelle", descrizione: "I codici da far inquadrare alle modelle per firmare il consenso", Icona: IconaTileModelle, attivo: true, onClick: () => setView("qrconsensi") },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
@@ -72896,6 +72905,15 @@ export default function App() {
           }}
           onBack={() => setView("normative")}
           titolo={etichettaTasto("normative", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {view === "qrconsensi" && (
+        <QrConsensi
+          isMobile={isMobile}
+          onBack={() => setView("home")}
+          TastoIndietro={TastoLivelloPrecedente}
+          titolo={etichettaTasto("home", "qrconsensi", "QR consensi modelle")}
         />
       )}
 
