@@ -24840,7 +24840,6 @@ const AREA_MADRE_VISTA = {
   ritornoalcorso: ["normative"],
   mappanormativepmu: ["normative"],
   modulistica: ["normative"],
-  iscrizioneallievi: ["normative"],
   prossimecontabilita: ["gestionedate"],
   amministrazione: ["erp"],
   catalogocategoriecosti: ["erp"],
@@ -34458,10 +34457,14 @@ const NORMATIVA_RITORNO_AL_CORSO = [
 // ragione per cui e' un blocco e non un componente cablato qui dentro.
 const SEGNAPOSTO_BENVENUTO = [
   ["{allievo}", "il nome di battesimo dell’allievo"],
+  ["{cognome}", "il cognome dell’allievo"],
   ["{corso}", "il nome del corso"],
+  ["{kit}", "il kit che ha scelto"],
   ["{sede}", "la città della sede"],
+  ["{indirizzo}", "l’indirizzo della sede"],
   ["{date}", "le date, per esteso (es. 18–19 ottobre 2026)"],
   ["{master}", "il nome della master della classe"],
+  ["{tutor}", "chi l’ha iscritto"],
 ];
 // In anagrafica i corsi stanno tutti in maiuscolo — "PMU BASE", "HENNE
 // INDIVI" — ed e' giusto cosi' per le tabelle. Dentro una frase mandata
@@ -34483,6 +34486,50 @@ function nomeCorsoLeggibile(nome) {
 }
 const MESSAGGIO_BENVENUTO_PREDEFINITO = "Congratulazioni {allievo}! Elitederma è lieta di confermare la tua iscrizione al corso di {corso}, che si svolgerà nella sede di {sede}. Il corso si terrà il {date}.";
 
+// Il kit scelto dall'allievo, sulla sua scheda: prima il riferimento
+// vero (kit_id, scritto da quando la scheda lo chiede), poi il ripiego
+// sul nome (pacchetto_kit, com'era prima). Le vecchie iscrizioni hanno
+// solo il nome, e sono ancora quelle della maggior parte dell'archivio.
+function kitDellIscritto(iscritto, kitDefinizioni, corsoId) {
+  if (!iscritto) return null;
+  const tutti = kitDefinizioni || [];
+  if (iscritto.kit_id) {
+    const per_id = tutti.find((k) => k.id === iscritto.kit_id);
+    if (per_id) return per_id;
+  }
+  if (!iscritto.pacchetto_kit) return null;
+  const nome = String(iscritto.pacchetto_kit).trim().toUpperCase();
+  return tutti.find((k) => k.corso_id === corsoId && String(k.nome || "").trim().toUpperCase() === nome)
+    || tutti.find((k) => String(k.nome || "").trim().toUpperCase() === nome)
+    || null;
+}
+
+// I valori da mettere al posto dei segnaposto. Sta qui fuori perche' lo
+// usano in due: il configuratore che compone il messaggio da mandare e
+// l'anteprima dell'area dove i messaggi si scrivono.
+function valoriBenvenuto({ iscritto, classe, corso, sede, master, kit }) {
+  return {
+    "{allievo}": iscritto ? toTitleCase(String(iscritto.nome || "").trim()) : "",
+    "{cognome}": iscritto ? toTitleCase(String(iscritto.cognome || "").trim()) : "",
+    "{corso}": corso ? nomeCorsoLeggibile(corso.nome) : "",
+    "{kit}": kit ? nomeCorsoLeggibile(kit.nome) : (iscritto?.pacchetto_kit ? nomeCorsoLeggibile(iscritto.pacchetto_kit) : ""),
+    "{sede}": sede?.nome ? toTitleCase(sede.nome) : "",
+    "{indirizzo}": sede?.indirizzo ? String(sede.indirizzo).trim() : "",
+    "{date}": classe ? fmtIntervalloEsteso(classe.data_inizio, classe.data_fine || classe.data_inizio) : "",
+    "{master}": master?.nome ? toTitleCase(master.nome) : "",
+    "{tutor}": iscritto?.tutor ? toTitleCase(String(iscritto.tutor).trim()) : "",
+  };
+}
+// Un segnaposto senza valore resta scritto com'e': in anteprima fa
+// vedere cosa manca, e su un messaggio davvero pronto non ne avanza
+// nessuno.
+function componiBenvenuto(modello, valori) {
+  return Object.entries(valori || {}).reduce(
+    (testo, [segno, valore]) => (valore ? testo.split(segno).join(valore) : testo),
+    String(modello || "")
+  );
+}
+
 const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia1", tipo: "testata", titolo: "Iscrizione allievi", sottotitolo: "Come la master iscrive un allievo a un corso", claim: "Pagina per le master — non va mandata all'allievo", lato: "Uso interno" },
   { id: "pr0", tipo: "sezione", testo: "Procedura" },
@@ -34499,6 +34546,8 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia8", tipo: "sezione", testo: "Se non hanno la carta: bonifico" },
   { id: "ia9", tipo: "copia", titolo: "Dati per il bonifico", spiega: "Copiali e mandali in chat all\u2019allievo cos\u00ec come sono.", testo: "ELITEDERMA SRL\nBanca Popolare del Lazio\nIBAN: IT69T0510439499CC0010523827\nBIC: BPLZIT3V\nCausale: nome e cognome acquisto formazione" },
   { id: "ia10", tipo: "nota", testo: "Appena l\u2019allievo ha fatto il bonifico, avvisa Elena: senza quell\u2019avviso la fattura non viene emessa." },
+  { id: "ia13", tipo: "sezione", testo: "Definizione messaggi" },
+  { id: "ia14", tipo: "messaggikit", titolo: "Definizione messaggi", spiega: "Un messaggio per ogni kit. Finché un kit non ha il suo, chi manda il benvenuto si ritrova in mano il testo generico." },
   { id: "ia11", tipo: "sezione", testo: "Messaggio di benvenuto" },
   { id: "ia12", tipo: "benvenuto", titolo: "Messaggio di benvenuto", spiega: "Scegli la classe e l\u2019allievo: il messaggio si compila da solo, poi copialo e mandalo in chat.", testo: MESSAGGIO_BENVENUTO_PREDEFINITO },
   { id: "ia2", tipo: "nota", testo: "Il messaggio si riscrive da qui, col tasto “Modifica messaggio di benvenuto”. In modalità programmatore clicca su un pezzo di testo per riscriverlo, e usa i tasti in fondo per aggiungerne altri — “Testo da copiare” è quello giusto per un messaggio da mandare in chat." },
@@ -34511,7 +34560,8 @@ const CAMPI_BLOCCO_NORMATIVA = {
   tappa: [["numero", "Numero (es. 01, lascia vuoto per una tappa a tempo)"], ["quando", "Quando (es. Entro 16 mesi)"], ["sotto", "Sotto (es. Dalla fine del corso)"], ["titolo", "Titolo"], ["testo", "Testo"]],
   link: [["titolo", "Titolo"], ["url", "Indirizzo (https://…)"], ["testo", "A cosa serve, in una riga"]],
   copia: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il testo da copiare, riga per riga"]],
-  benvenuto: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il messaggio. Segnaposto: {allievo} {corso} {sede} {date} {master}"]],
+  benvenuto: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"], ["testo", "Il testo generico, usato quando il kit non ha un messaggio suo"]],
+  messaggikit: [["titolo", "Titolo"], ["spiega", "A cosa serve, in una riga"]],
   riquadro: [["titolo", "Titolo del riquadro"], ["testo", "Testo (una riga vuota separa i capoversi)"]],
   passi: [
     ["occhiello", "Occhiello in oro (es. COMPLETAMENTO)"],
@@ -34661,9 +34711,221 @@ function BloccoDaCopiare({ blocco, isMobile }) {
 }
 
 
+// L'area dove i messaggi si scrivono: tutti i corsi, e sotto ognuno i
+// suoi kit, ciascuno col proprio messaggio.
+//
+// Perche' per kit e non per corso: chi compra il kit base e chi compra
+// quello completo ricevono due cose diverse, e il messaggio che arriva
+// dopo l'iscrizione e' il primo posto dove si vede la differenza.
+//
+// Un kit senza messaggio non e' un errore da nascondere: e' il lavoro
+// che manca, e infatti sta scritto in cima quanti ne restano. Finche'
+// sono vuoti il configuratore qui sotto non ha niente di specifico da
+// dare e ripiega sul testo generico, dicendolo.
+function AreaDefinizioneMessaggi({ blocco, isMobile, dati, puoScrivere, ricarica, onModifica }) {
+  const { corsi = [], kitDefinizioni = [], messaggiKit = [] } = dati || {};
+  const [corsoAperto, setCorsoAperto] = useState(null);
+  const [inModifica, setInModifica] = useState(null); // kit_id
+  const [bozza, setBozza] = useState("");
+  const [daImportare, setDaImportare] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const testoPerKit = useMemo(() => {
+    const m = {};
+    (messaggiKit || []).forEach((r) => { m[r.kit_id] = String(r.testo || ""); });
+    return m;
+  }, [messaggiKit]);
+  const scritto = (kitId) => !!String(testoPerKit[kitId] || "").trim();
+
+  // solo i pacchetti veri: in "Tipologie di kit" ci sono anche righe
+  // "divisore", che sono linee per separare e non kit da consegnare
+  const kitPerCorso = useMemo(() => {
+    const m = {};
+    (kitDefinizioni || [])
+      .filter((k) => k.tipo !== "divisore" && String(k.nome || "").trim())
+      .forEach((k) => { (m[k.corso_id || "senza"] ||= []).push(k); });
+    Object.values(m).forEach((lista) => lista.sort((a, b) => (a.ordine ?? 999) - (b.ordine ?? 999) || String(a.nome).localeCompare(String(b.nome), "it")));
+    return m;
+  }, [kitDefinizioni]);
+
+  const corsiConKit = useMemo(
+    () => (corsi || [])
+      .filter((c) => (kitPerCorso[c.id] || []).length > 0)
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "it")),
+    [corsi, kitPerCorso]
+  );
+
+  const tuttiIKit = useMemo(() => corsiConKit.flatMap((c) => kitPerCorso[c.id] || []), [corsiConKit, kitPerCorso]);
+  const conMessaggio = tuttiIKit.filter((k) => scritto(k.id)).length;
+
+  // da quali kit si puo' copiare: quelli che un messaggio ce l'hanno
+  // gia', tranne quello che si sta scrivendo
+  const nomeCorso = (id) => (corsi || []).find((c) => c.id === id)?.nome || "senza corso";
+  const sorgenti = useMemo(
+    () => tuttiIKit
+      .filter((k) => scritto(k.id) && k.id !== inModifica)
+      .map((k) => ({ id: k.id, nome: `${nomeCorsoLeggibile(nomeCorso(k.corso_id))} · ${k.nome}` })),
+    [tuttiIKit, inModifica, testoPerKit] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  function apri(kit) {
+    setInModifica(kit.id);
+    setBozza(testoPerKit[kit.id] || "");
+    setDaImportare("");
+  }
+  function importa(kitId) {
+    setDaImportare(kitId);
+    if (!kitId) return;
+    const testo = testoPerKit[kitId] || "";
+    if (!testo) return;
+    // si copia, non si collega: da qui in poi i due messaggi vivono
+    // per conto loro, ed e' quello che serve — si importa per non
+    // riscrivere tutto, non per tenerli uguali per sempre
+    if (bozza.trim() && !window.confirm("Sostituisco quello che hai scritto con il messaggio dell'altro kit?")) return;
+    setBozza(testo);
+  }
+  async function salva(kitId) {
+    setSalvando(true);
+    const { error } = await supabase.from("messaggi_kit")
+      .upsert({ kit_id: kitId, testo: bozza, aggiornato_il: new Date().toISOString() }, { onConflict: "kit_id" });
+    setSalvando(false);
+    if (error) { window.alert("Non sono riuscito a salvare: " + error.message); return; }
+    await ricarica?.(["messaggi_kit"]);
+    setInModifica(null); setBozza(""); setDaImportare("");
+  }
+  async function svuota(kit) {
+    if (!window.confirm(`Tolgo il messaggio del kit "${kit.nome}"? Chi lo manda tornera' a usare il testo generico.`)) return;
+    const { error } = await supabase.from("messaggi_kit").delete().eq("kit_id", kit.id);
+    if (error) { window.alert("Non sono riuscito a cancellare: " + error.message); return; }
+    await ricarica?.(["messaggi_kit"]);
+  }
+
+  const stileSelect = { ...fontBody, width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 9, border: `1px solid ${CREAM_BORDER}`, fontSize: isMobile ? 13 : 13.5, color: NAVY, background: "#fff" };
+
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "16px 18px" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{blocco?.titolo || "Definizione messaggi"}</div>
+          {blocco?.spiega && <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>{blocco.spiega}</div>}
+        </div>
+        {onModifica && <Button variant="ghost" onClick={() => onModifica()}>Riscrivi il titolo</Button>}
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: conMessaggio === tuttiIKit.length && tuttiIKit.length ? "#2E7D32" : "#8A6D1D", background: conMessaggio === tuttiIKit.length && tuttiIKit.length ? "#EAF5EA" : "#FDF8EC", border: `1px solid ${conMessaggio === tuttiIKit.length && tuttiIKit.length ? "#C7E3C7" : "#EBD9AE"}`, borderRadius: 10, padding: "9px 11px", marginTop: 12 }}>
+        {tuttiIKit.length === 0
+          ? "Non c'è nessun kit a catalogo: i messaggi si scrivono da qui appena ce ne sarà uno."
+          : `${conMessaggio} kit su ${tuttiIKit.length} hanno il loro messaggio. I kit senza messaggio ricevono il testo generico.`}
+      </div>
+
+      {!puoScrivere && tuttiIKit.length > 0 && (
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>
+          Qui puoi leggere i messaggi; a riscriverli ci pensano amministrazione e chi programma.
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        {corsiConKit.map((corso) => {
+          const kit = kitPerCorso[corso.id] || [];
+          const fatti = kit.filter((k) => scritto(k.id)).length;
+          const aperto = corsoAperto === corso.id;
+          return (
+            <div key={corso.id} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div
+                onClick={() => setCorsoAperto(aperto ? null : corso.id)}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 2px", cursor: "pointer" }}
+              >
+                <span style={{ ...fontBody, fontSize: 11, color: MUTED, width: 12, flexShrink: 0 }}>{aperto ? "▾" : "▸"}</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0 }}>{nomeCorsoLeggibile(corso.nome)}</span>
+                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: fatti === kit.length ? "#2E7D32" : MUTED, whiteSpace: "nowrap" }}>{fatti}/{kit.length}</span>
+              </div>
+
+              {aperto && kit.map((k) => {
+                const modificando = inModifica === k.id;
+                const testo = testoPerKit[k.id] || "";
+                return (
+                  <div key={k.id} style={{ borderTop: `1px dashed ${CREAM_BORDER}`, padding: "10px 0 12px 22px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: scritto(k.id) ? "#2E7D32" : "#D8CDB4", flexShrink: 0 }} />
+                      <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 600, color: NAVY, flex: 1, minWidth: 120 }}>{k.nome}</span>
+                      {puoScrivere && !modificando && (
+                        <>
+                          <Button variant="ghost" onClick={() => apri(k)}>{scritto(k.id) ? "Modifica" : "Scrivi il messaggio"}</Button>
+                          {scritto(k.id) && (
+                            <button onClick={() => svuota(k)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Togli</button>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {!modificando && (
+                      <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, color: scritto(k.id) ? NAVY : MUTED, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "9px 11px", marginTop: 7, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
+                        {scritto(k.id) ? testo : "Nessun messaggio per questo kit."}
+                      </div>
+                    )}
+
+                    {modificando && (
+                      <div style={{ marginTop: 8 }}>
+                        <label style={{ display: "block", marginBottom: 8 }}>
+                          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Importa da un altro kit</div>
+                          <select style={stileSelect} value={daImportare} onChange={(e) => importa(e.target.value)}>
+                            <option value="">— parti da zero —</option>
+                            {sorgenti.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                          </select>
+                          {sorgenti.length === 0 && (
+                            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>Non c'è ancora nessun altro kit con un messaggio da cui copiare.</div>
+                          )}
+                        </label>
+                        <textarea
+                          value={bozza}
+                          onChange={(e) => setBozza(e.target.value)}
+                          rows={Math.max(5, Math.ceil(bozza.length / 60))}
+                          style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.6, fontSize: isMobile ? 13.5 : 14.5 }}
+                        />
+                        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.6, marginTop: 6, background: BG, borderRadius: 8, padding: "8px 10px" }}>
+                          Segnaposto: {SEGNAPOSTO_BENVENUTO.map(([segno, cosa], i) => (
+                            <span key={segno}>{i > 0 ? " · " : ""}<b style={{ color: NAVY }}>{segno}</b> {cosa}</span>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                          <Button onClick={() => salva(k.id)} disabled={salvando}>{salvando ? "Salvo…" : "Salva il messaggio"}</Button>
+                          <Button variant="ghost" onClick={() => { setInModifica(null); setBozza(""); setDaImportare(""); }}>Annulla</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Il configuratore del messaggio da mandare all'allievo appena iscritto.
+//
+// Una tendina sola, in cima: il nome dell'allievo. Da li' l'app risale
+// da sola alla classe, al corso, alla sede, alle date, alla master e al
+// kit che ha scelto — sono tutte cose gia' scritte sulla sua scheda, e
+// ricopiarle a mano vuol dire sbagliarne una ogni tanto.
+//
+// Chi manda il messaggio vede SOLO i propri allievi: il confronto e' fra
+// il nome di chi ha fatto accesso e il "tutor" scritto sull'iscrizione.
+// Amministrazione e chi programma li vedono tutti, perche' capita di
+// mandare il messaggio per conto di qualcun altro; in quel caso accanto
+// al nome compare chi l'ha iscritto.
+//
+// Il testo non e' uno solo: e' quello del kit, scritto qui sopra in
+// "Definizione messaggi". Finche' un kit non ce l'ha, si ripiega sul
+// testo generico del blocco e lo si dice, invece di far partire un
+// messaggio che sembra fatto apposta e non lo e'.
 function ConfiguratoreBenvenuto({ blocco, isMobile, dati, programmatore, onModifica }) {
-  const { corsi = [], location = [], corsiDate = [], iscritti = [], master = [], corsiDateDocenti = [], masterId = null } = dati || {};
-  const [classeId, setClasseId] = useState("");
+  const {
+    corsi = [], location = [], corsiDate = [], iscritti = [], master = [],
+    kitDefinizioni = [], messaggiKit = [], operatore = null, ruoloUtente = null,
+  } = dati || {};
   const [iscrittoId, setIscrittoId] = useState("");
   const [copiato, setCopiato] = useState(false);
   const [erroreCopia, setErroreCopia] = useState(false);
@@ -34671,51 +34933,65 @@ function ConfiguratoreBenvenuto({ blocco, isMobile, dati, programmatore, onModif
   const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
   const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
+  const classeById = useMemo(() => Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd])), [corsiDate]);
+  const testoPerKit = useMemo(() => {
+    const m = {};
+    (messaggiKit || []).forEach((r) => { m[r.kit_id] = String(r.testo || ""); });
+    return m;
+  }, [messaggiKit]);
 
-  // Le classi da cui si puo' pescare: le proprie se chi guarda e' una
-  // master, tutte altrimenti. Si fermano trenta giorni indietro — il
-  // benvenuto si manda prima del corso, e un elenco lungo due anni e'
-  // un elenco in cui non si trova niente.
-  const classi = useMemo(() => {
+  const vedeTutti = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
+  const nomeMio = String(operatore?.nome || "").trim().toUpperCase();
+
+  // Gli allievi proposti: i propri, e solo delle classi da qui in avanti
+  // (trenta giorni di margine indietro). Il benvenuto si manda appena
+  // iscritti: un elenco lungo due anni e' un elenco in cui non si trova
+  // niente.
+  const allievi = useMemo(() => {
     const limite = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const miaClasse = (cd) => !masterId
-      || cd.master_id === masterId
-      || (corsiDateDocenti || []).some((d) => d.corso_data_id === cd.id && d.tipo === "master" && d.persona_id === masterId);
-    return (corsiDate || [])
-      .filter((cd) => cd.data_inizio && (cd.data_fine || cd.data_inizio) >= limite && miaClasse(cd))
-      .sort((a, b) => String(a.data_inizio).localeCompare(String(b.data_inizio)));
-  }, [corsiDate, corsiDateDocenti, masterId]);
+    return (iscritti || [])
+      .filter((i) => {
+        const cd = classeById[i.corso_data_id];
+        if (!cd || !cd.data_inizio) return false;
+        if ((cd.data_fine || cd.data_inizio) < limite) return false;
+        if (vedeTutti) return true;
+        if (!nomeMio) return false;
+        return String(i.tutor || "").trim().toUpperCase() === nomeMio;
+      })
+      .sort((a, b) => {
+        const ca = classeById[a.corso_data_id], cb = classeById[b.corso_data_id];
+        return String(ca.data_inizio).localeCompare(String(cb.data_inizio))
+          || `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it");
+      });
+  }, [iscritti, classeById, vedeTutti, nomeMio]);
 
-  const classe = classi.find((cd) => cd.id === classeId) || null;
-  const alliviDellaClasse = useMemo(
-    () => (iscritti || [])
-      .filter((i) => i.corso_data_id === classeId)
-      .sort((a, b) => `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it")),
-    [iscritti, classeId]
-  );
-  const iscritto = alliviDellaClasse.find((i) => i.id === iscrittoId) || null;
+  const opzioniAllievi = useMemo(() => allievi.map((i) => {
+    const cd = classeById[i.corso_data_id];
+    const pezzi = [
+      toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim()) || "(senza nome)",
+      nomeCorsoLeggibile(corsoById[cd?.corso_id]?.nome),
+      locById[cd?.location_id]?.nome ? toTitleCase(locById[cd.location_id].nome) : null,
+      fmtDataCompatta(cd?.data_inizio, cd?.data_fine || cd?.data_inizio),
+      vedeTutti && i.tutor ? `tutor ${toTitleCase(i.tutor)}` : null,
+    ].filter(Boolean);
+    return { id: i.id, nome: pezzi.join(" · ") };
+  }), [allievi, classeById, corsoById, locById, vedeTutti]);
 
-  const etichettaClasse = (cd) => [
-    corsoById[cd.corso_id]?.nome || "corso senza nome",
-    locById[cd.location_id]?.nome ? toTitleCase(locById[cd.location_id].nome) : null,
-    fmtDataCompatta(cd.data_inizio, cd.data_fine || cd.data_inizio),
-  ].filter(Boolean).join(" · ");
+  const iscritto = allievi.find((i) => i.id === iscrittoId) || null;
+  const classe = iscritto ? classeById[iscritto.corso_data_id] || null : null;
+  const corso = classe ? corsoById[classe.corso_id] || null : null;
+  const kit = kitDellIscritto(iscritto, kitDefinizioni, classe?.corso_id);
+  const testoDelKit = kit ? String(testoPerKit[kit.id] || "").trim() : "";
+  const generico = String(blocco?.testo || "").trim() || MESSAGGIO_BENVENUTO_PREDEFINITO;
+  const modello = testoDelKit || generico;
 
-  const modello = String(blocco.testo || "").trim() || MESSAGGIO_BENVENUTO_PREDEFINITO;
-  const valori = {
-    "{allievo}": iscritto ? toTitleCase(String(iscritto.nome || "").trim()) : "",
-    "{corso}": classe ? nomeCorsoLeggibile(corsoById[classe.corso_id]?.nome) : "",
-    "{sede}": classe && locById[classe.location_id]?.nome ? toTitleCase(locById[classe.location_id].nome) : "",
-    "{date}": classe ? fmtIntervalloEsteso(classe.data_inizio, classe.data_fine || classe.data_inizio) : "",
-    "{master}": classe && masterById[classe.master_id] ? toTitleCase(masterById[classe.master_id].nome || "") : "",
-  };
-  const pronto = !!(classe && iscritto);
-  // finche' non si e' scelto tutto il messaggio resta col segnaposto in
-  // vista: fa capire cosa manca meglio di uno spazio vuoto
-  const messaggio = Object.entries(valori).reduce(
-    (testo, [segno, valore]) => (valore ? testo.split(segno).join(valore) : testo),
-    modello
-  );
+  const valori = valoriBenvenuto({
+    iscritto, classe, corso,
+    sede: classe ? locById[classe.location_id] || null : null,
+    master: classe ? masterById[classe.master_id] || null : null,
+    kit,
+  });
+  const messaggio = componiBenvenuto(modello, valori);
 
   async function copia(e) {
     e.stopPropagation();
@@ -34729,8 +35005,6 @@ function ConfiguratoreBenvenuto({ blocco, isMobile, dati, programmatore, onModif
     }
   }
 
-  const stileSelect = { ...fontBody, width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 9, border: `1px solid ${CREAM_BORDER}`, fontSize: isMobile ? 13 : 13.5, color: NAVY, background: "#fff" };
-
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "16px 18px" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -34739,7 +35013,7 @@ function ConfiguratoreBenvenuto({ blocco, isMobile, dati, programmatore, onModif
           {blocco.spiega && <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>{blocco.spiega}</div>}
         </div>
         {programmatore && (
-          <Button variant="ghost" onClick={(e) => { e.stopPropagation(); onModifica?.(); }}>Modifica messaggio di benvenuto</Button>
+          <Button variant="ghost" onClick={(e) => { e.stopPropagation(); onModifica?.(); }}>Modifica il testo generico</Button>
         )}
       </div>
 
@@ -34753,38 +35027,50 @@ function ConfiguratoreBenvenuto({ blocco, isMobile, dati, programmatore, onModif
         </div>
       )}
 
-      {classi.length === 0 ? (
+      {allievi.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 12, lineHeight: 1.5 }}>
-          {masterId
-            ? "Non risultano tue classi da qui in avanti. Se dovresti averne una, avvisa la sede: la classe va assegnata a te in Operativo corsi."
-            : "Non ci sono classi da qui in avanti."}
+          {vedeTutti
+            ? "Non risultano allievi iscritti a classi da qui in avanti."
+            : nomeMio
+              ? "Non risultano allievi iscritti da te a classi da qui in avanti. Compaiono qui quelli che hanno il tuo nome come tutor sulla scheda di iscrizione."
+              : "Non riesco a capire chi sei: entra con la tua utenza e qui compariranno i tuoi allievi."}
         </div>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
-            <label style={{ display: "block" }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Classe</div>
-              <select style={stileSelect} value={classeId} onChange={(e) => { setClasseId(e.target.value); setIscrittoId(""); }}>
-                <option value="">— scegli la classe —</option>
-                {classi.map((cd) => <option key={cd.id} value={cd.id}>{etichettaClasse(cd)}</option>)}
-              </select>
-            </label>
-            <label style={{ display: "block" }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Allievo</div>
-              <select style={{ ...stileSelect, opacity: classeId ? 1 : 0.55 }} value={iscrittoId} disabled={!classeId} onChange={(e) => setIscrittoId(e.target.value)}>
-                <option value="">{classeId ? (alliviDellaClasse.length ? "— scegli l’allievo —" : "nessun iscritto in questa classe") : "prima scegli la classe"}</option>
-                {alliviDellaClasse.map((i) => <option key={i.id} value={i.id}>{toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim()) || "(senza nome)"}</option>)}
-              </select>
-            </label>
+          <div style={{ marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>
+              Allievo{vedeTutti ? "" : " (i tuoi)"}
+            </div>
+            <TendinaRicerca
+              valore={iscrittoId}
+              opzioni={opzioniAllievi}
+              onCambia={setIscrittoId}
+              etichettaVuoto="— scegli l’allievo —"
+              placeholderRicerca="Cerca per nome, corso o città…"
+            />
           </div>
 
-          <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "12px 14px", marginTop: 12, whiteSpace: "pre-wrap", lineHeight: 1.65, opacity: pronto ? 1 : 0.7 }}>
+          {iscritto && (
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.6 }}>
+              Kit: <b style={{ color: NAVY }}>{kit?.nome || iscritto.pacchetto_kit || "non indicato sulla scheda"}</b>
+            </div>
+          )}
+
+          {iscritto && !testoDelKit && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginTop: 8, lineHeight: 1.55 }}>
+              {kit
+                ? `Il kit “${kit.nome}” non ha ancora un messaggio suo: qui sotto c’è il testo generico. Si scrive in “Definizione messaggi”, qui sopra.`
+                : "Sulla scheda di questo allievo non c'è scritto quale kit ha preso, quindi non so quale messaggio usare: qui sotto c'è il testo generico."}
+            </div>
+          )}
+
+          <div style={{ ...fontBody, fontSize: isMobile ? 13 : 14, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "12px 14px", marginTop: 10, whiteSpace: "pre-wrap", lineHeight: 1.65, opacity: iscritto ? 1 : 0.7 }}>
             {messaggio}
           </div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-            <Button onClick={copia} disabled={!pronto}>{copiato ? "Copiato ✓" : "Copia messaggio"}</Button>
-            {!pronto && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Scegli classe e allievo: i segnaposto si riempiono da soli.</span>}
+            <Button onClick={copia} disabled={!iscritto}>{copiato ? "Copiato ✓" : "Copia messaggio"}</Button>
+            {!iscritto && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Scegli l’allievo: il resto si compila da solo.</span>}
             {copiato && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>Incollalo nella chat dell’allievo.</span>}
             {erroreCopia && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>Copia non riuscita: seleziona il testo qui sopra.</span>}
           </div>
@@ -35115,6 +35401,14 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
       if (righeTitolo.length) { scriviRighe(righeTitolo, { x: MARGINE + 14, size: 9.5, font: grassetto, interlinea: 1.4 }); y -= 3; }
       scriviRighe(righeTesto, { x: MARGINE + 14, size: 10, interlinea: 1.5 });
       y = cima - altezza - 10;
+    } else if (b.tipo === "messaggikit") {
+      // sulla carta non ha senso: e' il posto dove i messaggi si
+      // scrivono, non un testo da leggere. Resta il titolo, cosi' chi
+      // legge il PDF sa che sull'app c'e' qualcosa in piu'
+      y -= 4;
+      scriviRighe(righeDi(String(b.titolo || "Definizione messaggi").toUpperCase(), grassetto, 11, LARGHEZZA), { size: 11, font: grassetto, interlinea: 1.3 });
+      scriviRighe(righeDi("I messaggi per ogni kit si scrivono e si leggono dentro l'app.", normale, 9.5, LARGHEZZA), { size: 9.5, colore: GRIGIO_PDF });
+      y -= 8;
     } else if (b.tipo === "benvenuto") {
       // sulla carta i menu non esistono: resta il modello com'e' scritto,
       // segnaposto compresi. E' comunque l'unica cosa che vale la pena
@@ -35267,7 +35561,9 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
       : tipo === "riquadro"
         ? { id: `b${Date.now()}`, tipo, titolo: "Titolo del riquadro", testo: "Scrivi qui il testo." }
       : tipo === "benvenuto"
-        ? { id: `b${Date.now()}`, tipo, titolo: "Messaggio di benvenuto", spiega: "Scegli la classe e l’allievo: il messaggio si compila da solo.", testo: MESSAGGIO_BENVENUTO_PREDEFINITO }
+        ? { id: `b${Date.now()}`, tipo, titolo: "Messaggio di benvenuto", spiega: "Scegli l’allievo: il messaggio si compila da solo.", testo: MESSAGGIO_BENVENUTO_PREDEFINITO }
+      : tipo === "messaggikit"
+        ? { id: `b${Date.now()}`, tipo, titolo: "Definizione messaggi", spiega: "Un messaggio per ogni kit." }
         : { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
     if (await salvaBlocchi([...blocchi, nuovo])) apriModifica(nuovo);
   }
@@ -35280,7 +35576,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
     if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
     if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#5E5039", background: "#F5EEDD", border: "1px solid #E6D9B8", borderRadius: 12, padding: "12px 14px 12px 46px", lineHeight: 1.6, margin: "14px 0 22px", position: "relative" };
     if (tipo === "tappa") return { marginBottom: 12 };
-    if (tipo === "link" || tipo === "copia" || tipo === "benvenuto" || tipo === "riquadro" || tipo === "passi") return { marginBottom: 14 };
+    if (tipo === "link" || tipo === "copia" || tipo === "benvenuto" || tipo === "messaggikit" || tipo === "riquadro" || tipo === "passi") return { marginBottom: 14 };
     if (tipo === "testata") return {};
     return { ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, marginBottom: 12 };
   }
@@ -35390,6 +35686,14 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
                     programmatore={programmatore} onModifica={() => apriModifica(b)}
                   />
                 )
+                : b.tipo === "messaggikit" ? (
+                  <AreaDefinizioneMessaggi
+                    blocco={b} isMobile={isMobile} dati={datiBenvenuto}
+                    puoScrivere={programmatore || ruoloUtente === "amministratore"}
+                    ricarica={ricarica}
+                    onModifica={programmatore ? () => apriModifica(b) : null}
+                  />
+                )
                 : b.tipo === "nota" ? (
                   <>
                     {/* la "i" nel tondo, come sulla locandina */}
@@ -35413,6 +35717,7 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
             <Button variant="ghost" onClick={() => aggiungiBlocco("link")}>+ Link da copiare</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("copia")}>+ Testo da copiare</Button>
             <Button variant="ghost" onClick={() => aggiungiBlocco("benvenuto")}>+ Messaggio di benvenuto</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("messaggikit")}>+ Definizione messaggi</Button>
           </div>
         )}
 
@@ -35604,7 +35909,7 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
 // documenti che le accompagnano. Per ora ospita un solo argomento —
 // "Ritorno al Corso" — ed e' fatta con la stessa griglia di tessere delle
 // altre aree, cosi' aggiungerne altri e' solo una riga in piu'.
-function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onApriMappaNormative, onApriModulistica, onApriIscrizioneAllievi, onBack, titolo = "Normative" }) {
+function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onApriMappaNormative, onApriModulistica, onBack, titolo = "Normative" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -35623,7 +35928,6 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
             { chiave: "ritornoalcorso", title: "Regole Ritorno al Corso", descrizione: "Le regole per chi torna a frequentare un corso già fatto.", Icona: IconaTileNormative, attivo: true, onClick: onApriRitornoAlCorso || (() => {}) },
             { chiave: "mappanormativepmu", title: "Mappa normative regionali", descrizione: "Cosa serve per esercitare il trucco permanente, regione per regione.", Icona: IconaPin, attivo: true, onClick: onApriMappaNormative || (() => {}) },
             { chiave: "modulistica", title: "Modulistica", descrizione: "Moduli, contratti e documenti da scaricare e compilare.", Icona: IconaTileLoghi, attivo: true, onClick: onApriModulistica || (() => {}) },
-            { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Per le master: come si iscrive un allievo a un corso, e cosa serve.", Icona: IconaPersonaAggiungi, attivo: true, onClick: onApriIscrizioneAllievi || (() => {}) },
           ]}
         />
       </div>
@@ -70368,6 +70672,7 @@ export default function App() {
   // checklist, quantità accessori inviati, se già scaricato dal magazzino
   const [corsiKitProdotti, setCorsiKitProdotti] = useState([]);
   const [kitDefinizioni, setKitDefinizioni] = useState([]);
+  const [messaggiKit, setMessaggiKit] = useState([]);
   const [accontiDaVerificare, setAccontiDaVerificare] = useState([]);
   // cosa è già presente in ciascuna sede (prodotti/attrezzature), come
   // dichiarato dalla master dalla sua Dashboard ("Inventario corso
@@ -70585,6 +70890,7 @@ export default function App() {
     corsi_kit_prodotti: async () => setCorsiKitProdotti(await leggiTutte(() => supabase.from("corsi_kit_prodotti").select("*").order("id"))),
     logistica_kit_edizioni: async () => setLogisticaKitEdizioni((await supabase.from("logistica_kit_edizioni").select("*")).data || []),
     kit_definizioni: async () => setKitDefinizioni((await supabase.from("kit_definizioni").select("*").order("nome")).data || []),
+    messaggi_kit: async () => setMessaggiKit((await supabase.from("messaggi_kit").select("*")).data || []),
     inventario_sede: async () => setInventarioSede((await supabase.from("inventario_sede").select("*")).data || []),
     prodotti_aperti_magazzino: async () => setProdottiApertiMagazzino((await supabase.from("prodotti_aperti_magazzino").select("*")).data || []),
     segnalazioni_magazzino: async () => setSegnalazioniMagazzino((await supabase.from("segnalazioni_magazzino").select("*").order("ts", { ascending: false })).data || []),
@@ -70719,6 +71025,9 @@ export default function App() {
     prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno"],
     normative: [],
     ritornoalcorso: ["normative_testi"],
+    // il configuratore pesca dagli iscritti, dai kit e dai messaggi
+    // scritti per ogni kit: senza questi la pagina si apre vuota
+    iscrizioneallievi: ["normative_testi", "kit_definizioni", "messaggi_kit", "iscritti", "corsi", "corsi_date", "location", "master", "corsi_date_docenti"],
     mappanormativepmu: [],
     modulistica: [],
     // "coupon" serve ai carrelli sospesi: senza, il pannello non trova il
@@ -71712,12 +72021,12 @@ export default function App() {
       { chiave: "ritornoalcorso", titolo: etichettaTasto("normative", "ritornoalcorso", "Regole Ritorno al Corso"), apri: () => setView("ritornoalcorso") },
       { chiave: "mappanormativepmu", titolo: etichettaTasto("normative", "mappanormativepmu", "Mappa normative regionali"), apri: () => setView("mappanormativepmu") },
       { chiave: "modulistica", titolo: etichettaTasto("normative", "modulistica", "Modulistica"), apri: () => setView("modulistica") },
-      { chiave: "iscrizioneallievi", titolo: etichettaTasto("normative", "iscrizioneallievi", "Iscrizione Allievi"), apri: () => setView("iscrizioneallievi") },
     ] },
+    { chiave: "iscrizioneallievi", titolo: etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi"), apri: () => setView("iscrizioneallievi"), figli: [], sempre: true },
     { chiave: "progettiincorso", titolo: etichettaTasto("home", "progettiincorso", "Progetti in corso"), apri: apriProgetti, figli: [] },
   ].map((area) => ({
-    ...area, abilitata: areaAbilitata(area.chiave),
-    figli: (area.figli || []).map((f) => ({ ...f, area: area.chiave, abilitata: areaAbilitata(area.chiave) })),
+    ...area, abilitata: area.sempre || areaAbilitata(area.chiave),
+    figli: (area.figli || []).map((f) => ({ ...f, area: area.chiave, abilitata: area.sempre || areaAbilitata(area.chiave) })),
   }));
   // una scorciatoia salvata e' solo una chiave (piu' l'area): titolo e
   // azione si rileggono qui ogni volta, cosi' un tasto rinominato cambia
@@ -72251,6 +72560,10 @@ export default function App() {
               // (commento con //, non {/* */}: qui siamo dentro un array
               // JavaScript, non dentro il JSX)
               { chiave: "qrconsensi", title: "QR consensi modelle", descrizione: "I codici da far inquadrare alle modelle per firmare il consenso", Icona: IconaTileModelle, attivo: true, onClick: () => setView("qrconsensi") },
+              // sta in home e non piu' dentro Normative: lo aprono le
+              // master e chi vende, ogni volta che iscrivono qualcuno —
+              // due tasti di distanza erano due di troppo
+              { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come si iscrive un allievo, e il messaggio da mandargli dopo", Icona: IconaPersonaAggiungi, attivo: true, onClick: () => setView("iscrizioneallievi") },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
@@ -72896,7 +73209,6 @@ export default function App() {
           onApriRitornoAlCorso={() => setView("ritornoalcorso")}
           onApriMappaNormative={() => setView("mappanormativepmu")}
           onApriModulistica={() => setView("modulistica")}
-          onApriIscrizioneAllievi={() => setView("iscrizioneallievi")}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "normative", "Normative")}
         />
@@ -72932,13 +73244,17 @@ export default function App() {
           perAllievo={false}
           datiBenvenuto={{
             corsi, location, corsiDate, iscritti, master, corsiDateDocenti,
-            // chi e' entrato come master vede solo le SUE classi; l'ufficio
-            // e chi programma le vedono tutte, perche' capita di mandare il
+            kitDefinizioni, messaggiKit,
+            // chi sta guardando: il configuratore propone solo gli allievi
+            // che hanno il suo nome come tutor sulla scheda. Amministrazione
+            // e chi programma li vedono tutti, perche' capita di mandare il
             // messaggio per conto di qualcun altro
-            masterId: utenteLoggato?.masterId || null,
+            operatore: operatoreApp,
+            ruoloUtente,
           }}
-          onBack={() => setView("normative")}
-          titolo={etichettaTasto("normative", "iscrizioneallievi", "Iscrizione Allievi")}
+          onBack={() => setView("home")}
+          titoloIndietro="Home"
+          titolo={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
         />
       )}
 
