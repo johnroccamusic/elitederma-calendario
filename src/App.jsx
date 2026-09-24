@@ -3419,7 +3419,7 @@ function mescolaColore(a, b, t) {
 // sopra, l'icona bianca con un filo d'ombra, come fosse incisa. Tutto in
 // proporzione al lato, cosi' in anteprima e sul telefono e' lo stesso
 // disegno
-function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true, pozzettoColore = "#E6E6E4", rapportoDisco = 0.62, rapportoIcona = 0.66 }) {
+function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true, pozzettoColore = "#E6E6E4", rapportoDisco = 0.62, rapportoIcona = 0.66, chiaveStile = null }) {
   const pozzetto = Math.round(lato * 0.80);
   // il pozzetto sfuma dal colore scelto scurito in alto (l'ombra che
   // scende dal bordo) fino quasi al bianco in basso (il bordo che riprende luce)
@@ -3436,7 +3436,7 @@ function DiscoMedaglione({ lato, icona, colore, Icona, attivo = true, pozzettoCo
       boxShadow: `inset 0 ${3 * u}px ${5 * u}px rgba(20,20,30,0.22), inset 0 ${1 * u}px ${2 * u}px rgba(20,20,30,0.12), inset 0 -${1.5 * u}px ${2 * u}px rgba(255,255,255,0.95), 0 ${1 * u}px 0 rgba(255,255,255,1)`,
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <div style={{
+      <div data-stile-tasto={chiaveStile ? `${chiaveStile}|disco` : undefined} style={{
         width: diametro, height: diametro, borderRadius: "50%", flexShrink: 0,
         background: `radial-gradient(circle at 50% 28%, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 45%, rgba(0,0,0,0.10) 100%), ${tinta}`,
         boxShadow: `0 ${1.5 * u}px ${3 * u}px rgba(20,20,30,0.30), 0 ${0.5 * u}px ${1 * u}px rgba(20,20,30,0.20), inset 0 ${1 * u}px ${1.5 * u}px rgba(255,255,255,0.28), inset 0 -${1.5 * u}px ${2.5 * u}px rgba(0,0,0,0.20)`,
@@ -3689,7 +3689,7 @@ function TileHome({
         }}>
           {maniglia}
           {aspettoMobile.stile === "medaglione"
-            ? <DiscoMedaglione lato={aspettoMobile.dimensione} icona={aspettoMobile.icona} colore={aspettoMobile.disco} pozzettoColore={aspettoMobile.pozzetto} Icona={Icona} attivo={attivo} />
+            ? <DiscoMedaglione chiaveStile={chiaveStile} lato={aspettoMobile.dimensione} icona={aspettoMobile.icona} colore={aspettoMobile.disco} pozzettoColore={aspettoMobile.pozzetto} Icona={Icona} attivo={attivo} />
             : <Icona size={aspettoMobile.icona} color={coloreIcona} />}
           {!attivo && (
             <span style={{ position: "absolute", top: 4, right: 4, ...fontBody, fontSize: 6.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "1.5px 5px" }}>Non attivo</span>
@@ -3785,6 +3785,7 @@ function TileHome({
               {/* lo scavo intero (pozzetto, disco, icona) al 15% in meno
                   rispetto alla reference, per lasciare spazio ai testi */}
               <DiscoMedaglione
+                chiaveStile={chiaveStile}
                 lato={Math.round(latoTessera * 0.75 * 0.85)}
                 icona={Math.round(latoTessera * 0.45 * 0.52 * 0.85)}
                 rapportoDisco={0.60} rapportoIcona={0.52}
