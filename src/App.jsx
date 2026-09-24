@@ -906,6 +906,12 @@ function stileTestoBreve(el) { return (el.textContent || "").trim().replace(/\s+
 // React aggiunge o toglie un fratello da qualche parte piu' in su, e per un
 // oggetto senza testo non c'era nessun ripiego: non lo si ritrovava piu'.
 function stileTrovaElemento(voce, chiave) {
+  // il tasto si cerca per identita': vale su qualunque pagina e su
+  // qualunque schermo, ed e' l'unico modo perche' il telefono e la
+  // scrivania disegnano due alberi diversi
+  if (voce && voce.tasto) {
+    return document.querySelector(`[data-stile-tasto="${CSS.escape(voce.tasto)}"]`);
+  }
   if (chiave) {
     // confronto diretto invece di un selettore: la chiave contiene ">",
     // "#", "|" e parentesi, e come valore di un attributo in un selettore
@@ -957,7 +963,9 @@ function stileApplicaTutto() {
   if (typeof document === "undefined" || !STILE_VISTA) return;
   const vive = new Set();
   Object.entries(STILE_MAPPA || {}).forEach(([chiave, voce]) => {
-    if (!voce || voce.vista !== STILE_VISTA) return;
+    // vista "*": il colore di un tasto vale in qualunque pagina lo si
+    // incontri — e' legato al tasto, non alla schermata
+    if (!voce || (voce.vista !== "*" && voce.vista !== STILE_VISTA)) return;
     const el = stileTrovaElemento(voce, chiave);
     // non trovato: gli si lascia il colore che ha addosso. Prima si
     // ripuliva tutto e poi si ridipingeva, e un oggetto che nel frattempo
@@ -1028,10 +1036,17 @@ function PannelloStileOggetti({ vista, programmatore }) {
       e.preventDefault(); e.stopPropagation();
       el.style.outline = "";
       const percorso = stilePercorsoElemento(el);
-      const chiave = `${vista}|${percorso}`;
+      // Un tasto della home (o di un'altra pagina a tasti) si riconosce
+      // per quello che e', non per dove sta: la chiave diventa
+      // "tasto|home|amministrazione" invece del sentiero di div e
+      // bottoni. Cosi' il colore si vede anche dal telefono, dove la
+      // pagina e' costruita in un altro modo, e resta attaccato al suo
+      // tasto quando si riordina la home.
+      const tasto = el.closest("[data-stile-tasto]");
+      const chiave = tasto ? `tasto|${tasto.dataset.stileTasto}` : `${vista}|${percorso}`;
       const esistente = (mappa || {})[chiave];
       setProprieta(esistente?.proprieta || "sfondo");
-      setSelezione({ chiave, elemento: el, voce: { vista, percorso, tag: el.tagName.toLowerCase(), testo: stileTestoBreve(el) }, esistente: esistente || null });
+      setSelezione({ chiave, elemento: tasto || el, voce: { vista: tasto ? "*" : vista, tasto: tasto ? tasto.dataset.stileTasto : null, percorso, tag: (tasto || el).tagName.toLowerCase(), testo: stileTestoBreve(tasto || el) }, esistente: esistente || null });
     };
     document.addEventListener("mouseover", sopra, true);
     document.addEventListener("mouseout", fuori, true);
@@ -3587,6 +3602,12 @@ button[style*="background: #"]:not([data-niente-ombra]) { box-shadow: ${ombra}; 
 // shop), non solo la Home.
 function TileHome({
   title, descrizione, Icona, attivo = true, onClick, badge,
+  // Identita' stabile del tasto, per il colore dato a mano col tasto
+  // "Stile". Senza, il colore si attaccava alla POSIZIONE nella pagina
+  // ("il quinto bottone della quinta riga"): spariva sul telefono, dove
+  // la pagina e' costruita in un altro modo, e cambiava tasto appena si
+  // riordinava la home. Con questa, il colore segue il tasto ovunque.
+  chiaveStile = null,
   // riordino/cartelle (solo programmatore, vedi GrigliaTasti) — tutti
   // opzionali: i 27+ usi esistenti di TileHome non li passano e restano
   // identici a prima
@@ -3659,7 +3680,7 @@ function TileHome({
           opacity: attenuato ? 0.5 : 1,
         }}
       >
-        <div style={{
+        <div data-stile-tasto={chiaveStile || undefined} style={{
           width: etichettaDueRighe ? `min(100%, ${aspettoMobile.dimensione}px)` : "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
           background: aspettoMobile.stile === "medaglione" ? sfondoMedaglione(aspettoMobile.cuscino) : (attivo ? aspettoMobile.colore : "#F1EAE0"), borderRadius: aspettoMobile.raggio,
@@ -3705,6 +3726,7 @@ function TileHome({
     <button
       ref={rifTasto}
       data-niente-ombra="1"
+      data-stile-tasto={chiaveStile || undefined}
       onClick={attivo ? onClick : undefined}
       onContextMenu={onRinominaEtichetta ? (e) => { e.preventDefault(); e.stopPropagation(); onRinominaEtichetta(); } : undefined}
       disabled={!attivo}
@@ -3999,6 +4021,7 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
           return (
             <TileHome
               key={chiave}
+              chiaveStile={`${pagina}|${chiave}`}
               title={isCartella ? nodo.nome : (etichette[chiave] || def.title)}
               descrizione={isCartella ? `${nTasti} tast${nTasti === 1 ? "o" : "i"}` : def.descrizione}
               Icona={isCartella ? IconaCartellaShop : def.Icona}
