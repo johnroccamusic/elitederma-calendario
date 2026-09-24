@@ -4311,10 +4311,10 @@ function percentualeSeccaDiRiga(prodotto, riga, percentuale, base) {
     const euro = scontoSulMargineDiRiga(prodotto, Number(riga?.quantita) || 0, percentuale);
     return round2((euro / lordo) * 100);
   }
-  if (base === "netto") {
-    const aliquota = prodotto?.aliquota_iva_vendita ?? 22;
-    return round2(percentuale / (1 + aliquota / 100));
-  }
+  // sul netto vale la stessa percentuale: l'IVA e' proporzionale e si
+  // semplifica. Vedi percentualeWooEquivalente, dove stava lo stesso
+  // errore
+  if (base === "netto") return percentuale;
   return percentuale;
 }
 function scontoSulMargineDiRiga(prodotto, quantita, percentuale) {
@@ -4704,11 +4704,21 @@ function marginePercentualeMedio(prodotti) {
   });
   return netto > 0 ? (margine / netto) * 100 : 0;
 }
+// Quanto scrivere su WooCommerce, che conosce solo percentuali sul
+// prezzo al pubblico.
+//
+// Sul NETTO la percentuale e' la stessa del lordo, e per molto tempo qui
+// c'e' stata una divisione per 1,22 che la rimpiccioliva. L'IVA e'
+// proporzionale: se il netto scende del 30%, il lordo scende del 30% —
+// 40,98 x 0,70 = 28,69, e 28,69 x 1,22 = 35,00, che e' 50,00 x 0,70.
+// Dividere per 1,22 e' il conto giusto per un IMPORTO espresso al netto,
+// non per una percentuale, e faceva uscire il 24,59% al posto del 30%:
+// un terzo di sconto in meno di quello scritto sul coupon.
 function percentualeWooEquivalente(percentuale, base, margineMedioPct) {
   const pct = Number(percentuale) || 0;
   if (!(pct > 0)) return pct;
   const fattoreIva = 1 + ALIQUOTA_IVA_STANDARD / 100;
-  if (base === "netto") return round2(pct / fattoreIva);
+  if (base === "netto") return round2(pct);
   if (base === "margine") return round2((pct * (Number(margineMedioPct) || 0)) / 100 / fattoreIva);
   return round2(pct);
 }
@@ -36569,7 +36579,7 @@ const ETICHETTA_BASE_SCONTO = {
 };
 const AIUTO_BASE_SCONTO = {
   lordo: "Sul prezzo al pubblico, IVA inclusa. È come ha sempre funzionato ed è l'unica delle tre che WooCommerce sa fare da sé.",
-  netto: "Sul prezzo senza IVA: a parità di percentuale sconta circa un quinto in meno del lordo.",
+  netto: "Sul prezzo senza IVA. L'IVA è proporzionale, quindi la stessa percentuale toglie la stessa quota anche dal lordo: il 30% sul netto è il 30% sul prezzo in vetrina.",
   margine: "Sul guadagno, prodotto per prodotto: il 15% su un articolo che rende 22,70 € è 3,41 €, su uno che rende 1,20 € diciotto centesimi. Un prodotto senza costo di acquisto non ha margine noto e non si sconta.",
 };
 const BASE_SCONTO_VALIDA = (v) => (ETICHETTA_BASE_SCONTO[v] ? v : "lordo");
