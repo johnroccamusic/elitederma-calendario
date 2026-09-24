@@ -44,6 +44,11 @@ define( 'ELITEDERMA_PREZZI_JS', <<<'JS'
   // 22%: se un giorno non lo fossero piu', questo numero non basta piu'
   // e va acceso il calcolo delle imposte in WooCommerce.
   var ALIQUOTA = 22;
+  // Il numero di versione serve a una cosa sola: capire, guardando la
+  // console, QUALE copia dello snippet sta girando. Due snippet accesi
+  // insieme — quello vecchio e quello nuovo — si disegnano a vicenda e
+  // vince l'ultimo: senza questo, non c'e' modo di accorgersene.
+  var VERSIONE = "3 · netto scorporato dal lordo";
   var dati = null;
   var inCorso = false;
 
@@ -193,6 +198,7 @@ define( 'ELITEDERMA_PREZZI_JS', <<<'JS'
   function stato() {
     var righe = document.querySelectorAll(".wc-block-cart-items__row, .wc-block-components-order-summary-item, .wc-block-cart-item");
     return {
+      versione: VERSIONE,
       scriptCaricato: true,
       indirizzoStoreApi: RADICE,
       rispostaRicevuta: !!dati,
@@ -203,6 +209,7 @@ define( 'ELITEDERMA_PREZZI_JS', <<<'JS'
   }
 
   function avvia() {
+    if (window.console && console.log) console.log("[Elitederma prezzi] versione " + VERSIONE);
     if (window.elitedermaPrezzi) window.elitedermaPrezzi.stato = stato;
     carica();
     osserva();

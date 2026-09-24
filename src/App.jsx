@@ -43119,19 +43119,64 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
 // sempre, che restano tutte dove sono: se un numero non torna si aggiusta
 // il calcolo qui, non i dati.
 const CICLO_TESTI_SOLDI = ["Da pagare", "Disposto", "In estratto conto"];
-const CICLO_TESTI_CARTA = ["Manca", "Arrivata", "Agganciata"];
+const CICLO_TESTI_CARTA = ["Non arrivata", "Da agganciare", "Agganciata"];
+
+// Chi ha scritto la riga: in questo momento e' la distinzione che conta
+// di piu'. Quelle che porta un istituto — la banca, Fatture in Cloud —
+// arrivano da sole. Quelle di cassa le scrive una persona ed e' giusto
+// cosi', perche' i contanti nessun istituto li vede. Quelle scritte a
+// mano su un pagamento che passa dal conto sono invece il doppio lavoro
+// che il modello nuovo toglie: si vedono a colpo d'occhio apposta,
+// perche' guardarle calare e' il modo di sapere come sta andando il
+// passaggio.
+const CICLO_FONTI = {
+  Banca: { colore: GRAFITE, sfondo: BG, bordo: CREAM_BORDER, nota: "Portata dall'estratto conto" },
+  "Fatt.Cloud": { colore: GRAFITE, sfondo: BG, bordo: CREAM_BORDER, nota: "Arrivata da Fatture in Cloud" },
+  Riepilogo: { colore: GRAFITE, sfondo: BG, bordo: CREAM_BORDER, nota: "Calcolata dal riepilogo del corso" },
+  Cassa: { colore: "#1F4E8C", sfondo: "#EEF3FA", bordo: "#BBD0EA", aMano: true, nota: "Scritta a mano — ed e' giusto: i contanti nessun istituto li vede" },
+  Manuale: { colore: "#C77A18", sfondo: "#FBEEDA", bordo: "#E8C48A", aMano: true, daTogliere: true, nota: "Scritta a mano, ma l'estratto conto l'avrebbe portata da sola" },
+};
+const cicloStileFonte = (f) => CICLO_FONTI[f] || CICLO_FONTI.Riepilogo;
 const CICLO_STATI = {
   ritardo: { colore: "#C0392B", sfondo: "#FBE4E1", etichetta: "In ritardo", sotto: "scadute e non pagate" },
   pronte: { colore: "#1F4E8C", sfondo: "#EEF3FA", etichetta: "Da disporre", sotto: "fattura in mano" },
+  contabilizzare: { colore: "#6B4FA8", sfondo: "#F0EBF9", etichetta: "Da contabilizzare", sotto: "l'estratto conto li ha portati" },
   attesa: { colore: "#C77A18", sfondo: "#FBEEDA", etichetta: "Manca la fattura", sotto: "soldi già usciti" },
   chiuse: { colore: "#2E7D32", sfondo: "#E3F3E5", etichetta: "Chiuse", sotto: "niente in sospeso" },
 };
+
+// Una fattura non arrivera' mai: tributi (F24 = "delega unica"), stipendi,
+// spese e commissioni della banca, il riepilogo mensile della carta di
+// credito. Finivano tutti in "Manca la fattura", che e' una coda di
+// lavoro — ma qui lavoro non ce n'e', e una coda piena di cose che non si
+// possono chiudere e' una coda che si smette di aprire.
+const CICLO_MAI_FATTURA = /^\s*(delega unica|disp\.?\s*emolumenti|commissioni|interessi|recupero bolli|comm\.?\s*spese estero|e\.\s*c\.?\s*nexi|imposta|bollo)/i;
+// stesso concetto dal lato delle spese gia' registrate
+const CICLO_METODI_SENZA_FATTURA = new Set(["spesa bancaria su c/c", "cash no iva"]);
+const cicloNonPrevedeFattura = (testo) => CICLO_MAI_FATTURA.test(String(testo || ""));
+
+// I fornitori esteri che fatturano dal PROPRIO portale: Google, Meta,
+// AWS. Non emettono fattura elettronica italiana, quindi da Fatture in
+// Cloud non arriveranno mai — aspettarle li' e' aspettare qualcosa che
+// non puo' succedere. La loro riga resta scoperta come le altre (il
+// documento serve davvero), ma l'azione e' diversa: non si telefona al
+// fornitore, si scarica il PDF dal portale una volta al mese.
+// Per ora si riconoscono dal nome: la casella vera sull'anagrafica
+// fornitori arriva insieme alle altre, senza toccare il database adesso.
+const CICLO_PORTALE = /google|adwords|\bmeta\b|facebook|instagram|linkedin|tiktok|\baws\b|amazon web|microsoft|shopify|stripe|mailchimp/i;
+const cicloDalPortale = (...testi) => testi.some((t) => CICLO_PORTALE.test(String(t || "")));
 
 // In quale casella cade una riga. "impegni" non è una coda di lavoro:
 // sono i costi che il Riepilogo ha già deciso e per cui la fattura non è
 // ancora arrivata — non chiedono niente a nessuno, servono perché la
 // fattura, quando arriva, sappia dove atterrare.
 function cicloGruppoDi(r) {
+  // Un movimento che la banca ha portato e che nessuno ha ancora
+  // classificato non e' "manca la fattura": e' "manca la registrazione".
+  // Sono due lavori diversi e mescolarli faceva sembrare enorme una coda
+  // che enorme non e' — oltre a contare due volte lo stesso pagamento,
+  // quando la spesa era gia' stata scritta a mano.
+  if (r.daContabilizzare) return "contabilizzare";
   if (r.senzaDoc) return "chiuse";
   if (r.carta === 2 && r.soldi >= 1) return "chiuse";
   if (r.soldi >= 1) return "attesa";
@@ -43193,16 +43238,18 @@ function costruisciRigheCicloPassivo({ daPagareVirtuali, speseDaPagareReali, spe
     .forEach((s) => {
       const dallaCassa = METODI_SPESA_DALLA_CASSA.has(s.metodo_pagamento || "");
       const vistaInBanca = speseViste.has(s.id);
+      const nomeSottocat = sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "";
       righe.push({
         key: `pagata_${s.id}`, spesaId: s.id,
         fonte: dallaCassa ? "Cassa" : (vistaInBanca ? "Banca" : "Manuale"),
+        dalPortale: !s.numero_documento && cicloDalPortale(fornitoriById[s.fornitore_id]?.nome, s.descrizione, nomeSottocat),
         fornitore: fornitoriById[s.fornitore_id]?.nome || "—",
-        descrizione: s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "Spesa",
+        descrizione: s.descrizione || nomeSottocat || "Spesa",
         ambito: (s.classe_id && corsiDateById?.[s.classe_id] ? etichettaCorso(corsiDateById[s.classe_id]) : null) || "Sede centrale",
         importo: round2(s.totale || 0), data: s.data_pagamento || s.data_documento || null,
         soldi: dallaCassa || vistaInBanca ? 2 : 1,
         carta: s.numero_documento ? 2 : 0,
-        senzaDoc: String(s.metodo_pagamento || "").toLowerCase() === "cash no iva",
+        senzaDoc: CICLO_METODI_SENZA_FATTURA.has(String(s.metodo_pagamento || "").toLowerCase()),
         gruppo: s.gruppo_pagamento || null,
       });
     });
@@ -43210,15 +43257,31 @@ function costruisciRigheCicloPassivo({ daPagareVirtuali, speseDaPagareReali, spe
   // 4. le uscite che la banca ha portato e che nessuno ha contabilizzato:
   //    Trenitalia, carburante, addebiti che non erano previsti da nessuna
   //    parte. I soldi sono usciti davvero, la carta manca.
+  //    Stessa soglia delle spese: l'estratto conto e' stato caricato anche
+  //    per gli anni prima che la contabilita' entrasse in app, e senza
+  //    questo taglio ogni vecchio addebito comparirebbe qui come una
+  //    fattura mancante. Non sono lavoro arretrato, sono archivio.
   (movimentiBanca || [])
-    .filter((m) => m.stato === "nuovo" && Number(m.importo) < 0)
+    .filter((m) => m.stato === "nuovo" && Number(m.importo) < 0 && (m.data_operazione || "") >= INIZIO_CONTABILITA)
     .forEach((m) => {
+      const importo = round2(Math.abs(Number(m.importo) || 0));
+      // la spesa gemella: stesso importo al centesimo, a pochi giorni di
+      // distanza. Vuol dire che quel pagamento e' gia' stato scritto a
+      // mano in prima nota e questo movimento e' la sua seconda copia —
+      // sono proprio le righe da riconciliare per prime
+      const gemella = (spese || []).find((s) => s.stato === "pagata"
+        && !METODI_SPESA_DALLA_CASSA.has(s.metodo_pagamento || "")
+        && Math.abs((Number(s.totale) || 0) - importo) < 0.01
+        && Math.abs(differenzaGiorni(m.data_operazione, s.data_pagamento || s.data_documento)) <= 6);
       righe.push({
-        key: `banca_${m.id}`, movimentoId: m.id, fonte: "Banca",
+        key: `banca_${m.id}`, movimentoId: m.id, fonte: "Banca", daContabilizzare: true,
         fornitore: controparteBanca(m.descrizione, m.causale) || "—",
-        descrizione: m.descrizione || "Movimento di banca", ambito: "Da classificare",
-        importo: round2(Math.abs(Number(m.importo) || 0)), data: m.data_operazione || null,
+        descrizione: m.descrizione || "Movimento di banca",
+        ambito: gemella ? "Ha già una spesa gemella scritta a mano" : "Da classificare",
+        gemella: !!gemella,
+        importo, data: m.data_operazione || null,
         soldi: 2, carta: 0,
+        senzaDoc: cicloNonPrevedeFattura(m.causale || m.descrizione),
       });
     });
 
@@ -43246,9 +43309,12 @@ function SchedaCicloPassivo({ righe, caricando, oggiStr, onApriSpesa }) {
   const [filtro, setFiltro] = useState(null);
   const [ricerca, setRicerca] = useState("");
 
-  const conti = { ritardo: 0, pronte: 0, attesa: 0, chiuse: 0, impegni: 0 };
-  const somme = { ritardo: 0, pronte: 0, attesa: 0, chiuse: 0, impegni: 0 };
+  const conti = { ritardo: 0, pronte: 0, contabilizzare: 0, attesa: 0, chiuse: 0, impegni: 0 };
+  const somme = { ritardo: 0, pronte: 0, contabilizzare: 0, attesa: 0, chiuse: 0, impegni: 0 };
   let inAttesaEstrattoConto = 0;
+  const scritteAMano = righe.filter((r) => cicloStileFonte(r.fonte).daTogliere).length;
+  const gemelle = righe.filter((r) => r.gemella).length;
+  const dalPortale = righe.filter((r) => r.dalPortale).length;
   righe.forEach((r) => {
     const g = cicloGruppoDi(r);
     conti[g] += 1; somme[g] = round2(somme[g] + r.importo);
@@ -43280,13 +43346,17 @@ function SchedaCicloPassivo({ righe, caricando, oggiStr, onApriSpesa }) {
     <div>
       {/* le quattro caselle di lavoro: chi apre questa pagina vuole sapere
           quanto lavoro c'e' e dove, non scorrere trecento righe */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 6 : 12, marginBottom: 10 }}>
-        {["ritardo", "pronte", "attesa", "chiuse"].map((k) => {
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(5, minmax(0,1fr))", gap: isMobile ? 6 : 10, marginBottom: 10 }}>
+        {["ritardo", "pronte", "contabilizzare", "attesa", "chiuse"].map((k) => {
           const s = CICLO_STATI[k];
           const attivo = filtro === k;
           const sotto = k === "chiuse"
             ? (inAttesaEstrattoConto ? `${inAttesaEstrattoConto} attende l'estratto conto` : s.sotto)
-            : (conti[k] ? fmtEuroErp(somme[k]) : s.sotto);
+            : k === "contabilizzare" && gemelle
+              ? `${fmtEuroErp(somme[k])} · ${gemelle} già scritti a mano`
+              : k === "attesa" && dalPortale
+                ? `${fmtEuroErp(somme[k])} · ${dalPortale} da scaricare dal portale`
+                : (conti[k] ? fmtEuroErp(somme[k]) : s.sotto);
           return (
             <button
               key={k}
@@ -43354,8 +43424,19 @@ function SchedaCicloPassivo({ righe, caricando, oggiStr, onApriSpesa }) {
               <div style={{ minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{r.fornitore}</div>
                 <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.35, marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: GRAFITE, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 4, padding: "1px 5px" }}>{r.fonte}</span>
+                  {(() => {
+                    const f = cicloStileFonte(r.fonte);
+                    return (
+                      <span title={f.nota} style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: f.colore, background: f.sfondo, border: `1px solid ${f.bordo}`, borderRadius: 4, padding: "1px 5px", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {/* il puntino pieno dice "l'ha scritta una persona":
+                            si riconosce con la coda dell'occhio, il testo no */}
+                        {f.aMano && <span style={{ width: 5, height: 5, borderRadius: "50%", background: f.colore, flexShrink: 0 }} />}
+                        {r.fonte}
+                      </span>
+                    );
+                  })()}
                   {r.gruppo && <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 4, padding: "1px 5px" }}>Un bonifico solo</span>}
+                  {r.dalPortale && <span title="Fornitore estero: la fattura non passa da SDI, si scarica dal suo portale" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#6B4FA8", border: "1px solid #C6B6E6", background: "#F0EBF9", borderRadius: 4, padding: "1px 5px" }}>Dal portale</span>}
                   <span>{r.descrizione} · {r.ambito}</span>
                 </div>
               </div>
@@ -43379,8 +43460,20 @@ function SchedaCicloPassivo({ righe, caricando, oggiStr, onApriSpesa }) {
         </div>
       )}
 
-      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 14 }}>
-        Questa pagina legge soltanto: non scrive niente e non tocca nessuna delle schermate di sempre, che restano tutte al loro posto. Serve a vedere se il modello regge sui dati veri, prima di cambiare il modo di lavorare.
+      {/* il termometro del passaggio: quante righe di pagamenti bancari
+          sta ancora scrivendo una persona. Dal giorno in cui la fonte
+          diventa l'estratto conto, questo numero deve scendere a zero da
+          solo — e se non scende, si vede qui invece che a fine mese */}
+      <div style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5, marginTop: 14, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#C77A18", flexShrink: 0 }} />
+        <span>
+          <b>{scritteAMano} righe scritte a mano</b> su pagamenti che passano dal conto: l'estratto conto le avrebbe portate da solo.
+          {" "}Le righe di <b>Cassa</b> hanno il puntino anche loro, ma quelle vanno scritte a mano per forza — i contanti nessun istituto li vede.
+        </span>
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 10 }}>
+        Questa pagina legge soltanto: non scrive niente e non tocca nessuna delle schermate di sempre, che restano tutte al loro posto. Serve a vedere se il modello regge sui dati veri, prima di cambiare il modo di lavorare. L'analisi parte dal {fmtData(INIZIO_CONTABILITA)}: prima di quella data c'è archivio, non lavoro arretrato.
       </div>
     </div>
   );
@@ -43407,6 +43500,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     let vivo = true;
     supabase.from("movimenti_banca")
       .select("id, data_operazione, importo, descrizione, causale, stato, collegato_tipo, collegato_id")
+      .gte("data_operazione", INIZIO_CONTABILITA)
       .order("data_operazione", { ascending: false }).limit(1500)
       .then(({ data }) => { if (vivo) setMovimentiCiclo(data || []); });
     return () => { vivo = false; };
