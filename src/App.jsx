@@ -14,6 +14,7 @@ import {
   FAMIGLIA_STRETTA, GRIGIO_LEGGIBILE,
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
+import { qrSvg } from "./ui/qr.js";
 import { caricaKitInAula } from "./rientri/pos";
 import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
 import SchedaRientro from "./rientri/SchedaRientro.jsx";
@@ -60517,6 +60518,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // altrimenti diventerebbe uno sconto manuale spacciato per referral
   const [couponAttivo, setCouponAttivo] = useState(null);
   const [metodoPagamento, setMetodoPagamento] = useState("pos");
+  // Il pagamento con carta chiesto col QR: la cliente inquadra, paga e
+  // compila da sola i dati di fatturazione sulla pagina di Stripe.
+  // Non e' un metodo di pagamento in piu': e' il modo di incassare del
+  // POS che c'e' gia'.
+  const [richiestaQr, setRichiestaQr] = useState(null);   // { codice, indirizzo }
+  const [statoQr, setStatoQr] = useState("in_attesa");
+  const [creandoQr, setCreandoQr] = useState(false);
+  // Col metodo POS ci sono due modi di incassare davvero, e vanno detti
+  // perche' il conto e' identico ma il gesto no: "esterno" e' il
+  // terminale fisico che si batte al banco — quello che si e' sempre
+  // fatto, e resta il modo predefinito — "qr" e' la cliente che paga
+  // col suo telefono. Non sono due metodi di pagamento: per la vendita,
+  // per l'IVA, per i punti e per le fasce restano tutti e due "POS".
+  const [modoIncassoPos, setModoIncassoPos] = useState("esterno");
+  const [msgQr, setMsgQr] = useState("");
   const [linkAmazonCopiato, setLinkAmazonCopiato] = useState(false);
   async function copiaLinkAmazon() {
     try { await navigator.clipboard.writeText(LINK_BUONO_AMAZON); setLinkAmazonCopiato(true); setTimeout(() => setLinkAmazonCopiato(false), 1800); }
@@ -61004,6 +61020,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // Entra nel conto come una riga a se', cosi' il totale e' sempre la
   // somma delle righe; un omaggio non la fa pagare
   const speseSpedizione = spedizioneAttiva && !omaggioAttivo ? COSTO_SPEDIZIONE_POS : 0;
+
   const totaleConSpedizione = round2(totaleNetto + speseSpedizione);
   // L'IVA si scorpora solo se quella vendita un documento fiscale ce
   // l'ha. Una vendita in contanti senza fattura non genera IVA: non c'e'
@@ -61022,6 +61039,73 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // omaggio: il magazzino si scarica lo stesso, ma non entra un euro —
   // il totale "da incassare" e le sue componenti diventano sempre zero
   const totaleDaIncassare = omaggioAttivo ? 0 : totaleConSpedizione;
+  // Le righe che finiscono sulla pagina di pagamento. Devono sommare
+  // esattamente quello che si incassa, sconti compresi: la pagina di
+  // Stripe non e' un preventivo, e' quello che la cliente paga davvero.
+  // Lo sconto si spalma in proporzione e il resto dei centesimi va
+  // sull'ultima riga, come fa gia' la conferma della vendita.
+  function righePerPagamento() {
+    const lordi = carrello.map((r) => round2(r.prezzo * r.quantita));
+    const lordoTotale = round2(lordi.reduce((a, b) => a + b, 0) + speseSpedizione);
+    const righe = carrello.map((r, i) => ({
+      nome: `${r.quantita > 1 ? `${r.quantita} × ` : ""}${r.nome}`,
+      quantita: 1,
+      prezzo: lordi[i],
+    }));
+    if (speseSpedizione > 0) righe.push({ nome: "Spedizione", quantita: 1, prezzo: speseSpedizione });
+    if (righe.length === 0 || lordoTotale <= 0) return righe;
+    const fattore = totaleDaIncassare / lordoTotale;
+    const scalate = righe.map((r) => ({ ...r, prezzo: round2(r.prezzo * fattore) }));
+    const resto = round2(totaleDaIncassare - scalate.reduce((a, r) => a + r.prezzo, 0));
+    if (resto !== 0) scalate[scalate.length - 1].prezzo = round2(scalate[scalate.length - 1].prezzo + resto);
+    return scalate;
+  }
+
+  async function chiediPagamentoQr() {
+    setCreandoQr(true); setMsgQr("");
+    const { data, error } = await supabase.functions.invoke("stripe-crea-pagamento", {
+      body: {
+        importo: round2(totaleDaIncassare),
+        descrizione: corsoPosSel ? `POS · ${corsoById[corsoPosSel.corso_id]?.nome || "corso"}` : "Vendita al banco",
+        righe: righePerPagamento(),
+        operatore: { tipo: operatore.tipo, id: operatore.id, nome: operatore.nome },
+        corsoDataId: corsoPosSel?.id || null,
+      },
+    });
+    setCreandoQr(false);
+    if (error || data?.errore) { setMsgQr("Non sono riuscito a chiedere il pagamento: " + (data?.errore || error?.message || "errore sconosciuto")); return; }
+    setRichiestaQr(data);
+    setStatoQr("in_attesa");
+  }
+
+  async function annullaRichiestaQr() {
+    if (richiestaQr?.codice) {
+      await supabase.from("pagamenti_pos").update({ stato: "annullato", aggiornato_il: new Date().toISOString() })
+        .eq("codice", richiestaQr.codice).eq("stato", "in_attesa");
+    }
+    setRichiestaQr(null); setStatoQr("in_attesa"); setMsgQr("");
+  }
+
+  // Si chiede al database ogni tre secondi se il pagamento e' arrivato.
+  // Il webhook di Stripe scrive li', e qui si guarda: e' l'unico modo
+  // perche' chi sta al banco veda la spunta senza toccare niente.
+  useEffect(() => {
+    if (!richiestaQr?.codice || statoQr === "pagato") return;
+    let vivo = true;
+    const battito = setInterval(async () => {
+      const { data } = await supabase.from("pagamenti_pos").select("stato").eq("codice", richiestaQr.codice).maybeSingle();
+      if (!vivo || !data) return;
+      if (data.stato === "da_verificare" || data.stato === "fatturato") setStatoQr("pagato");
+      else if (data.stato === "scaduto" || data.stato === "annullato") setStatoQr(data.stato);
+    }, 3000);
+    return () => { vivo = false; clearInterval(battito); };
+  }, [richiestaQr?.codice, statoQr]);
+
+  const qrPagamento = useMemo(
+    () => (richiestaQr?.indirizzo ? qrSvg(richiestaQr.indirizzo, { lato: isMobile ? 230 : 300 }) : null),
+    [richiestaQr?.indirizzo, isMobile],
+  );
+
   const imponibileDaRegistrare = omaggioAttivo ? 0 : imponibile;
   const ivaDaRegistrare = omaggioAttivo ? 0 : iva;
   // I punti che la master matura con questo carrello, con la stessa
@@ -61925,6 +62009,54 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               );
             })}
           </div>
+          {/* Col POS si incassa in due modi, e il conto non cambia: il
+              terminale fisico al banco, oppure il QR che la cliente
+              inquadra col telefono. Non sono due metodi di pagamento —
+              per la vendita, per l'IVA e per i punti restano "POS". */}
+          {metodoPagamento === "pos" && !omaggioAttivo && (
+            <div style={{ marginTop: -6, marginBottom: isMobile ? 10 : 16, padding: "10px 12px", borderRadius: 12, background: "#F4F6FB", border: `1px solid #D9E0EE` }}>
+              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Come incassi</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[
+                  { v: "esterno", l: "POS esterno", sotto: "batti tu sul terminale" },
+                  { v: "qr", l: "Col QR", sotto: "paga lei col telefono" },
+                ].map((m) => {
+                  const scelto = modoIncassoPos === m.v;
+                  return (
+                    <button
+                      key={m.v} type="button"
+                      onClick={() => { setModoIncassoPos(m.v); setMsgQr(""); }}
+                      style={{ flex: "1 1 140px", padding: isMobile ? "8px 10px" : "10px 12px", borderRadius: 10, border: `1px solid ${scelto ? NAVY : "#D9E0EE"}`, background: scelto ? NAVY : "#fff", cursor: "pointer", textAlign: "left" }}
+                    >
+                      <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: scelto ? "#fff" : NAVY }}>{m.l}</div>
+                      <div style={{ ...fontBody, fontSize: 11, color: scelto ? "rgba(255,255,255,0.75)" : MUTED, marginTop: 1 }}>{m.sotto}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {modoIncassoPos === "esterno" ? (
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.5, marginTop: 9 }}>
+                  Incassa sul terminale, poi conferma la vendita qui sotto come hai sempre fatto. L'app non aspetta nessuna conferma da fuori.
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 9 }}>
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 180px", lineHeight: 1.45 }}>
+                    La cliente inquadra, paga e scrive lei i dati per la fattura.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={chiediPagamentoQr}
+                    disabled={creandoQr || carrello.length === 0 || totaleDaIncassare <= 0}
+                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "8px 14px", cursor: creandoQr || carrello.length === 0 ? "default" : "pointer", opacity: creandoQr || carrello.length === 0 || totaleDaIncassare <= 0 ? 0.5 : 1, whiteSpace: "nowrap" }}
+                  >
+                    {creandoQr ? "Preparo…" : `Mostra il QR · ${fmtEuroErp2(totaleDaIncassare)}`}
+                  </button>
+                </div>
+              )}
+              {msgQr && <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 8 }}>{msgQr}</div>}
+            </div>
+          )}
           {/* con il buono Amazon la master manda al cliente il link del
               buono: sta qui sotto, pronto da copiare */}
           {metodoPagamento === "buono_amazon" && (
@@ -61937,6 +62069,48 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             </div>
           )}
         </>
+      )}
+      {/* Il QR a schermo intero: e' la cliente che lo guarda, quindi
+          grande, centrato e senza niente intorno da leggere. Sotto, il
+          codice in chiaro: quando una fotocamera non ne vuole sapere,
+          si detta e si scrive a mano. */}
+      {richiestaQr && (
+        <Modal title={statoQr === "pagato" ? "Pagamento ricevuto" : "Fai inquadrare questo codice"} onClose={statoQr === "pagato" ? () => { setRichiestaQr(null); setStatoQr("in_attesa"); } : annullaRichiestaQr} maxWidth={420}>
+          {statoQr === "pagato" ? (
+            <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#E8F5E9", color: "#2E7D32", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+                <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+              </div>
+              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)} incassati</div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginTop: 8 }}>
+                I dati per la fattura li ha scritti lei e sono già in <b style={{ color: NAVY }}>Amministrazione → Fatture da emettere</b>.
+                <br />Adesso chiudi la vendita come sempre.
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</div>
+              {qrPagamento && (
+                <div style={{ display: "flex", justifyContent: "center", margin: "14px 0 10px", lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: qrPagamento }} />
+              )}
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.6 }}>
+                Sulla pagina che le si apre paga e scrive i suoi dati per la fattura.
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>oppure detta questo codice</div>
+              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, letterSpacing: 4, marginTop: 2 }}>{richiestaQr.codice}</div>
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2, wordBreak: "break-all" }}>{richiestaQr.indirizzo}</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: statoQr === "in_attesa" ? "#C9A227" : "#C0392B" }} />
+                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: statoQr === "in_attesa" ? "#8A6D1D" : "#C0392B" }}>
+                  {statoQr === "in_attesa" ? "In attesa che paghi…" : statoQr === "scaduto" ? "Richiesta scaduta" : "Richiesta annullata"}
+                </span>
+              </div>
+              <button type="button" onClick={annullaRichiestaQr} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", marginTop: 12 }}>
+                Annulla la richiesta
+              </button>
+            </div>
+          )}
+        </Modal>
       )}
       {!isMobile && (
         <div style={{ marginBottom: 14 }}>
