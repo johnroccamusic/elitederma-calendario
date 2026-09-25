@@ -29,6 +29,7 @@ import { accessoriDaElencare } from "./rientri/composizione";
 import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
 import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
 import QrConsensi from "./consensi/QrConsensi.jsx";
+import Ricevuta from "./pos/Ricevuta.jsx";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -71747,6 +71748,11 @@ export default function App() {
   // l'applicazione — chi arriva da quel codice non deve vedere nient'altro
   const paramConsenso = new URLSearchParams(window.location.search).get("consenso");
   if (paramConsenso) return <PaginaConsenso codice={paramConsenso} />;
+  // ?ricevuta=<CODICE>: dove Stripe rimanda chi ha appena pagato col QR.
+  // Esce di qui come le altre rotte pubbliche: chi arriva da un
+  // pagamento vede la sua ricevuta e nient'altro dell'applicazione
+  const paramRicevuta = new URLSearchParams(window.location.search).get("ricevuta");
+  if (paramRicevuta) return <Ricevuta codice={paramRicevuta} />;
   // se il link contiene ?modelle=<id>, mostro solo l'elenco dei trattamenti
   // richiesti per questa classe (nessun dato personale/di pagamento)
   const paramModelle = new URLSearchParams(window.location.search).get("modelle");

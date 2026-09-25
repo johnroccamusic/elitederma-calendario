@@ -16,14 +16,26 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-function pagina(titolo: string, messaggio: string, codice = 200) {
-  return new Response(
-    `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${titolo}</title></head>` +
-    `<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F7F4EC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:24px">` +
-    `<div style="max-width:420px;text-align:center"><h1 style="font-size:20px;color:#0E1B33;margin:0 0 10px">${titolo}</h1>` +
-    `<p style="font-size:15px;line-height:1.6;color:#5E5039;margin:0">${messaggio}</p></div></body></html>`,
-    { status: codice, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
-  );
+// Da qui non esce piu' nessuna pagina.
+//
+// Le edge function di Supabase rispondono con "content-type: text/plain"
+// e una CSP "sandbox": una pagina HTML servita da qui il browser non la
+// disegna, la mostra come testo o se la scarica come file — ed e'
+// esattamente quello che e' successo sul telefono della prima cliente
+// che ha pagato, che si e' ritrovata il sorgente della pagina.
+//
+// Quindi: o si rimanda a Stripe, o si rimanda alla ricevuta dell'app,
+// che e' un sito vero e sa disegnarsi.
+const APP = (Deno.env.get("APP_URL") || "https://elitederma-calendario.vercel.app").replace(/\/$/, "");
+
+function versoLApp(codice: string, stato = 200) {
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `${APP}/?ricevuta=${encodeURIComponent(codice)}`, "Cache-Control": "no-store" },
+  });
+}
+function messaggioSecco(testo: string, stato: number) {
+  return new Response(testo, { status: stato, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 Deno.serve(async (req) => {
@@ -31,7 +43,7 @@ Deno.serve(async (req) => {
   // sia /paga/7F3K9 sia /paga?c=7F3K9
   const dalPercorso = url.pathname.split("/").filter(Boolean).pop();
   const codice = (url.searchParams.get("c") || (dalPercorso && dalPercorso !== "paga" ? dalPercorso : "") || "").toUpperCase();
-  if (!codice) return pagina("Link non valido", "Questo indirizzo non porta a nessun pagamento.", 400);
+  if (!codice) return messaggioSecco("Questo indirizzo non porta a nessun pagamento.", 400);
 
   const { data: richiesta } = await sb
     .from("pagamenti_pos")
@@ -39,13 +51,13 @@ Deno.serve(async (req) => {
     .eq("codice", codice)
     .maybeSingle();
 
-  if (!richiesta) return pagina("Pagamento non trovato", "Il codice non corrisponde a nessuna richiesta. Chiedi che te ne generino uno nuovo.", 404);
-  if (richiesta.stato === "annullato") return pagina("Richiesta annullata", "Questo pagamento e' stato annullato al banco.", 410);
-  if (richiesta.stato !== "in_attesa") return pagina("Gia' pagato", "Questo pagamento risulta gia' ricevuto. Non serve rifarlo.", 200);
-  if (richiesta.scade_il && new Date(richiesta.scade_il).getTime() < Date.now()) {
-    return pagina("Richiesta scaduta", "Questo link non vale piu'. Chiedi che te ne generino uno nuovo.", 410);
-  }
-  if (!richiesta.stripe_session_url) return pagina("Pagamento non pronto", "La richiesta esiste ma non ha ancora una pagina di pagamento. Riprova fra un istante.", 409);
+  // qualunque strada diversa dal "vai a pagare" finisce sulla ricevuta:
+  // e' lei che sa dire se e' gia' pagato, annullato o scaduto, e lo dice
+  // con l'intestazione della societa' davanti
+  if (!richiesta) return messaggioSecco("Il codice non corrisponde a nessuna richiesta. Chiedi che te ne generino uno nuovo.", 404);
+  if (richiesta.stato !== "in_attesa") return versoLApp(codice);
+  if (richiesta.scade_il && new Date(richiesta.scade_il).getTime() < Date.now()) return versoLApp(codice);
+  if (!richiesta.stripe_session_url) return versoLApp(codice);
 
   return new Response(null, { status: 302, headers: { Location: richiesta.stripe_session_url, "Cache-Control": "no-store" } });
 });

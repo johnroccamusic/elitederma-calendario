@@ -65,6 +65,12 @@ Deno.serve(async (req) => {
 
   const base = (Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "");
   const indirizzoCorto = `${base}/functions/v1/paga/${codice}`;
+  // Finito il pagamento si torna sull'APP, non qui: le edge function di
+  // Supabase rispondono "text/plain" con una CSP "sandbox", e una
+  // pagina HTML servita da qui il telefono non la disegna — se la
+  // scarica come file, col sorgente dentro. La ricevuta la fa l'app.
+  const app = (Deno.env.get("APP_URL") || "https://elitederma-calendario.vercel.app").replace(/\/$/, "");
+  const ricevuta = `${app}/?ricevuta=${codice}`;
   const scadeIl = new Date(Date.now() + 2 * 3600 * 1000);
 
   const form = new URLSearchParams();
@@ -74,8 +80,8 @@ Deno.serve(async (req) => {
   form.set("tax_id_collection[enabled]", "true");
   form.set("customer_creation", "always");
   form.set("expires_at", String(Math.floor(scadeIl.getTime() / 1000)));
-  form.set("success_url", `${base}/functions/v1/paga/${codice}`);
-  form.set("cancel_url", `${base}/functions/v1/paga/${codice}`);
+  form.set("success_url", ricevuta);
+  form.set("cancel_url", ricevuta);
   form.set("metadata[codice]", codice);
   righe.forEach((r: any, i: number) => {
     form.set(`line_items[${i}][price_data][currency]`, "eur");
