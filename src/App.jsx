@@ -25400,7 +25400,7 @@ function modalitaVenditore(quoteVenditoriSplit, corsoDataId, chiaveVenditore) {
   return riga?.modalita || "C";
 }
 
-function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit }, overrides = {}) {
+function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi = [] }, overrides = {}) {
   const { splitOverride = {}, giorniPresenzaOverride = {} } = overrides;
   function conSplit(rigaId, base) {
     return { ...base, ...(splitOverride[rigaId] || {}) };
@@ -25491,7 +25491,26 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   const costoGiornalieroLocation = locSedeClasse?.sede_centrale ? null : (pagamentoSedeClasse === "cash"
     ? (corsoData.costo_giorno_sede_cash ?? locSedeClasse?.costo_giornaliero_cash ?? locSedeClasse?.costo_giornaliero_bonifico ?? null)
     : (corsoData.costo_giorno_sede_bonifico ?? locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null));
-  const costoLocationClasse = costoGiornalieroLocation != null ? round2(costoGiornalieroLocation * durataGiorniCorso) : 0;
+  // Il listino per giorni della settimana, quando la sede ce l'ha: tre
+  // giorni infrasettimanali a 80 e due di fine settimana a 130 fanno
+  // 500, non cinque volte la stessa cifra.
+  //
+  // Chi decide resta pero' "Gestisci sede": se per QUESTO corso e' stata
+  // scritta una cifra a mano, quella vince sul listino. E' una tariffa
+  // trattata per l'occasione, e il listino generale non deve
+  // sovrascriverla alle spalle di chi l'ha contrattata.
+  const overrideGiornoSede = pagamentoSedeClasse === "cash" ? corsoData.costo_giorno_sede_cash : corsoData.costo_giorno_sede_bonifico;
+  const listinoSede = locSedeClasse?.sede_centrale || overrideGiornoSede != null ? null : costoLocationPerGiorni({
+    fasce: fasceLocationDi(locationPrezzi, corsoData.location_id),
+    dataInizio: corsoData.data_inizio, dataFine: corsoData.data_fine || corsoData.data_inizio,
+    preferisciCash: pagamentoSedeClasse === "cash",
+  });
+  // senza listino e senza tariffa non c'e' riga: com'e' sempre stato
+  const totaleSedeClasse = locSedeClasse?.sede_centrale ? null
+    : listinoSede ? listinoSede.totale
+    : costoGiornalieroLocation != null ? round2(costoGiornalieroLocation * durataGiorniCorso)
+    : null;
+  const costoLocationClasse = totaleSedeClasse ?? 0;
   // il titolo guida col vero fornitore (il nome della sede, per far
   // match con la fattura reale) e riporta la città solo come contesto —
   // prima mostrava solo la città, che non basta a riconoscere QUALE
@@ -25499,7 +25518,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   const nomeLocationPerTitolo = locSedeClasse?.nome_sede
     ? `${locSedeClasse.nome_sede}, ${toTitleCase(locSedeClasse?.nome || "")}`
     : toTitleCase(locSedeClasse?.nome || "—");
-  const rigaLocationClasse = costoGiornalieroLocation != null ? {
+  const rigaLocationClasse = totaleSedeClasse != null ? {
     rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${nomeLocationPerTitolo}`, totale: costoLocationClasse, anagrafica: locSedeClasse || null,
     bonifico: pagamentoSedeClasse === "cash" ? 0 : costoLocationClasse,
     cash: pagamentoSedeClasse === "cash" ? costoLocationClasse : 0,
@@ -26090,7 +26109,7 @@ function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evide
 function PannelloRiepilogoAmministrativo({
   corsoData, iscritti, spese, venditeShop, prodottiShop, corsi = [],
   corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel,
-  costiCategorie, costiSottocategorie, quoteVenditoriSplit, ricarica, onMessaggio, onIntestazione,
+  costiCategorie, costiSottocategorie, quoteVenditoriSplit, locationPrezzi = [], ricarica, onMessaggio, onIntestazione,
   // il Quadro impegni: serve a sapere quali quote in contanti sono gia'
   // state rinviate. Mancava dalla firma e il pannello cadeva alla prima
   // riga che lo leggeva: schermata bianca dall'11/09
@@ -26452,7 +26471,7 @@ function PannelloRiepilogoAmministrativo({
     ricarica(["corsi_date_docenti"]);
   }
   const { righeSpeseTutte: righeSpeseGrezze, totaleSpeseAutomaticheClasse } =
-    calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit }, { splitOverride, giorniPresenzaOverride });
+    calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi }, { splitOverride, giorniPresenzaOverride });
   // La quota in contante di una riga puo' essere gia' uscita dalla busta e
   // gia' registrata come spesa pagata (tasto "Pagamenti effettuati"). Da
   // quel momento non e' piu' "cash da pagare": sta fra le spese della
@@ -27684,7 +27703,7 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
-function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   const maniglieAttive = useManiglieAttive();
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -29802,7 +29821,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
       {vista === "lista" && costiAperto && (
         <PannelloRiepilogoAmministrativo
-          quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni} corsi={corsi}
+          quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi} impegni={impegni} corsi={corsi}
           corsoData={corsoData} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
           corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
@@ -32049,7 +32068,7 @@ function PaginaProssimeContabilita({
   quoteVenditoriSplit, impegni = [],
   corsi, corsiDate, location, iscritti, spese, venditeShop, prodottiShop, corsiDateDocenti,
   master, masterCorsi, assistente, assistenteCorsi, leva, hotel,
-  costiCategorie, costiSottocategorie, ricarica,
+  costiCategorie, costiSottocategorie, locationPrezzi = [], ricarica,
   onApriClasse, onBack, titolo = "Prossime contabilità",
 }) {
   const isMobile = useIsMobile();
@@ -32096,7 +32115,7 @@ function PaginaProssimeContabilita({
       .map((cd) => {
         const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
         const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
-          calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit }, {});
+          calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi }, {});
         const conti = contiRiepilogoClasse({
           incassiExtra: Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [],
           listaIscritti,
@@ -32292,7 +32311,7 @@ function PaginaProssimeContabilita({
               {scheda && (
               <div style={{ marginTop: 14 }}>
                 <PannelloRiepilogoAmministrativo
-                  quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegni} corsi={corsi}
+                  quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi} impegni={impegni} corsi={corsi}
                   corsoData={cd} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
                   corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
                   assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
@@ -38368,7 +38387,7 @@ const PAGINA_CATEGORIA_GRUPPO_PER_TIPO = {
 // Appena si associa la fattura o si paga nasce la spesa vera e da quel
 // momento comanda quella.
 const GIORNI_ANTICIPO_SCADENZIARIO = 7;
-function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese , quoteVenditoriSplit, impegnoTabella}) {
+function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese , quoteVenditoriSplit, impegnoTabella, locationPrezzi = []}) {
   const oggiStr = dataOggiStr();
   const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
   // Le scadenze spostate a mano su una voce ancora aperta. Stanno nella
@@ -38396,7 +38415,7 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
     // finito l'ha superata, e i suoi costi entrano tutti
     const entroLaSoglia = cd.data_inizio && cd.data_inizio <= addGiorni(oggiStr, GIORNI_ANTICIPO_SCADENZIARIO);
     if (!entroLaSoglia && !classiConSpesa.has(cd.id)) return;
-    const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit });
+    const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi });
     righeSpeseTutte.forEach((r) => {
       const chiave = `${r.tipo}_${r.rigaId}`;
       // il valore di oggi va registrato SEMPRE, anche quando e' zero: uno
@@ -41417,7 +41436,7 @@ function IconaAvvisoSpunta({ size = 20, color = "#fff" }) {
 // Le contabilita' da approvare: le buste dei corsi finiti non ancora in
 // cassa (con contante dentro) e le appendici aperte. Le legge la cassa
 // contanti per la lista "Avvisi" e Contabilita' per il riquadro in cima
-function contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici }) {
+function contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi = [], spese, venditeShop, busteAppendici }) {
   const oggi = dataOggiStr();
   let totale = 0;
   const righe = [];
@@ -41432,7 +41451,7 @@ function contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master,
     const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
     const { righeSpeseTutte, totaleSpeseAutomaticheClasse } = calcolaRigheSpeseCorso(
       cd,
-      { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit },
+      { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi },
       {}
     );
     const conti = contiRiepilogoClasse({
@@ -41493,7 +41512,7 @@ function SegnalatoriContabilita({
   isMobile, style, speseDaPagare,
   documentoFornitoreTabella, fattureRicevuteFic,
   corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
-  leva, location, hotel, quoteVenditoriSplit, spese, venditeShop,
+  leva, location, hotel, quoteVenditoriSplit, locationPrezzi = [], spese, venditeShop,
   onRiconciliazione, onDocumenti, onPassivo, onFondocassa,
 }) {
   const busteAppendici = useBusteAppendici(corsiDate, spese, venditeShop);
@@ -41503,7 +41522,7 @@ function SegnalatoriContabilita({
   const daImportare = (fattureRicevuteFic || []).filter((f) => !f.spesa_id && dentroContabilita(f)).length;
   const daApprovare = contabilitaDaApprovare({
     corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
-    leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici,
+    leva, location, hotel, quoteVenditoriSplit, locationPrezzi, spese, venditeShop, busteAppendici,
   }).quante;
   const riquadri = [
     { chiave: "riconciliare", etichetta: "Documenti da riconciliare", valore: daRiconciliare, colore: "#6E7391", sfondo: "#fff", disco: "#6E7391", Icona: IconaAvvisoDocumento, onClick: () => onRiconciliazione?.() },
@@ -41524,7 +41543,7 @@ function SegnalatoriContabilita({
 
 function PannelloCassaContanti({
   corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
-  leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, ricarica, onApriClasse,
+  leva, location, hotel, quoteVenditoriSplit, locationPrezzi = [], spese, venditeShop, ricarica, onApriClasse,
 }) {
   const isMobile = useIsMobile();
   const [movimenti, setMovimenti] = useState(null);
@@ -41628,7 +41647,7 @@ function PannelloCassaContanti({
   // spuntata oggi finisce comunque in cassa. Escluderla da "in arrivo"
   // farebbe comparire dal nulla il giorno della spunta un contante che
   // nessuno aveva annunciato.
-  const busteInArrivo = useMemo(() => contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici }),
+  const busteInArrivo = useMemo(() => contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi, spese, venditeShop, busteAppendici }),
     [corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici]);
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
@@ -43909,7 +43928,7 @@ function SchedaCicloPassivo({ righe, caricando, oggiStr, onApriSpesa }) {
   );
 }
 
-function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriNuovaSpesaDaMovimentoBanca, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
+function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = [], ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, ordineSchedeContabilita, onSalvaOrdineSchedeContabilita, assistente, assistenteCorsi, leva, hotel, spese, venditeShop, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriClasseRiepilogo, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriNuovaSpesaDaMovimentoBanca, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "passivo");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -44066,7 +44085,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
     return s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "—";
   }
 
-  const { daPagareVirtuali, importiRicalcolati } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella });
+  const { daPagareVirtuali, importiRicalcolati } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella, locationPrezzi });
 
   // una spesa nata da "Registra fattura" o da "+ Nuova spesa da pagare"
   // (stato diverso da "pagata") resta qui finché non viene segnata
@@ -44872,7 +44891,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           fattureRicevuteFic={fattureRicevuteFic}
           corsiDate={corsiDate} iscritti={iscritti} corsiDateDocenti={corsiDateDocenti}
           master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
-          leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit}
+          leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi}
           spese={spese} venditeShop={venditeShop}
           onRiconciliazione={onApriRiconciliazione}
           onDocumenti={() => setTab("documenti")}
@@ -44945,7 +44964,7 @@ function PaginaAmministrazione({ impegnoTabella = [], ruoloUtente, corsi, locati
           <PannelloCassaContanti
             corsiDate={corsiDate} iscritti={iscritti} corsiDateDocenti={corsiDateDocenti}
             master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
-            leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit}
+            leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi}
             spese={spese} venditeShop={venditeShop} corsi={corsi} ricarica={ricarica}
             onApriClasse={onApriClasseRiepilogo}
           />
@@ -45546,7 +45565,7 @@ function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAsso
 }
 
 function PaginaInserimentoCostiRicavi({
-  ruoloUtente, quoteVenditoriSplit, impegnoTabella = [],
+  ruoloUtente, quoteVenditoriSplit, impegnoTabella = [], locationPrezzi = [],
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
   abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, venditeShop = [],
@@ -45791,7 +45810,7 @@ function PaginaInserimentoCostiRicavi({
   // conteggi per la riga di tasti verso le altre schede di Amministrazione
   // (vedi TabsAmministrazione) — stesse funzioni condivise usate lì, così
   // i numeri non possono mai divergere
-  const { daPagareVirtuali: daPagareVirtualiPerConteggio } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella });
+  const { daPagareVirtuali: daPagareVirtualiPerConteggio } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella, locationPrezzi });
   const oggiStrConteggio = dataOggiStr();
   const daPagareRealiPerConteggio = (spese || [])
     .filter((s) => s.stato !== "pagata")
@@ -45986,7 +46005,7 @@ function PaginaInserimentoCostiRicavi({
           fattureRicevuteFic={fattureRicevuteFic}
           corsiDate={corsiDate} iscritti={iscritti} corsiDateDocenti={corsiDateDocenti}
           master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
-          leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit}
+          leva={leva} location={location} hotel={hotel} quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi}
           spese={spese} venditeShop={venditeShop}
           onRiconciliazione={onApriRiconciliazione}
           onDocumenti={() => onApriAmministrazioneTab("documenti")}
@@ -57599,8 +57618,8 @@ function giornoSettimanaDi(dataIso) {
 // Se nessuna fascia copre quel giorno si ripiega sulla prima che ha un
 // prezzo: meglio la tariffa base che nessuna tariffa: un listino
 // incompleto non deve far risultare la stanza gratis.
-function fasciaPerGiorno(fasce, dataIso) {
-  const utili = (fasce || []).filter((f) => f.prezzo_cash != null || f.prezzo_fattura != null);
+function fasciaPerGiorno(fasce, dataIso, campiPrezzo = ["prezzo_cash", "prezzo_fattura"]) {
+  const utili = (fasce || []).filter((f) => campiPrezzo.some((c) => f[c] != null));
   if (utili.length === 0) return null;
   const giorno = giornoSettimanaDi(dataIso);
   if (giorno) {
@@ -57608,6 +57627,47 @@ function fasciaPerGiorno(fasce, dataIso) {
     if (calzante) return calzante;
   }
   return utili[0];
+}
+
+// ---------- Il listino della sede, per giorni della settimana ----------
+//
+// Stesso meccanismo degli hotel, senza i periodi dell'anno: una sede
+// costa diverso infrasettimanale e nel fine settimana, e quello non
+// cambia a marzo o ad agosto. Ogni fascia porta i suoi due prezzi, cash
+// e bonifico, perche' la sede fa due cifre a seconda di come la si paga.
+const CAMPI_PREZZO_LOCATION = ["prezzo_cash", "prezzo_bonifico"];
+function fasceLocationDi(locationPrezzi, locationId) {
+  if (!locationId) return [];
+  return (locationPrezzi || [])
+    .filter((p) => p.location_id === locationId)
+    .sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || String(a.id).localeCompare(String(b.id)));
+}
+// Il costo della sede per un corso, sommato giorno per giorno: tre
+// giorni infrasettimanali a 80 e due di fine settimana a 130 fanno 500,
+// non cinque volte la stessa cifra.
+//
+// Torna null quando non c'e' nessuna fascia con un prezzo: chi chiama
+// ricade sulla tariffa unica di sempre, e nessun conto gia' fatto si
+// muove finche' un listino non viene scritto davvero.
+function costoLocationPerGiorni({ fasce, dataInizio, dataFine, preferisciCash }) {
+  const utili = (fasce || []).filter((f) => f.prezzo_cash != null || f.prezzo_bonifico != null);
+  if (utili.length === 0 || !dataInizio) return null;
+  const fine = dataFine || dataInizio;
+  if (fine < dataInizio) return null;
+  let totale = 0;
+  let giorni = 0;
+  // il tetto e' una cintura, non una regola: un corso di un anno non
+  // esiste, e un intervallo sbagliato non deve bloccare la pagina
+  for (let giorno = dataInizio; giorno <= fine && giorni < 400; giorno = addGiorni(giorno, 1)) {
+    giorni += 1;
+    const fascia = fasciaPerGiorno(utili, giorno, CAMPI_PREZZO_LOCATION);
+    if (!fascia) continue;
+    const prezzo = preferisciCash
+      ? (fascia.prezzo_cash ?? fascia.prezzo_bonifico)
+      : (fascia.prezzo_bonifico ?? fascia.prezzo_cash);
+    totale += Number(prezzo) || 0;
+  }
+  return { totale: round2(totale), giorni };
 }
 
 function prezzoHotelPerData(prezzi, periodi, hotelId, tipoStanza, data) {
@@ -58044,7 +58104,150 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
 // Città (l'elenco a cui fanno riferimento i calendari, per evitare
 // doppioni di battitura) e Sedi (una o più per città, con capienza/costi/
 // IBAN)
-function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocategorie, ricarica, onBack }) {
+// Una riga del listino di una sede: nome della fascia, i sette giorni da
+// accendere, i due prezzi e il cestino. Stessa forma della riga degli
+// hotel — chi ha imparato la' non deve imparare di nuovo qui — ma senza
+// i periodi dell'anno: una sede costa diverso il sabato, non ad agosto.
+function RigaFasciaLocation({ fascia, indice, isMobile, onSalva, onElimina }) {
+  const giorniAccesi = Array.isArray(fascia.giorni) ? fascia.giorni : [];
+  function cambiaGiorno(n) {
+    const nuovi = giorniAccesi.includes(n) ? giorniAccesi.filter((g) => g !== n) : [...giorniAccesi, n].sort((a, b) => a - b);
+    onSalva({ giorni: nuovi });
+  }
+  const campo = { ...inputStyle, padding: isMobile ? "5px 6px" : "6px 8px", fontSize: isMobile ? 11.5 : 12.5 };
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr 1fr" : "20px minmax(70px, 110px) 1fr 92px 92px 22px",
+      gap: isMobile ? 6 : 8, alignItems: "center", padding: isMobile ? "6px 0" : "3px 0",
+    }}>
+      {!isMobile && (
+        <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textAlign: "center" }}>{indice + 1}</span>
+      )}
+      <input
+        style={{ ...campo, ...(isMobile ? { gridColumn: "1 / -1" } : null) }}
+        defaultValue={fascia.nome || ""}
+        placeholder={`Fascia ${indice + 1}`}
+        onBlur={(e) => { if (e.target.value !== (fascia.nome || "")) onSalva({ nome: e.target.value.trim() || null }); }}
+      />
+      <div style={{ display: "flex", gap: isMobile ? 3 : 4, flexWrap: "wrap", ...(isMobile ? { gridColumn: "1 / -1" } : null) }}>
+        {GIORNI_SETTIMANA.map((g) => {
+          const acceso = giorniAccesi.includes(g.n);
+          return (
+            <button
+              key={g.n} type="button" onClick={() => cambiaGiorno(g.n)}
+              title={acceso ? "Non applicare in questo giorno" : "Applica anche in questo giorno"}
+              style={{
+                ...fontBody, fontSize: isMobile ? 8.5 : 9.5, fontWeight: 700, letterSpacing: 0.3,
+                color: acceso ? "#fff" : MUTED, background: acceso ? NAVY : "#F4F0E7",
+                border: `1px solid ${acceso ? NAVY : CREAM_BORDER}`, borderRadius: 999,
+                padding: isMobile ? "3px 6px" : "4px 8px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
+              }}
+            >
+              {g.breve}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>€</span>
+        <input type="number" min="0" step="0.01" style={{ ...campo, minWidth: 0, flex: 1 }} defaultValue={fascia.prezzo_cash ?? ""}
+          onBlur={(e) => { if (e.target.value !== String(fascia.prezzo_cash ?? "")) onSalva({ prezzo_cash: e.target.value === "" ? null : parseNum(e.target.value) }); }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>€</span>
+        <input type="number" min="0" step="0.01" style={{ ...campo, minWidth: 0, flex: 1 }} defaultValue={fascia.prezzo_bonifico ?? ""}
+          onBlur={(e) => { if (e.target.value !== String(fascia.prezzo_bonifico ?? "")) onSalva({ prezzo_bonifico: e.target.value === "" ? null : parseNum(e.target.value) }); }} />
+      </div>
+      <button onClick={onElimina} title="Elimina questa fascia" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#C0392B", display: "flex", justifySelf: isMobile ? "start" : "center" }}>
+        <IconaCestino size={14} />
+      </button>
+    </div>
+  );
+}
+
+// Il listino di una sede. Finche' non c'e' nessuna fascia vale la
+// tariffa unica scritta qui sopra, esattamente come prima: il listino si
+// prende il posto solo quando qualcuno lo scrive davvero.
+function ListinoLocation({ locationId, prezzi, ricarica }) {
+  const isMobile = useIsMobile();
+  const [msg, setMsg] = useState("");
+  const fasce = fasceLocationDi(prezzi, locationId);
+  // i giorni che nessuna fascia copre: si dicono, perche' un giorno
+  // scoperto prende la prima fascia con un prezzo e nessuno se ne
+  // accorgerebbe leggendo solo il totale
+  const coperti = new Set(fasce.flatMap((f) => (Array.isArray(f.giorni) ? f.giorni : [])));
+  const scoperti = GIORNI_SETTIMANA.filter((g) => !coperti.has(g.n));
+
+  async function aggiungiFascia() {
+    const { error } = await supabase.from("location_prezzi").insert({
+      location_id: locationId,
+      nome: `Fascia ${fasce.length + 1}`,
+      // nasce senza giorni: accenderli tutti vorrebbe dire coprire di
+      // colpo una settimana che le altre fasce si stanno dividendo
+      giorni: [],
+      ordine: fasce.length + 1,
+    });
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("");
+    ricarica(["location_prezzi"]);
+  }
+  async function salvaFascia(id, campi) {
+    const { error } = await supabase.from("location_prezzi").update({ ...campi, aggiornato_il: new Date().toISOString() }).eq("id", id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("");
+    ricarica(["location_prezzi"]);
+  }
+  async function eliminaFascia(id) {
+    const { error } = await supabase.from("location_prezzi").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    ricarica(["location_prezzi"]);
+  }
+
+  const titolino = { ...fontBody, fontSize: isMobile ? 8 : 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 };
+
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: "#fff", padding: isMobile ? "10px 11px" : "12px 14px", margin: "4px 0 14px" }}>
+      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Prezzi per giorno della settimana</div>
+      <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.5, marginTop: 3 }}>
+        Se la sede costa diverso infrasettimanale e nel fine settimana, scrivilo qui: una fascia dal lunedì al venerdì, un’altra per sabato e domenica. Il costo del corso si somma giorno per giorno.
+        {fasce.length === 0 && " Finché non c’è nessuna fascia vale il costo giornaliero qui sopra."}
+      </div>
+
+      {fasce.length > 0 && (
+        <>
+          {!isMobile && (
+            <div style={{ display: "grid", gridTemplateColumns: "20px minmax(70px, 110px) 1fr 92px 92px 22px", gap: 8, marginTop: 10, marginBottom: 2 }}>
+              <span /><span style={titolino}>Fascia</span><span style={titolino}>Giorni</span>
+              <span style={titolino}>Cash</span><span style={titolino}>Bonifico</span><span />
+            </div>
+          )}
+          <div style={{ marginTop: isMobile ? 8 : 0 }}>
+            {fasce.map((f, i) => (
+              <RigaFasciaLocation
+                key={f.id} fascia={f} indice={i} isMobile={isMobile}
+                onSalva={(campi) => salvaFascia(f.id, campi)}
+                onElimina={() => eliminaFascia(f.id)}
+              />
+            ))}
+          </div>
+          {scoperti.length > 0 && (
+            <div style={{ ...fontBody, fontSize: 11, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 8, padding: "7px 9px", marginTop: 8, lineHeight: 1.45 }}>
+              Nessuna fascia copre {scoperti.map((g) => g.breve).join(", ")}: in quei giorni si usa la prima fascia con un prezzo.
+            </div>
+          )}
+        </>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+        <Button variant="ghost" onClick={aggiungiFascia}>+ Aggiungi fascia</Button>
+        {msg && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B" }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
+function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocategorie, locationPrezzi = [], ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
 
@@ -58407,6 +58610,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                               <Field label="Costo giornaliero Bonifico (opzionale)">
                                 <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
                               </Field>
+                              <ListinoLocation locationId={l.id} prezzi={locationPrezzi} ricarica={ricarica} />
                             </>
                           )}
                           <div style={{ display: "flex", gap: 10 }}>
@@ -70611,7 +70815,7 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
 // callback di navigazione interna (onBack/onCambiaSottoVista/…) sono no-op
 // qui, perché in questa vista non esiste una cronologia condivisa tra le
 // colonne — "← Indietro" in alto chiude l'intera vista e basta
-function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
+function VistaSchedeAffiancate({ quoteVenditoriSplit, locationPrezzi = [], iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 0 60px" }}>
@@ -70628,7 +70832,7 @@ function VistaSchedeAffiancate({ quoteVenditoriSplit, iscrittiArr, ruoloUtente, 
               <div key={iscritto.id} style={{ flex: "0 0 680px", width: 680 }}>
                 <SchedaData
                   utentiApp={utentiApp}
-                  quoteVenditoriSplit={quoteVenditoriSplit}
+                  quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi}
                   puoAssegnareModelle={puoAprireVista("gestionemodelle")}
                   ruoloUtente={ruoloUtente}
                   codiceAmministratoreAttuale={codiceAmministratoreAttuale}
@@ -70865,6 +71069,7 @@ export default function App() {
   const [kitDefinizioni, setKitDefinizioni] = useState([]);
   const [messaggiKit, setMessaggiKit] = useState([]);
   const [syncShopEsiti, setSyncShopEsiti] = useState([]);
+  const [locationPrezzi, setLocationPrezzi] = useState([]);
   const [accontiDaVerificare, setAccontiDaVerificare] = useState([]);
   // cosa è già presente in ciascuna sede (prodotti/attrezzature), come
   // dichiarato dalla master dalla sua Dashboard ("Inventario corso
@@ -71099,6 +71304,7 @@ export default function App() {
     corsi_date_docenti: async () => setCorsiDateDocenti((await supabase.from("corsi_date_docenti").select("*")).data || []),
     quote_venditori_split: async () => setQuoteVenditoriSplit((await supabase.from("quote_venditori_split").select("*")).data || []),
     hotel_prezzi: async () => setHotelPrezzi((await supabase.from("hotel_prezzi").select("*")).data || []),
+    location_prezzi: async () => setLocationPrezzi((await supabase.from("location_prezzi").select("*").order("ordine")).data || []),
     hotel_periodi_speciali: async () => setHotelPeriodi((await supabase.from("hotel_periodi_speciali").select("*").order("data_inizio")).data || []),
     voci_shop_classificazione: async () => setVociShopClassificazione((await supabase.from("voci_shop_classificazione").select("*")).data || []),
     coupon: async () => setCoupon((await supabase.from("coupon").select("*").order("created_at", { ascending: false })).data || []),
@@ -71215,7 +71421,7 @@ export default function App() {
     // tasto Advisor, che infatti il pallino lo mostrava
     // gli stessi dati che servono al riepilogo dentro la scheda del corso:
     // i conti sono gli stessi, quindi gli ingredienti anche
-    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno"],
+    prossimecontabilita: ["corsi", "location", "corsi_date", "iscritti", "spese", "vendite_shop", "corsi_date_docenti", "master", "master_corsi", "assistente", "assistente_corsi", "leva", "hotel", "costi_categorie", "costi_sottocategorie", "prodotti_shop", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno", "location_prezzi"],
     normative: [],
     ritornoalcorso: ["normative_testi"],
     // il configuratore pesca dagli iscritti, dai kit e dai messaggi
@@ -71232,11 +71438,11 @@ export default function App() {
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
     // "password_menu"/"utenti_app" (gia' fra le essenziali) servono
     // all'area "Utenti", che da ora vive qui dentro
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali"],
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare", "impegno"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
-    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali"],
-    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno"],
+    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi"],
+    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno", "location_prezzi"],
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
@@ -71292,19 +71498,19 @@ export default function App() {
     gestioneleve: ["leva", "corsi", "corsi_date", "corsi_date_docenti"],
     gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
-    gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie"],
+    gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie", "location_prezzi"],
     crmallievi: [],
     crmallievielenco: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
     statisticavenditori: ["corsi", "corsi_date", "iscritti", "venditori", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     ultimeiscrizioni: ["corsi", "location", "corsi_date", "iscritti"],
-    assegnazionemaster: ["corsi", "location", "corsi_date", "corsi_date_docenti", "master", "hotel", "assistente", "leva", "spese", "impostazioni_layout_assegnazione_master", "hotel_prezzi", "hotel_periodi_speciali"],
+    assegnazionemaster: ["corsi", "location", "corsi_date", "corsi_date_docenti", "master", "hotel", "assistente", "leva", "spese", "impostazioni_layout_assegnazione_master", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi"],
     calendario: ["corsi", "location", "corsi_date", "iscritti", "master"],
     cerca: ["corsi", "location", "corsi_date", "iscritti"],
     cercaiscritto: ["corsi", "location", "corsi_date", "iscritti"],
     // "impegno" serve al riepilogo amministrativo: una quota in contanti
     // puo' essere rinviata agli impegni quando il cash del corso non basta
-    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "impegno", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "vendite_shop"],
+    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "impegno", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "vendite_shop", "location_prezzi"],
   };
 
   async function caricaIniziale() {
@@ -72871,7 +73077,7 @@ export default function App() {
         <VistaSchedeAffiancate
           utentiApp={utentiApp}
           impegni={impegnoTabella}
-          quoteVenditoriSplit={quoteVenditoriSplit}
+          quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi}
           iscrittiArr={schedeAffiancateIscritti}
           ruoloUtente={ruoloUtente}
           codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
@@ -72903,7 +73109,7 @@ export default function App() {
 
       {view === "amministrazione" && (
         <PaginaAmministrazione
-          quoteVenditoriSplit={quoteVenditoriSplit} impegnoTabella={impegnoTabella}
+          quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi} impegnoTabella={impegnoTabella}
           ruoloUtente={ruoloUtente}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
@@ -73089,7 +73295,7 @@ export default function App() {
 
       {view === "inserimentocostiricavi" && (
         <PaginaInserimentoCostiRicavi
-          quoteVenditoriSplit={quoteVenditoriSplit} impegnoTabella={impegnoTabella}
+          quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi} impegnoTabella={impegnoTabella}
           ordineSchedeContabilita={layoutTasti["contabilitaschede"]?.ordine}
           ruoloUtente={ruoloUtente}
           spese={spese}
@@ -73382,7 +73588,7 @@ export default function App() {
           />
         </div>
         <PaginaProssimeContabilita
-          quoteVenditoriSplit={quoteVenditoriSplit} impegni={impegnoTabella}
+          quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi} impegni={impegnoTabella}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop} corsiDateDocenti={corsiDateDocenti}
           master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
@@ -73651,7 +73857,7 @@ export default function App() {
       )}
 
       {view === "gestionelocation" && (
-        <PaginaGestioneLocation location={location} citta={citta} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <PaginaGestioneLocation location={location} citta={citta} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} locationPrezzi={locationPrezzi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "crmallievi" && (
@@ -73720,7 +73926,7 @@ export default function App() {
         <SchedaData
           utentiApp={utentiApp}
           impegni={impegnoTabella}
-          quoteVenditoriSplit={quoteVenditoriSplit}
+          quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi}
           key={schedaKey}
           ruoloUtente={ruoloUtente}
           venditoreLoggato={venditoreLoggato}
