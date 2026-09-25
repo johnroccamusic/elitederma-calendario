@@ -60162,6 +60162,37 @@ function etichettaMetodoVendita(metodo) {
   if (metodo === "buono_amazon") return "Buono Amazon";
   return "POS";
 }
+// Il cassetto che incassa: due monete che cadono dentro con la freccia
+// verde. Sta sul tasto che chiude la vendita, ed e' l'unico posto
+// dell'app dove serve un'icona a piu' colori — deve dire "i soldi
+// entrano" a chi la guarda di sfuggita, non essere un simbolo da
+// interpretare.
+function IconaIncassaVendita({ size = 34 }) {
+  const oro = "#E3C489";
+  const oroScuro = "#C6A45C";
+  const chiaro = "#F6F1E6";
+  const verde = "#3FA65A";
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      {/* la moneta grande, col suo € */}
+      <circle cx="16.5" cy="17" r="7.2" fill={oro} stroke={oroScuro} strokeWidth="1.4" />
+      <path d="M18.6 14.4a3 3 0 1 0 0 5.2M13.9 16.2h4M13.9 17.9h4"
+            stroke="#7A5F22" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+      {/* la moneta piccola, dietro */}
+      <circle cx="25.6" cy="22.4" r="4.6" fill={oro} stroke={oroScuro} strokeWidth="1.3" />
+      <path d="M27 21a1.9 1.9 0 1 0 0 2.9M24.1 21.8h2.4M24.1 22.9h2.4"
+            stroke="#7A5F22" strokeWidth="1" strokeLinecap="round" fill="none" />
+      {/* la freccia verde: i soldi vanno dentro */}
+      <path d="M34 9v11.5" stroke={verde} strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M29.6 18.2 34 23l4.4-4.8" stroke={verde} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      {/* il cassetto */}
+      <path d="M7 29.5h34v9a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3z" fill="#16294A" stroke={chiaro} strokeWidth="2" strokeLinejoin="round" />
+      <path d="M5.5 29.5h37" stroke={chiaro} strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M19.5 35.5h9" stroke={oro} strokeWidth="2.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // L'interruttore delle opzioni al POS: una levetta, non una casella di
 // spunta. Al banco si tocca col pollice mentre si guarda altro, e una
 // casella di 17 pixel e' un bersaglio troppo piccolo.
@@ -62246,13 +62277,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               ...fontBody, fontSize: isMobile ? 13.5 : 15, fontWeight: 700,
             }}
           >
-            {/* il lucchetto d'oro a sinistra e la freccia a destra: il tasto
-                che chiude la vendita non deve somigliare agli altri */}
-            <span style={{ display: "inline-flex", color: GOLD, flexShrink: 0 }}><IconaLucchetto size={18} /></span>
-            <span style={{ flex: 1, textAlign: "center" }}>
-              {omaggioAttivo ? "Conferma omaggio" : `Conferma vendita e incassa ${fmtEuroErp2(totaleDaIncassare)}`}
+            {/* il cassetto che incassa a sinistra e la freccia a destra:
+                il tasto che chiude la vendita non deve somigliare agli
+                altri. La cifra sta sotto la parola, non in fondo a una
+                frase: e' l'ultima cosa che si guarda prima di battere */}
+            <span style={{ display: "inline-flex", flexShrink: 0 }}><IconaIncassaVendita size={isMobile ? 30 : 38} /></span>
+            <span style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
+              <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 14 : 16.5, fontWeight: 800, letterSpacing: 0.8, textTransform: "uppercase", lineHeight: 1.15 }}>
+                {omaggioAttivo ? "Conferma omaggio" : "Incassa vendita"}
+              </span>
+              {!omaggioAttivo && (
+                <span style={{ display: "block", ...fontDisplay, fontSize: isMobile ? 15 : 18, fontWeight: 700, lineHeight: 1.2, marginTop: 1 }}>
+                  {fmtEuroErp2(totaleDaIncassare)}
+                </span>
+              )}
             </span>
-            <span style={{ display: "inline-flex", flexShrink: 0 }}><IconaChevronDestra size={18} color="#fff" /></span>
+            <span style={{ display: "inline-flex", flexShrink: 0 }}><IconaChevronDestra size={20} color="#fff" /></span>
           </button>
           {/* a destra: il carrello si mette da parte senza pagarlo, per
               riprenderlo dalla linguetta dei carrelli sospesi */}
