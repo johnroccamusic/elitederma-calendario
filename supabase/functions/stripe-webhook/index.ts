@@ -48,8 +48,19 @@ function campoLibero(sessione: any, chiave: string): string {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Metodo non consentito", { status: 405 });
 
-  const segreto = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-  if (!segreto) { console.error("STRIPE_WEBHOOK_SECRET non impostato"); return new Response("Configurazione mancante", { status: 500 }); }
+  // Il segreto di firma sta nel Vault, dove l'ha messo
+  // "stripe-configura-webhook" quando ha registrato l'endpoint: non e'
+  // passato per le mani di nessuno. Resta il ripiego sulla variabile
+  // d'ambiente, per chi preferisce incollarlo a mano.
+  let segreto: string | null = null;
+  try {
+    const { data } = await sb.rpc("segreto_vault", { nome: "stripe_webhook_secret" });
+    if (data) segreto = String(data);
+  } catch (e) {
+    console.error("Vault non raggiungibile:", e);
+  }
+  if (!segreto) segreto = Deno.env.get("STRIPE_WEBHOOK_SECRET") || null;
+  if (!segreto) { console.error("Segreto di firma non trovato ne' nel Vault ne' fra i secret"); return new Response("Configurazione mancante", { status: 500 }); }
 
   const payload = await req.text();
   const intestazione = req.headers.get("stripe-signature") || "";
