@@ -46447,6 +46447,52 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
   );
 }
 
+// ---------- Quando abbiamo parlato col sito l'ultima volta ----------
+//
+// La sincronizzazione con WooCommerce gira ogni ora. Queste due cose le
+// usano sia "Ordini in arrivo" (la riga in cima) sia "Vendite Shop
+// Online" (il semaforo): stanno qui, prima di tutte e due.
+const ORE_MASSIME_SENZA_SYNC = 8; // il cron gira ogni ora: otto sono gia' troppe
+// Postgres restituisce "2026-09-25 08:31:00.53+00": con lo spazio al
+// posto della T e l'offset a due cifre Safari risponde Invalid Date, e
+// sul telefono la riga sarebbe diventata rossa da sola.
+function dataDaPostgres(valore) {
+  if (!valore) return null;
+  const iso = String(valore).replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00");
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+function oreDaAllora(valore) {
+  const d = dataDaPostgres(valore);
+  return d ? (Date.now() - d.getTime()) / 3600000 : Infinity;
+}
+// l'ultimo giro ANDATO A BUON FINE: e' l'unico momento di cui si possa
+// dire "qui i dati erano quelli del sito". Un giro fallito non aggiorna
+// niente, e scriverne l'ora sarebbe una bugia gentile.
+function ultimoSyncRiuscito(esiti) {
+  return (esiti || []).find((e) => e.esito === "ok" || e.esito === "parziale") || null;
+}
+function dataOraSync(valore) {
+  const d = dataDaPostgres(valore);
+  return d ? d.toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
+}
+
+// La riga in alto a sinistra di "Ordini in arrivo". Grigia quando e'
+// fresca, rossa quando non lo e': chi prepara i pacchi deve accorgersi
+// da solo che sta guardando una fotografia vecchia.
+function UltimoAggiornamentoShop({ esiti = [], isMobile }) {
+  const ultimo = ultimoSyncRiuscito(esiti);
+  const quando = dataOraSync(ultimo?.ts);
+  const vecchio = oreDaAllora(ultimo?.ts) > ORE_MASSIME_SENZA_SYNC;
+  return (
+    <div style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, fontWeight: 700, color: vecchio ? "#C0392B" : MUTED, letterSpacing: 0.2, marginBottom: isMobile ? 8 : 10 }}>
+      {quando
+        ? `Ultimo aggiornamento ${quando}${vecchio ? " — il sito non lo leggiamo da un po'" : ""}`
+        : "Ultimo aggiornamento: mai"}
+    </div>
+  );
+}
+
 // ---------- Ordini in arrivo (spedizioni dello shop online) ----------
 // le righe di un indirizzo WooCommerce, nell'ordine in cui si scrivono su
 // una busta
@@ -46844,7 +46890,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
 // In pagina restano solo quelli in lavorazione — cioè pagati e in attesa
 // di partire; le vendite già chiuse si guardano dal tasto "Storico", che
 // non deve rubare spazio a quello che c'è da fare oggi.
-function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, corsi, corsiDate, location, iscritti, ruoloUtente, ricarica, onBack, titolo = "Ordini in arrivo" }) {
+function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, corsi, corsiDate, location, iscritti, syncEsiti = [], ruoloUtente, ricarica, onBack, titolo = "Ordini in arrivo" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("dagestire"); // dagestire | storico
   const [payloadPerId, setPayloadPerId] = useState({});
@@ -47047,6 +47093,11 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
           barra di sistema copre l'ultima scheda, e i tasti di stato
           dell'ultimo ordine restavano sotto e non si potevano premere */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px calc(160px + env(safe-area-inset-bottom, 0px))" : "32px 32px 90px" }}>
+        {/* In cima a sinistra, prima di ogni altra cosa: quando questa
+            pagina ha parlato col sito l'ultima volta. Chi prepara i
+            pacchi lavora su quello che legge qui, e ha il diritto di
+            sapere se e' di un'ora fa o di ieri. */}
+        <UltimoAggiornamentoShop esiti={syncEsiti} isMobile={isMobile} />
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
@@ -47985,22 +48036,13 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
 // Adesso ogni giro lascia una riga in "sync_shop_esiti" e qui si vede
 // com'e' andato l'ultimo. Rosso vuol dire che gli ordini che vedi sotto
 // potrebbero non essere tutti: e' l'unica cosa che conta saperla subito.
-const ORE_MASSIME_SENZA_SYNC = 8; // il cron gira quattro volte al giorno
-// Postgres restituisce "2026-09-25 08:31:00.53+00": con lo spazio al
-// posto della T e l'offset a due cifre Safari risponde Invalid Date, e
-// sul telefono il semaforo sarebbe diventato rosso da solo.
-function dataDaPostgres(valore) {
-  if (!valore) return null;
-  const iso = String(valore).replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00");
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? null : d;
-}
 function SemaforoSyncShop({ esiti = [], isMobile }) {
   const ultimo = (esiti || [])[0] || null;
-  const ultimoOk = (esiti || []).find((e) => e.esito === "ok") || null;
-  const oreDa = (ts) => { const d = dataDaPostgres(ts); return d ? (Date.now() - d.getTime()) / 3600000 : Infinity; };
-  const quandoBreve = (ts) => { const d = dataDaPostgres(ts); return d ? d.toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "mai"; };
-  const oreDaOk = oreDa(ultimoOk?.ts);
+  // un giro "parziale" i dati li ha aggiornati lo stesso, solo non tutti:
+  // conta come riuscito, o il riquadro direbbe "mai" con la sync viva
+  const ultimoOk = ultimoSyncRiuscito(esiti);
+  const quandoBreve = (ts) => dataOraSync(ts) || "mai";
+  const oreDaOk = oreDaAllora(ultimoOk?.ts);
   const vecchio = oreDaOk > ORE_MASSIME_SENZA_SYNC;
 
   const stato = !ultimo ? "muto" : ultimo.esito === "errore" || vecchio ? "rosso" : ultimo.esito === "parziale" ? "giallo" : "verde";
@@ -71211,7 +71253,7 @@ export default function App() {
     gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
-    ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
+    ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti", "sync_shop_esiti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
     spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location"],
     contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
@@ -73481,6 +73523,7 @@ export default function App() {
           venditeShop={venditeShop} venditeSimulate={venditeSimulate} spedizioniPos={spedizioniPos}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} ruoloUtente={ruoloUtente}
           ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
+          syncEsiti={syncShopEsiti}
           titolo={etichettaTasto("logisticaprodotti", "ordiniinarrivo", "Ordini in arrivo")}
         />
       )}
