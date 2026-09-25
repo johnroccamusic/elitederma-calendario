@@ -18591,11 +18591,15 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
   const cashNum = cash === "" ? 0 : parseNum(cash);
   const bonifico = round2(totaleNum - cashNum);
 
+  // Quello che si scrive qui e' quello che si e' speso, punto: niente
+  // scorporo. Sono spese fatte sul posto senza chiedere la ricevuta, e
+  // senza documento non c'e' IVA da portare a credito. Prima ogni cifra
+  // battuta rimetteva l'imponibile a totale/1,22 — anche su una riga
+  // gia' sistemata a mano — e l'IVA fantasma tornava da sola.
   function commitTotale() {
     const v = totale === "" ? null : parseNum(totale);
     if (v === (spesa.totale ?? null)) return;
-    const nuovoImponibile = v == null ? null : round2(v / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100));
-    onSalva({ totale: v, imponibile: nuovoImponibile });
+    onSalva({ totale: v, imponibile: v, iva_percentuale: 0 });
   }
   function commitCash() {
     const v = cash === "" ? null : parseNum(cash);
@@ -26233,6 +26237,18 @@ function PannelloRiepilogoAmministrativo({
       tipo_ambito: "classe", classe_id: corsoData.id,
       categoria_id: categoriaId, sottocategoria_id: sottocategoriaId,
       descrizione: descrizione || null, imponibile: 0, totale: 0,
+      // La data del corso, sempre. Senza, la riga nasceva con tutte e due
+      // le colonne della data vuote (qui non si scrivevano, e il default
+      // della tabella e' NULL): il riepilogo del corso la mostrava lo
+      // stesso, perche' legge per classe, ma prima nota e ciclo passivo
+      // leggono `data_pagamento || data_documento` e la buttavano fuori.
+      // Ventisei righe sono rimaste invisibili cosi'.
+      data_documento: corsoData.data_fine || corsoData.data_inizio || null,
+      // Sono i pagamenti fatti sul posto — il bar, il taxi, il parcheggio —
+      // di cui non si chiede la ricevuta: senza documento non c'e' IVA da
+      // portare a credito. Il 22 di prima non l'aveva scelto nessuno, era
+      // il valore predefinito della colonna.
+      iva_percentuale: 0,
     }).select().single();
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setSpeseClasseNuove((prev) => [...prev, data]);
