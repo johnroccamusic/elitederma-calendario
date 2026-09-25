@@ -47986,10 +47986,20 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
 // com'e' andato l'ultimo. Rosso vuol dire che gli ordini che vedi sotto
 // potrebbero non essere tutti: e' l'unica cosa che conta saperla subito.
 const ORE_MASSIME_SENZA_SYNC = 8; // il cron gira quattro volte al giorno
+// Postgres restituisce "2026-09-25 08:31:00.53+00": con lo spazio al
+// posto della T e l'offset a due cifre Safari risponde Invalid Date, e
+// sul telefono il semaforo sarebbe diventato rosso da solo.
+function dataDaPostgres(valore) {
+  if (!valore) return null;
+  const iso = String(valore).replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00");
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
 function SemaforoSyncShop({ esiti = [], isMobile }) {
   const ultimo = (esiti || [])[0] || null;
   const ultimoOk = (esiti || []).find((e) => e.esito === "ok") || null;
-  const oreDa = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3600000 : Infinity);
+  const oreDa = (ts) => { const d = dataDaPostgres(ts); return d ? (Date.now() - d.getTime()) / 3600000 : Infinity; };
+  const quandoBreve = (ts) => { const d = dataDaPostgres(ts); return d ? d.toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "mai"; };
   const oreDaOk = oreDa(ultimoOk?.ts);
   const vecchio = oreDaOk > ORE_MASSIME_SENZA_SYNC;
 
@@ -48001,7 +48011,7 @@ function SemaforoSyncShop({ esiti = [], isMobile }) {
     muto: { testo: MUTED, sfondo: BG, bordo: CREAM_BORDER, pallino: "#C9C4B8" },
   }[stato];
 
-  const quando = ultimo?.ts ? new Date(ultimo.ts).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
+  const quando = ultimo?.ts ? quandoBreve(ultimo.ts) : null;
   const scartati = Array.isArray(ultimo?.scartati) ? ultimo.scartati : [];
   const errori = Array.isArray(ultimo?.errori) ? ultimo.errori : [];
 
@@ -48010,7 +48020,7 @@ function SemaforoSyncShop({ esiti = [], isMobile }) {
     : stato === "rosso"
       ? (errori.length
           ? `Ultima sincronizzazione ${quando}: non riuscita. ${errori.join(" · ")}`
-          : `L’ultima sincronizzazione riuscita è di ${Math.round(oreDaOk)} ore fa (${ultimoOk?.ts ? new Date(ultimoOk.ts).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "mai"}). Gli ordini qui sotto potrebbero non essere tutti.`)
+          : `L’ultima sincronizzazione riuscita è di ${Math.round(oreDaOk)} ore fa (${quandoBreve(ultimoOk?.ts)}). Gli ordini qui sotto potrebbero non essere tutti.`)
       : stato === "giallo"
         ? `Sincronizzato il ${quando}, ma ${scartati.length} ordin${scartati.length === 1 ? "e è rimasto" : "i sono rimasti"} fuori: ${scartati.slice(0, 5).map((s) => s.ordine).join(", ")}${scartati.length > 5 ? "…" : ""}.`
         : `Sincronizzato con WooCommerce il ${quando}: ${ultimo.ordini_importati} ordini controllati, ${ultimo.ordini_riallineati} stati riallineati.`;
