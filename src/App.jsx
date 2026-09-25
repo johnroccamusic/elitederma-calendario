@@ -3875,7 +3875,7 @@ function IconaColonne({ n, size = 16, color = "currentColor" }) {
 //   dell'app). Un tasto dentro una cartella aperta, trascinato
 //   sull'icona Home del breadcrumb, torna in cima — nessuna cartella
 //   dentro un'altra cartella, per restare semplice.
-function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ruoloUtente, onSalvaOrdine, onSalvaColonne, onSalvaEtichetta, consentiCartelle = false, colonneDesktop = 3 }) {
+function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ruoloUtente, onSalvaOrdine, onSalvaColonne, onSalvaEtichetta, consentiCartelle = false, colonneDesktop = 3, nascondiSpenti = false }) {
   const maniglieAttive = useManiglieAttive();
   const rinominaAttiva = useRinominaTastiAttiva();
   const isMobile = useIsMobile();
@@ -4029,7 +4029,18 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
           const chiave = isCartella ? nodo.id : nodo;
           const def = isCartella ? null : defPerChiave[chiave];
           if (!isCartella && !def) return null;
-          const nTasti = isCartella ? (nodo.tasti || []).length : 0;
+          // Le aree che questo utente non ha non si mostrano proprio:
+          // un tasto grigio con su scritto "Non attivo" non serve a chi
+          // lo guarda — non puo' accenderlo lui — e riempie la home di
+          // porte chiuse. Chi decide chi vede cosa lo fa dalla
+          // rotellina, dove l'elenco completo c'e' sempre.
+          if (!isCartella && nascondiSpenti && def.attivo === false) return null;
+          // una cartella che dentro non ha piu' niente di visibile
+          // sparisce con quello che conteneva
+          if (isCartella && nascondiSpenti && !(nodo.tasti || []).some((c) => defPerChiave[c] && defPerChiave[c].attivo !== false)) return null;
+          const nTasti = isCartella
+            ? (nascondiSpenti ? (nodo.tasti || []).filter((c) => defPerChiave[c] && defPerChiave[c].attivo !== false).length : (nodo.tasti || []).length)
+            : 0;
           return (
             <TileHome
               key={chiave}
@@ -73589,6 +73600,7 @@ export default function App() {
             colonne={layoutTasti.home?.colonne}
             etichette={layoutTasti.home?.etichette}
             ruoloUtente={ruoloUtente}
+            nascondiSpenti
             onSalvaOrdine={(nuovoOrdine) => salvaLayoutTasti("home", { ordine: nuovoOrdine })}
             onSalvaColonne={(n) => salvaLayoutTasti("home", { colonne: n })}
             onSalvaEtichetta={(chiave, testo) => salvaEtichettaTasto("home", chiave, testo)}
