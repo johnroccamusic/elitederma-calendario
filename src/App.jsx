@@ -60165,20 +60165,23 @@ function etichettaMetodoVendita(metodo) {
 // L'interruttore delle opzioni al POS: una levetta, non una casella di
 // spunta. Al banco si tocca col pollice mentre si guarda altro, e una
 // casella di 17 pixel e' un bersaglio troppo piccolo.
-function InterruttorePos({ acceso, onCambia, id }) {
+function InterruttorePos({ acceso, onCambia, id, piccolo = false }) {
+  const largo = piccolo ? 38 : 46;
+  const alto = piccolo ? 23 : 27;
+  const pallino = alto - 6;
   return (
     <button
       type="button" id={id} role="switch" aria-checked={acceso} data-niente-ombra
       onClick={(e) => { e.preventDefault(); onCambia(!acceso); }}
       style={{
-        width: 46, height: 27, borderRadius: 999, flexShrink: 0, cursor: "pointer", padding: 0,
+        width: largo, height: alto, borderRadius: 999, flexShrink: 0, cursor: "pointer", padding: 0,
         border: `1px solid ${acceso ? NAVY : "#D9D4C7"}`,
         background: acceso ? NAVY : "#EFEAE0",
         position: "relative", transition: "background 140ms",
       }}
     >
       <span style={{
-        position: "absolute", top: 2, left: acceso ? 21 : 2, width: 21, height: 21, borderRadius: "50%",
+        position: "absolute", top: 2, left: acceso ? largo - pallino - 4 : 2, width: pallino, height: pallino, borderRadius: "50%",
         background: "#fff", boxShadow: "0 1px 3px rgba(14,27,51,0.28)", transition: "left 140ms",
       }} />
     </button>
@@ -61915,29 +61918,38 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </>
       </div>
 
-      {/* Le tre opzioni della vendita in un riquadro solo: omaggio,
+      {/* Le opzioni della vendita in un riquadro solo: omaggio,
           spedizione, fattura. Sono indipendenti — si spedisce senza
-          fatturare e si fattura senza spedire — e stanno in fila, con
-          la levetta a destra di ognuna. I moduli si aprono sotto. */}
+          fatturare e si fattura senza spedire — e stanno SEMPRE su una
+          riga sola, che siano tre o che siano due (chi non puo' fare
+          omaggi ne vede due). Sul telefono ogni colonna si incolonna
+          dentro di se' — tondo, nome, levetta — perche' in orizzontale
+          "Aggiungi spese spedizione" non ci starebbe mai in un terzo di
+          schermo. I moduli si aprono sotto. */}
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 7 }}>Altre opzioni</div>
       <div style={{
-        display: "flex", alignItems: "stretch", gap: 0, flexWrap: isMobile ? "wrap" : "nowrap",
+        display: "flex", alignItems: "stretch", gap: 0, flexWrap: "nowrap",
         border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, background: "#fff",
-        padding: isMobile ? "4px 6px" : "6px 8px", marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14),
+        padding: isMobile ? "4px 4px" : "6px 8px", marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14),
       }}>
         {[
           ...(puoOmaggiare ? [{ id: "pos-omaggio", Icona: IconaRegalo, testo: "Omaggio", acceso: omaggioAttivo, cambia: setOmaggioAttivo }] : []),
           { id: "pos-spedizione", Icona: IconaCamionConsegna, testo: "Aggiungi spese spedizione", acceso: spedizioneAttiva, cambia: setSpedizioneAttiva },
           { id: "pos-richiede-fattura", Icona: IconaCatDocumento, testo: "Richiede fattura", acceso: fattAttiva, cambia: setFattAttiva },
-        ].map((o, i, tutte) => (
+        ].map((o, i) => (
           <React.Fragment key={o.id}>
-            {i > 0 && !isMobile && <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />}
-            <div style={{ display: "flex", alignItems: "center", gap: 9, flex: isMobile ? "1 1 100%" : "1 1 0", minWidth: 0, padding: isMobile ? "8px 6px" : "8px 10px", ...(isMobile && i < tutte.length - 1 ? { borderBottom: `1px solid ${CREAM_BORDER}` } : {}) }}>
-              <span style={{ width: 38, height: 38, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <o.Icona size={19} color={GOLD} />
+            {i > 0 && <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />}
+            <div style={{
+              display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center",
+              justifyContent: isMobile ? "flex-start" : undefined,
+              gap: isMobile ? 6 : 9, flex: "1 1 0", minWidth: 0,
+              padding: isMobile ? "9px 4px" : "8px 10px", textAlign: isMobile ? "center" : "left",
+            }}>
+              <span style={{ width: isMobile ? 34 : 38, height: isMobile ? 34 : 38, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <o.Icona size={isMobile ? 17 : 19} color={GOLD} />
               </span>
-              <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 12.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{o.testo}</span>
-              <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} />
+              <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 700, color: NAVY, flex: isMobile ? "0 0 auto" : 1, minWidth: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{o.testo}</span>
+              <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} />
             </div>
           </React.Fragment>
         ))}
