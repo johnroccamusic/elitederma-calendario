@@ -42681,6 +42681,11 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   // la sottopagina: l'elenco dei movimenti oppure l'allineamento, dove si
   // guardano le coppie sospette una per una
   const [vista, setVista] = useState("movimenti");
+  // la ricerca libera sull'estratto conto: nome, iniziali, importo, data
+  const [ricerca, setRicerca] = useState("");
+  // la riga aperta sulle possibili spese: una per volta, altrimenti
+  // l'elenco torna il muro che era
+  const [abbinamentiAperti, setAbbinamentiAperti] = useState(null);
   const [coppieScartate, salvaCoppieScartate] = useImpostazioneCondivisa(CHIAVE_COPPIE_SCARTATE_BANCA, []);
   const scartate = new Set(Array.isArray(coppieScartate) ? coppieScartate : []);
   const [applicandoRegole, setApplicandoRegole] = useState(false);
@@ -42862,9 +42867,37 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   const ignorati = tutti.filter((m) => m.stato === "ignorato");
   const riconciliati = tutti.filter((m) => m.stato === "riconciliato");
   const nelPeriodo = tutti.filter((m) => m.data_operazione >= range.inizio && m.data_operazione <= range.fine);
+  // Ogni parola scritta deve esserci da qualche parte nella riga, in
+  // qualunque ordine: "esso 150" trova l'uscita da 150 € verso Esselunga.
+  // Dell'importo si cercano tutte e due le facce — 1.234,56 come lo
+  // scrive l'app e 1234.56 come sta sul database — perche' chi cerca
+  // scrive quello che ha davanti agli occhi, non quello che c'e' dentro.
+  const paroleRicerca = ricerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const testoDiMovimento = (m) => {
+    const importo = Number(m.importo) || 0;
+    const spesa = m.collegato_id ? speseById[m.collegato_id] : null;
+    return [
+      controparteBanca(m.descrizione, m.causale), m.descrizione, m.causale, m.nota,
+      String(m.importo ?? ""), fmtEuroErp2(Math.abs(importo)),
+      m.data_operazione, fmtData(m.data_operazione),
+      spesa?.descrizione, spesa?.numero_documento,
+      spesa?.fornitore_id ? fornitoriById[spesa.fornitore_id]?.nome : null,
+    ].filter(Boolean).join(" ").toLowerCase();
+  };
+  const passaRicerca = (m) => {
+    if (paroleRicerca.length === 0) return true;
+    const testo = testoDiMovimento(m);
+    return paroleRicerca.every((parola) => testo.includes(parola));
+  };
   const visibili = (filtro === "tutti" ? nelPeriodo : nelPeriodo.filter((m) => m.stato === filtro))
     .filter((m) => direzione === "tutte" || (direzione === "entrate" ? (Number(m.importo) || 0) >= 0 : (Number(m.importo) || 0) < 0))
+    .filter(passaRicerca)
     .sort((a, b) => String(b.data_operazione).localeCompare(String(a.data_operazione)) || (a.progressivo || 0) - (b.progressivo || 0));
+  // la ricerca guarda solo il periodo scelto: se non trova niente qui ma
+  // trova altrove, conviene dirlo invece di far credere che non esista
+  const trovatiFuoriPeriodo = paroleRicerca.length > 0
+    ? tutti.filter((m) => passaRicerca(m)).length - nelPeriodo.filter((m) => passaRicerca(m)).length
+    : 0;
 
   // i totali del periodo contano tutto tranne gli ignorati (giroconti e
   // movimenti tecnici non sono ne' entrate ne' uscite)
@@ -43128,10 +43161,35 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
           <TabPillola attivo={filtro === "tutti"} onClick={() => setFiltro("tutti")}>Tutti ({nelPeriodo.length})</TabPillola>
         </div>
 
+        {/* La ricerca libera sull'estratto conto: nome, iniziali,
+            importo, data. Sta sopra l'elenco e non tocca i totali del
+            periodo, che restano quelli del mese. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <input
+            value={ricerca}
+            onChange={(e) => setRicerca(e.target.value)}
+            placeholder="Cerca nell'estratto conto: nome, iniziali, importo, data…"
+            style={{ ...inputStyle, flex: "1 1 260px", minWidth: 0 }}
+          />
+          {ricerca.trim() && (
+            <button onClick={() => setRicerca("")} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>
+              Pulisci
+            </button>
+          )}
+          {ricerca.trim() && (
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+              {visibili.length} trovat{visibili.length === 1 ? "o" : "i"}
+              {trovatiFuoriPeriodo > 0 ? ` · altri ${trovatiFuoriPeriodo} fuori da questo periodo` : ""}
+            </span>
+          )}
+        </div>
+
         {movimenti === null && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Carico…</div>}
         {movimenti !== null && visibili.length === 0 && (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>
-            {tutti.length === 0 ? "Nessun movimento importato: carica l'estratto conto qui sopra." : nelPeriodo.length === 0 ? "Nessun movimento in questo periodo." : "Nessun movimento in questo stato."}
+            {tutti.length === 0 ? "Nessun movimento importato: carica l'estratto conto qui sopra."
+              : ricerca.trim() ? `Nessun movimento per "${ricerca.trim()}" in questo periodo.${trovatiFuoriPeriodo > 0 ? ` Ce ne sono ${trovatiFuoriPeriodo} in altri mesi.` : ""}`
+              : nelPeriodo.length === 0 ? "Nessun movimento in questo periodo." : "Nessun movimento in questo stato."}
           </div>
         )}
         {visibili.map((m) => {
@@ -43144,74 +43202,76 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
           const etichettaCollegata = collegata ? (String(m.nota || "").startsWith("contabilizzata") ? (String(m.nota || "").endsWith("regola") ? "Contabilizzata da regola" : "Contabilizzata") : "Riconciliata") : null;
           const spesaCollegata = collegata && m.collegato_id ? speseById[m.collegato_id] : null;
           const candidati = daSistemare && !entrata ? candidatiSpesaPerMovimento(m, spese, fornitoriById, spesaCollegateIds) : [];
+          const aperto = abbinamentiAperti === m.id;
+          const controparte = controparteBanca(m.descrizione, m.causale);
           return (
-            <div key={m.id} style={{ opacity: collegata || m.stato === "ignorato" ? 0.62 : 1, filter: collegata ? "grayscale(0.6)" : "none" }}>
-              <CardAmministrazione
+            <div key={m.id} style={{ opacity: collegata || m.stato === "ignorato" ? 0.66 : 1 }}>
+              <RigaAmministrazione
                 data={m.data_operazione}
-                titolo={controparteBanca(m.descrizione, m.causale)}
-                corsoLabel={m.descrizione}
+                titolo={controparte || m.descrizione || "Movimento"}
+                sottotitolo={[m.causale, controparte && m.descrizione && m.descrizione !== controparte ? m.descrizione : null].filter(Boolean).join(" · ") || null}
                 chips={[
-                  m.causale ? { Icona: IconaQiBanca, testo: m.causale } : null,
                   m.stato === "ignorato" ? "Ignorato" : null,
-                  etichettaCollegata ? { Icona: IconaQiDocumento, testo: `${etichettaCollegata}${spesaCollegata ? ` · ${spesaCollegata.descrizione || "spesa"}` : ""}` } : null,
-                  daSistemare && candidati.length > 0 ? { Icona: IconaQiDocumento, testo: `Trovat${candidati.length === 1 ? "o un importo riconciliabile" : `i ${candidati.length} importi riconciliabili`}` } : null,
-                ]}
-                importo={`${entrata ? "+" : "−"} ${fmtEuroErp2(Math.abs(importo))}`} etichettaImporto={entrata ? "Entrata" : "Uscita"} coloreImporto={entrata ? "#2E7D32" : "#C0392B"}
-                piede={(
-                  <>
-                    <span style={{ flex: "1 1 auto" }} />
-                    {daSistemare && (
-                      <>
-                        <button onClick={() => cambiaStato(m, "ignorato")} title="Non entra in prima nota: giroconti, movimenti tecnici" style={{ ...stileTastoCardChiaro(isMobile), color: MUTED }}>
-                          Ignora
-                        </button>
-                        {!entrata && onContabilizza && (
-                          <button onClick={() => onContabilizza(m)} title="Apre il modulo della spesa gia' compilato: categoria, classe e imputazione, poi il movimento risulta contabilizzato" style={{ ...stileTastoCardNavy(isMobile, false), justifyContent: "space-between", gap: 10 }}>
-                            <span>Contabilizza</span><span style={{ fontSize: 18, lineHeight: 1 }}>›</span>
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {collegata && (
-                      <button onClick={() => scollega(m)} title="Scioglie il collegamento: il movimento torna da sistemare" style={stileTastoCardChiaro(isMobile)}>
-                        Scollega
-                      </button>
-                    )}
-                    {m.stato === "ignorato" && (
-                      <button onClick={() => cambiaStato(m, "nuovo")} style={stileTastoCardChiaro(isMobile)}>
-                        Rimetti fra quelli da sistemare
-                      </button>
-                    )}
-                  </>
-                )}
+                  etichettaCollegata ? `${etichettaCollegata}${spesaCollegata ? ` · ${spesaCollegata.descrizione || "spesa"}` : ""}` : null,
+                ].filter(Boolean)}
+                importo={`${entrata ? "+" : "−"} ${fmtEuroErp2(Math.abs(importo))}`}
+                coloreImporto={entrata ? "#2E7D32" : "#C0392B"}
+                bordoSotto={!aperto}
               >
-                {/* i possibili abbinamenti in prima nota, sotto la riga: si
-                    sceglie quello giusto e si preme Riconcilia */}
-                {candidati.length > 0 && (
-                  <div style={{ marginTop: 12, padding: isMobile ? 10 : 12, background: BG_CHIARO, borderRadius: 14 }}>
-                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Possibili spese in prima nota</div>
-                    {candidati.map((c) => (
-                      <div key={c.spesa.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-                          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{c.fornitore ? `${c.fornitore} · ` : ""}{c.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, c.spesa.sottocategoria_id)?.nome || "Spesa"}</div>
-                          {/* la data e' il riferimento con cui si decide se
-                              due righe sono la stessa cosa: sta prima, ed e'
-                              leggibile quanto il resto invece che grigia in
-                              mezzo alle altre informazioni */}
-                          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
-                            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
-                              {fmtData(c.spesa.data_pagamento || c.spesa.data_documento)}
-                            </span>
-                            <span>{c.spesa.metodo_pagamento || "—"}{c.scarto > 0 ? ` · importo diverso del ${(c.scarto * 100).toFixed(1)}%` : " · stesso importo"}{c.comuni > 0 ? " · intestazione che combacia" : ""}</span>
-                          </div>
-                        </div>
-                        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(Number(c.spesa.totale))}</div>
-                        <button onClick={() => riconcilia(m, c.spesa)} style={{ ...stileTastoCardOro(isMobile, false), padding: "8px 14px", fontSize: 12.5 }}>Riconcilia</button>
-                      </div>
-                    ))}
-                  </div>
+                {daSistemare && candidati.length > 0 && (
+                  <button
+                    onClick={() => setAbbinamentiAperti(aperto ? null : m.id)}
+                    title="Le spese della prima nota che potrebbero essere questo movimento"
+                    style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: aperto ? "#fff" : "#8A6D1D", background: aperto ? "#8A6D1D" : "#FDF8EC", border: `1px solid ${aperto ? "#8A6D1D" : "#EBD9AE"}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+                  >
+                    {candidati.length} in prima nota
+                  </button>
                 )}
-              </CardAmministrazione>
+                {daSistemare && (
+                  <button onClick={() => cambiaStato(m, "ignorato")} title="Non entra in prima nota: giroconti, movimenti tecnici" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>
+                    Ignora
+                  </button>
+                )}
+                {daSistemare && !entrata && onContabilizza && (
+                  <button onClick={() => onContabilizza(m)} title="Apre il modulo della spesa gia' compilato: categoria, classe e imputazione, poi il movimento risulta contabilizzato" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>
+                    Contabilizza
+                  </button>
+                )}
+                {collegata && (
+                  <button onClick={() => scollega(m)} title="Scioglie il collegamento: il movimento torna da sistemare" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>
+                    Scollega
+                  </button>
+                )}
+                {m.stato === "ignorato" && (
+                  <button onClick={() => cambiaStato(m, "nuovo")} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>
+                    Rimetti da sistemare
+                  </button>
+                )}
+              </RigaAmministrazione>
+
+              {/* i possibili abbinamenti in prima nota: non piu' sempre
+                  aperti sotto ogni riga — erano loro a rendere l'elenco un
+                  muro — ma dietro la pastiglia col numero */}
+              {aperto && candidati.length > 0 && (
+                <div style={{ margin: "0 0 14px 68px", padding: isMobile ? 10 : 12, background: BG_CHIARO, borderRadius: 12, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Possibili spese in prima nota</div>
+                  {candidati.map((c) => (
+                    <div key={c.spesa.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{c.fornitore ? `${c.fornitore} · ` : ""}{c.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, c.spesa.sottocategoria_id)?.nome || "Spesa"}</div>
+                        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                          <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                            {fmtData(c.spesa.data_pagamento || c.spesa.data_documento)}
+                          </span>
+                          <span>{c.spesa.metodo_pagamento || "—"}{c.scarto > 0 ? ` · importo diverso del ${(c.scarto * 100).toFixed(1)}%` : " · stesso importo"}{c.comuni > 0 ? " · intestazione che combacia" : ""}</span>
+                        </div>
+                      </div>
+                      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(Number(c.spesa.totale))}</div>
+                      <button onClick={() => riconcilia(m, c.spesa)} style={{ ...stileTastoCardOro(isMobile, false), padding: "8px 14px", fontSize: 12.5 }}>Riconcilia</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
