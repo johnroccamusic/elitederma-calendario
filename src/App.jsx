@@ -61941,15 +61941,31 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             {i > 0 && <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />}
             <div style={{
               display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center",
-              justifyContent: isMobile ? "flex-start" : undefined,
-              gap: isMobile ? 6 : 9, flex: "1 1 0", minWidth: 0,
-              padding: isMobile ? "9px 4px" : "8px 10px", textAlign: isMobile ? "center" : "left",
+              gap: isMobile ? 5 : 9, flex: "1 1 0", minWidth: 0,
+              padding: isMobile ? "8px 4px" : "8px 10px", textAlign: isMobile ? "center" : "left",
             }}>
-              <span style={{ width: isMobile ? 34 : 38, height: isMobile ? 34 : 38, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <o.Icona size={isMobile ? 17 : 19} color={GOLD} />
-              </span>
-              <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 700, color: NAVY, flex: isMobile ? "0 0 auto" : 1, minWidth: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{o.testo}</span>
-              <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} />
+              {isMobile ? (
+                <>
+                  {/* il nome sopra, e sotto il tondo accanto alla levetta:
+                      in colonna il riquadro diventava alto il doppio, e
+                      sul telefono quell'altezza la si paga in scorrimento */}
+                  <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{o.testo}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span style={{ width: 30, height: 30, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <o.Icona size={16} color={GOLD} />
+                    </span>
+                    <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo />
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span style={{ width: 38, height: 38, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <o.Icona size={19} color={GOLD} />
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{o.testo}</span>
+                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} />
+                </>
+              )}
             </div>
           </React.Fragment>
         ))}
