@@ -62019,7 +62019,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {[
                   { v: "esterno", l: "POS esterno", sotto: "batti tu sul terminale" },
-                  { v: "qr", l: "Col QR", sotto: "paga lei col telefono" },
+                  { v: "qr", l: "Carta / Stripe", sotto: "paga lei col telefono" },
                 ].map((m) => {
                   const scelto = modoIncassoPos === m.v;
                   return (
