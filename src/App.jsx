@@ -62414,32 +62414,68 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             position: "fixed", left: 0, right: 0, bottom: 0,
             background: "#fff", borderTop: `1px solid ${CREAM_BORDER}`, borderRadius: "16px 16px 0 0",
             boxShadow: "0 -6px 18px rgba(0,0,0,0.10)",
-            padding: "14px 18px calc(env(safe-area-inset-bottom, 0px) + 98px)",
-            display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, cursor: "pointer", zIndex: 40,
+            padding: "12px 12px calc(env(safe-area-inset-bottom, 0px) + 98px)",
+            cursor: "pointer", zIndex: 40,
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-              <div style={{ position: "relative", width: 40, height: 40, borderRadius: 10, background: carrello.length ? NAVY : "#D9D4C7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <IconaCarrelloPos size={19} />
-                {carrello.length > 0 && (
-                  <span style={{ position: "absolute", top: -6, right: -6, background: GOLD, color: "#fff", borderRadius: "50%", width: 18, height: 18, fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{carrello.length}</span>
-                )}
+            {/* La barra del carrello: blu notte, filo d'oro intorno e un
+                alone caldo sotto. Al banco questa riga si guarda di
+                sfuggita, con le mani occupate — deve staccarsi dal
+                bianco della pagina e dirsi da sola, non essere l'ennesima
+                riga chiara fra le altre. */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              background: NAVY, border: `2px solid ${GOLD}`, borderRadius: 20,
+              padding: "12px 14px",
+              boxShadow: "0 0 0 4px rgba(198,164,92,0.14), 0 10px 26px -12px rgba(14,27,51,0.55)",
+            }}>
+              {/* il quadrato d'oro col carrello: e' il segno che si
+                  riconosce prima di leggere qualunque parola */}
+              <div style={{
+                position: "relative", width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+                background: `linear-gradient(160deg, #E4CE9B 0%, ${GOLD} 55%, #A8873F 100%)`,
+                color: NAVY, display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55), 0 2px 6px rgba(0,0,0,0.25)",
+              }}>
+                <IconaCarrelloPos size={25} color={NAVY} />
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrello vendita</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+
+              <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: "#F6F1E6", textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  Carrello vendita
+                </div>
+                <div style={{ display: "inline-flex", alignItems: "center", ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#E8DFC9", letterSpacing: 0.8, textTransform: "uppercase", border: "1px solid rgba(232,223,201,0.45)", borderRadius: 999, padding: "2px 10px", marginTop: 5 }}>
+                  {carrello.length} articol{carrello.length === 1 ? "o" : "i"}
+                </div>
+                <div style={{ ...fontBody, fontSize: 12, color: "rgba(246,241,230,0.68)", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {carrello.length === 0
-                    ? "vuoto — tocca un prodotto per aggiungerlo"
-                    : `${carrello.length} prodott${carrello.length === 1 ? "o" : "i"} · ${numeroPezziCarrello} pezz${numeroPezziCarrello === 1 ? "o" : "i"}`}
+                    ? "Carrello vuoto"
+                    : `${numeroPezziCarrello} pezz${numeroPezziCarrello === 1 ? "o" : "i"}`}
                 </div>
               </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>Totale da incassare</div>
-                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</div>
-                {puntiCarrello && <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD }}>Punti maturati {fmtPunti(puntiCarrello.maturati)}</div>}
+
+              {/* il filo verticale: separa il carrello dai soldi, che
+                  sono due cose diverse e si leggono in due momenti */}
+              <div style={{ width: 1, alignSelf: "stretch", background: "rgba(232,223,201,0.28)", flexShrink: 0 }} />
+
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ ...fontBody, fontSize: 10.5, color: "rgba(246,241,230,0.72)", whiteSpace: "nowrap" }}>
+                  {omaggioAttivo ? "Omaggio" : "Totale da incassare"}
+                </div>
+                <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: "#F6F1E6", lineHeight: 1.15, whiteSpace: "nowrap" }}>
+                  {fmtEuroErp2(totaleDaIncassare)}
+                </div>
+                {puntiCarrello && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>Punti {fmtPunti(puntiCarrello.maturati)}</div>}
               </div>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>›</div>
+
+              <div style={{
+                display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
+                background: "linear-gradient(160deg, #EBDBB4 0%, #C6A45C 100%)",
+                color: NAVY, borderRadius: 999, padding: "10px 14px",
+                ...fontBody, fontSize: 13, fontWeight: 800, letterSpacing: 0.4,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 6px rgba(0,0,0,0.22)",
+              }}>
+                APRI <span style={{ fontSize: 15, lineHeight: 1 }}>›</span>
+              </div>
             </div>
           </div>
         )}
