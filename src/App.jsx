@@ -24931,6 +24931,7 @@ const AREA_MADRE_VISTA = {
   catalogocategoriecosti: ["erp"],
   riconciliazione: ["erp"],
   anagrafiche: ["erp"],
+  fattureemettere: ["erp"],
   inserimentocostiricavi: ["erp"],
   budgetcosti: ["erp"],
   abbonamentoform: ["erp"],
@@ -33672,7 +33673,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
+function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, onApriFattureDaEmettere, fattureDaEmettere = 0, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -33690,6 +33691,7 @@ function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti
             { chiave: "operativocorsi", title: "Operativo corsi", descrizione: "Assegna master, assistenti, leve, hotel e sedi a ogni edizione.", Icona: IconaTileMaster, attivo: true, onClick: onApriAssegnazioneMaster },
             { chiave: "anagrafiche", title: "Anagrafiche", descrizione: "Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.", Icona: IconaTileAnagrafiche, attivo: true, onClick: onApriAnagrafiche },
             { chiave: "gestioneiva", title: "Gestione IVA", descrizione: "IVA su acquisti e vendite, per aliquota e per prodotto.", Icona: IconaTileClassificazioneVoci, attivo: true, onClick: onApriGestioneIva },
+            { chiave: "fattureemettere", title: "Fatture da emettere", descrizione: "Gli incassi con carta al POS, coi dati di fatturazione da controllare prima del documento.", Icona: IconaTileFattureRicevute, attivo: true, onClick: onApriFattureDaEmettere, badge: fattureDaEmettere },
           ]}
         />
       </div>
@@ -58379,6 +58381,220 @@ function ListinoLocation({ locationId, prezzi, ricarica }) {
   );
 }
 
+// ---------- Fatture da emettere ----------
+//
+// Dove si fermano i pagamenti incassati con la carta al POS, con i dati
+// di fatturazione che la cliente ha scritto di suo pugno sulla pagina
+// di Stripe.
+//
+// L'emissione automatica su Fatture in Cloud e' gia' scritta ma sta
+// spenta: prima va chiarita la faccenda delle due tabelle della
+// connessione e vanno verificati i permessi di scrittura. Finche' non
+// e' chiaro, qui si guardano i dati, si correggono se serve, si
+// copiano nel gestionale vero e si segna il numero del documento.
+//
+// La correzione a mano non e' un ripiego: e' il punto. Un codice
+// destinatario battuto su un telefono va riletto da qualcuno prima di
+// diventare un documento che non si annulla.
+const CAMPI_CLIENTE_FATTURA = [
+  ["ditta", "Ragione sociale"], ["nome", "Nome"], ["cognome", "Cognome"],
+  ["piva", "Partita IVA"], ["codice_fiscale", "Codice fiscale"],
+  ["indirizzo", "Indirizzo"], ["civico", "Civico"], ["cap", "CAP"],
+  ["citta", "Città"], ["provincia", "Provincia"],
+  ["cod_dest", "Codice destinatario"], ["pec", "PEC"],
+  ["email", "Email"], ["telefono", "Telefono"],
+];
+
+function testoPerGestionale(p, cliente) {
+  const righe = (Array.isArray(p.righe) ? p.righe : [])
+    .map((r) => `${r.quantita || 1} × ${r.nome || "Articolo"} — ${fmtEuroErp2((Number(r.prezzo) || 0) * (Number(r.quantita) || 1))}`);
+  return [
+    cliente.ditta || [cliente.nome, cliente.cognome].filter(Boolean).join(" "),
+    [cliente.indirizzo, cliente.civico].filter(Boolean).join(" "),
+    [cliente.cap, cliente.citta, cliente.provincia ? `(${cliente.provincia})` : null].filter(Boolean).join(" "),
+    cliente.piva ? `P.IVA ${cliente.piva}` : null,
+    cliente.codice_fiscale ? `C.F. ${cliente.codice_fiscale}` : null,
+    cliente.cod_dest ? `Codice destinatario ${cliente.cod_dest}` : null,
+    cliente.pec ? `PEC ${cliente.pec}` : null,
+    cliente.email ? `Email ${cliente.email}` : null,
+    "",
+    ...righe,
+    `Totale ${fmtEuroErp2(Number(p.importo) || 0)} — pagato con carta il ${fmtData(p.pagato_il)}`,
+  ].filter((r) => r !== null).join("\n");
+}
+
+function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato }) {
+  const [cliente, setCliente] = useState(() => ({ ...(pagamento.cliente || {}) }));
+  const [numero, setNumero] = useState(pagamento.fattura_numero || "");
+  const [note, setNote] = useState(pagamento.note_fattura || "");
+  const [aperto, setAperto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [copiato, setCopiato] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const nome = cliente.ditta || [cliente.nome, cliente.cognome].filter(Boolean).join(" ") || "Cliente senza nome";
+  // quello che manca per una fattura elettronica: si dice prima, non
+  // dopo aver provato a emetterla
+  const mancanti = [
+    !cliente.codice_fiscale && !cliente.piva ? "codice fiscale o partita IVA" : null,
+    !cliente.indirizzo || !cliente.cap || !cliente.citta ? "indirizzo completo" : null,
+    !cliente.cod_dest && !cliente.pec ? "codice destinatario o PEC" : null,
+  ].filter(Boolean);
+
+  async function copia() {
+    try {
+      await navigator.clipboard.writeText(testoPerGestionale(pagamento, cliente));
+      setCopiato(true); setTimeout(() => setCopiato(false), 2400);
+    } catch { setMsg("Copia non riuscita: seleziona il testo a mano."); }
+  }
+  async function salvaDati() {
+    setSalvando(true);
+    const { error } = await supabase.from("pagamenti_pos")
+      .update({ cliente, note_fattura: note || null, aggiornato_il: new Date().toISOString() })
+      .eq("id", pagamento.id);
+    if (!error && pagamento.cliente_fattura_id) {
+      await supabase.from("clienti_fattura").update({ ...cliente, aggiornato_il: new Date().toISOString() }).eq("id", pagamento.cliente_fattura_id);
+    }
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("Dati salvati.");
+    onSalvato?.();
+  }
+  async function segnaFatturata() {
+    if (!numero.trim()) { setMsg("Scrivi il numero della fattura che hai emesso."); return; }
+    if (!window.confirm(`Segno questo incasso come fatturato con il numero ${numero.trim()}?\n\nLa riga esce da "Fatture da emettere".`)) return;
+    setSalvando(true);
+    const { error } = await supabase.from("pagamenti_pos").update({
+      stato: "fatturato", fattura_manuale: true, fattura_numero: numero.trim(),
+      fattura_emessa_il: new Date().toISOString(), cliente, note_fattura: note || null,
+      verificato_il: new Date().toISOString(), aggiornato_il: new Date().toISOString(),
+    }).eq("id", pagamento.id);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    onSalvato?.();
+  }
+
+  const campo = { ...inputStyle, padding: isMobile ? "7px 8px" : "8px 10px", fontSize: isMobile ? 12.5 : 13 };
+
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, background: "#fff", padding: isMobile ? "12px 14px" : "14px 16px", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ ...fontDisplay, fontSize: isMobile ? 15 : 16, fontWeight: 700, color: NAVY, flex: "1 1 200px", minWidth: 0 }}>{nome}</span>
+        <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(Number(pagamento.importo) || 0)}</span>
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 3 }}>
+        Pagato con carta il {fmtData(pagamento.pagato_il)} · codice {pagamento.codice}
+        {pagamento.descrizione ? ` · ${pagamento.descrizione}` : ""}
+      </div>
+
+      {mancanti.length > 0 && (
+        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 9, padding: "8px 10px", marginTop: 9, lineHeight: 1.5 }}>
+          Per la fattura elettronica manca: {mancanti.join(", ")}. Completa qui sotto prima di emetterla.
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+        <Button variant="ghost" onClick={() => setAperto((a) => !a)}>{aperto ? "Chiudi i dati" : "Guarda e correggi i dati"}</Button>
+        <Button variant="ghost" onClick={copia}>{copiato ? "Copiato ✓" : "Copia per il gestionale"}</Button>
+      </div>
+
+      {aperto && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
+            {CAMPI_CLIENTE_FATTURA.map(([chiave, etichetta]) => (
+              <label key={chiave} style={{ display: "block" }}>
+                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{etichetta}</span>
+                <input
+                  style={{ ...campo, width: "100%", boxSizing: "border-box", marginTop: 2 }}
+                  value={cliente[chiave] ?? ""}
+                  onChange={(e) => setCliente((c) => ({ ...c, [chiave]: e.target.value }))}
+                />
+              </label>
+            ))}
+          </div>
+          <label style={{ display: "block", marginTop: 8 }}>
+            <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Note</span>
+            <input style={{ ...campo, width: "100%", boxSizing: "border-box", marginTop: 2 }} value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+            <Button onClick={salvaDati} disabled={salvando}>{salvando ? "Salvo…" : "Salva i dati"}</Button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+        <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Emessa a mano? Scrivi il numero:</span>
+        <input style={{ ...campo, width: 130 }} value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="es. 124/2026" />
+        <Button onClick={segnaFatturata} disabled={salvando}>Segna fatturata</Button>
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: msg.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function PaginaFattureDaEmettere({ onBack, titolo = "Fatture da emettere" }) {
+  const isMobile = useIsMobile();
+  const [pagamenti, setPagamenti] = useState(null);
+  const [vista, setVista] = useState("daemettere");
+  const [msg, setMsg] = useState("");
+
+  async function carica() {
+    const { data, error } = await supabase.from("pagamenti_pos")
+      .select("*").in("stato", ["da_verificare", "fatturato"])
+      .order("pagato_il", { ascending: false }).limit(400);
+    if (error) { setMsg("Non riesco a leggere i pagamenti: " + testoErrore(error)); setPagamenti([]); return; }
+    setPagamenti(data || []);
+  }
+  useEffect(() => { carica(); }, []);
+
+  const tutti = pagamenti || [];
+  const daEmettere = tutti.filter((p) => p.stato === "da_verificare");
+  const fatte = tutti.filter((p) => p.stato === "fatturato");
+  const elenco = vista === "daemettere" ? daEmettere : fatte;
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 80px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: 16, lineHeight: 1.6 }}>
+          Gli incassi con carta al POS, coi dati di fatturazione che ha scritto la cliente. Per ora la fattura si emette a mano sul gestionale: qui si controllano i dati, si copiano e si segna il numero del documento.
+        </div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+          <TabPillola attivo={vista === "daemettere"} onClick={() => setVista("daemettere")}>Da emettere ({daEmettere.length})</TabPillola>
+          <TabPillola attivo={vista === "fatte"} onClick={() => setVista("fatte")}>Già fatturate ({fatte.length})</TabPillola>
+        </div>
+
+        {msg && <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
+        {pagamenti === null && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>}
+        {pagamenti !== null && elenco.length === 0 && (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
+            {vista === "daemettere"
+              ? "Nessuna fattura da emettere. Compaiono qui gli incassi con carta appena la cliente ha pagato."
+              : "Nessuna fattura ancora emessa da qui."}
+          </div>
+        )}
+        {elenco.map((p) => (
+          vista === "daemettere"
+            ? <SchedaFatturaDaEmettere key={p.id} pagamento={p} isMobile={isMobile} onSalvato={carica} />
+            : (
+              <RigaAmministrazione
+                key={p.id}
+                data={(p.fattura_emessa_il || p.pagato_il || "").slice(0, 10)}
+                titolo={p.cliente?.ditta || [p.cliente?.nome, p.cliente?.cognome].filter(Boolean).join(" ") || "Cliente"}
+                sottotitolo={[p.fattura_numero ? `Fattura ${p.fattura_numero}` : null, p.fattura_manuale ? "emessa a mano" : "emessa dall’app", `codice ${p.codice}`].filter(Boolean).join(" · ")}
+                importo={fmtEuroErp2(Number(p.importo) || 0)}
+              />
+            )
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocategorie, locationPrezzi = [], ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
@@ -71202,6 +71418,15 @@ export default function App() {
   const [messaggiKit, setMessaggiKit] = useState([]);
   const [syncShopEsiti, setSyncShopEsiti] = useState([]);
   const [locationPrezzi, setLocationPrezzi] = useState([]);
+  // quanti incassi con carta aspettano la loro fattura: e' il pallino
+  // sul tasto "Fatture da emettere"
+  const [fattureDaEmettere, setFattureDaEmettere] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("pagamenti_pos").select("id", { count: "exact", head: true }).eq("stato", "da_verificare")
+      .then(({ count }) => { if (vivo) setFattureDaEmettere(count || 0); });
+    return () => { vivo = false; };
+  }, [view]);
   const [accontiDaVerificare, setAccontiDaVerificare] = useState([]);
   // cosa è già presente in ciascuna sede (prodotti/attrezzature), come
   // dichiarato dalla master dalla sua Dashboard ("Inventario corso
@@ -73232,6 +73457,8 @@ export default function App() {
           onApriAssegnazioneMaster={() => setView("assegnazionemaster")}
           onApriAnagrafiche={() => apriViewProtetta("anagrafiche")}
           onApriGestioneIva={apriGestioneIva}
+          onApriFattureDaEmettere={() => setView("fattureemettere")}
+          fattureDaEmettere={fattureDaEmettere}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.amministrazione?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("amministrazione", { ordine: o })}
           colonneTasti={layoutTasti.amministrazione?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("amministrazione", { colonne: n })}
           etichetteTasti={layoutTasti.amministrazione?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("amministrazione", chiave, testo)}
@@ -73789,6 +74016,13 @@ export default function App() {
           onBack={() => setView("home")}
           titoloIndietro="Home"
           titolo={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {view === "fattureemettere" && (
+        <PaginaFattureDaEmettere
+          onBack={() => setView("erp")}
+          titolo={etichettaTasto("amministrazione", "fattureemettere", "Fatture da emettere")}
         />
       )}
 
