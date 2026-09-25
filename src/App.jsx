@@ -60197,24 +60197,27 @@ function SceltaPos({ scelto, Icona, titolo, sotto, onClick, isMobile }) {
     <button
       type="button" onClick={onClick} data-niente-ombra
       style={{
-        flex: "1 1 150px", minWidth: 0, position: "relative", textAlign: "left", cursor: "pointer",
-        display: "flex", alignItems: "center", gap: 10,
-        padding: isMobile ? "11px 12px" : "13px 14px",
+        // base zero, non 150px: era quella a mandare a capo il terzo
+        // riquadro appena lo schermo si stringeva
+        flex: "1 1 0", minWidth: 0, position: "relative", cursor: "pointer",
+        textAlign: isMobile ? "center" : "left",
+        display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 5 : 10,
+        padding: isMobile ? "10px 6px" : "13px 14px",
         borderRadius: 14, border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`,
         background: scelto ? NAVY : "#fff",
         boxShadow: scelto ? "0 6px 16px -8px rgba(14,27,51,0.55)" : "none",
       }}
     >
       <span style={{ display: "inline-flex", color: scelto ? "#fff" : GOLD, flexShrink: 0 }}>
-        <Icona size={isMobile ? 20 : 23} color={scelto ? "#fff" : GOLD} />
+        <Icona size={isMobile ? 19 : 23} color={scelto ? "#fff" : GOLD} />
       </span>
-      <span style={{ minWidth: 0 }}>
-        <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: scelto ? "#fff" : NAVY, lineHeight: 1.2 }}>{titolo}</span>
-        {sotto && <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: scelto ? "rgba(255,255,255,0.72)" : MUTED, marginTop: 2, lineHeight: 1.25 }}>{sotto}</span>}
+      <span style={{ minWidth: 0, width: isMobile ? "100%" : undefined }}>
+        <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 11.5 : 14, fontWeight: 700, color: scelto ? "#fff" : NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{titolo}</span>
+        {sotto && <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 9.5 : 11.5, color: scelto ? "rgba(255,255,255,0.72)" : MUTED, marginTop: 2, lineHeight: 1.25, overflowWrap: "anywhere" }}>{sotto}</span>}
       </span>
       {scelto && (
-        <span style={{ position: "absolute", top: 8, right: 8, width: 19, height: 19, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        <span style={{ position: "absolute", top: isMobile ? 5 : 8, right: isMobile ? 5 : 8, width: isMobile ? 15 : 19, height: isMobile ? 15 : 19, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width={isMobile ? 9 : 11} height={isMobile ? 9 : 11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
         </span>
       )}
     </button>
@@ -62082,7 +62085,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {!omaggioAttivo && (
         <>
           <div style={etichettaPos}>Come paga?</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: isMobile ? 10 : 14 }}>
+          <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap", marginBottom: isMobile ? 10 : 14 }}>
             {[
               { v: "pos", l: "Carta", sotto: "Bancomat / Carta di credito", Icona: IconaCartaPos },
               { v: "contanti", l: "Contanti", sotto: "Incasso immediato", Icona: IconaBanconota },
@@ -62103,7 +62106,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           {metodoPagamento === "pos" && (
             <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: "#F4F6FB", border: `1px solid #DEE4F0` }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
                 <SceltaPos
                   scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
                   titolo="POS esterno" sotto="Batti tu sul terminale" isMobile={isMobile}
