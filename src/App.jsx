@@ -824,6 +824,25 @@ function vistaDaRiprendere() {
     return v || null;
   } catch (e) { return null; }
 }
+// Quanto spazio c'e' davvero, in punti CSS.
+//
+// Serve a far stare la vista scrivania dentro lo schermo. Prima la
+// scala si calcolava da window.screen.width, che su un iPad non e' la
+// larghezza della finestra: in Stage Manager, in split view o in una
+// finestra non a tutto schermo lo schermo dice 1024 e la finestra ne ha
+// 820, e il risultato e' una pagina tagliata a destra — il carrello del
+// POS finiva mezzo fuori.
+//
+// Con la vista scrivania gia' accesa la pagina e' larga 1180 e ridotta:
+// lo spazio vero e' quello visibile moltiplicato per la riduzione.
+function larghezzaFisicaCss() {
+  try {
+    const vv = window.visualViewport;
+    if (vv && vv.width && vv.scale) return Math.round(vv.width * vv.scale);
+  } catch (e) { /* browser vecchi */ }
+  return document.documentElement.clientWidth || window.innerWidth;
+}
+
 function applicaVistaForzata(v) {
   vistaForzata = v === "desktop" || v === "mobile" ? v : null;
   try { if (vistaForzata) window.localStorage.setItem(CHIAVE_VISTA_FORZATA, vistaForzata); else window.localStorage.removeItem(CHIAVE_VISTA_FORZATA); } catch (e) { /* navigazione privata */ }
@@ -833,7 +852,7 @@ function applicaVistaForzata(v) {
     meta.setAttribute("content", desktopDalTelefono
       // la scala iniziale fa stare tutta la larghezza nello schermo; poi
       // il pizzico ingrandisce fino a 4 volte
-      ? `width=${LARGHEZZA_VISTA_DESKTOP}, initial-scale=${(window.screen.width / LARGHEZZA_VISTA_DESKTOP).toFixed(3)}, minimum-scale=0.2, maximum-scale=4, user-scalable=yes, viewport-fit=cover`
+      ? `width=${LARGHEZZA_VISTA_DESKTOP}, initial-scale=${(Math.min(1, larghezzaFisicaCss() / LARGHEZZA_VISTA_DESKTOP)).toFixed(3)}, minimum-scale=0.2, maximum-scale=4, user-scalable=yes, viewport-fit=cover`
       : VIEWPORT_TELEFONO);
   }
   const touch = desktopDalTelefono ? "auto" : "";
@@ -841,6 +860,24 @@ function applicaVistaForzata(v) {
   if (document.body) document.body.style.touchAction = touch;
   window.dispatchEvent(new Event("zoom-pagina"));
 }
+
+// Girando il tablet la scala va rifatta: quella calcolata in verticale,
+// applicata in orizzontale, lascia la pagina piccola in mezzo allo
+// schermo. Vale solo per la vista scrivania forzata — nelle altre il
+// viewport non lo tocchiamo.
+(function riadattaVistaScrivania() {
+  if (typeof window === "undefined") return;
+  let inCorso = null;
+  function rifai() {
+    if (vistaForzata !== "desktop") return;
+    clearTimeout(inCorso);
+    // si aspetta che il browser abbia finito di girare, o si misura la
+    // larghezza di mezzo giro
+    inCorso = setTimeout(() => applicaVistaForzata("desktop"), 250);
+  }
+  window.addEventListener("orientationchange", rifai);
+  window.addEventListener("resize", rifai);
+})();
 // il tastino si mostra solo su un telefono o tablet vero: schermo
 // touch e lato corto piccolo. Su un computer non ha senso
 function dispositivoTouchPiccolo() {
