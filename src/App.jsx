@@ -60267,6 +60267,73 @@ function IconaIncassaVendita({ size = 34 }) {
   );
 }
 
+// Un tocco, non uno scorrimento.
+//
+// Serve per poter aggiungere un prodotto toccando la riga e non solo il
+// "+", senza che scorrendo l'elenco finisca mezzo magazzino nel
+// carrello. La regola e' quella che usano le liste dei telefoni: e' un
+// tocco se il dito si e' mosso meno di dieci punti e ha staccato entro
+// mezzo secondo. Tutto il resto e' uno scorrimento e non fa niente.
+//
+// Dieci punti perche' un dito fermo non e' mai fermo davvero: sotto
+// quella soglia nessuno crede di aver scorso.
+const SPOSTAMENTO_MASSIMO_TAP = 10;
+const DURATA_MASSIMA_TAP = 600;
+function usaTapNonScorrimento(onTap, attivo = true) {
+  const partenza = useRef(null);
+  if (!attivo || !onTap) return {};
+  return {
+    onPointerDown: (e) => {
+      partenza.current = { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId };
+    },
+    onPointerUp: (e) => {
+      const p = partenza.current;
+      partenza.current = null;
+      if (!p || p.id !== e.pointerId) return;
+      const spostato = Math.hypot(e.clientX - p.x, e.clientY - p.y);
+      if (spostato > SPOSTAMENTO_MASSIMO_TAP) return;      // stava scorrendo
+      if (Date.now() - p.t > DURATA_MASSIMA_TAP) return;   // dito tenuto premuto
+      onTap(e);
+    },
+    onPointerCancel: () => { partenza.current = null; },
+    // il dito esce dalla riga mentre scorre: non e' piu' un tocco su questa
+    onPointerLeave: () => { partenza.current = null; },
+  };
+}
+
+// La riga di un prodotto nell'elenco del telefono: si tocca tutta, non
+// solo il "+". Il tocco si distingue dallo scorrimento (vedi
+// usaTapNonScorrimento), cosi' scorrere l'elenco non riempie il
+// carrello — era la preoccupazione giusta.
+function RigaProdottoPos({ prodotto, esaurito, onAggiungi, children }) {
+  const [acceso, setAcceso] = useState(false);
+  const tap = usaTapNonScorrimento(() => {
+    if (esaurito) return;
+    onAggiungi(prodotto);
+    // un lampo: senza, toccando la riga non si capisce se e' successo
+    setAcceso(true);
+    setTimeout(() => setAcceso(false), 260);
+  }, !esaurito);
+  return (
+    <div
+      {...tap}
+      role={esaurito ? undefined : "button"}
+      aria-label={esaurito ? undefined : `Aggiungi ${prodotto.nome} al carrello`}
+      style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "8px 6px", margin: "0 -6px",
+        borderBottom: `1px solid ${CREAM_BORDER}`, borderRadius: 10,
+        background: acceso ? "#F4EEDF" : "transparent",
+        transition: "background 180ms ease",
+        cursor: esaurito ? "default" : "pointer",
+        // il testo non si seleziona tenendo premuto: qui si tocca, non si copia
+        userSelect: "none", WebkitUserSelect: "none", WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 // L'interruttore delle opzioni al POS: una levetta, non una casella di
 // spunta. Al banco si tocca col pollice mentre si guarda altro, e una
 // casella di 17 pixel e' un bersaglio troppo piccolo.
@@ -62431,7 +62498,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         const esaurito = disponibili <= 0 && !inBackorder;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
-          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+          <RigaProdottoPos key={p.id} prodotto={p} esaurito={esaurito} onAggiungi={aggiungiAlCarrello}>
             <div style={{ width: 42, height: 42, borderRadius: 7, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {immagineUrlPerProdotto[p.id] ? <img src={immagineUrlPerProdotto[p.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={17} color={MUTED} />}
             </div>
@@ -62450,10 +62517,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>IVA incl.</div>
             </div>
             <button
-              onClick={() => aggiungiAlCarrello(p)} disabled={esaurito} title="Aggiungi al carrello"
+              onClick={(e) => { e.stopPropagation(); aggiungiAlCarrello(p); }} disabled={esaurito} title="Aggiungi al carrello"
               style={{ width: 44, height: 44, borderRadius: 12, border: "none", background: esaurito ? "#E5E1D6" : GOLD, color: "#fff", fontSize: 23, flexShrink: 0, cursor: esaurito ? "default" : "pointer" }}
             >+</button>
-          </div>
+          </RigaProdottoPos>
         );
       })}
       {prodottiPagina.length === 0 && (
@@ -62658,8 +62725,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </div>
 
               <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: "#F6F1E6", textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  Carrello vendita
+                <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: "#F6F1E6", textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {/* col totale e il tasto accanto, su un telefono stretto
+                      "Carrello vendita" finiva in "CARRELLO …" */}
+                  {isMobile ? "Carrello" : "Carrello vendita"}
                 </div>
                 <div style={{ display: "inline-flex", alignItems: "center", ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#E8DFC9", letterSpacing: 0.8, textTransform: "uppercase", border: "1px solid rgba(232,223,201,0.45)", borderRadius: 999, padding: "2px 10px", marginTop: 5 }}>
                   {carrello.length} articol{carrello.length === 1 ? "o" : "i"}
