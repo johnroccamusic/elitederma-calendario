@@ -47116,7 +47116,10 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
     setMsgRicontrollo(`Controllati ${riallineati} ordini aperti${nuovi > 0 ? `, ${nuovi} nuovi importati` : ""}.`);
   }
   // una prova si butta davvero: vendita, spedizione e righe gia' spuntate.
-  // È il senso della modalità simulazione — non deve restarne niente
+  // La modalità simulazione al POS non c'è più (25/09/2026), ma le
+  // vendite di prova registrate quando c'era restano qui finché
+  // qualcuno non le butta: e' il solo posto da cui si tolgono, e non
+  // deve restarne niente
   async function buttaProva(spedizione) {
     const vendita = spedizione?.vendita_id ? venditaPerId[spedizione.vendita_id] : null;
     if (!window.confirm("Questa è una vendita di prova: la cancello del tutto, senza lasciarne traccia. Confermi?")) return;
@@ -60418,16 +60421,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // Quindi la vendita si registra, l'incasso pure, ma il magazzino non si
   // tocca — il pezzo esce dall'atteso di rientro alla chiusura del corso
   const [prelevatoDaiKit, setPrelevatoDaiKit] = useState(false);
-  // Modalità simulazione: il POS è l'unica parte dell'app che non si può
-  // provare senza fare danni — ogni prova era un incasso in più nei conti e
-  // un pezzo in meno in magazzino (e sul sito). Con questa accesa la
-  // vendita si registra dichiarata "di prova": non scarica niente, non
-  // entra in nessun totale, e da Logistica si cancella senza lasciare
-  // traccia. La spunta la vede solo chi programma: per tutti gli altri non
-  // esiste, quindi nessuna vendita vera può finire registrata come prova
-  const [simulazione, setSimulazione] = useState(false);
-  const puoSimulare = ruoloUtente === "programmatore";
-  const senzaScaricoMagazzino = (!!corsoPosSel && prelevatoDaiKit) || (puoSimulare && simulazione);
+  // La modalità simulazione non c'è più (25/09/2026): era un
+  // interruttore che solo chi programma vedeva, e una vendita vera
+  // battuta con quello acceso spariva dai conti senza che nessuno se ne
+  // accorgesse. Il rischio non valeva la comodità di provare il POS.
+  // Le vendite di prova già registrate restano dove sono e si buttano
+  // da Logistica: la colonna "simulazione" su vendite_shop non si tocca.
+  const senzaScaricoMagazzino = !!corsoPosSel && prelevatoDaiKit;
   const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
 
@@ -61060,9 +61060,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // vendita qualcuno se ne dimentica, e quei soldi finiscono fuori
     // dalla busta del corso e fuori dai punti della master. Si toglie
     // quando lo si toglie, o quando il corso finisce.
-    //
-    // la simulazione non si spegne da sola: chi prova fa piu' prove di
-    // fila, e riaccenderla ogni volta sarebbe il modo di dimenticarsene
   }
 
   const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
@@ -61375,7 +61372,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // uscito il pezzo, e se l'allievo se l'è portato via subito
       prelevato_dai_kit: !!corsoPosSel && prelevatoDaiKit,
       consegnato_in_aula: corsoPosSel ? !spedizioneAttiva : null,
-      simulazione: puoSimulare && simulazione,
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
       richiede_fattura: fattAttiva,
@@ -61389,7 +61385,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     };
 
     const datiSpedizione = spedizioneAttiva ? {
-      simulazione: puoSimulare && simulazione,
       corso_data_id: corsoPosSel?.id || null,
       iscritto_id: spedIscrittoId || null,
       destinatario_nome: spedDestinatario,
@@ -61411,8 +61406,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       prodotti: prodottiRiga,
     } : null;
     const nomeOperatore = operatore?.nome || null;
-    const etichettaEsito = (puoSimulare && simulazione) ? "PROVA registrata (nessun incasso, nessuno scarico)"
-      : omaggioAttivo ? "Omaggio registrato" : "Vendita registrata";
+    const etichettaEsito = omaggioAttivo ? "Omaggio registrato" : "Vendita registrata";
 
     // Il cliente della fattura entra (o si aggiorna) in anagrafica prima
     // che parta la vendita: e' quello che evita di riscrivere tutto la
@@ -61467,7 +61461,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // sulle prove non matura niente, e un omaggio ha righe a zero quindi
       // non produce margine da dividere.
       let provvigione = null;
-      if (datiVendita.operatore_tipo === "master" && !datiVendita.simulazione && !omaggioAttivo) {
+      if (datiVendita.operatore_tipo === "master" && !omaggioAttivo) {
         const canaleProvvigione = corsoPosSel ? "corso" : (couponAttivo ? "referral" : null);
         provvigione = await congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale: canaleProvvigione });
       }
@@ -61591,46 +61585,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
-      {/* la spunta della simulazione sta in cima al carrello e, quando è
-          accesa, si vede da lontano: una prova dimenticata accesa è una
-          vendita vera che sparisce dai conti, ed è il danno peggiore di
-          tutti quelli che questa modalità serve a evitare */}
-      {puoSimulare && (
-        // la simulazione ha il suo interruttore, non una spunta in mezzo
-        // alle altre: acceso si vede da lontano, ed e' proprio quello che
-        // serve — una prova dimenticata accesa e' una vendita vera che
-        // sparisce dai conti
-        <div style={{
-          marginBottom: isMobile ? 8 : 16, borderRadius: 14, padding: "12px 14px",
-          display: "flex", alignItems: "center", gap: 12,
-          background: simulazione ? "#FBF1D9" : BG,
-          border: `1px ${simulazione ? "solid" : "dashed"} ${simulazione ? GOLD : CREAM_BORDER}`,
-        }}>
-          <span style={{ width: 44, height: 44, borderRadius: 10, border: `1px dashed ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#fff" }}>
-            <IconaBorsaShop size={20} color={GOLD} />
-          </span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: simulazione ? "#8A6D1D" : NAVY, display: "block" }}>
-              {simulazione ? "MODALITÀ SIMULAZIONE ATTIVA" : "Modalità simulazione"}
-            </span>
-            <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: grigioCarrello, marginTop: 2, lineHeight: 1.4 }}>
-              {simulazione
-                ? "Quello che vendi ora è una prova: nessun incasso nei conti, nessun pezzo scaricato dal magazzino. Si cancella da Logistica, senza lasciare traccia."
-                : "Solo per chi programma: registra vendite di prova che non toccano né i conti né il magazzino."}
-            </span>
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={simulazione}
-            onClick={() => setSimulazione(!simulazione)}
-            title={simulazione ? "Spegni la simulazione" : "Accendi la simulazione"}
-            style={{ width: 56, height: 30, borderRadius: 20, border: "none", padding: 3, flexShrink: 0, cursor: "pointer", background: simulazione ? GOLD : "#CFCABA", display: "flex", justifyContent: simulazione ? "flex-end" : "flex-start", alignItems: "center", transition: "background 160ms ease" }}
-          >
-            <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} />
-          </button>
-        </div>
-      )}
 
       {corsiEleggibiliPos.length > 0 && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
