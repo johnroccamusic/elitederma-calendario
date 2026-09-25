@@ -175,6 +175,37 @@ export async function congelaProvvigioneReferral(supabase: any, riga: Record<str
 // solo la transizione DENTRO/FUORI da questo insieme scarica o ripristina
 // lo stock — mai due volte per lo stesso ordine, vedi woo-webhook
 // (confronta lo stato PRIMA dell'upsert con quello nuovo)
+// Le righe di un lotto devono avere TUTTE le stesse chiavi.
+//
+// PostgREST traduce un upsert di cento righe in UN SOLO insert con una
+// lista di colonne sola: l'unione delle chiavi che trova. Una chiave che
+// c'e' in una riga e manca nell'altra non prende il default della
+// colonna - viene riempita con NULL.
+//
+// Su "vendite_shop" questo ha rotto tutto in silenzio: la provvigione la
+// scrive solo l'ordine con un referral code, e "provvigione_pezzi" e'
+// NOT NULL con default 0. Bastava un ordine col referral in mezzo a
+// novantanove senza perche' l'intero lotto venisse rifiutato, e con lui
+// l'intera sincronizzazione ("ordiniImportati: 0, pagina: 1"). Dal
+// webhook non si vedeva, perche' li' le righe si salvano una per volta.
+//
+// Qui ogni riga viene completata con le chiavi che le mancano, mettendo
+// il valore giusto - non NULL - dove la colonna non lo ammette.
+const VALORI_SE_MANCANTE: Record<string, unknown> = {
+  provvigione_pezzi: 0,
+};
+export function uniformaChiavi(righe: Record<string, unknown>[]): Record<string, unknown>[] {
+  const chiavi = new Set<string>();
+  for (const r of righe) for (const k of Object.keys(r)) chiavi.add(k);
+  return righe.map((r) => {
+    const completa: Record<string, unknown> = { ...r };
+    for (const k of chiavi) {
+      if (!(k in completa)) completa[k] = k in VALORI_SE_MANCANTE ? VALORI_SE_MANCANTE[k] : null;
+    }
+    return completa;
+  });
+}
+
 export const STATI_VIVI = ["processing", "completed"];
 
 // per ogni riga dell'ordine che corrisponde a un prodotto "bundle" (per

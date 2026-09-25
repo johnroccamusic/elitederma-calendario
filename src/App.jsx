@@ -47974,7 +47974,56 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
   );
 }
 
-function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiShop = [], bundleComponenti = [], origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+// Il semaforo della sincronizzazione con WooCommerce.
+//
+// Nasce da un guasto vero: per giorni gli ordini del sito non sono
+// arrivati in app e non se n'e' accorto nessuno, perche' non c'era
+// nessun posto dove guardare. Il cron scriveva "riuscito" (spedisce la
+// richiesta e non aspetta la risposta) e l'errore vero campava poche ore
+// dentro una tabella di sistema.
+//
+// Adesso ogni giro lascia una riga in "sync_shop_esiti" e qui si vede
+// com'e' andato l'ultimo. Rosso vuol dire che gli ordini che vedi sotto
+// potrebbero non essere tutti: e' l'unica cosa che conta saperla subito.
+const ORE_MASSIME_SENZA_SYNC = 8; // il cron gira quattro volte al giorno
+function SemaforoSyncShop({ esiti = [], isMobile }) {
+  const ultimo = (esiti || [])[0] || null;
+  const ultimoOk = (esiti || []).find((e) => e.esito === "ok") || null;
+  const oreDa = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3600000 : Infinity);
+  const oreDaOk = oreDa(ultimoOk?.ts);
+  const vecchio = oreDaOk > ORE_MASSIME_SENZA_SYNC;
+
+  const stato = !ultimo ? "muto" : ultimo.esito === "errore" || vecchio ? "rosso" : ultimo.esito === "parziale" ? "giallo" : "verde";
+  const colori = {
+    verde: { testo: "#2E7D32", sfondo: "#EAF5EA", bordo: "#C7E3C7", pallino: "#2E7D32" },
+    giallo: { testo: "#8A6D1D", sfondo: "#FDF8EC", bordo: "#EBD9AE", pallino: "#C9A227" },
+    rosso: { testo: "#C0392B", sfondo: "#FBEBE9", bordo: "#F0C8C2", pallino: "#C0392B" },
+    muto: { testo: MUTED, sfondo: BG, bordo: CREAM_BORDER, pallino: "#C9C4B8" },
+  }[stato];
+
+  const quando = ultimo?.ts ? new Date(ultimo.ts).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
+  const scartati = Array.isArray(ultimo?.scartati) ? ultimo.scartati : [];
+  const errori = Array.isArray(ultimo?.errori) ? ultimo.errori : [];
+
+  const frase = !ultimo
+    ? "Non risulta ancora nessuna sincronizzazione registrata. Premi “Recupera ordini mancanti” per farne una."
+    : stato === "rosso"
+      ? (errori.length
+          ? `Ultima sincronizzazione ${quando}: non riuscita. ${errori.join(" · ")}`
+          : `L’ultima sincronizzazione riuscita è di ${Math.round(oreDaOk)} ore fa (${ultimoOk?.ts ? new Date(ultimoOk.ts).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "mai"}). Gli ordini qui sotto potrebbero non essere tutti.`)
+      : stato === "giallo"
+        ? `Sincronizzato il ${quando}, ma ${scartati.length} ordin${scartati.length === 1 ? "e è rimasto" : "i sono rimasti"} fuori: ${scartati.slice(0, 5).map((s) => s.ordine).join(", ")}${scartati.length > 5 ? "…" : ""}.`
+        : `Sincronizzato con WooCommerce il ${quando}: ${ultimo.ordini_importati} ordini controllati, ${ultimo.ordini_riallineati} stati riallineati.`;
+
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: colori.sfondo, border: `1px solid ${colori.bordo}`, borderRadius: 12, padding: isMobile ? "10px 12px" : "11px 14px", marginBottom: 16 }}>
+      <span style={{ width: 9, height: 9, borderRadius: "50%", background: colori.pallino, flexShrink: 0, marginTop: 5 }} />
+      <span style={{ ...fontBody, fontSize: isMobile ? 12 : 12.5, fontWeight: 600, color: colori.testo, lineHeight: 1.5 }}>{frase}</span>
+    </div>
+  );
+}
+
+function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiShop = [], bundleComponenti = [], syncEsiti = [], origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
   // Cancellare una vendita: non deve restarne niente. Sparisce la riga (e
   // con lei prima nota, cassa, provvigioni, statistiche, che la leggono
   // da li'), spariscono la spedizione e le righe preparate, spariscono
@@ -48207,9 +48256,17 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     setMsgRecupero("");
     const { data, error } = await supabase.functions.invoke("woo-import-storico");
     setRecuperando(false);
-    if (error || data?.errore) { setMsgRecupero("Errore: " + (data?.errore || error.message)); return; }
-    setMsgRecupero(`Controllati ${data.ordiniImportati} ordini su WooCommerce.`);
-    ricarica(["vendite_shop"]);
+    if (error || data?.errore || (data?.errori || []).length) {
+      const dettaglio = data?.errore || (data?.errori || []).join(" · ") || error?.message || "non so dire cosa";
+      setMsgRecupero("Errore: " + dettaglio);
+      ricarica(["vendite_shop", "sync_shop_esiti"]);
+      return;
+    }
+    const fuori = (data?.scartati || []).length;
+    setMsgRecupero(fuori
+      ? `Controllati ${data.ordiniImportati} ordini, ma ${fuori} sono rimasti fuori: ${data.scartati.map((s) => s.ordine).join(", ")}.`
+      : `Controllati ${data.ordiniImportati} ordini su WooCommerce, ${data.ordiniRiallineati} stati riallineati.`);
+    ricarica(["vendite_shop", "sync_shop_esiti"]);
   }
 
   const venditeOrigine = (venditeShop || [])
@@ -48289,6 +48346,8 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
             </div>
           )}
         </div>
+
+        {origine === "woocommerce" && <SemaforoSyncShop esiti={syncEsiti} isMobile={isMobile} />}
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
@@ -70724,6 +70783,7 @@ export default function App() {
   const [corsiKitProdotti, setCorsiKitProdotti] = useState([]);
   const [kitDefinizioni, setKitDefinizioni] = useState([]);
   const [messaggiKit, setMessaggiKit] = useState([]);
+  const [syncShopEsiti, setSyncShopEsiti] = useState([]);
   const [accontiDaVerificare, setAccontiDaVerificare] = useState([]);
   // cosa è già presente in ciascuna sede (prodotti/attrezzature), come
   // dichiarato dalla master dalla sua Dashboard ("Inventario corso
@@ -70942,6 +71002,7 @@ export default function App() {
     logistica_kit_edizioni: async () => setLogisticaKitEdizioni((await supabase.from("logistica_kit_edizioni").select("*")).data || []),
     kit_definizioni: async () => setKitDefinizioni((await supabase.from("kit_definizioni").select("*").order("nome")).data || []),
     messaggi_kit: async () => setMessaggiKit((await supabase.from("messaggi_kit").select("*")).data || []),
+    sync_shop_esiti: async () => setSyncShopEsiti((await supabase.from("sync_shop_esiti").select("*").order("ts", { ascending: false }).limit(30)).data || []),
     inventario_sede: async () => setInventarioSede((await supabase.from("inventario_sede").select("*")).data || []),
     prodotti_aperti_magazzino: async () => setProdottiApertiMagazzino((await supabase.from("prodotti_aperti_magazzino").select("*")).data || []),
     segnalazioni_magazzino: async () => setSegnalazioniMagazzino((await supabase.from("segnalazioni_magazzino").select("*").order("ts", { ascending: false })).data || []),
@@ -71085,6 +71146,7 @@ export default function App() {
     // "coupon" serve ai carrelli sospesi: senza, il pannello non trova il
     // codice del corso e mostra tutti gli sconti a zero
     magazzinoshop: ["prodotti_shop", "riordini_in_corso", "coupon", "corsi", "corsi_date", "location"],
+    venditeshop: ["vendite_shop", "sync_shop_esiti", "prodotti_shop", "bundle_componenti"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione", "spese", "iscritti", "corsi_date"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
     // "password_menu"/"utenti_app" (gia' fra le essenziali) servono
@@ -72976,7 +73038,7 @@ export default function App() {
       )}
 
       {view === "venditeshop" && (
-        <PaginaVenditeShop venditeShop={venditeShop} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} origine="woocommerce" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditeshop", "Vendite Shop Online")} />
+        <PaginaVenditeShop venditeShop={venditeShop} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} syncEsiti={syncShopEsiti} origine="woocommerce" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditeshop", "Vendite Shop Online")} />
       )}
 
       {view === "venditealbanco" && (
