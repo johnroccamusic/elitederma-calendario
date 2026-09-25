@@ -3066,9 +3066,19 @@ function addMesi(dataStr, n) {
   return `${annoDest}-${String(meseDest + 1).padStart(2, "0")}-${String(giornoDest).padStart(2, "0")}`;
 }
 // numero di giorni tra due date "yyyy-mm-dd" (dataB - dataA)
+// Una data che non c'e' non e' una distanza zero: e' una distanza che
+// non si puo' dire, e qui vale NaN. Serve perche' NaN perde ogni
+// confronto (`Math.abs(NaN) <= 6` e' falso), quindi chi cerca due date
+// vicine non trova nulla invece di trovare tutto.
+//
+// Prima queste due righe facevano `.split` su quello che arrivava: una
+// spesa pagata senza data di pagamento ne' di documento — ce n'erano 27
+// — bastava a far saltare tutta la Contabilita' aprendo il Ciclo
+// passivo, perche' il conto si fa dentro un useMemo, in disegno.
 function differenzaGiorni(dataA, dataB) {
-  const [ya, ma, da] = dataA.split("-").map(Number);
-  const [yb, mb, db] = dataB.split("-").map(Number);
+  if (!dataA || !dataB) return NaN;
+  const [ya, ma, da] = String(dataA).split("-").map(Number);
+  const [yb, mb, db] = String(dataB).split("-").map(Number);
   return Math.round((Date.UTC(yb, mb - 1, db) - Date.UTC(ya, ma - 1, da)) / 86400000);
 }
 // assegna una "corsia" (lane) a ciascun evento di una riga evitando sovrapposizioni
@@ -43670,8 +43680,11 @@ function costruisciRigheCicloPassivo({ daPagareVirtuali, speseDaPagareReali, spe
       // distanza. Vuol dire che quel pagamento e' gia' stato scritto a
       // mano in prima nota e questo movimento e' la sua seconda copia —
       // sono proprio le righe da riconciliare per prime
+      // una spesa senza nessuna data non puo' essere la gemella di
+      // niente: non si sa quando sarebbe successa
       const gemella = (spese || []).find((s) => s.stato === "pagata"
         && !METODI_SPESA_DALLA_CASSA.has(s.metodo_pagamento || "")
+        && (s.data_pagamento || s.data_documento)
         && Math.abs((Number(s.totale) || 0) - importo) < 0.01
         && Math.abs(differenzaGiorni(m.data_operazione, s.data_pagamento || s.data_documento)) <= 6);
       righe.push({
