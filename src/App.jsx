@@ -62261,14 +62261,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             disabled={carrello.length === 0}
             title="Mette il carrello fra i sospesi, da riprendere e pagare dopo"
             style={{
-              flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+              // largo il doppio: era una colonnina stretta accanto a un
+              // tasto lungo tutta la riga, e "Salva carrello" ci stava
+              // solo spezzato in due
+              flex: "0 0 auto", width: isMobile ? 152 : 184,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
               background: "#fff", color: NAVY, border: `1.5px solid ${NAVY}`, borderRadius: 14,
-              padding: isMobile ? "8px 12px" : "10px 16px", cursor: carrello.length === 0 ? "default" : "pointer", opacity: carrello.length === 0 ? 0.45 : 1,
+              padding: isMobile ? "8px 10px" : "10px 14px", cursor: carrello.length === 0 ? "default" : "pointer", opacity: carrello.length === 0 ? 0.45 : 1,
               ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, lineHeight: 1.15,
             }}
           >
             <span style={{ display: "inline-flex", color: GOLD }}><IconaCarrelloPos size={16} color={GOLD} /></span>
-            <span>Salva<br />carrello</span>
+            <span style={{ whiteSpace: "nowrap" }}>Salva carrello</span>
           </button>
           </div>
         );
