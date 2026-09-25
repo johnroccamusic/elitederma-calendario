@@ -1318,6 +1318,25 @@ function useTastieraAperta() {
   return aperta;
 }
 
+// Sotto una certa larghezza, ma non per forza un telefono: e' il caso
+// dell'iPad in verticale (820 punti), dove la pagina non e' stretta come
+// un telefono ma nemmeno larga come un monitor. Il POS la' dentro
+// stava in due colonne, e le categorie si riducevano a strisce da
+// sessanta pixel con le parole spezzate lettera per lettera.
+function useSottoLarghezza(soglia) {
+  const [sotto, setSotto] = useState(() => typeof window !== "undefined" && larghezzaUtile() < soglia);
+  useEffect(() => {
+    function aggiorna() { setSotto(larghezzaUtile() < soglia); }
+    window.addEventListener("resize", aggiorna);
+    window.addEventListener("zoom-pagina", aggiorna);
+    return () => {
+      window.removeEventListener("resize", aggiorna);
+      window.removeEventListener("zoom-pagina", aggiorna);
+    };
+  }, [soglia]);
+  return sotto;
+}
+
 function useIsMobile(breakpoint = 700) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && larghezzaUtile() <= breakpoint);
   useEffect(() => {
@@ -2116,55 +2135,58 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
   // della griglia, larga quando occupa la pagina. Due colonne in piu' per
   // ciascuna: le categorie sono trenta, e ogni riga risparmiata e' spazio
   // che va ai prodotti
-  const colonne = isMobile ? 8 : compatta ? 7 : 8;
+  // Niente piu' un numero di colonne deciso qui: la griglia si riempie da
+  // sola con celle larghe almeno 140 (92 sul telefono). Con le colonne
+  // fisse, su un iPad in verticale la striscia si spezzava in colonnine
+  // da sessanta pixel e le parole andavano a capo lettera per lettera.
+  const cellaMinima = isMobile ? 92 : compatta ? 132 : 148;
   // il filetto sul crema: CREAM_BORDER e' lo stesso tono dello sfondo e
   // spariva. Questo e' il grigio-oro gia' usato per i divisori della
   // scheda corso, che sul crema si vede
   const FILETTO = "#D5C9AF";
-  const ultimaRiga = Math.floor((voci.length - 1) / colonne);
   return (
     <div
       style={{
-        display: "grid", gridTemplateColumns: `repeat(${colonne}, minmax(0, 1fr))`, alignItems: "stretch",
+        display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${cellaMinima}px, 1fr))`, alignItems: "stretch",
+        gap: 4,
         background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
-        padding: compatta ? "4px 6px" : "6px 8px", marginBottom: compatta ? 10 : 16,
+        padding: compatta ? "6px 8px" : "8px 10px", marginBottom: compatta ? 10 : 16,
       }}
     >
-      {voci.map((c, i) => {
+      {voci.map((c) => {
         const Icona = c.id ? iconaCategoriaPos(c.nome) : IconaTilePos;
         const scelta = selezionata === c.id;
-        const ultimaDellaRiga = (i + 1) % colonne === 0 || i === voci.length - 1;
-        const nellUltimaRiga = Math.floor(i / colonne) === ultimaRiga;
         return (
           <button
             key={c.id || "tutti"}
             onClick={() => onSeleziona(c.id)}
             title={c.nome}
             style={{
-              display: "flex", minWidth: 0,
-              // su cinque colonne di telefono una cella vale ~62px: icona e
-              // nome affiancati non ci stanno, quindi il nome passa sotto
-              flexDirection: isMobile ? "column" : "row",
-              alignItems: "center", justifyContent: isMobile ? "flex-start" : "flex-start",
-              gap: isMobile ? 2 : 8,
-              padding: isMobile ? "6px 1px" : compatta ? "8px 10px" : "10px 12px", borderRadius: isMobile ? 9 : 12,
-              background: scelta ? NAVY : "transparent",
-              // i filetti sono bordi della cella, non elementi in mezzo:
-              // cosi' cadono esattamente sulla colonna, riga dopo riga
-              border: "1px solid transparent",
-              borderRight: !scelta && !ultimaDellaRiga ? `1px solid ${FILETTO}` : "1px solid transparent",
-              borderBottom: !scelta && !nellUltimaRiga ? `1px solid ${FILETTO}` : "1px solid transparent",
-              cursor: "pointer", ...fontBody, fontSize: isMobile ? 7.5 : compatta ? 11.5 : 12.5, fontWeight: 700,
-              color: scelta ? "#fff" : NAVY, textAlign: isMobile ? "center" : "left",
+              // icona sopra e nome sotto, centrati: in fila il nome si
+              // prendeva quel che restava della cella, e su una cella
+              // stretta restava una lettera
+              display: "flex", minWidth: 0, flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              gap: isMobile ? 3 : 5,
+              // 44 e' il bersaglio minimo che un dito trova al primo colpo
+              minHeight: 44,
+              padding: isMobile ? "7px 3px" : "9px 6px", borderRadius: isMobile ? 10 : 12,
+              background: scelta ? NAVY : "#fff",
+              border: `1px solid ${scelta ? NAVY : FILETTO}`,
+              cursor: "pointer", ...fontBody, fontSize: isMobile ? 8.5 : compatta ? 11 : 12, fontWeight: 700,
+              color: scelta ? "#fff" : NAVY, textAlign: "center",
             }}
           >
             <span style={{ display: "inline-flex", flexShrink: 0, color: scelta ? "#fff" : GOLD }}>
-              <Icona size={isMobile ? 14 : compatta ? 17 : 20} color={scelta ? "#fff" : GOLD} />
+              <Icona size={isMobile ? 15 : compatta ? 18 : 20} color={scelta ? "#fff" : GOLD} />
             </span>
-            {/* due parole vanno a capo invece di allungare la colonna:
-                "Lame Microblading" su una riga sola allargherebbe la sua
-                colonna e con lei tutte le altre */}
-            <span style={{ minWidth: 0, lineHeight: 1.15, whiteSpace: "normal", overflowWrap: "anywhere" }}>{c.nome}</span>
+            {/* al massimo due righe, e la parola lunga si taglia coi
+                puntini: mai piu' spezzata lettera per lettera */}
+            <span style={{
+              width: "100%", minWidth: 0, lineHeight: 1.2, whiteSpace: "normal",
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}>{c.nome}</span>
           </button>
         );
       })}
@@ -60711,6 +60733,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // scendono a tendina da una linguetta. Trenta caselle occupavano meta'
   // schermo prima ancora del primo prodotto
   const [categorieATendina, setCategorieATendina] = useState(false);
+  // Sotto i 1024 punti — l'iPad in verticale sta a 820 — le due colonne
+  // non ci stanno: i prodotti si prendono tutta la pagina e il carrello
+  // diventa un cassetto che si apre da destra, con una barra fissa in
+  // fondo che dice quanto c'e' dentro.
+  const schermoStretto = useSottoLarghezza(1024);
+  // le opzioni si incolonnano solo dove il carrello e' una colonna
+  // stretta di fianco ai prodotti: sul telefono il carrello prende tutta
+  // la pagina e le tre stanno in fila, nel cassetto pure
+  const righeOpzioni = schermoStretto && !isMobile;
+  const [cassettoCarrello, setCassettoCarrello] = useState(false);
   // da scrivania la striscia parte aperta e si ritrae con la stessa
   // linguetta del telefono: lo stato e' separato perche' i due schermi
   // hanno abitudini diverse
@@ -61228,6 +61260,44 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return () => { vivo = false; clearInterval(battito); };
   }, [richiestaQr?.codice, statoQr]);
 
+  // I soldi sono arrivati: la vendita si chiude da sola.
+  //
+  // Aspettare che qualcuno prema "Incassa vendita" dopo che la cliente
+  // ha gia' pagato e' un passaggio che non decide niente e che si puo'
+  // dimenticare — e un carrello dimenticato aperto e' un incasso preso
+  // che in cassa non risulta. Il tasto resta per tutti gli altri modi
+  // di pagare, dove l'incasso lo constata una persona.
+  //
+  // Una volta sola: il guardiano e' un riferimento, non uno stato,
+  // perche' fra il "pagato" e la fine della scrittura ci passano
+  // diversi disegni e uno stato arriverebbe tardi.
+  const venditaGiaChiusa = useRef(null);
+  useEffect(() => {
+    if (statoQr !== "pagato" || !richiestaQr?.codice) return;
+    if (venditaGiaChiusa.current === richiestaQr.codice) return;
+    venditaGiaChiusa.current = richiestaQr.codice;
+    (async () => {
+      const andata = await confermaVendita();
+      if (!andata) {
+        // i soldi sono arrivati ma la vendita non si e' chiusa (manca un
+        // dato per la fattura, un pezzo senza provenienza...): la
+        // finestra resta aperta col perche' scritto sotto, e il tasto
+        // torna a disposizione. Non si perde l'incasso in silenzio.
+        venditaGiaChiusa.current = null;
+        setStatoQr("in_attesa");
+        setMsgQr("Pagamento ricevuto, ma la vendita non si è chiusa: guarda l'avviso qui sotto, sistema e premi Incassa vendita.");
+        setRichiestaQr(null);
+        return;
+      }
+      // il carrello si e' svuotato da solo dentro confermaVendita: qui
+      // resta da togliere di mezzo la finestra del QR
+      setRichiestaQr(null);
+      setStatoQr("in_attesa");
+      setCassettoCarrello(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statoQr, richiestaQr?.codice]);
+
   const qrPagamento = useMemo(
     () => (richiestaQr?.indirizzo ? qrSvg(richiestaQr.indirizzo, { lato: isMobile ? 230 : 300 }) : null),
     [richiestaQr?.indirizzo, isMobile],
@@ -61263,18 +61333,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   })();
 
   async function confermaVendita() {
-    if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return; }
-    if (!operatore) { setMsg("Nessun operatore identificato: esci e rientra con il tuo account prima di vendere."); return; }
-    if (omaggioAttivo && !note.trim()) { setMsg("Scrivi una nota per motivare l'omaggio: è obbligatoria."); return; }
-    if (campiFatturaMancanti.length > 0) { setMsg(`Per la fattura manca: ${campiFatturaMancanti.join(", ")}.`); return; }
-    if (campiClienteMancanti.length > 0) { setMsg(`Completare i dati cliente: ${campiClienteMancanti.join(", ")}.`); return; }
+    if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return false; }
+    if (!operatore) { setMsg("Nessun operatore identificato: esci e rientra con il tuo account prima di vendere."); return false; }
+    if (omaggioAttivo && !note.trim()) { setMsg("Scrivi una nota per motivare l'omaggio: è obbligatoria."); return false; }
+    if (campiFatturaMancanti.length > 0) { setMsg(`Per la fattura manca: ${campiFatturaMancanti.join(", ")}.`); return false; }
+    if (campiClienteMancanti.length > 0) { setMsg(`Completare i dati cliente: ${campiClienteMancanti.join(", ")}.`); return false; }
     // Un pezzo che sta anche in un kit in aula non si incassa senza aver
     // detto da dove esce: dopo non si puo' piu' sapere, e il magazzino
     // resterebbe sbagliato in un senso o nell'altro.
     const senzaProvenienza = carrello.filter((r) => disponibileNeiKit(r.prodottoId)?.residuo > 0 && dalKitPerProdotto[r.prodottoId] === undefined);
     if (senzaProvenienza.length > 0) {
       setMsg(`Di ${senzaProvenienza.map((r) => `"${r.nome}"`).join(", ")} manca da dove esce: premi "Dal kit in aula" o "Lo spediamo dal magazzino" sulla riga del pezzo, nella fascia gialla.`);
-      return;
+      return false;
     }
     // scarico in due tempi: prima si verifica TUTTO il carrello (magazzino
     // fisico, poi shop online fino alla scorta minima — vedi
@@ -61291,7 +61361,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // centrale e non si scarica — quei pezzi sono usciti dal magazzino
     // giorni fa, con il pacco del corso
     const pianiVendita = senzaScaricoMagazzino ? [] : preparaScarichi(righeVendita);
-    if (!pianiVendita) { setMsg("Vendita non registrata: disponibilità insufficiente."); return; }
+    if (!pianiVendita) { setMsg("Vendita non registrata: disponibilità insufficiente."); return false; }
 
     // Lo sconto si scrive riga per riga, com'e' stato calcolato davvero:
     // a fasce ogni prodotto ha la sua percentuale, sul margine ogni
@@ -61497,6 +61567,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       }
       ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos"]);
     })();
+    // da qui in poi la vendita e' registrata e il carrello e' gia' vuoto:
+    // le scritture pesanti (scarico, spedizione) vanno avanti per conto
+    // loro, e chi ha chiamato puo' chiudere quello che aveva aperto
+    return true;
   }
 
   const venditePos = (venditeShop || []).filter((v) => v.origine === "pos").sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""));
@@ -61927,7 +62001,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           schermo. I moduli si aprono sotto. */}
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 7 }}>Altre opzioni</div>
       <div style={{
-        display: "flex", alignItems: "stretch", gap: 0, flexWrap: "nowrap",
+        // Su un iPad in verticale il carrello e' largo un terzo di
+        // pagina: tre colonne li' dentro spezzavano "Aggiungi spese
+        // spedizione" lettera per lettera. Li' si incolonnano, una
+        // opzione per riga. Sul telefono e sul monitor restano in fila,
+        // com'e' stato chiesto: li' lo spazio c'e', in un modo o
+        // nell'altro.
+        display: "flex", alignItems: "stretch",
+        flexDirection: righeOpzioni ? "column" : "row", gap: 0, flexWrap: "nowrap",
         border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, background: "#fff",
         padding: isMobile ? "4px 4px" : "6px 8px", marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14),
       }}>
@@ -61937,13 +62018,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           { id: "pos-richiede-fattura", Icona: IconaCatDocumento, testo: "Richiede fattura", acceso: fattAttiva, cambia: setFattAttiva },
         ].map((o, i) => (
           <React.Fragment key={o.id}>
-            {i > 0 && <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />}
+            {i > 0 && (righeOpzioni
+              ? <span style={{ height: 1, background: CREAM_BORDER, flexShrink: 0, margin: "0 8px" }} />
+              : <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />)}
             <div style={{
-              display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center",
-              gap: isMobile ? 5 : 9, flex: "1 1 0", minWidth: 0,
-              padding: isMobile ? "8px 4px" : "8px 10px", textAlign: isMobile ? "center" : "left",
+              display: "flex", flexDirection: isMobile && !righeOpzioni ? "column" : "row", alignItems: "center",
+              gap: isMobile && !righeOpzioni ? 5 : 9, flex: "1 1 0", minWidth: 0, minHeight: 44,
+              padding: isMobile && !righeOpzioni ? "8px 4px" : "8px 10px",
+              textAlign: isMobile && !righeOpzioni ? "center" : "left",
             }}>
-              {isMobile ? (
+              {isMobile && !righeOpzioni ? (
                 <>
                   {/* il nome sopra, e sotto il tondo accanto alla levetta:
                       in colonna il riquadro diventava alto il doppio, e
@@ -62166,8 +62250,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </div>
               <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)} incassati</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginTop: 8 }}>
-                I dati per la fattura li ha scritti lei e sono già in <b style={{ color: NAVY }}>Amministrazione → Fatture da emettere</b>.
-                <br />Adesso chiudi la vendita come sempre.
+                Sto chiudendo la vendita e scaricando il magazzino: non serve premere altro.
+                <br />I dati per la fattura li ha scritti lei e sono già in <b style={{ color: NAVY }}>Amministrazione → Fatture da emettere</b>.
               </div>
             </div>
           ) : (
@@ -62339,7 +62423,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       )}
     </div>
   ) : (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${colonneProdottiPos}, minmax(0, 1fr))`, gap: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: schermoStretto ? "repeat(auto-fill, minmax(140px, 1fr))" : `repeat(${colonneProdottiPos}, minmax(0, 1fr))`, gap: 12 }}>
       {prodottiPagina.map((p) => {
         const disponibili = disponibiliQui(p.id);
         const inBackorder = disponibili <= 0 && backorderAttivo(p);
@@ -62677,7 +62761,55 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
         {/* minmax(0,…): senza, un contenuto largo (la striscia delle
             categorie) allargava la colonna e con lei tutta la pagina */}
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)", gap: 18, alignItems: "flex-start" }}>
+        {/* Il velo dietro al cassetto: si tocca fuori e si chiude. Vive
+            solo quando lo schermo e' stretto, perche' solo li' il
+            carrello e' un cassetto. */}
+        {schermoStretto && cassettoCarrello && (
+          <div
+            onClick={() => setCassettoCarrello(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.42)", zIndex: 2150 }}
+          />
+        )}
+
+        {/* La barra in fondo: quanto c'e' nel carrello e quanto si
+            incassa, sempre sotto gli occhi, col tasto per aprirlo. Senza
+            questa, con il carrello nascosto in un cassetto non si
+            saprebbe mai a che punto si e'. */}
+        {schermoStretto && !cassettoCarrello && (
+          <div style={{
+            position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 2100,
+            background: NAVY, borderTop: `2px solid ${GOLD}`,
+            padding: "10px 14px calc(env(safe-area-inset-bottom, 0px) + 10px)",
+            display: "flex", alignItems: "center", gap: 12,
+            boxShadow: "0 -8px 24px rgba(14,27,51,0.28)",
+          }}>
+            <span style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(246,241,230,0.12)", color: "#F6F1E6", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <IconaBorsaShop size={21} color="#F6F1E6" />
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: "rgba(246,241,230,0.72)", whiteSpace: "nowrap" }}>
+                {carrello.length === 0 ? "Carrello vuoto" : `${carrello.length} articol${carrello.length === 1 ? "o" : "i"} · ${numeroPezziCarrello} pezz${numeroPezziCarrello === 1 ? "o" : "i"}`}
+              </span>
+              <span style={{ display: "block", ...fontDisplay, fontSize: 21, fontWeight: 700, color: "#F6F1E6", lineHeight: 1.15 }}>
+                {fmtEuroErp2(totaleDaIncassare)}
+              </span>
+            </span>
+            <button
+              type="button" onClick={() => setCassettoCarrello(true)} data-niente-ombra
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, minHeight: 44,
+                background: "linear-gradient(160deg, #EBDBB4 0%, #C6A45C 100%)", color: NAVY,
+                border: "none", borderRadius: 999, padding: "0 18px", cursor: "pointer",
+                ...fontBody, fontSize: 13.5, fontWeight: 800, letterSpacing: 0.3,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 6px rgba(0,0,0,0.22)",
+              }}
+            >
+              Apri carrello <span style={{ fontSize: 16, lineHeight: 1 }}>›</span>
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: schermoStretto ? "minmax(0,1fr)" : "minmax(0,1.5fr) minmax(0,1fr)", gap: 18, alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1, minWidth: 220 }} />
@@ -62733,12 +62865,36 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
             {elencoProdotti}
             {paginazione}
+            {/* la barra in fondo e' appoggiata sopra la pagina: senza
+                questo spazio coprirebbe l'ultima riga di prodotti */}
+            {schermoStretto && <div style={{ height: 96 }} />}
           </div>
 
-          <div style={{ ...cardStyle, marginBottom: 0, position: "sticky", top: 16 }}>
+          <div style={schermoStretto
+            ? {
+                ...cardStyle, marginBottom: 0,
+                // il cassetto: entra da destra, e sopra ci passa solo il
+                // velo scuro che lo chiude toccando fuori
+                position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 2200,
+                width: "min(460px, 94vw)", maxWidth: "94vw", borderRadius: "18px 0 0 18px",
+                overflowY: "auto", overscrollBehavior: "contain",
+                boxShadow: "-14px 0 34px rgba(14,27,51,0.28)",
+                transform: cassettoCarrello ? "translateX(0)" : "translateX(101%)",
+                transition: "transform 220ms ease",
+                paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
+              }
+            : { ...cardStyle, marginBottom: 0, position: "sticky", top: 16 }}>
             {/* la testata del carrello: la borsa nel quadrato scuro, il
                 titolo in serif e il conteggio di fianco. La ✕ svuota — e'
                 l'unico gesto distruttivo qui, quindi chiede conferma */}
+            {schermoStretto && (
+              <button
+                type="button" onClick={() => setCassettoCarrello(false)} data-niente-ombra
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 44, marginBottom: 12, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}
+              >
+                <span style={{ fontSize: 17, lineHeight: 1 }}>›</span> Torna ai prodotti
+              </button>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
               <span style={{ width: 44, height: 44, borderRadius: 12, background: NAVY, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <IconaBorsaShop size={22} color="#fff" />
