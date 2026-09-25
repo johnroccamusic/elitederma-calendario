@@ -6144,7 +6144,7 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
 // avvisata" è lo stesso sede_confermata di sempre, ora dentro la scheda
 // invece di un semaforo in tabella — il pallino fuori diventa verde/rosso
 // di conseguenza
-function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
+function ModaleGestisciSede({ cd, location, locationPrezzi = [], onClose, onSalvato }) {
   const locOriginale = (location || []).find((l) => l.id === cd.location_id);
   const cittaCorrente = locOriginale?.nome || null;
   const sediStessaCitta = (location || []).filter((l) => l.nome === cittaCorrente);
@@ -6158,21 +6158,58 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // Il listino della sede, se ce l'ha. Questa finestra prima non ne
+  // sapeva niente: riempiva da sola le due caselle con la tariffa unica
+  // della sede e le salvava sul corso, e siccome la cifra scritta qui
+  // vince sul listino, il listino non entrava mai in gioco. Era il
+  // motivo per cui le fasce di Napoli non si vedevano da nessuna parte.
+  const fasceSede = fasceLocationDi(locationPrezzi, locationIdScelta || cd.location_id);
+  const haListino = fasceSede.some((f) => f.prezzo_cash != null || f.prezzo_bonifico != null);
+  const contoListino = (cash) => costoLocationPerGiorni({
+    fasce: fasceSede, dataInizio: cd.data_inizio, dataFine: cd.data_fine || cd.data_inizio, preferisciCash: cash,
+  });
+  const listinoCash = haListino ? contoListino(true) : null;
+  const listinoBonifico = haListino ? contoListino(false) : null;
+
+  // La tariffa fissa parte spenta se la cifra che c'e' sul corso e'
+  // esattamente quella della sede: quella non l'ha scelta nessuno, l'ha
+  // messa questa finestra riempiendo le caselle da sola. Se invece e'
+  // una cifra diversa, qualcuno l'ha trattata davvero e resta.
+  const overrideUgualeAllaSede = (a, b) => (a == null && b == null) || (a != null && b != null && Math.abs(Number(a) - Number(b)) < 0.005);
+  const [tariffaFissa, setTariffaFissa] = useState(() => {
+    const giaScritta = cd.costo_giorno_sede_cash != null || cd.costo_giorno_sede_bonifico != null;
+    if (!giaScritta) return false;
+    // zero non e' una tariffa: e' quello che resta quando qualcuno ha
+    // svuotato le caselle per far entrare il listino, e finora lasciava
+    // la sede a costo zero senza dirlo. Una sede davvero gratis e' una
+    // "sede centrale", che passa da un'altra strada.
+    const tuttoAZero = (Number(cd.costo_giorno_sede_cash) || 0) === 0 && (Number(cd.costo_giorno_sede_bonifico) || 0) === 0;
+    if (tuttoAZero) return false;
+    if (!haListino) return true;
+    const comeLaSede = overrideUgualeAllaSede(cd.costo_giorno_sede_cash, loc?.costo_giornaliero_cash)
+      && overrideUgualeAllaSede(cd.costo_giorno_sede_bonifico, loc?.costo_giornaliero_bonifico);
+    return !comeLaSede;
+  });
+
   useEffect(() => {
-    if (!loc) return;
-    if (costoGiornoCash === "" && loc.costo_giornaliero_cash != null) setCostoGiornoCash(String(loc.costo_giornaliero_cash));
-    if (costoGiornoBonifico === "" && loc.costo_giornaliero_bonifico != null) setCostoGiornoBonifico(String(loc.costo_giornaliero_bonifico));
+    if (!loc || haListino) return; // col listino le caselle restano vuote: comanda lui
+    const vuoto = (v) => v === "" || Number(v) === 0;
+    if (vuoto(costoGiornoCash) && loc.costo_giornaliero_cash != null) setCostoGiornoCash(String(loc.costo_giornaliero_cash));
+    if (vuoto(costoGiornoBonifico) && loc.costo_giornaliero_bonifico != null) setCostoGiornoBonifico(String(loc.costo_giornaliero_bonifico));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sedeCentrale = !!loc?.sede_centrale;
+  // col listino acceso e nessuna tariffa fissa, le due colonne del corso
+  // vanno SVUOTATE: finche' restano scritte vincono loro
+  const usaListino = haListino && !tariffaFissa;
 
   async function salva() {
     setSalvando(true);
     const campi = {
       location_id: locationIdScelta || null,
-      costo_giorno_sede_cash: sedeCentrale ? null : (costoGiornoCash === "" ? null : parseNum(costoGiornoCash)),
-      costo_giorno_sede_bonifico: sedeCentrale ? null : (costoGiornoBonifico === "" ? null : parseNum(costoGiornoBonifico)),
+      costo_giorno_sede_cash: sedeCentrale || usaListino ? null : (costoGiornoCash === "" ? null : parseNum(costoGiornoCash)),
+      costo_giorno_sede_bonifico: sedeCentrale || usaListino ? null : (costoGiornoBonifico === "" ? null : parseNum(costoGiornoBonifico)),
       // "pagamento_sede" resta valorizzato anche per una sede centrale
       // (ignorato nel calcolo dei costi, vedi calcolaRigheSpeseCorso): è
       // il segnale che la scheda è stata aperta e salvata almeno una
@@ -6215,6 +6252,39 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
         </div>
       ) : (
         <>
+          {haListino && (
+            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 10, background: "#FFFDF8", padding: "10px 12px", marginBottom: 14 }}>
+              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Questa sede ha un listino per giorno</div>
+              <div style={{ marginTop: 7 }}>
+                {fasceSede.filter((f) => f.prezzo_cash != null || f.prezzo_bonifico != null).map((f) => (
+                  <div key={f.id} style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12, color: NAVY, padding: "2px 0" }}>
+                    <span style={{ fontWeight: 700, minWidth: 64 }}>{f.nome || "Fascia"}</span>
+                    <span style={{ color: MUTED }}>
+                      {(Array.isArray(f.giorni) ? f.giorni : []).map((n) => GIORNI_SETTIMANA[n - 1]?.breve).filter(Boolean).join(" ") || "nessun giorno"}
+                    </span>
+                    <span style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
+                      {f.prezzo_cash != null ? `${fmtEuroErp2(f.prezzo_cash)} cash` : "— cash"}
+                      {" · "}
+                      {f.prezzo_bonifico != null ? `${fmtEuroErp2(f.prezzo_bonifico)} bonifico` : "— bonifico"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {/* il conto vero, fatto sulle date di QUESTO corso: e' la
+                  riga che dice se il listino sta facendo quello che ci si
+                  aspetta, senza doverlo ricostruire a mente */}
+              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: usaListino ? "#2E7D32" : MUTED, background: usaListino ? "#EAF5EA" : "#F4F0E7", border: `1px solid ${usaListino ? "#C7E3C7" : CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", marginTop: 8, lineHeight: 1.5 }}>
+                {usaListino
+                  ? `Per questo corso — ${listinoCash?.giorni || 0} giorn${(listinoCash?.giorni || 0) === 1 ? "o" : "i"}: ${fmtEuroErp2(listinoCash?.totale || 0)} in cash, ${fmtEuroErp2(listinoBonifico?.totale || 0)} con bonifico.`
+                  : `Il listino direbbe ${fmtEuroErp2(listinoCash?.totale || 0)} cash / ${fmtEuroErp2(listinoBonifico?.totale || 0)} bonifico, ma per questo corso stai usando una tariffa fissa.`}
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginTop: 9 }}>
+                <input type="checkbox" checked={tariffaFissa} onChange={(e) => setTariffaFissa(e.target.checked)} style={{ width: 16, height: 16 }} />
+                <span style={{ ...fontBody, fontSize: 12, color: NAVY, fontWeight: 600 }}>Tariffa fissa concordata solo per questo corso</span>
+              </label>
+            </div>
+          )}
+          {(!haListino || tariffaFissa) && (
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <Field label="Costo a giorno Cash">
@@ -6227,6 +6297,7 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
               </Field>
             </div>
           </div>
+          )}
           <Field label="Tipo di pagamento">
             <select style={inputStyle} value={tipoPagamento} onChange={(e) => { setTipoPagamento(e.target.value); if (e.target.value === "cash") setScadenza(""); }}>
               <option value="cash">Cash</option>
@@ -6260,7 +6331,7 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
 // docente extra aggiungere (master/assistente/leva): ognuna diventa
 // una riga propria in corsi_date_docenti, con i propri biglietti di
 // viaggio e il proprio hotel.
-function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, hotelPrezzi, hotelPeriodi, assistente, leva, spese, ruoloUtente, layoutCondiviso, ricarica, onBack, onApriRegistraSpesaAlloggio, titolo = "Operativo corsi" }) {
+function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, hotelPrezzi, hotelPeriodi, locationPrezzi = [], assistente, leva, spese, ruoloUtente, layoutCondiviso, ricarica, onBack, onApriRegistraSpesaAlloggio, titolo = "Operativo corsi" }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -7189,6 +7260,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         <ModaleGestisciSede
           cd={gestisciSede.cd}
           location={location}
+          locationPrezzi={locationPrezzi}
           onClose={() => setGestisciSede(null)}
           onSalvato={() => { setGestisciSede(null); ricarica(["corsi_date"]); }}
         />
@@ -73907,7 +73979,7 @@ export default function App() {
       )}
 
       {view === "assegnazionemaster" && (
-        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} hotelPrezzi={hotelPrezzi} hotelPeriodi={hotelPeriodi} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("erp")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} titolo={etichettaTasto("amministrazione", "operativocorsi", "Operativo corsi")} />
+        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} hotelPrezzi={hotelPrezzi} hotelPeriodi={hotelPeriodi} locationPrezzi={locationPrezzi} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("erp")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} titolo={etichettaTasto("amministrazione", "operativocorsi", "Operativo corsi")} />
       )}
 
       {view === "calendario" && (
