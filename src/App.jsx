@@ -60162,6 +60162,88 @@ function etichettaMetodoVendita(metodo) {
   if (metodo === "buono_amazon") return "Buono Amazon";
   return "POS";
 }
+// L'interruttore delle opzioni al POS: una levetta, non una casella di
+// spunta. Al banco si tocca col pollice mentre si guarda altro, e una
+// casella di 17 pixel e' un bersaglio troppo piccolo.
+function InterruttorePos({ acceso, onCambia, id }) {
+  return (
+    <button
+      type="button" id={id} role="switch" aria-checked={acceso} data-niente-ombra
+      onClick={(e) => { e.preventDefault(); onCambia(!acceso); }}
+      style={{
+        width: 46, height: 27, borderRadius: 999, flexShrink: 0, cursor: "pointer", padding: 0,
+        border: `1px solid ${acceso ? NAVY : "#D9D4C7"}`,
+        background: acceso ? NAVY : "#EFEAE0",
+        position: "relative", transition: "background 140ms",
+      }}
+    >
+      <span style={{
+        position: "absolute", top: 2, left: acceso ? 21 : 2, width: 21, height: 21, borderRadius: "50%",
+        background: "#fff", boxShadow: "0 1px 3px rgba(14,27,51,0.28)", transition: "left 140ms",
+      }} />
+    </button>
+  );
+}
+
+// Una scelta al POS: riquadro con l'icona a sinistra, il nome, e sotto
+// una riga che dice cosa comporta. Quello scelto e' blu pieno col bollo
+// d'oro in alto a destra — si riconosce con la coda dell'occhio, senza
+// leggere.
+function SceltaPos({ scelto, Icona, titolo, sotto, onClick, isMobile }) {
+  return (
+    <button
+      type="button" onClick={onClick} data-niente-ombra
+      style={{
+        flex: "1 1 150px", minWidth: 0, position: "relative", textAlign: "left", cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 10,
+        padding: isMobile ? "11px 12px" : "13px 14px",
+        borderRadius: 14, border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`,
+        background: scelto ? NAVY : "#fff",
+        boxShadow: scelto ? "0 6px 16px -8px rgba(14,27,51,0.55)" : "none",
+      }}
+    >
+      <span style={{ display: "inline-flex", color: scelto ? "#fff" : GOLD, flexShrink: 0 }}>
+        <Icona size={isMobile ? 20 : 23} color={scelto ? "#fff" : GOLD} />
+      </span>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: scelto ? "#fff" : NAVY, lineHeight: 1.2 }}>{titolo}</span>
+        {sotto && <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: scelto ? "rgba(255,255,255,0.72)" : MUTED, marginTop: 2, lineHeight: 1.25 }}>{sotto}</span>}
+      </span>
+      {scelto && (
+        <span style={{ position: "absolute", top: 8, right: 8, width: 19, height: 19, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        </span>
+      )}
+    </button>
+  );
+}
+
+function IconaTerminalePos({ size = 22, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="2.5" width="14" height="19" rx="2.5" />
+      <rect x="7.5" y="5" width="9" height="4.5" rx="1" />
+      <circle cx="9" cy="13" r="1" /><circle cx="12" cy="13" r="1" /><circle cx="15" cy="13" r="1" />
+      <circle cx="9" cy="16.5" r="1" /><circle cx="12" cy="16.5" r="1" /><circle cx="15" cy="16.5" r="1" />
+    </svg>
+  );
+}
+function IconaAnelloLink({ size = 22, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13.5a4 4 0 0 0 5.66 0l2.9-2.9a4 4 0 0 0-5.66-5.66l-1.5 1.5" />
+      <path d="M14 10.5a4 4 0 0 0-5.66 0l-2.9 2.9a4 4 0 0 0 5.66 5.66l1.5-1.5" />
+    </svg>
+  );
+}
+function IconaInfoTondo({ size = 20, color = MUTED }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9.2" /><path d="M12 11v5.5" /><circle cx="12" cy="7.9" r="0.9" fill={color} stroke="none" />
+    </svg>
+  );
+}
+
 function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
@@ -61802,9 +61884,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           fianco a fianco: in colonna il riquadro diventava alto quanto
           mezzo schermo e il totale finiva sotto la piega */}
       <div style={{
-        background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 14, borderLeft: `4px solid ${GOLD}`, boxShadow: "var(--ombra-aree, none)",
-        padding: isMobile ? "7px 14px" : "11px 18px", marginBottom: isMobile ? 4 : 5,
-        display: isMobile ? "flex" : "block", alignItems: "stretch", gap: 14,
+        background: omaggioAttivo ? "#FBF1D9" : "linear-gradient(110deg, #FBF6EA 0%, #F7EAD1 55%, #F0DDB8 100%)",
+        borderRadius: 16, borderLeft: `5px solid ${GOLD}`,
+        boxShadow: "0 6px 18px -12px rgba(14,27,51,0.45)",
+        padding: isMobile ? "11px 14px" : "14px 20px", marginBottom: isMobile ? 8 : 12,
+        display: "flex", alignItems: "stretch", gap: isMobile ? 12 : 22,
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {[
@@ -61820,67 +61904,43 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             </div>
           ))}
         </div>
-        {isMobile ? (
-          <>
-            <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0 }} />
-            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", minWidth: 120 }}>
-              <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.25 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
-              <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, marginTop: 4 }}>{fmtEuroErp2(totaleDaIncassare)}</span>
+        <>
+            <span style={{ width: 1, background: "rgba(198,164,92,0.45)", flexShrink: 0 }} />
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", minWidth: isMobile ? 124 : 190 }}>
+              <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.25 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
+              <span style={{ ...fontDisplay, fontSize: isMobile ? 24 : 34, fontWeight: 700, color: NAVY, marginTop: 4, lineHeight: 1.1 }}>{fmtEuroErp2(totaleDaIncassare)}</span>
               {speseSpedizione > 0 && <span style={{ ...fontBody, fontSize: 10, color: grigioCarrello }}>di cui spedizione {fmtEuroErp2(speseSpedizione)}</span>}
               {puntiCarrello && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginTop: 3 }}>Punti maturati {fmtPunti(puntiCarrello.maturati)}</span>}
             </div>
           </>
-        ) : (
-          <>
-            <div style={{ height: 1, background: CREAM_BORDER, margin: "10px 0" }} />
-            {speseSpedizione > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <span style={{ ...fontBody, fontSize: 12.5, color: grigioCarrello }}>Spedizione</span>
-                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(speseSpedizione)}</span>
-              </div>
-            )}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
-              <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
-            </div>
-            {puntiCarrello && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 6 }} title={`Punti teorici ${fmtPunti(puntiCarrello.teorici)}: cedibile meno sicurezza, ridotti dello sconto dato all'allieva. Sono punti interi, non la quota della master`}>
-                <span style={{ ...fontBody, fontSize: 12, color: grigioCarrello }}>Punti maturati con questo carrello</span>
-                <span style={{ ...fontBody, fontSize: 15, fontWeight: 800, color: GOLD }}>{fmtPunti(puntiCarrello.maturati)}</span>
-              </div>
-            )}
-          </>
-        )}
       </div>
 
-      {puoOmaggiare && (
-        <label htmlFor="pos-omaggio" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: "pointer", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-          <input id="pos-omaggio" type="checkbox" checked={omaggioAttivo} onChange={(e) => setOmaggioAttivo(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
-          <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <IconaRegalo size={17} color={GOLD} />
-          </span>
-          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Omaggio — azzera l'incasso</span>
-        </label>
-      )}
-
-      {/* Spedizione e fattura sono due cose indipendenti — si spedisce
-          senza fatturare e si fattura senza spedire — e stanno sulla stessa
-          riga, una a sinistra e una a destra; i moduli si aprono sotto */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
-        <label htmlFor="pos-spedizione" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "3px 0 10px", cursor: "pointer" }}>
-          <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: ombraDischiPos }}>
-            <IconaCamionConsegna size={34} color={GOLD} />
-          </span>
-          <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
-          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese spedizione</span>
-        </label>
-        <label htmlFor="pos-richiede-fattura" style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, gap: 10, padding: "3px 0 10px", cursor: "pointer" }}>
-          <span style={{ width: 68, height: 68, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: ombraDischiPos }}>
-            <IconaCatDocumento size={34} color={GOLD} />
-          </span>
-          <input id="pos-richiede-fattura" type="checkbox" checked={fattAttiva} onChange={(e) => setFattAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
-          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Richiede fattura</span>
-        </label>
+      {/* Le tre opzioni della vendita in un riquadro solo: omaggio,
+          spedizione, fattura. Sono indipendenti — si spedisce senza
+          fatturare e si fattura senza spedire — e stanno in fila, con
+          la levetta a destra di ognuna. I moduli si aprono sotto. */}
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 7 }}>Altre opzioni</div>
+      <div style={{
+        display: "flex", alignItems: "stretch", gap: 0, flexWrap: isMobile ? "wrap" : "nowrap",
+        border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, background: "#fff",
+        padding: isMobile ? "4px 6px" : "6px 8px", marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14),
+      }}>
+        {[
+          ...(puoOmaggiare ? [{ id: "pos-omaggio", Icona: IconaRegalo, testo: "Omaggio", acceso: omaggioAttivo, cambia: setOmaggioAttivo }] : []),
+          { id: "pos-spedizione", Icona: IconaCamionConsegna, testo: "Aggiungi spese spedizione", acceso: spedizioneAttiva, cambia: setSpedizioneAttiva },
+          { id: "pos-richiede-fattura", Icona: IconaCatDocumento, testo: "Richiede fattura", acceso: fattAttiva, cambia: setFattAttiva },
+        ].map((o, i, tutte) => (
+          <React.Fragment key={o.id}>
+            {i > 0 && !isMobile && <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />}
+            <div style={{ display: "flex", alignItems: "center", gap: 9, flex: isMobile ? "1 1 100%" : "1 1 0", minWidth: 0, padding: isMobile ? "8px 6px" : "8px 10px", ...(isMobile && i < tutte.length - 1 ? { borderBottom: `1px solid ${CREAM_BORDER}` } : {}) }}>
+              <span style={{ width: 38, height: 38, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <o.Icona size={19} color={GOLD} />
+              </span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 12.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{o.testo}</span>
+              <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} />
+            </div>
+          </React.Fragment>
+        ))}
       </div>
       {spedizioneAttiva && (
         <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
@@ -61993,62 +62053,57 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
       {!omaggioAttivo && (
         <>
-          <div style={etichettaPos}>Modalità di pagamento</div>
-          <div style={{ display: "flex", gap: 10, marginBottom: isMobile ? 10 : 16 }}>
-            {[{ v: "pos", l: "POS / Carta", Icona: IconaCartaPos }, { v: "contanti", l: "Contanti", Icona: IconaBanconota }, { v: "buono_amazon", l: "Buono Amazon", Icona: IconaTileOmaggio }].map((m) => {
-              const scelto = metodoPagamento === m.v;
-              return (
-                <button
-                  key={m.v}
-                  onClick={() => setMetodoPagamento(m.v)}
-                  style={{ flex: 1, padding: isMobile ? "10px 8px" : "14px 10px", borderRadius: 12, border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`, background: scelto ? NAVY : "#fff", cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: scelto ? "#fff" : NAVY, display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
-                >
-                  <span style={{ display: "inline-flex", color: scelto ? "#fff" : GOLD }}><m.Icona size={18} /></span>
-                  {m.l}
-                </button>
-              );
-            })}
+          <div style={etichettaPos}>Come paga?</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: isMobile ? 10 : 14 }}>
+            {[
+              { v: "pos", l: "Carta", sotto: "Bancomat / Carta di credito", Icona: IconaCartaPos },
+              { v: "contanti", l: "Contanti", sotto: "Incasso immediato", Icona: IconaBanconota },
+              { v: "buono_amazon", l: "Buono Amazon", sotto: "Codice regalo", Icona: IconaTileOmaggio },
+            ].map((m) => (
+              <SceltaPos
+                key={m.v} scelto={metodoPagamento === m.v} Icona={m.Icona}
+                titolo={m.l} sotto={m.sotto} isMobile={isMobile}
+                onClick={() => setMetodoPagamento(m.v)}
+              />
+            ))}
           </div>
+
           {/* Col POS si incassa in due modi, e il conto non cambia: il
               terminale fisico al banco, oppure il QR che la cliente
               inquadra col telefono. Non sono due metodi di pagamento —
               per la vendita, per l'IVA e per i punti restano "POS". */}
-          {metodoPagamento === "pos" && !omaggioAttivo && (
-            <div style={{ marginTop: -6, marginBottom: isMobile ? 10 : 16, padding: "10px 12px", borderRadius: 12, background: "#F4F6FB", border: `1px solid #D9E0EE` }}>
-              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Come incassi</div>
+          {metodoPagamento === "pos" && (
+            <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: "#F4F6FB", border: `1px solid #DEE4F0` }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {[
-                  { v: "esterno", l: "POS esterno", sotto: "batti tu sul terminale" },
-                  { v: "qr", l: "Carta / Stripe", sotto: "paga lei col telefono" },
-                ].map((m) => {
-                  const scelto = modoIncassoPos === m.v;
-                  return (
-                    <button
-                      key={m.v} type="button"
-                      onClick={() => { setModoIncassoPos(m.v); setMsgQr(""); }}
-                      style={{ flex: "1 1 140px", padding: isMobile ? "8px 10px" : "10px 12px", borderRadius: 10, border: `1px solid ${scelto ? NAVY : "#D9E0EE"}`, background: scelto ? NAVY : "#fff", cursor: "pointer", textAlign: "left" }}
-                    >
-                      <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: scelto ? "#fff" : NAVY }}>{m.l}</div>
-                      <div style={{ ...fontBody, fontSize: 11, color: scelto ? "rgba(255,255,255,0.75)" : MUTED, marginTop: 1 }}>{m.sotto}</div>
-                    </button>
-                  );
-                })}
+                <SceltaPos
+                  scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
+                  titolo="POS esterno" sotto="Batti tu sul terminale" isMobile={isMobile}
+                  onClick={() => { setModoIncassoPos("esterno"); setMsgQr(""); }}
+                />
+                <SceltaPos
+                  scelto={modoIncassoPos === "qr"} Icona={IconaAnelloLink}
+                  titolo="Carta / Stripe" sotto="Paga lei col telefono" isMobile={isMobile}
+                  onClick={() => { setModoIncassoPos("qr"); setMsgQr(""); }}
+                />
               </div>
 
               {modoIncassoPos === "esterno" ? (
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.5, marginTop: 9 }}>
-                  Incassa sul terminale, poi conferma la vendita qui sotto come hai sempre fatto. L'app non aspetta nessuna conferma da fuori.
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 10 }}>
+                  <span style={{ display: "inline-flex", flexShrink: 0, marginTop: 1 }}><IconaInfoTondo size={18} color={MUTED} /></span>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: MUTED, lineHeight: 1.5 }}>
+                    Incassa sul terminale, poi conferma la vendita qui sotto come hai sempre fatto. L'app non aspetta nessuna conferma da fuori.
+                  </span>
                 </div>
               ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 9 }}>
-                  <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 180px", lineHeight: 1.45 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: MUTED, flex: "1 1 180px", lineHeight: 1.45 }}>
                     La cliente inquadra, paga e scrive lei i dati per la fattura.
                   </span>
                   <button
-                    type="button"
-                    onClick={chiediPagamentoQr}
+                    type="button" onClick={chiediPagamentoQr} data-niente-ombra
                     disabled={creandoQr || carrello.length === 0 || totaleDaIncassare <= 0}
-                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "8px 14px", cursor: creandoQr || carrello.length === 0 ? "default" : "pointer", opacity: creandoQr || carrello.length === 0 || totaleDaIncassare <= 0 ? 0.5 : 1, whiteSpace: "nowrap" }}
+                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: creandoQr || carrello.length === 0 ? "default" : "pointer", opacity: creandoQr || carrello.length === 0 || totaleDaIncassare <= 0 ? 0.45 : 1, whiteSpace: "nowrap" }}
                   >
                     {creandoQr ? "Preparo…" : `Mostra il QR · ${fmtEuroErp2(totaleDaIncassare)}`}
                   </button>
@@ -62057,6 +62112,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               {msgQr && <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 8 }}>{msgQr}</div>}
             </div>
           )}
+
           {/* con il buono Amazon la master manda al cliente il link del
               buono: sta qui sotto, pronto da copiare */}
           {metodoPagamento === "buono_amazon" && (
