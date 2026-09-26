@@ -4717,8 +4717,21 @@ function conCostoDeiBundle(prodottiShop, bundleComponenti) {
     return costo == null ? p : { ...p, costo_acquisto_effettivo: costo };
   });
 }
+// Il margine si misura su quello che il cliente paga davvero.
+//
+// Prima si leggeva "prezzo_vendita", che e' il netto SCRITTO in
+// anagrafica — e quando sulla scheda c'e' un prezzo al pubblico forzato
+// quel netto non c'entra piu' niente con l'incasso. Sui "Telini
+// politenati" il netto scritto diceva 56,8% di margine, ma il cliente
+// paga 6,90 e il margine vero e' 50,5%: sei punti di differenza, su cui
+// poi si sceglie la fascia di sconto e si contano i punti della master.
+//
+// Adesso il netto si ricava dal prezzo al pubblico vero, scorporando
+// l'IVA: se il forzato non c'e', si torna esattamente al numero di
+// prima.
 function marginePercentualeDi(prodotto) {
-  const netto = Number(prodotto?.prezzo_vendita);
+  const lordo = prezzoAlPubblico(prodotto);
+  const netto = lordo != null ? Number(lordo) / (1 + (prodotto?.aliquota_iva_vendita ?? 22) / 100) : Number(prodotto?.prezzo_vendita);
   const costo = costoAcquistoDi(prodotto);
   if (!(netto > 0) || costo == null || costo === "") return null;
   return ((netto - Number(costo)) / netto) * 100;
@@ -65384,9 +65397,19 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       ? null
       : (f.modoVendita === "netto" ? parseNum(f.prezzo) : nettoDaLordo(parseNum(f.prezzo), f.aliquotaVendita));
     const prezzoLordo = calcolaIvaELordo(prezzoNetto, f.aliquotaVendita, f.prezzoLordoForzato).lordo;
-    // margine sempre sui netti: l'IVA non deve sporcare il confronto
-    const margine = costoNetto != null && prezzoNetto != null ? round2(prezzoNetto - costoNetto) : null;
-    const marginePct = margine != null && prezzoNetto > 0 ? round2((margine / prezzoNetto) * 100) : null;
+    // Margine sempre sui netti — l'IVA non deve sporcare il confronto —
+    // ma il netto giusto e' quello del prezzo che il cliente paga
+    // davvero. Con un prezzo al pubblico forzato il netto scritto qui
+    // sopra non e' piu' l'incasso, e un margine calcolato su quello
+    // racconta una cosa che non succede.
+    const lordoForzato = String(f.prezzoLordoForzato ?? "").trim() === "" ? null : round2(parseNum(f.prezzoLordoForzato));
+    const nettoVero = lordoForzato != null ? round2(lordoForzato / (1 + (Number(f.aliquotaVendita) || 0) / 100)) : prezzoNetto;
+    const margine = costoNetto != null && nettoVero != null ? round2(nettoVero - costoNetto) : null;
+    const marginePct = margine != null && nettoVero > 0 ? round2((margine / nettoVero) * 100) : null;
+    // il prezzo scritto e quello che comanda non coincidono: va detto,
+    // o si cambia il prezzo e non succede niente
+    const forzatoScavalca = lordoForzato != null && prezzoNetto != null
+      && Math.abs(lordoForzato - round2(prezzoNetto * (1 + (Number(f.aliquotaVendita) || 0) / 100))) > 0.02;
     // "solo offline" può venire dalla categoria (vale per tutti i suoi
     // prodotti) o dalla spunta sul singolo prodotto: in entrambi i casi
     // il prodotto non va mai sullo shop, anche se ha un prezzo
@@ -65400,6 +65423,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const varianteNonPubblicabile = f.tipoProdotto === "variante" && !f.wooProductId;
     return {
       prezzoNetto, prezzoLordo, costoNetto, costoBundle, margine, marginePct,
+      lordoForzato, nettoVero, forzatoScavalca,
       bundleVirtuale, categoriaSoloOffline, soloOffline, categoriaNonSulPos, nonSulPos: categoriaNonSulPos || !!f.nonSulPos,
       categorieOffline, categorieNoPos, varianteNonPubblicabile,
       // una variante NON si pubblica da sola: su WooCommerce le taglie sono
@@ -65530,9 +65554,28 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           Costo di acquisto calcolato dalla distinta base (somma dei netti dei componenti): <b style={{ color: NAVY }}>{fmtEuroIva(calcoloPrezzi.costoBundle)}</b>
         </div>
       )}
+      {/* Il prezzo forzato comanda su tutto: sito, POS, fasce di sconto,
+          punti. Se qualcuno cambia il prezzo di vendita e quello resta
+          li', non cambia niente di quello che il cliente paga — ed e'
+          esattamente il caso in cui sembra che la modifica non abbia
+          fatto effetto. Qui lo si dice, e si offre di allinearlo. */}
+      {calcoloPrezzi.forzatoScavalca && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 8, padding: "9px 12px", marginBottom: 10, lineHeight: 1.5 }}>
+          <span style={{ flex: "1 1 240px", minWidth: 0 }}>
+            Attenzione: il prezzo al pubblico è <b>forzato a {fmtEuroIva(calcoloPrezzi.lordoForzato)}</b>, quindi il cliente paga quello e non il prezzo che hai scritto qui sopra. Margine e fasce si calcolano su {fmtEuroIva(calcoloPrezzi.lordoForzato)}.
+          </span>
+          <button
+            type="button" onClick={() => aggiornaForm({ prezzoLordoForzato: "" })}
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 14, padding: "8px 13px", cursor: "pointer", minHeight: 40, whiteSpace: "nowrap" }}
+          >
+            Usa il prezzo che ho scritto
+          </button>
+        </div>
+      )}
       {calcoloPrezzi.margine != null && (
         <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 14, padding: "8px 12px", background: "#FBF3E4", borderRadius: 8 }}>
           Margine (sui netti): <b>{fmtEuroIva(calcoloPrezzi.margine)}</b>{calcoloPrezzi.marginePct != null && <> — <b>{calcoloPrezzi.marginePct}%</b></>}
+          {calcoloPrezzi.forzatoScavalca && <span style={{ color: MUTED }}> · calcolato sul prezzo al pubblico forzato</span>}
         </div>
       )}
       <SpBlocco
