@@ -60511,6 +60511,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     ? corsiFinestraPos.filter((cd) => cd.master_id === operatore.id)
     : corsiFinestraPos;
   const [corsoPosId, setCorsoPosId] = useState("");
+  // Vendere a un evento non e' vendere a un corso: il materiale portato
+  // in fiera e' in consegna all'evento, non e' uscito dal magazzino.
+  // Quando lo si vende qui, il magazzino scende come per qualunque
+  // vendita — e la riga resta agganciata all'evento, cosi' in Gestione
+  // eventi si sa quanto di quello che e' partito e' stato venduto e
+  // quanto deve tornare indietro.
+  const [eventoPosId, setEventoPosId] = useState("");
+  const [eventiAperti, setEventiAperti] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    const da = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const a = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    supabase.from("eventi").select("id, nome, data_inizio, data_fine, citta")
+      .lte("data_inizio", a).gte("data_fine", da).neq("stato", "annullato")
+      .order("data_inizio")
+      .then(({ data }) => { if (vivo) setEventiAperti(data || []); });
+    return () => { vivo = false; };
+  }, []);
+  const eventoPosSel = eventiAperti.find((e) => e.id === eventoPosId) || null;
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
   // Capita che un amministratore dia una mano a una master vendendo dal
   // proprio telefono. La vendita e' sua, non di chi tiene il telefono:
@@ -61556,6 +61575,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       registrata_da_id: (venditaVaAllaMaster || perContoDiAltri) ? operatoreReale.id : null,
       registrata_da_nome: (venditaVaAllaMaster || perContoDiAltri) ? operatoreReale.nome : null,
       corso_data_id: corsoPosSel?.id || null,
+      evento_id: eventoPosSel?.id || null,
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
       prelevato_dai_kit: !!corsoPosSel && prelevatoDaiKit,
@@ -61574,6 +61594,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
     const datiSpedizione = spedizioneAttiva ? {
       corso_data_id: corsoPosSel?.id || null,
+      evento_id: eventoPosSel?.id || null,
       iscritto_id: spedIscrittoId || null,
       destinatario_nome: spedDestinatario,
       nome: spedNome.trim(),
@@ -61827,6 +61848,24 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
+
+      {/* La vendita fatta a una fiera: il materiale portato li' e' in
+          consegna all'evento, non e' mai uscito dal magazzino. Vendendolo
+          il magazzino scende come sempre, e la riga resta agganciata
+          all'evento cosi' in Gestione eventi si sa quanto di quello che
+          e' partito e' stato venduto e quanto deve tornare. */}
+      {eventiAperti.length > 0 && (
+        <div style={{ marginBottom: isMobile ? 8 : 14 }}>
+          <Field label="Sei a un evento?">
+            <select style={inputStyle} value={eventoPosId} onChange={(e) => setEventoPosId(e.target.value)}>
+              <option value="">— vendita non legata a un evento —</option>
+              {eventiAperti.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.nome}{ev.citta ? ` · ${ev.citta}` : ""}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      )}
 
       {corsiEleggibiliPos.length > 0 && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>

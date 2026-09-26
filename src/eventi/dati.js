@@ -97,3 +97,24 @@ export function quantiGiorni(evento) {
   const b = new Date(`${evento.data_fine || evento.data_inizio}T12:00:00`);
   return Math.max(1, Math.round((b - a) / 86400000) + 1);
 }
+
+// Quanto di quel materiale e' stato venduto al POS all'evento.
+//
+// Serve a chiudere il conto della consegna: quello che e' partito meno
+// quello che e' tornato deve fare quello che si e' venduto. Se non
+// torna, o manca qualcosa o qualcuno ha dimenticato di segnarlo.
+export async function vendutoAllEvento(eventoId) {
+  const { data, error } = await supabase
+    .from("vendite_shop").select("prodotti, tipo_movimento")
+    .eq("evento_id", eventoId);
+  if (error) throw new Error(error.message);
+  const perProdotto = {};
+  (data || []).forEach((v) => {
+    if (v.tipo_movimento === "omaggio") return;
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+      if (!r.prodotto_id) return;
+      perProdotto[r.prodotto_id] = (perProdotto[r.prodotto_id] || 0) + (Number(r.quantita) || 0);
+    });
+  });
+  return perProdotto;
+}

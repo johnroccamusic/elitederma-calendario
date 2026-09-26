@@ -10,7 +10,7 @@ import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
-  periodoEvento, quantiGiorni,
+  periodoEvento, quantiGiorni, vendutoAllEvento,
 } from "./dati.js";
 import { supabase } from "../supabase.js";
 
@@ -282,10 +282,14 @@ function SchedaTeam({ eventoId, persone }) {
 
 function SchedaMateriali({ eventoId, prodotti }) {
   const [righe, setRighe] = useState(null);
+  const [venduto, setVenduto] = useState({});
   const [cerca, setCerca] = useState("");
   const [nomeLibero, setNomeLibero] = useState("");
 
-  const ricarica = () => leggiRighe("eventi_materiali", eventoId).then(setRighe).catch(() => setRighe([]));
+  const ricarica = () => {
+    leggiRighe("eventi_materiali", eventoId).then(setRighe).catch(() => setRighe([]));
+    vendutoAllEvento(eventoId).then(setVenduto).catch(() => setVenduto({}));
+  };
   useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
 
   const trovati = useMemo(() => {
@@ -305,15 +309,15 @@ function SchedaMateriali({ eventoId, prodotti }) {
   }
 
   if (righe === null) return <Vuoto>Carico…</Vuoto>;
-  const preparati = righe.filter((r) => r.preparato).length;
 
   return (
     <>
-      {/* Detto chiaro, perche' la differenza conta: qui si scrive cosa
-          portare, non si scarica il magazzino. Le giacenze non si
-          toccano da questa pagina. */}
-      <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 14, lineHeight: 1.5 }}>
-        Questo è l'elenco di cosa preparare. Le giacenze di magazzino non si muovono da qui.
+      {/* La regola, scritta dove si lavora: il materiale di un evento non
+          esce dal magazzino come quello di un corso. E' in consegna
+          all'evento — roba nostra, in un altro posto — e scende solo
+          quando lo si vende col POS sul posto. */}
+      <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 14, lineHeight: 1.55 }}>
+        Quello che parte per l'evento <b>non esce dal magazzino</b>: resta nostro, solo in un altro posto. Scende dalle giacenze solo quando lo vendi col POS all'evento.
       </div>
 
       <Field label="Cerca un prodotto a catalogo">
@@ -341,29 +345,56 @@ function SchedaMateriali({ eventoId, prodotti }) {
       </div>
 
       {righe.length === 0 && <Vuoto>Non c'è ancora niente da portare.</Vuoto>}
-      {righe.length > 0 && (
-        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: preparati === righe.length ? "#2E7D32" : MUTED, marginBottom: 8 }}>
-          {preparati} di {righe.length} già preparat{righe.length === 1 ? "o" : "i"}
-        </div>
-      )}
-      {righe.map((r) => (
-        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <input
-            type="checkbox" checked={!!r.preparato} title="Preparato"
-            onChange={(e) => salvaRiga("eventi_materiali", r.id, { preparato: e.target.checked }).then(ricarica)}
-            style={{ width: 20, height: 20, flexShrink: 0, cursor: "pointer" }}
-          />
-          <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: r.preparato ? MUTED : NAVY, textDecoration: r.preparato ? "line-through" : "none" }}>
-            {r.nome}
-            {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginLeft: 8 }}>a catalogo</span>}
-          </span>
-          <input
-            type="number" min="0" step="1" style={{ ...campoRiga, width: 82, flexShrink: 0, textAlign: "right" }} defaultValue={r.quantita ?? 1}
-            onBlur={(e) => { const v = Number(e.target.value); if (v !== Number(r.quantita)) salvaRiga("eventi_materiali", r.id, { quantita: v }).then(ricarica); }}
-          />
-          <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
-        </div>
-      ))}
+
+      {righe.map((r) => {
+        const portata = r.quantita_portata == null ? null : Number(r.quantita_portata);
+        const rientrata = r.quantita_rientrata == null ? null : Number(r.quantita_rientrata);
+        const vendutoQui = r.prodotto_id ? (venduto[r.prodotto_id] || 0) : 0;
+        // il conto della consegna: quello che e' partito meno quello che
+        // e' tornato deve fare quello che si e' venduto
+        const mancante = portata != null && rientrata != null ? Math.round((portata - rientrata - vendutoQui) * 100) / 100 : null;
+        return (
+          <div key={r.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
+                {r.nome}
+                {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginLeft: 8 }}>a catalogo</span>}
+              </span>
+              <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+              {[
+                ["Da portare", "quantita", r.quantita],
+                ["Partito", "quantita_portata", r.quantita_portata],
+                ["Rientrato", "quantita_rientrata", r.quantita_rientrata],
+              ].map(([etichetta, campo, valore]) => (
+                <label key={campo} style={{ flex: "1 1 92px", minWidth: 0 }}>
+                  <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>{etichetta}</span>
+                  <input
+                    type="number" min="0" step="1" style={{ ...campoRiga, width: "100%", boxSizing: "border-box", textAlign: "right" }}
+                    defaultValue={valore ?? ""}
+                    onBlur={(e) => {
+                      const v = e.target.value === "" ? null : Number(e.target.value);
+                      if (v !== (valore == null ? null : Number(valore))) salvaRiga("eventi_materiali", r.id, { [campo]: v }).then(ricarica);
+                    }}
+                  />
+                </label>
+              ))}
+              <span style={{ flex: "1 1 92px", minWidth: 0 }}>
+                <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Venduto al POS</span>
+                <span style={{ display: "block", ...fontBody, fontSize: 14, fontWeight: 700, color: vendutoQui > 0 ? "#2E7D32" : MUTED, textAlign: "right", padding: "8px 10px" }}>{vendutoQui}</span>
+              </span>
+            </div>
+            {mancante != null && mancante !== 0 && (
+              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 5 }}>
+                {mancante > 0
+                  ? `Non torna: ${mancante} pz partiti che non sono né rientrati né venduti.`
+                  : `Non torna: sono rientrati ${-mancante} pz più di quanti ne fossero partiti.`}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }
