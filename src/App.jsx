@@ -64969,11 +64969,19 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // il salvataggio in background, comune a "Salva" e a "Duplica prodotto":
   // riceve una copia del modulo e va avanti da solo
   function lanciaSalvataggioProdotto(f, calcolo, componentiSnapshot) {
-    // la conferma si da' subito, senza aspettare WooCommerce: da qui in
-    // poi e' un lavoro in background, e chi salva puo' andare avanti. Se
-    // poi non andasse, se ne accorge dall'avviso rosso qui sotto
+    // La conferma NON si da' qui. Si dava prima di sapere com'era andata,
+    // e la frase "il prodotto e' stato salvato" arrivava mentre il
+    // salvataggio doveva ancora partire: se il sito rifiutava, chi aveva
+    // gia' letto quel "grazie" e chiuso la finestra restava convinto di
+    // aver salvato, mentre nell'app non era stato scritto niente — i
+    // campi dell'app si scrivono solo DOPO che WooCommerce ha detto di
+    // si'. E' cosi' che un back order acceso risultava spento il giorno
+    // dopo, senza che nessuno avesse sbagliato niente.
+    //
+    // Mentre si aspetta non si resta al buio: la striscia gialla in cima
+    // dice "Sto salvando…" e si puo' continuare a lavorare. Il "grazie"
+    // arriva quando e' vero, l'avviso rosso quando non lo e'.
     setErroreSalvataggio(null);
-    setConfermaSalvataggio({ nome: f.nome.trim(), nuovo: !f.id });
     // da qui quello che c'e' nella scheda e' esattamente quello che si sta
     // salvando: se nessuno ci scrive piu', a fine salvataggio si potra'
     // rimettere in pagina la riga vera senza cancellare niente
@@ -64985,11 +64993,16 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
         if (esito?.errore) {
           setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: esito.errore, form: f }]);
-          // la conferma data prima era una promessa: qui si ritira
+          // niente conferma da ritirare, ormai: si azzera solo quella di
+          // un salvataggio precedente, o chiudendo l'avviso rosso
+          // ricomparirebbe un "grazie" che parla di un altro prodotto
           setConfermaSalvataggio(null);
           setErroreSalvataggio(f.nome.trim());
           return;
         }
+        // andata bene davvero: adesso si puo' dire. L'avviso della cache,
+        // se c'e', nasce insieme alla conferma invece di rincorrerla
+        setConfermaSalvataggio({ nome: f.nome.trim(), nuovo: !f.id, avviso: esito.avvisoCache || null });
         // il messaggio nella scheda solo se è ancora aperta SULLO STESSO
         // prodotto: nel frattempo si può averne aperto un altro, e un
         // "salvato" sulla scheda sbagliata è peggio di nessun messaggio
@@ -65000,10 +65013,6 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           setMsgSuccesso((f.id ? "Prodotto salvato." : "Prodotto creato.") + (esito.avvisoCache ? " " + esito.avvisoCache : ""));
           return f.id ? prev : { ...prev, id: esito.idProdotto };
         });
-        // salvato sul sito ma con la cache ancora piena: il cliente vedrebbe
-        // ancora il prezzo vecchio, e va detto nella stessa finestra che ha
-        // appena detto "salvato"
-        if (esito.avvisoCache) setConfermaSalvataggio((prev) => (prev && prev.nome === f.nome.trim() ? { ...prev, avviso: esito.avvisoCache } : prev));
         await ricarica(esito.tabelle);
         // Il salvataggio va in background: chi chiude la scheda e riapre
         // subito lo stesso prodotto lo riapre dai dati di prima, e vede
