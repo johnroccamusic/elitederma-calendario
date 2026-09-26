@@ -30,6 +30,7 @@ import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
 import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
 import QrConsensi from "./consensi/QrConsensi.jsx";
 import Ricevuta from "./pos/Ricevuta.jsx";
+import GestioneEventi from "./eventi/GestioneEventi.jsx";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -24987,6 +24988,7 @@ const TASTI_HOME = [
   // tendina "Assegnato a" — assegnare un progetto a chi non puo' nemmeno
   // vederlo sarebbe un modo elegante di non farlo fare a nessuno
   { chiave: "progettiincorso", etichetta: "Progetti in corso" },
+  { chiave: "gestionieventi", etichetta: "Gestione eventi" },
 ];
 // viste interne che non sono un tasto della home (sotto-sezioni raggiunte
 // da dentro un'area già sbloccata, es. "Anagrafiche" dentro Amministrazione)
@@ -72480,6 +72482,7 @@ export default function App() {
     gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie", "location_prezzi"],
+    gestionieventi: ["location", "master", "assistente", "venditori", "prodotti_shop", "hotel"],
     crmallievi: [],
     crmallievielenco: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
@@ -73947,6 +73950,7 @@ export default function App() {
               // master e chi vende, ogni volta che iscrivono qualcuno —
               // due tasti di distanza erano due di troppo
               { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come si iscrive un allievo, e il messaggio da mandargli dopo", Icona: IconaPersonaAggiungi, attivo: true, onClick: () => setView("iscrizioneallievi") },
+              { chiave: "gestionieventi", title: "Gestione eventi", descrizione: "Fiere e congressi: team, materiali, trasferimenti e hotel", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionieventi"), onClick: () => setView("gestionieventi") },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
@@ -74641,6 +74645,15 @@ export default function App() {
           onBack={() => setView("home")}
           titoloIndietro="Home"
           titolo={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {view === "gestionieventi" && (
+        <GestioneEventi
+          location={location} master={master} assistente={assistente} venditori={venditori}
+          prodottiShop={prodottiShop} hotel={hotel}
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "gestionieventi", "Gestione eventi")}
         />
       )}
 
