@@ -123,7 +123,15 @@ Deno.serve(async (req) => {
     const acceso = !!backorder;
     return {
       manage_stock: true,
-      backorders: acceso ? "yes" : "no",
+      // 'notify' e non 'yes'. Sono due cose diverse in WooCommerce:
+      // con 'yes' il cliente puo' ordinare ma NON viene avvisato di
+      // niente — get_availability_text() restituisce stringa vuota, e
+      // sulla scheda non compare nessuna riga di disponibilita'. Con
+      // 'notify' e' WooCommerce stesso a dirglielo. Il nostro messaggio,
+      // quando c'e' lo snippet sul sito, si mette al posto di quella
+      // frase; quando lo snippet non c'e' — ed e' il caso di oggi — resta
+      // almeno la frase di WooCommerce invece del silenzio.
+      backorders: acceso ? "notify" : "no",
       meta_data: [{ key: "_elitederma_backorder_messaggio", value: acceso ? String(backorderMessaggio || "") : "" }],
     };
   }
