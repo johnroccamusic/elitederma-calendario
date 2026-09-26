@@ -32,6 +32,8 @@ import QrConsensi from "./consensi/QrConsensi.jsx";
 import Ricevuta from "./pos/Ricevuta.jsx";
 import GestioneEventi from "./eventi/GestioneEventi.jsx";
 import PrezziListini from "./prezzi/PrezziListini.jsx";
+import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
+import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -64028,8 +64030,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [componenti, setComponenti] = useState([]);
   // salvataggi lasciati in corso con "Salva e esci": si continua a lavorare
   // mentre WooCommerce risponde, e l'esito compare nella striscia in alto
-  const [lavoriInCorso, setLavoriInCorso] = useState([]);
-  const [lavoriFalliti, setLavoriFalliti] = useState([]);
+  // i salvataggi in volo non stanno piu' qui: vivono in salvataggi/stato.js
+  // e li disegna App, cosi' l'esito segue chi ha premuto Salva anche se
+  // esce da questa pagina (e anche quando la scheda e' aperta da Gestione
+  // magazzino, dove la striscia non veniva disegnata affatto)
+  const { daRiaprire } = useSalvataggi();
   // riordino della vetrina: la sequenza in lavorazione, finche' non si
   // salva. Null = non si sta riordinando
   // quanti prodotti per riga: 1 e' l'elenco a righe di prima, da 2 in su
@@ -64987,12 +64992,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // rimettere in pagina la riga vera senza cancellare niente
     formToccatoRef.current = false;
     const chiave = `${f.id || "nuovo"}-${f.nome}-${Date.now()}`;
-    setLavoriInCorso((prec) => [...prec, { chiave, nome: f.nome.trim() }]);
+    avviaSalvataggio(chiave, f.nome.trim());
     eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot)
       .then(async (esito) => {
-        setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
         if (esito?.errore) {
-          setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: esito.errore, form: f }]);
+          concludiSalvataggio(chiave, { errore: esito.errore, nome: f.nome.trim(), form: f });
           // niente conferma da ritirare, ormai: si azzera solo quella di
           // un salvataggio precedente, o chiudendo l'avviso rosso
           // ricomparirebbe un "grazie" che parla di un altro prodotto
@@ -65000,6 +65004,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           setErroreSalvataggio(f.nome.trim());
           return;
         }
+        concludiSalvataggio(chiave);
         // andata bene davvero: adesso si puo' dire. L'avviso della cache,
         // se c'e', nasce insieme alla conferma invece di rincorrerla
         setConfermaSalvataggio({ nome: f.nome.trim(), nuovo: !f.id, avviso: esito.avvisoCache || null });
@@ -65026,8 +65031,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         }
       })
       .catch((e) => {
-        setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
-        setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: String(e?.message || e), form: f }]);
+        concludiSalvataggio(chiave, { errore: String(e?.message || e), nome: f.nome.trim(), form: f });
         setConfermaSalvataggio(null);
         setErroreSalvataggio(f.nome.trim());
       });
@@ -65346,34 +65350,21 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // quello che sta succedendo fuori dalla scheda: i salvataggi lasciati in
   // corso e quelli che non sono andati. Sta in cima alla pagina, non dentro
   // la scheda, perché riguarda prodotti che in quel momento non sono aperti
-  const strisciaLavori = (lavoriInCorso.length > 0 || lavoriFalliti.length > 0) && (
-    <div style={{ marginBottom: 12 }}>
-      {lavoriInCorso.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF3E4", border: `1px solid ${GOLD}55`, borderRadius: 10, padding: "8px 12px", marginBottom: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: GOLD, flexShrink: 0 }} />
-          Sto salvando {lavoriInCorso.map((l) => l.nome).join(", ")}… puoi continuare a lavorare.
-        </div>
-      )}
-      {lavoriFalliti.map((l) => (
-        <div key={l.chiave} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", ...fontBody, fontSize: 12.5, color: "#C0392B", background: "#FBEAEA", borderRadius: 10, padding: "8px 12px", marginBottom: 8 }}>
-          <span style={{ flex: "1 1 260px", minWidth: 0 }}><b>{l.nome}</b> non è stato salvato: {l.errore}</span>
-          <button
-            onClick={() => { setProdottoForm(l.form); setLavoriFalliti((prec) => prec.filter((x) => x.chiave !== l.chiave)); if (isMobile) setVistaMobile("dettaglio"); }}
-            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
-          >
-            Riapri la scheda
-          </button>
-          <button
-            onClick={() => setLavoriFalliti((prec) => prec.filter((x) => x.chiave !== l.chiave))}
-            title="Nascondi l'avviso"
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
-          >
-            ×
-          </button>
-        </div>
-      ))}
-    </div>
-  );
+  // La scheda che torna indietro dopo un salvataggio fallito. Il tasto
+  // "Riapri la scheda" sta nella striscia disegnata da App, che qui non
+  // puo' arrivare: lascia la richiesta nello store, App porta su questa
+  // pagina, e qui si raccoglie. Si rimette il modulo com'era al momento
+  // del Salva — quello che l'utente aveva scritto, non quello che c'e'
+  // nel database.
+  const riaperturaServita = useRef(null);
+  useEffect(() => {
+    if (!daRiaprire || riaperturaServita.current === daRiaprire.n) return;
+    riaperturaServita.current = daRiaprire.n;
+    setProdottoForm(daRiaprire.form);
+    setVista("backoffice");
+    if (isMobile) setVistaMobile("dettaglio");
+    consumaRiapertura();
+  }, [daRiaprire?.n]);
 
   const messaggi = (
     <>
@@ -66455,7 +66446,6 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           paneDettaglio
         ) : isMobile ? (
           <>
-            {strisciaLavori}
             {vistaMobile !== "albero" && (
               <button onClick={() => setVistaMobile(vistaMobile === "dettaglio" ? "lista" : "albero")} style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "4px 0", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
                 <IconaFrecciaSinistra size={14} /> {vistaMobile === "dettaglio" ? "Elenco prodotti" : "Struttura shop"}
@@ -66467,7 +66457,6 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           </>
         ) : (
           <>
-          {strisciaLavori}
           <div
             ref={rifGriglia}
             style={{
@@ -75036,6 +75025,11 @@ export default function App() {
         />
       )}
       <IndicatoreZoom />
+      {/* l'esito dei salvataggi in volo: disegnato qui, una volta sola,
+          cosi' segue chi ha premuto Salva in qualunque pagina vada.
+          "Riapri la scheda" riporta su Gestione shop, che raccoglie il
+          modulo lasciato nello store */}
+      <StrisciaSalvataggi onRiapri={() => apriGestioneShop()} />
     </div>
     </CorniceTelefono>
   );
