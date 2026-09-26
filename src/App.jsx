@@ -461,6 +461,15 @@ const QUOTE_COLONNE_PUNTI_DEFAULT = [25, 30, 50];
 // prodotti, come l'incidenza dei costi aziendali.
 const CHIAVE_MARGINE_OPERATIVO = "dettaglioProdotti_margineOperativoPct";
 const MARGINE_OPERATIVO_DEFAULT = 25;
+// Quante volte il costo di acquisto per arrivare al prezzo al pubblico.
+// Deciso dal titolare il 27/09/2026 e ricavato cosi': il netto dev'essere
+// il costo diviso 0,285 (meta' listino al venditore, e sull'altra meta'
+// costi aziendali e margine operativo), cioe' 3,51 volte il costo; con
+// l'IVA al 22% fanno 4,28. Lui lo ha arrotondato a 4,5 per stare piu'
+// largo. Si scrive nel titolo della colonna: cambiarlo non richiede un
+// deploy, e in una settimana e' gia' passato da 4,3 a 4,5.
+const CHIAVE_MOLT_CONSIGLIATO = "dettaglioProdotti_moltiplicatoreConsigliato";
+const MOLT_CONSIGLIATO_DEFAULT = 4.5;
 // Lo schema dei punti: dal cedibile (il 100%) si accantona subito una
 // parte di sicurezza, quel che resta e' il massimo cedibile, e i punti
 // sono dieci per ogni euro di massimo cedibile — cosi' la conversione e'
@@ -4528,6 +4537,10 @@ function incidenzaCostiAttiva() {
 function margineOperativoAttivo() {
   const n = Number(LAYOUT_CACHE[CHIAVE_MARGINE_OPERATIVO]);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : MARGINE_OPERATIVO_DEFAULT;
+}
+function moltiplicatoreConsigliatoAttivo() {
+  const n = Number(LAYOUT_CACHE[CHIAVE_MOLT_CONSIGLIATO]);
+  return Number.isFinite(n) && n > 0 && n <= 50 ? n : MOLT_CONSIGLIATO_DEFAULT;
 }
 // La somma massima cedibile di un pezzo (21/09/2026).
 //
@@ -50144,6 +50157,11 @@ const COLONNE_MAGAZZINO = [
   { label: "No shop", campo: null, larghezza: 64 },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 72 },
   { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84 },
+  // Il prezzo al pubblico a cui il prodotto andrebbe venduto: il costo di
+  // acquisto per il moltiplicatore scritto nel titolo. Sta subito dopo il
+  // prezzo vero perche' la domanda e' sempre "quanto sono lontano".
+  // Indicativa: non si salva niente e non tocca sito ne' POS.
+  { label: "Prezzo vendita consigliato", campo: "prezzoVenditaConsigliato", direzioneIniziale: "desc", larghezza: 96, moltiplicatore: true },
   // Il lordo e il netto uno accanto all'altro. Il margine si e' sempre
   // calcolato sul netto — com'e' giusto, l'IVA non e' ricavo — ma in
   // tabella si vedeva solo il lordo, e il conto non tornava a occhio:
@@ -50468,7 +50486,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
 
 // sicurezzaPunti, pctQuotaColonna ed euroQuota arrivano dalla pagina: sono
 // le percentuali scritte nei titoli delle colonne "Sicurezza" e "Quota"
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, margineOperativoPct = MARGINE_OPERATIVO_DEFAULT, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, margineOperativoPct = MARGINE_OPERATIVO_DEFAULT, moltiplicatoreConsigliato = MOLT_CONSIGLIATO_DEFAULT, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
   // la percentuale di sicurezza di QUESTO prodotto: si scrive nella cella
   // "Sicurezza" e si salva quando si esce dal campo (o con Invio). Vuota
   // = torna a quella generale
@@ -50749,6 +50767,17 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
               <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 15, lineHeight: 1 }}>⚠</span>
             )}
           </div>
+        </td>
+    ),
+    "Prezzo vendita consigliato": (
+        <td style={tdStyle} title={
+          p.prezzoVenditaConsigliato == null
+            ? "Senza un costo di acquisto non si puo' consigliare un prezzo. Per i bundle serve la distinta base completa."
+            : `Costo di acquisto ${fmtEuroErp2(p.costo_acquisto)} x ${String(moltiplicatoreConsigliato).replace(".", ",")}. E' un prezzo AL PUBBLICO, IVA inclusa: il moltiplicatore se la porta gia' dentro (al 22%). Indicativo: non si salva e non tocca ne' il sito ne' il POS.`
+        }>
+          <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: p.prezzoVenditaConsigliato == null ? MUTED : NAVY }}>
+            {p.prezzoVenditaConsigliato != null ? fmtEuroErp2(p.prezzoVenditaConsigliato) : "—"}
+          </span>
         </td>
     ),
     "Prezzo netto vendita": (
@@ -51116,6 +51145,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     if (valore === "" || valore == null) return;
     const n = Math.max(0, Math.min(100, Number(String(valore).replace(",", ".")) || 0));
     if (n !== Number(margineOperativoSalvato)) salvaMargineOperativo(n);
+  };
+  // quante volte il costo di acquisto fa il prezzo consigliato: si scrive
+  // nel titolo della sua colonna e vale per tutti i prodotti
+  const [moltiplicatoreSalvato, salvaMoltiplicatore] = useImpostazioneCondivisa(CHIAVE_MOLT_CONSIGLIATO, MOLT_CONSIGLIATO_DEFAULT);
+  const moltiplicatoreConsigliato = moltiplicatoreConsigliatoAttivo();
+  const cambiaMoltiplicatore = (valore) => {
+    if (valore === "" || valore == null) return;
+    const n = Math.max(0.1, Math.min(50, Number(String(valore).replace(",", ".")) || 0));
+    if (n !== Number(moltiplicatoreSalvato)) salvaMoltiplicatore(n);
   };
   // tutti i prodotti con una percentuale propria tornano a quella generale
   async function riallineaSicurezzaTutti() {
@@ -51620,6 +51658,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // il margine operativo in euro: la sua percentuale del prezzo netto
     // di vendita. Senza prezzo non c'e' niente da calcolare
     const margineOperativoEuro = p.prezzo_vendita != null ? round2((Number(p.prezzo_vendita) * margineOperativoPct) / 100) : null;
+    // il prezzo al pubblico consigliato: costo di acquisto per il
+    // moltiplicatore. Per un bundle il costo e' quello della distinta
+    // (costoEffettivo), lo stesso che mostra la colonna "Costo acquisto"
+    const prezzoVenditaConsigliato = costoEffettivo != null && Number(costoEffettivo) > 0
+      ? round2(Number(costoEffettivo) * moltiplicatoreConsigliato)
+      : null;
     // quanto si toglie dal cedibile per la sicurezza, in euro
     const sicurezzaEuro = sommaMassimaCedibileEuro != null ? round2((Math.max(0, sommaMassimaCedibileEuro) * sicurezzaProdotto) / 100) : null;
 
@@ -51646,6 +51690,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       punti,
       quota1, quota2, quota3,
       margineOperativoEuro,
+      prezzoVenditaConsigliato,
       sicurezzaEuro,
       sicurezzaProdotto,
       margineContanti: contanti.margine,
@@ -52343,6 +52388,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                           <span style={{ fontSize: 13, color: NAVY }}>%</span>
                         </div>
                       )}
+                      {col.moltiplicatore && (
+                        // quante volte il costo: si scrive qui, vale per tutti
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
+                          onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                          <span style={{ fontSize: 13, color: NAVY }}>×</span>
+                          <CampoNumero valore={moltiplicatoreConsigliato} min={0.1} max={50} onCambia={(n) => cambiaMoltiplicatore(n)} titolo="Quante volte il costo di acquisto per arrivare al prezzo al pubblico consigliato. IVA compresa: al 22% la regola e' 4,5"
+                            style={{ ...fontBody, width: 44, fontSize: 13.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
+                        </div>
+                      )}
                       {col.quotaIndice != null && (
                         // la percentuale della quota si scrive qui, nel
                         // titolo: click e trascinamento non devono
@@ -52382,7 +52436,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} margineOperativoPct={margineOperativoPct} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} margineOperativoPct={margineOperativoPct} moltiplicatoreConsigliato={moltiplicatoreConsigliato} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 15, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
