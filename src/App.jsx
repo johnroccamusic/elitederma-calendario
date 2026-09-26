@@ -4526,6 +4526,90 @@ function margineOperativoAttivo() {
   const n = Number(LAYOUT_CACHE[CHIAVE_MARGINE_OPERATIVO]);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : MARGINE_OPERATIVO_DEFAULT;
 }
+// Quanto si vuole poter cedere a un rivenditore, in percentuale del
+// prezzo netto. E' l'obiettivo del prezzo consigliato: si scrive nel
+// titolo della colonna e vale per tutti i prodotti.
+const CHIAVE_QUOTA_RIVENDITORE = "dettaglioProdotti_quotaRivenditorePct";
+const QUOTA_RIVENDITORE_DEFAULT = 50;
+function quotaRivenditoreAttiva() {
+  const n = Number(LAYOUT_CACHE[CHIAVE_QUOTA_RIVENDITORE]);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : QUOTA_RIVENDITORE_DEFAULT;
+}
+
+// Il prezzo a cui un prodotto andrebbe venduto (26/09/2026). E' indicativo:
+// non si salva, non tocca sito, POS, fasce ne' punti. Dice solo di quanto
+// un prezzo e' fuori posto.
+//
+// La regola detta dal titolare: a ogni rivenditore si deve poter cedere
+// almeno il 50% del prezzo netto, PULITO — cioe' dopo che l'azienda ha
+// messo da parte il suo margine operativo, i costi aziendali e il costo
+// della merce. E' esattamente il numero della colonna "Residuo cedibile %
+// sul netto": il prezzo consigliato e' quello a cui quella colonna
+// arriverebbe a segnare l'obiettivo.
+//
+// A mano si farebbe alzando il prezzo netto un centesimo alla volta
+// finche' la colonna non scrive 50. La formula da' la stessa risposta in
+// un passo, perche' quella colonna e' una riga sola:
+//
+//   residuo% = 100 - costo%  - margineOperativo% - costiAziendali%
+//   dove costo% = costo / netto x 100
+//
+// Imponendo residuo% = obiettivo e risolvendo per il netto:
+//
+//   netto* = costo / (1 - (margineOperativo + costiAziendali + obiettivo) / 100)
+//
+// Col 28% di margine operativo, il 15% di costi aziendali e il 50% da
+// cedere, al costo della merce resta il 7% del prezzo: netto* e' 14,29
+// volte il costo. Non e' un errore del conto, e' quanto stretto sia lo
+// spazio — 28 + 15 + 50 fa 93.
+//
+// Se le tre percentuali arrivano a cento o oltre non esiste nessun prezzo
+// che basti: si restituisce null e la colonna lo dice.
+function prezzoConsigliatoDi(p, costoAcquisto = costoAcquistoDi(p), obiettivoPct = quotaRivenditoreAttiva()) {
+  const costo = Number(costoAcquisto);
+  if (costoAcquisto == null || costoAcquisto === "" || !Number.isFinite(costo) || !(costo > 0)) {
+    return { netto: null, lordo: null, impossibile: false };
+  }
+  const spazioCosto = 100 - margineOperativoAttivo() - incidenzaCostiAttiva() - Number(obiettivoPct || 0);
+  if (!(spazioCosto > 0)) return { netto: null, lordo: null, impossibile: true };
+  const netto = round2(costo / (spazioCosto / 100));
+  return { netto, lordo: round2(netto * (1 + (p?.aliquota_iva_vendita ?? 22) / 100)), impossibile: false };
+}
+
+// Il testo che spiega il prezzo consigliato passandoci sopra: il conto
+// per intero, con le cifre di questo prodotto. Serve perche' un numero
+// del genere, da solo, non si crede — e chi lo legge deve poter rifare
+// il conto senza chiedere a nessuno.
+function titoloConsigliato(p, obiettivoPct, margineOperativoPct, incidenzaCostiPct, quale) {
+  const costo = costoAcquistoDi(p);
+  // 4 prodotti hanno il costo a zero, non mancante: il messaggio deve
+  // valere per tutti e due i casi, o sembra che il dato ci sia
+  if (costo == null || costo === "" || !(Number(costo) > 0)) return "Il costo di acquisto manca o e' a zero: senza quello non si puo' dire a quanto andrebbe venduto";
+  const spazio = 100 - Number(margineOperativoPct) - Number(incidenzaCostiPct) - Number(obiettivoPct);
+  if (!(spazio > 0)) {
+    return `Margine operativo ${margineOperativoPct}% + costi aziendali ${incidenzaCostiPct}% + ${obiettivoPct}% da cedere fanno ${100 - spazio}%: non resta niente per il costo della merce, e nessun prezzo basta. Abbassa l'obiettivo o una delle due percentuali.`;
+  }
+  const netto = p.prezzoNettoConsigliato, lordo = p.prezzoLordoConsigliato;
+  const oggi = quale === "lordo" ? prezzoAlPubblico(p) : p.prezzo_vendita;
+  const mira = quale === "lordo" ? lordo : netto;
+  const scarto = oggi != null && mira != null && oggi > 0 ? round1Erp(((mira - oggi) / oggi) * 100) : null;
+  return [
+    `Il prezzo ${quale} a cui questo prodotto andrebbe venduto per poter cedere il ${obiettivoPct}% pulito a un rivenditore.`,
+    `Costo ${fmtEuroErp2(costo)} diviso ${(spazio / 100).toFixed(2).replace(".", ",")} — cioe' cento meno margine operativo ${margineOperativoPct}%, meno costi aziendali ${incidenzaCostiPct}%, meno il ${obiettivoPct}% da cedere — fa ${fmtEuroErp2(netto)} netto, ${fmtEuroErp2(lordo)} lordo.`,
+    oggi != null && scarto != null
+      ? (scarto > 0 ? `Oggi e' ${fmtEuroErp2(oggi)}: servirebbe il ${fmtPctErp(scarto)} in piu'.` : `Oggi e' ${fmtEuroErp2(oggi)}, gia' sopra: c'e' margine.`)
+      : "Questo prodotto non ha ancora un prezzo di vendita.",
+    "Indicativo: non si salva e non cambia nulla ne' sul sito ne' al POS.",
+  ].join("\n");
+}
+// rosso se il prezzo di oggi non ci arriva, verde se ci arriva: e' tutta
+// l'informazione che serve a occhio, scorrendo la colonna
+function coloreConsigliato(consigliato, oggi) {
+  if (consigliato == null) return MUTED;
+  if (oggi == null) return NAVY;
+  return Number(oggi) + 0.005 < Number(consigliato) ? "#C0392B" : "#2E7D32";
+}
+
 // La somma massima cedibile di un pezzo (21/09/2026).
 //
 // Sul prezzo netto ci sono tre cose che non si possono cedere: il costo
@@ -50139,12 +50223,20 @@ const COLONNE_MAGAZZINO = [
   { label: "No shop", campo: null, larghezza: 64 },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 72 },
   { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84 },
+  // Il prezzo a cui andrebbe venduto per poter cedere al rivenditore la
+  // sua quota pulita (vedi prezzoConsigliatoDi). Sta accanto al prezzo di
+  // oggi perche' la domanda e' sempre "quanto sono lontano". Non si
+  // scrive niente: sono due caselle indicative.
+  { label: "Prezzo lordo consigliato", campo: "prezzoLordoConsigliato", direzioneIniziale: "desc", larghezza: 86 },
   // Il lordo e il netto uno accanto all'altro. Il margine si e' sempre
   // calcolato sul netto — com'e' giusto, l'IVA non e' ricavo — ma in
   // tabella si vedeva solo il lordo, e il conto non tornava a occhio:
   // 39,90 meno 10,00 non fa il 69,4% che c'era scritto. Fa il 69,4% su
   // 32,70, che e' il netto. Ora quel numero sta li' e il conto si legge.
   { label: "Prezzo netto vendita", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 78 },
+  // la percentuale obiettivo si scrive qui nel titolo, una per tutti i
+  // prodotti, come il margine operativo e l'incidenza
+  { label: "Prezzo netto consigliato", campo: "prezzoNettoConsigliato", direzioneIniziale: "desc", larghezza: 86, quotaRivenditore: true },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
   // una percentuale del prezzo netto di vendita, scritta nel titolo:
   // vale per tutti i prodotti, come l'incidenza
@@ -50463,7 +50555,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
 
 // sicurezzaPunti, pctQuotaColonna ed euroQuota arrivano dalla pagina: sono
 // le percentuali scritte nei titoli delle colonne "Sicurezza" e "Quota"
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, margineOperativoPct = MARGINE_OPERATIVO_DEFAULT, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, margineOperativoPct = MARGINE_OPERATIVO_DEFAULT, quotaRivenditorePct = QUOTA_RIVENDITORE_DEFAULT, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
   // la percentuale di sicurezza di QUESTO prodotto: si scrive nella cella
   // "Sicurezza" e si salva quando si esce dal campo (o con Invio). Vuota
   // = torna a quella generale
@@ -50744,6 +50836,20 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
               <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 15, lineHeight: 1 }}>⚠</span>
             )}
           </div>
+        </td>
+    ),
+    "Prezzo lordo consigliato": (
+        <td style={tdStyle} title={titoloConsigliato(p, quotaRivenditorePct, margineOperativoPct, incidenzaCostiPct, "lordo")}>
+          <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: coloreConsigliato(p.prezzoLordoConsigliato, prezzoAlPubblico(p)) }}>
+            {p.prezzoLordoConsigliato != null ? fmtEuroErp2(p.prezzoLordoConsigliato) : "N/D"}
+          </span>
+        </td>
+    ),
+    "Prezzo netto consigliato": (
+        <td style={tdStyle} title={titoloConsigliato(p, quotaRivenditorePct, margineOperativoPct, incidenzaCostiPct, "netto")}>
+          <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: coloreConsigliato(p.prezzoNettoConsigliato, p.prezzo_vendita) }}>
+            {p.prezzoNettoConsigliato != null ? fmtEuroErp2(p.prezzoNettoConsigliato) : "N/D"}
+          </span>
         </td>
     ),
     "Prezzo netto vendita": (
@@ -51111,6 +51217,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     if (valore === "" || valore == null) return;
     const n = Math.max(0, Math.min(100, Number(String(valore).replace(",", ".")) || 0));
     if (n !== Number(margineOperativoSalvato)) salvaMargineOperativo(n);
+  };
+  // la quota che si vuole poter cedere a un rivenditore: l'obiettivo del
+  // prezzo consigliato, scritta in cima alla sua colonna e valida per tutti
+  const [quotaRivenditoreSalvata, salvaQuotaRivenditore] = useImpostazioneCondivisa(CHIAVE_QUOTA_RIVENDITORE, QUOTA_RIVENDITORE_DEFAULT);
+  const quotaRivenditorePct = Number.isFinite(Number(quotaRivenditoreSalvata)) ? Number(quotaRivenditoreSalvata) : QUOTA_RIVENDITORE_DEFAULT;
+  const cambiaQuotaRivenditore = (valore) => {
+    if (valore === "" || valore == null) return;
+    const n = Math.max(0, Math.min(100, Number(String(valore).replace(",", ".")) || 0));
+    if (n !== Number(quotaRivenditoreSalvata)) salvaQuotaRivenditore(n);
   };
   // tutti i prodotti con una percentuale propria tornano a quella generale
   async function riallineaSicurezzaTutti() {
@@ -51615,6 +51730,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // il margine operativo in euro: la sua percentuale del prezzo netto
     // di vendita. Senza prezzo non c'e' niente da calcolare
     const margineOperativoEuro = p.prezzo_vendita != null ? round2((Number(p.prezzo_vendita) * margineOperativoPct) / 100) : null;
+    // il prezzo a cui andrebbe venduto per poter cedere al rivenditore la
+    // sua quota pulita: indicativo, non si salva da nessuna parte
+    const consigliato = prezzoConsigliatoDi(p, costoEffettivo, quotaRivenditorePct);
     // quanto si toglie dal cedibile per la sicurezza, in euro
     const sicurezzaEuro = sommaMassimaCedibileEuro != null ? round2((Math.max(0, sommaMassimaCedibileEuro) * sicurezzaProdotto) / 100) : null;
 
@@ -51641,6 +51759,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       punti,
       quota1, quota2, quota3,
       margineOperativoEuro,
+      prezzoNettoConsigliato: consigliato.netto,
+      prezzoLordoConsigliato: consigliato.lordo,
       sicurezzaEuro,
       sicurezzaProdotto,
       margineContanti: contanti.margine,
@@ -52338,6 +52458,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                           <span style={{ fontSize: 13, color: NAVY }}>%</span>
                         </div>
                       )}
+                      {col.quotaRivenditore && (
+                        // la quota da cedere al rivenditore: e' l'obiettivo
+                        // del prezzo consigliato, una per tutti i prodotti
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3 }} draggable={false}
+                          onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                          <CampoNumero valore={quotaRivenditorePct} min={0} max={100} onCambia={(n) => cambiaQuotaRivenditore(n)} titolo="Percentuale del prezzo netto che si vuole poter cedere pulita a un rivenditore: e' l'obiettivo del prezzo consigliato"
+                            style={{ ...fontBody, width: 40, fontSize: 13.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: "2px 3px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
+                          <span style={{ fontSize: 13, color: NAVY }}>%</span>
+                        </div>
+                      )}
                       {col.quotaIndice != null && (
                         // la percentuale della quota si scrive qui, nel
                         // titolo: click e trascinamento non devono
@@ -52377,7 +52507,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} margineOperativoPct={margineOperativoPct} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} margineOperativoPct={margineOperativoPct} quotaRivenditorePct={quotaRivenditorePct} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 15, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
