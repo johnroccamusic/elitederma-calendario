@@ -61706,9 +61706,19 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return stessaPersona(v.operatore_tipo, v.operatore_id, v.operatore_nome)
       || stessaPersona(v.registrata_da_tipo, v.registrata_da_id, v.registrata_da_nome);
   };
+  // Chi le vendite le deve vedere tutte, e perche':
+  //   - chi amministra e chi programma, che fanno i conti;
+  //   - chi ha in mano la logistica, che quelle vendite le deve
+  //     spedire — e per spedirle deve poterle trovare, comprese
+  //     quelle battute da altri.
+  // Non e' un nome scritto nel codice: e' il permesso "logisticaprodotti",
+  // cosi' il giorno che la logistica passa a un'altra persona la cosa
+  // la segue senza che nessuno debba ricordarsi di questa riga.
+  const vedeTutteLeVendite = ruoloUtente === "programmatore" || ruoloUtente === "amministratore"
+    || (utenteLoggato?.permessi || []).includes("logisticaprodotti");
   const venditePos = (venditeShop || [])
     .filter((v) => v.origine === "pos")
-    .filter(mioStorico)
+    .filter(vedeTutteLeVendite ? () => true : mioStorico)
     .sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""));
 
   // quadrata come sullo shop: aspectRatio invece di un'altezza fissa, così
@@ -61727,9 +61737,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="POS Vendita diretta" onClick={() => setMostraStorico(false)} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ ...stileTitoloPagina, color: NAVY }}>Le tue vendite al POS</div>
+              <div style={{ ...stileTitoloPagina, color: NAVY }}>{vedeTutteLeVendite ? "Storico vendite POS" : "Le tue vendite al POS"}</div>
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>
-                {operatoreReale?.nome ? `Solo quelle di ${toTitleCase(operatoreReale.nome)}.` : "Solo le tue."} L’elenco completo sta in Gestione magazzino e shop → Vendite al banco.
+                {vedeTutteLeVendite
+                  ? "Tutte le vendite al banco, di chiunque le abbia fatte."
+                  : `${operatoreReale?.nome ? `Solo quelle di ${toTitleCase(operatoreReale.nome)}.` : "Solo le tue."} L’elenco completo sta in Gestione magazzino e shop → Vendite al banco.`}
               </div>
             </div>
           </div>
@@ -61771,7 +61783,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   {/* vuoto non vuol dire "non ha venduto nessuno": vuol
                       dire "non hai venduto tu" */}
                   {venditePos.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Non hai ancora registrato nessuna vendita al banco.</td></tr>
+                    <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{vedeTutteLeVendite ? "Nessuna vendita al banco registrata." : "Non hai ancora registrato nessuna vendita al banco."}</td></tr>
                   )}
                 </tbody>
               </table>
