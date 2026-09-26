@@ -31,6 +31,7 @@ import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
 import QrConsensi from "./consensi/QrConsensi.jsx";
 import Ricevuta from "./pos/Ricevuta.jsx";
 import GestioneEventi from "./eventi/GestioneEventi.jsx";
+import PrezziListini from "./prezzi/PrezziListini.jsx";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import {
   CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
@@ -25047,6 +25048,7 @@ const AREA_MADRE_VISTA = {
   crmallievielenco: ["crmallievi"],
   generacoupon: ["compensipremi"],
   gestionepunti: ["compensipremi"],
+  prezzilistini: ["magazzinoshop"],
   venditeshop: ["magazzinoshop"],
   venditealbanco: ["magazzinoshop"],
   omaggi: ["magazzinoshop"],
@@ -36206,7 +36208,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS: un carrello
   // dimenticato tiene fermo materiale che nessuno puo' vendere, e da qui
@@ -36270,6 +36272,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
             // del tastino accanto al titolo (16/09/2026); solo per chi amministra
             { chiave: "carrellisospesi", title: "Carrelli sospesi", descrizione: "I carrelli salvati e non pagati di tutti gli operatori: materiale fermo che nessuno può vendere.", Icona: IconaCarrelloPos, attivo: true, onClick: () => setMostraSospesi(true), badge: sospesiTutti.length || undefined },
             { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
+            { chiave: "prezzilistini", title: "Prezzi e listini", descrizione: "A quanto andrebbe venduto ogni prodotto perché al venditore resti la sua quota pulita. Sola lettura.", Icona: IconaTilePrezzi, attivo: true, onClick: onApriPrezziListini },
           ]}
         />
       </div>
@@ -72748,6 +72751,10 @@ export default function App() {
   // la scheda di un prodotto aperta da fuori (dall'Advisor, cliccando il
   // nome): il magazzino la apre appena entra, e il primo "indietro"
   // riporta da dove si veniva invece che nel suo elenco
+  // la quota del venditore usata dal listino di "Prezzi e listini": sta
+  // in Impostazioni, non nel codice, e la view del database legge la
+  // stessa chiave — il conto lo fa lei, qui si scrive solo il numero
+  const [quotaVenditoreListino, salvaQuotaVenditoreListino] = useImpostazioneCondivisa("prezziListini_quotaVenditorePct", 50);
   const [prodottoDaAprireInMagazzino, setProdottoDaAprireInMagazzino] = useState(null);
   const [viewPrimaDiMagazzino, setViewPrimaDiMagazzino] = useState("magazzinoshop");
   const [dockCoricato, setDockCoricato] = useState(false);
@@ -73145,6 +73152,7 @@ export default function App() {
     setView("magazzino");
   }
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
+  function apriPrezziListini() { apriViewProtetta("prezzilistini"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
@@ -74223,6 +74231,7 @@ export default function App() {
           onBack={() => setView("home")}
           onApriMagazzino={apriMagazzino}
           onApriGestioneShop={apriGestioneShop}
+          onApriPrezziListini={apriPrezziListini}
           onApriVenditeShop={() => apriVenditeShop("magazzinoshop")}
           onApriVenditeAlBanco={() => apriVenditeAlBanco("magazzinoshop")}
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
@@ -74390,9 +74399,26 @@ export default function App() {
           registraInterceptaIndietro={registraInterceptaIndietro}
           venditeShop={venditeShop} ricarica={fetchDati}
           aperturaEsterna={prodottoDaAprireInMagazzino}
-          titoloIndietro={viewPrimaDiMagazzino === "advisor" ? "Advisor" : null}
+          titoloIndietro={viewPrimaDiMagazzino === "advisor" ? "Advisor" : (viewPrimaDiMagazzino === "prezzilistini" ? "Prezzi e listini" : null)}
           onBack={() => { setProdottoDaAprireInMagazzino(null); setView(viewPrimaDiMagazzino); }}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
+        />
+      )}
+
+      {view === "prezzilistini" && (
+        <PrezziListini
+          quotaVenditorePct={Number.isFinite(Number(quotaVenditoreListino)) ? Number(quotaVenditoreListino) : 50}
+          onCambiaQuotaVenditore={(n) => {
+            const v = Math.max(0, Math.min(99, Number(String(n).replace(",", ".")) || 0));
+            if (v !== Number(quotaVenditoreListino)) salvaQuotaVenditoreListino(v);
+          }}
+          onApriProdotto={(prodottoId) => apriProdottoInMagazzino(prodottoId, "prezzilistini")}
+          // le altre due percentuali si scrivono nei titoli delle colonne
+          // di Gestione magazzino: il link porta li', non in una pagina di
+          // impostazioni che per loro non esiste
+          onApriImpostazioni={() => { setViewPrimaDiMagazzino("prezzilistini"); setView("magazzino"); }}
+          onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "prezzilistini", "Prezzi e listini")}
         />
       )}
 
