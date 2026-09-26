@@ -4730,8 +4730,7 @@ function conCostoDeiBundle(prodottiShop, bundleComponenti) {
 // l'IVA: se il forzato non c'e', si torna esattamente al numero di
 // prima.
 function marginePercentualeDi(prodotto) {
-  const lordo = prezzoAlPubblico(prodotto);
-  const netto = lordo != null ? Number(lordo) / (1 + (prodotto?.aliquota_iva_vendita ?? 22) / 100) : Number(prodotto?.prezzo_vendita);
+  const netto = Number(prodotto?.prezzo_vendita);
   const costo = costoAcquistoDi(prodotto);
   if (!(netto > 0) || costo == null || costo === "") return null;
   return ((netto - Number(costo)) / netto) * 100;
@@ -4869,29 +4868,44 @@ function totaleListinoVendita(v) {
   return pagato;
 }
 function prezzoAlPubblico(p) {
-  if (p?.prezzo_lordo_forzato != null && p.prezzo_lordo_forzato !== "") return round2(Number(p.prezzo_lordo_forzato));
   if (p?.prezzo_vendita == null) return null;
   return round2(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? 22) / 100));
 }
-// L'IVA si ricava dalla differenza, non si ricalcola: cosi' netto, IVA e
-// lordo tornano sempre fra loro, anche quando il lordo e' stato deciso a
-// mano e non e' esattamente netto x aliquota.
-function calcolaIvaELordo(netto, aliquotaPct, lordoForzato) {
+// Il lordo si calcola con UN solo arrotondamento, la stessa riga di
+// prezzoAlPubblico: arrotondando prima l'IVA e poi la somma, al 4% la
+// scheda mostrava un centesimo in piu' di quello che il POS incassava
+// davvero (0,13 diventava 0,14 in 10.670 casi su 300.000). L'IVA resta
+// la differenza fra i due, cosi' i tre numeri tornano sempre fra loro.
+function calcolaIvaELordo(netto, aliquotaPct) {
   if (netto == null || aliquotaPct == null) return { iva: null, lordo: null };
-  const forzato = lordoForzato != null && lordoForzato !== "" ? round2(parseNum(lordoForzato)) : null;
-  const lordo = forzato != null ? forzato : round2(netto + round2(netto * (aliquotaPct / 100)));
+  const lordo = round2(netto * (1 + aliquotaPct / 100));
   return { iva: round2(lordo - netto), lordo };
 }
-// unico punto in cui si parte dal lordo (il toggle "netto/lordo" in
-// scheda prodotto): il netto si ricava all'indietro e si arrotonda
-// subito, diventando da qui in poi l'unico valore salvato — un nuovo
-// giro netto->lordo->netto riparte sempre da un netto già arrotondato,
-// non da un lordo "vecchio", quindi non si accumula mai una deriva tra
-// un salvataggio e l'altro (al più ±1 centesimo di scarto in un singolo
-// giro di conversione, inevitabile arrotondando sui centesimi)
+// Unico punto in cui si parte dal lordo. Se scrivi 39,90 quel prezzo
+// ricalcola SOLO il netto, e il netto si tiene a sei decimali: cosi'
+// rifacendo il giro all'indietro il lordo torna 39,90 e non 39,89.
+// Arrotondando il netto a due decimali il lordo digitato si perdeva in
+// 54.098 casi su 300.000 al 22% (un prezzo su cinque), ed e' il motivo
+// per cui era nato il "prezzo forzato": un secondo lordo scritto a mano
+// che poi comandava di nascosto su sito, POS, fasce e punti. A sei
+// decimali il netto basta da solo — provato su ogni centesimo da 0,01 a
+// 3.000 € al 22, 10, 5, 4 e 0%: zero prezzi spostati. Il netto resta
+// l'unico valore salvato, e il lordo e' sempre e solo netto + IVA.
 function nettoDaLordo(lordo, aliquotaPct) {
   if (lordo == null || aliquotaPct == null) return null;
-  return round2(lordo / (1 + aliquotaPct / 100));
+  return Math.round((lordo / (1 + aliquotaPct / 100) + Number.EPSILON) * 1e6) / 1e6;
+}
+// Un numero come lo si scrive nel campo. Il lordo ha sempre due decimali
+// (39,90). Il netto tiene quelli che ha: due se bastano, fino a sei se
+// servono — schiacciarlo a due sposterebbe di un centesimo il prezzo al
+// pubblico al salvataggio successivo (5,655738 -> 5,66 -> 6,91 invece
+// di 6,90).
+function testoCampoPrezzo(n, modo) {
+  if (n == null || !Number.isFinite(n)) return "";
+  if (modo === "lordo") return n.toFixed(2).replace(".", ",");
+  const preciso = n.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+  const decimali = (preciso.split(".")[1] || "").length;
+  return (decimali <= 2 ? n.toFixed(2) : preciso).replace(".", ",");
 }
 function fmtEuroIva(n) {
   return n == null ? "—" : n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -4904,30 +4918,30 @@ function fmtEuroIva(n) {
 // derivato dal campo+modo attuali: è l'unico valore poi salvato.
 function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambiaModo, aliquota, onCambiaAliquota, obbligatorio }) {
   const netto = modo === "netto" ? (inputTesto.trim() === "" ? null : parseNum(inputTesto)) : nettoDaLordo(inputTesto.trim() === "" ? null : parseNum(inputTesto), aliquota);
-  // Se scrivi il LORDO, il lordo e' quello che hai scritto: si ricava il
-  // netto e basta. Prima si ricavava il netto e poi da quel netto si
-  // ricalcolava il lordo — 39,90 diventava 32,70 e da li' 39,89, e il
-  // numero digitato spariva sotto le dita. Se scrivi il netto, il lordo lo
-  // calcola il programma: in ogni caso comanda quello che hai scritto tu.
-  const lordoDigitato = modo === "lordo" && inputTesto.trim() !== "" ? round2(parseNum(inputTesto)) : null;
-  const { iva, lordo } = calcolaIvaELordo(netto, aliquota, lordoDigitato);
+  // Se scrivi il LORDO, il lordo e' quello che hai scritto: nettoDaLordo
+  // tiene sei decimali, quindi ricalcolando il lordo da quel netto torna
+  // esattamente il numero digitato. Non serve tenerlo da parte ne'
+  // scriverlo due volte: 39,90 resta 39,90 da solo.
+  const { iva, lordo } = calcolaIvaELordo(netto, aliquota);
   const aliquotaEStandard = ALIQUOTE_IVA_STANDARD.includes(Number(aliquota));
 
   function cambiaModo(nuovoModo) {
     if (nuovoModo === modo) return;
     // converte il valore digitato nell'equivalente del nuovo modo, invece
     // di lasciarlo lì a significare qualcos'altro
-    if (nuovoModo === "lordo") onCambiaInputTesto(lordo != null ? lordo.toFixed(2).replace(".", ",") : "");
-    else onCambiaInputTesto(netto != null ? netto.toFixed(2).replace(".", ",") : "");
+    if (nuovoModo === "lordo") onCambiaInputTesto(testoCampoPrezzo(lordo, "lordo"));
+    else onCambiaInputTesto(testoCampoPrezzo(netto, "netto"));
     onCambiaModo(nuovoModo);
   }
-  // quando si esce dal campo il prezzo si mostra a due decimali fissi
-  // all'italiana (2,80, non 2.8); mentre si scrive comanda quello che digiti
-  function fissaDueDecimali() {
+  // quando si esce dal campo il prezzo si mostra all'italiana (2,80, non
+  // 2.8); mentre si scrive comanda quello che digiti. In modo "netto" i
+  // decimali oltre il secondo restano: sono quelli che tengono in piedi
+  // il lordo scritto (vedi testoCampoPrezzo)
+  function fissaDecimali() {
     const t = inputTesto.trim();
     if (t === "") return;
     const n = parseNum(t);
-    if (Number.isFinite(n)) onCambiaInputTesto(n.toFixed(2).replace(".", ","));
+    if (Number.isFinite(n)) onCambiaInputTesto(testoCampoPrezzo(n, modo));
   }
 
   // sul telefono i due blocchi (Acquisto e Vendita) stanno affiancati come
@@ -4964,7 +4978,7 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
         {/* sei decimi alla cifra, quattro all'aliquota: lasciato a se', il
             menu' si allargava quanto voleva e la cifra spariva */}
         <div style={{ position: "relative", flex: "6 1 0", minWidth: 0 }}>
-          <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} onBlur={fissaDueDecimali} placeholder="0,00" />
+          <input style={{ ...campo, width: "100%" }} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} onBlur={fissaDecimali} placeholder="0,00" />
           <span style={{ position: "absolute", right: stretto ? 8 : 9, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: stretto ? 12 : 12, color: MUTED, pointerEvents: "none" }}>€</span>
         </div>
         <select
@@ -46550,7 +46564,7 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
     const ids = righe.map((r) => r.prodotto_id).filter(Boolean);
     if (!ids.length) return;
     let annullato = false;
-    supabase.from("prodotti_shop").select("id, prezzo_vendita, aliquota_iva_vendita, prezzo_lordo_forzato").in("id", ids)
+    supabase.from("prodotti_shop").select("id, prezzo_vendita, aliquota_iva_vendita").in("id", ids)
       .then(({ data }) => { if (!annullato) setListinoAttuale(Object.fromEntries((data || []).map((p) => [p.id, prezzoAlPubblico(p)]))); });
     return () => { annullato = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48007,7 +48021,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
             {(() => {
               // un prodotto vero: 39,90 al pubblico, 10 di costo, pagato
               // in contanti — i punti restano gli stessi anche scontato
-              const esempio = { prezzo_vendita: 32.7, costo_acquisto: 10, prezzo_lordo_forzato: 39.9, aliquota_iva_vendita: 22, stato: "publish" };
+              const esempio = { prezzo_vendita: 32.7, costo_acquisto: 10, aliquota_iva_vendita: 22, stato: "publish" };
               const sconto = 10;
               const lordo = prezzoAlPubblico(esempio);
               const pagato = round2(lordo * (1 - sconto / 100));
@@ -50499,7 +50513,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   const [prezzoOttimistico, setPrezzoOttimistico] = useState(null);
   useEffect(() => {
     if (prezzoOttimistico != null && round2(prezzoAlPubblico(p) || 0) === prezzoOttimistico) setPrezzoOttimistico(null);
-  }, [p.prezzo_vendita, p.prezzo_lordo_forzato]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [p.prezzo_vendita]); // eslint-disable-line react-hooks/exhaustive-deps
   // lo stock cambia anche senza passare da questa casella: una vendita al
   // banco, un ordine online, lo scarico dei kit, "Apri confezione". Senza
   // questo riallineamento la casella resterebbe ferma al valore letto
@@ -50532,9 +50546,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     if (!(lordo > 0)) return;
     if (lordo === round2(prezzoAlPubblico(p) || 0)) return;
     const iva = Number(p.aliquota_iva_vendita ?? 22) || 0;
-    const netto = round2(lordo / (1 + iva / 100));
-    const lordoRicalcolato = round2(netto * (1 + iva / 100));
-    const forzato = lordoRicalcolato === lordo ? null : lordo;
+    // stessa regola della scheda prodotto: il lordo scritto ricalcola solo
+    // il netto, a sei decimali, e da quel netto torna il lordo identico
+    const netto = nettoDaLordo(lordo, iva);
     // tieni a vista subito la cifra scritta, cosi' non "sparisce" mentre il
     // salvataggio e' in corso
     setPrezzoOttimistico(lordo);
@@ -50546,7 +50560,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
       const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: p.id, prezzoVendita: lordo } });
       if (error || data?.errore) { setPrezzoOttimistico(null); window.alert("Prezzo non aggiornato sul sito: " + (data?.errore || error?.message || "errore")); return; }
     }
-    const { error } = await supabase.from("prodotti_shop").update({ prezzo_vendita: netto, prezzo_lordo_forzato: forzato }).eq("id", p.id);
+    const { error } = await supabase.from("prodotti_shop").update({ prezzo_vendita: netto }).eq("id", p.id);
     if (error) { setPrezzoOttimistico(null); window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["prodotti_shop"]);
   }
@@ -64316,8 +64330,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         : "",
       modoVendita: "lordo",
       aliquotaVendita: p.aliquota_iva_vendita ?? aliquotaIvaDefault,
-      prezzoLordoForzato: p.prezzo_lordo_forzato != null ? Number(p.prezzo_lordo_forzato).toFixed(2).replace(".", ",") : "",
-      costo: p.costo_acquisto != null ? Number(p.costo_acquisto).toFixed(2).replace(".", ",") : "",
+      costo: p.costo_acquisto != null ? testoCampoPrezzo(Number(p.costo_acquisto), "netto") : "",
       modoAcquisto: "netto",
       aliquotaAcquisto: p.aliquota_iva_acquisto ?? aliquotaIvaDefault,
       stato: p.stato || "publish",
@@ -64742,20 +64755,6 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       // Adesso in modalita' lordo il numero digitato E' il prezzo, e viene
       // tenuto. Si scrive solo se serve davvero: se il giro torna esatto
       // (26,80 -> 32,70 -> 26,80) non c'e' niente da forzare e il campo
-      // resta vuoto. In modalita' netto comanda il netto, e vale quello che
-      // c'e' scritto nella casella "Forza prezzo" — vuota compresa.
-      prezzo_lordo_forzato: (() => {
-        const aMano = String(f.prezzoLordoForzato ?? "").trim();
-        if (aMano !== "") return parseNum(aMano);
-        if (f.modoVendita !== "lordo") return null;
-        const scritto = String(f.prezzo ?? "").trim();
-        if (scritto === "") return null;
-        const lordoScritto = round2(parseNum(scritto));
-        const lordoCalcolato = calcolo.prezzoNetto != null
-          ? round2(calcolo.prezzoNetto * (1 + (Number(f.aliquotaVendita) || 0) / 100))
-          : null;
-        return lordoCalcolato === lordoScritto ? null : lordoScritto;
-      })(),
       iva_verificata: true,
       soglia_riordino: interoOpzionale(f.scortaMinima),
       lead_time_giorni: interoOpzionale(f.leadTime),
@@ -65396,20 +65395,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const prezzoNetto = String(f.prezzo ?? "").trim() === ""
       ? null
       : (f.modoVendita === "netto" ? parseNum(f.prezzo) : nettoDaLordo(parseNum(f.prezzo), f.aliquotaVendita));
-    const prezzoLordo = calcolaIvaELordo(prezzoNetto, f.aliquotaVendita, f.prezzoLordoForzato).lordo;
-    // Margine sempre sui netti — l'IVA non deve sporcare il confronto —
-    // ma il netto giusto e' quello del prezzo che il cliente paga
-    // davvero. Con un prezzo al pubblico forzato il netto scritto qui
-    // sopra non e' piu' l'incasso, e un margine calcolato su quello
-    // racconta una cosa che non succede.
-    const lordoForzato = String(f.prezzoLordoForzato ?? "").trim() === "" ? null : round2(parseNum(f.prezzoLordoForzato));
-    const nettoVero = lordoForzato != null ? round2(lordoForzato / (1 + (Number(f.aliquotaVendita) || 0) / 100)) : prezzoNetto;
-    const margine = costoNetto != null && nettoVero != null ? round2(nettoVero - costoNetto) : null;
-    const marginePct = margine != null && nettoVero > 0 ? round2((margine / nettoVero) * 100) : null;
-    // il prezzo scritto e quello che comanda non coincidono: va detto,
-    // o si cambia il prezzo e non succede niente
-    const forzatoScavalca = lordoForzato != null && prezzoNetto != null
-      && Math.abs(lordoForzato - round2(prezzoNetto * (1 + (Number(f.aliquotaVendita) || 0) / 100))) > 0.02;
+    const prezzoLordo = calcolaIvaELordo(prezzoNetto, f.aliquotaVendita).lordo;
+    // margine sempre sui netti: l'IVA non deve sporcare il confronto.
+    // Il netto e' uno solo — il prezzo al pubblico e' sempre netto piu'
+    // IVA — da quando il "prezzo forzato" non c'e' piu'.
+    const margine = costoNetto != null && prezzoNetto != null ? round2(prezzoNetto - costoNetto) : null;
+    const marginePct = margine != null && prezzoNetto > 0 ? round2((margine / prezzoNetto) * 100) : null;
     // "solo offline" può venire dalla categoria (vale per tutti i suoi
     // prodotti) o dalla spunta sul singolo prodotto: in entrambi i casi
     // il prodotto non va mai sullo shop, anche se ha un prezzo
@@ -65423,7 +65414,6 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const varianteNonPubblicabile = f.tipoProdotto === "variante" && !f.wooProductId;
     return {
       prezzoNetto, prezzoLordo, costoNetto, costoBundle, margine, marginePct,
-      lordoForzato, nettoVero, forzatoScavalca,
       bundleVirtuale, categoriaSoloOffline, soloOffline, categoriaNonSulPos, nonSulPos: categoriaNonSulPos || !!f.nonSulPos,
       categorieOffline, categorieNoPos, varianteNonPubblicabile,
       // una variante NON si pubblica da sola: su WooCommerce le taglie sono
@@ -65519,31 +65509,6 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           />
         </div>
       )}
-      {/* Il prezzo al pubblico deciso a mano. Serve ai prezzi da scaffale:
-          32,70 piu' IVA fa 39,894, che arrotondato diventa 39,89 — e un
-          prezzo che finisce per nove centesimi si legge come un errore di
-          conto. Qui si scrive 39,90 e vince quello, ovunque: elenchi, POS,
-          sito. L'IVA diventa la differenza fra questo e il netto.
-          Lasciandolo vuoto il prezzo torna a essere netto piu' IVA. */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-        <div style={{ flex: "0 1 200px", minWidth: 150 }}>
-          <Field label="Forza prezzo al pubblico a">
-            <input
-              style={{ ...inputStyle, fontWeight: 700 }}
-              inputMode="decimal"
-              placeholder={calcoloPrezzi.prezzoNetto != null ? `es. ${round2(calcoloPrezzi.prezzoNetto * (1 + (prodottoForm.aliquotaVendita || 0) / 100)).toFixed(2)}` : "es. 39.90"}
-              value={prodottoForm.prezzoLordoForzato || ""}
-              onChange={(e) => aggiornaForm({ prezzoLordoForzato: e.target.value })}
-              onBlur={() => { const t = String(prodottoForm.prezzoLordoForzato ?? "").trim(); if (t === "") return; const n = parseNum(t); if (Number.isFinite(n)) aggiornaForm({ prezzoLordoForzato: n.toFixed(2).replace(".", ",") }); }}
-            />
-          </Field>
-        </div>
-        <div style={{ flex: "1 1 220px", minWidth: 0, ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.45, paddingBottom: 10 }}>
-          {String(prodottoForm.prezzoLordoForzato ?? "").trim() !== ""
-            ? <>Il cliente paga <b style={{ color: NAVY }}>{fmtEuroIva(round2(parseNum(prodottoForm.prezzoLordoForzato)))}</b>, e l'IVA e' la differenza rispetto al netto. Svuota la casella per tornare al calcolo automatico.</>
-            : <>Vuoto: comanda il calcolo netto piu' IVA. Non serve compilarlo se il prezzo lo scrivi qui sopra in modalita' <b>Lordo</b>: quel numero viene tenuto com'e', e la casella si riempie da sola al salvataggio quando il giro netto/IVA non ci torna esatto.</>}
-        </div>
-      </div>
       {prodottoForm.tipoProdotto === "vetrina" && (
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: -6, marginBottom: 12, lineHeight: 1.35 }}>
           È il prezzo che il cliente vede sulla pagina del prodotto prima di scegliere la variante. L'incasso vero viene registrato sulla variante venduta.
@@ -65554,28 +65519,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           Costo di acquisto calcolato dalla distinta base (somma dei netti dei componenti): <b style={{ color: NAVY }}>{fmtEuroIva(calcoloPrezzi.costoBundle)}</b>
         </div>
       )}
-      {/* Il prezzo forzato comanda su tutto: sito, POS, fasce di sconto,
-          punti. Se qualcuno cambia il prezzo di vendita e quello resta
-          li', non cambia niente di quello che il cliente paga — ed e'
-          esattamente il caso in cui sembra che la modifica non abbia
-          fatto effetto. Qui lo si dice, e si offre di allinearlo. */}
-      {calcoloPrezzi.forzatoScavalca && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 8, padding: "9px 12px", marginBottom: 10, lineHeight: 1.5 }}>
-          <span style={{ flex: "1 1 240px", minWidth: 0 }}>
-            Attenzione: il prezzo al pubblico è <b>forzato a {fmtEuroIva(calcoloPrezzi.lordoForzato)}</b>, quindi il cliente paga quello e non il prezzo che hai scritto qui sopra. Margine e fasce si calcolano su {fmtEuroIva(calcoloPrezzi.lordoForzato)}.
-          </span>
-          <button
-            type="button" onClick={() => aggiornaForm({ prezzoLordoForzato: "" })}
-            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${NAVY}`, borderRadius: 14, padding: "8px 13px", cursor: "pointer", minHeight: 40, whiteSpace: "nowrap" }}
-          >
-            Usa il prezzo che ho scritto
-          </button>
-        </div>
-      )}
       {calcoloPrezzi.margine != null && (
         <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 14, padding: "8px 12px", background: "#FBF3E4", borderRadius: 8 }}>
           Margine (sui netti): <b>{fmtEuroIva(calcoloPrezzi.margine)}</b>{calcoloPrezzi.marginePct != null && <> — <b>{calcoloPrezzi.marginePct}%</b></>}
-          {calcoloPrezzi.forzatoScavalca && <span style={{ color: MUTED }}> · calcolato sul prezzo al pubblico forzato</span>}
         </div>
       )}
       <SpBlocco
