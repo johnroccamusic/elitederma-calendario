@@ -61678,7 +61678,38 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return true;
   }
 
-  const venditePos = (venditeShop || []).filter((v) => v.origine === "pos").sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""));
+  // Lo storico del POS e' il PROPRIO storico: ognuno vede le vendite che
+  // ha fatto, non quelle di tutta l'accademia. Chi sta al banco apre
+  // quel tasto per ritrovare una vendita sua — di solito l'ultima, per
+  // controllare un importo o rifare uno scontrino — e l'elenco di tutti
+  // era insieme inutile e indiscreto.
+  //
+  // "Sua" in due modi, perche' sono due cose diverse e vanno tutte e
+  // due: la vendita ATTRIBUITA a lei (operatore_*, a chi contano punti e
+  // provvigione) e quella BATTUTA da lei (registrata_da_*, chi l'ha
+  // materialmente chiusa — succede a chi amministra di chiudere il
+  // carrello sospeso di un'altra).
+  //
+  // L'elenco completo resta dov'e' sempre stato, in Gestione magazzino e
+  // shop → Vendite al banco, per chi ha quell'area.
+  const mioStorico = (v) => {
+    if (!operatoreReale?.id && !operatoreReale?.nome) return false;
+    // Con tutti e due gli identificativi si confrontano quelli, che non
+    // sbagliano. Se ne manca uno — succede a chi entra con la sola
+    // password, senza una scheda di master o venditore — resta il nome,
+    // che al banco e' unico.
+    const comeSiChiama = (n) => String(n || "").trim().toUpperCase();
+    const stessaPersona = (tipo, id, nome) => {
+      if (operatoreReale.id && id) return operatoreReale.id === id && operatoreReale.tipo === tipo;
+      return !!nome && !!operatoreReale.nome && comeSiChiama(nome) === comeSiChiama(operatoreReale.nome);
+    };
+    return stessaPersona(v.operatore_tipo, v.operatore_id, v.operatore_nome)
+      || stessaPersona(v.registrata_da_tipo, v.registrata_da_id, v.registrata_da_nome);
+  };
+  const venditePos = (venditeShop || [])
+    .filter((v) => v.origine === "pos")
+    .filter(mioStorico)
+    .sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""));
 
   // quadrata come sullo shop: aspectRatio invece di un'altezza fissa, così
   // il riquadro resta un quadrato vero qualunque sia la larghezza della
@@ -61695,7 +61726,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="POS Vendita diretta" onClick={() => setMostraStorico(false)} />
-            <div style={{ ...stileTitoloPagina, color: NAVY }}>Storico vendite POS</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...stileTitoloPagina, color: NAVY }}>Le tue vendite al POS</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>
+                {operatoreReale?.nome ? `Solo quelle di ${toTitleCase(operatoreReale.nome)}.` : "Solo le tue."} L’elenco completo sta in Gestione magazzino e shop → Vendite al banco.
+              </div>
+            </div>
           </div>
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 14 }}>
             <div style={{ overflowX: "auto" }}>
@@ -61732,8 +61768,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                       </tr>
                     );
                   })}
+                  {/* vuoto non vuol dire "non ha venduto nessuno": vuol
+                      dire "non hai venduto tu" */}
                   {venditePos.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco registrata.</td></tr>
+                    <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Non hai ancora registrato nessuna vendita al banco.</td></tr>
                   )}
                 </tbody>
               </table>
