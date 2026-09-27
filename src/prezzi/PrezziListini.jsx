@@ -143,12 +143,19 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
       .lst-privato .lst-tab, .lst-privato .lst-tab tbody,
       .lst-privato .lst-tab tr, .lst-privato .lst-tab td { display: block; }
       .lst-privato .lst-tab colgroup { display: none; }
-      .lst-privato .lst-tab tr { display: grid; grid-template-columns: repeat(8, 1fr);
-                                 gap: 0 3px; padding: 10px 8px; border-top: 1px solid ${CREAM_BORDER}; }
-      .lst-privato .lst-tab td { border-top: none; padding: 0; font-size: 12.5px; text-align: center; }
+      /* minmax(0, 1fr) e non 1fr: con "1fr" il minimo di ogni colonna e'
+         la larghezza del suo contenuto, e le celle hanno white-space
+         nowrap — otto colonne cosi' sfondano lo schermo e le ultime
+         finiscono fuori a destra. Proprio "a lui", che e' quella che
+         serve a vedere se il bilanciato bilancia. */
+      .lst-privato .lst-tab tr { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr));
+                                 gap: 0 2px; padding: 10px 6px; border-top: 1px solid ${CREAM_BORDER}; }
+      .lst-privato .lst-tab td { border-top: none; padding: 0; font-size: 12.5px; text-align: center;
+                                 min-width: 0; white-space: normal; overflow-wrap: anywhere; }
       .lst-privato .lst-tab td::before { content: attr(data-eti); display: block; font-size: 7.5px;
-                                         font-weight: 700; letter-spacing: .2px; text-transform: uppercase;
-                                         color: ${MUTED}; margin-bottom: 1px; line-height: 1.1; }
+                                         font-weight: 700; letter-spacing: 0; text-transform: uppercase;
+                                         color: ${MUTED}; margin-bottom: 1px; line-height: 1.05;
+                                         white-space: normal; }
       /* nome e foto occupano insieme la riga di sopra */
       .lst-privato .lst-tab td.lst-foto { grid-column: 1 / 2; padding: 0 !important; }
       .lst-privato .lst-tab td.lst-foto::before { content: none; }
@@ -282,7 +289,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                               : <span className="lst-vuota" />}
                           </td>
                           <td className="lst-nome">{r.nome}</td>
-                          {privato && <td className="lst-costo" data-eti="acquisto">{cifra(r.costo_acquisto)}</td>}
+                          {privato && <td className="lst-costo" data-eti="acq.">{cifra(r.costo_acquisto)}</td>}
                           <td data-eti="lordo">{cifra(r.pubblico_lordo)}</td>
                           <td data-eti="netto">{cifra(r.pubblico_netto)}</td>
                           <td data-eti="sconto">
@@ -292,11 +299,11 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                               <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_fase_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_fase_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_fase_pct).replace(".", ",")}%</span>
                             )}
                           </td>
-                          <td className="lst-riv" data-eti="al riv.">{cifra(r.prezzo_fase)}</td>
+                          <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_fase)}</td>
                           {privato && (
                             <>
-                              <td className="lst-resta" data-eti="a te senza" title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
-                              <td className="lst-resta-riv" data-eti="a te con" title={r.utile_fase != null ? `${fase.nome}: a te ${euro(r.ti_resta_fase)} dopo le imposte (${euro(r.utile_fase)} prima), a lui ${euro(r.guadagno_riv_fase)}.` : undefined}>{cifra(r.ti_resta_fase)}</td>
+                              <td className="lst-resta" data-eti="a te\nsenza" title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
+                              <td className="lst-resta-riv" data-eti="a te\ncon" title={r.utile_fase != null ? `${fase.nome}: a te ${euro(r.ti_resta_fase)} dopo le imposte (${euro(r.utile_fase)} prima), a lui ${euro(r.guadagno_riv_fase)}.` : undefined}>{cifra(r.ti_resta_fase)}</td>
                               <td className="lst-lui" data-eti="a lui" title="Quello che il rivenditore guadagna rivendendo al prezzo di listino: la differenza fra quanto paga lui e quanto incassa dal cliente.">{cifra(r.guadagno_riv_fase)}</td>
                             </>
                           )}
