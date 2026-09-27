@@ -1210,6 +1210,25 @@ function vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato
   return codici.includes("cc");
 }
 
+// Chi puo' correggere a mano il prezzo di una riga del carrello al POS.
+// Chiesto il 27/09/2026: al banco capita di concordare una cifra diversa
+// dal listino — un pezzo con la scatola ammaccata, un fuori tutto, una
+// cortesia a una cliente storica. Finora l'unica strada era uno sconto
+// sul carrello intero, che e' un'altra cosa e sporca i conti dei coupon.
+//
+// E' un permesso personale, come la vista forzata: il programmatore e
+// Andrea. In anagrafica il venditore e' registrato come "ANDREA" senza
+// cognome, quindi si confronta il nome di battesimo; "paura" e' li'
+// perche' il giorno che il cognome verra' scritto continui a funzionare.
+const NOMI_CORREZIONE_PREZZO = ["andrea", "paura"];
+function puoCorreggerePrezzoPos(ruoloUtente, utenteLoggato, venditoreLoggato) {
+  if (ruoloUtente === "programmatore") return true;
+  return [utenteLoggato?.nome, venditoreLoggato?.nome]
+    .filter(Boolean)
+    .some((n) => String(n).trim().toLowerCase().split(/\s+/)
+      .some((parola) => NOMI_CORREZIONE_PREZZO.includes(parola)));
+}
+
 function TastoVistaForzata({ abilitato = false }) {
   // Se la vista era rimasta forzata da un accesso precedente e ora chi
   // entra non puo' cambiarla, si torna normali da soli: altrimenti
@@ -60871,6 +60890,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // monca in fondo come facevano dodici
   const [righePerPagina, setRighePerPagina] = useState(15);
   const [carrello, setCarrello] = useState([]); // { prodottoId, nome, prezzo, quantita, sku, disponibili }
+  // il testo grezzo del prezzo corretto a mano, finche' si digita
+  const [bozzaPrezzo, setBozzaPrezzo] = useState({});
+  const correzionePrezzo = puoCorreggerePrezzoPos(ruoloUtente, utenteLoggato, venditoreLoggato);
   const [scontoTipo, setScontoTipo] = useState("percentuale"); // percentuale | importo
   const [scontoValore, setScontoValore] = useState("");
   // sconto vendita (manuale) e coupon (dallo sconto dell'edizione di corso
@@ -61088,6 +61110,31 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   function rimuoviRiga(prodottoId) {
     setCarrello((prev) => prev.filter((r) => r.prodottoId !== prodottoId));
+    setBozzaPrezzo((prev) => { const d = { ...prev }; delete d[prodottoId]; return d; });
+  }
+  // Il prezzo corretto a mano sulla riga. Si scrive SUBITO nel carrello a
+  // ogni cifra battuta — niente "conferma", che al banco ci si dimentica
+  // e si incassa il listino credendo di aver corretto. `bozzaPrezzo`
+  // tiene solo il testo grezzo mentre si digita, perche' "1," e "1,0"
+  // sono numeri identici ma non si possono cancellare se il campo
+  // rimostra il numero a ogni tasto.
+  //
+  // `prezzoListino` resta scritto sulla riga: serve a mostrare da dove si
+  // e' partiti, a tornare indietro, e a lasciarne traccia sulla vendita.
+  // Il magazzino non c'entra: scarica sulla quantita', che non si tocca.
+  function correggiPrezzoRiga(prodottoId, testo) {
+    setBozzaPrezzo((prev) => ({ ...prev, [prodottoId]: testo }));
+    if (String(testo).trim() === "") return;   // campo svuotato: si aspetta
+    const n = Math.max(0, round2(parseNum(testo)));
+    setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId
+      ? { ...r, prezzo: n, prezzoListino: r.prezzoListino ?? r.prezzo }
+      : r)));
+  }
+  function ripristinaPrezzoRiga(prodottoId) {
+    setBozzaPrezzo((prev) => { const d = { ...prev }; delete d[prodottoId]; return d; });
+    setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId && r.prezzoListino != null
+      ? { ...r, prezzo: r.prezzoListino, prezzoListino: undefined }
+      : r)));
   }
   function svuotaCarrello() { setCarrello([]); }
   // la fotografia del carrello da mettere in sospeso: righe, note, metodo,
@@ -61629,7 +61676,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       const sconto = omaggioAttivo ? lordiRiga[i] : scontiRiga[i];
       return {
         prodotto_id: r.prodottoId, nome: r.nome, quantita: r.quantita,
+        // il prezzo che ha fatto la vendita. Se e' stato corretto a mano
+        // e' quello corretto — e' quello che si e' incassato davvero, ed
+        // e' su quello che vanno margini, IVA e punti. Da dove si era
+        // partiti resta scritto accanto, o la correzione sparisce
         prezzo_listino: r.prezzo,
+        ...(r.prezzoListino != null ? { prezzo_corretto_a_mano: true, prezzo_listino_originale: round2(r.prezzoListino) } : {}),
         // il pezzo uscito da un kit che sta in aula l'allieva ce l'ha gia'
         // in mano: chi compone il pacco non deve rispedirglielo
         ...(dalKitPerProdotto[r.prodottoId] ? { dal_kit: true } : {}),
@@ -62068,7 +62120,31 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</div>
-                <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
+                {correzionePrezzo ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>€</span>
+                    <input
+                      value={bozzaPrezzo[r.prodottoId] ?? String(r.prezzo ?? "").replace(".", ",")}
+                      onChange={(e) => correggiPrezzoRiga(r.prodottoId, e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      inputMode="decimal"
+                      title="Prezzo di questa riga. Il pezzo esce lo stesso dal magazzino: cambia solo quanto si incassa."
+                      style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, fontWeight: 700, width: 54,
+                        color: r.prezzoListino != null ? "#8A6D1D" : NAVY, background: r.prezzoListino != null ? "#FDF8EC" : "#fff",
+                        border: `1px solid ${r.prezzoListino != null ? "#EBD9AE" : CREAM_BORDER}`, borderRadius: 6,
+                        padding: "1px 5px", textAlign: "right" }} />
+                    {r.prezzoListino != null && (
+                      <>
+                        <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10, color: grigioCarrello, textDecoration: "line-through" }}>{fmtEuroErp2(r.prezzoListino)}</span>
+                        <button onClick={() => ripristinaPrezzoRiga(r.prodottoId)} title="Rimetti il prezzo di listino"
+                          style={{ background: "none", border: "none", color: "#8A6D1D", cursor: "pointer", fontSize: isMobile ? 11 : 12, padding: 0, lineHeight: 1 }}>↺</button>
+                      </>
+                    )}
+                    {r.sku ? <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10, color: grigioCarrello, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Cod. {r.sku}</span> : null}
+                  </div>
+                ) : (
+                  <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
                 <button onClick={() => decrementaRiga(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
