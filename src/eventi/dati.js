@@ -103,18 +103,23 @@ export function quantiGiorni(evento) {
 // Serve a chiudere il conto della consegna: quello che e' partito meno
 // quello che e' tornato deve fare quello che si e' venduto. Se non
 // torna, o manca qualcosa o qualcuno ha dimenticato di segnarlo.
-export async function vendutoAllEvento(eventoId) {
+// Quello che e' USCITO dalla scatola dell'evento: venduto e omaggiato,
+// separati. Un pezzo regalato non porta ricavo ma non e' nemmeno
+// tornato a casa: contarlo solo nel venduto faceva risultare "mancante"
+// tutto cio' che si regala in fiera, che e' esattamente quello che in
+// fiera si fa. Il conto della consegna deve pareggiare sulla SOMMA.
+export async function usciteAllEvento(eventoId) {
   const { data, error } = await supabase
     .from("vendite_shop").select("prodotti, tipo_movimento")
     .eq("evento_id", eventoId);
   if (error) throw new Error(error.message);
-  const perProdotto = {};
+  const venduto = {}, omaggiato = {};
   (data || []).forEach((v) => {
-    if (v.tipo_movimento === "omaggio") return;
+    const dove = v.tipo_movimento === "omaggio" ? omaggiato : venduto;
     (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
       if (!r.prodotto_id) return;
-      perProdotto[r.prodotto_id] = (perProdotto[r.prodotto_id] || 0) + (Number(r.quantita) || 0);
+      dove[r.prodotto_id] = (dove[r.prodotto_id] || 0) + (Number(r.quantita) || 0);
     });
   });
-  return perProdotto;
+  return { venduto, omaggiato };
 }

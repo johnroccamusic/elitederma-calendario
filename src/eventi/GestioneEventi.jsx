@@ -10,8 +10,9 @@ import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
-  periodoEvento, quantiGiorni, vendutoAllEvento,
+  periodoEvento, quantiGiorni, usciteAllEvento,
 } from "./dati.js";
+import { leggiConto, calcolaConto } from "./conto.js";
 import { supabase } from "../supabase.js";
 
 const euro = (n) => `${(Number(n) || 0).toFixed(2).replace(".", ",")} €`;
@@ -282,13 +283,13 @@ function SchedaTeam({ eventoId, persone }) {
 
 function SchedaMateriali({ eventoId, prodotti }) {
   const [righe, setRighe] = useState(null);
-  const [venduto, setVenduto] = useState({});
+  const [uscite, setUscite] = useState({ venduto: {}, omaggiato: {} });
   const [cerca, setCerca] = useState("");
   const [nomeLibero, setNomeLibero] = useState("");
 
   const ricarica = () => {
     leggiRighe("eventi_materiali", eventoId).then(setRighe).catch(() => setRighe([]));
-    vendutoAllEvento(eventoId).then(setVenduto).catch(() => setVenduto({}));
+    usciteAllEvento(eventoId).then(setUscite).catch(() => setUscite({ venduto: {}, omaggiato: {} }));
   };
   useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
 
@@ -349,10 +350,12 @@ function SchedaMateriali({ eventoId, prodotti }) {
       {righe.map((r) => {
         const portata = r.quantita_portata == null ? null : Number(r.quantita_portata);
         const rientrata = r.quantita_rientrata == null ? null : Number(r.quantita_rientrata);
-        const vendutoQui = r.prodotto_id ? (venduto[r.prodotto_id] || 0) : 0;
+        const vendutoQui = r.prodotto_id ? (uscite.venduto[r.prodotto_id] || 0) : 0;
+        const omaggiatoQui = r.prodotto_id ? (uscite.omaggiato[r.prodotto_id] || 0) : 0;
         // il conto della consegna: quello che e' partito meno quello che
-        // e' tornato deve fare quello che si e' venduto
-        const mancante = portata != null && rientrata != null ? Math.round((portata - rientrata - vendutoQui) * 100) / 100 : null;
+        // e' tornato deve fare quello che e' uscito — venduto PIU'
+        // omaggiato, perche' anche un pezzo regalato non e' tornato
+        const mancante = portata != null && rientrata != null ? Math.round((portata - rientrata - vendutoQui - omaggiatoQui) * 100) / 100 : null;
         return (
           <div key={r.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -381,14 +384,17 @@ function SchedaMateriali({ eventoId, prodotti }) {
                 </label>
               ))}
               <span style={{ flex: "1 1 92px", minWidth: 0 }}>
-                <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Venduto al POS</span>
-                <span style={{ display: "block", ...fontBody, fontSize: 14, fontWeight: 700, color: vendutoQui > 0 ? "#2E7D32" : MUTED, textAlign: "right", padding: "8px 10px" }}>{vendutoQui}</span>
+                <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Uscito al POS</span>
+                <span style={{ display: "block", ...fontBody, fontSize: 14, fontWeight: 700, color: (vendutoQui + omaggiatoQui) > 0 ? "#2E7D32" : MUTED, textAlign: "right", padding: "8px 10px" }}>
+                  {vendutoQui + omaggiatoQui}
+                  {omaggiatoQui > 0 && <span style={{ display: "block", ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#8A6D1D" }}>di cui {omaggiatoQui} in omaggio</span>}
+                </span>
               </span>
             </div>
             {mancante != null && mancante !== 0 && (
               <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 5 }}>
                 {mancante > 0
-                  ? `Non torna: ${mancante} pz partiti che non sono né rientrati né venduti.`
+                  ? `Non torna: ${mancante} pz partiti che non sono né rientrati né usciti al POS.`
                   : `Non torna: sono rientrati ${-mancante} pz più di quanti ne fossero partiti.`}
               </div>
             )}
@@ -586,14 +592,189 @@ function SchedaHotel({ eventoId, evento, team, hotel }) {
 
 // -------------------------------------------------------- la scheda evento
 
+// ------------------------------------------------------------- il conto
+
+const CAT_ORDINE = ["Trasferimenti", "Hotel"];
+
+function VoceConto({ etichetta, valore, forte = false, colore = NAVY, nota }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "6px 0" }}>
+      <span style={{ ...fontBody, fontSize: forte ? 13.5 : 12.5, fontWeight: forte ? 700 : 400, color: forte ? NAVY : MUTED, minWidth: 0 }}>
+        {etichetta}
+        {nota && <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, marginTop: 1, lineHeight: 1.4 }}>{nota}</span>}
+      </span>
+      <span style={{ ...fontDisplay, fontSize: forte ? 16 : 13.5, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>{valore}</span>
+    </div>
+  );
+}
+
+function Riquadro({ titolo, children, sfondo = "#fff", bordo = CREAM_BORDER }) {
+  return (
+    <div style={{ background: sfondo, border: `1px solid ${bordo}`, borderRadius: 14, padding: "12px 14px", marginBottom: 12 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 }}>{titolo}</div>
+      {children}
+    </div>
+  );
+}
+
+function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome }) {
+  const [dati, setDati] = useState(null);
+  const [errore, setErrore] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    setDati(null); setErrore("");
+    leggiConto(evento.id)
+      .then((d) => { if (vivo) setDati(d); })
+      .catch((e) => { if (vivo) setErrore(e.message); });
+    return () => { vivo = false; };
+  }, [evento.id]);
+
+  const conto = useMemo(
+    () => (dati ? calcolaConto(dati, evento.id, { prodottiShop: prodotti, bundleComponenti, categorieNome }) : null),
+    [dati, evento.id, prodotti, bundleComponenti, categorieNome],
+  );
+
+  if (errore) return <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B" }}>Non riesco a leggere il conto: {errore}</div>;
+  if (!conto) return <Vuoto>Sto facendo i conti…</Vuoto>;
+
+  const { entrate, omaggi, uscitePerCategoria, usciteTotale, uscite, merce, costoMerce, merceSenzaCosto, righeScartate, risultato, completo } = conto;
+  const categorie = Object.keys(uscitePerCategoria)
+    .sort((a, b) => (CAT_ORDINE.indexOf(a) - CAT_ORDINE.indexOf(b)) || a.localeCompare(b));
+  const inUtile = risultato >= 0;
+
+  return (
+    <div>
+      {/* Il risultato in cima: è la domanda per cui si apre questa
+          scheda. Sotto ci sono i pezzi che lo compongono. */}
+      <div style={{
+        background: inUtile ? "linear-gradient(110deg, #F2FAF2 0%, #E4F3E6 100%)" : "linear-gradient(110deg, #FDF3F1 0%, #FAE6E2 100%)",
+        border: `1px solid ${inUtile ? "#C7E3C7" : "#F0C8C2"}`, borderRadius: 16, padding: "14px 18px", marginBottom: 14,
+      }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: inUtile ? "#2E7D32" : "#C0392B", textTransform: "uppercase", letterSpacing: 0.7 }}>
+          {inUtile ? "Risultato dell'evento" : "L'evento è in perdita"}
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: inUtile ? "#2E7D32" : "#C0392B", lineHeight: 1.15, marginTop: 3 }}>
+          {euro(risultato)}
+        </div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 5, lineHeight: 1.5 }}>
+          Incassato al netto dell'IVA ({euro(entrate.imponibile)}), meno le spese ({euro(usciteTotale)}) e il costo della merce uscita ({euro(costoMerce)}).
+        </div>
+        {!completo && (
+          <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 7, lineHeight: 1.5 }}>
+            Attenzione: {merceSenzaCosto.length} riga{merceSenzaCosto.length === 1 ? "" : "e"} di materiale non ha un costo di acquisto.
+            Quella merce è contata zero, quindi il risultato qui sopra è più bello del vero.
+          </div>
+        )}
+      </div>
+
+      <Riquadro titolo="Entrate — vendite al POS">
+        {entrate.quante === 0 ? (
+          <Vuoto>Nessuna vendita registrata a questo evento. Al POS si sceglie l'evento dalla tendina "Sei a un evento?".</Vuoto>
+        ) : (
+          <>
+            <VoceConto etichetta={`Incassato lordo · ${entrate.quante} vendit${entrate.quante === 1 ? "a" : "e"}`} valore={euro(entrate.lordo)} forte />
+            <VoceConto etichetta="di cui imponibile" valore={euro(entrate.imponibile)} />
+            <VoceConto etichetta="di cui IVA" valore={euro(entrate.iva)} nota="Non è un ricavo: si incassa per conto dello Stato e si gira." />
+            <div style={{ height: 1, background: CREAM_BORDER, margin: "8px 0" }} />
+            {Object.entries(entrate.perMetodo).map(([m, v]) => (
+              <VoceConto key={m} etichetta={m === "pos" ? "Carta" : m === "contanti" ? "Contanti" : m === "buono_amazon" ? "Buono Amazon" : m} valore={euro(v)} />
+            ))}
+          </>
+        )}
+      </Riquadro>
+
+      {omaggi.quanti > 0 && (
+        <Riquadro titolo="Omaggi" sfondo="#FDF8EC" bordo="#EBD9AE">
+          <VoceConto etichetta={`${omaggi.quanti} omaggi, a listino`} valore={euro(omaggi.valore)} forte colore="#8A6D1D"
+            nota="Non è un ricavo mancato: è merce data via. Nel risultato entra il suo costo, insieme al resto della merce uscita." />
+        </Riquadro>
+      )}
+
+      <Riquadro titolo="Uscite">
+        {uscite.length === 0 ? (
+          <Vuoto>Nessuna spesa imputata a questo evento. Si imputano da Contabilità scegliendo l'ambito "evento".</Vuoto>
+        ) : (
+          <>
+            {categorie.map((c) => <VoceConto key={c} etichetta={c} valore={euro(uscitePerCategoria[c])} />)}
+            <div style={{ height: 1, background: CREAM_BORDER, margin: "8px 0" }} />
+            <VoceConto etichetta="Totale uscite" valore={euro(usciteTotale)} forte />
+            <div style={{ marginTop: 10 }}>
+              {uscite.map((v) => (
+                <div key={v.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 11.5, color: MUTED, padding: "3px 0" }}>
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {v.descrizione}
+                    {v.parziale && <span title="Spesa divisa fra più ambiti: qui c'è solo la quota dell'evento" style={{ color: "#8A6D1D", fontWeight: 700 }}> · quota</span>}
+                  </span>
+                  <span style={{ whiteSpace: "nowrap" }}>{euro(v.importo)}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Riquadro>
+
+      <Riquadro titolo="Merce uscita dalla scatola">
+        {merce.length === 0 ? (
+          <Vuoto>Nessun materiale in elenco. Si aggiunge dalla scheda Materiali.</Vuoto>
+        ) : (
+          <>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
+              Il materiale portato a un evento non esce dal magazzino: resta roba nostra, solo in un altro posto.
+              Scende quando si vende o si regala. Qui si valorizza a costo di acquisto quello che non è tornato indietro.
+            </div>
+            {merce.map((r) => (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
+                <span style={{ ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
+                  {r.portata != null ? `${r.portata} portati` : "partenza non contata"}
+                  {r.venduto > 0 ? ` · ${r.venduto} venduti` : ""}
+                  {r.omaggiata > 0 ? ` · ${r.omaggiata} omaggio` : ""}
+                </span>
+                {r.senzaCosto ? (
+                  <span title="Senza costo di acquisto questa merce vale zero nel conto: mettilo nella scheda del prodotto."
+                    style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#C0392B", background: "#FBEBE9", border: "1px solid #F0C8C2", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
+                    costo mancante
+                  </span>
+                ) : (
+                  <span style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", minWidth: 70, textAlign: "right" }}>{euro(r.valore || 0)}</span>
+                )}
+              </div>
+            ))}
+            <div style={{ height: 1, background: CREAM_BORDER, margin: "8px 0" }} />
+            <VoceConto etichetta="Costo della merce uscita" valore={euro(costoMerce)} forte />
+          </>
+        )}
+      </Riquadro>
+
+      {righeScartate.length > 0 && (
+        <Riquadro titolo="Non torna" sfondo="#FBEBE9" bordo="#F0C8C2">
+          <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", lineHeight: 1.5, marginBottom: 6 }}>
+            Quello che è partito meno quello che è tornato deve fare quello che si è venduto o regalato. Qui non torna:
+          </div>
+          {righeScartate.map((r) => (
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 12, color: "#C0392B", padding: "3px 0" }}>
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
+              <span style={{ whiteSpace: "nowrap", fontWeight: 700 }}>
+                {r.scarto > 0 ? `${r.scarto} in meno del venduto` : `${-r.scarto} venduti più di quanti ne risultino partiti`}
+              </span>
+            </div>
+          ))}
+        </Riquadro>
+      )}
+    </div>
+  );
+}
+
 const SEZIONI = [
   { v: "team", l: "Team" },
   { v: "materiali", l: "Materiali" },
   { v: "trasferimenti", l: "Trasferimenti" },
   { v: "hotel", l: "Hotel" },
+  { v: "conto", l: "Conto" },
 ];
 
-function SchedaEvento({ evento, location, persone, prodotti, hotel, onIndietro, onCambiato }) {
+function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onIndietro, onCambiato }) {
   const [sezione, setSezione] = useState("team");
   const [inModifica, setInModifica] = useState(false);
   const [team, setTeam] = useState([]);
@@ -656,6 +837,7 @@ function SchedaEvento({ evento, location, persone, prodotti, hotel, onIndietro, 
         {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} prodotti={prodotti} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
+        {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} />}
       </div>
     </>
   );
@@ -663,7 +845,7 @@ function SchedaEvento({ evento, location, persone, prodotti, hotel, onIndietro, 
 
 // --------------------------------------------------------------- la pagina
 
-export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null }) {
+export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null }) {
   const [eventi, setEventi] = useState(null);
   // `eventoIniziale` arriva da chi ci ha portati qui — oggi la barra
   // dell'evento nel calendario. Non e' uno stato che cambia da solo:
@@ -682,6 +864,14 @@ export default function GestioneEventi({ location = [], master = [], assistente 
     ...(assistente || []).map((a) => ({ id: a.id, nome: a.nome, tipo: "assistente" })),
     ...(venditori || []).map((v) => ({ id: v.id, nome: v.nome, tipo: "venditore" })),
   ].filter((p) => p.nome).sort((a, b) => String(a.nome).localeCompare(String(b.nome))), [master, assistente, venditori]);
+
+  // i nomi leggibili delle categorie di spesa: nel conto le uscite si
+  // raggruppano per categoria, e "viaggi_corsi" non e' un titolo
+  const categorieNome = useMemo(() => {
+    const m = {};
+    (costiCategorie || []).forEach((c) => { m[c.id] = c.nome; });
+    return m;
+  }, [costiCategorie]);
 
   const aperto = (eventi || []).find((e) => e.id === apertoId) || null;
 
@@ -710,6 +900,7 @@ export default function GestioneEventi({ location = [], master = [], assistente 
         {!creando && aperto && (
           <SchedaEvento
             evento={aperto} location={location} persone={persone} prodotti={prodottiShop} hotel={hotel}
+            bundleComponenti={bundleComponenti} categorieNome={categorieNome}
             onIndietro={() => setApertoId(null)}
             onCambiato={ricarica}
           />
