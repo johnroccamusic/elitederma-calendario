@@ -67,11 +67,44 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
     scaricaCsv(csvListino(visibili), `listino-rivenditori-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
-  const th = { ...fontBody, fontSize: 9.5, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "9px 6px", textAlign: "center", lineHeight: 1.2, whiteSpace: "pre-line" };
-  const td = { ...fontBody, fontSize: 13, color: NAVY, padding: "9px 6px", borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "center", whiteSpace: "nowrap" };
+  // Il foglio della tabella. Sta qui e non negli stili inline perche' sotto
+  // i 700px la tabella non e' piu' una tabella: diventa un blocco per
+  // prodotto, col nome sopra e i quattro numeri in riga sotto. Cinque
+  // colonne su un telefono non ci stanno, e farle scorrere di lato
+  // significa nascondere meta' listino.
+  //
+  // Media query vere, non la larghezza letta da JavaScript: con la vista
+  // scrivania forzata da iPad `screen.width` racconta un'altra cosa,
+  // mentre il CSS segue i pixel veri della pagina.
+  const foglio = `
+    .lst-tab { border-collapse: collapse; width: 100%; font-family: 'Roboto',sans-serif; }
+    .lst-tab thead tr { background: #FAF6EE; }
+    .lst-tab th { font-size: 9.5px; font-weight: 800; color: ${MUTED}; text-transform: uppercase;
+                  letter-spacing: .5px; padding: 9px 6px; text-align: center; line-height: 1.2; white-space: pre-line; }
+    .lst-tab th.lst-nome, .lst-tab td.lst-nome { text-align: left; padding-left: 16px; }
+    .lst-tab th:last-child, .lst-tab td:last-child { padding-right: 16px; }
+    .lst-tab td { font-size: 13px; color: ${NAVY}; padding: 9px 6px; text-align: center;
+                  border-top: 1px solid ${CREAM_BORDER}; white-space: nowrap; }
+    .lst-tab td.lst-nome { white-space: normal; font-weight: 600; }
+    .lst-tab td.lst-riv { font-weight: 800; }
+    .lst-manca { background: #FDFAF2; }
+
+    @media (max-width: 700px) {
+      .lst-tab thead { display: none; }
+      .lst-tab, .lst-tab tbody, .lst-tab tr, .lst-tab td { display: block; }
+      .lst-tab tr { display: grid; grid-template-columns: repeat(4, 1fr);
+                    gap: 0 6px; padding: 11px 12px; border-top: 1px solid ${CREAM_BORDER}; }
+      .lst-tab td { border-top: none; padding: 0; font-size: 13.5px; }
+      .lst-tab td::before { content: attr(data-eti); display: block; font-size: 8.5px; font-weight: 800;
+                            letter-spacing: .5px; text-transform: uppercase; color: ${MUTED}; margin-bottom: 2px; }
+      .lst-tab td.lst-nome { grid-column: 1 / -1; padding: 0 0 7px; font-size: 14.5px; }
+      .lst-tab td.lst-nome::before { content: none; }
+    }
+  `;
 
   return (
     <div style={{ minHeight: "100vh", background: BG, padding: "16px 12px 60px" }}>
+      <style>{foglio}</style>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <TastoLivelloPrecedente titolo={titoloIndietro} onClick={onBack} />
         <h1 style={{ ...stileTitoloPagina, marginTop: 8, marginBottom: 2 }}>{titolo}</h1>
@@ -129,35 +162,35 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{b.prodotti.length} prodotti</div>
               </div>
 
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 560 }}>
+              <div>
+                <table className="lst-tab">
                   <thead>
-                    <tr style={{ background: "#FAF6EE" }}>
-                      <th style={{ ...th, textAlign: "left", paddingLeft: 16 }}>Prodotto</th>
-                      <th style={th}>{"pubblico\nlordo"}</th>
-                      <th style={th}>{"pubblico\nnetto"}</th>
-                      <th style={th}>{"sconto\nmax"}</th>
-                      <th style={{ ...th, paddingRight: 16 }}>{"prezzo\nrivenditore"}</th>
+                    <tr>
+                      <th className="lst-nome">Prodotto</th>
+                      <th>{"pubblico\nlordo"}</th>
+                      <th>{"pubblico\nnetto"}</th>
+                      <th>{"sconto\nmax"}</th>
+                      <th>{"prezzo\nrivenditore"}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {b.prodotti.map((r) => {
                       const manca = r.sconto_max_pct == null;
                       return (
-                        <tr key={r.id} onClick={() => onApriProdotto && onApriProdotto(r.id)}
-                          style={{ cursor: onApriProdotto ? "pointer" : "default", background: manca ? "#FDFAF2" : undefined }}
+                        <tr key={r.id} className={manca ? "lst-manca" : undefined} onClick={() => onApriProdotto && onApriProdotto(r.id)}
+                          style={{ cursor: onApriProdotto ? "pointer" : "default" }}
                           title={manca ? motivoSenzaSconto(r) : `Costo ${euro(r.costo_acquisto)}. Scontando il ${r.sconto_max_pct}% incassi ${euro(r.prezzo_rivenditore)}: pagata la merce e i costi aziendali, a te resta quanto al rivenditore. Il calcolo esatto darebbe ${String(r.sconto_esatto_pct).replace(".", ",")}%, arrotondato per difetto.`}>
-                          <td style={{ ...td, textAlign: "left", whiteSpace: "normal", paddingLeft: 16, fontWeight: 600 }}>{r.nome}</td>
-                          <td style={td}>{euro(r.pubblico_lordo)}</td>
-                          <td style={td}>{euro(r.pubblico_netto)}</td>
-                          <td style={td}>
+                          <td className="lst-nome">{r.nome}</td>
+                          <td data-eti="lordo">{euro(r.pubblico_lordo)}</td>
+                          <td data-eti="netto">{euro(r.pubblico_netto)}</td>
+                          <td data-eti="sconto">
                             {manca ? (
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
                               <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_max_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_max_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{r.sconto_max_pct}%</span>
                             )}
                           </td>
-                          <td style={{ ...td, fontWeight: 800, paddingRight: 16 }}>{euro(r.prezzo_rivenditore)}</td>
+                          <td className="lst-riv" data-eti="rivenditore">{euro(r.prezzo_rivenditore)}</td>
                         </tr>
                       );
                     })}
