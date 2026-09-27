@@ -1,72 +1,70 @@
-// Il listino per i venditori: lettura e niente più.
+// Il listino: lettura e niente più.
 //
 // Il conto vive nella view `v_prezzi_listini` (migrazione
-// 20260927090000), non qui: una formula sola, in un posto solo. Questo
-// file la legge e la porta in tabella. Non scrive mai su
-// `prodotti_shop`, e non parla con WooCommerce — il listino per i
-// venditori è una cosa, il prezzo dello shop un'altra.
+// 20260927200000), non qui: una formula sola, in un posto solo. Questo
+// file la legge e la porta in pagina. Non scrive mai su `prodotti_shop`
+// e non parla con WooCommerce — il listino per i rivenditori è una cosa,
+// il prezzo dello shop un'altra.
 import { supabase, leggiTutte } from "../supabase.js";
 
-// I tre parametri della regola. La quota del venditore è nostra; le due
-// percentuali aziendali sono quelle che l'app usa già in Dettaglio
-// prodotti, perché sono le stesse e due verità che divergono sui soldi
-// sono il modo migliore per non fidarsi di nessuna delle due.
-export const CHIAVE_QUOTA_VENDITORE = "prezziListini_quotaVenditorePct";
-export const CHIAVE_COSTI_AZIENDALI = "dettaglioProdotti_margineOperativoPct";
-export const CHIAVE_SICUREZZA = "puntiMaster_incidenzaCostiPct";
-export const QUOTA_VENDITORE_DEFAULT = 50;
+// l'ordinamento è per blocco e nome, non per id: sulle pagine successive
+// di PostgREST un ordine instabile fa comparire due volte la stessa riga
+export async function leggiListino() {
+  return leggiTutte(() =>
+    supabase.from("v_prezzi_listini").select("*")
+      .order("blocco_ordine", { ascending: true })
+      .order("nome", { ascending: true }));
+}
 
-export const TIPI_PRODOTTO = [
-  { v: "semplice", l: "Semplice" },
-  { v: "bundle", l: "Bundle" },
-  { v: "componente", l: "Componente" },
-  { v: "variante", l: "Variante" },
+// I blocchi, nell'ordine del menu del sito. Il numero combacia con
+// `blocco_ordine` della view: se cambia là, cambia qui.
+export const BLOCCHI = [
+  { n: 1,  nome: "PIGMENTI",            descrizione: "Pigmenti per dermopigmentazione professionale" },
+  { n: 2,  nome: "COLLE DA EXTENSIONS", descrizione: "Adesivi, sigillante e primer per extension ciglia" },
+  { n: 3,  nome: "DERMOGRAFI",          descrizione: "Macchinette e manipoli" },
+  { n: 4,  nome: "AGHI",                descrizione: "Aghi e cartucce per dermopigmentazione" },
+  { n: 5,  nome: "MICROBLADING",        descrizione: "Lame e accessori per microblading" },
+  { n: 6,  nome: "LASH EXTENSION",      descrizione: "Ciglia, pinzette e materiale per extension" },
+  { n: 7,  nome: "LAMINAZIONE",         descrizione: "Prodotti e accessori per laminazione ciglia e sopracciglia" },
+  { n: 8,  nome: "HENNE",               descrizione: "Tinte e accessori henné" },
+  { n: 9,  nome: "NEEDLING",            descrizione: "Needling e trattamenti viso" },
+  { n: 10, nome: "PROGETTAZIONE",       descrizione: "Matite, fili, calibri e strumenti di disegno" },
+  { n: 11, nome: "ACCESSORI",           descrizione: "Monouso, protezioni e materiale di consumo" },
+  { n: 12, nome: "WEAR & ACC",          descrizione: "Abbigliamento e accessori Elitederma" },
+  { n: 99, nome: "ALTRI PRODOTTI",      descrizione: "In vendita sullo shop ma fuori dalle categorie del menu" },
 ];
 
-// l'ordinamento è per nome e non per id: sulle pagine successive di
-// PostgREST un ordine instabile fa comparire due volte la stessa riga
-export async function leggiPrezziListini() {
-  return leggiTutte(() => supabase.from("v_prezzi_listini").select("*").order("nome", { ascending: true }));
+export function bloccoDi(n) {
+  return BLOCCHI.find((b) => b.n === n) || BLOCCHI[BLOCCHI.length - 1];
 }
 
-export function etichettaTipo(tipo) {
-  return (TIPI_PRODOTTO.find((t) => t.v === tipo) || { l: tipo || "—" }).l;
-}
-
-// Perché un prodotto non ha un listino. Serve alla pastiglia in tabella:
-// "Costo mancante" da solo non dice se il costo non c'è sulla riga o se
-// manca in un pezzo della distinta, e sono due cose da sistemare in due
-// posti diversi.
-export function motivoCostoMancante(r) {
-  if (r.stato_prezzo !== "costo_mancante") return null;
-  if (r.tipo !== "bundle") return "Questo prodotto non ha un costo di acquisto, o è a zero.";
+// Perché un prodotto non ha uno sconto massimo: senza costo non si può
+// dire quanto si può cedere. Distinguere i due casi serve, perché si
+// rimedia in due posti diversi.
+export function motivoSenzaSconto(r) {
+  if (r.sconto_max_pct != null) return null;
+  if (r.tipo !== "bundle") return "Manca il costo di acquisto: senza quello non si può dire quanto si può scontare.";
   if (r.componenti_distinta == null) return "Bundle senza distinta base: non c'è nessun componente da cui ricavare il costo.";
   if (r.componenti_senza_costo > 0) {
     const n = r.componenti_senza_costo;
-    return `${n} component${n === 1 ? "e" : "i"} su ${r.componenti_distinta} non ha un costo di acquisto: la somma sarebbe una cifra falsa, più bassa del vero.`;
+    return `${n} component${n === 1 ? "e" : "i"} su ${r.componenti_distinta} non ha un costo: la somma sarebbe più bassa del vero.`;
   }
   return "Il costo ricavato dalla distinta è zero.";
 }
 
 const CAMPI_CSV = [
+  ["blocco", "Reparto"],
   ["nome", "Prodotto"],
-  ["tipo", "Tipo"],
+  ["pubblico_lordo", "Pubblico lordo"],
+  ["pubblico_netto", "Pubblico netto"],
+  ["sconto_max_pct", "Sconto max %"],
+  ["prezzo_rivenditore", "Prezzo rivenditore"],
   ["costo_acquisto", "Costo acquisto"],
-  ["listino_netto", "Listino netto"],
-  ["listino_ivato", "Listino IVA incl."],
-  ["quota_venditore", "Quota venditore"],
-  ["prezzo_shop_netto", "Prezzo shop netto"],
-  ["prezzo_shop_ivato", "Prezzo shop IVA incl."],
-  ["scarto", "Scarto"],
-  ["moltiplicatore_attuale", "Moltiplicatore attuale"],
-  ["aliquota_iva", "IVA %"],
-  ["quota_venditore_pct", "Quota venditore %"],
-  ["stato_prezzo", "Stato"],
 ];
 
 // Il CSV per Excel italiano: punto e virgola fra le colonne, virgola nei
 // decimali, e il BOM davanti o gli accenti arrivano illeggibili.
-export function csvPrezziListini(righe) {
+export function csvListino(righe) {
   const cella = (v) => {
     if (v == null) return "";
     const t = typeof v === "number" ? String(v).replace(".", ",") : String(v);

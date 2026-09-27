@@ -72803,10 +72803,6 @@ export default function App() {
   // la scheda di un prodotto aperta da fuori (dall'Advisor, cliccando il
   // nome): il magazzino la apre appena entra, e il primo "indietro"
   // riporta da dove si veniva invece che nel suo elenco
-  // la quota del venditore usata dal listino di "Prezzi e listini": sta
-  // in Impostazioni, non nel codice, e la view del database legge la
-  // stessa chiave — il conto lo fa lei, qui si scrive solo il numero
-  const [quotaVenditoreListino, salvaQuotaVenditoreListino] = useImpostazioneCondivisa("prezziListini_quotaVenditorePct", 50);
   const [prodottoDaAprireInMagazzino, setProdottoDaAprireInMagazzino] = useState(null);
   const [viewPrimaDiMagazzino, setViewPrimaDiMagazzino] = useState("magazzinoshop");
   const [dockCoricato, setDockCoricato] = useState(false);
@@ -74459,16 +74455,7 @@ export default function App() {
 
       {view === "prezzilistini" && (
         <PrezziListini
-          quotaVenditorePct={Number.isFinite(Number(quotaVenditoreListino)) ? Number(quotaVenditoreListino) : 50}
-          onCambiaQuotaVenditore={(n) => {
-            const v = Math.max(0, Math.min(99, Number(String(n).replace(",", ".")) || 0));
-            if (v !== Number(quotaVenditoreListino)) salvaQuotaVenditoreListino(v);
-          }}
           onApriProdotto={(prodottoId) => apriProdottoInMagazzino(prodottoId, "prezzilistini")}
-          // le altre due percentuali si scrivono nei titoli delle colonne
-          // di Gestione magazzino: il link porta li', non in una pagina di
-          // impostazioni che per loro non esiste
-          onApriImpostazioni={() => { setViewPrimaDiMagazzino("prezzilistini"); setView("magazzino"); }}
           onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "prezzilistini", "Prezzi e listini")}
         />
