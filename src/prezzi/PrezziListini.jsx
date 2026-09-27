@@ -128,10 +128,32 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     .lst-tab td.lst-costo, .lst-tab th.lst-costo { color: ${MUTED}; }
     .lst-tab td.lst-resta { font-weight: 800; }
     .lst-tab td.lst-resta-riv { color: #8A6D1D; font-weight: 800; }
-    /* con le colonne riservate i numeri sono otto: sotto una certa
-       larghezza non c'e' verso di farceli stare, e si scorre di lato */
-    .lst-privato { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .lst-privato .lst-tab { min-width: 700px; }
+    /* Nel listino privato i numeri sono sette: su un telefono una riga
+       sola non basta, e farla scorrere di lato vorrebbe dire nascondere
+       proprio le colonne che servono a decidere. Quindi sotto i 700px il
+       nome prende la riga intera e i sette numeri si dispongono sotto, in
+       griglia, ciascuno con la sua etichetta. Tutto in una schermata,
+       niente da trascinare. */
+    @media (max-width: 700px) {
+      .lst-privato .lst-tab thead { display: none; }
+      .lst-privato .lst-tab, .lst-privato .lst-tab tbody,
+      .lst-privato .lst-tab tr, .lst-privato .lst-tab td { display: block; }
+      .lst-privato .lst-tab colgroup { display: none; }
+      .lst-privato .lst-tab tr { display: grid; grid-template-columns: repeat(7, 1fr);
+                                 gap: 0 3px; padding: 10px 8px; border-top: 1px solid ${CREAM_BORDER}; }
+      .lst-privato .lst-tab td { border-top: none; padding: 0; font-size: 12px; text-align: center; }
+      .lst-privato .lst-tab td::before { content: attr(data-eti); display: block; font-size: 7.5px;
+                                         font-weight: 700; letter-spacing: .2px; text-transform: uppercase;
+                                         color: ${MUTED}; margin-bottom: 1px; line-height: 1.1; }
+      /* nome e foto occupano insieme la riga di sopra */
+      .lst-privato .lst-tab td.lst-foto { grid-column: 1 / 2; padding: 0 !important; }
+      .lst-privato .lst-tab td.lst-foto::before { content: none; }
+      .lst-privato .lst-tab td.lst-foto img, .lst-privato .lst-tab td.lst-foto .lst-vuota { width: 26px; height: 26px; }
+      .lst-privato .lst-tab td.lst-nome { grid-column: 2 / -1; padding: 3px 0 8px 6px !important;
+                                          font-size: 13.5px; text-align: left; }
+      .lst-privato .lst-tab td.lst-nome::before { content: none; }
+      .lst-privato .lst-tab td.lst-riv { padding-right: 0 !important; }
+    }
 
     @media (max-width: 560px) {
       .lst-tab td { font-size: 13px; padding: 5px 2px; }
@@ -256,21 +278,21 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                               : <span className="lst-vuota" />}
                           </td>
                           <td className="lst-nome">{r.nome}</td>
-                          {privato && <td className="lst-costo">{euro(r.costo_acquisto)}</td>}
-                          <td>{euro(r.pubblico_lordo)}</td>
-                          <td>{euro(r.pubblico_netto)}</td>
-                          <td>
+                          {privato && <td className="lst-costo" data-eti="acquisto">{euro(r.costo_acquisto)}</td>}
+                          <td data-eti="lordo">{euro(r.pubblico_lordo)}</td>
+                          <td data-eti="netto">{euro(r.pubblico_netto)}</td>
+                          <td data-eti="sconto">
                             {manca ? (
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
                               <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_fase_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_fase_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{r.sconto_fase_pct}%</span>
                             )}
                           </td>
-                          <td className="lst-riv">{euro(r.prezzo_fase)}</td>
+                          <td className="lst-riv" data-eti="al riv.">{euro(r.prezzo_fase)}</td>
                           {privato && (
                             <>
-                              <td className="lst-resta" title={r.utile_diretto != null ? `Prima delle imposte erano ${euro(r.utile_diretto)}` : undefined}>{euro(r.ti_resta_diretto)}</td>
-                              <td className="lst-resta-riv" title={r.utile_fase != null ? `Prima delle imposte erano ${euro(r.utile_fase)}. Il rivenditore ne guadagna ${euro(r.guadagno_riv_fase)}.` : undefined}>{euro(r.ti_resta_fase)}</td>
+                              <td className="lst-resta" data-eti="resta senza" title={r.utile_diretto != null ? `Prima delle imposte erano ${euro(r.utile_diretto)}` : undefined}>{euro(r.ti_resta_diretto)}</td>
+                              <td className="lst-resta-riv" data-eti="resta con" title={r.utile_fase != null ? `Prima delle imposte erano ${euro(r.utile_fase)}. Il rivenditore ne guadagna ${euro(r.guadagno_riv_fase)}.` : undefined}>{euro(r.ti_resta_fase)}</td>
                             </>
                           )}
                         </tr>
