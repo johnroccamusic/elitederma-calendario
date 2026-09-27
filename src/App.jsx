@@ -71446,7 +71446,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           <Field label="Descrizione"><input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} /></Field>
           {!ambitoBloccato && (
             <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <Field label="Categoria">
                   <select style={inputStyle} value={categoriaId} onChange={(e) => { setCategoriaId(e.target.value); setSottocategoriaId(""); }}>
                     <option value="">— scegli —</option>
@@ -71454,7 +71454,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                   </select>
                 </Field>
               </div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <Field label="Sotto-categoria">
                   <select style={inputStyle} value={sottocategoriaId} onChange={(e) => setSottocategoriaId(e.target.value)} disabled={!categoriaId}>
                     <option value="">— scegli —</option>
@@ -71465,7 +71465,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
             </div>
           )}
           <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <Field label="Fornitore">
                 {/* i fornitori sono centinaia: si scrivono le iniziali e
                     l'elenco si stringe. Se quello che serve non c'e', in
@@ -71491,7 +71491,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                 />
               </Field>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <Field label="Nuovo fornitore (opzionale)"><input style={inputStyle} placeholder="Nome fornitore" value={nuovoFornitore} onChange={(e) => setNuovoFornitore(e.target.value)} disabled={!!fornitoreId} /></Field>
             </div>
           </div>
@@ -71537,9 +71537,9 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           )}
           <Field label="Numero documento/fattura"><input style={inputStyle} value={numeroDocumento} onChange={(e) => setNumeroDocumento(e.target.value)} /></Field>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 140px" }}><Field label="Data documento"><input type="date" style={inputStyle} value={dataDocumento} onChange={(e) => setDataDocumento(e.target.value)} /></Field></div>
-            <div style={{ flex: "1 1 140px" }}><Field label="Scadenza pagamento"><input type="date" style={inputStyle} value={scadenzaPagamento} onChange={(e) => setScadenzaPagamento(e.target.value)} /></Field></div>
-            <div style={{ flex: "1 1 140px" }}>
+            <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Data documento"><input type="date" style={inputStyle} value={dataDocumento} onChange={(e) => setDataDocumento(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Scadenza pagamento"><input type="date" style={inputStyle} value={scadenzaPagamento} onChange={(e) => setScadenzaPagamento(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px", minWidth: 0 }}>
               <Field label="Data pagamento">
                 <input
                   type="date"
@@ -71560,8 +71560,8 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                 )}
               </Field>
             </div>
-            <div style={{ flex: "1 1 140px" }}><Field label="Competenza dal"><input type="date" style={inputStyle} value={competenzaDa} onChange={(e) => setCompetenzaDa(e.target.value)} /></Field></div>
-            <div style={{ flex: "1 1 140px" }}><Field label="Competenza al"><input type="date" style={inputStyle} value={competenzaA} onChange={(e) => setCompetenzaA(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Competenza dal"><input type="date" style={inputStyle} value={competenzaDa} onChange={(e) => setCompetenzaDa(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Competenza al"><input type="date" style={inputStyle} value={competenzaA} onChange={(e) => setCompetenzaA(e.target.value)} /></Field></div>
           </div>
 
           <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, margin: "12px 0 6px" }}>
@@ -71594,15 +71594,15 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
             </div>
           )}
           <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1 }}><Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field></div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}><Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field></div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <Field label="IVA">
                 <select style={{ ...inputStyle, background: ivaBloccata ? "#EFEFEF" : "#fff", color: ivaBloccata ? MUTED : NAVY }} disabled={ivaBloccata} value={ivaEffettiva} onChange={(e) => onIvaChange(Number(e.target.value))}>
                   {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
                 </select>
               </Field>
             </div>
-            <div style={{ flex: 1 }}><Field label="Totale"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field></div>
+            <div style={{ flex: 1, minWidth: 0 }}><Field label="Totale"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field></div>
           </div>
 
           {/* una tendina sola al posto di "Stato" piu' nove radio del
@@ -71645,10 +71645,10 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           <div style={{ ...cardStyle }}>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Commissioni di pagamento</div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 160px" }}><Field label="Piattaforma"><input style={inputStyle} value={piattaformaPagamento} onChange={(e) => setPiattaformaPagamento(e.target.value)} /></Field></div>
-              <div style={{ flex: "1 1 140px" }}><Field label="N. transazioni"><input style={inputStyle} inputMode="numeric" value={numeroTransazioni} onChange={(e) => setNumeroTransazioni(e.target.value)} /></Field></div>
-              <div style={{ flex: "1 1 160px" }}><Field label="Incassato tramite piattaforma"><input style={inputStyle} inputMode="decimal" value={incassatoPiattaforma} onChange={(e) => setIncassatoPiattaforma(e.target.value)} /></Field></div>
-              <div style={{ flex: "1 1 140px" }}><Field label="% commissione effettiva"><input style={inputStyle} inputMode="decimal" value={percentualeCommissione} onChange={(e) => setPercentualeCommissione(e.target.value)} /></Field></div>
+              <div style={{ flex: "1 1 160px", minWidth: 0 }}><Field label="Piattaforma"><input style={inputStyle} value={piattaformaPagamento} onChange={(e) => setPiattaformaPagamento(e.target.value)} /></Field></div>
+              <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="N. transazioni"><input style={inputStyle} inputMode="numeric" value={numeroTransazioni} onChange={(e) => setNumeroTransazioni(e.target.value)} /></Field></div>
+              <div style={{ flex: "1 1 160px", minWidth: 0 }}><Field label="Incassato tramite piattaforma"><input style={inputStyle} inputMode="decimal" value={incassatoPiattaforma} onChange={(e) => setIncassatoPiattaforma(e.target.value)} /></Field></div>
+              <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="% commissione effettiva"><input style={inputStyle} inputMode="decimal" value={percentualeCommissione} onChange={(e) => setPercentualeCommissione(e.target.value)} /></Field></div>
             </div>
           </div>
         )}
@@ -71658,7 +71658,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Ambito di attribuzione</div>
           {!ripartisci && (
             <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <Field label="Ambito">
                   <select style={inputStyle} value={tipoAmbito} onChange={(e) => setTipoAmbito(e.target.value)}>
                     {AMBITI_SPESA.map((a) => <option key={a.chiave} value={a.chiave}>{a.etichetta}</option>)}
@@ -71666,7 +71666,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                 </Field>
               </div>
               {["sede", "corso", "classe", "evento"].includes(tipoAmbito) && (
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <Field label={AMBITI_SPESA.find((a) => a.chiave === tipoAmbito)?.etichetta}>
                     {selettoreAmbito(tipoAmbito, sedeId, setSedeId, corsoId, setCorsoId, classeId, setClasseId, eventoId, setEventoId)}
                   </Field>
@@ -71681,14 +71681,14 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
             <div>
               {righeRipartizione.map((r, idx) => (
                 <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 10, flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 140px" }}>
+                  <div style={{ flex: "1 1 140px", minWidth: 0 }}>
                     <Field label="Ambito">
                       <select style={inputStyle} value={r.tipoAmbito} onChange={(e) => modificaRigaRipartizione(idx, "tipoAmbito", e.target.value)}>
                         {AMBITI_SPESA.filter((a) => ["sede", "corso", "classe", "evento"].includes(a.chiave)).map((a) => <option key={a.chiave} value={a.chiave}>{a.etichetta}</option>)}
                       </select>
                     </Field>
                   </div>
-                  <div style={{ flex: "1 1 160px" }}>
+                  <div style={{ flex: "1 1 160px", minWidth: 0 }}>
                     <Field label="Selezione">
                       {selettoreAmbito(r.tipoAmbito,
                         r.sedeId, (v) => modificaRigaRipartizione(idx, "sedeId", v),
@@ -71697,7 +71697,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                         r.eventoId, (v) => modificaRigaRipartizione(idx, "eventoId", v))}
                     </Field>
                   </div>
-                  <div style={{ flex: "0 1 90px" }}>
+                  <div style={{ flex: "0 1 90px", minWidth: 0 }}>
                     <Field label="%"><input style={inputStyle} inputMode="decimal" value={r.percentuale} onChange={(e) => modificaRigaRipartizione(idx, "percentuale", e.target.value)} /></Field>
                   </div>
                   <button onClick={() => rimuoviRigaRipartizione(idx)} title="Rimuovi" style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -71738,9 +71738,9 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
         <div style={{ ...cardStyle }}>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Budget e controllo</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 160px" }}><Field label="Budget previsto"><input style={inputStyle} inputMode="decimal" value={budgetPrevisto} onChange={(e) => setBudgetPrevisto(e.target.value)} /></Field></div>
-            <div style={{ flex: "1 1 160px" }}><Field label="Soglia di allerta personalizzata"><input style={inputStyle} inputMode="decimal" value={sogliaPersonalizzata} onChange={(e) => setSogliaPersonalizzata(e.target.value)} /></Field></div>
-            <div style={{ flex: "1 1 160px" }}><Field label="Responsabile del costo"><input style={inputStyle} value={responsabileCosto} onChange={(e) => setResponsabileCosto(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 160px", minWidth: 0 }}><Field label="Budget previsto"><input style={inputStyle} inputMode="decimal" value={budgetPrevisto} onChange={(e) => setBudgetPrevisto(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 160px", minWidth: 0 }}><Field label="Soglia di allerta personalizzata"><input style={inputStyle} inputMode="decimal" value={sogliaPersonalizzata} onChange={(e) => setSogliaPersonalizzata(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 160px", minWidth: 0 }}><Field label="Responsabile del costo"><input style={inputStyle} value={responsabileCosto} onChange={(e) => setResponsabileCosto(e.target.value)} /></Field></div>
           </div>
         </div>
 

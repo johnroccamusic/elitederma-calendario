@@ -64,6 +64,12 @@ export const inputStyle = {
   ...fontBody,
   width: "100%",
   boxSizing: "border-box",
+  // Dentro una riga flex o una griglia un campo non si comprime da solo:
+  // `min-width` vale `auto`, cioe' la larghezza minima del controllo, e
+  // per un `input type="date"` su iPhone quella e' larga. Il campo resta
+  // grande, spinge fuori la colonna e il riquadro sborda. `width: 100%`
+  // non basta: governa la larghezza voluta, non il minimo.
+  minWidth: 0,
   padding: "10px 12px",
   borderRadius: 8,
   border: `1px solid ${CREAM_BORDER}`,
