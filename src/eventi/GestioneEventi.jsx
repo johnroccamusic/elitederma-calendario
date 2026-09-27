@@ -20,6 +20,11 @@ const euro = (n) => `${(Number(n) || 0).toFixed(2).replace(".", ",")} €`;
 // "2026-09-26" -> "26/09". Le date qui sono giorni, non istanti: si
 // spezza la stringa invece di passare da Date, o il fuso sposta il
 // giorno indietro di uno (vedi date-nulle-fanno-schermata-bianca)
+// i campi del modulo spesa: sei caselle in griglia, con l'imbottitura
+// piena di inputStyle il riquadro diventava alto mezza schermata.
+// minWidth 0 sul controllo stesso, non solo sul suo contenitore: un
+// select con 215 fornitori dentro ha una larghezza minima sua
+const campoSpesa = { ...inputStyle, padding: "7px 9px", fontSize: 13, minWidth: 0, maxWidth: "100%" };
 const fmtGiorno = (g) => (g ? `${g.slice(8, 10)}/${g.slice(5, 7)}` : "—");
 // l'orario di una vendita, letto a Roma: e' un istante vero
 const fmtQuando = (ts) => {
@@ -670,7 +675,7 @@ function PannelloIncassi({ evento, onFatto }) {
   return (
     <Riquadro titolo="Incassi rimasti senza evento">
       <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
-        <label style={{ flex: "0 0 120px" }}>
+        <label style={{ flex: "0 1 120px", minWidth: 0 }}>
           <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Giorni di allestimento</span>
           <input type="number" min="0" max="10" value={giorniPrima} onChange={(e) => setGiorniPrima(Number(e.target.value) || 0)}
             style={{ ...inputStyle, textAlign: "right" }} />
@@ -746,58 +751,59 @@ function ModuloSpesaEvento({ evento, costiCategorie, costiSottocategorie, fornit
 
   return (
     <Riquadro titolo="Aggiungi una spesa di questo evento">
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-          <Field label="Cos'è">
-            <input style={inputStyle} value={f.descrizione} onChange={(e) => cambia("descrizione", e.target.value)} placeholder="es. Stand, pad. 3 — saldo" />
+      {/* Una griglia sola, non tre righe di flex con basi fisse: sotto
+          una certa larghezza la base non si comprimeva piu' e l'ultima
+          colonna usciva dal riquadro. `minmax(min(190px, 100%), 1fr)`
+          e' lo stesso rimedio del listino — il min() fa cedere la
+          colonna quando lo schermo e' piu' stretto della base. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(190px, 100%), 1fr))", gap: "0 10px" }}>
+        {/* "Cos'è" occupa tutta la riga dove le colonne sono due o piu':
+            e' il campo che si scrive davvero, gli altri sono scelte */}
+        <div style={{ minWidth: 0, gridColumn: "1 / -1" }}>
+          <Field label="Cos'è" compatto etichettaFontSize={10}>
+            <input style={campoSpesa} value={f.descrizione} onChange={(e) => cambia("descrizione", e.target.value)} placeholder="es. Stand, pad. 3 — saldo" />
           </Field>
         </div>
-        <div style={{ flex: "1 1 130px", minWidth: 0 }}>
-          <Field label="Imponibile">
-            <input style={{ ...inputStyle, textAlign: "right" }} inputMode="decimal" value={f.imponibile} onChange={(e) => cambia("imponibile", e.target.value)} placeholder="0,00" />
+        <div style={{ minWidth: 0, display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: "0 8px" }}>
+          <Field label="Imponibile" compatto etichettaFontSize={10}>
+            <input style={{ ...campoSpesa, textAlign: "right" }} inputMode="decimal" value={f.imponibile} onChange={(e) => cambia("imponibile", e.target.value)} placeholder="0,00" />
           </Field>
-        </div>
-        <div style={{ flex: "0 1 92px", minWidth: 0 }}>
-          <Field label="IVA">
-            <select style={inputStyle} value={f.iva_percentuale} onChange={(e) => cambia("iva_percentuale", Number(e.target.value))}>
+          <Field label="IVA" compatto etichettaFontSize={10}>
+            <select style={campoSpesa} value={f.iva_percentuale} onChange={(e) => cambia("iva_percentuale", Number(e.target.value))}>
               {ALIQUOTE_IVA_EVENTO.map((a) => <option key={a} value={a}>{a}%</option>)}
             </select>
           </Field>
         </div>
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-          <Field label="Categoria">
-            <select style={inputStyle} value={f.categoria_id} onChange={(e) => cambia("categoria_id", e.target.value)}>
+        <div style={{ minWidth: 0 }}>
+          <Field label="Stato" compatto etichettaFontSize={10}>
+            <select style={campoSpesa} value={f.stato} onChange={(e) => cambia("stato", e.target.value)}>
+              {STATI_SPESA_EVENTO.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <Field label="Categoria" compatto etichettaFontSize={10}>
+            <select style={campoSpesa} value={f.categoria_id} onChange={(e) => cambia("categoria_id", e.target.value)}>
               {(costiCategorie || []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </Field>
         </div>
-        <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-          <Field label="Voce (opzionale)">
-            <select style={inputStyle} value={f.sottocategoria_id} onChange={(e) => cambia("sottocategoria_id", e.target.value)}>
+        <div style={{ minWidth: 0 }}>
+          <Field label="Voce" compatto etichettaFontSize={10}>
+            <select style={campoSpesa} value={f.sottocategoria_id} onChange={(e) => cambia("sottocategoria_id", e.target.value)}>
               <option value="">— nessuna —</option>
               {sotto.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
             </select>
           </Field>
         </div>
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 150px", minWidth: 0 }}>
-          <Field label="Stato">
-            <select style={inputStyle} value={f.stato} onChange={(e) => cambia("stato", e.target.value)}>
-              {STATI_SPESA_EVENTO.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
-            </select>
+        <div style={{ minWidth: 0 }}>
+          <Field label="Data" compatto etichettaFontSize={10}>
+            <input type="date" style={campoSpesa} value={f.data_documento} onChange={(e) => cambia("data_documento", e.target.value)} />
           </Field>
         </div>
-        <div style={{ flex: "1 1 150px", minWidth: 0 }}>
-          <Field label="Data (vuoto = fine evento)">
-            <input type="date" style={inputStyle} value={f.data_documento} onChange={(e) => cambia("data_documento", e.target.value)} />
-          </Field>
-        </div>
-        <div style={{ flex: "1 1 170px", minWidth: 0 }}>
-          <Field label="Fornitore (opzionale)">
-            <select style={inputStyle} value={f.fornitore_id} onChange={(e) => cambia("fornitore_id", e.target.value)}>
+        <div style={{ minWidth: 0 }}>
+          <Field label="Fornitore" compatto etichettaFontSize={10}>
+            <select style={campoSpesa} value={f.fornitore_id} onChange={(e) => cambia("fornitore_id", e.target.value)}>
               <option value="">— nessuno —</option>
               {(fornitori || []).map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
             </select>
@@ -805,9 +811,10 @@ function ModuloSpesaEvento({ evento, costiCategorie, costiSottocategorie, fornit
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
-        <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12, color: MUTED }}>
+        <span style={{ flex: "1 1 200px", minWidth: 0, ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.45 }}>
           Totale con IVA: <b style={{ color: NAVY }}>{euro(totale)}</b>
-          {f.stato !== "pagata" && <span> · non ancora pagata, quindi niente data di pagamento</span>}
+          {" · "}{f.data_documento ? "" : "data vuota = giorno di fine evento"}
+          {f.stato !== "pagata" && " · non ancora pagata, quindi niente data di pagamento"}
         </span>
         <Button onClick={salva} disabled={salvando}>{salvando ? "Salvo…" : "Registra la spesa"}</Button>
       </div>
