@@ -71376,10 +71376,19 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                   type="date"
                   style={{ ...inputStyle, background: pagataOInParte ? "#fff" : "#EFEFEF", color: pagataOInParte ? NAVY : MUTED }}
                   disabled={!pagataOInParte}
-                  title={pagataOInParte ? undefined : "Serve solo quando la spesa risulta pagata: scegli un metodo di pagamento qui sopra."}
+                  title={pagataOInParte
+                    ? "È il giorno in cui la spesa entra in prima nota cassa."
+                    : "Serve solo quando la spesa risulta pagata: scegli un metodo di pagamento qui sopra."}
                   value={pagataOInParte ? dataPagamento : ""}
                   onChange={(e) => setDataPagamento(e.target.value)}
                 />
+                {pagataOInParte && (
+                  <div style={{ ...fontBody, fontSize: 11, color: dataPagamento ? MUTED : "#C0392B", marginTop: 3, lineHeight: 1.4 }}>
+                    {dataPagamento
+                      ? `In prima nota cassa al ${fmtData(dataPagamento)}.`
+                      : "Senza questa data la spesa entra in prima nota al giorno del documento."}
+                  </div>
+                )}
               </Field>
             </div>
             <div style={{ flex: "1 1 140px" }}><Field label="Competenza dal"><input type="date" style={inputStyle} value={competenzaDa} onChange={(e) => setCompetenzaDa(e.target.value)} /></Field></div>
@@ -71432,7 +71441,19 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           <Field label="Pagata?">
             <SelettorePagamentoSpesa
               stato={stato} metodoPagamento={metodoPagamento}
-              onCambia={({ stato: s, metodoPagamento: m }) => { setStato(s); setMetodoPagamento(m); }}
+              onCambia={({ stato: s, metodoPagamento: m }) => {
+                setStato(s);
+                setMetodoPagamento(m);
+                // Segnando il metodo si sta dicendo "pagata": se la data
+                // del pagamento e' vuota si mette subito quella del
+                // documento, altrimenti la riga entra in prima nota lo
+                // stesso ma al giorno del documento — e' il ripiego
+                // `data_pagamento || data_documento`, e oggi 41 spese
+                // pagate su 226 ci cascano dentro senza dirlo a nessuno.
+                // Resta modificabile: e' un punto di partenza, non una
+                // decisione presa al posto di chi scrive
+                if (s === "pagata" && !dataPagamento) setDataPagamento(dataDocumento || dataOggiStr());
+              }}
             />
           </Field>
           <Field label="Allegato (fattura/ricevuta)">
