@@ -51660,10 +51660,23 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // il margine operativo in euro: la sua percentuale del prezzo netto
     // di vendita. Senza prezzo non c'e' niente da calcolare
     const margineOperativoEuro = p.prezzo_vendita != null ? round2((Number(p.prezzo_vendita) * margineOperativoPct) / 100) : null;
+    // Vendibile = sullo shop oppure sul POS. E' la stessa definizione del
+    // filtro per canale piu' sotto, tirata fuori qui perche' ora serve a
+    // due cose: dire se un prodotto e' fermo, e decidere se ha senso
+    // consigliargli un prezzo.
+    const suShop = !!p.woo_product_id && p.stato === "publish" && !p.solo_offline && !forzatoSoloOffline;
+    const suPos = p.prezzo_vendita != null && !p.escludi_vendita_diretta && !forzatoEscludi;
+    const vendibile = suShop || suPos;
     // il prezzo al pubblico consigliato: costo di acquisto per il
     // moltiplicatore. Per un bundle il costo e' quello della distinta
-    // (costoEffettivo), lo stesso che mostra la colonna "Costo acquisto"
-    const prezzoVenditaConsigliato = costoEffettivo != null && Number(costoEffettivo) > 0
+    // (costoEffettivo), lo stesso che mostra la colonna "Costo acquisto".
+    //
+    // Solo per chi si vende davvero. Anellini, bustine e gli altri pezzi
+    // che esistono solo per comporre un kit non vanno da nessuna parte a
+    // quel prezzo: consigliarglielo riempiva la colonna di numeri che
+    // nessuno userà mai, e faceva sembrare un problema il fatto che non
+    // ci fossero.
+    const prezzoVenditaConsigliato = vendibile && costoEffettivo != null && Number(costoEffettivo) > 0
       ? round2(Number(costoEffettivo) * moltiplicatoreConsigliato)
       : null;
     // quanto si toglie dal cedibile per la sicurezza, in euro
@@ -51712,9 +51725,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       // prodotto che non e' in vendita non puo' essere fermo — non e' mai
       // partito. I consumabili dei corsi e il materiale interno finivano
       // tutti li' dentro e coprivano quelli che davvero non si vendono.
-      inVendita:
-        (!!p.woo_product_id && p.stato === "publish" && !p.solo_offline && !forzatoSoloOffline)
-        || (p.prezzo_vendita != null && !p.escludi_vendita_diretta && !forzatoEscludi),
+      inVendita: vendibile,
       stockTotale,
       riordinoCompleto: p.soglia_riordino != null && p.lead_time_giorni != null && !!p.fornitore_id,
       sottoScorta: p.conta_magazzino !== false && p.soglia_riordino != null && stockTotale != null && stockTotale < p.soglia_riordino,
