@@ -11,7 +11,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { leggiListino, csvListino, scaricaCsv, BLOCCHI, motivoSenzaSconto, FASI, faseDi, scenario } from "./dati.js";
+import { leggiListino, csvListino, scaricaCsv, BLOCCHI, motivoSenzaSconto } from "./dati.js";
 import { iconaDelBlocco } from "./icone.jsx";
 
 const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace(".", ",")}`);
@@ -30,8 +30,6 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   const [errore, setErrore] = useState(null);
   const [cerca, setCerca] = useState("");
   const [bloccoScelto, setBloccoScelto] = useState(null); // null = tutti
-  const [faseId, setFaseId] = useState("bilanciato");
-  const fase = faseDi(faseId);
   const riferimenti = useRef({});
 
   useEffect(() => {
@@ -47,18 +45,9 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   }, []);
 
   const q = cerca.trim().toLowerCase();
-  // ogni riga porta con se' i numeri della fase scelta: sconto, prezzo al
-  // rivenditore e quello che resta. Cambiando linguetta cambiano questi,
-  // non i dati — il listino e' sempre lo stesso
-  const conFase = useMemo(() => righe.map((r) => {
-    const sc = scenario(r, fase.k);
-    return { ...r, sconto_fase_pct: sc.scontoPct, prezzo_fase: sc.prezzoRivenditore,
-             guadagno_riv_fase: sc.guadagnoRivenditore, utile_fase: sc.utile, ti_resta_fase: sc.tiResta,
-             quota_fase_pct: sc.quotaPct, sotto_fase: sc.sotto };
-  }), [righe, fase.k]);
   const visibili = useMemo(
-    () => conFase.filter((r) => (!q || (r.nome || "").toLowerCase().includes(q)) && (bloccoScelto == null || r.blocco_ordine === bloccoScelto)),
-    [conFase, q, bloccoScelto]);
+    () => righe.filter((r) => (!q || (r.nome || "").toLowerCase().includes(q)) && (bloccoScelto == null || r.blocco_ordine === bloccoScelto)),
+    [righe, q, bloccoScelto]);
 
   // i reparti che hanno davvero qualcosa dentro, nell'ordine del menu
   const gruppi = useMemo(() => {
@@ -82,7 +71,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     setTimeout(() => riferimenti.current[n]?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   }
   function esporta() {
-    scaricaCsv(csvListino(visibili), `listino-${fase.id}-${new Date().toISOString().slice(0, 10)}.csv`);
+    scaricaCsv(csvListino(visibili), `listino-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   // Il foglio della tabella. Sta qui e non negli stili inline perche' sotto
@@ -132,7 +121,6 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     .lst-tab td.lst-costo, .lst-tab th.lst-costo { color: ${MUTED}; }
     .lst-tab td.lst-resta { font-weight: 800; }
     .lst-tab td.lst-resta-riv { color: #8A6D1D; font-weight: 800; }
-    .lst-tab td.lst-lui, .lst-tab th.lst-lui { color: ${MUTED}; }
     /* Nel listino privato i numeri sono sette: su un telefono una riga
        sola non basta, e farla scorrere di lato vorrebbe dire nascondere
        proprio le colonne che servono a decidere. Quindi sotto i 700px il
@@ -146,10 +134,8 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
       .lst-privato .lst-tab colgroup { display: none; }
       /* minmax(0, 1fr) e non 1fr: con "1fr" il minimo di ogni colonna e'
          la larghezza del suo contenuto, e le celle hanno white-space
-         nowrap — otto colonne cosi' sfondano lo schermo e le ultime
-         finiscono fuori a destra. Proprio "a lui", che e' quella che
-         serve a vedere se il bilanciato bilancia. */
-      .lst-privato .lst-tab tr { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr));
+         nowrap — cosi' le ultime finiscono fuori a destra. */
+      .lst-privato .lst-tab tr { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
                                  gap: 0 2px; padding: 10px 6px; border-top: 1px solid ${CREAM_BORDER}; }
       .lst-privato .lst-tab td { border-top: none; padding: 0; font-size: 12.5px; text-align: center;
                                  min-width: 0; white-space: normal; overflow-wrap: anywhere; }
@@ -187,22 +173,6 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
         <h1 style={{ ...stileTitoloPagina, marginTop: 8, marginBottom: 2 }}>{titolo}</h1>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 14 }}>{privato ? "Costi, prezzi e quello che resta in tasca — solo per uso interno" : "Gestione prezzi vendita e rivenditori"}</div>
 
-        {/* Le tre fasi. Lo sconto E' la divisione del prezzo: meta', un
-            terzo, un quarto. Niente da calcolare, solo da scegliere. */}
-        <div style={{ display: "flex", gap: 6, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 5, marginBottom: 10 }}>
-          {FASI.map((f) => {
-            const attiva = f.id === faseId;
-            return (
-              <button key={f.id} onClick={() => setFaseId(f.id)} title={f.spiega}
-                style={{ flex: 1, cursor: "pointer", borderRadius: 10, border: "none", padding: "9px 6px",
-                  background: attiva ? NAVY : "transparent", color: attiva ? "#fff" : NAVY, ...fontBody }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: 0.3 }}>{f.nome}</div>
-                <div style={{ fontSize: 10.5, opacity: attiva ? 0.85 : 0.6, marginTop: 1 }}>{f.quota}</div>
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>{fase.spiega}</div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           <input value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="Cerca prodotto…"
@@ -272,21 +242,18 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       {privato && <th className="lst-costo">{"prezzo\nacquisto"}</th>}
                       <th>{"pubbl.\nlordo"}</th>
                       <th>{"pubbl.\nnetto"}</th>
-                      <th>{"sconto\n" + fase.nome.toLowerCase()}</th>
+                      <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th><th>{"a lui"}</th></>}
+                      {privato && <><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th></>}
                     </tr>
                   </thead>
                   <tbody>
                     {b.prodotti.map((r) => {
-                      const manca = r.sconto_fase_pct == null;
+                      const manca = r.sconto_max_pct == null;
                       return (
                         <tr key={r.id} className={manca ? "lst-manca" : undefined} onClick={() => onApriProdotto && onApriProdotto(r.id)}
                           style={{ cursor: onApriProdotto ? "pointer" : "default" }}
-                          title={manca ? motivoSenzaSconto(r)
-                            : r.sotto_fase
-                              ? `${fase.nome} vorrebbe il ${String(r.quota_fase_pct).replace(".", ",")}%, ma a quel prezzo vendi sottocosto: il massimo qui è ${String(r.sconto_fase_pct).replace(".", ",")}%. Lui paga ${euro(r.prezzo_fase)} e ci guadagna ${euro(r.guadagno_riv_fase)}; a te resta ${euro(r.ti_resta_fase)} netto. Merce ${euro(r.costo_acquisto)}.`
-                              : `${fase.nome}: gli lasci ${euro(r.guadagno_riv_fase)} e ne incassi ${euro(r.prezzo_fase)} — il ${String(r.sconto_fase_pct).replace(".", ",")}% del netto. Di quello che incassi, pagata la merce (${euro(r.costo_acquisto)}) e i costi, ti resta ${euro(r.utile_fase)} prima delle imposte e ${euro(r.ti_resta_fase)} dopo.`}>
+                          title={manca ? motivoSenzaSconto(r) : `Scontando il ${String(r.sconto_max_pct).replace(".", ",")}% il rivenditore paga ${euro(r.prezzo_rivenditore)}. Costo della merce ${euro(r.costo_acquisto)}.`}>
                           <td className="lst-foto">
                             {r.foto_url
                               ? <img src={r.foto_url} alt="" loading="lazy" decoding="async" />
@@ -300,15 +267,14 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                             {manca ? (
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
-                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sotto_fase ? ROSSO : "#8A6D1D", background: r.sotto_fase ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_fase_pct).replace(".", ",")}%</span>
+                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_max_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_max_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_max_pct).replace(".", ",")}%</span>
                             )}
                           </td>
-                          <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_fase)}</td>
+                          <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_rivenditore)}</td>
                           {privato && (
                             <>
                               <td className="lst-resta" data-eti="a te\nsenza" title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
-                              <td className="lst-resta-riv" data-eti="a te\ncon" title={r.utile_fase != null ? `${fase.nome}: a te ${euro(r.ti_resta_fase)} dopo le imposte (${euro(r.utile_fase)} prima), a lui ${euro(r.guadagno_riv_fase)}.` : undefined}>{cifra(r.ti_resta_fase)}</td>
-                              <td className="lst-lui" data-eti="a lui" title="Quello che il rivenditore guadagna rivendendo al prezzo di listino: la differenza fra quanto paga lui e quanto incassa dal cliente.">{cifra(r.guadagno_riv_fase)}</td>
+                              <td className="lst-resta-riv" data-eti="a te\ncon" title={r.utile_rivenditore != null ? `Vendendo a un rivenditore allo sconto massimo: ${euro(r.utile_rivenditore)} prima delle imposte, ${euro(r.ti_resta_rivenditore)} dopo.` : undefined}>{cifra(r.ti_resta_rivenditore)}</td>
                             </>
                           )}
                         </tr>
@@ -334,12 +300,10 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
           </p>
         )}
         <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>
-          Lo <b>sconto</b> non è calcolato: è la divisione. In Bilanciato il prezzo netto si taglia a
-          metà, e la cifra che lasci a lui è la stessa che incassi tu; in Fase 2 ne tieni due terzi,
-          in Fase 1 tre quarti. Cosa ciascuno faccia poi con la sua parte — merce, spese, imposte —
-          è affare suo, e per la tua parte lo dicono le colonne «a te». L'unico limite è il fondo:
-          dove metà prezzo non copre la merce e il margine di sicurezza lo sconto si ferma prima e
-          diventa <span style={{ color: ROSSO, fontWeight: 700 }}>rosso</span>. Ci sono solo i prodotti
+          Lo <b>sconto massimo</b> è la quota che divide il guadagno a metà fra te e il rivenditore:
+          concedendola, pagata la merce e i costi aziendali, a te resta quanto a lui. È arrotondata
+          per difetto a passi di cinque — meglio concedere un punto in meno che uno in più. Il
+          <b> prezzo rivenditore</b> è il pubblico netto meno quello sconto. Ci sono solo i prodotti
           in vendita sullo shop: fuori chi non ha prezzo, non è pubblicato o è solo interno.
         </p>
       </div>
