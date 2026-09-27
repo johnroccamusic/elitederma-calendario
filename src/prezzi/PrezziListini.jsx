@@ -139,7 +139,13 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                  gap: 0 2px; padding: 10px 6px; border-top: 1px solid ${CREAM_BORDER}; }
       .lst-privato .lst-tab td { border-top: none; padding: 0; font-size: 12.5px; text-align: center;
                                  min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+      /* da telefono la pillola intera non ci sta nella sua colonna e
+         finiva sopra a quella accanto: resta il punto interrogativo, il
+         perche' e' nel titolo della riga */
+      .lst-privato .lst-tab .lst-manca-eti { font-size: 0; padding: 3px 7px; }
+      .lst-privato .lst-tab .lst-manca-eti::after { content: "?"; font-size: 11px; }
       .lst-privato .lst-tab td::before { content: attr(data-eti); display: block; font-size: 7.5px;
+                                         white-space: pre-line;
                                          font-weight: 700; letter-spacing: 0; text-transform: uppercase;
                                          color: ${MUTED}; margin-bottom: 1px; line-height: 1.05;
                                          white-space: normal; }
@@ -265,7 +271,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                           <td data-eti="netto">{cifra(r.pubblico_netto)}</td>
                           <td data-eti="sconto">
                             {manca ? (
-                              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
+                              <span className="lst-manca-eti" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
                               <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_max_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_max_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_max_pct).replace(".", ",")}%</span>
                             )}
@@ -273,8 +279,8 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                           <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_rivenditore)}</td>
                           {privato && (
                             <>
-                              <td className="lst-resta" data-eti="a te\nsenza" title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
-                              <td className="lst-resta-riv" data-eti="a te\ncon" title={r.utile_rivenditore != null ? `Vendendo a un rivenditore allo sconto massimo: ${euro(r.utile_rivenditore)} prima delle imposte, ${euro(r.ti_resta_rivenditore)} dopo.` : undefined}>{cifra(r.ti_resta_rivenditore)}</td>
+                              <td className="lst-resta" data-eti={"a te\nsenza"} title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
+                              <td className="lst-resta-riv" data-eti={"a te\ncon"} title={r.utile_rivenditore != null ? `Vendendo a un rivenditore allo sconto massimo: ${euro(r.utile_rivenditore)} prima delle imposte, ${euro(r.ti_resta_rivenditore)} dopo.` : undefined}>{cifra(r.ti_resta_rivenditore)}</td>
                             </>
                           )}
                         </tr>
