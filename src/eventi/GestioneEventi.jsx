@@ -663,9 +663,12 @@ function SchedaEvento({ evento, location, persone, prodotti, hotel, onIndietro, 
 
 // --------------------------------------------------------------- la pagina
 
-export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], hotel = [], onBack, titolo = "Gestione eventi" }) {
+export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null }) {
   const [eventi, setEventi] = useState(null);
-  const [apertoId, setApertoId] = useState(null);
+  // `eventoIniziale` arriva da chi ci ha portati qui — oggi la barra
+  // dell'evento nel calendario. Non e' uno stato che cambia da solo:
+  // entrati, l'evento e' aperto, e da li' si naviga come sempre
+  const [apertoId, setApertoId] = useState(eventoIniziale || null);
   const [creando, setCreando] = useState(false);
   const [msg, setMsg] = useState("");
 

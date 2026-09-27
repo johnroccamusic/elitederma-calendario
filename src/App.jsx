@@ -9486,6 +9486,7 @@ function BadgeTipologia({ testo, conteggio }) {
 // "Gestione modelle" — cambia solo dove porta il click su una data
 // (onApriData), passato dal chiamante
 function SezioneDateCorsi({
+  eventi = [], onApriEvento,
   corsi, location, corsiDate, iscritti, master, ricarica, onApriData,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
   cronologicoHome, setCronologicoHome,
@@ -9870,7 +9871,7 @@ function SezioneDateCorsi({
         // spostabile solo dove è già consentito modificare le date (Gestione
         // corsi passa onEdit/onDelete; Dashboard venditori e Gestione modelle
         // restano di sola consultazione)
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} spostabile={!!onEdit} />
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} eventi={eventi} onApriEvento={onApriEvento} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} spostabile={!!onEdit} />
       )}
       </div>
 
@@ -18082,7 +18083,7 @@ function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungi
   );
 }
 
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false, apriSubitoAggiungiCorso = false }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [], onApriEvento, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false, apriSubitoAggiungiCorso = false }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
@@ -18178,6 +18179,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         )}
         <Calendario
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          eventi={eventi} onApriEvento={onApriEvento}
           onApriData={onApriData} onBack={() => setMostraAggiungiCorso(false)} ricarica={ricarica}
           apriPopupInizialeData={dataOggiStr()}
         />
@@ -18229,6 +18231,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
           data scorrendo una lista, non navigando fra i mesi */}
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+        eventi={eventi} onApriEvento={onApriEvento}
         ricarica={ricarica} onApriData={soloLettura ? () => {} : onApriData}
         onApriIscritto={soloLettura ? undefined : onApriIscritto}
         nascondiTitolo
@@ -24207,7 +24210,7 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
 // DOM, e qualunque cattura del puntore impostata su di essa andrebbe persa.
 // quanto togliere al corpo dei nomi dei corsi nelle barre del calendario
 const RIDUZIONE_NOME_CORSO_CALENDARIO = 2;
-function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, onSpostaDaBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento, fontScaleBarre = 1 }) {
+function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, onSpostaDaBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento, fontScaleBarre = 1, eventi = [], onApriEvento }) {
   // su schermi stretti (cellulare) le barre dei corsi diventano illeggibili
   // se restano alla dimensione pensata per desktop: qui si ingrandiscono
   // corsia, intestazione del giorno e i relativi font
@@ -24250,7 +24253,17 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
     ? corsiDate.map((cd) => cd.id === idEvidenziato ? { ...cd, data_inizio: overrideInizio, data_fine: overrideFine || overrideInizio } : cd)
     : corsiDate;
 
-  const eventiMese = corsiDateEff.filter(
+  // Corsi ed eventi nella stessa lista prima di assegnare le corsie.
+  //
+  // Devono stare insieme QUI e non in due griglie sovrapposte: le corsie
+  // servono a non far accavallare due barre nella stessa settimana, e due
+  // calcoli separati finirebbero per mettere un evento sopra un corso
+  // proprio nei giorni in cui si sovrappongono — che e' l'unico caso in
+  // cui la corsia serviva. Un evento senza data di fine dura un giorno.
+  const barreEvento = (eventi || [])
+    .filter((e) => e.data_inizio && e.stato !== "annullato")
+    .map((e) => ({ ...e, tipoBarra: "evento", data_fine: e.data_fine || e.data_inizio }));
+  const eventiMese = [...corsiDateEff, ...barreEvento].filter(
     (cd) => cd.data_inizio <= dateStr(giorniMese) && cd.data_fine >= dateStr(1)
   );
 
@@ -24310,6 +24323,41 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                 });
                 const continuaPrima = startIdx < 0;
                 const continuaDopo = ev.data_fine > fineRiga;
+
+                // Un evento non e' un corso e non deve somigliargli: niente
+                // tinta piena, niente riempimento dei posti, niente frecce
+                // di trascinamento — un evento non si sposta trascinandolo.
+                // Fondo crema e filetto d'oro: si riconosce da lontano che
+                // quella barra e' un'altra cosa.
+                if (ev.tipoBarra === "evento") {
+                  const dove = ev.citta || ev.nome_luogo || locById[ev.location_id]?.nome || "";
+                  return (
+                    <div
+                      key={`ev-${ev.id}`}
+                      onClick={() => onApriEvento && onApriEvento(ev)}
+                      title={`Evento: ${String(ev.nome || "").toUpperCase()}${dove ? ` · ${String(dove).toUpperCase()}` : ""}`}
+                      style={{
+                        position: "relative", pointerEvents: "auto",
+                        gridColumn: `${colStart + 1} / span ${colSpan}`,
+                        gridRow: ev.lane + 1, alignSelf: "center",
+                        marginLeft: continuaPrima ? 0 : 3, marginRight: continuaDopo ? 0 : 3,
+                        height: LANE_H - 2, borderRadius: 4,
+                        background: "linear-gradient(180deg, #FDF8EC 0%, #F7EAD1 100%)",
+                        border: `1px solid ${GOLD}`, boxSizing: "border-box",
+                        display: "flex", alignItems: "center", gap: 3, padding: "0 5px",
+                        cursor: onApriEvento ? "pointer" : "default",
+                        ...fontBody, fontSize: (isMobile ? 9 : 8) * fontScaleBarre, fontWeight: 700,
+                        color: "#6E5312", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      }}
+                    >
+                      <span style={{ flexShrink: 0, opacity: 0.85 }}>◆</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {String(ev.nome || "Evento").toUpperCase()}{dove ? ` · ${String(dove).toUpperCase()}` : ""}
+                      </span>
+                    </div>
+                  );
+                }
+
                 const corso = corsoById[ev.corso_id];
                 const loc = locById[ev.location_id];
                 const coloreCorso = corso?.colore || NAVY;
@@ -24482,7 +24530,7 @@ function PopupEliminaData({ evento, corsoById, locById, onElimina, onChiudi }) {
   );
 }
 
-function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData, fontScaleBarre = 1, scrollMarginTop = 54, spostabile = false }) {
+function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData, fontScaleBarre = 1, scrollMarginTop = 54, spostabile = false, eventi = [], onApriEvento }) {
   const isMobile = useIsMobile();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
@@ -24661,6 +24709,7 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
           <MeseGriglia
             anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
             onApriData={onApriData} corsoById={corsoById} locById={locById}
+            eventi={eventi} onApriEvento={onApriEvento}
             onClickGiornoVuoto={setPopupNuovo}
             onDoppioClickEvento={setPopupElimina}
             fontScaleBarre={fontScaleBarre}
@@ -72204,6 +72253,12 @@ export default function App() {
   const [costiCategorie, setCostiCategorie] = useState([]);
   const [costiSottocategorie, setCostiSottocategorie] = useState([]);
   const [eventi, setEventi] = useState([]);
+  // Da dove si e' arrivati alla scheda di un evento, e quale evento.
+  // Cliccando la barra nel calendario si entra in Gestione eventi gia'
+  // aperti su quello, e "Indietro" riporta al calendario invece che alla
+  // home — chi stava guardando il mese vuole tornare al mese
+  const [eventoDaAprire, setEventoDaAprire] = useState(null);
+  const [vistaPrimaDellEvento, setVistaPrimaDellEvento] = useState(null);
   const [fornitori, setFornitori] = useState([]);
   const [spese, setSpese] = useState([]);
   const [speseAttribuzioni, setSpeseAttribuzioni] = useState([]);
@@ -73099,6 +73154,12 @@ export default function App() {
     );
   }
 
+  // dalla barra del calendario alla scheda dell'evento
+  function apriEvento(ev) {
+    setVistaPrimaDellEvento(view);
+    setEventoDaAprire(ev.id);
+    setView("gestionieventi");
+  }
   function apriData(cd) {
     setViewPrimaDiScheda(view);
     setVieneDaGestioneModelle(false);
@@ -74191,7 +74252,7 @@ export default function App() {
               // master e chi vende, ogni volta che iscrivono qualcuno —
               // due tasti di distanza erano due di troppo
               { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come si iscrive un allievo, e il messaggio da mandargli dopo", Icona: IconaPersonaAggiungi, attivo: true, onClick: () => setView("iscrizioneallievi") },
-              { chiave: "gestionieventi", title: "Gestione eventi", descrizione: "Fiere e congressi: team, materiali, trasferimenti e hotel", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionieventi"), onClick: () => setView("gestionieventi") },
+              { chiave: "gestionieventi", title: "Gestione eventi", descrizione: "Fiere e congressi: team, materiali, trasferimenti e hotel", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionieventi"), onClick: () => { setEventoDaAprire(null); setVistaPrimaDellEvento(null); setView("gestionieventi"); } },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
@@ -74259,6 +74320,7 @@ export default function App() {
       {view === "gestionedate" && (
         <GestioneDate
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          eventi={eventi} onApriEvento={apriEvento}
           ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
           onApriIscritto={(i) => { setViewPrimaDiScheda("gestionedate"); apriIscritto(i); }}
           apriSubitoAggiungiCorso={aprireAggiungiCorso}
@@ -74910,9 +74972,11 @@ export default function App() {
 
       {view === "gestionieventi" && (
         <GestioneEventi
+          key={eventoDaAprire || "elenco"}
           location={location} master={master} assistente={assistente} venditori={venditori}
           prodottiShop={prodottiShop} hotel={hotel}
-          onBack={() => setView("home")}
+          eventoIniziale={eventoDaAprire}
+          onBack={() => { setEventoDaAprire(null); setView(vistaPrimaDellEvento || "home"); }}
           titolo={etichettaTasto("home", "gestionieventi", "Gestione eventi")}
         />
       )}
@@ -75175,7 +75239,7 @@ export default function App() {
       )}
 
       {view === "calendario" && (
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} onApriData={apriData} onBack={() => setView("home")} ricarica={fetchDati} />
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} eventi={eventi} onApriEvento={apriEvento} onApriData={apriData} onBack={() => setView("home")} ricarica={fetchDati} />
       )}
 
       {view === "cerca" && (
