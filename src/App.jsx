@@ -60975,6 +60975,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // si scrive sempre sull'ultima lista arrivata, non su quella chiusa nella
   // funzione: un'altra persona puo' aver salvato un carrello nel frattempo
   const sospesiAttuali = () => (Array.isArray(LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI]) ? LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI] : []);
+  // il codice extra sta chiuso finche' non serve: nella tessera degli
+  // sconti occupava tre righe di etichetta piu' la casella, per una cosa
+  // che quasi sempre non si usa
+  const [codiceExtraAperto, setCodiceExtraAperto] = useState(false);
   const [carrelloEspanso, setCarrelloEspanso] = useState(false); // solo mobile: carrello come foglio a comparsa dal basso
   // solo mobile: le categorie stanno ripiegate sotto la barra di ricerca e
   // scendono a tendina da una linguetta. Trenta caselle occupavano meta'
@@ -62218,7 +62222,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {/* sconto e coupon in una tessera sola: sono due modi di fare la
           stessa cosa e si escludono a vicenda, tenerli vicini lo dice
           senza doverlo scrivere */}
-      <div style={{ border: `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: puoScontare ? undefined : "#EDF2F8", borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: isMobile ? 10 : 14, display: "flex", gap: puoScontare ? 8 : (isMobile ? 10 : 14), alignItems: "flex-end", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
+      <div style={{ border: `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: puoScontare ? undefined : "#EDF2F8", borderRadius: 14, padding: puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px"), marginBottom: isMobile ? 10 : 14, display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
         {puoScontare && (
           <>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
@@ -62245,64 +62249,84 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           // gia' acceso quando si vende stando a quel corso — oppure un
           // codice dato dall'amministrazione, scritto a mano dopo aver
           // spento il primo. Una percentuale da inventare non c'e' piu'.
-          <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", gap: 12, alignItems: "flex-start" }}>
-            {/* due colonne: a sinistra le spunte (referral personale o
-                sconto del corso), a destra il codice extra; una riga sola */}
-            {((!corsoPosId && couponReferralPersonale) || couponDellEdizione(corsoPosId)) && (
-              <div style={{ flex: 1, minWidth: 0 }}>
-              {!corsoPosId && couponReferralPersonale && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, marginBottom: 0 }}>
-                  <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                  <span style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.2 }}>
-                    <span style={{ ...fontBody, fontSize: 15.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponReferralPersonale.codice}</span>
-                    <span>Applica il<br />mio referral</span>
-                  </span>
-                  {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
-                    <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
-                  )}
-                </label>
-              )}
-              {couponDellEdizione(corsoPosId) && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY, marginBottom: 0 }}>
-                  <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                  Applica sconto del corso
-                  {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 8px" }}>−{fmtPctErp2(percentualeErogata)}</span>}
-                </label>
-              )}
-              </div>
+          // Una riga sola, alta la meta' di prima. Prima le due spunte
+          // stavano incolonnate a sinistra col codice sopra su due righe,
+          // e a destra "Codice / sconto / extra" su tre righe con la
+          // casella sempre aperta: quattro righe di altezza per una cosa
+          // che nove volte su dieci e' solo una spunta. Il codice extra
+          // adesso e' un link che si apre quando serve.
+          <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            {!corsoPosId && couponReferralPersonale && (
+              <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, minWidth: 0 }}>
+                <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
+                <span style={{ whiteSpace: "nowrap" }}>Usa il mio referral</span>
+                {/* il codice sta nella riga, non sopra: e' un'etichetta di
+                    cosa si sta accendendo, e va letto e copiato, non riscritto */}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#F7EEDE", borderRadius: 999, padding: "2px 4px 2px 8px", flexShrink: 0 }}>
+                  <span style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>{couponReferralPersonale.codice}</span>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); try { navigator.clipboard.writeText(String(couponReferralPersonale.codice || "").toUpperCase()); } catch (err) { /* niente appunti: si legge e si copia a mano */ } }}
+                    title="Copia il codice"
+                    style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: MUTED, display: "flex", alignItems: "center" }}>
+                    <IconaCopiaFile size={13} />
+                  </button>
+                </span>
+                {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
+                  <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 6px", whiteSpace: "nowrap" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
+                )}
+              </label>
             )}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {/* le tre parole una sull'altra a sinistra, la casella a destra */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ ...etichettaPos, marginBottom: 0, lineHeight: 1.15, flexShrink: 0 }}>Codice<br />sconto<br />extra</div>
-                <input
-                  style={{ ...inputStyle, textTransform: "uppercase", opacity: (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
-                  value={couponCodiceTesto}
-                  disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
-                  onChange={(e) => applicaCodiceCoupon(e.target.value)}
-                  placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso per usarne un altro" : referralPersonaleInUso ? "Spegni il tuo referral per usare un altro codice" : "Codice dato dall'amministrazione"}
-                />
+            {couponDellEdizione(corsoPosId) && (
+              <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY }}>
+                <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
+                <span style={{ whiteSpace: "nowrap" }}>Applica sconto del corso</span>
+                {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{fmtPctErp2(percentualeErogata)}</span>}
+              </label>
+            )}
+            {/* il separatore solo se a sinistra c'e' davvero qualcosa */}
+            {((!corsoPosId && couponReferralPersonale) || couponDellEdizione(corsoPosId)) && !isMobile && (
+              <span style={{ width: 1, alignSelf: "stretch", minHeight: 20, background: CREAM_BORDER, flexShrink: 0 }} />
+            )}
+            {codiceExtraAperto || couponCodiceTesto.trim() !== "" ? (
+              <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    autoFocus={codiceExtraAperto}
+                    style={{ ...inputStyle, padding: "5px 9px", fontSize: 13, textTransform: "uppercase", opacity: (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
+                    value={couponCodiceTesto}
+                    disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
+                    onChange={(e) => applicaCodiceCoupon(e.target.value)}
+                    placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso" : referralPersonaleInUso ? "Spegni il tuo referral" : "Codice sconto extra"}
+                  />
+                  <button onClick={() => { applicaCodiceCoupon(""); setCodiceExtraAperto(false); }} title="Chiudi il codice extra"
+                    style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2, flexShrink: 0 }}>✕</button>
+                </div>
+                {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
+                  couponAttivo ? (
+                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 3 }}>
+                      Codice valido: −{fmtPctErp2(percentualeErogata)}
+                      {/* quanto durera': un codice a uso singolo sparisce dopo
+                          questo carrello, e saperlo prima evita di cercarlo
+                          alla vendita dopo credendo che sia sparito per errore */}
+                      <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: grigioCarrello, marginTop: 1 }}>
+                        {couponAttivo.utilizzi_max === 1
+                          ? "Uso singolo: dopo questa vendita si toglie da solo."
+                          : couponAttivo.valido_fino_a
+                          ? `Resta fino al ${fmtData(couponAttivo.valido_fino_a)}, o finché non lo cancelli.`
+                          : "Resta finché non lo cancelli."}
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>Codice non valido o scaduto: nessuno sconto.</div>
+                  )
+                )}
               </div>
-              {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
-                couponAttivo ? (
-                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 4 }}>
-                    Codice valido: −{fmtPctErp2(percentualeErogata)}
-                    {/* quanto durera': un codice a uso singolo sparisce dopo
-                        questo carrello, e saperlo prima evita di cercarlo
-                        alla vendita dopo credendo che sia sparito per errore */}
-                    <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: grigioCarrello, marginTop: 2 }}>
-                      {couponAttivo.utilizzi_max === 1
-                        ? "Uso singolo: dopo questa vendita si toglie da solo."
-                        : couponAttivo.valido_fino_a
-                        ? `Resta fino al ${fmtData(couponAttivo.valido_fino_a)}, o finché non lo cancelli.`
-                        : "Resta finché non lo cancelli."}
-                    </span>
-                  </div>
-                ) : (
-                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 4 }}>Codice non valido o scaduto: nessuno sconto.</div>
-                )
-              )}
-            </div>
+            ) : (
+              <button onClick={() => setCodiceExtraAperto(true)}
+                style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", marginLeft: "auto" }}>
+                Codice sconto extra <span style={{ fontSize: 15, lineHeight: 1 }}>›</span>
+              </button>
+            )}
           </div>
         )}
         {(couponNum > 0 || scontoNum > 0) && (
