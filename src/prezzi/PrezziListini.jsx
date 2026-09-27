@@ -17,7 +17,11 @@ import { iconaDelBlocco } from "./icone.jsx";
 const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace(".", ",")}`);
 const ROSSO = "#C0392B";
 
-export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro = "Magazzino e shop", titolo = "Prezzi e listini" }) {
+// `privato` accende le colonne che non si mostrano a nessuno fuori:
+// il prezzo di acquisto in testa, e in coda quello che resta in tasca
+// vendendo al pubblico o a un rivenditore. E' la stessa tabella, non una
+// copia: due tabelle sugli stessi numeri finirebbero per divergere.
+export default function PrezziListini({ privato = false, onApriProdotto, onBack, titoloIndietro = "Magazzino e shop", titolo = "Prezzi e listini" }) {
   const [righe, setRighe] = useState([]);
   const [caricando, setCaricando] = useState(true);
   const [errore, setErrore] = useState(null);
@@ -110,6 +114,14 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
     .lst-tab col.c-nome { width: auto; }
     .lst-tab col.c-num  { width: 66px; }
     .lst-tab col.c-scon { width: 52px; }
+    .lst-tab col.c-costo { width: 62px; }
+    .lst-tab td.lst-costo, .lst-tab th.lst-costo { color: ${MUTED}; }
+    .lst-tab td.lst-resta { font-weight: 800; }
+    .lst-tab td.lst-resta-riv { color: #8A6D1D; font-weight: 800; }
+    /* con le colonne riservate i numeri sono otto: sotto una certa
+       larghezza non c'e' verso di farceli stare, e si scorre di lato */
+    .lst-privato { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .lst-privato .lst-tab { min-width: 700px; }
 
     @media (max-width: 560px) {
       .lst-tab td { font-size: 13px; padding: 5px 2px; }
@@ -129,7 +141,7 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <TastoLivelloPrecedente titolo={titoloIndietro} onClick={onBack} />
         <h1 style={{ ...stileTitoloPagina, marginTop: 8, marginBottom: 2 }}>{titolo}</h1>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 14 }}>Gestione prezzi vendita e rivenditori</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 14 }}>{privato ? "Costi, prezzi e quello che resta in tasca — solo per uso interno" : "Gestione prezzi vendita e rivenditori"}</div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           <input value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="Cerca prodotto…"
@@ -183,21 +195,25 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{b.prodotti.length} prodotti</div>
               </div>
 
-              <div>
+              <div className={privato ? "lst-privato" : undefined}>
                 <table className="lst-tab">
                   <colgroup>
                     <col className="c-foto" /><col className="c-nome" />
+                    {privato && <col className="c-costo" />}
                     <col className="c-num" /><col className="c-num" />
                     <col className="c-scon" /><col className="c-num" />
+                    {privato && <><col className="c-num" /><col className="c-num" /></>}
                   </colgroup>
                   <thead>
                     <tr>
                       <th className="lst-foto" />
                       <th className="lst-nome">Prodotto</th>
+                      {privato && <th className="lst-costo">{"prezzo\nacquisto"}</th>}
                       <th>{"pubbl.\nlordo"}</th>
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
+                      {privato && <><th>{"ti resta\nsenza riv."}</th><th>{"ti resta\ncon riv."}</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -213,6 +229,7 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
                               : <span className="lst-vuota" />}
                           </td>
                           <td className="lst-nome">{r.nome}</td>
+                          {privato && <td className="lst-costo">{euro(r.costo_acquisto)}</td>}
                           <td>{euro(r.pubblico_lordo)}</td>
                           <td>{euro(r.pubblico_netto)}</td>
                           <td>
@@ -223,6 +240,12 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
                             )}
                           </td>
                           <td className="lst-riv">{euro(r.prezzo_rivenditore)}</td>
+                          {privato && (
+                            <>
+                              <td className="lst-resta" title={r.utile_diretto != null ? `Prima delle imposte erano ${euro(r.utile_diretto)}` : undefined}>{euro(r.ti_resta_diretto)}</td>
+                              <td className="lst-resta-riv" title={r.utile_rivenditore != null ? `Prima delle imposte erano ${euro(r.utile_rivenditore)}` : undefined}>{euro(r.ti_resta_rivenditore)}</td>
+                            </>
+                          )}
                         </tr>
                       );
                     })}
@@ -233,6 +256,18 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
           );
         })}
 
+        {privato && (
+          <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4, background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 13px" }}>
+            <b>Solo per te.</b> Qui ci sono i costi di acquisto: è una pagina da non mostrare a
+            clienti né rivenditori. <b>Ti resta</b> è quello che rimane in tasca su un pezzo, pagata
+            la merce, tolti i costi aziendali ({righe[0]?.sicurezza_pct ?? 15}%) e le imposte sul
+            reddito ({String(righe[0]?.imposte_pct ?? 27.9).replace(".", ",")}%, IRES più IRAP).
+            L'IVA non compare perché non è tua: la incassi per conto dello Stato e la giri.
+            Le imposte vere si calcolano sull'utile dell'anno, con ammortamenti e deduzioni: questo
+            è un ordine di grandezza per pezzo, non il conto del commercialista. Passando su un
+            numero vedi quanto era prima delle imposte.
+          </p>
+        )}
         <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>
           Lo <b>sconto massimo</b> è la quota che divide il guadagno a metà fra te e il rivenditore:
           concedendola, pagata la merce e i costi aziendali, a te resta quanto a lui. È arrotondata

@@ -25064,6 +25064,7 @@ const AREA_MADRE_VISTA = {
   generacoupon: ["compensipremi"],
   gestionepunti: ["compensipremi"],
   prezzilistini: ["magazzinoshop"],
+  listinoprivato: ["magazzinoshop"],
   venditeshop: ["magazzinoshop"],
   venditealbanco: ["magazzinoshop"],
   omaggi: ["magazzinoshop"],
@@ -36223,7 +36224,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, onApriListinoPrivato, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS: un carrello
   // dimenticato tiene fermo materiale che nessuno puo' vendere, e da qui
@@ -36287,7 +36288,8 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
             // del tastino accanto al titolo (16/09/2026); solo per chi amministra
             { chiave: "carrellisospesi", title: "Carrelli sospesi", descrizione: "I carrelli salvati e non pagati di tutti gli operatori: materiale fermo che nessuno può vendere.", Icona: IconaCarrelloPos, attivo: true, onClick: () => setMostraSospesi(true), badge: sospesiTutti.length || undefined },
             { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
-            { chiave: "prezzilistini", title: "Prezzi e listini", descrizione: "A quanto andrebbe venduto ogni prodotto perché al venditore resti la sua quota pulita. Sola lettura.", Icona: IconaTilePrezzi, attivo: true, onClick: onApriPrezziListini },
+            { chiave: "prezzilistini", title: "Prezzi e listini", descrizione: "Il listino per i rivenditori: prezzi, sconto massimo e quanto pagano. Sola lettura.", Icona: IconaTilePrezzi, attivo: true, onClick: onApriPrezziListini },
+            { chiave: "listinoprivato", title: "Listino privato", descrizione: "Lo stesso listino con i costi di acquisto e quello che resta in tasca. Da non mostrare a nessuno fuori.", Icona: IconaTilePrezzi, attivo: true, onClick: onApriListinoPrivato },
           ]}
         />
       </div>
@@ -73201,6 +73203,7 @@ export default function App() {
   }
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
   function apriPrezziListini() { apriViewProtetta("prezzilistini"); }
+  function apriListinoPrivato() { apriViewProtetta("listinoprivato"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
@@ -74280,6 +74283,7 @@ export default function App() {
           onApriMagazzino={apriMagazzino}
           onApriGestioneShop={apriGestioneShop}
           onApriPrezziListini={apriPrezziListini}
+          onApriListinoPrivato={apriListinoPrivato}
           onApriVenditeShop={() => apriVenditeShop("magazzinoshop")}
           onApriVenditeAlBanco={() => apriVenditeAlBanco("magazzinoshop")}
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
@@ -74447,9 +74451,18 @@ export default function App() {
           registraInterceptaIndietro={registraInterceptaIndietro}
           venditeShop={venditeShop} ricarica={fetchDati}
           aperturaEsterna={prodottoDaAprireInMagazzino}
-          titoloIndietro={viewPrimaDiMagazzino === "advisor" ? "Advisor" : (viewPrimaDiMagazzino === "prezzilistini" ? "Prezzi e listini" : null)}
+          titoloIndietro={viewPrimaDiMagazzino === "advisor" ? "Advisor" : (viewPrimaDiMagazzino === "prezzilistini" ? "Prezzi e listini" : (viewPrimaDiMagazzino === "listinoprivato" ? "Listino privato" : null))}
           onBack={() => { setProdottoDaAprireInMagazzino(null); setView(viewPrimaDiMagazzino); }}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
+        />
+      )}
+
+      {view === "listinoprivato" && (
+        <PrezziListini
+          privato
+          onApriProdotto={(prodottoId) => apriProdottoInMagazzino(prodottoId, "listinoprivato")}
+          onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "listinoprivato", "Listino privato")}
         />
       )}
 

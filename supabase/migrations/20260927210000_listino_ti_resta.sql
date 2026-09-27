@@ -1,0 +1,19 @@
+-- "Ti resta", nei due modi di vendere lo stesso pezzo, per il Listino privato.
+--
+--   ti_resta_diretto      vendendo al pubblico al prezzo di listino
+--   ti_resta_rivenditore  vendendo a un rivenditore allo sconto massimo
+--
+-- La catena, coi numeri di un pigmento: il rivenditore paga 29,93, ma
+-- 5,40 sono IVA e non sono mai tuoi — si incassano per conto dello Stato
+-- e si girano. Il ricavo e' 24,53; meno 10,00 di merce e il 15% di costi
+-- aziendali restano 10,85 di utile; tolte IRES e IRAP restano 7,82.
+--
+-- L'aliquota sta in `listino_imposteRedditoPct` (predefinito 27,9 =
+-- IRES 24 + IRAP 3,9, l'ordinaria di una SRL): e' un dato dell'azienda,
+-- non del codice. Le imposte vere si calcolano sull'utile dell'anno con
+-- ammortamenti e deduzioni: questo e' un ordine di grandezza per pezzo.
+-- In perdita non si pagano, e infatti non si tolgono.
+--
+-- Il corpo della view e' quello applicato con la migrazione
+-- `listino_ti_resta` via MCP: vedi 20260927200000 per la versione
+-- precedente e per la regola dello sconto massimo.
