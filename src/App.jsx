@@ -26524,6 +26524,14 @@ function PannelloRiepilogoAmministrativo({
       // leggono `data_pagamento || data_documento` e la buttavano fuori.
       // Ventisei righe sono rimaste invisibili cosi'.
       data_documento: corsoData.data_fine || corsoData.data_inizio || null,
+      // E la stessa data anche come data di PAGAMENTO. Regola dettata il
+      // 27/09/2026: una spesa nata nel riepilogo di un corso si considera
+      // pagata l'ultimo giorno di quel corso — sono soldi usciti li', in
+      // aula o intorno all'aula. Senza, la riga entrava in prima nota per
+      // il ripiego su data_documento: stesso giorno nella maggior parte
+      // dei casi, ma per caso, e bastava spostare la data del documento
+      // per vederla scivolare via senza che nessuno l'avesse deciso.
+      data_pagamento: corsoData.data_fine || corsoData.data_inizio || null,
       // Sono i pagamenti fatti sul posto — il bar, il taxi, il parcheggio —
       // di cui non si chiede la ricevuta: senza documento non c'e' IVA da
       // portare a credito. Il 22 di prima non l'aveva scelto nessuno, era
@@ -69872,7 +69880,11 @@ function generaVociDaCostiExtra(corsiDate, costiSottocategorie) {
       voci.push({
         id: `extra__${cd.id}__${idx}`, categoria_id: categoriaId, sottocategoria_id: (sottocategoriaMatch || catchAll)?.id || null,
         descrizione: extra.titolo || null, imponibile: valore,
-        data_documento: cd.data_inizio, data_pagamento: cd.data_inizio, competenza_da: cd.data_inizio, competenza_a: cd.data_inizio,
+        // l'ULTIMO giorno del corso, non il primo: una spesa nata dal
+        // riepilogo di un corso si considera pagata quando il corso
+        // finisce. Stessa regola delle righe vere in `spese`
+        data_documento: cd.data_fine || cd.data_inizio, data_pagamento: cd.data_fine || cd.data_inizio,
+        competenza_da: cd.data_inizio, competenza_a: cd.data_fine || cd.data_inizio,
         tipo_ambito: "classe", classe_id: cd.id, origine: "automatico", stato: "pagata", includi_analisi_costi: true,
       });
     });
