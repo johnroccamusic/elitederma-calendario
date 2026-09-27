@@ -15,6 +15,9 @@ import { leggiListino, csvListino, scaricaCsv, BLOCCHI, motivoSenzaSconto, FASI,
 import { iconaDelBlocco } from "./icone.jsx";
 
 const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace(".", ",")}`);
+// dentro la tabella il simbolo non si ripete: lo dicono le intestazioni,
+// e otto colonne di numeri su un telefono non possono permetterselo
+const cifra = (n) => (n == null ? "—" : Number(n).toFixed(2).replace(".", ","));
 const ROSSO = "#C0392B";
 
 // `privato` accende le colonne che non si mostrano a nessuno fuori:
@@ -128,6 +131,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     .lst-tab td.lst-costo, .lst-tab th.lst-costo { color: ${MUTED}; }
     .lst-tab td.lst-resta { font-weight: 800; }
     .lst-tab td.lst-resta-riv { color: #8A6D1D; font-weight: 800; }
+    .lst-tab td.lst-lui, .lst-tab th.lst-lui { color: ${MUTED}; }
     /* Nel listino privato i numeri sono sette: su un telefono una riga
        sola non basta, e farla scorrere di lato vorrebbe dire nascondere
        proprio le colonne che servono a decidere. Quindi sotto i 700px il
@@ -139,9 +143,9 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
       .lst-privato .lst-tab, .lst-privato .lst-tab tbody,
       .lst-privato .lst-tab tr, .lst-privato .lst-tab td { display: block; }
       .lst-privato .lst-tab colgroup { display: none; }
-      .lst-privato .lst-tab tr { display: grid; grid-template-columns: repeat(7, 1fr);
+      .lst-privato .lst-tab tr { display: grid; grid-template-columns: repeat(8, 1fr);
                                  gap: 0 3px; padding: 10px 8px; border-top: 1px solid ${CREAM_BORDER}; }
-      .lst-privato .lst-tab td { border-top: none; padding: 0; font-size: 12px; text-align: center; }
+      .lst-privato .lst-tab td { border-top: none; padding: 0; font-size: 12.5px; text-align: center; }
       .lst-privato .lst-tab td::before { content: attr(data-eti); display: block; font-size: 7.5px;
                                          font-weight: 700; letter-spacing: .2px; text-transform: uppercase;
                                          color: ${MUTED}; margin-bottom: 1px; line-height: 1.1; }
@@ -251,7 +255,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                     {privato && <col className="c-costo" />}
                     <col className="c-num" /><col className="c-num" />
                     <col className="c-scon" /><col className="c-num" />
-                    {privato && <><col className="c-num" /><col className="c-num" /></>}
+                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
                   </colgroup>
                   <thead>
                     <tr>
@@ -262,7 +266,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\n" + fase.nome.toLowerCase()}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"ti resta\nsenza riv."}</th><th>{"ti resta\ncon riv."}</th></>}
+                      {privato && <><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th><th>{"a lui"}</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -278,21 +282,22 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                               : <span className="lst-vuota" />}
                           </td>
                           <td className="lst-nome">{r.nome}</td>
-                          {privato && <td className="lst-costo" data-eti="acquisto">{euro(r.costo_acquisto)}</td>}
-                          <td data-eti="lordo">{euro(r.pubblico_lordo)}</td>
-                          <td data-eti="netto">{euro(r.pubblico_netto)}</td>
+                          {privato && <td className="lst-costo" data-eti="acquisto">{cifra(r.costo_acquisto)}</td>}
+                          <td data-eti="lordo">{cifra(r.pubblico_lordo)}</td>
+                          <td data-eti="netto">{cifra(r.pubblico_netto)}</td>
                           <td data-eti="sconto">
                             {manca ? (
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
-                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_fase_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_fase_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{r.sconto_fase_pct}%</span>
+                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_fase_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_fase_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_fase_pct).replace(".", ",")}%</span>
                             )}
                           </td>
-                          <td className="lst-riv" data-eti="al riv.">{euro(r.prezzo_fase)}</td>
+                          <td className="lst-riv" data-eti="al riv.">{cifra(r.prezzo_fase)}</td>
                           {privato && (
                             <>
-                              <td className="lst-resta" data-eti="resta senza" title={r.utile_diretto != null ? `Prima delle imposte erano ${euro(r.utile_diretto)}` : undefined}>{euro(r.ti_resta_diretto)}</td>
-                              <td className="lst-resta-riv" data-eti="resta con" title={r.utile_fase != null ? `Prima delle imposte erano ${euro(r.utile_fase)}. Il rivenditore ne guadagna ${euro(r.guadagno_riv_fase)}.` : undefined}>{euro(r.ti_resta_fase)}</td>
+                              <td className="lst-resta" data-eti="a te senza" title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
+                              <td className="lst-resta-riv" data-eti="a te con" title={r.utile_fase != null ? `${fase.nome}: a te ${euro(r.ti_resta_fase)} dopo le imposte (${euro(r.utile_fase)} prima), a lui ${euro(r.guadagno_riv_fase)}.` : undefined}>{cifra(r.ti_resta_fase)}</td>
+                              <td className="lst-lui" data-eti="a lui" title="Quello che il rivenditore guadagna rivendendo al prezzo di listino: la differenza fra quanto paga lui e quanto incassa dal cliente.">{cifra(r.guadagno_riv_fase)}</td>
                             </>
                           )}
                         </tr>
