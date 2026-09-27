@@ -5,8 +5,18 @@
 // evento. Due copie sarebbero divergute al primo metodo aggiunto.
 export const METODI_SPESA = [
   "Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico",
-  "Bonifico periodico", "Domiciliazione bancaria", "Spesa bancaria su C/C", "Cassa contanti",
+  "Bonifico periodico", "Domiciliazione bancaria", "Spesa bancaria su C/C",
+  // I tre modi del contante. "Contanti" e "Cash no iva" c'erano da
+  // sempre nei dati — sedici spese e tre — ma non erano piu' scegliibili:
+  // comparivano solo se gia' salvati su quella riga. Rimessi.
+  "Cassa contanti", "Contanti", "Cash no iva",
 ];
+
+// "Cash no iva" non e' solo un'etichetta: l'importo che si scrive e'
+// tutto, senza imposta. E' un pagamento fatto sul posto di cui non si
+// chiede la ricevuta, e senza documento non c'e' IVA da portare a
+// credito. Stessa cosa che fa gia' sugli incassi (conMetodoAggiornato).
+export const METODO_SENZA_IVA = "Cash no iva";
 
 // Gli stati che NON sono "pagata". Tutto il resto dell'app decide con
 // `stato === 'pagata'`: prima nota, cassa contanti, ciclo passivo. Qui

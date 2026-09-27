@@ -31,7 +31,7 @@ import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
 import QrConsensi from "./consensi/QrConsensi.jsx";
 import Ricevuta from "./pos/Ricevuta.jsx";
 import GestioneEventi from "./eventi/GestioneEventi.jsx";
-import { METODI_SPESA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
+import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
 import PrezziListini from "./prezzi/PrezziListini.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
@@ -71611,8 +71611,17 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
             <SelettorePagamentoSpesa
               stato={stato} metodoPagamento={metodoPagamento}
               onCambia={({ stato: s, metodoPagamento: m }) => {
+                const eraSenzaIva = metodoPagamento === METODO_SENZA_IVA;
                 setStato(s);
                 setMetodoPagamento(m);
+                // "Cash no iva" azzera l'imposta: l'importo scritto e'
+                // tutto. E' la stessa cosa che il metodo fa gia' sugli
+                // incassi, e senza ricevuta non c'e' IVA da portare a
+                // credito. Uscendo da quel metodo l'esenzione si toglie,
+                // ma solo se era stata messa da lui — chi l'ha spuntata a
+                // mano se la tiene
+                if (m === METODO_SENZA_IVA) onEsenteChange(true);
+                else if (eraSenzaIva && esenteIva && !naturaFiscale) onEsenteChange(false);
                 // Segnando il metodo si sta dicendo "pagata": se la data
                 // del pagamento e' vuota si mette subito quella del
                 // documento, altrimenti la riga entra in prima nota lo
