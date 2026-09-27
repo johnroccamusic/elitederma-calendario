@@ -80,29 +80,34 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           <input value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="Cerca prodotto…"
             style={{ ...inputStyle, flex: "1 1 220px", minWidth: 160, fontSize: 14 }} />
-          <select value={bloccoScelto ?? ""} onChange={(e) => setBloccoScelto(e.target.value === "" ? null : Number(e.target.value))}
-            style={{ ...inputStyle, width: "auto", fontSize: 14 }}>
-            <option value="">Tutti i reparti</option>
-            {reparti.map((b) => <option key={b.n} value={b.n}>{b.nome}</option>)}
-          </select>
           <Button variant="ghost" onClick={esporta} disabled={visibili.length === 0} style={{ fontSize: 13, padding: "8px 14px" }}>Esporta CSV</Button>
         </div>
 
-        {/* le pastiglie dei reparti: scorrono in orizzontale e portano al blocco */}
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 14, WebkitOverflowScrolling: "touch" }}>
-          {reparti.map((b) => {
-            const Ico = iconaDelBlocco(b.n);
-            const attivo = bloccoScelto === b.n;
-            return (
-              <button key={b.n} onClick={() => (attivo ? setBloccoScelto(null) : vaiAl(b.n))}
-                style={{ display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0, cursor: "pointer",
-                  background: attivo ? "#F3E9D8" : "#fff", border: `1px solid ${attivo ? GOLD : CREAM_BORDER}`,
-                  borderRadius: 12, padding: "9px 14px", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, letterSpacing: 0.4 }}>
-                <Ico s={17} c={GOLD} />{b.nome}
-              </button>
-            );
-          })}
-        </div>
+        {/* L'indice dei reparti: i nomi in chiaro, uno sotto l'altro, col
+            numero di prodotti. Cliccato porta al blocco; ricliccato lascia
+            solo quello. Niente tendina: un elenco si legge tutto insieme,
+            una tendina nasconde quello che c'e' finche' non la apri. */}
+        {reparti.length > 0 && (
+          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 4px", marginBottom: 16 }}>
+            {reparti.map((b, i) => {
+              const Ico = iconaDelBlocco(b.n);
+              const attivo = bloccoScelto === b.n;
+              const quanti = righe.filter((r) => r.blocco_ordine === b.n).length;
+              return (
+                <button key={b.n} onClick={() => (attivo ? setBloccoScelto(null) : (setBloccoScelto(null), vaiAl(b.n)))}
+                  style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left", cursor: "pointer",
+                    background: attivo ? "#F6EFE2" : "transparent", border: "none",
+                    borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}`, padding: "11px 12px" }}>
+                  <span style={{ width: 32, height: 32, borderRadius: 10, background: "#F6EFE2", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Ico s={18} c={GOLD} />
+                  </span>
+                  <span style={{ ...fontDisplay, fontSize: 15.5, fontWeight: 800, color: NAVY, letterSpacing: 0.5, flex: 1, minWidth: 0 }}>{b.nome}</span>
+                  <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{quanti}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {errore && <div style={{ ...fontBody, fontSize: 13, color: ROSSO, background: "#FBEBE9", border: "1px solid #F0C8C2", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>{errore}</div>}
         {caricando && <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, padding: "24px 4px" }}>Sto leggendo il listino…</div>}
