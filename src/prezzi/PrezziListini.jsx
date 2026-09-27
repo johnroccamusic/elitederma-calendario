@@ -11,7 +11,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { leggiListino, csvListino, scaricaCsv, BLOCCHI, motivoSenzaSconto } from "./dati.js";
+import { leggiListino, csvListino, scaricaCsv, BLOCCHI, motivoSenzaSconto, FASI, faseDi, scenario } from "./dati.js";
 import { iconaDelBlocco } from "./icone.jsx";
 
 const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace(".", ",")}`);
@@ -27,6 +27,8 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   const [errore, setErrore] = useState(null);
   const [cerca, setCerca] = useState("");
   const [bloccoScelto, setBloccoScelto] = useState(null); // null = tutti
+  const [faseId, setFaseId] = useState("bilanciato");
+  const fase = faseDi(faseId);
   const riferimenti = useRef({});
 
   useEffect(() => {
@@ -42,9 +44,17 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   }, []);
 
   const q = cerca.trim().toLowerCase();
+  // ogni riga porta con se' i numeri della fase scelta: sconto, prezzo al
+  // rivenditore e quello che resta. Cambiando linguetta cambiano questi,
+  // non i dati — il listino e' sempre lo stesso
+  const conFase = useMemo(() => righe.map((r) => {
+    const sc = scenario(r, fase.k);
+    return { ...r, sconto_fase_pct: sc.scontoPct, prezzo_fase: sc.prezzoRivenditore,
+             guadagno_riv_fase: sc.guadagnoRivenditore, utile_fase: sc.utile, ti_resta_fase: sc.tiResta };
+  }), [righe, fase.k]);
   const visibili = useMemo(
-    () => righe.filter((r) => (!q || (r.nome || "").toLowerCase().includes(q)) && (bloccoScelto == null || r.blocco_ordine === bloccoScelto)),
-    [righe, q, bloccoScelto]);
+    () => conFase.filter((r) => (!q || (r.nome || "").toLowerCase().includes(q)) && (bloccoScelto == null || r.blocco_ordine === bloccoScelto)),
+    [conFase, q, bloccoScelto]);
 
   // i reparti che hanno davvero qualcosa dentro, nell'ordine del menu
   const gruppi = useMemo(() => {
@@ -68,7 +78,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     setTimeout(() => riferimenti.current[n]?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   }
   function esporta() {
-    scaricaCsv(csvListino(visibili), `listino-rivenditori-${new Date().toISOString().slice(0, 10)}.csv`);
+    scaricaCsv(csvListino(visibili), `listino-${fase.id}-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   // Il foglio della tabella. Sta qui e non negli stili inline perche' sotto
@@ -143,6 +153,23 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
         <h1 style={{ ...stileTitoloPagina, marginTop: 8, marginBottom: 2 }}>{titolo}</h1>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 14 }}>{privato ? "Costi, prezzi e quello che resta in tasca — solo per uso interno" : "Gestione prezzi vendita e rivenditori"}</div>
 
+        {/* Le tre fasi. Non si sceglie uno sconto: si sceglie come dividere
+            il guadagno, e lo sconto viene di conseguenza. */}
+        <div style={{ display: "flex", gap: 6, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 5, marginBottom: 10 }}>
+          {FASI.map((f) => {
+            const attiva = f.id === faseId;
+            return (
+              <button key={f.id} onClick={() => setFaseId(f.id)} title={f.spiega}
+                style={{ flex: 1, cursor: "pointer", borderRadius: 10, border: "none", padding: "9px 6px",
+                  background: attiva ? NAVY : "transparent", color: attiva ? "#fff" : NAVY, ...fontBody }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: 0.3 }}>{f.nome}</div>
+                <div style={{ fontSize: 10.5, opacity: attiva ? 0.85 : 0.6, marginTop: 1 }}>{f.quota}</div>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>{fase.spiega}</div>
+
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           <input value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="Cerca prodotto…"
             style={{ ...inputStyle, flex: "1 1 220px", minWidth: 160, fontSize: 14 }} />
@@ -211,18 +238,18 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       {privato && <th className="lst-costo">{"prezzo\nacquisto"}</th>}
                       <th>{"pubbl.\nlordo"}</th>
                       <th>{"pubbl.\nnetto"}</th>
-                      <th>{"sconto\nmax"}</th>
+                      <th>{"sconto\n" + fase.nome.toLowerCase()}</th>
                       <th>{"prezzo\nrivend."}</th>
                       {privato && <><th>{"ti resta\nsenza riv."}</th><th>{"ti resta\ncon riv."}</th></>}
                     </tr>
                   </thead>
                   <tbody>
                     {b.prodotti.map((r) => {
-                      const manca = r.sconto_max_pct == null;
+                      const manca = r.sconto_fase_pct == null;
                       return (
                         <tr key={r.id} className={manca ? "lst-manca" : undefined} onClick={() => onApriProdotto && onApriProdotto(r.id)}
                           style={{ cursor: onApriProdotto ? "pointer" : "default" }}
-                          title={manca ? motivoSenzaSconto(r) : `Costo ${euro(r.costo_acquisto)}. Scontando il ${r.sconto_max_pct}% incassi ${euro(r.prezzo_rivenditore)}: pagata la merce e i costi aziendali, a te resta quanto al rivenditore. Il calcolo esatto darebbe ${String(r.sconto_esatto_pct).replace(".", ",")}%, arrotondato per difetto.`}>
+                          title={manca ? motivoSenzaSconto(r) : `${fase.nome}: scontando il ${r.sconto_fase_pct}% il rivenditore paga ${euro(r.prezzo_fase)} e guadagna ${euro(r.guadagno_riv_fase)}; a te restano ${euro(r.utile_fase)} prima delle imposte, ${euro(r.ti_resta_fase)} dopo. Costo della merce ${euro(r.costo_acquisto)}.`}>
                           <td className="lst-foto">
                             {r.foto_url
                               ? <img src={r.foto_url} alt="" loading="lazy" decoding="async" />
@@ -236,14 +263,14 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                             {manca ? (
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
-                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_max_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_max_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{r.sconto_max_pct}%</span>
+                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_fase_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_fase_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{r.sconto_fase_pct}%</span>
                             )}
                           </td>
-                          <td className="lst-riv">{euro(r.prezzo_rivenditore)}</td>
+                          <td className="lst-riv">{euro(r.prezzo_fase)}</td>
                           {privato && (
                             <>
                               <td className="lst-resta" title={r.utile_diretto != null ? `Prima delle imposte erano ${euro(r.utile_diretto)}` : undefined}>{euro(r.ti_resta_diretto)}</td>
-                              <td className="lst-resta-riv" title={r.utile_rivenditore != null ? `Prima delle imposte erano ${euro(r.utile_rivenditore)}` : undefined}>{euro(r.ti_resta_rivenditore)}</td>
+                              <td className="lst-resta-riv" title={r.utile_fase != null ? `Prima delle imposte erano ${euro(r.utile_fase)}. Il rivenditore ne guadagna ${euro(r.guadagno_riv_fase)}.` : undefined}>{euro(r.ti_resta_fase)}</td>
                             </>
                           )}
                         </tr>

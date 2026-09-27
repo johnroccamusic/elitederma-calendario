@@ -57,8 +57,8 @@ const CAMPI_CSV = [
   ["nome", "Prodotto"],
   ["pubblico_lordo", "Pubblico lordo"],
   ["pubblico_netto", "Pubblico netto"],
-  ["sconto_max_pct", "Sconto max %"],
-  ["prezzo_rivenditore", "Prezzo rivenditore"],
+  ["sconto_fase_pct", "Sconto %"],
+  ["prezzo_fase", "Prezzo rivenditore"],
   ["costo_acquisto", "Costo acquisto"],
 ];
 
@@ -86,4 +86,59 @@ export function scaricaCsv(testo, nomeFile) {
   a.remove();
   // senza revoke il blob resta in memoria finché non si chiude la pagina
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---------------------------------------------------------------------
+// I tre sotto-listini: quanto del guadagno si lascia al rivenditore.
+//
+// Non si decide la percentuale di sconto e si guarda cosa succede: si
+// decide COME DIVIDERE IL GUADAGNO, e lo sconto viene di conseguenza.
+// Chiamando k il rapporto fra quello che resta a noi e quello che prende
+// lui, e a i costi aziendali:
+//
+//     noi: N(1-d)(1-a) - C        lui: dN
+//     imponendo  noi = k x lui:
+//     d = [ N(1-a) - C ] / [ N(k + 1 - a) ]
+//
+// Con k=1 torna la formula della meta' per uno. Lo sconto si arrotonda
+// all'intero percento PER DIFETTO: cosi' l'errore di arrotondamento
+// cade sempre dalla nostra parte, mai dalla sua.
+//
+// Sono tre fasi di un rapporto commerciale, non tre listini a caso: si
+// parte stretti e si concede terreno quando il rivenditore ha dimostrato
+// di portare volume.
+export const FASI = [
+  { id: "fase1",      nome: "Fase 1",     k: 3, quota: "3/4 a noi",  spiega: "Tre quarti del guadagno a noi, un quarto al rivenditore. Si parte da qui." },
+  { id: "fase2",      nome: "Fase 2",     k: 2, quota: "2/3 a noi",  spiega: "Due terzi a noi, un terzo al rivenditore. Quando ha cominciato a portare volume." },
+  { id: "bilanciato", nome: "Bilanciato", k: 1, quota: "metà per uno", spiega: "Guadagniamo lo stesso: quello che resta a noi è quanto prende lui." },
+];
+
+export function faseDi(id) {
+  return FASI.find((f) => f.id === id) || FASI[FASI.length - 1];
+}
+
+const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// I numeri di una riga secondo la fase scelta. Tutto si ricava dai dati
+// della view — prezzo netto, costo, costi aziendali, imposte — cosi' le
+// tre fasi non possono raccontare cose diverse fra loro.
+export function scenario(riga, k) {
+  const N = Number(riga.pubblico_netto);
+  const C = riga.costo_acquisto == null ? null : Number(riga.costo_acquisto);
+  const a = Number(riga.sicurezza_pct ?? 15) / 100;
+  const imposte = Number(riga.imposte_pct ?? 27.9) / 100;
+  if (C == null || !(N > 0)) {
+    return { scontoPct: null, prezzoRivenditore: null, guadagnoRivenditore: null, utile: null, tiResta: null };
+  }
+  const esatto = (N * (1 - a) - C) / (N * (k + 1 - a));
+  const d = Math.max(0, Math.floor(esatto * 100) / 100);
+  const prezzo = r2(N * (1 - d));
+  const utile = prezzo * (1 - a) - C;
+  return {
+    scontoPct: Math.round(d * 100),
+    prezzoRivenditore: prezzo,
+    guadagnoRivenditore: r2(N * d),
+    utile: r2(utile),
+    tiResta: r2(utile > 0 ? utile * (1 - imposte) : utile),
+  };
 }
