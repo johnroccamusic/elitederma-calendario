@@ -60484,6 +60484,28 @@ function InterruttorePos({ acceso, onCambia, id, piccolo = false }) {
 // una riga che dice cosa comporta. Quello scelto e' blu pieno col bollo
 // d'oro in alto a destra — si riconosce con la coda dell'occhio, senza
 // leggere.
+// Il rilievo del POS. Chiesto il 27/09/2026 su un disegno: al banco si
+// lavora in piedi, di fretta, guardando lo schermo di sbieco — e una
+// pagina tutta piatta costringe a leggere per capire dove si preme.
+// L'ombra qui non e' decorazione, e' il modo in cui si vede al volo cosa
+// e' una superficie, cosa e' un tasto e cosa e' gia' scelto.
+//
+// Sono ombre inline apposta: la regola globale di "Aspetto dell'app"
+// (StiliGlobaliAspetto) non porta !important proprio per questo, chi si
+// sceglie la sua se la tiene. Vale solo dentro il POS.
+const OMBRA_POS = {
+  // una tessera appoggiata sul foglio: riga del carrello, riquadri
+  tessera: "0 1px 2px rgba(14,27,51,0.05), 0 8px 18px -12px rgba(14,27,51,0.30)",
+  // un tasto che aspetta di essere premuto, un po' piu' staccato
+  tasto: "0 1px 2px rgba(14,27,51,0.07), 0 5px 12px -7px rgba(14,27,51,0.28)",
+  // quello scelto: affonda nella pagina invece di galleggiare
+  scelto: "0 10px 22px -10px rgba(14,27,51,0.60)",
+  // i tondi piccoli (piu'/meno, cestino): ombra corta o sembrano bolle
+  tondo: "0 1px 2px rgba(14,27,51,0.08), 0 3px 7px -4px rgba(14,27,51,0.26)",
+  // un pannello incassato nella pagina, non appoggiato sopra
+  incassato: "inset 0 1px 3px rgba(14,27,51,0.07)",
+};
+
 function SceltaPos({ scelto, Icona, titolo, sotto, onClick, isMobile }) {
   return (
     <button
@@ -60496,8 +60518,11 @@ function SceltaPos({ scelto, Icona, titolo, sotto, onClick, isMobile }) {
         display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 5 : 10,
         padding: isMobile ? "10px 6px" : "13px 14px",
         borderRadius: 14, border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`,
-        background: scelto ? NAVY : "#fff",
-        boxShadow: scelto ? "0 6px 16px -8px rgba(14,27,51,0.55)" : "none",
+        // anche quello NON scelto sta sopra il foglio: se solo il scelto
+        // avesse rilievo, gli altri due sembrerebbero spenti invece che
+        // semplicemente non scelti
+        background: scelto ? `linear-gradient(160deg, #1B3157 0%, ${NAVY} 60%)` : "linear-gradient(180deg, #FFFFFF 0%, #FCFAF6 100%)",
+        boxShadow: scelto ? OMBRA_POS.scelto : OMBRA_POS.tasto,
       }}
     >
       <span style={{ display: "inline-flex", color: scelto ? "#fff" : GOLD, flexShrink: 0 }}>
@@ -60508,7 +60533,7 @@ function SceltaPos({ scelto, Icona, titolo, sotto, onClick, isMobile }) {
         {sotto && <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 9.5 : 11.5, color: scelto ? "rgba(255,255,255,0.72)" : MUTED, marginTop: 2, lineHeight: 1.25, overflowWrap: "anywhere" }}>{sotto}</span>}
       </span>
       {scelto && (
-        <span style={{ position: "absolute", top: isMobile ? 5 : 8, right: isMobile ? 5 : 8, width: isMobile ? 15 : 19, height: isMobile ? 15 : 19, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ position: "absolute", top: isMobile ? 5 : 8, right: isMobile ? 5 : 8, width: isMobile ? 15 : 19, height: isMobile ? 15 : 19, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 5px -1px rgba(14,27,51,0.45)" }}>
           <svg width={isMobile ? 9 : 11} height={isMobile ? 9 : 11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
         </span>
       )}
@@ -62115,7 +62140,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           // prodotto in back order, dove finire i pezzi non e' un limite
           const tettoRiga = backorderAttivo(trovaProdotto(r.prodottoId)) ? Infinity : disponibiliDi(r.prodottoId);
           return (
-            <div key={r.prodottoId} style={{ borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            // ogni articolo e' una tessera sua, non una riga separata da
+            // un filo: al banco si tocca il "+" giusto senza rileggere
+            <div key={r.prodottoId} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: OMBRA_POS.tessera, padding: isMobile ? "4px 8px" : "6px 12px", marginBottom: isMobile ? 6 : 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 10, padding: isMobile ? "6px 0" : "10px 0" }}>
               {isMobile && (
                 <div style={{ width: 32, height: 32, borderRadius: 6, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -62151,12 +62178,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
-                <button onClick={() => decrementaRiga(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
-                <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, minWidth: 16, textAlign: "center" }}>{r.quantita}</span>
-                <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= tettoRiga} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: r.quantita >= tettoRiga ? "default" : "pointer", opacity: r.quantita >= tettoRiga ? 0.4 : 1 }}>+</button>
+                <button onClick={() => decrementaRiga(r.prodottoId)} data-niente-ombra style={{ width: isMobile ? 24 : 28, height: isMobile ? 24 : 28, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)", boxShadow: OMBRA_POS.tondo, color: NAVY, ...fontBody, fontSize: isMobile ? 14 : 16, fontWeight: 700, lineHeight: 1, cursor: "pointer" }}>−</button>
+                {/* il numero in una casellina, come sul disegno: fra due
+                    tondi in rilievo un numero nudo sembrava un'etichetta */}
+                <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, minWidth: isMobile ? 24 : 30, textAlign: "center", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: isMobile ? "3px 2px" : "4px 3px", boxShadow: OMBRA_POS.incassato }}>{r.quantita}</span>
+                <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= tettoRiga} data-niente-ombra style={{ width: isMobile ? 24 : 28, height: isMobile ? 24 : 28, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)", boxShadow: r.quantita >= tettoRiga ? "none" : OMBRA_POS.tondo, color: NAVY, ...fontBody, fontSize: isMobile ? 14 : 16, fontWeight: 700, lineHeight: 1, cursor: r.quantita >= tettoRiga ? "default" : "pointer", opacity: r.quantita >= tettoRiga ? 0.4 : 1 }}>+</button>
               </div>
               <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, width: isMobile ? 52 : 62, textAlign: "right" }}>{fmtEuroErp2(round2(r.prezzo * r.quantita))}</div>
-              <button onClick={() => rimuoviRiga(r.prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: isMobile ? 13 : 15, padding: 2 }}>✕</button>
+              {/* il cestino in un tondo rosato: e' l'unico gesto che
+                  toglie roba, e deve distinguersi senza gridare */}
+              <button onClick={() => rimuoviRiga(r.prodottoId)} title="Rimuovi" data-niente-ombra
+                style={{ width: isMobile ? 26 : 30, height: isMobile ? 26 : 30, flexShrink: 0, borderRadius: 10, border: "1px solid #F0CFC9",
+                  background: "linear-gradient(180deg, #FEF7F6 0%, #FBEAE7 100%)", boxShadow: OMBRA_POS.tondo, color: "#C0392B",
+                  cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <IconaCestino size={isMobile ? 13 : 15} color="#C0392B" />
+              </button>
             </div>
             {/* La provenienza sta QUI, sulla riga del pezzo a cui si
                 riferisce, e solo per i pezzi che in quell'aula ci sono
@@ -62222,7 +62258,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {/* sconto e coupon in una tessera sola: sono due modi di fare la
           stessa cosa e si escludono a vicenda, tenerli vicini lo dice
           senza doverlo scrivere */}
-      <div style={{ border: `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: puoScontare ? undefined : "#EDF2F8", borderRadius: 14, padding: puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px"), marginBottom: isMobile ? 10 : 14, display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
+      <div style={{ border: `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: puoScontare ? undefined : "#EDF2F8", borderRadius: 14, padding: puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px"), marginBottom: isMobile ? 10 : 14, boxShadow: puoScontare ? OMBRA_POS.tessera : OMBRA_POS.tasto, display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
         {puoScontare && (
           <>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
@@ -62356,8 +62392,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           mezzo schermo e il totale finiva sotto la piega */}
       <div style={{
         background: omaggioAttivo ? "#FBF1D9" : "linear-gradient(110deg, #FBF6EA 0%, #F7EAD1 55%, #F0DDB8 100%)",
-        borderRadius: 16, borderLeft: `5px solid ${GOLD}`,
-        boxShadow: "0 6px 18px -12px rgba(14,27,51,0.45)",
+        borderRadius: 16, border: `1px solid ${GOLD}`, borderLeftWidth: 5,
+        // e' il numero che si guarda per ultimo prima di battere: deve
+        // staccarsi dalla pagina piu' di ogni altra cosa
+        boxShadow: "0 2px 4px -2px rgba(14,27,51,0.10), 0 14px 30px -16px rgba(138,106,27,0.55)",
         padding: isMobile ? "11px 14px" : "14px 20px", marginBottom: isMobile ? 8 : 12,
         display: "flex", alignItems: "stretch", gap: isMobile ? 12 : 22,
       }}>
@@ -62404,7 +62442,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         // nell'altro.
         display: "flex", alignItems: "stretch",
         flexDirection: righeOpzioni ? "column" : "row", gap: 0, flexWrap: "nowrap",
-        border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, background: "#fff",
+        border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, background: "linear-gradient(180deg, #FFFFFF 0%, #FCFAF6 100%)",
+        boxShadow: OMBRA_POS.tessera,
         padding: isMobile ? "4px 4px" : "6px 8px", marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14),
       }}>
         {[
@@ -62429,7 +62468,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                       sul telefono quell'altezza la si paga in scorrimento */}
                   <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{o.testo}</span>
                   <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <span style={{ width: 30, height: 30, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(180deg, #FEFAF1 0%, #F7EAD1 100%)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: OMBRA_POS.tondo }}>
                       <o.Icona size={16} color={GOLD} />
                     </span>
                     <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo />
@@ -62437,7 +62476,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 </>
               ) : (
                 <>
-                  <span style={{ width: 38, height: 38, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(180deg, #FEFAF1 0%, #F7EAD1 100%)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: OMBRA_POS.tondo }}>
                     <o.Icona size={19} color={GOLD} />
                   </span>
                   <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{o.testo}</span>
@@ -62579,7 +62618,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               inquadra col telefono. Non sono due metodi di pagamento —
               per la vendita, per l'IVA e per i punti restano "POS". */}
           {metodoPagamento === "pos" && (
-            <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: "#F4F6FB", border: `1px solid #DEE4F0` }}>
+            // incassato nella pagina e non appoggiato sopra: e' un
+            // dettaglio DENTRO "Carta", non una scelta allo stesso livello
+            <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: "#F4F6FB", border: `1px solid #DEE4F0`, boxShadow: OMBRA_POS.incassato }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
               <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
                 <SceltaPos
@@ -62682,7 +62723,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ position: "relative" }}>
             <textarea
               value={note} onChange={(e) => setNote(e.target.value)} rows={2}
-              style={{ ...inputStyle, background: BG, resize: "vertical", paddingRight: 34, ...(omaggioAttivo && !note.trim() ? { border: "1px solid #C0392B" } : {}) }}
+              style={{ ...inputStyle, background: BG, resize: "vertical", paddingRight: 34, boxShadow: OMBRA_POS.incassato, ...(omaggioAttivo && !note.trim() ? { border: "1px solid #C0392B" } : {}) }}
               placeholder={omaggioAttivo ? "Perché questo prodotto viene regalato?" : "Aggiungi note sulla vendita…"}
             />
             <span style={{ position: "absolute", right: 10, bottom: 10, color: grigioCarrello, pointerEvents: "none" }}><IconaMatitaNota size={15} /></span>
@@ -62716,7 +62757,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             disabled={bloccato}
             style={{
               flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10,
-              background: NAVY, color: "#fff", border: "none", borderRadius: 14,
+              background: `linear-gradient(160deg, #1B3157 0%, ${NAVY} 65%)`, color: "#fff", border: "none", borderRadius: 14,
+              boxShadow: bloccato ? "none" : "0 3px 6px -3px rgba(14,27,51,0.35), 0 16px 30px -14px rgba(14,27,51,0.70)",
               padding: isMobile ? "12px 14px" : "16px 18px", cursor: bloccato ? "default" : "pointer", opacity: bloccato ? 0.45 : 1,
               ...fontBody, fontSize: isMobile ? 13.5 : 15, fontWeight: 700,
             }}
@@ -62750,7 +62792,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               // solo spezzato in due
               flex: "0 0 auto", width: isMobile ? 152 : 184,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
-              background: "#fff", color: NAVY, border: `1.5px solid ${NAVY}`, borderRadius: 14,
+              background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)", color: NAVY, border: `1.5px solid ${NAVY}`, borderRadius: 14,
+              boxShadow: carrello.length === 0 ? "none" : OMBRA_POS.tasto,
               padding: isMobile ? "8px 10px" : "10px 14px", cursor: carrello.length === 0 ? "default" : "pointer", opacity: carrello.length === 0 ? 0.45 : 1,
               ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, lineHeight: 1.15,
             }}
