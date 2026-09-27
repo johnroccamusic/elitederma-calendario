@@ -123,3 +123,55 @@ export async function usciteAllEvento(eventoId) {
   });
   return { venduto, omaggiato };
 }
+
+// Una spesa creata dalla scheda dell'evento.
+//
+// I default di colonna di `spese` sono una trappola: `stato` nasce
+// 'pagata' e `iva_percentuale` nasce 22. Un insert che omette un campo
+// non lo lascia vuoto, gli mette addosso una decisione che nessuno ha
+// preso — ed e' gia' costato 239,68 euro di credito IVA inesistente
+// sulle voci di costo dei corsi. Quindi qui si scrive TUTTO, esplicito.
+export const STATI_SPESA_EVENTO = [
+  { v: "pagata", l: "Pagata" },
+  { v: "fatturata", l: "Fatturata, da pagare" },
+  { v: "impegnata", l: "Impegnata" },
+  { v: "preventivata", l: "Preventivata" },
+];
+export const ALIQUOTE_IVA_EVENTO = [22, 10, 4, 0];
+
+export async function creaSpesaEvento(evento, campi) {
+  // lo stato non ha un ripiego: e' proprio quello che la colonna
+  // decideva da sola ('pagata'), e una spesa data per pagata finisce in
+  // prima nota come uscita di cassa che nessuno ha fatto
+  if (!STATI_SPESA_EVENTO.some((s) => s.v === campi.stato)) {
+    throw new Error("Stato della spesa mancante o non valido.");
+  }
+  const imponibile = Math.round((Number(campi.imponibile) || 0) * 100) / 100;
+  const iva = Number(campi.iva_percentuale) || 0;
+  const totale = Math.round(imponibile * (1 + iva / 100) * 100) / 100;
+  // la data: quella scritta, altrimenti il giorno in cui l'evento
+  // finisce. Mai nulla — prima nota e ciclo passivo leggono le colonne
+  // della data e una spesa senza data sparisce da tutti e due
+  const data = campi.data_documento || evento.data_fine || evento.data_inizio || new Date().toISOString().slice(0, 10);
+  const { error } = await supabase.from("spese").insert({
+    descrizione: campi.descrizione || null,
+    categoria_id: campi.categoria_id || null,
+    sottocategoria_id: campi.sottocategoria_id || null,
+    fornitore_id: campi.fornitore_id || null,
+    imponibile,
+    iva_percentuale: iva,
+    totale,
+    data_documento: data,
+    data_pagamento: campi.stato === "pagata" ? data : null,
+    competenza_da: data,
+    competenza_a: data,
+    tipo_ambito: "evento",
+    evento_id: evento.id,
+    sede_id: null, corso_id: null, classe_id: null,
+    stato: campi.stato,
+    origine: "manuale",
+    includi_analisi_costi: true,
+    note: campi.note || null,
+  });
+  if (error) throw new Error(error.message);
+}

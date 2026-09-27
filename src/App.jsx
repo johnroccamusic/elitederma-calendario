@@ -72776,7 +72776,7 @@ export default function App() {
     gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie", "location_prezzi"],
-    gestionieventi: ["location", "master", "assistente", "venditori", "prodotti_shop", "bundle_componenti", "costi_categorie", "hotel"],
+    gestionieventi: ["location", "master", "assistente", "venditori", "prodotti_shop", "bundle_componenti", "costi_categorie", "costi_sottocategorie", "fornitori", "hotel"],
     crmallievi: [],
     crmallievielenco: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
@@ -74974,7 +74974,8 @@ export default function App() {
         <GestioneEventi
           key={eventoDaAprire || "elenco"}
           location={location} master={master} assistente={assistente} venditori={venditori}
-          prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} costiCategorie={costiCategorie} hotel={hotel}
+          prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} hotel={hotel}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
           eventoIniziale={eventoDaAprire}
           onBack={() => { setEventoDaAprire(null); setView(vistaPrimaDellEvento || "home"); }}
           titolo={etichettaTasto("home", "gestionieventi", "Gestione eventi")}

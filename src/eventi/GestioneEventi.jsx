@@ -11,11 +11,23 @@ import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
   periodoEvento, quantiGiorni, usciteAllEvento,
+  creaSpesaEvento, STATI_SPESA_EVENTO, ALIQUOTE_IVA_EVENTO,
 } from "./dati.js";
-import { leggiConto, calcolaConto, problemiDiChiusura } from "./conto.js";
+import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
 
 const euro = (n) => `${(Number(n) || 0).toFixed(2).replace(".", ",")} €`;
+// "2026-09-26" -> "26/09". Le date qui sono giorni, non istanti: si
+// spezza la stringa invece di passare da Date, o il fuso sposta il
+// giorno indietro di uno (vedi date-nulle-fanno-schermata-bianca)
+const fmtGiorno = (g) => (g ? `${g.slice(8, 10)}/${g.slice(5, 7)}` : "—");
+// l'orario di una vendita, letto a Roma: e' un istante vero
+const fmtQuando = (ts) => {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+};
 const oggi = () => new Date().toISOString().slice(0, 10);
 
 const COLORE_STATO = {
@@ -617,12 +629,201 @@ function Riquadro({ titolo, children, sfondo = "#fff", bordo = CREAM_BORDER }) {
   );
 }
 
-function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onCambiato }) {
+// Gli incassi del POS rimasti senza evento. Al banco di una fiera si
+// vende e basta: la tendina "Sei a un evento?" ci si dimentica di
+// sceglierla. Invece di rincorrerli uno a uno, si chiede all'app quali
+// vendite di quei giorni non sono ancora di nessuno.
+function PannelloIncassi({ evento, onFatto }) {
+  const [giorniPrima, setGiorniPrima] = useState(1);
+  const [trovate, setTrovate] = useState(null);
+  const [scelte, setScelte] = useState({});
+  const [cerco, setCerco] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function cerca() {
+    setCerco(true); setMsg("");
+    try {
+      const r = await incassiSenzaEvento(evento, giorniPrima, 0);
+      setTrovate(r);
+      // tutte spuntate: chi apre questo pannello le vuole agganciare,
+      // semmai toglie quella di troppo
+      setScelte(Object.fromEntries(r.righe.map((v) => [v.id, true])));
+    } catch (e) { setMsg(e.message); }
+    setCerco(false);
+  }
+  async function aggancia() {
+    const ids = Object.entries(scelte).filter(([, s]) => s).map(([id]) => id);
+    if (!ids.length) return;
+    setCerco(true);
+    try {
+      await agganciaIncassi(ids, evento.id);
+      setTrovate(null); setScelte({});
+      setMsg(`${ids.length} vendit${ids.length === 1 ? "a agganciata" : "e agganciate"} all'evento.`);
+      if (onFatto) onFatto();
+    } catch (e) { setMsg(e.message); }
+    setCerco(false);
+  }
+
+  const quante = Object.values(scelte).filter(Boolean).length;
+  const somma = trovate ? trovate.righe.filter((v) => scelte[v.id]).reduce((s, v) => s + (Number(v.totale) || 0), 0) : 0;
+
+  return (
+    <Riquadro titolo="Incassi rimasti senza evento">
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+        <label style={{ flex: "0 0 120px" }}>
+          <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Giorni di allestimento</span>
+          <input type="number" min="0" max="10" value={giorniPrima} onChange={(e) => setGiorniPrima(Number(e.target.value) || 0)}
+            style={{ ...inputStyle, textAlign: "right" }} />
+        </label>
+        <Button variant="ghost" onClick={cerca} disabled={cerco || !evento.data_inizio}>{cerco ? "Cerco…" : "Cerca"}</Button>
+        <span style={{ flex: 1, minWidth: 140, ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>
+          Si guarda dai giorni di allestimento fino alla fine dell'evento. Le vendite già legate a un corso non si toccano.
+        </span>
+      </div>
+
+      {msg && <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: msg.includes("aggancia") ? "#2E7D32" : "#C0392B", marginTop: 8 }}>{msg}</div>}
+
+      {trovate && trovate.righe.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
+          Dal {fmtGiorno(trovate.inizio)} al {fmtGiorno(trovate.fine)} non c'è nessuna vendita POS orfana: o sono già su questo evento, o non ce ne sono state.
+        </div>
+      )}
+
+      {trovate && trovate.righe.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+            Dal {fmtGiorno(trovate.inizio)} al {fmtGiorno(trovate.fine)}:
+          </div>
+          {trovate.righe.map((v) => (
+            <label key={v.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!scelte[v.id]} onChange={(e) => setScelte((p) => ({ ...p, [v.id]: e.target.checked }))} style={{ width: 15, height: 15, flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {fmtQuando(v.data_ordine)} · {v.operatore_nome || "?"}
+                {v.tipo_movimento === "omaggio" && <span style={{ color: "#8A6D1D", fontWeight: 700 }}> · omaggio</span>}
+              </span>
+              <span style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{euro(v.totale)}</span>
+            </label>
+          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+            <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>
+              {quante} selezionat{quante === 1 ? "a" : "e"} · {euro(somma)}
+            </span>
+            <Button onClick={aggancia} disabled={cerco || quante === 0}>Aggancia all'evento</Button>
+          </div>
+        </div>
+      )}
+    </Riquadro>
+  );
+}
+
+// La spesa si scrive da qui, non si va a cercarla in Contabilità: chi
+// torna da una fiera ha in mano cinque scontrini e vuole batterli
+// mentre si ricorda cos'erano.
+function ModuloSpesaEvento({ evento, costiCategorie, costiSottocategorie, fornitori, onFatto }) {
+  const [f, setF] = useState({
+    descrizione: "", categoria_id: "fiere_eventi", sottocategoria_id: "", fornitore_id: "",
+    imponibile: "", iva_percentuale: 22, stato: "pagata", data_documento: "", note: "",
+  });
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+  const cambia = (k, v) => setF((p) => ({ ...p, [k]: v, ...(k === "categoria_id" ? { sottocategoria_id: "" } : {}) }));
+  const sotto = (costiSottocategorie || []).filter((s) => s.categoria_id === f.categoria_id);
+  const imp = Number(String(f.imponibile).replace(",", ".")) || 0;
+  const totale = Math.round(imp * (1 + (Number(f.iva_percentuale) || 0) / 100) * 100) / 100;
+
+  async function salva() {
+    if (!f.descrizione.trim()) { setMsg("Scrivi cos'è questa spesa."); return; }
+    if (!(imp > 0)) { setMsg("L'importo non può essere zero."); return; }
+    setSalvando(true); setMsg("");
+    try {
+      await creaSpesaEvento(evento, { ...f, imponibile: imp });
+      setF((p) => ({ ...p, descrizione: "", imponibile: "", note: "" }));
+      setMsg("Spesa registrata.");
+      if (onFatto) onFatto();
+    } catch (e) { setMsg(e.message); }
+    setSalvando(false);
+  }
+
+  return (
+    <Riquadro titolo="Aggiungi una spesa di questo evento">
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ flex: "2 1 220px", minWidth: 0 }}>
+          <Field label="Cos'è">
+            <input style={inputStyle} value={f.descrizione} onChange={(e) => cambia("descrizione", e.target.value)} placeholder="es. Stand, pad. 3 — saldo" />
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 130px", minWidth: 0 }}>
+          <Field label="Imponibile">
+            <input style={{ ...inputStyle, textAlign: "right" }} inputMode="decimal" value={f.imponibile} onChange={(e) => cambia("imponibile", e.target.value)} placeholder="0,00" />
+          </Field>
+        </div>
+        <div style={{ flex: "0 1 92px", minWidth: 0 }}>
+          <Field label="IVA">
+            <select style={inputStyle} value={f.iva_percentuale} onChange={(e) => cambia("iva_percentuale", Number(e.target.value))}>
+              {ALIQUOTE_IVA_EVENTO.map((a) => <option key={a} value={a}>{a}%</option>)}
+            </select>
+          </Field>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+          <Field label="Categoria">
+            <select style={inputStyle} value={f.categoria_id} onChange={(e) => cambia("categoria_id", e.target.value)}>
+              {(costiCategorie || []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+          <Field label="Voce (opzionale)">
+            <select style={inputStyle} value={f.sottocategoria_id} onChange={(e) => cambia("sottocategoria_id", e.target.value)}>
+              <option value="">— nessuna —</option>
+              {sotto.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+            </select>
+          </Field>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 150px", minWidth: 0 }}>
+          <Field label="Stato">
+            <select style={inputStyle} value={f.stato} onChange={(e) => cambia("stato", e.target.value)}>
+              {STATI_SPESA_EVENTO.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 150px", minWidth: 0 }}>
+          <Field label="Data (vuoto = fine evento)">
+            <input type="date" style={inputStyle} value={f.data_documento} onChange={(e) => cambia("data_documento", e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 170px", minWidth: 0 }}>
+          <Field label="Fornitore (opzionale)">
+            <select style={inputStyle} value={f.fornitore_id} onChange={(e) => cambia("fornitore_id", e.target.value)}>
+              <option value="">— nessuno —</option>
+              {(fornitori || []).map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+            </select>
+          </Field>
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
+        <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12, color: MUTED }}>
+          Totale con IVA: <b style={{ color: NAVY }}>{euro(totale)}</b>
+          {f.stato !== "pagata" && <span> · non ancora pagata, quindi niente data di pagamento</span>}
+        </span>
+        <Button onClick={salva} disabled={salvando}>{salvando ? "Salvo…" : "Registra la spesa"}</Button>
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: msg === "Spesa registrata." ? "#2E7D32" : "#C0392B", marginTop: 8 }}>{msg}</div>}
+    </Riquadro>
+  );
+}
+
+function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, costiCategorie, costiSottocategorie, fornitori, onCambiato }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState("");
   const [chiedeConferma, setChiedeConferma] = useState(false);
   const [chiudendo, setChiudendo] = useState(false);
 
+  const [giro, setGiro] = useState(0);
+  const rileggi = () => setGiro((n) => n + 1);
   useEffect(() => {
     let vivo = true;
     setDati(null); setErrore("");
@@ -630,7 +831,7 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onCamb
       .then((d) => { if (vivo) setDati(d); })
       .catch((e) => { if (vivo) setErrore(e.message); });
     return () => { vivo = false; };
-  }, [evento.id]);
+  }, [evento.id, giro]);
 
   const conto = useMemo(
     () => (dati ? calcolaConto(dati, evento.id, { prodottiShop: prodotti, bundleComponenti, categorieNome }) : null),
@@ -764,6 +965,11 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onCamb
         )}
       </Riquadro>
 
+      <PannelloIncassi evento={evento} onFatto={rileggi} />
+
+      <ModuloSpesaEvento evento={evento} costiCategorie={costiCategorie}
+        costiSottocategorie={costiSottocategorie} fornitori={fornitori} onFatto={rileggi} />
+
       {evento.stato === "concluso" ? (
         <Riquadro titolo="Evento chiuso" sfondo="#EAF5EA" bordo="#C7E3C7">
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -835,7 +1041,7 @@ const SEZIONI = [
   { v: "conto", l: "Conto" },
 ];
 
-function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onIndietro, onCambiato }) {
+function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, costiCategorie, costiSottocategorie, fornitori, hotel, onIndietro, onCambiato }) {
   const [sezione, setSezione] = useState("team");
   const [inModifica, setInModifica] = useState(false);
   const [team, setTeam] = useState([]);
@@ -898,7 +1104,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
         {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} prodotti={prodotti} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
-        {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} onCambiato={onCambiato} />}
+        {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori} onCambiato={onCambiato} />}
       </div>
     </>
   );
@@ -906,7 +1112,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
 
 // --------------------------------------------------------------- la pagina
 
-export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null }) {
+export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], costiSottocategorie = [], fornitori = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null }) {
   const [eventi, setEventi] = useState(null);
   // `eventoIniziale` arriva da chi ci ha portati qui — oggi la barra
   // dell'evento nel calendario. Non e' uno stato che cambia da solo:
@@ -962,6 +1168,7 @@ export default function GestioneEventi({ location = [], master = [], assistente 
           <SchedaEvento
             evento={aperto} location={location} persone={persone} prodotti={prodottiShop} hotel={hotel}
             bundleComponenti={bundleComponenti} categorieNome={categorieNome}
+            costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
             onIndietro={() => setApertoId(null)}
             onCambiato={ricarica}
           />

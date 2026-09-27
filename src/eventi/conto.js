@@ -224,3 +224,55 @@ export function problemiDiChiusura(conto) {
     ...speseNonPagate.map((v) => `${v.descrizione}: la spesa è ancora "${v.stato}".`),
   ];
 }
+
+// ---------------------------------------------------------------------
+// Agganciare all'evento gli incassi che il POS non ha etichettato.
+//
+// Al banco di una fiera si vende e basta: la tendina "Sei a un evento?"
+// ci si dimentica di sceglierla, e quegli incassi restano senza padrone.
+// Invece di rincorrerli uno a uno, qui si chiede: fra queste date, quali
+// vendite POS non sono ancora di nessun evento né di un corso?
+//
+// La finestra parte PRIMA dell'evento perché si allestisce prima: lo
+// stand si monta il giorno avanti, e quel giorno si vende già.
+// Le vendite legate a un corso non si toccano mai: quelle un padrone ce
+// l'hanno, ed e' un altro.
+export async function incassiSenzaEvento(evento, giorniPrima = 1, giorniDopo = 0) {
+  const sposta = (giorno, quanti) => {
+    const d = new Date(`${giorno}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + quanti);
+    return d.toISOString().slice(0, 10);
+  };
+  const inizio = sposta(evento.data_inizio, -Math.abs(giorniPrima));
+  const fine = sposta(evento.data_fine || evento.data_inizio, Math.abs(giorniDopo));
+  // il confronto e' sull'ora di Roma, non su UTC: una vendita delle
+  // 00:30 del 26 in Italia e' ancora il 25 in UTC, e sparirebbe
+  const { data, error } = await supabase
+    .from("vendite_shop")
+    .select("id, numero_ordine, data_ordine, totale, metodo_pagamento, tipo_movimento, operatore_nome")
+    .eq("origine", "pos")
+    .is("evento_id", null)
+    .is("corso_data_id", null)
+    .gte("data_ordine", `${inizio}T00:00:00+02:00`)
+    .lte("data_ordine", `${fine}T23:59:59+02:00`)
+    .order("data_ordine");
+  if (error) throw new Error(error.message);
+  return { inizio, fine, righe: data || [] };
+}
+
+export async function agganciaIncassi(ids, eventoId) {
+  if (!ids || !ids.length) return 0;
+  const { error } = await supabase.from("vendite_shop")
+    .update({ evento_id: eventoId }).in("id", ids);
+  if (error) throw new Error(error.message);
+  return ids.length;
+}
+
+// Staccare una vendita agganciata per sbaglio. Serve: la finestra e'
+// per date, e in quei giorni puo' esserci finito dentro anche chi
+// vendeva da casa.
+export async function staccaIncasso(venditaId) {
+  const { error } = await supabase.from("vendite_shop")
+    .update({ evento_id: null }).eq("id", venditaId);
+  if (error) throw new Error(error.message);
+}
