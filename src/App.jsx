@@ -31,6 +31,7 @@ import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
 import QrConsensi from "./consensi/QrConsensi.jsx";
 import Ricevuta from "./pos/Ricevuta.jsx";
 import GestioneEventi from "./eventi/GestioneEventi.jsx";
+import { METODI_SPESA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
 import PrezziListini from "./prezzi/PrezziListini.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
@@ -41367,8 +41368,46 @@ function RigaCassaVuota({ testo }) {
 // nessuno l'ha disposto e non c'e' un fornitore a cui chiedere la
 // fattura — e tenerla separata evita di cercare per sempre un documento
 // che non esistera' mai.
-const METODI_SPESA = ["Carta Nexi", "PayPal", "Stripe", "Carta PayPal", "Bonifico", "Bonifico periodico", "Domiciliazione bancaria", "Spesa bancaria su C/C", "Cassa contanti"];
 const METODI_SPESA_DALLA_CASSA = new Set(["Cassa contanti", "Contanti", "Cash no iva"]);
+
+// Stato e metodo di pagamento in una tendina sola.
+//
+// Erano due campi: una tendina con sette stati, e sotto una fila di
+// nove radio per il metodo — mezza schermata per rispondere a una
+// domanda sola, "questa spesa l'hai pagata, e come?". Chiesto di
+// unirli il 27/09/2026.
+//
+// La tendina parte da "Non pagata" e non da "Pagata" come prima: il
+// default della colonna `stato` e' 'pagata', ed e' gia' costato 1.299
+// euro di uscite mai fatte entrate in prima nota. Una spesa si da' per
+// pagata solo se qualcuno lo dice.
+//
+// Scegliere un metodo vuol dire pagata: sono la stessa scelta, e
+// tenerle separate permetteva "pagata senza metodo" e "metodo su una
+// spesa non pagata", che non vogliono dire niente. Gli altri stati
+// restano tutti raggiungibili nel primo gruppo: lo scadenziario e il
+// ciclo passivo li usano.
+function SelettorePagamentoSpesa({ stato, metodoPagamento, onCambia, stile }) {
+  const pagata = stato === "pagata";
+  // un metodo salvato col nome vecchio ("Contanti", "Cash no iva") resta
+  // scelto e continua a valere come cassa, invece di sparire
+  const metodiVisti = [...METODI_SPESA, ...(metodoPagamento && !METODI_SPESA.includes(metodoPagamento) ? [metodoPagamento] : [])];
+  return (
+    <select
+      style={stile || inputStyle}
+      value={valoreTendinaPagamento(stato, metodoPagamento)}
+      onChange={(e) => onCambia(leggiTendinaPagamento(e.target.value))}
+    >
+      <optgroup label="Non pagata">
+        {STATI_NON_PAGATA.map((s) => <option key={s.chiave} value={`stato:${s.chiave}`}>{s.etichetta}</option>)}
+      </optgroup>
+      <optgroup label="Pagata con">
+        {metodiVisti.map((m) => <option key={m} value={`metodo:${m}`}>{m}</option>)}
+        {pagata && !metodoPagamento && <option value="pagata:">Pagata — metodo non indicato</option>}
+      </optgroup>
+    </select>
+  );
+}
 // Una spesa di classe pagata in contanti e' uscita dalla BUSTA di quel
 // corso, non dalla cassa contanti: la busta entra in cassa gia' al netto
 // ("busta_importo" e' il cash pulito, cioe' l'incassato meno queste spese),
@@ -70946,8 +70985,14 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   // contributive, e l'importo vale per intero. Segnarle solo come "esente
   // IVA" le confondeva con una fattura senza imposta, che e' un'altra cosa.
   const [naturaFiscale, setNaturaFiscale] = useState(spesaEsistente?.natura_fiscale || "");
-  const [stato, setStato] = useState(spesaEsistente?.stato || prefill?.statoIniziale || "pagata");
+  // "da_pagare" e non "pagata": e' lo stesso valore che scrive gia' lo
+  // scadenziario, e una spesa data per pagata entra in prima nota come
+  // un'uscita di cassa che nessuno ha fatto
+  const [stato, setStato] = useState(spesaEsistente?.stato || prefill?.statoIniziale || "da_pagare");
   const [metodoPagamento, setMetodoPagamento] = useState(spesaEsistente?.metodo_pagamento || prefill?.metodoPagamento || "");
+  // "pagata in parte" un pagamento l'ha avuto, quindi una data ce l'ha:
+  // e' l'unico altro stato che puo' tenersela
+  const pagataOInParte = stato === "pagata" || stato === "parzialmente_pagata";
   // Contabilizza da Movimenti banca: al salvataggio il movimento resta
   // collegato a questa spesa. E si puo' chiedere di ricordarsi la
   // scelta: una regola che contabilizza da sola i prossimi movimenti con
@@ -71098,7 +71143,12 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       categoria_id: categoriaId, sottocategoria_id: sottocategoriaId,
       fornitore_id: fornitoreIdFinale || null,
       numero_documento: numeroDocumento.trim() || null,
-      data_documento: dataDocumento || null, data_pagamento: dataPagamento || null,
+      data_documento: dataDocumento || null,
+      // la data del pagamento vale solo se la spesa e' pagata (o pagata
+      // in parte). Lasciata addosso a una spesa tornata "da pagare"
+      // finirebbe lo stesso in prima nota come uscita di cassa: e'
+      // `data_pagamento || data_documento` che decide il giorno
+      data_pagamento: (stato === "pagata" || stato === "parzialmente_pagata") ? (dataPagamento || null) : null,
       scadenza_pagamento: scadenzaPagamento || null,
       competenza_da: competenzaDa || null, competenza_a: competenzaA || null,
       imponibile: imp, iva_percentuale: ivaEffettiva, totale: totale === "" ? imp : round2(parseNum(totale)),
@@ -71320,7 +71370,18 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 140px" }}><Field label="Data documento"><input type="date" style={inputStyle} value={dataDocumento} onChange={(e) => setDataDocumento(e.target.value)} /></Field></div>
             <div style={{ flex: "1 1 140px" }}><Field label="Scadenza pagamento"><input type="date" style={inputStyle} value={scadenzaPagamento} onChange={(e) => setScadenzaPagamento(e.target.value)} /></Field></div>
-            <div style={{ flex: "1 1 140px" }}><Field label="Data pagamento"><input type="date" style={inputStyle} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px" }}>
+              <Field label="Data pagamento">
+                <input
+                  type="date"
+                  style={{ ...inputStyle, background: pagataOInParte ? "#fff" : "#EFEFEF", color: pagataOInParte ? NAVY : MUTED }}
+                  disabled={!pagataOInParte}
+                  title={pagataOInParte ? undefined : "Serve solo quando la spesa risulta pagata: scegli un metodo di pagamento qui sopra."}
+                  value={pagataOInParte ? dataPagamento : ""}
+                  onChange={(e) => setDataPagamento(e.target.value)}
+                />
+              </Field>
+            </div>
             <div style={{ flex: "1 1 140px" }}><Field label="Competenza dal"><input type="date" style={inputStyle} value={competenzaDa} onChange={(e) => setCompetenzaDa(e.target.value)} /></Field></div>
             <div style={{ flex: "1 1 140px" }}><Field label="Competenza al"><input type="date" style={inputStyle} value={competenzaA} onChange={(e) => setCompetenzaA(e.target.value)} /></Field></div>
           </div>
@@ -71366,24 +71427,13 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
             <div style={{ flex: 1 }}><Field label="Totale"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field></div>
           </div>
 
-          <Field label="Stato">
-            <select style={inputStyle} value={stato} onChange={(e) => setStato(e.target.value)}>
-              {STATI_SPESA.map((s) => <option key={s.chiave} value={s.chiave}>{s.etichetta}</option>)}
-            </select>
-          </Field>
-          <Field label="Metodo di pagamento">
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-              {/* METODI_SPESA sta accanto alla cassa contanti perche' e' li'
-                  che conta: solo "Cassa contanti" scala il saldo del
-                  contante. Se il metodo salvato e' uno dei nomi vecchi
-                  ("Contanti", "Cash no iva") resta scelto e continua a valere
-                  come cassa, invece di sparire dalla scheda */}
-              {[...METODI_SPESA, ...(metodoPagamento && !METODI_SPESA.includes(metodoPagamento) ? [metodoPagamento] : [])].map((opz) => (
-                <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                  <input type="radio" name="metodo-spesa" checked={metodoPagamento === opz} onChange={() => setMetodoPagamento(opz)} /> {opz}
-                </label>
-              ))}
-            </div>
+          {/* una tendina sola al posto di "Stato" piu' nove radio del
+              metodo: e' una domanda sola, e occupava mezza schermata */}
+          <Field label="Pagata?">
+            <SelettorePagamentoSpesa
+              stato={stato} metodoPagamento={metodoPagamento}
+              onCambia={({ stato: s, metodoPagamento: m }) => { setStato(s); setMetodoPagamento(m); }}
+            />
           </Field>
           <Field label="Allegato (fattura/ricevuta)">
             <CampoFileTrascinabile onChange={(e) => setAllegatoFile(e.target.files?.[0] || null)} />
@@ -73461,6 +73511,21 @@ export default function App() {
   function apriNuovoAbbonamento() { setAbbonamentoInModifica(null); apriViewProtetta("abbonamentoform"); }
   function apriModificaAbbonamento(id) { setAbbonamentoInModifica(id); apriViewProtetta("abbonamentoform"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
+  // La spesa di un evento si scrive con lo STESSO modulo della
+  // Contabilita', non con una copia ridotta: si apre quello, gia'
+  // puntato sull'evento e sulla categoria "Fiere ed eventi", e
+  // "Indietro" riporta alla scheda dell'evento invece che ai costi.
+  function apriNuovaSpesaEvento(evento) {
+    setSpesaInModifica(null);
+    setSpesaPrefill({
+      tipoAmbito: "evento", eventoId: evento.id,
+      categoriaId: "fiere_eventi",
+      dataDocumento: evento.data_fine || evento.data_inizio || dataOggiStr(),
+    });
+    setEventoDaAprire(evento.id);
+    setSpesaRitornoView("gestionieventi");
+    setView("spesaform");
+  }
   function apriModificaSpesa(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
   // "Modifica spesa" aperta da una riga già in Amministrazione: al
   // salvataggio "Indietro" deve tornare lì, non a Prima nota cassa
@@ -74745,7 +74810,7 @@ export default function App() {
           spese={spese} speseAttribuzioni={speseAttribuzioni}
           ricarica={fetchDati}
           onBack={() => { if (spesaPrefill?.classeId) { setSpesaPrefill(null); setView("scheda"); } else { setSpesaPrefill(null); setView(spesaRitornoView); } }}
-          titoloPrecedente={spesaPrefill?.classeId ? "Scheda" : (spesaRitornoView === "amministrazione" ? "Contabilità" : spesaRitornoView === "assegnazionemaster" ? "Operativo corsi" : "Prima nota cassa")}
+          titoloPrecedente={spesaPrefill?.classeId ? "Scheda" : spesaRitornoView === "gestionieventi" ? "Evento" : (spesaRitornoView === "amministrazione" ? "Contabilità" : spesaRitornoView === "assegnazionemaster" ? "Operativo corsi" : "Prima nota cassa")}
         />
       )}
 
@@ -74975,8 +75040,9 @@ export default function App() {
           key={eventoDaAprire || "elenco"}
           location={location} master={master} assistente={assistente} venditori={venditori}
           prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} hotel={hotel}
-          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
+          costiCategorie={costiCategorie}
           eventoIniziale={eventoDaAprire}
+          onNuovaSpesa={apriNuovaSpesaEvento}
           onBack={() => { setEventoDaAprire(null); setView(vistaPrimaDellEvento || "home"); }}
           titolo={etichettaTasto("home", "gestionieventi", "Gestione eventi")}
         />

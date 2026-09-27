@@ -11,7 +11,6 @@ import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
   periodoEvento, quantiGiorni, usciteAllEvento,
-  creaSpesaEvento, STATI_SPESA_EVENTO, ALIQUOTE_IVA_EVENTO,
 } from "./dati.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
@@ -20,11 +19,6 @@ const euro = (n) => `${(Number(n) || 0).toFixed(2).replace(".", ",")} €`;
 // "2026-09-26" -> "26/09". Le date qui sono giorni, non istanti: si
 // spezza la stringa invece di passare da Date, o il fuso sposta il
 // giorno indietro di uno (vedi date-nulle-fanno-schermata-bianca)
-// i campi del modulo spesa: sei caselle in griglia, con l'imbottitura
-// piena di inputStyle il riquadro diventava alto mezza schermata.
-// minWidth 0 sul controllo stesso, non solo sul suo contenitore: un
-// select con 215 fornitori dentro ha una larghezza minima sua
-const campoSpesa = { ...inputStyle, padding: "7px 9px", fontSize: 13, minWidth: 0, maxWidth: "100%" };
 const fmtGiorno = (g) => (g ? `${g.slice(8, 10)}/${g.slice(5, 7)}` : "—");
 // l'orario di una vendita, letto a Roma: e' un istante vero
 const fmtQuando = (ts) => {
@@ -721,109 +715,7 @@ function PannelloIncassi({ evento, onFatto }) {
   );
 }
 
-// La spesa si scrive da qui, non si va a cercarla in Contabilità: chi
-// torna da una fiera ha in mano cinque scontrini e vuole batterli
-// mentre si ricorda cos'erano.
-function ModuloSpesaEvento({ evento, costiCategorie, costiSottocategorie, fornitori, onFatto }) {
-  const [f, setF] = useState({
-    descrizione: "", categoria_id: "fiere_eventi", sottocategoria_id: "", fornitore_id: "",
-    imponibile: "", iva_percentuale: 22, stato: "pagata", data_documento: "", note: "",
-  });
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState("");
-  const cambia = (k, v) => setF((p) => ({ ...p, [k]: v, ...(k === "categoria_id" ? { sottocategoria_id: "" } : {}) }));
-  const sotto = (costiSottocategorie || []).filter((s) => s.categoria_id === f.categoria_id);
-  const imp = Number(String(f.imponibile).replace(",", ".")) || 0;
-  const totale = Math.round(imp * (1 + (Number(f.iva_percentuale) || 0) / 100) * 100) / 100;
-
-  async function salva() {
-    if (!f.descrizione.trim()) { setMsg("Scrivi cos'è questa spesa."); return; }
-    if (!(imp > 0)) { setMsg("L'importo non può essere zero."); return; }
-    setSalvando(true); setMsg("");
-    try {
-      await creaSpesaEvento(evento, { ...f, imponibile: imp });
-      setF((p) => ({ ...p, descrizione: "", imponibile: "", note: "" }));
-      setMsg("Spesa registrata.");
-      if (onFatto) onFatto();
-    } catch (e) { setMsg(e.message); }
-    setSalvando(false);
-  }
-
-  return (
-    <Riquadro titolo="Aggiungi una spesa di questo evento">
-      {/* Una griglia sola, non tre righe di flex con basi fisse: sotto
-          una certa larghezza la base non si comprimeva piu' e l'ultima
-          colonna usciva dal riquadro. `minmax(min(190px, 100%), 1fr)`
-          e' lo stesso rimedio del listino — il min() fa cedere la
-          colonna quando lo schermo e' piu' stretto della base. */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(190px, 100%), 1fr))", gap: "0 10px" }}>
-        {/* "Cos'è" occupa tutta la riga dove le colonne sono due o piu':
-            e' il campo che si scrive davvero, gli altri sono scelte */}
-        <div style={{ minWidth: 0, gridColumn: "1 / -1" }}>
-          <Field label="Cos'è" compatto etichettaFontSize={10}>
-            <input style={campoSpesa} value={f.descrizione} onChange={(e) => cambia("descrizione", e.target.value)} placeholder="es. Stand, pad. 3 — saldo" />
-          </Field>
-        </div>
-        <div style={{ minWidth: 0, display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)", gap: "0 8px" }}>
-          <Field label="Imponibile" compatto etichettaFontSize={10}>
-            <input style={{ ...campoSpesa, textAlign: "right" }} inputMode="decimal" value={f.imponibile} onChange={(e) => cambia("imponibile", e.target.value)} placeholder="0,00" />
-          </Field>
-          <Field label="IVA" compatto etichettaFontSize={10}>
-            <select style={campoSpesa} value={f.iva_percentuale} onChange={(e) => cambia("iva_percentuale", Number(e.target.value))}>
-              {ALIQUOTE_IVA_EVENTO.map((a) => <option key={a} value={a}>{a}%</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <Field label="Stato" compatto etichettaFontSize={10}>
-            <select style={campoSpesa} value={f.stato} onChange={(e) => cambia("stato", e.target.value)}>
-              {STATI_SPESA_EVENTO.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <Field label="Categoria" compatto etichettaFontSize={10}>
-            <select style={campoSpesa} value={f.categoria_id} onChange={(e) => cambia("categoria_id", e.target.value)}>
-              {(costiCategorie || []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <Field label="Voce" compatto etichettaFontSize={10}>
-            <select style={campoSpesa} value={f.sottocategoria_id} onChange={(e) => cambia("sottocategoria_id", e.target.value)}>
-              <option value="">— nessuna —</option>
-              {sotto.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <Field label="Data" compatto etichettaFontSize={10}>
-            <input type="date" style={campoSpesa} value={f.data_documento} onChange={(e) => cambia("data_documento", e.target.value)} />
-          </Field>
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <Field label="Fornitore" compatto etichettaFontSize={10}>
-            <select style={campoSpesa} value={f.fornitore_id} onChange={(e) => cambia("fornitore_id", e.target.value)}>
-              <option value="">— nessuno —</option>
-              {(fornitori || []).map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
-            </select>
-          </Field>
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
-        <span style={{ flex: "1 1 200px", minWidth: 0, ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.45 }}>
-          Totale con IVA: <b style={{ color: NAVY }}>{euro(totale)}</b>
-          {" · "}{f.data_documento ? "" : "data vuota = giorno di fine evento"}
-          {f.stato !== "pagata" && " · non ancora pagata, quindi niente data di pagamento"}
-        </span>
-        <Button onClick={salva} disabled={salvando}>{salvando ? "Salvo…" : "Registra la spesa"}</Button>
-      </div>
-      {msg && <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: msg === "Spesa registrata." ? "#2E7D32" : "#C0392B", marginTop: 8 }}>{msg}</div>}
-    </Riquadro>
-  );
-}
-
-function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, costiCategorie, costiSottocategorie, fornitori, onCambiato }) {
+function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuovaSpesa, onCambiato }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState("");
   const [chiedeConferma, setChiedeConferma] = useState(false);
@@ -974,8 +866,19 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, costiC
 
       <PannelloIncassi evento={evento} onFatto={rileggi} />
 
-      <ModuloSpesaEvento evento={evento} costiCategorie={costiCategorie}
-        costiSottocategorie={costiSottocategorie} fornitori={fornitori} onFatto={rileggi} />
+      {/* La spesa si scrive con lo STESSO modulo della Contabilita', non
+          con una copia ridotta: una copia diverge al primo campo nuovo, e
+          qui ci sono di mezzo IVA, stato del pagamento e ripartizioni.
+          Si apre quello, gia' puntato su questo evento. */}
+      <Riquadro titolo="Spese di questo evento">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
+            Si apre il modulo spese della Contabilità, già puntato su questo evento e sulla
+            categoria «Fiere ed eventi». Finito, torni qui.
+          </span>
+          <Button onClick={() => onNuovaSpesa && onNuovaSpesa(evento)} disabled={!onNuovaSpesa}>Aggiungi una spesa</Button>
+        </div>
+      </Riquadro>
 
       {evento.stato === "concluso" ? (
         <Riquadro titolo="Evento chiuso" sfondo="#EAF5EA" bordo="#C7E3C7">
@@ -1048,7 +951,7 @@ const SEZIONI = [
   { v: "conto", l: "Conto" },
 ];
 
-function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, costiCategorie, costiSottocategorie, fornitori, hotel, onIndietro, onCambiato }) {
+function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onNuovaSpesa, onIndietro, onCambiato }) {
   const [sezione, setSezione] = useState("team");
   const [inModifica, setInModifica] = useState(false);
   const [team, setTeam] = useState([]);
@@ -1111,7 +1014,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
         {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} prodotti={prodotti} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
-        {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori} onCambiato={onCambiato} />}
+        {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} onCambiato={onCambiato} />}
       </div>
     </>
   );
@@ -1119,7 +1022,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
 
 // --------------------------------------------------------------- la pagina
 
-export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], costiSottocategorie = [], fornitori = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null }) {
+export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa }) {
   const [eventi, setEventi] = useState(null);
   // `eventoIniziale` arriva da chi ci ha portati qui — oggi la barra
   // dell'evento nel calendario. Non e' uno stato che cambia da solo:
@@ -1174,8 +1077,8 @@ export default function GestioneEventi({ location = [], master = [], assistente 
         {!creando && aperto && (
           <SchedaEvento
             evento={aperto} location={location} persone={persone} prodotti={prodottiShop} hotel={hotel}
-            bundleComponenti={bundleComponenti} categorieNome={categorieNome}
-            costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
+            onNuovaSpesa={onNuovaSpesa}
+            bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa}
             onIndietro={() => setApertoId(null)}
             onCambiato={ricarica}
           />
