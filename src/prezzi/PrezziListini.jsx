@@ -9,7 +9,7 @@
 // Il conto sta tutto nella view `v_prezzi_listini`, così la stessa
 // formula non finisce scritta due volte in due posti che poi divergono.
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
+import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { leggiListino, csvListino, scaricaCsv, BLOCCHI, motivoSenzaSconto } from "./dati.js";
 import { iconaDelBlocco } from "./icone.jsx";
@@ -76,29 +76,50 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
   // Media query vere, non la larghezza letta da JavaScript: con la vista
   // scrivania forzata da iPad `screen.width` racconta un'altra cosa,
   // mentre il CSS segue i pixel veri della pagina.
+  // Il foglio della tabella. Una riga per prodotto, sempre: anche da
+  // telefono. Ci sta perche' il carattere e' condensato — Sofia Sans
+  // Condensed, lo stesso delle tabelle strette dell'app — e perche' i
+  // numeri hanno larghezza fissa (`tabular-nums`), cosi' le colonne non
+  // ballano da una riga all'altra.
+  //
+  // Media query vere, non la larghezza letta da JavaScript: con la vista
+  // scrivania forzata da iPad `screen.width` racconta un'altra cosa,
+  // mentre il CSS segue i pixel veri della pagina.
   const foglio = `
-    .lst-tab { border-collapse: collapse; width: 100%; font-family: 'Roboto',sans-serif; }
+    .lst-tab { border-collapse: collapse; width: 100%; table-layout: fixed;
+               font-family: ${FAMIGLIA_STRETTA}; }
     .lst-tab thead tr { background: #FAF6EE; }
-    .lst-tab th { font-size: 9.5px; font-weight: 800; color: ${MUTED}; text-transform: uppercase;
-                  letter-spacing: .5px; padding: 9px 6px; text-align: center; line-height: 1.2; white-space: pre-line; }
-    .lst-tab th.lst-nome, .lst-tab td.lst-nome { text-align: left; padding-left: 16px; }
-    .lst-tab th:last-child, .lst-tab td:last-child { padding-right: 16px; }
-    .lst-tab td { font-size: 13px; color: ${NAVY}; padding: 9px 6px; text-align: center;
-                  border-top: 1px solid ${CREAM_BORDER}; white-space: nowrap; }
-    .lst-tab td.lst-nome { white-space: normal; font-weight: 600; }
-    .lst-tab td.lst-riv { font-weight: 800; }
+    .lst-tab th { font-size: 9.5px; font-weight: 700; color: ${MUTED}; text-transform: uppercase;
+                  letter-spacing: .3px; padding: 7px 3px; text-align: center; line-height: 1.15; white-space: pre-line; }
+    .lst-tab td { font-size: 14px; color: ${NAVY}; padding: 6px 3px; text-align: center;
+                  border-top: 1px solid ${CREAM_BORDER}; white-space: nowrap;
+                  font-variant-numeric: tabular-nums; }
+
+    .lst-foto  { width: 40px; padding-left: 10px !important; padding-right: 0 !important; }
+    .lst-foto img { width: 32px; height: 32px; object-fit: cover; border-radius: 7px;
+                    display: block; background: #F3EFE6; }
+    .lst-vuota { width: 32px; height: 32px; border-radius: 7px; background: #F3EFE6; display: block; }
+
+    .lst-nome  { text-align: left !important; white-space: normal !important;
+                 font-weight: 600; line-height: 1.15; padding-left: 8px !important; }
+    .lst-riv   { font-weight: 800; padding-right: 10px !important; }
     .lst-manca { background: #FDFAF2; }
 
-    @media (max-width: 700px) {
-      .lst-tab thead { display: none; }
-      .lst-tab, .lst-tab tbody, .lst-tab tr, .lst-tab td { display: block; }
-      .lst-tab tr { display: grid; grid-template-columns: repeat(4, 1fr);
-                    gap: 0 6px; padding: 11px 12px; border-top: 1px solid ${CREAM_BORDER}; }
-      .lst-tab td { border-top: none; padding: 0; font-size: 13.5px; }
-      .lst-tab td::before { content: attr(data-eti); display: block; font-size: 8.5px; font-weight: 800;
-                            letter-spacing: .5px; text-transform: uppercase; color: ${MUTED}; margin-bottom: 2px; }
-      .lst-tab td.lst-nome { grid-column: 1 / -1; padding: 0 0 7px; font-size: 14.5px; }
-      .lst-tab td.lst-nome::before { content: none; }
+    /* le larghezze: il nome prende quello che resta, i numeri stanno stretti */
+    .lst-tab col.c-foto { width: 42px; }
+    .lst-tab col.c-nome { width: auto; }
+    .lst-tab col.c-num  { width: 66px; }
+    .lst-tab col.c-scon { width: 52px; }
+
+    @media (max-width: 560px) {
+      .lst-tab td { font-size: 13px; padding: 5px 2px; }
+      .lst-tab th { font-size: 8.5px; padding: 6px 2px; }
+      .lst-tab col.c-num  { width: 58px; }
+      .lst-tab col.c-scon { width: 44px; }
+      .lst-foto { width: 34px; padding-left: 7px !important; }
+      .lst-foto img, .lst-vuota { width: 27px; height: 27px; }
+      .lst-nome { padding-left: 6px !important; font-size: 12.5px; }
+      .lst-riv { padding-right: 7px !important; }
     }
   `;
 
@@ -164,13 +185,19 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
 
               <div>
                 <table className="lst-tab">
+                  <colgroup>
+                    <col className="c-foto" /><col className="c-nome" />
+                    <col className="c-num" /><col className="c-num" />
+                    <col className="c-scon" /><col className="c-num" />
+                  </colgroup>
                   <thead>
                     <tr>
+                      <th className="lst-foto" />
                       <th className="lst-nome">Prodotto</th>
-                      <th>{"pubblico\nlordo"}</th>
-                      <th>{"pubblico\nnetto"}</th>
+                      <th>{"pubbl.\nlordo"}</th>
+                      <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
-                      <th>{"prezzo\nrivenditore"}</th>
+                      <th>{"prezzo\nrivend."}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -180,17 +207,22 @@ export default function PrezziListini({ onApriProdotto, onBack, titoloIndietro =
                         <tr key={r.id} className={manca ? "lst-manca" : undefined} onClick={() => onApriProdotto && onApriProdotto(r.id)}
                           style={{ cursor: onApriProdotto ? "pointer" : "default" }}
                           title={manca ? motivoSenzaSconto(r) : `Costo ${euro(r.costo_acquisto)}. Scontando il ${r.sconto_max_pct}% incassi ${euro(r.prezzo_rivenditore)}: pagata la merce e i costi aziendali, a te resta quanto al rivenditore. Il calcolo esatto darebbe ${String(r.sconto_esatto_pct).replace(".", ",")}%, arrotondato per difetto.`}>
+                          <td className="lst-foto">
+                            {r.foto_url
+                              ? <img src={r.foto_url} alt="" loading="lazy" decoding="async" />
+                              : <span className="lst-vuota" />}
+                          </td>
                           <td className="lst-nome">{r.nome}</td>
-                          <td data-eti="lordo">{euro(r.pubblico_lordo)}</td>
-                          <td data-eti="netto">{euro(r.pubblico_netto)}</td>
-                          <td data-eti="sconto">
+                          <td>{euro(r.pubblico_lordo)}</td>
+                          <td>{euro(r.pubblico_netto)}</td>
+                          <td>
                             {manca ? (
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
                               <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_max_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_max_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{r.sconto_max_pct}%</span>
                             )}
                           </td>
-                          <td className="lst-riv" data-eti="rivenditore">{euro(r.prezzo_rivenditore)}</td>
+                          <td className="lst-riv">{euro(r.prezzo_rivenditore)}</td>
                         </tr>
                       );
                     })}
