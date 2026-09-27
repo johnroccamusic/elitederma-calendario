@@ -91,40 +91,38 @@ export function scaricaCsv(testo, nomeFile) {
 }
 
 // ---------------------------------------------------------------------
-// I tre sotto-listini: quanto del guadagno si lascia al rivenditore.
+// I tre sotto-listini: come si divide il prezzo col rivenditore.
 //
-// Non si sceglie una percentuale di sconto e si guarda cosa succede: si
-// sceglie COME DIVIDERE I SOLDI, e lo sconto viene di conseguenza.
+// La regola, detta dal titolare guardando la riga dell'Arizona (netto
+// 32,70): "gli ho ceduto 24 euro e a me restano 8. Io mi aspetto 16 a
+// lui e 16 a me". Quindi il confronto non e' fra l'utile finale e lo
+// sconto: e' fra le DUE META' DEL PREZZO. Lo sconto non e' il risultato
+// di un calcolo, lo sconto E' la divisione.
 //
-// E i soldi da confrontare sono quelli che si vedono in tabella: quello
-// che resta A TE, cioe' al netto di merce, costi aziendali e imposte, e
-// quello che va A LUI. Il primo tentativo pareggiava l'utile PRIMA delle
-// imposte, e in "Bilanciato" uscivano 7,02 a te contro 9,48 a lui: giusto
-// nei conti, ma non e' quello che si legge sullo schermo, ed e' quello
-// che si legge che conta.
+//     Bilanciato  meta' per uno     sconto 50%
+//     Fase 2      due terzi a te    sconto 33,3%
+//     Fase 1      tre quarti a te   sconto 25%
 //
-//   a te:  ( N(1-d)(1-a) - C ) (1-t)        a lui:  dN
-//   imponendo  a te = k x a lui:
-//   d = T(N·P - C) / ( N(k + P·T) )     con P = 1-a  e  T = 1-t
+// Cioe' d = 1/(k+1), e basta. Quello che lui fa con la sua meta' — spese,
+// societa', tasse — non entra nel conto e non deve: e' roba sua. Quello
+// che tu fai con la tua resta scritto nelle colonne "a te", che sono
+// un'altra cosa e continuano a dire la verita'.
 //
-//     Fase 1      k=3   tre quarti a te
-//     Fase 2      k=2   due terzi a te
-//     Bilanciato  k=1   la stessa cifra per uno
+// I due tentativi precedenti pareggiavano prima l'utile ante imposte e
+// poi quello netto: numeri giusti, domanda sbagliata. Restano qui a
+// memoria di cosa NON si stava chiedendo.
 //
-// Sono tre fasi di un rapporto commerciale, non tre listini a caso: si
-// parte stretti e si concede terreno quando il rivenditore porta volume.
-// Lo sconto si arrotonda all'intero percento PER DIFETTO, cosi' l'errore
-// cade sempre dalla tua parte: sulle fasi strette il rapporto esce un po'
-// piu' alto del dichiarato (3,3 invece di 3), mai piu' basso.
+// L'unico limite e' non vendere sottocosto: oltre
 //
-// Nota su cosa si sta confrontando: il tuo e' un netto dopo le imposte,
-// il suo e' lordo — anche lui paghera' le sue, ma il suo regime non lo
-// sappiamo. Dal tuo lato e' comunque il confronto giusto: quei soldi
-// escono di tasca tua per intero.
+//     tetto = 1 - C / ( N (1-a) )
+//
+// il prezzo al rivenditore non copre piu' merce e margine di sicurezza.
+// Dove la quota teorica sfonda quel tetto lo sconto si ferma li' e la
+// riga lo dichiara (`sotto`), invece di mostrare una meta' che non c'e'.
 export const FASI = [
-  { id: "fase1",      nome: "Fase 1",     k: 3, quota: "3/4 a te",     spiega: "Tre quarti dei soldi restano a te, un quarto al rivenditore. Si parte da qui." },
-  { id: "fase2",      nome: "Fase 2",     k: 2, quota: "2/3 a te",     spiega: "Due terzi a te, un terzo al rivenditore. Quando ha cominciato a portare volume." },
-  { id: "bilanciato", nome: "Bilanciato", k: 1, quota: "metà per uno", spiega: "La stessa cifra per uno: quello che ti resta in tasca è quanto va a lui." },
+  { id: "fase1",      nome: "Fase 1",     k: 3, quota: "3/4 a te",     spiega: "Sconto del 25%: tre quarti del prezzo li incassi tu, un quarto lo lasci a lui. Si parte da qui." },
+  { id: "fase2",      nome: "Fase 2",     k: 2, quota: "2/3 a te",     spiega: "Sconto del 33,3%: due terzi a te, un terzo a lui. Quando ha cominciato a portare volume." },
+  { id: "bilanciato", nome: "Bilanciato", k: 1, quota: "metà per uno", spiega: "Sconto del 50%: il prezzo si divide a metà. Quanto gli lasci è quanto incassi — poi ognuno con la sua metà fa i conti suoi." },
 ];
 
 export function faseDi(id) {
@@ -142,22 +140,24 @@ export function scenario(riga, k) {
   const a = Number(riga.sicurezza_pct ?? 15) / 100;
   const t = Number(riga.imposte_pct ?? 27.9) / 100;
   if (C == null || !(N > 0)) {
-    return { scontoPct: null, prezzoRivenditore: null, guadagnoRivenditore: null, utile: null, tiResta: null };
+    return { scontoPct: null, prezzoRivenditore: null, guadagnoRivenditore: null,
+             utile: null, tiResta: null, sotto: false, quotaPct: null };
   }
-  const P = 1 - a, T = 1 - t;
-  const esatto = (T * (N * P - C)) / (N * (k + P * T));
-  // a passi di mezzo punto, sempre per DIFETTO: all'intero percento le
-  // fasi strette sbandavano (su un prodotto da pochi euro uno sconto del
-  // 5,9% sceso a 5 sposta il rapporto da 3 a 6). Mezzo punto si dice
-  // ancora al telefono e dimezza lo scarto.
-  const d = Math.max(0, Math.floor(esatto * 200) / 200);
+  // k parti a te, una a lui: la fetta di lui e' 1/(k+1) del prezzo
+  const quota = 1 / (k + 1);
+  // sotto a questo prezzo la merce e il margine di sicurezza non si
+  // pagano piu': il tetto non e' una scelta commerciale, e' il fondo
+  const tetto = Math.max(0, 1 - C / (N * (1 - a)));
+  const d = Math.min(quota, tetto);
   const prezzo = r2(N * (1 - d));
-  const utile = prezzo * P - C;
+  const utile = prezzo * (1 - a) - C;
   return {
     scontoPct: Math.round(d * 1000) / 10,
+    quotaPct: Math.round(quota * 1000) / 10,
+    sotto: d < quota - 1e-9,          // la meta' promessa non ci sta
     prezzoRivenditore: prezzo,
     guadagnoRivenditore: r2(N * d),
     utile: r2(utile),
-    tiResta: r2(utile > 0 ? utile * T : utile),
+    tiResta: r2(utile > 0 ? utile * (1 - t) : utile),
   };
 }

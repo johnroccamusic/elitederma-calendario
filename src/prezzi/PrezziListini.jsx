@@ -53,7 +53,8 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   const conFase = useMemo(() => righe.map((r) => {
     const sc = scenario(r, fase.k);
     return { ...r, sconto_fase_pct: sc.scontoPct, prezzo_fase: sc.prezzoRivenditore,
-             guadagno_riv_fase: sc.guadagnoRivenditore, utile_fase: sc.utile, ti_resta_fase: sc.tiResta };
+             guadagno_riv_fase: sc.guadagnoRivenditore, utile_fase: sc.utile, ti_resta_fase: sc.tiResta,
+             quota_fase_pct: sc.quotaPct, sotto_fase: sc.sotto };
   }), [righe, fase.k]);
   const visibili = useMemo(
     () => conFase.filter((r) => (!q || (r.nome || "").toLowerCase().includes(q)) && (bloccoScelto == null || r.blocco_ordine === bloccoScelto)),
@@ -186,8 +187,8 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
         <h1 style={{ ...stileTitoloPagina, marginTop: 8, marginBottom: 2 }}>{titolo}</h1>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 14 }}>{privato ? "Costi, prezzi e quello che resta in tasca — solo per uso interno" : "Gestione prezzi vendita e rivenditori"}</div>
 
-        {/* Le tre fasi. Non si sceglie uno sconto: si sceglie come dividere
-            il guadagno, e lo sconto viene di conseguenza. */}
+        {/* Le tre fasi. Lo sconto E' la divisione del prezzo: meta', un
+            terzo, un quarto. Niente da calcolare, solo da scegliere. */}
         <div style={{ display: "flex", gap: 6, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 5, marginBottom: 10 }}>
           {FASI.map((f) => {
             const attiva = f.id === faseId;
@@ -282,7 +283,10 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       return (
                         <tr key={r.id} className={manca ? "lst-manca" : undefined} onClick={() => onApriProdotto && onApriProdotto(r.id)}
                           style={{ cursor: onApriProdotto ? "pointer" : "default" }}
-                          title={manca ? motivoSenzaSconto(r) : `${fase.nome}: scontando il ${r.sconto_fase_pct}% il rivenditore paga ${euro(r.prezzo_fase)} e guadagna ${euro(r.guadagno_riv_fase)}; a te restano ${euro(r.utile_fase)} prima delle imposte, ${euro(r.ti_resta_fase)} dopo. Costo della merce ${euro(r.costo_acquisto)}.`}>
+                          title={manca ? motivoSenzaSconto(r)
+                            : r.sotto_fase
+                              ? `${fase.nome} vorrebbe il ${String(r.quota_fase_pct).replace(".", ",")}%, ma a quel prezzo vendi sottocosto: il massimo qui è ${String(r.sconto_fase_pct).replace(".", ",")}%. Lui paga ${euro(r.prezzo_fase)} e ci guadagna ${euro(r.guadagno_riv_fase)}; a te resta ${euro(r.ti_resta_fase)} netto. Merce ${euro(r.costo_acquisto)}.`
+                              : `${fase.nome}: gli lasci ${euro(r.guadagno_riv_fase)} e ne incassi ${euro(r.prezzo_fase)} — il ${String(r.sconto_fase_pct).replace(".", ",")}% del netto. Di quello che incassi, pagata la merce (${euro(r.costo_acquisto)}) e i costi, ti resta ${euro(r.utile_fase)} prima delle imposte e ${euro(r.ti_resta_fase)} dopo.`}>
                           <td className="lst-foto">
                             {r.foto_url
                               ? <img src={r.foto_url} alt="" loading="lazy" decoding="async" />
@@ -296,7 +300,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                             {manca ? (
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
-                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_fase_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_fase_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_fase_pct).replace(".", ",")}%</span>
+                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sotto_fase ? ROSSO : "#8A6D1D", background: r.sotto_fase ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_fase_pct).replace(".", ",")}%</span>
                             )}
                           </td>
                           <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_fase)}</td>
@@ -330,10 +334,12 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
           </p>
         )}
         <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>
-          Lo <b>sconto massimo</b> è la quota che divide il guadagno a metà fra te e il rivenditore:
-          concedendola, pagata la merce e i costi aziendali, a te resta quanto a lui. È arrotondata
-          per difetto a passi di cinque — meglio concedere un punto in meno che uno in più. Il
-          <b> prezzo rivenditore</b> è il pubblico netto meno quello sconto. Ci sono solo i prodotti
+          Lo <b>sconto</b> non è calcolato: è la divisione. In Bilanciato il prezzo netto si taglia a
+          metà, e la cifra che lasci a lui è la stessa che incassi tu; in Fase 2 ne tieni due terzi,
+          in Fase 1 tre quarti. Cosa ciascuno faccia poi con la sua parte — merce, spese, imposte —
+          è affare suo, e per la tua parte lo dicono le colonne «a te». L'unico limite è il fondo:
+          dove metà prezzo non copre la merce e il margine di sicurezza lo sconto si ferma prima e
+          diventa <span style={{ color: ROSSO, fontWeight: 700 }}>rosso</span>. Ci sono solo i prodotti
           in vendita sullo shop: fuori chi non ha prezzo, non è pubblicato o è solo interno.
         </p>
       </div>
