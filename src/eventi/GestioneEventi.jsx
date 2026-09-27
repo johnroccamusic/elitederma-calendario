@@ -12,7 +12,7 @@ import {
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
   periodoEvento, quantiGiorni, usciteAllEvento,
 } from "./dati.js";
-import { leggiConto, calcolaConto } from "./conto.js";
+import { leggiConto, calcolaConto, problemiDiChiusura } from "./conto.js";
 import { supabase } from "../supabase.js";
 
 const euro = (n) => `${(Number(n) || 0).toFixed(2).replace(".", ",")} €`;
@@ -617,9 +617,11 @@ function Riquadro({ titolo, children, sfondo = "#fff", bordo = CREAM_BORDER }) {
   );
 }
 
-function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome }) {
+function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onCambiato }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState("");
+  const [chiedeConferma, setChiedeConferma] = useState(false);
+  const [chiudendo, setChiudendo] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -639,6 +641,21 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome }) {
   if (!conto) return <Vuoto>Sto facendo i conti…</Vuoto>;
 
   const { entrate, omaggi, uscitePerCategoria, usciteTotale, uscite, merce, costoMerce, merceSenzaCosto, righeScartate, risultato, completo } = conto;
+
+  const problemi = problemiDiChiusura(conto);
+
+  async function cambiaStato(nuovo) {
+    setChiudendo(true);
+    try {
+      await salvaEvento(evento.id, { stato: nuovo });
+      setChiedeConferma(false);
+      if (onCambiato) onCambiato();
+    } catch (e) {
+      setErrore(e.message);
+    } finally {
+      setChiudendo(false);
+    }
+  }
   const categorie = Object.keys(uscitePerCategoria)
     .sort((a, b) => (CAT_ORDINE.indexOf(a) - CAT_ORDINE.indexOf(b)) || a.localeCompare(b));
   const inUtile = risultato >= 0;
@@ -747,6 +764,50 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome }) {
         )}
       </Riquadro>
 
+      {evento.stato === "concluso" ? (
+        <Riquadro titolo="Evento chiuso" sfondo="#EAF5EA" bordo="#C7E3C7">
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, color: "#2E7D32", lineHeight: 1.5 }}>
+              Questo evento è chiuso. Il conto resta leggibile e continua ad aggiornarsi se arrivano altre spese.
+            </span>
+            <Button variant="ghost" onClick={() => cambiaStato("programmato")} disabled={chiudendo}>Riapri</Button>
+          </div>
+        </Riquadro>
+      ) : evento.stato !== "annullato" && (
+        <Riquadro titolo="Chiusura" sfondo={problemi.length ? "#FDF8EC" : "#fff"} bordo={problemi.length ? "#EBD9AE" : CREAM_BORDER}>
+          {problemi.length === 0 ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
+                Tutto quadra: la merce partita torna col venduto, le spese sono pagate e hanno un importo.
+              </span>
+              <Button onClick={() => cambiaStato("concluso")} disabled={chiudendo}>{chiudendo ? "Chiudo…" : "Chiudi l'evento"}</Button>
+            </div>
+          ) : (
+            <>
+              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", lineHeight: 1.5, marginBottom: 6 }}>
+                Prima di chiudere, {problemi.length === 1 ? "c'è una cosa" : `ci sono ${problemi.length} cose`} da guardare:
+              </div>
+              <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
+                {problemi.map((p, i) => (
+                  <li key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.6 }}>{p}</li>
+                ))}
+              </ul>
+              {chiedeConferma ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", lineHeight: 1.5 }}>
+                    Chiudo lo stesso? Il conto resterà com'è adesso.
+                  </span>
+                  <Button variant="ghost" onClick={() => setChiedeConferma(false)} disabled={chiudendo}>No, vado a sistemare</Button>
+                  <Button onClick={() => cambiaStato("concluso")} disabled={chiudendo}>{chiudendo ? "Chiudo…" : "Sì, chiudi"}</Button>
+                </div>
+              ) : (
+                <Button variant="ghost" onClick={() => setChiedeConferma(true)}>Chiudi l'evento lo stesso</Button>
+              )}
+            </>
+          )}
+        </Riquadro>
+      )}
+
       {righeScartate.length > 0 && (
         <Riquadro titolo="Non torna" sfondo="#FBEBE9" bordo="#F0C8C2">
           <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", lineHeight: 1.5, marginBottom: 6 }}>
@@ -837,7 +898,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
         {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} prodotti={prodotti} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
-        {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} />}
+        {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} onCambiato={onCambiato} />}
       </div>
     </>
   );

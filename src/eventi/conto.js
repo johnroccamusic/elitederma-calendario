@@ -204,3 +204,23 @@ export function calcolaConto(dati, eventoId, { prodottiShop = [], bundleComponen
     completo: merceSenzaCosto.length === 0,
   };
 }
+
+// Quello che non torna, prima di chiudere. Non blocca — un evento
+// finisce quando è finito, non quando i conti sono belli — ma va detto
+// PRIMA, perché dopo nessuno riapre una fiera per contare i gadget.
+//
+// Sta qui e non dentro al componente perché è la sola parte della
+// chiusura che si possa sbagliare: così si prova con dati veri invece
+// che guardandola.
+export function problemiDiChiusura(conto) {
+  const rientroNonContato = conto.merce.filter((r) => r.portata != null && r.consumata == null);
+  const speseNonPagate = conto.uscite.filter((v) => v.stato && v.stato !== "pagata");
+  return [
+    ...rientroNonContato.map((r) => `${r.nome}: è partito ma non hai segnato quanto è rientrato.`),
+    ...conto.righeScartate.map((r) => r.scarto > 0
+      ? `${r.nome}: ${r.scarto} pz spariti, né rientrati né usciti al POS.`
+      : `${r.nome}: il POS ne ha registrati ${-r.scarto} più di quanti ne risultino partiti.`),
+    ...conto.merceSenzaCosto.map((r) => `${r.nome}: senza costo di acquisto vale zero, e il risultato esce più bello del vero.`),
+    ...speseNonPagate.map((v) => `${v.descrizione}: la spesa è ancora "${v.stato}".`),
+  ];
+}
