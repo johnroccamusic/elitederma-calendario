@@ -39354,7 +39354,136 @@ const AIUTI_TAB_AMMINISTRAZIONE = {
 const LARGHEZZA_SCHEDE_CONTABILITA = 900;
 // lo stacco fra la fila delle tessere e la riga dei filtri sotto
 const SPAZIO_TASTI_FILTRI = 100;
-function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente, ordine, onSalvaOrdine }) {
+// ---------------------------------------------------------------------
+// Le spese pagate a cui manca la data del pagamento.
+//
+// Sezione di passaggio, non un pezzo dell'app: serve a sanare
+// l'arretrato e a sparire. La linguetta si mostra SOLO se c'è ancora
+// qualcosa da sistemare, quindi quando l'ultima riga è a posto se ne va
+// da sola e il codice si può togliere senza che nessuno se ne accorga.
+//
+// Perché conta: la prima nota cassa colloca una spesa a
+// `data_pagamento || data_documento`. Il ripiego è silenzioso — la riga
+// c'è, ma al giorno del documento, che è un'altra cosa e nessuno l'ha
+// deciso. Una riga senza nessuna delle due date non c'è proprio.
+function speseSenzaDataPagamento(spese, corsiDateById) {
+  return (spese || [])
+    .filter((s) => s.stato === "pagata" && !s.data_pagamento)
+    .map((s) => {
+      const classe = s.classe_id ? corsiDateById[s.classe_id] : null;
+      // La regola, dettata il 27/09/2026: una spesa nata nel riepilogo
+      // di un corso si considera pagata l'ultimo giorno di quel corso.
+      // Per tutte le altre il suggerimento è la data del documento —
+      // per un acquisto online pagato sul momento le due coincidono
+      // davvero — ma resta un suggerimento, non una decisione.
+      const daCorso = classe?.data_fine || classe?.data_inizio || null;
+      return {
+        spesa: s,
+        classe,
+        suggerita: daCorso || s.data_documento || "",
+        motivo: daCorso ? "ultimo giorno del corso" : s.data_documento ? "data del documento" : "nessun appiglio: scrivila tu",
+      };
+    })
+    .sort((a, b) => String(a.suggerita || "9999").localeCompare(String(b.suggerita || "9999")));
+}
+
+function PannelloDatePagamentoMancanti({ righe, corsoById, fornitoriById, costiCategorieById, ricarica }) {
+  const [bozze, setBozze] = useState({});
+  const [salvando, setSalvando] = useState(null);
+  const [msg, setMsg] = useState("");
+  const isMobile = useIsMobile();
+
+  const dataDi = (r) => (bozze[r.spesa.id] !== undefined ? bozze[r.spesa.id] : r.suggerita);
+
+  async function salva(r) {
+    const data = dataDi(r);
+    if (!data) { setMsg("Scrivi una data prima di salvare."); return; }
+    setSalvando(r.spesa.id); setMsg("");
+    const { error } = await supabase.from("spese").update({ data_pagamento: data }).eq("id", r.spesa.id);
+    setSalvando(null);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    ricarica(["spese"]);
+  }
+  async function salvaTutte() {
+    const pronte = righe.filter((r) => dataDi(r));
+    if (!pronte.length) return;
+    if (!window.confirm(`Metti la data di pagamento a ${pronte.length} spese?`)) return;
+    setSalvando("tutte"); setMsg("");
+    for (const r of pronte) {
+      const { error } = await supabase.from("spese").update({ data_pagamento: dataDi(r) }).eq("id", r.spesa.id);
+      if (error) { setSalvando(null); setMsg("Errore su “" + (r.spesa.descrizione || "senza nome") + "”: " + testoErrore(error)); ricarica(["spese"]); return; }
+    }
+    setSalvando(null);
+    ricarica(["spese"]);
+  }
+
+  const totale = round2(righe.reduce((t, r) => t + (Number(r.spesa.totale) || 0), 0));
+  const senzaAppiglio = righe.filter((r) => !r.suggerita).length;
+
+  return (
+    <div>
+      <div style={{ ...cardStyle, padding: isMobile ? "14px 14px" : "16px 20px", marginBottom: 14 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 21, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>
+          {righe.length} spes{righe.length === 1 ? "a" : "e"} pagat{righe.length === 1 ? "a" : "e"} senza la data del pagamento
+        </div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 6, lineHeight: 1.6 }}>
+          Sono {fmtEuroErp2(totale)}. In prima nota cassa ci sono già, ma al <b>giorno del documento</b>: è il ripiego
+          di <code style={{ ...fontBody }}>data_pagamento || data_documento</code>, e nessuno l'ha scelto.
+          {senzaAppiglio > 0 && <> {senzaAppiglio === 1 ? "Una" : senzaAppiglio} non ha nemmeno quella, quindi oggi dalla prima nota è proprio fuori.</>}
+          {" "}Metti la data giusta e la riga si toglie da questo elenco. Quando l'elenco è vuoto, la linguetta sparisce.
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+          <Button onClick={salvaTutte} disabled={salvando !== null}>
+            {salvando === "tutte" ? "Salvo…" : "Applica tutte le date proposte"}
+          </Button>
+          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 200px", minWidth: 0, lineHeight: 1.45 }}>
+            La proposta è l'ultimo giorno del corso per le spese nate in un riepilogo, la data del documento per le altre.
+          </span>
+        </div>
+        {msg && <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", marginTop: 8 }}>{msg}</div>}
+      </div>
+
+      {righe.map((r) => {
+        const s = r.spesa;
+        const corso = r.classe ? corsoById[r.classe.corso_id] : null;
+        return (
+          <div key={s.id} style={{ ...cardStyle, padding: isMobile ? "10px 12px" : "12px 16px", marginBottom: 8,
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                {s.descrizione || "(senza descrizione)"}
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2, lineHeight: 1.45 }}>
+                {[
+                  costiCategorieById[s.categoria_id]?.nome,
+                  s.fornitore_id ? fornitoriById[s.fornitore_id]?.nome : null,
+                  s.metodo_pagamento,
+                  corso && r.classe ? `${corso.nome} · fine ${fmtData(r.classe.data_fine || r.classe.data_inizio)}` : null,
+                  s.data_documento ? `documento ${fmtData(s.data_documento)}` : "nessuna data di documento",
+                ].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(s.totale)}</div>
+            <div style={{ flex: "0 1 170px", minWidth: 0 }}>
+              <input
+                type="date"
+                style={{ ...inputStyle, padding: "7px 9px", fontSize: 13, minWidth: 0, maxWidth: "100%" }}
+                value={dataDi(r)}
+                onChange={(e) => setBozze((p) => ({ ...p, [s.id]: e.target.value }))}
+              />
+              <div style={{ ...fontBody, fontSize: 10, color: MUTED, marginTop: 2 }}>{r.motivo}</div>
+            </div>
+            <Button variant="ghost" onClick={() => salva(r)} disabled={salvando !== null || !dataDi(r)}>
+              {salvando === s.id ? "Salvo…" : "Salva"}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, dateMancantiCount = 0, ruoloUtente, ordine, onSalvaOrdine }) {
   const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
   const aiuto = (chiave) => ({ chiave: `amministrazione.${chiave}`, testo: AIUTI_TAB_AMMINISTRAZIONE[chiave], ruoloUtente });
@@ -39380,6 +39509,12 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
     { chiave: "fondocassa", titolo: "Cassa contanti", sotto: "Entrate e uscite contanti", Icona: IconaTileCassaContanti },
     { chiave: "consulenze", titolo: "Cassa consulenze", sotto: "", Icona: IconaTileCassaConsulenze },
     { chiave: "abbonamenti", titolo: `Abbonamenti e contratti (${abbonamentiCount})`, sotto: "Gestione ricorrenti", Icona: IconaTileAbbonamenti },
+    // Di passaggio: c'è solo finché c'è arretrato da sistemare. Sanata
+    // l'ultima riga sparisce da sola, e il codice si toglie senza che
+    // nessuno se ne accorga.
+    ...(dateMancantiCount > 0
+      ? [{ chiave: "datepagamento", titolo: `Date di pagamento (${dateMancantiCount})`, sotto: "Spese pagate senza la data", Icona: IconaTilePrimaNota, badge: dateMancantiCount }]
+      : []),
   ];
 
   // In coda le schede mai viste in un ordine salvato: una scheda aggiunta
@@ -44434,6 +44569,10 @@ function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = [], ruolo
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
   const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
+  // sezione di passaggio: la linguetta esiste solo finché c'è arretrato
+  const corsiDateByIdContab = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const corsoByIdContab = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const righeSenzaDataPagamento = speseSenzaDataPagamento(spese, corsiDateByIdContab);
   // Registro documenti fornitore: ciascuna riga di fatture_ricevute_fic
   // ha una gemella in documento_fornitore (stesso fic_id, popolate
   // insieme da fic-sync-documenti) — da qui il pulsante giusto per
@@ -45311,6 +45450,7 @@ function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = [], ruolo
           passivoCount={daPagare.length}
           attivoCount={scadenziarioAttivo.length}
           abbonamentiCount={(abbonamentiContratti || []).length}
+          dateMancantiCount={righeSenzaDataPagamento.length}
           ruoloUtente={ruoloUtente}
         />
 
@@ -45759,6 +45899,23 @@ function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = [], ruolo
               </div>
             )}
           </div>
+        )}
+
+        {tab === "datepagamento" && (
+          righeSenzaDataPagamento.length > 0 ? (
+            <PannelloDatePagamentoMancanti
+              righe={righeSenzaDataPagamento}
+              corsoById={corsoByIdContab}
+              fornitoriById={fornitoriById}
+              costiCategorieById={costiCategorieById}
+              ricarica={ricarica}
+            />
+          ) : (
+            <div style={{ ...cardStyle, padding: "20px 24px", ...fontBody, fontSize: 13.5, color: "#2E7D32", lineHeight: 1.6 }}>
+              Non c'è più nessuna spesa pagata senza data di pagamento. Questa sezione ha finito il suo lavoro:
+              alla prossima apertura della Contabilità la linguetta non ci sarà più.
+            </div>
+          )
         )}
 
         {tab === "abbonamenti" && (
