@@ -4117,7 +4117,14 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
           </div>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : `repeat(${colonneEffettive}, 1fr)`, gap: isMobile ? 14 : 16, rowGap: isMobile ? 21 : 16 }}>
+      {/* Lo spazio VERTICALE fra i tasti sceso del 10% il 28/09/2026:
+          da telefono 21 -> 19, da computer 16 -> 14. Solo rowGap, non
+          `gap`: quello orizzontale separa colonne che stanno gia'
+          strette e toccarlo attaccherebbe i tasti fra loro.
+          Questa griglia e' una sola e la usano tutte: la home e le
+          sottopagine (Statistiche, Amministrazione, Normative,
+          Compensi, CRM). */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : `repeat(${colonneEffettive}, 1fr)`, gap: isMobile ? 14 : 16, rowGap: isMobile ? 19 : 14 }}>
         {listaVisibile.map((nodo) => {
           const isCartella = typeof nodo === "object" && nodo?.tipo === "cartella";
           const chiave = isCartella ? nodo.id : nodo;
