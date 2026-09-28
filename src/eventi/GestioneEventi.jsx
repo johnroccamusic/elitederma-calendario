@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, BG_CHIARO, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
+import SelettorePeriodo from "../ui/SelettorePeriodo.jsx";
 import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
@@ -174,8 +175,18 @@ function ModuloEvento({ evento, location, onSalvato, onAnnulla }) {
         <input style={inputStyle} value={f.nome} onChange={(e) => cambia("nome", e.target.value)} placeholder="es. Cosmoprof Bologna" />
       </Field>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 150px" }}><Field label="Dal"><input type="date" style={inputStyle} value={f.data_inizio} onChange={(e) => cambia("data_inizio", e.target.value)} /></Field></div>
-        <div style={{ flex: "1 1 150px" }}><Field label="Al (vuoto = un giorno solo)"><input type="date" style={inputStyle} value={f.data_fine} onChange={(e) => cambia("data_fine", e.target.value)} /></Field></div>
+        {/* un controllo solo: si tocca il primo giorno e poi l'ultimo,
+            e in mezzo si vede la striscia. Due caselle costringevano a
+            capire da soli se la seconda veniva dopo la prima */}
+        <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+          <Field label="Quando">
+            <SelettorePeriodo
+              da={f.data_inizio} a={f.data_fine || f.data_inizio}
+              vuoto="Tocca qui e scegli i giorni"
+              onCambia={({ da, a }) => setF((p) => ({ ...p, data_inizio: da, data_fine: a }))}
+            />
+          </Field>
+        </div>
       </div>
       <Field label="Sede già in anagrafica (opzionale)">
         <select style={inputStyle} value={f.location_id} onChange={(e) => scegliSede(e.target.value)}>
@@ -186,8 +197,8 @@ function ModuloEvento({ evento, location, onSalvato, onAnnulla }) {
         </select>
       </Field>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 150px" }}><Field label="Città"><input style={inputStyle} value={f.citta} onChange={(e) => cambia("citta", e.target.value)} /></Field></div>
-        <div style={{ flex: "1 1 150px" }}><Field label="Luogo"><input style={inputStyle} value={f.nome_luogo} onChange={(e) => cambia("nome_luogo", e.target.value)} placeholder="es. Fiera di Bologna, pad. 32" /></Field></div>
+        <div style={{ flex: "1 1 150px", minWidth: 0 }}><Field label="Città"><input style={inputStyle} value={f.citta} onChange={(e) => cambia("citta", e.target.value)} /></Field></div>
+        <div style={{ flex: "1 1 150px", minWidth: 0 }}><Field label="Luogo"><input style={inputStyle} value={f.nome_luogo} onChange={(e) => cambia("nome_luogo", e.target.value)} placeholder="es. Fiera di Bologna, pad. 32" /></Field></div>
       </div>
       <Field label="Indirizzo"><input style={inputStyle} value={f.indirizzo} onChange={(e) => cambia("indirizzo", e.target.value)} /></Field>
       <Field label="Stato">
@@ -454,7 +465,7 @@ function SchedaTrasferimenti({ eventoId, team }) {
       {righe.map((r) => (
         <div key={r.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 10, background: "#fff" }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div style={{ flex: "0 0 140px" }}>
+            <div style={{ flex: "0 0 140px", minWidth: 0 }}>
               <Field label="Come">
                 <select style={campoRiga} defaultValue={r.tipo || "treno"} onChange={(e) => salvaRiga("eventi_trasferimenti", r.id, { tipo: e.target.value }).then(ricarica)}>
                   {TIPI_TRASFERIMENTO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
@@ -470,16 +481,16 @@ function SchedaTrasferimenti({ eventoId, team }) {
             <TastoCestino onClick={() => eliminaRiga("eventi_trasferimenti", r.id).then(ricarica)} />
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 140px" }}><Field label="Da"><input style={campoRiga} defaultValue={r.da_dove || ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { da_dove: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
-            <div style={{ flex: "1 1 140px" }}><Field label="A"><input style={campoRiga} defaultValue={r.a_dove || ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { a_dove: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
+            <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Da"><input style={campoRiga} defaultValue={r.da_dove || ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { da_dove: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
+            <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="A"><input style={campoRiga} defaultValue={r.a_dove || ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { a_dove: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 170px" }}><Field label="Partenza"><input type="datetime-local" style={campoRiga} defaultValue={r.partenza ? String(r.partenza).slice(0, 16) : ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { partenza: e.target.value || null }).then(ricarica)} /></Field></div>
-            <div style={{ flex: "1 1 170px" }}><Field label="Arrivo"><input type="datetime-local" style={campoRiga} defaultValue={r.arrivo ? String(r.arrivo).slice(0, 16) : ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { arrivo: e.target.value || null }).then(ricarica)} /></Field></div>
+            <div style={{ flex: "1 1 170px", minWidth: 0 }}><Field label="Partenza"><input type="datetime-local" style={campoRiga} defaultValue={r.partenza ? String(r.partenza).slice(0, 16) : ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { partenza: e.target.value || null }).then(ricarica)} /></Field></div>
+            <div style={{ flex: "1 1 170px", minWidth: 0 }}><Field label="Arrivo"><input type="datetime-local" style={campoRiga} defaultValue={r.arrivo ? String(r.arrivo).slice(0, 16) : ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { arrivo: e.target.value || null }).then(ricarica)} /></Field></div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 160px" }}><Field label="Riferimento (biglietto, targa, prenotazione)"><input style={campoRiga} defaultValue={r.riferimento || ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { riferimento: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
-            <div style={{ flex: "0 0 110px" }}><Field label="Costo"><input type="number" min="0" step="0.01" style={campoRiga} defaultValue={r.costo ?? ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { costo: e.target.value === "" ? null : Number(e.target.value) }).then(ricarica)} /></Field></div>
+            <div style={{ flex: "1 1 160px", minWidth: 0 }}><Field label="Riferimento (biglietto, targa, prenotazione)"><input style={campoRiga} defaultValue={r.riferimento || ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { riferimento: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
+            <div style={{ flex: "0 0 110px", minWidth: 0 }}><Field label="Costo"><input type="number" min="0" step="0.01" style={campoRiga} defaultValue={r.costo ?? ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { costo: e.target.value === "" ? null : Number(e.target.value) }).then(ricarica)} /></Field></div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
             {r.allegato_path ? (
@@ -551,7 +562,7 @@ function SchedaHotel({ eventoId, evento, team, hotel }) {
         return (
           <div key={g.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 14, marginBottom: 12, background: "#fff" }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <div style={{ flex: "1 1 130px" }}><Field label="Gruppo"><input style={campoRiga} defaultValue={g.nome || ""} onBlur={(e) => salvaRiga("eventi_hotel_gruppi", g.id, { nome: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
+              <div style={{ flex: "1 1 130px", minWidth: 0 }}><Field label="Gruppo"><input style={campoRiga} defaultValue={g.nome || ""} onBlur={(e) => salvaRiga("eventi_hotel_gruppi", g.id, { nome: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
               <div style={{ flex: "1 1 180px", minWidth: 0 }}>
                 <Field label="Hotel">
                   <input style={campoRiga} defaultValue={g.hotel_nome || ""} list={`hotel-${eventoId}`} placeholder="nome dell'hotel"
@@ -561,9 +572,17 @@ function SchedaHotel({ eventoId, evento, team, hotel }) {
               <TastoCestino titolo="Elimina il gruppo e le sue stanze" onClick={() => { if (window.confirm(`Elimino "${g.nome || "questo gruppo"}" e le sue stanze?`)) supabase.from("eventi_hotel_gruppi").delete().eq("id", g.id).then(ricarica); }} />
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 140px" }}><Field label="Dal"><input type="date" style={campoRiga} defaultValue={g.check_in || ""} onBlur={(e) => salvaRiga("eventi_hotel_gruppi", g.id, { check_in: e.target.value || null }).then(ricarica)} /></Field></div>
-              <div style={{ flex: "1 1 140px" }}><Field label="Al"><input type="date" style={campoRiga} defaultValue={g.check_out || ""} onBlur={(e) => salvaRiga("eventi_hotel_gruppi", g.id, { check_out: e.target.value || null }).then(ricarica)} /></Field></div>
-              <div style={{ flex: "1 1 140px" }}><Field label="Prenotazione"><input style={campoRiga} defaultValue={g.riferimento || ""} onBlur={(e) => salvaRiga("eventi_hotel_gruppi", g.id, { riferimento: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
+              <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                <Field label="Notti">
+                  <SelettorePeriodo
+                    da={g.check_in || ""} a={g.check_out || ""}
+                    vuoto="Check-in e check-out"
+                    stile={{ padding: "8px 10px", fontSize: 13 }}
+                    onCambia={({ da, a }) => salvaRiga("eventi_hotel_gruppi", g.id, { check_in: da || null, check_out: a || null }).then(ricarica)}
+                  />
+                </Field>
+              </div>
+              <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Prenotazione"><input style={campoRiga} defaultValue={g.riferimento || ""} onBlur={(e) => salvaRiga("eventi_hotel_gruppi", g.id, { riferimento: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
             </div>
 
             {sue.map((s) => (

@@ -32,6 +32,7 @@ import QrConsensi from "./consensi/QrConsensi.jsx";
 import Ricevuta from "./pos/Ricevuta.jsx";
 import GestioneEventi from "./eventi/GestioneEventi.jsx";
 import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
+import SelettorePeriodo from "./ui/SelettorePeriodo.jsx";
 import PrezziListini from "./prezzi/PrezziListini.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
@@ -9162,12 +9163,12 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
             {opzioniMese.map((o) => <option key={o.valore} value={o.valore}>{o.etichetta}</option>)}
           </select>
         </Field>
-        <Field label="Dal">
-          <input type="date" style={inputStyle} value={da} onChange={(e) => { setDa(e.target.value); setPeriodoSel(""); }} />
-        </Field>
-        <Field label="Al">
-          <input type="date" style={inputStyle} value={a} onChange={(e) => { setA(e.target.value); setPeriodoSel(""); }} />
-        </Field>
+        <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+          <Field label="Oppure scegli i giorni">
+            <SelettorePeriodo da={da} a={a} vuoto="Tocca e scegli il periodo"
+              onCambia={({ da: d, a: f }) => { setDa(d); setA(f); setPeriodoSel(""); }} />
+          </Field>
+        </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 22, ...fontBody, fontSize: 13.5, color: NAVY }}>
@@ -58490,8 +58491,10 @@ function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
           <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{pe.nome || `Periodo ${i + 1}`}</div>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 150px 150px auto", gap: 8, alignItems: "end", marginBottom: 6 }}>
             <Field label="Nome (facoltativo)"><input style={inputStyle} defaultValue={pe.nome || ""} placeholder="Alta stagione, fiera…" onBlur={(e) => { if (e.target.value !== (pe.nome || "")) salvaPeriodo(pe.id, "nome", e.target.value); }} /></Field>
-            <Field label="Dal"><input type="date" style={inputStyle} defaultValue={pe.data_inizio || ""} onBlur={(e) => { if (e.target.value !== (pe.data_inizio || "")) salvaPeriodo(pe.id, "data_inizio", e.target.value); }} /></Field>
-            <Field label="Al"><input type="date" style={inputStyle} defaultValue={pe.data_fine || ""} onBlur={(e) => { if (e.target.value !== (pe.data_fine || "")) salvaPeriodo(pe.id, "data_fine", e.target.value); }} /></Field>
+            <Field label="Quando">
+              <SelettorePeriodo da={pe.data_inizio || ""} a={pe.data_fine || ""} vuoto="Scegli i giorni"
+                onCambia={({ da, a }) => { salvaPeriodo(pe.id, "data_inizio", da); salvaPeriodo(pe.id, "data_fine", a); }} />
+            </Field>
             <button onClick={() => eliminaPeriodo(pe.id)} title="Elimina periodo" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}>Elimina</button>
           </div>
           {bloccoStanze(pe.id)}
@@ -70421,8 +70424,12 @@ function SezioneAnalisiCosti({
           </div>
           {periodo === "personalizzato" && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-              <Field label="Dal"><input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} /></Field>
-              <Field label="Al"><input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} /></Field>
+              <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+                <Field label="Da quando a quando">
+                  <SelettorePeriodo da={customDa} a={customA} vuoto="Scegli il periodo"
+                    onCambia={({ da, a }) => { setCustomDa(da); setCustomA(a); }} />
+                </Field>
+              </div>
             </div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -71560,8 +71567,12 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                 )}
               </Field>
             </div>
-            <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Competenza dal"><input type="date" style={inputStyle} value={competenzaDa} onChange={(e) => setCompetenzaDa(e.target.value)} /></Field></div>
-            <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Competenza al"><input type="date" style={inputStyle} value={competenzaA} onChange={(e) => setCompetenzaA(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+              <Field label="Competenza">
+                <SelettorePeriodo da={competenzaDa} a={competenzaA} vuoto="A quale periodo si riferisce"
+                  onCambia={({ da, a }) => { setCompetenzaDa(da); setCompetenzaA(a); }} />
+              </Field>
+            </div>
           </div>
 
           <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, margin: "12px 0 6px" }}>
