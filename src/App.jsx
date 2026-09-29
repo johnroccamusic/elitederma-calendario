@@ -28426,57 +28426,35 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     page.drawText(testo, { x, y, size: fontSize, font, color: rgbFn(r, g, b) });
   }
 
-  // IL DIPLOMA DEL PACCHETTO VINCE SU TUTTO. Regola dettata, e ribadita
-  // il 30/09/2026: se l'allieva ha un pacchetto e quel pacchetto ha un
-  // suo modello, si stampa quello. Punto.
+  // IL DIPLOMA VIENE SOLO DAL PACCHETTO. Nessun ripiego, nessuna
+  // eccezione. Regola dettata il 30/09/2026: "unici diplomi che valgono
+  // sono quelli associati ai pacchetti".
   //
-  // Prima c'era una condizione in piu' — `kit.corso_id === corso.id` —
-  // che buttava via il modello del pacchetto quando il pacchetto era
-  // nato sotto un'altra definizione di corso, e faceva scattare il
-  // ripiego. Il ripiego pesca "l'ultimo diploma caricato fra i pacchetti
-  // di questo corso", che e' il diploma DI UN'ALTRA PERSONA: un'allieva
-  // di Labbra + Eyeliner poteva uscire col certificato di Sopracciglia e
-  // Labbra senza che nessuno se ne accorgesse.
+  // C'erano due strade in piu', e tutte e due potevano stampare il
+  // certificato di un'altra persona: una condizione `kit.corso_id ===
+  // corso.id` che buttava via il modello del pacchetto quando il
+  // pacchetto era nato sotto un'altra definizione di corso, e un
+  // ripiego sull'"ultimo diploma caricato fra i pacchetti di questo
+  // corso". Un'allieva di Labbra + Eyeliner poteva uscire col diploma
+  // di Sopracciglia e Labbra senza che nessuno se ne accorgesse.
   //
-  // Il ripiego resta solo per chi un pacchetto non ce l'ha proprio — ma
-  // adesso chi lo riceve viene detto per nome prima di stampare, perche'
-  // un diploma sbagliato in mano a un'allieva non si ritira piu'.
+  // Adesso: o il pacchetto ha il suo modello, o quell'allieva non ha un
+  // diploma e lo si dice. Meglio una stampa in meno che una sbagliata:
+  // un diploma consegnato non si ritira piu'.
   const kitPerIdDiplomi = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
-  const tsDiploma = (k) => Number((String(k?.diploma_path || "").match(/diploma-(\d+)-/) || [])[1] || 0);
-  const ultimoDiplomaDelCorso = (kitDefinizioni || [])
-    .filter((k) => k.corso_id === corso?.id && k.diploma_path)
-    .sort((a, b) => tsDiploma(b) - tsDiploma(a))[0]?.diploma_path || null;
   const percorsoDiplomaDi = (iscritto) => {
     const kit = iscritto?.kit_id ? kitPerIdDiplomi[iscritto.kit_id] : null;
-    if (kit?.diploma_path) return kit.diploma_path;
-    return ultimoDiplomaDelCorso;
+    return kit?.diploma_path || null;
   };
-  // chi sta per ricevere un modello che non e' del suo pacchetto
-  const conDiplomaDiRipiego = () => (listaIscritti || []).filter((i) => {
-    const kit = i?.kit_id ? kitPerIdDiplomi[i.kit_id] : null;
-    return !kit?.diploma_path && ultimoDiplomaDelCorso;
-  });
 
   async function stampaDiplomi() {
     if (listaIscritti.length > 0 && !listaIscritti.some((i) => percorsoDiplomaDi(i))) {
-      window.alert('Nessun modello di diploma: si carica sul pacchetto, in Impostazioni → Tipologie di kit.');
+      window.alert("Nessun diploma da stampare: nessuno dei pacchetti di questa classe ha un modello.\n\nSi carica sul pacchetto, in Impostazioni → Tipologie di kit.");
       return;
     }
     if (listaIscritti.length === 0) {
       window.alert("Non ci sono iscritti in questa classe.");
       return;
-    }
-    // il ripiego non e' piu' silenzioso: chi riceve il modello di un
-    // altro pacchetto viene detto per nome, e si conferma prima
-    const diRipiego = conDiplomaDiRipiego();
-    if (diRipiego.length > 0) {
-      const nomi = diRipiego.map((i) => `${i.nome} ${i.cognome}`).join(", ");
-      const quale = String(ultimoDiplomaDelCorso).split("/").pop();
-      if (!window.confirm(
-        `Il pacchetto di ${nomi} non ha un suo modello di diploma.\n\n` +
-        `Stamperei per loro l'ultimo modello caricato su questo corso:\n${quale}\n\n` +
-        `Se non è quello giusto, annulla e carica il modello sul pacchetto (Impostazioni → Tipologie di kit).\n\nStampo lo stesso?`
-      )) return;
     }
     setGenerandoDiplomi(true);
     try {
@@ -28600,11 +28578,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       }
 
       if (outputPdf.getPageCount() === 0) {
-        window.alert(`Nessun diploma generato: nessun pacchetto di questo corso ha un modello di diploma (${senzaModello.join(", ")}).`);
+        window.alert(`Nessun diploma generato — questi pacchetti non hanno un modello: ${senzaModello.join(", ")}.`);
         return;
       }
       if (senzaModello.length > 0) {
-        window.alert(`Diplomi generati, tranne per: ${senzaModello.join(", ")} — nessun pacchetto di questo corso ha un modello di diploma.`);
+        window.alert(`Diplomi generati, tranne per: ${senzaModello.join(", ")} — il loro pacchetto non ha un modello di diploma. Caricalo in Impostazioni → Tipologie di kit e ristampa solo per loro.`);
       }
       const bytesFinali = await outputPdf.save();
       const blob = new Blob([bytesFinali], { type: "application/pdf" });
