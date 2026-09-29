@@ -44527,7 +44527,11 @@ function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = [], ruolo
       headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
     });
     setSincronizzandoFic(false);
-    if (error) { setMsgFic("Errore: " + testoErrore(error)); return; }
+    // il messaggio vero sta nel CORPO della risposta, non nel message:
+    // quando la funzione risponde 502 invoke() dice solo "Edge Function
+    // returned a non-2xx status code", e "Fatture in Cloud ha risposto
+    // 401" — che e' la sola frase utile — resta dentro error.context
+    if (error) { setMsgFic("Errore: " + await testoErroreFunzione(error)); return; }
     if (data?.errore) { setMsgFic("Errore: " + data.errore); return; }
     setMsgFic(`Sincronizzate ${data?.importati ?? 0} fatture.`);
     ricarica(["fatture_ricevute_fic"]);
@@ -44549,7 +44553,7 @@ function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = [], ruolo
       headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
     });
     setSincronizzandoNoteCredito(false);
-    if (error) { setMsgNoteCredito("Errore: " + testoErrore(error)); return; }
+    if (error) { setMsgNoteCredito("Errore: " + await testoErroreFunzione(error)); return; }
     const esito = data?.esiti?.[0];
     if (esito?.esito === "errore") { setMsgNoteCredito("Errore: " + esito.messaggio); return; }
     setMsgNoteCredito(`Sincronizzati ${esito?.ricevuti ?? 0} documenti ricevuti.`);

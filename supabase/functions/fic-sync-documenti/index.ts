@@ -5,18 +5,26 @@
 // duplica nulla. Richiamabile dal tasto "Sincronizza da Fatture in
 // Cloud" in Registro documenti fornitore.
 //
-// Rinnova da solo l'access_token quando è scaduto (o vicino a
-// scadere), usando il refresh_token salvato da fic-oauth-callback —
-// l'utente non deve mai rifare l'autorizzazione a mano. La stessa
-// logica di rinnovo è duplicata (non importata da un file condiviso)
-// in fic-documento-allegato: ogni Edge Function qui va deployata come
-// bundle a sé, niente import relativi fra funzioni diverse.
+// IL TOKEN È UNO SOLO, e si legge da fic_connessioni.
+//
+// Prima questa funzione aveva il suo, preso da fatture_in_cloud_config,
+// mentre fic-sync usava quello di fic_connessioni. Sono due
+// autorizzazioni OAuth diverse sulla stessa azienda, e Fatture in Cloud
+// fa ruotare il refresh token: rinnovare da una parte INVALIDA l'access
+// token dell'altra. Il 29/09/2026 le due sincronizzazioni sono partite
+// insieme alle 05:00, hanno rinnovato a quattro secondi di distanza, e
+// da quel momento questa qui rispondeva 401 a ogni chiamata — mentre
+// l'altra funzionava, il che rendeva la cosa incomprensibile.
+//
+// Adesso si passa da leggiConnessione/tokenValido di _shared/fic.ts:
+// una sola connessione, un solo rinnovo, nessuno che scalza l'altro.
 //
 // Variabili d'ambiente richieste (Supabase → Edge Functions → Secrets):
 //   FIC_CLIENT_ID
 //   FIC_CLIENT_SECRET
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { leggiConnessione, tokenValido } from "../_shared/fic.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -30,56 +38,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-async function caricaConfigFic() {
-  const { data, error } = await supabase
-    .from("fatture_in_cloud_config")
-    .select("*")
-    .order("ts", { ascending: false })
-    .limit(1);
-  if (error || !data || data.length === 0) {
-    return { config: null, errore: "Nessun collegamento a Fatture in Cloud trovato — va completata prima l'autorizzazione OAuth." };
-  }
-  return { config: data[0], errore: null as string | null };
-}
-
-async function rinnovaTokenSeServe(config: any) {
-  const scadeIl = config.token_scade_il ? new Date(config.token_scade_il).getTime() : 0;
-  if (scadeIl - Date.now() > 5 * 60 * 1000) {
-    return { accessToken: config.access_token as string, errore: null as string | null };
-  }
-
-  const clientId = Deno.env.get("FIC_CLIENT_ID");
-  const clientSecret = Deno.env.get("FIC_CLIENT_SECRET");
-  if (!clientId || !clientSecret) {
-    return { accessToken: null, errore: "Configurazione Fatture in Cloud mancante (FIC_CLIENT_ID/FIC_CLIENT_SECRET)" };
-  }
-
-  const risposta = await fetch("https://api-v2.fattureincloud.it/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "refresh_token",
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: config.refresh_token,
-    }),
-  });
-  if (!risposta.ok) {
-    const testo = await risposta.text();
-    return { accessToken: null, errore: `Rinnovo token fallito: ${risposta.status} — ${testo}` };
-  }
-  const token = await risposta.json();
-  const nuovaScadenza = new Date(Date.now() + (token.expires_in || 86400) * 1000).toISOString();
-
-  await supabase.from("fatture_in_cloud_config").update({
-    access_token: token.access_token,
-    refresh_token: token.refresh_token,
-    token_scade_il: nuovaScadenza,
-  }).eq("id", config.id);
-
-  return { accessToken: token.access_token as string, errore: null as string | null };
-}
 
 // da ReceivedDocument (vedi models/schemas/ReceivedDocument.yaml) alla
 // riga di fatture_ricevute_fic
@@ -204,17 +162,21 @@ Deno.serve(async (req) => {
   }
   const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
-  const { config, errore: erroreConfig } = await caricaConfigFic();
-  if (erroreConfig || !config) {
-    return new Response(JSON.stringify({ errore: erroreConfig }), { status: 400, headers: jsonHeaders });
+  let config;
+  try {
+    config = await leggiConnessione(supabase);
+  } catch (e) {
+    return new Response(JSON.stringify({ errore: String((e as Error).message || e) }), { status: 400, headers: jsonHeaders });
   }
   if (!config.company_id) {
-    return new Response(JSON.stringify({ errore: "Azienda Fatture in Cloud non impostata su fatture_in_cloud_config.company_id." }), { status: 400, headers: jsonHeaders });
+    return new Response(JSON.stringify({ errore: "Azienda Fatture in Cloud non impostata: manca company_id sulla connessione." }), { status: 400, headers: jsonHeaders });
   }
 
-  const { accessToken, errore: erroreToken } = await rinnovaTokenSeServe(config);
-  if (erroreToken || !accessToken) {
-    return new Response(JSON.stringify({ errore: erroreToken || "Token non disponibile" }), { status: 502, headers: jsonHeaders });
+  let accessToken: string;
+  try {
+    accessToken = await tokenValido(supabase, config);
+  } catch (e) {
+    return new Response(JSON.stringify({ errore: String((e as Error).message || e) }), { status: 502, headers: jsonHeaders });
   }
 
   let pagina = 1;
@@ -269,7 +231,11 @@ Deno.serve(async (req) => {
   // ricorrenti (§6.4) arriverà come parte del motore di match
   await supabase.from("documento_fornitore").update({ stato: "da_riconciliare" }).eq("stato", "importato");
 
-  await supabase.from("fatture_in_cloud_config").update({ ultima_sincronizzazione: new Date().toISOString() }).eq("id", config.id);
+  // la data dell'ultima sincronizzazione resta su fatture_in_cloud_config,
+  // che e' dove la pagina la legge; il token invece non sta piu' qui
+  await supabase.from("fatture_in_cloud_config")
+    .update({ ultima_sincronizzazione: new Date().toISOString() })
+    .eq("company_id", config.company_id);
 
   return new Response(JSON.stringify({ importati, pagineProcessate: pagina, completato }), { status: 200, headers: jsonHeaders });
 });
