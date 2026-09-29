@@ -68370,8 +68370,32 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       fineLavorazione(corsoData.id);
     }
   }
+  // Lo stato SCRITTO, riletto adesso dal database — non quello che
+  // questa pagina ha in memoria.
+  //
+  // Lo scarico dei kit non riscarica mai il valore assoluto: applica la
+  // DIFFERENZA fra quanto serve ora e quanto risulta gia' scaricato. Se
+  // quel "gia' scaricato" e' vecchio, la differenza e' sbagliata e i
+  // pezzi escono una seconda volta. E' successo davvero: PMU BASE INDIV
+  // a Udine, il 22/09, tre giri fra le 15:26 e le 15:31 — lame, anellini
+  // e cancelleria usciti due e tre volte. La guardia contro il doppio
+  // clic non basta, perche' protegge questa scheda e non il database:
+  // due schede aperte, o un ricarica() che non e' ancora atterrato, e la
+  // memoria mente.
+  async function statoScrittoDi(corsoDataId) {
+    const { data, error } = await supabase
+      .from("logistica_kit_edizioni").select("*").eq("corso_data_id", corsoDataId).maybeSingle();
+    // se il database non risponde ci si ferma: meglio non scaricare che
+    // scaricare due volte
+    if (error) return { errore: error.message, stato: null };
+    return { errore: null, stato: data || statoDi(corsoDataId) };
+  }
   async function sincronizzaMagazzinoInterno(corsoData) {
-    const stato = statoDi(corsoData.id);
+    const { errore: erroreStato, stato } = await statoScrittoDi(corsoData.id);
+    if (erroreStato) {
+      mostraAvviso("Non riesco a rileggere cosa risulta già scaricato per questo corso — " + erroreStato + "\n\nNon ho toccato il magazzino: riprova fra un momento.");
+      return false;
+    }
     const richiesti = totaleKitPerEdizione(iscritti.filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni, corsoData.corso_id, stato.riserva_per_kit);
     const scaricoAttuale = stato.scarico_per_kit || {};
 
@@ -68533,7 +68557,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // ritirato dal corriere" (annulla lo scarico appena fatto) — nessuno
   // dei due tocca qui la fase, ci pensa chi chiama
   async function ripristinaMagazzinoDaScaricoInterno(corsoData) {
-    const stato = statoDi(corsoData.id);
+    // stessa ragione dello scarico: si ripristina quello che risulta
+    // scritto, non quello che la pagina ricorda
+    const { errore: erroreStato, stato } = await statoScrittoDi(corsoData.id);
+    if (erroreStato) {
+      mostraAvviso("Non riesco a rileggere cosa risulta scaricato per questo corso — " + erroreStato + "\n\nNon ho toccato il magazzino: riprova fra un momento.");
+      return;
+    }
     const scaricoAttuale = stato.scarico_per_kit || {};
     const deltaPerProdotto = {};
     Object.entries(scaricoAttuale).forEach(([kitId, quantita]) => {
