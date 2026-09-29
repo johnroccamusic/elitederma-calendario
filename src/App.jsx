@@ -28426,14 +28426,21 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     page.drawText(testo, { x, y, size: fontSize, font, color: rgbFn(r, g, b) });
   }
 
-  // il modello di diploma di un allievo viene SOLO dai pacchetti
-  // (Impostazioni → Tipologie di kit): il suo, se e' un pacchetto di
-  // questo corso e ha un diploma; altrimenti l'ultimo diploma caricato
-  // fra i pacchetti di questo corso. Il modello salvato sulla definizione
-  // del corso non si guarda piu': il 15/09/2026 due allieve di
-  // Laminazione — una senza pacchetto, una col pacchetto Extension —
-  // erano uscite col diploma vecchio rimasto li', mentre le altre
-  // quattro avevano quello nuovo del pacchetto
+  // IL DIPLOMA DEL PACCHETTO VINCE SU TUTTO. Regola dettata, e ribadita
+  // il 30/09/2026: se l'allieva ha un pacchetto e quel pacchetto ha un
+  // suo modello, si stampa quello. Punto.
+  //
+  // Prima c'era una condizione in piu' — `kit.corso_id === corso.id` —
+  // che buttava via il modello del pacchetto quando il pacchetto era
+  // nato sotto un'altra definizione di corso, e faceva scattare il
+  // ripiego. Il ripiego pesca "l'ultimo diploma caricato fra i pacchetti
+  // di questo corso", che e' il diploma DI UN'ALTRA PERSONA: un'allieva
+  // di Labbra + Eyeliner poteva uscire col certificato di Sopracciglia e
+  // Labbra senza che nessuno se ne accorgesse.
+  //
+  // Il ripiego resta solo per chi un pacchetto non ce l'ha proprio — ma
+  // adesso chi lo riceve viene detto per nome prima di stampare, perche'
+  // un diploma sbagliato in mano a un'allieva non si ritira piu'.
   const kitPerIdDiplomi = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
   const tsDiploma = (k) => Number((String(k?.diploma_path || "").match(/diploma-(\d+)-/) || [])[1] || 0);
   const ultimoDiplomaDelCorso = (kitDefinizioni || [])
@@ -28441,9 +28448,14 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     .sort((a, b) => tsDiploma(b) - tsDiploma(a))[0]?.diploma_path || null;
   const percorsoDiplomaDi = (iscritto) => {
     const kit = iscritto?.kit_id ? kitPerIdDiplomi[iscritto.kit_id] : null;
-    if (kit && kit.corso_id === corso?.id && kit.diploma_path) return kit.diploma_path;
+    if (kit?.diploma_path) return kit.diploma_path;
     return ultimoDiplomaDelCorso;
   };
+  // chi sta per ricevere un modello che non e' del suo pacchetto
+  const conDiplomaDiRipiego = () => (listaIscritti || []).filter((i) => {
+    const kit = i?.kit_id ? kitPerIdDiplomi[i.kit_id] : null;
+    return !kit?.diploma_path && ultimoDiplomaDelCorso;
+  });
 
   async function stampaDiplomi() {
     if (listaIscritti.length > 0 && !listaIscritti.some((i) => percorsoDiplomaDi(i))) {
@@ -28453,6 +28465,18 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     if (listaIscritti.length === 0) {
       window.alert("Non ci sono iscritti in questa classe.");
       return;
+    }
+    // il ripiego non e' piu' silenzioso: chi riceve il modello di un
+    // altro pacchetto viene detto per nome, e si conferma prima
+    const diRipiego = conDiplomaDiRipiego();
+    if (diRipiego.length > 0) {
+      const nomi = diRipiego.map((i) => `${i.nome} ${i.cognome}`).join(", ");
+      const quale = String(ultimoDiplomaDelCorso).split("/").pop();
+      if (!window.confirm(
+        `Il pacchetto di ${nomi} non ha un suo modello di diploma.\n\n` +
+        `Stamperei per loro l'ultimo modello caricato su questo corso:\n${quale}\n\n` +
+        `Se non è quello giusto, annulla e carica il modello sul pacchetto (Impostazioni → Tipologie di kit).\n\nStampo lo stesso?`
+      )) return;
     }
     setGenerandoDiplomi(true);
     try {
