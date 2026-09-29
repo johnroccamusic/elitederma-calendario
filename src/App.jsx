@@ -65006,11 +65006,34 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
 
 
+  // L'estensione si ricava dal TIPO del file, non dal suo nome.
+  //
+  // `file.name.split(".").pop()` su un nome senza punto restituisce il
+  // nome intero: una foto che arriva dagli appunti o da una fotocamera
+  // si chiama "image" e finiva su storage come "...-abc.image".
+  // WooCommerce poi rifiuta di scaricare un indirizzo che non finisce
+  // con un'estensione di immagine che conosce.
+  const ESTENSIONE_DA_TIPO = {
+    "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png",
+    "image/webp": "webp", "image/gif": "gif", "image/avif": "avif",
+    // HEIC e' il formato predefinito dell'iPhone. Lo accettiamo qui, ma
+    // WordPress non lo sa leggere: va convertito prima di pubblicarlo
+    "image/heic": "heic", "image/heif": "heic",
+  };
   async function caricaFileSuStorage(file) {
-    const estensione = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const tipo = (file.type || "").toLowerCase();
+    const daNome = (file.name || "").includes(".") ? file.name.split(".").pop().toLowerCase() : "";
+    const estensione = ESTENSIONE_DA_TIPO[tipo] || (/^[a-z0-9]{2,5}$/.test(daNome) ? daNome : "jpg");
     const percorso = `${Date.now()}-${Math.random().toString(36).slice(2)}.${estensione}`;
-    const { error } = await supabase.storage.from("shop-immagini").upload(percorso, file);
-    if (error) throw new Error(error.message);
+    const { error } = await supabase.storage.from("shop-immagini")
+      .upload(percorso, file, { contentType: tipo || "image/jpeg" });
+    if (error) {
+      // il messaggio di storage da solo non dice quasi niente ("new row
+      // violates...", "The object exceeded..."): si aggiunge quello che
+      // si stava caricando, che e' la prima cosa da guardare
+      const peso = file.size ? ` — ${(file.size / 1024 / 1024).toFixed(1)} MB` : "";
+      throw new Error(`${error.message} (file "${file.name || "senza nome"}", tipo "${tipo || "sconosciuto"}"${peso})`);
+    }
     return supabase.storage.from("shop-immagini").getPublicUrl(percorso).data.publicUrl;
   }
 
