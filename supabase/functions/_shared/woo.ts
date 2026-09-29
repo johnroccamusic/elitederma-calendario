@@ -214,7 +214,7 @@ export const STATI_VIVI = ["processing", "completed"];
 // alla quantità venduta — un bundle non ha mai una giacenza propria.
 // Ritorna gli id dei bundle toccati, per poi rispingere su WooCommerce la
 // loro disponibilità ricalcolata (vedi sincronizzaDisponibilitaBundle)
-export async function applicaMovimentoBundle(supabase: any, prodotti: any[], direzione: 1 | -1): Promise<Set<string>> {
+export async function applicaMovimentoBundle(supabase: any, prodotti: any[], direzione: 1 | -1, contesto: any = {}): Promise<Set<string>> {
   const bundleToccati = new Set<string>();
   for (const riga of prodotti || []) {
     const nome = String(riga?.nome || "").trim();
@@ -228,10 +228,15 @@ export async function applicaMovimentoBundle(supabase: any, prodotti: any[], dir
       if (!comp) continue;
       const delta = direzione * quantita * c.quantita_per_bundle;
       const nuova = (comp.quantita || 0) + delta;
-      if (nuova < 0) console.error(`Bundle "${nome}": componente ${c.componente_id} andrebbe sotto zero (${nuova}), portato a 0`);
       const { error } = await supabase.from("prodotti_shop").update({ quantita: Math.max(0, nuova) }).eq("id", c.componente_id);
-      if (error) console.error(`Bundle "${nome}": errore aggiornando il componente ${c.componente_id}:`, error.message);
-      else await supabase.from("movimenti_magazzino").insert({
+      if (error) {
+        if (direzione < 0) await segnalaScaricoNonRiuscito(supabase, riga, `Componente del kit non scaricato (${c.componente_id}): ${error.message}`, contesto);
+        continue;
+      }
+      if (nuova < 0 && direzione < 0) {
+        await segnalaScaricoNonRiuscito(supabase, riga, `Un componente del kit sarebbe andato a ${nuova}: portato a 0, mancano ${-nuova} pezzi da contare.`, contesto);
+      }
+      await supabase.from("movimenti_magazzino").insert({
         prodotto_id: c.componente_id, delta, origine: "ordine_online",
         nota: `Componente di "${nome}" venduto online`, utente: "WooCommerce",
       });
@@ -277,20 +282,62 @@ async function trovaProdottoDaRiga(supabase: any, riga: any) {
   return trovati.length === 1 ? trovati[0] : null;  // se sono due, meglio non indovinare
 }
 
-export async function applicaMovimentoProdottiSemplici(supabase: any, prodotti: any[], direzione: 1 | -1): Promise<Set<string>> {
+// Una riga che il magazzino non ha saputo scaricare non finisce piu' nei
+// log: finisce in "scarichi_non_riusciti", che Logistica mostra in cima
+// agli ordini finche' qualcuno non la sistema. Un console.error e' un
+// messaggio a nessuno — il pacco parte, la giacenza non scende, e ce ne
+// si accorge mesi dopo contando gli scaffali.
+async function segnalaScaricoNonRiuscito(
+  supabase: any,
+  riga: any,
+  motivo: string,
+  contesto: { woo_order_id?: number | null; numero_ordine?: string | null; vendita_id?: string | null } = {},
+) {
+  console.error(`Scarico non riuscito su "${riga?.nome}": ${motivo}`);
+  try {
+    await supabase.from("scarichi_non_riusciti").insert({
+      woo_order_id: contesto.woo_order_id ?? null,
+      numero_ordine: contesto.numero_ordine ?? null,
+      vendita_id: contesto.vendita_id ?? null,
+      nome_riga: String(riga?.nome || "(riga senza nome)"),
+      sku: riga?.sku ?? null,
+      woo_product_id: riga?.woo_product_id ?? null,
+      woo_variation_id: riga?.woo_variation_id ?? null,
+      quantita: Number(riga?.quantita) || 0,
+      motivo,
+    });
+  } catch (e) {
+    // se non si riesce nemmeno a segnalare, almeno il log resta
+    console.error("Segnalazione non salvata:", e);
+  }
+}
+
+export async function applicaMovimentoProdottiSemplici(supabase: any, prodotti: any[], direzione: 1 | -1, contesto: any = {}): Promise<Set<string>> {
   const toccati = new Set<string>();
   for (const riga of prodotti || []) {
     const nome = String(riga?.nome || "").trim();
     const quantita = Number(riga?.quantita) || 0;
     if (!quantita) continue;
     const prodotto = await trovaProdottoDaRiga(supabase, riga);
-    if (!prodotto) { console.error(`"${nome}": nessun prodotto in anagrafica, magazzino NON scaricato`); continue; }
+    if (!prodotto) {
+      // solo in uscita: su un ripristino la riga non riconosciuta l'aveva
+      // gia' mancata all'andata, e segnalarla due volte confonde e basta
+      if (direzione < 0) await segnalaScaricoNonRiuscito(supabase, riga, "Nessun prodotto con questo nome, SKU o codice in anagrafica: il magazzino non e' stato scaricato.", contesto);
+      continue;
+    }
     if (prodotto.tipo_prodotto === "bundle") continue;
     const delta = direzione * quantita;
     const nuova = (prodotto.quantita || 0) + delta;
-    if (nuova < 0) console.error(`"${nome}": lo stock andrebbe a ${nuova}, portato a 0`);
     const { error } = await supabase.from("prodotti_shop").update({ quantita: Math.max(0, nuova) }).eq("id", prodotto.id);
-    if (error) { console.error(`"${nome}": errore aggiornando lo stock:`, error.message); continue; }
+    if (error) {
+      if (direzione < 0) await segnalaScaricoNonRiuscito(supabase, riga, `Errore scrivendo la giacenza: ${error.message}`, contesto);
+      continue;
+    }
+    // portata a zero invece che sotto: la giacenza non va mai negativa,
+    // ma i pezzi mancano davvero e qualcuno deve contarli
+    if (nuova < 0 && direzione < 0) {
+      await segnalaScaricoNonRiuscito(supabase, riga, `La giacenza sarebbe andata a ${nuova}: portata a 0, mancano ${-nuova} pezzi da contare.`, contesto);
+    }
     await supabase.from("movimenti_magazzino").insert({
       prodotto_id: prodotto.id, delta, origine: "ordine_online",
       nota: direzione < 0 ? "Venduto sullo shop online" : "Ordine online annullato/rimborsato", utente: "WooCommerce",

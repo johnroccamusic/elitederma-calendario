@@ -130,9 +130,12 @@ Deno.serve(async (req) => {
     const eraVivo = STATI_VIVI.includes(String(esistente?.stato || ""));
     const oraVivo = STATI_VIVI.includes(String(riga.stato || ""));
     let bundleToccati = new Set<string>();
+    // il contesto serve alla segnalazione: senza il numero dell'ordine,
+    // una riga non scaricata non si puo' andare a guardare sul sito
+    const contesto = { woo_order_id: riga.woo_order_id as number, numero_ordine: String(riga.numero_ordine ?? riga.woo_order_id ?? "") };
     if (!eraVivo && oraVivo) {
-      bundleToccati = await applicaMovimentoBundle(supabase, riga.prodotti as any[], -1);
-      await applicaMovimentoProdottiSemplici(supabase, riga.prodotti as any[], -1);
+      bundleToccati = await applicaMovimentoBundle(supabase, riga.prodotti as any[], -1, contesto);
+      await applicaMovimentoProdottiSemplici(supabase, riga.prodotti as any[], -1, contesto);
     } else if (eraVivo && !oraVivo) {
       bundleToccati = await applicaMovimentoBundle(supabase, (esistente?.prodotti as any[]) || [], 1);
       await applicaMovimentoProdottiSemplici(supabase, (esistente?.prodotti as any[]) || [], 1);

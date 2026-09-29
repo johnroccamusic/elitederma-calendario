@@ -47473,6 +47473,53 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
 // In pagina restano solo quelli in lavorazione — cioè pagati e in attesa
 // di partire; le vendite già chiuse si guardano dal tasto "Storico", che
 // non deve rubare spazio a quello che c'è da fare oggi.
+// La striscia degli scarichi non riusciti.
+//
+// Sta IN CIMA agli ordini e non in una pagina sua: chi prepara i pacchi
+// e' l'unico che passa di qui tutti i giorni, ed e' l'unico che puo'
+// accorgersi che un prodotto sullo scaffale non torna con quello che
+// dice l'app. Prima questa notizia era un console.error nei log
+// dell'edge function — un messaggio a nessuno.
+function StrisciaScarichiMancati({ righe, onSistemata, isMobile }) {
+  const [occupato, setOccupato] = useState(null);
+  if (!righe.length) return null;
+  async function segnaSistemata(r) {
+    if (!window.confirm(`Segno come sistemata la riga "${r.nome_riga}"? Fallo dopo aver corretto la giacenza, non prima.`)) return;
+    setOccupato(r.id);
+    const { error } = await supabase.from("scarichi_non_riusciti")
+      .update({ risolto_il: new Date().toISOString(), risolto_da: "logistica" }).eq("id", r.id);
+    setOccupato(null);
+    if (error) { window.alert("Non sono riuscito a segnarla: " + error.message); return; }
+    onSistemata();
+  }
+  return (
+    <div style={{ background: "#FBEBE9", border: "1px solid #F0C8C2", borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 18px", marginBottom: 14 }}>
+      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B", marginBottom: 4 }}>
+        {righe.length === 1 ? "Un prodotto venduto non è sceso dal magazzino" : `${righe.length} prodotti venduti non sono scesi dal magazzino`}
+      </div>
+      <div style={{ ...fontBody, fontSize: 11.5, color: "#8A4038", lineHeight: 1.5, marginBottom: 8 }}>
+        Il pacco si può preparare lo stesso: quello che non torna è la giacenza. Correggila in Gestione magazzino, poi segna qui che è a posto.
+      </div>
+      {righe.map((r) => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "6px 0", borderTop: "1px solid #F0C8C2" }}>
+          <span style={{ flex: "1 1 220px", minWidth: 0 }}>
+            <span style={{ display: "block", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+              {Number(r.quantita) || 1} × {r.nome_riga}
+            </span>
+            <span style={{ display: "block", ...fontBody, fontSize: 11, color: "#8A4038", lineHeight: 1.45 }}>
+              {r.numero_ordine ? `Ordine ${r.numero_ordine} · ` : ""}{r.motivo}
+            </span>
+          </span>
+          <button onClick={() => segnaSistemata(r)} disabled={occupato === r.id} data-niente-ombra
+            style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "6px 12px", cursor: occupato === r.id ? "default" : "pointer", flexShrink: 0 }}>
+            {occupato === r.id ? "…" : "Sistemata"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, corsi, corsiDate, location, iscritti, syncEsiti = [], ruoloUtente, ricarica, onBack, titolo = "Ordini in arrivo" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("dagestire"); // dagestire | storico
@@ -47572,6 +47619,16 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
   // pagina serve a sapere cosa spedire ADESSO, quindi ad ogni apertura
   // rilegge ordini e spedizioni invece di fidarsi di quanto era in memoria
   useEffect(() => { ricarica(["vendite_shop", "spedizioni_pos"]); }, []);
+
+  // gli scarichi non riusciti: tabella piccola e letta solo da qui, se
+  // la carica da sola invece di passare dal caricatore globale
+  const [scarichiMancati, setScarichiMancati] = useState([]);
+  async function leggiScarichiMancati() {
+    const { data } = await supabase.from("scarichi_non_riusciti")
+      .select("*").is("risolto_il", null).order("ts", { ascending: false });
+    setScarichiMancati(data || []);
+  }
+  useEffect(() => { leggiScarichiMancati(); }, []);
 
   // le righe già prese dallo scaffale: stanno su una tabella loro perché
   // chi prepara un pacco non è sempre chi lo chiude
@@ -47684,6 +47741,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
             pacchi lavora su quello che legge qui, e ha il diritto di
             sapere se e' di un'ora fa o di ieri. */}
         <UltimoAggiornamentoShop esiti={syncEsiti} isMobile={isMobile} />
+        <StrisciaScarichiMancati righe={scarichiMancati} onSistemata={leggiScarichiMancati} isMobile={isMobile} />
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>

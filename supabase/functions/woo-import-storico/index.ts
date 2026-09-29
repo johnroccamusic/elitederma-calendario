@@ -96,9 +96,10 @@ async function salvaLotto(supabase: any, ordini: any[], siteUrl: string) {
     const prima = primaDi.get(riga.woo_order_id as number);
     const eraVivo = STATI_VIVI.includes(String(prima?.stato || ""));
     const oraVivo = STATI_VIVI.includes(String(riga.stato || ""));
+    const contesto = { woo_order_id: riga.woo_order_id as number, numero_ordine: String(riga.numero_ordine ?? riga.woo_order_id ?? "") };
     if (!eraVivo && oraVivo) {
-      (await applicaMovimentoBundle(supabase, riga.prodotti as any[], -1)).forEach((id: string) => bundleToccati.add(id));
-      await applicaMovimentoProdottiSemplici(supabase, riga.prodotti as any[], -1);
+      (await applicaMovimentoBundle(supabase, riga.prodotti as any[], -1, contesto)).forEach((id: string) => bundleToccati.add(id));
+      await applicaMovimentoProdottiSemplici(supabase, riga.prodotti as any[], -1, contesto);
     } else if (eraVivo && !oraVivo) {
       (await applicaMovimentoBundle(supabase, (prima?.prodotti as any[]) || [], 1)).forEach((id: string) => bundleToccati.add(id));
       await applicaMovimentoProdottiSemplici(supabase, (prima?.prodotti as any[]) || [], 1);
