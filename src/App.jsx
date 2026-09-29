@@ -15364,6 +15364,25 @@ function ModaleAccesso({ tabella, riga, nome, ricarica, onClose }) {
 // gli errori delle edge function arrivano con il messaggio vero dentro il
 // corpo della risposta, non nel messaggio dell'eccezione ("Edge Function
 // returned a non-2xx status code" e basta)
+// Un secondo tentativo, una volta sola, dopo un secondo.
+//
+// Il sito sta su Cloudways dietro Cloudflare e ogni tanto risponde 502
+// o 503 per un istante: il 29/09/2026 due salvataggi di prodotto sono
+// falliti alle 13:03 e alle 13:04, e rifatti identici un minuto dopo
+// sono passati. Un secondo tentativo li avrebbe resi invisibili.
+//
+// Solo per gli errori di trasporto (nessuna risposta, o una 5xx). Un
+// 400 e' una risposta: vuol dire che quello che abbiamo mandato non va
+// bene, e ripeterlo non cambia niente.
+async function invocaConUnSecondoTentativo(nomeFunzione, opzioni) {
+  const primo = await supabase.functions.invoke(nomeFunzione, opzioni);
+  if (!primo.error) return primo;
+  const stato = primo.error?.context?.status;
+  if (stato && stato < 500) return primo;
+  await new Promise((r) => setTimeout(r, 1000));
+  return supabase.functions.invoke(nomeFunzione, opzioni);
+}
+
 async function testoErroreFunzione(error) {
   try {
     const corpo = await error?.context?.json?.();
@@ -65378,7 +65397,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
     if (calcolo.vaSuWoo) {
       // WooCommerce pubblica i prezzi IVA inclusa: si manda il LORDO
-      const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
+      const { data, error } = await invocaConUnSecondoTentativo("woo-gestisci-prodotto", {
         body: {
           azione: f.wooProductId ? "modifica" : "crea",
           prodottoId: f.id || undefined,
@@ -65396,7 +65415,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           backorderMessaggio: String(f.backorderTesto || "").trim() || BACKORDER_TESTO_PREDEFINITO,
         },
       });
-      if (error || data?.errore) return { errore: "Salvataggio non riuscito, riprova. " + (data?.errore || error.message) };
+      // il motivo vero sta nel CORPO della risposta: quando la funzione
+      // risponde 502, invoke() dice solo "Edge Function returned a
+      // non-2xx status code" e la frase utile — "WooCommerce ha
+      // rifiutato l'aggiornamento (503)" — resta dentro error.context
+      if (error || data?.errore) return { errore: "Salvataggio non riuscito, riprova. " + (data?.errore || await testoErroreFunzione(error)) };
       // woo-gestisci-prodotto, con azione "crea", inserisce SEMPRE una riga
       // nuova in anagrafica: se il prodotto esisteva già in locale (era
       // interno e ora va online) resterebbero due schede per lo stesso
