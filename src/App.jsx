@@ -28083,6 +28083,14 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // da "Assegna modelle" in Contabilità classe e qui restano invariati
   const [tipiModelle, setTipiModelle] = useState([]);
   const [pacchettoKit, setPacchettoKit] = useState("");
+  // dal nome scelto nella tendina al pacchetto vero
+  function risolviKitId(nomeScelto) {
+    const n = String(nomeScelto || "").trim().toUpperCase();
+    if (!n) return null;
+    const tutti = kitDefinizioni || [];
+    return (tutti.find((k) => k.corso_id === corso?.id && String(k.nome || "").trim().toUpperCase() === n)
+      || tutti.find((k) => String(k.nome || "").trim().toUpperCase() === n))?.id || null;
+  }
   // il dermografo non sta più nel kit ma sull'iscrizione: non tutti lo
   // prendono e i modelli sono due, e un kit per ogni combinazione avrebbe
   // moltiplicato il catalogo a ogni opzione futura. Su una scheda nuova
@@ -29167,6 +29175,22 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         dermografo_metodo: dermografoDaPagare ? (pagDermografo.metodo || null) : null,
         dermografo_pagato: dermografoDaPagare ? pagDermografoPagato : false,
         pacchetto_kit: pacchettoKit.trim() || null,
+        // IL RIFERIMENTO, non solo il nome.
+        //
+        // Questa scheda scriveva `pacchetto_kit` — una stringa — e basta.
+        // Ma il diploma, il magazzino e la logistica leggono `kit_id`,
+        // che restava quello di prima: cambiando pacchetto sulla scheda
+        // si vedeva il nome nuovo e usciva il diploma del vecchio.
+        // Fortuna Pierro aveva "Labbra + Eyeliner" scritto e
+        // "Sopracciglia + Labbra" dentro, e il certificato diceva il
+        // secondo. Cinque allieve erano in questo stato.
+        //
+        // Si risolve il nome fra i pacchetti di QUESTO corso, e solo
+        // fuori si accetta un pacchetto di un altro (succede: un kit
+        // preso a un corso diverso). Se le definizioni non sono ancora
+        // caricate NON si tocca kit_id: azzerarlo sarebbe peggio del
+        // problema che stiamo chiudendo.
+        ...((kitDefinizioni || []).length > 0 ? { kit_id: risolviKitId(pacchettoKit) } : {}),
         // per il magazzino conta solo quale pezzo esce: "no" e "ha il suo"
         // valgono entrambi "nessuno", la differenza la tiene dermografo_scelta
         // il modello resta scritto anche se lo riceve a casa: a non contarlo
