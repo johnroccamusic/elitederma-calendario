@@ -65325,8 +65325,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // due, esattamente come oggi WooCommerce le assegna insieme in coppia
   // (es. "Aghi" + "Aghi Universali"). Le altre restano "extra": pochi
   // prodotti (es. "Diluente") devono davvero comparire in più punti
+  // La principale e' la PRIMA, punto. Prima si cercava "la prima che sia
+  // una sottocategoria", e su un prodotto con principale di primo livello
+  // e secondaria di secondo le due si scambiavano da sole: bastava
+  // riaprire la scheda per vedersele invertite. L'ordine adesso e'
+  // scritto sul database (prodotti_categorie.ordine), quindi non c'e'
+  // piu' niente da dedurre.
   function categoriaPrimariaEExtra(ids) {
-    const primariaId = ids.find((id) => !!categorieTutte.find((c) => c.id === id)?.categoria_padre_id) || ids[0] || null;
+    const primariaId = ids[0] || null;
     return { primariaId, extraIds: ids.filter((id) => id !== primariaId) };
   }
   function impostaCategoriaPrimaria(nuovoId) {
@@ -65706,7 +65712,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const { error: erroreRimuoviCat } = await supabase.from("prodotti_categorie").delete().eq("prodotto_id", idProdotto);
     if (erroreRimuoviCat) return { errore: "Prodotto salvato, ma le categorie no: " + erroreRimuoviCat.message };
     if (categorieIdsDaSalvare.length) {
-      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert(categorieIdsDaSalvare.map((id) => ({ prodotto_id: idProdotto, categoria_id: id })));
+      // `ordine` e' la posizione scelta: la prima e' la principale. Senza
+      // scriverla, riaprendo la scheda l'app doveva indovinare quale
+      // fosse — e indovinava male
+      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert(categorieIdsDaSalvare.map((id, i) => ({ prodotto_id: idProdotto, categoria_id: id, ordine: i })));
       if (erroreCat) return { errore: "Prodotto salvato, ma le categorie no: " + erroreCat.message };
     }
     // Le foto si salvano anche qui. Su questo ramo — prodotto senza
@@ -73188,7 +73197,10 @@ export default function App() {
     impostazioni_iva: async () => setImpostazioniIva((await supabase.from("impostazioni_iva").select("*").maybeSingle()).data || { aliquota_default: 22 }),
     intestazione_societa: async () => setIntestazioneSocieta((await supabase.from("intestazione_societa").select("*").maybeSingle()).data || {}),
     prodotti_shop: async () => setProdottiShop((await supabase.from("prodotti_shop").select("*").order("nome")).data || []),
-    prodotti_categorie: async () => setProdottiCategorie((await supabase.from("prodotti_categorie").select("*")).data || []),
+    // l'ordine conta: la categoria con ordine 0 e' la PRINCIPALE. Senza
+    // `order` il database restituisce le righe come gli pare, e la
+    // principale si scambiava con la secondaria a ogni ricaricamento
+    prodotti_categorie: async () => setProdottiCategorie((await leggiTutte(() => supabase.from("prodotti_categorie").select("*").order("prodotto_id").order("ordine"))) || []),
     prodotti_immagini: async () => setProdottiImmagini((await supabase.from("prodotti_immagini").select("*")).data || []),
     corsi_giorni: async () => setCorsiGiorni((await supabase.from("corsi_giorni").select("*").order("numero_giorno")).data || []),
     tipi_modella: async () => setTipiModella((await supabase.from("tipi_modella").select("*").order("nome")).data || []),
