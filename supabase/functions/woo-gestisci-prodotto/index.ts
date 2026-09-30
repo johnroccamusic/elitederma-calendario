@@ -219,9 +219,23 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ errore: "Creato su WooCommerce ma non nel database locale: " + erroreInsert.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       await sincronizzaCollegamentiLocali(riga.id, creato, categorieIds);
-      // le pagine di elenco (shop, categorie) sono in cache: senza questo il
-      // prodotto nuovo non compare finche' la cache non scade
-      const avvisoCache = await svuotaCacheSito({ prodottiWooIds: [creato.id] });
+      // Qui si svuota TUTTO, non solo le pagine di questo prodotto.
+      //
+      // Il purge mirato di Breeze copre la scheda del prodotto, /shop/ e
+      // gli archivi delle sue categorie. Ma mezzo sito e' fatto di pagine
+      // costruite a mano — /aghi-universali-per-pmu/, /pigmenti-proomix/,
+      // /accessori/… — che dentro hanno un blocco LiveCanvas che interroga
+      // la categoria a ogni richiesta. Sono pagine, non archivi: il purge
+      // mirato non le tocca, e restano ferme fino a trenta giorni.
+      //
+      // Verificato il 30/09/2026: ago pubblicato alle 12:18, alle 12:40
+      // /product-category/aghi/ ne mostrava 13 e /aghi-universali-per-pmu/
+      // ancora 12. Non era la pagina a essere statica — era la sua copia.
+      //
+      // Un prodotto nuovo cambia l'insieme di quello che quelle pagine
+      // devono mostrare, e si crea un prodotto qualche volta a settimana:
+      // il costo di ricostruire la cache sta tutto dentro quel margine.
+      const avvisoCache = await svuotaCacheSito({ tutto: true });
       return new Response(JSON.stringify({ ok: true, prodottoId: riga.id, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -283,8 +297,20 @@ Deno.serve(async (req) => {
     await sincronizzaCollegamentiLocali(prodottoId, aggiornato, categorieIds);
     // WooCommerce ha il prezzo e le foto nuove, ma la pagina che vedono i
     // clienti e' in cache (Breeze + Cloudflare, fino a 30 giorni): va
-    // svuotata adesso, altrimenti il sito continua a mostrare quelle vecchie
-    const avvisoCache = await svuotaCacheSito({ prodottiWooIds: [prodottoEsistente.woo_product_id] });
+    // svuotata adesso, altrimenti il sito continua a mostrare quelle vecchie.
+    //
+    // Due pesi diversi, per la ragione spiegata in "crea": cambiare lo
+    // stato (pubblicato/bozza) o le categorie cambia DOVE il prodotto
+    // compare, e quindi anche le pagine vetrina costruite a mano, che il
+    // purge mirato non raggiunge. Prezzo, nome e foto no: quelli vivono
+    // sulla scheda e sugli archivi, che il purge mirato copre gia'. E il
+    // purge mirato va difeso, perche' da qui passa anche il cambio di
+    // stato in blocco: svuotare tutto a ogni singola foto sarebbe uno
+    // spreco su un sito che sta dietro Cloudflare.
+    const cambiaDoveCompare = stato != null || categorieIds !== undefined;
+    const avvisoCache = cambiaDoveCompare
+      ? await svuotaCacheSito({ tutto: true })
+      : await svuotaCacheSito({ prodottiWooIds: [prodottoEsistente.woo_product_id] });
     return new Response(JSON.stringify({ ok: true, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ errore: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
