@@ -19263,9 +19263,23 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
       const { error } = await supabase.from("font_diplomi").update(payload).eq("id", nuovo.id);
       if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     } else {
-      const { data, error } = await supabase.from("font_diplomi").insert(payload).select("id").single();
-      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-      setConfig((c) => ({ ...c, id: data.id }));
+      // Senza id si rischia di CREARE una riga che c'e' gia': e' cosi'
+      // che il 31/07/2026 ne sono nate due a undici secondi di distanza,
+      // due salvataggi partiti prima che il primo restituisse l'id. Da
+      // allora il caricamento ne leggeva una a caso e i limiti della
+      // firma sparivano da soli. Quindi prima si guarda se una riga
+      // esiste gia', e semmai si aggiorna quella.
+      const { data: esistente } = await supabase
+        .from("font_diplomi").select("id").order("ts", { ascending: true }).limit(1).maybeSingle();
+      if (esistente?.id) {
+        const { error } = await supabase.from("font_diplomi").update(payload).eq("id", esistente.id);
+        if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+        setConfig((c) => ({ ...c, id: esistente.id }));
+      } else {
+        const { data, error } = await supabase.from("font_diplomi").insert(payload).select("id").single();
+        if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+        setConfig((c) => ({ ...c, id: data.id }));
+      }
     }
     ricarica(["font_diplomi"]);
   }

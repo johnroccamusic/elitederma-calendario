@@ -87,13 +87,26 @@ Deno.serve(async (req) => {
 
   const scadeIl = new Date(Date.now() + (token.expires_in || 86400) * 1000).toISOString();
 
-  const { error } = await supabase.from("fatture_in_cloud_config").insert({
+  // AGGIORNA la riga di questa azienda, non ne crea una nuova.
+  //
+  // Prima era un insert secco: rifare l'autorizzazione lasciava due
+  // righe per la stessa azienda, ognuna col suo token. Fatture in Cloud
+  // fa ruotare il refresh token, quindi le due si scalzavano a vicenda —
+  // il 29/09/2026 la sincronizzazione delle fatture ricevute rispondeva
+  // 401 a ogni chiamata mentre quella delle note di credito funzionava,
+  // ed era incomprensibile finche' non si guardavano le due righe.
+  const campi = {
     access_token: token.access_token,
     refresh_token: token.refresh_token,
     token_scade_il: scadeIl,
     company_id: companyId,
     company_nome: companyNome,
-  });
+  };
+  const { data: esistente } = await supabase
+    .from("fatture_in_cloud_config").select("id").eq("company_id", companyId).order("ts", { ascending: true }).limit(1).maybeSingle();
+  const { error } = esistente?.id
+    ? await supabase.from("fatture_in_cloud_config").update(campi).eq("id", esistente.id)
+    : await supabase.from("fatture_in_cloud_config").insert(campi);
   if (error) {
     return new Response(paginaEsito("Autorizzazione ottenuta ma salvataggio fallito", error.message), { status: 500, headers: htmlHeaders });
   }
