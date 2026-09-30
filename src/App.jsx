@@ -72743,6 +72743,44 @@ export default function App() {
   const tastieraAperta = useTastieraAperta();
   const appDaSchermataHome = useAppDaSchermataHome();
   const [view, setView] = useState(() => vistaDaRiprendere() || "home");
+  // Il numero sulla tessera provvisoria "Assegnazione kit".
+  //
+  // La home non carica nessuna tabella (TABELLE_PER_VIEW.home = []): e'
+  // una pagina di sola navigazione, tenuta leggera apposta. Contare gli
+  // allievi senza pacchetto leggendo `iscritti` in memoria dava sempre
+  // zero, e la tessera non compariva mai. Lo stesso inciampo del pallino
+  // rosso su "Gestione magazzino", che infatti la sua tabella se la fa
+  // caricare.
+  //
+  // Qui non si caricano le anagrafiche per un numero: si chiedono due
+  // colonne. E sta in cima, fra gli altri hook, perche' piu' in basso
+  // c'e' il gate coi suoi return anticipati — un hook di la' fa contare
+  // a React un numero di hook diverso prima e dopo il login, e la
+  // schermata resta bianca.
+  const [allieviSenzaKit, setAllieviSenzaKit] = useState(0);
+  useEffect(() => {
+    if (view !== "home") return undefined;
+    let vivo = true;
+    (async () => {
+      try {
+        // leggiTutte e non un select secco: oltre mille righe PostgREST
+        // taglia in silenzio, e un conto tagliato qui vorrebbe dire una
+        // tessera che sparisce mentre c'e' ancora gente da sistemare
+        const [iscrittiKit, kits] = await Promise.all([
+          leggiTutte(() => supabase.from("iscritti").select("id, kit_id").order("id")),
+          leggiTutte(() => supabase.from("kit_definizioni").select("id, diploma_path").order("id")),
+        ]);
+        if (!vivo) return;
+        const conDiploma = new Set((kits || []).filter((k) => k.diploma_path).map((k) => k.id));
+        setAllieviSenzaKit((iscrittiKit || []).filter((i) => !i.kit_id || !conDiploma.has(i.kit_id)).length);
+      } catch (e) {
+        // se il conto non si puo' fare, la tessera non si mostra: meglio
+        // non mostrarla che mostrarla con un numero inventato
+        if (vivo) setAllieviSenzaKit(0);
+      }
+    })();
+    return () => { vivo = false; };
+  }, [view]);
   // il segnaposto si tiene aggiornato a ogni spostamento: quando si
   // cambia vista telefono/computer la pagina si ricarica, e deve
   // ripartire da qui invece che dalla home
@@ -74165,24 +74203,6 @@ export default function App() {
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
-  // Quanti allievi non hanno un pacchetto con un diploma. Serve alla
-  // tessera provvisoria "Assegnazione kit": si mostra solo finché il
-  // numero è maggiore di zero, poi sparisce da sola.
-  //
-  // NIENTE useMemo qui. Questo punto sta DOPO i return anticipati del
-  // gate (`if (!ok) return …`, `if (loading) return …`): un hook messo
-  // qui viene eseguito solo quando si e' gia' dentro, e React conta gli
-  // hook — al primo render dopo il login ne trova uno in piu' e muore
-  // con la schermata bianca. E' costato l'accesso all'app il 30/09/2026.
-  // Un filtro su duecento iscritti non ha bisogno di essere ricordato.
-  const allieviSenzaKit = (() => {
-    const kitPerId = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
-    return (iscritti || []).filter((i) => {
-      const kit = i?.kit_id ? kitPerId[i.kit_id] : null;
-      return !kit?.diploma_path;
-    }).length;
-  })();
-
   // dalla lista "Assegnazione kit" alla scheda, e Indietro torna lì
   function apriIscrittoDaAssegnazioneKit(i) {
     scrollAppInCima();
