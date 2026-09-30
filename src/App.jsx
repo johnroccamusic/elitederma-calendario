@@ -74168,13 +74168,20 @@ export default function App() {
   // Quanti allievi non hanno un pacchetto con un diploma. Serve alla
   // tessera provvisoria "Assegnazione kit": si mostra solo finché il
   // numero è maggiore di zero, poi sparisce da sola.
-  const allieviSenzaKit = useMemo(() => {
+  //
+  // NIENTE useMemo qui. Questo punto sta DOPO i return anticipati del
+  // gate (`if (!ok) return …`, `if (loading) return …`): un hook messo
+  // qui viene eseguito solo quando si e' gia' dentro, e React conta gli
+  // hook — al primo render dopo il login ne trova uno in piu' e muore
+  // con la schermata bianca. E' costato l'accesso all'app il 30/09/2026.
+  // Un filtro su duecento iscritti non ha bisogno di essere ricordato.
+  const allieviSenzaKit = (() => {
     const kitPerId = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
     return (iscritti || []).filter((i) => {
       const kit = i?.kit_id ? kitPerId[i.kit_id] : null;
       return !kit?.diploma_path;
     }).length;
-  }, [iscritti, kitDefinizioni]);
+  })();
 
   // dalla lista "Assegnazione kit" alla scheda, e Indietro torna lì
   function apriIscrittoDaAssegnazioneKit(i) {
