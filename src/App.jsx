@@ -19716,9 +19716,10 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
                 onPointerCancel={fineDrag}
                 style={{
                   position: "absolute",
-                  left: chiave === "firma"
-                    ? `${((Number(config.firma_limite_sx ?? 25) + Number(config.firma_limite_dx ?? 75)) / 2)}%`
-                    : `${config[`${chiave}_pos_x`]}%`,
+                  // anche in anteprima la firma sta sul SUO centro, come
+                  // sul PDF: mostrarla a meta' fra i limiti faceva vedere
+                  // una posizione che la stampa non rispettava
+                  left: `${config[`${chiave}_pos_x`]}%`,
                   top: `${config[`${chiave}_pos_y`]}%`,
                   transform: "translate(-50%, -50%)",
                   display: "flex",
@@ -19726,7 +19727,13 @@ function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
                   minWidth: 40,
                   // la firma occupa esattamente lo spazio fra i suoi due
                   // segni: cosi' si vede subito se il nome ci sta o no
-                  ...(chiave === "firma" ? { width: `${Math.max(2, Number(config.firma_limite_dx ?? 75) - Number(config.firma_limite_sx ?? 25))}%` } : {}),
+                  // la cornice mostra lo spazio DAVVERO utilizzabile: il
+                  // doppio del lato piu' stretto, centrato sul punto della
+                  // firma — cioe' esattamente quello che la stampa usa
+                  ...(chiave === "firma" ? { width: `${Math.max(2, 2 * Math.min(
+                    Number(config.firma_pos_x ?? 50) - Number(config.firma_limite_sx ?? 25),
+                    Number(config.firma_limite_dx ?? 75) - Number(config.firma_pos_x ?? 50),
+                  ))}%` } : {}),
                   cursor: chiave === "firma" ? "ns-resize" : "grab",
                   padding: 4,
                   border: `2px dashed ${colore}`,
@@ -28568,9 +28575,24 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           // Una master che si chiama "Maria Antonietta Della Valle" e una
           // che si chiama "Ada" devono stare tutte e due dentro la stessa
           // riga, senza che nessuno vada a ritoccare il corpo a mano.
+          // La firma e' SEMPRE centrata sul suo punto, e cresce o cala da
+          // li': un nome corto resta dov'era il centro di uno lungo,
+          // senza spostarsi. Prima si centrava a meta' strada fra i due
+          // limiti, quindi bastava muovere un limite per veder scappare
+          // la firma da un'altra parte.
+          //
+          // Il corpo scende finche' il nome non sta dentro tutti e due i
+          // segni. La larghezza utile e' il DOPPIO del lato piu' stretto,
+          // non la distanza fra i limiti: essendo centrato, il testo si
+          // allarga in parti uguali di qua e di la', e se il centro non
+          // sta esattamente a meta' e' il lato corto a decidere. E' lo
+          // stesso conto che il nome dell'allievo fa gia'.
           const sxFirma = Number(config.firma_limite_sx ?? 25);
           const dxFirma = Number(config.firma_limite_dx ?? 75);
-          const larghezzaMaxFirma = Math.max(0, (dxFirma - sxFirma) / 100 * larghezzaPaginaDiploma);
+          const centroFirma = Number(config.firma_pos_x ?? (sxFirma + dxFirma) / 2);
+          const spazioSxFirma = (centroFirma - sxFirma) / 100 * larghezzaPaginaDiploma;
+          const spazioDxFirma = (dxFirma - centroFirma) / 100 * larghezzaPaginaDiploma;
+          const larghezzaMaxFirma = 2 * Math.max(0, Math.min(spazioSxFirma, spazioDxFirma));
           let firmaFontSize = config.firma_font_size;
           if (larghezzaMaxFirma > 0) {
             const larghezzaTestoFirma = fontFirma.widthOfTextAtSize(testoFirma, firmaFontSize);
@@ -28579,7 +28601,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             }
           }
           disegnaTestoDiploma(pagina, testoFirma, {
-            posX: (sxFirma + dxFirma) / 2, posY: config.firma_pos_y, fontSize: firmaFontSize,
+            posX: centroFirma, posY: config.firma_pos_y, fontSize: firmaFontSize,
             colore: config.firma_colore, allineamento: "center", font: fontFirma,
           });
         }
@@ -73054,7 +73076,14 @@ export default function App() {
     hotel: async () => setHotel((await supabase.from("hotel").select("*").order("nome")).data || []),
     assistente: async () => setAssistente((await supabase.from("assistente").select("*").order("nome")).data || []),
     leva: async () => setLeva((await supabase.from("leva").select("*").order("nome")).data || []),
-    font_diplomi: async () => setFontDiplomi((await supabase.from("font_diplomi").select("*").limit(1)).data?.[0] || null),
+    // `order` e non solo `limit(1)`: senza un ordine il database puo'
+    // restituire una riga qualsiasi, e in questa tabella ce ne sono DUE
+    // — nate a undici secondi di distanza il 31/07/2026, quando il
+    // salvataggio inseriva invece di aggiornare. Una porta le posizioni
+    // vere, l'altra i valori predefiniti: leggendo ora l'una ora l'altra,
+    // i limiti della firma sparivano e tornavano da soli. La piu' vecchia
+    // e' quella che la pagina di configurazione aggiorna.
+    font_diplomi: async () => setFontDiplomi((await supabase.from("font_diplomi").select("*").order("ts", { ascending: true }).limit(1)).data?.[0] || null),
     segnaposti_config: async () => setSegnaposti((await supabase.from("segnaposti_config").select("*").limit(1)).data?.[0] || null),
     loghi_impostazioni: async () => setLoghiImpostazioni((await supabase.from("loghi_impostazioni").select("*").limit(1)).data?.[0] || null),
     loghi_categorie: async () => setLoghiCategorie((await supabase.from("loghi_categorie").select("*")).data || []),
