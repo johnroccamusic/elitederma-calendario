@@ -39994,7 +39994,7 @@ function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, colore
 // i due tasti del piede: leggono la scala dalla card che li contiene,
 // cosi' si rimpiccioliscono con lei invece di restare grandi dentro una
 // riga piccola
-function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pannello, onPannello, quanteSimili = 0 }) {
+function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pannello, onPannello, quanteSimili = 0, onApriSpesa = null }) {
   const k = useContext(ScalaRigaContabilita);
   const q = (n) => Math.round(n * k * 10) / 10;
   const isMobile = useIsMobile();
@@ -40036,6 +40036,14 @@ function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pa
             style={{ ...tastino(true), color: "#8A6A1B", borderColor: "#E3C97A", background: "#FFFBF0", outline: pannello === "simili" ? `2px solid #8A6A1B` : "none" }}
           >Unisci al pagamento</button>
         )}
+        {/* La scheda della spesa, com'e' scritta. Finora da qui si poteva
+            solo pagare o agganciare una fattura: se la riga era sbagliata
+            in partenza — categoria, importo, stato — non c'era modo di
+            andarla a correggere senza cercarla altrove. */}
+        {onApriSpesa && (
+          <button onClick={onApriSpesa} title="Apre la scheda di questa spesa per correggerla"
+            style={{ ...tastino(false), minWidth: q(92) }}>Modifica</button>
+        )}
       </>
     );
   }
@@ -40066,6 +40074,13 @@ function TastiPiedeScadenzario({ fatturaAssociata, numeroDocumento, salvando, pa
           style={{ ...stileTastoCardChiaro(isMobile), width: "100%", padding: `${q(9)}px ${q(12)}px`, fontSize: q(12.5), gap: q(6), borderRadius: q(12), justifyContent: "center", whiteSpace: "nowrap", color: "#8A6A1B", borderColor: "#E3C97A", background: "#FFFBF0", outline: pannello === "simili" ? `2px solid #8A6A1B` : "none" }}
         >
           <span>Unisci al pagamento</span>
+        </button>
+      )}
+      {onApriSpesa && (
+        <button onClick={onApriSpesa} disabled={salvando}
+          title="Apre la scheda di questa spesa per correggerla"
+          style={{ ...stileTastoCardChiaro(isMobile), width: "100%", padding: `${q(9)}px ${q(12)}px`, fontSize: q(12.5), gap: q(6), borderRadius: q(12), justifyContent: "center", whiteSpace: "nowrap" }}>
+          <span>Modifica la spesa</span>
         </button>
       )}
     </>
@@ -40156,7 +40171,7 @@ function PannelloAmbitoSpesa({ valori, onChange, corsi = [], location = [], cors
     </div>
   );
 }
-function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onAssociaASpesaEsistente, onAnnullaAssociazione, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [], spese = [], fornitoreId = null, categoriaSpesa = null }) {
+function RigaScadenziarioDaPagare({ onApriSpesa = null, nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, scadenzaStimata, iban, totale, categoriaNome, anagrafica, statoFattura, numeroDocumento, disabilitato, motivoDisabilitato, onConferma, onRiconciliaDocumento, onAssociaASpesaEsistente, onAnnullaAssociazione, onCambiaScadenza, documentiFornitore, nomeFornitoreDi, ambitoIniziale = null, corsi = [], location = [], corsiDate = [], eventi = [], spese = [], fornitoreId = null, categoriaSpesa = null }) {
   const isMobile = useIsMobile();
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
@@ -40300,6 +40315,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
     <TastiPiedeScadenzario
       fatturaAssociata={fatturaAssociata} numeroDocumento={numeroDocumento} salvando={salvando}
       pannello={pannello} onPannello={apriPannello} quanteSimili={speseSimili.length}
+      onApriSpesa={onApriSpesa}
     />
   );
   return (
@@ -45968,6 +45984,10 @@ function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = [], ruolo
                     onAssociaASpesaEsistente={(spesa) => associaImpegnoASpesaEsistente(item, spesa)}
                     onAnnullaAssociazione={item.spesaReale?.numero_documento ? () => annullaAssociazioneFattura(item) : null}
                     onCambiaScadenza={item.tipo === "abbonamento" ? null : (nuova) => cambiaScadenza(item, nuova)}
+                    // solo le righe che sono gia' una spesa vera si
+                    // possono aprire: un impegno previsto non e' ancora
+                    // una scheda da correggere
+                    onApriSpesa={item.spesaReale?.id ? () => onApriModificaSpesa(item.spesaReale.id) : null}
                     documentiFornitore={documentoFornitoreTabella}
                     nomeFornitoreDi={(id) => fornitoriById[id]?.nome || ""}
                     spese={spese} fornitoreId={item.spesaReale?.fornitore_id || item.fornitoreId || null}
