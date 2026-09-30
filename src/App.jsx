@@ -39536,6 +39536,131 @@ function PannelloDatePagamentoMancanti({ righe, corsoById, fornitoriById, costiC
   );
 }
 
+// ---------------------------------------------------------------------
+// Assegnazione kit: gli allievi rimasti senza pacchetto.
+//
+// Area di passaggio, non un pezzo dell'app. Dal 30/09/2026 il diploma
+// viene SOLO dal pacchetto: chi non ce l'ha non ha un diploma, e finché
+// l'elenco non si svuota qualcuno resta senza certificato a fine corso.
+// Questa pagina serve a svuotarlo in un pomeriggio e poi a sparire: la
+// tessera in home si mostra solo se c'è ancora qualcuno, quindi quando
+// l'ultimo è a posto se ne va da sola e il codice si può togliere.
+function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefinizioni, onApriIscritto, onBack, titolo = "Assegnazione kit" }) {
+  const isMobile = useIsMobile();
+  const oggi = dataOggiStr();
+
+  // per ogni corso, i pacchetti che hanno davvero un diploma: sono gli
+  // unici che risolvono il problema, gli altri lascerebbero l'allievo
+  // esattamente dov'era
+  const pacchettiPerCorso = useMemo(() => {
+    const m = {};
+    (kitDefinizioni || []).forEach((k) => {
+      if (!k.corso_id || !k.diploma_path || !String(k.nome || "").trim()) return;
+      (m[k.corso_id] ||= []).push(k.nome);
+    });
+    Object.values(m).forEach((v) => v.sort((a, b) => a.localeCompare(b)));
+    return m;
+  }, [kitDefinizioni]);
+
+  const classi = useMemo(() => {
+    const kitPerId = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
+    const senzaPacchetto = (i) => {
+      const kit = i?.kit_id ? kitPerId[i.kit_id] : null;
+      return !kit?.diploma_path;
+    };
+    const perClasse = new Map();
+    (iscritti || []).forEach((i) => {
+      if (!senzaPacchetto(i)) return;
+      const cd = (corsiDate || []).find((x) => x.id === i.corso_data_id);
+      if (!cd) return;
+      if (!perClasse.has(cd.id)) perClasse.set(cd.id, { cd, allievi: [] });
+      perClasse.get(cd.id).allievi.push(i);
+    });
+    return [...perClasse.values()]
+      .map((g) => ({
+        ...g,
+        corso: (corsi || []).find((c) => c.id === g.cd.corso_id) || null,
+        sede: (location || []).find((l) => l.id === g.cd.location_id) || null,
+        finita: (g.cd.data_fine || g.cd.data_inizio) < oggi,
+        allievi: g.allievi.sort((a, b) => `${a.cognome} ${a.nome}`.localeCompare(`${b.cognome} ${b.nome}`)),
+      }))
+      // i corsi già finiti per primi: lì il diploma andava consegnato e
+      // non è stato consegnato, è il debito più vecchio
+      .sort((a, b) => (b.finita - a.finita) || String(a.cd.data_inizio).localeCompare(String(b.cd.data_inizio)));
+  }, [iscritti, corsiDate, corsi, location, kitDefinizioni, oggi]);
+
+  const quanti = classi.reduce((s, g) => s + g.allievi.length, 0);
+  const finite = classi.filter((g) => g.finita);
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 80px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+
+        {quanti === 0 ? (
+          <div style={{ ...cardStyle, padding: "22px 24px", ...fontBody, fontSize: 14, color: "#2E7D32", lineHeight: 1.6 }}>
+            Tutti gli allievi hanno un pacchetto con un diploma. Questa pagina ha finito il suo lavoro:
+            alla prossima apertura la tessera in home non ci sarà più.
+          </div>
+        ) : (
+          <>
+            <div style={{ ...cardStyle, padding: isMobile ? "14px 16px" : "16px 20px", marginBottom: 14 }}>
+              <div style={{ ...fontDisplay, fontSize: isMobile ? 19 : 22, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>
+                {quanti} allievi senza pacchetto
+              </div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 6, lineHeight: 1.6 }}>
+                Il diploma viene solo dal pacchetto: senza, a fine corso non esce niente. Clicca un nome, scegli il
+                pacchetto nella sua scheda e salva — sparisce da qui da solo.
+                {finite.length > 0 && <> <b style={{ color: "#C0392B" }}>In cima ci sono {finite.length} class{finite.length === 1 ? "e" : "i"} già finite</b>: lì il diploma andava già consegnato.</>}
+              </div>
+            </div>
+
+            {classi.map((g) => {
+              const disponibili = pacchettiPerCorso[g.cd.corso_id] || [];
+              return (
+                <div key={g.cd.id} style={{ ...cardStyle, padding: isMobile ? "12px 14px" : "14px 18px", marginBottom: 10,
+                  borderLeft: g.finita ? "4px solid #C0392B" : `4px solid ${GOLD}` }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 13.5 : 14.5, fontWeight: 700, color: NAVY }}>
+                      {(g.corso?.nome || "?").toUpperCase()} · {(g.sede?.nome || "?").toUpperCase()}
+                    </span>
+                    <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+                      {fmtDataCompatta(g.cd.data_inizio, g.cd.data_fine)}
+                    </span>
+                    {g.finita && (
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#C0392B", background: "#FBEBE9", border: "1px solid #F0C8C2", borderRadius: 999, padding: "2px 8px" }}>
+                        già finito
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
+                    {disponibili.length > 0
+                      ? <>Pacchetti con diploma: {disponibili.join(" · ")}</>
+                      : <b style={{ color: "#C0392B" }}>Nessun pacchetto di questo corso ha un diploma: va caricato prima, in Impostazioni → Tipologie di kit.</b>}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {g.allievi.map((i) => (
+                      <button key={i.id} onClick={() => onApriIscritto(i)} data-niente-ombra
+                        style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY,
+                          background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)",
+                          border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "8px 12px", cursor: "pointer" }}>
+                        {`${i.nome} ${i.cognome}`.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, dateMancantiCount = 0, ruoloUtente, ordine, onSalvaOrdine }) {
   const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
@@ -74040,6 +74165,27 @@ export default function App() {
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
+  // Quanti allievi non hanno un pacchetto con un diploma. Serve alla
+  // tessera provvisoria "Assegnazione kit": si mostra solo finché il
+  // numero è maggiore di zero, poi sparisce da sola.
+  const allieviSenzaKit = useMemo(() => {
+    const kitPerId = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
+    return (iscritti || []).filter((i) => {
+      const kit = i?.kit_id ? kitPerId[i.kit_id] : null;
+      return !kit?.diploma_path;
+    }).length;
+  }, [iscritti, kitDefinizioni]);
+
+  // dalla lista "Assegnazione kit" alla scheda, e Indietro torna lì
+  function apriIscrittoDaAssegnazioneKit(i) {
+    scrollAppInCima();
+    setVieneDaGestioneModelle(false);
+    setViewPrimaDiScheda("assegnazionekit");
+    setCorsoDataAperta(i.corso_data_id);
+    setSottoVistaScheda({ vista: "form", modificandoId: i.id, mostraGestione: false });
+    setSchedaKey((k) => k + 1);
+    setView("scheda");
+  }
   function apriIscritto(i) {
     scrollAppInCima();
     setVieneDaGestioneModelle(false);
@@ -74693,6 +74839,16 @@ export default function App() {
               // L'archivio dei consensi firmati resta dov'e', protetto.
               // (commento con //, non {/* */}: qui siamo dentro un array
               // JavaScript, non dentro il JSX)
+              // Provvisoria: c'è solo finché qualcuno è senza pacchetto.
+              // Niente permesso da assegnare, va usata adesso e poi
+              // sparisce — la tessera e il codice se ne vanno insieme.
+              ...(allieviSenzaKit > 0 ? [{
+                chiave: "assegnazionekit",
+                title: "Assegnazione kit",
+                descrizione: `${allieviSenzaKit} allievi senza pacchetto: senza, a fine corso non esce il diploma`,
+                Icona: IconaScatolaErp, attivo: true, badge: allieviSenzaKit,
+                onClick: () => setView("assegnazionekit"),
+              }] : []),
               { chiave: "qrconsensi", title: "QR consensi modelle", descrizione: "I codici da far inquadrare alle modelle per firmare il consenso", Icona: IconaTileModelle, attivo: true, onClick: () => setView("qrconsensi") },
               // sta in home e non piu' dentro Normative: lo aprono le
               // master e chi vende, ogni volta che iscrivono qualcuno —
@@ -75413,6 +75569,15 @@ export default function App() {
           onBack={() => setView("home")}
           titoloIndietro="Home"
           titolo={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {view === "assegnazionekit" && (
+        <PaginaAssegnazioneKit
+          iscritti={iscritti} corsiDate={corsiDate} corsi={corsi} location={location}
+          kitDefinizioni={kitDefinizioni}
+          onApriIscritto={apriIscrittoDaAssegnazioneKit}
+          onBack={() => setView("home")}
         />
       )}
 
