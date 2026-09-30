@@ -73371,6 +73371,11 @@ export default function App() {
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie", "location_prezzi"],
     gestionieventi: ["location", "master", "assistente", "venditori", "prodotti_shop", "bundle_componenti", "costi_categorie", "costi_sottocategorie", "fornitori", "hotel"],
+    // provvisoria: l'elenco degli allievi senza pacchetto. Senza questa
+    // riga la pagina riceveva prop vuote e diceva "tutti a posto" mentre
+    // la tessera in home contava sessantotto — le viste che non stanno
+    // in questo elenco non caricano niente
+    assegnazionekit: ["iscritti", "corsi_date", "corsi", "location", "kit_definizioni"],
     crmallievi: [],
     crmallievielenco: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
