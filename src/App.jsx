@@ -41794,6 +41794,23 @@ function SelettorePagamentoSpesa({ stato, metodoPagamento, onCambia, stile }) {
 // Scadenziario con "Pagato da cassa contanti" — quelle rinviate (origine
 // "scadenziario_cash") e quelle della parte bonifico (origine "automatico"
 // con la chiave della riga, senza il prefisso "cash_").
+// Una spesa di un EVENTO non esce dalla cassa contanti, per la stessa
+// ragione per cui non ne esce una di classe: chi va a una fiera parte con
+// del contante prelevato prima — un prelievo, gia' scritto e gia' sceso
+// dal saldo — e paga da quello. Segnarla anche come spesa in contanti la
+// toglie una seconda volta.
+//
+// Successo davvero con Tirana (26-27/09/2026): 3.000 euro usciti con due
+// prelievi il 23 e il 25, poi 1.560 euro di spese dell'evento registrate
+// "Cash no iva". La cassa ne contava 1.560 di troppo in meno.
+//
+// Se invece una spesa dell'evento la paghi tu dall'Italia prendendo i
+// soldi dalla cassaforte, quello e' un prelievo: lo scrivi li' ed esce
+// una volta sola, come dev'essere.
+function spesaDiEvento(s) {
+  return !!s.evento_id;
+}
+
 function spesaUscitaDallaBusta(s) {
   if (!s.classe_id) return false;
   if (s.origine === "scadenziario_cash") return false;
@@ -42253,11 +42270,18 @@ function PannelloCassaContanti({
       // solo le buste dichiarate rientrate, con l'importo congelato in quel
       // momento: quello e' il contante davvero arrivato in amministrazione
       supabase.from("corsi_date").select("id, busta_rientrata_il, busta_importo").not("busta_rientrata_il", "is", null).gte("busta_rientrata_il", aperta),
-      // le vendite in contanti dal POS che NON appartengono a un corso:
-      // quelle di un corso stanno gia' dentro la sua busta, e contarle qui
-      // vorrebbe dire contarle due volte
-      supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
-      supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento, classe_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
+      // Le vendite in contanti dal POS che non appartengono ne' a un corso
+      // ne' a un evento.
+      //
+      // Quelle di un corso stanno gia' dentro la sua busta. Quelle di un
+      // evento sono contante incassato altrove — allo stand di una fiera,
+      // spesso all'estero — e restano nelle mani di chi era li' finche'
+      // non le riporta: in cassaforte non ci sono. Sommarle al saldo fa
+      // dire alla cassa di avere soldi che sono in un'altra citta'.
+      // Verificato su Tirana il 27/09/2026: 594,76 euro di vendite allo
+      // stand contati come se fossero nel cassetto di Roma.
+      supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).is("evento_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
+      supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento, classe_id, evento_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
       supabase.from("corsi_date_buste").select("*").order("numero"),
     ]);
@@ -42266,7 +42290,7 @@ function PannelloCassaContanti({
     setBuste(bus.data || []);
     setBusteAppendici(app.data || []);
     setVenditeSenzaCorso(round2((ven.data || []).reduce((s, v) => s + (v.totale || 0), 0)));
-    setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x)).reduce((s, x) => s + (x.totale || 0), 0)));
+    setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x) && !spesaDiEvento(x)).reduce((s, x) => s + (x.totale || 0), 0)));
     setRicorrenti(ric.data || []);
   }
   useEffect(() => { carica(); }, []);
