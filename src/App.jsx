@@ -42272,8 +42272,22 @@ function SelettorePagamentoSpesa({ stato, metodoPagamento, onCambia, stile }) {
 // Se invece una spesa dell'evento la paghi tu dall'Italia prendendo i
 // soldi dalla cassaforte, quello e' un prelievo: lo scrivi li' ed esce
 // una volta sola, come dev'essere.
-function spesaDiEvento(s) {
-  return !!s.evento_id;
+// Una spesa di evento non tocca la cassa FINCHE' L'EVENTO E' APERTO.
+//
+// Mentre si e' in trasferta quel contante e' in viaggio: chi e' partito
+// paga con i soldi che si e' portato, e il conto dell'evento vive per
+// conto suo. Sommarlo alla cassa direbbe una bugia sul cassetto.
+//
+// Quando l'evento si chiude il conto si tira: la spesa e' fatta, il
+// contante e' uscito davvero, e da li' scende dalla cassa e compare in
+// prima nota come tutte le altre. Chiesto il 01/10/2026 su Tirana — 1.560
+// euro fra pasti, hotel e spedizioni.
+//
+// Un evento senza stato, o che non si trova, si considera aperto: meglio
+// una spesa che aspetta di un cassetto che si svuota da solo.
+function spesaDiEventoAperto(s, eventiConclusi) {
+  if (!s.evento_id) return false;
+  return !(eventiConclusi instanceof Set) || !eventiConclusi.has(s.evento_id);
 }
 
 // Una spesa scritta dallo scadenziario passivo, per qualunque strada.
@@ -42757,7 +42771,7 @@ function PannelloCassaContanti({
     setApertura(imp || null);
     setAperturaData(aperta);
     setAperturaSaldo(String(imp?.saldo_iniziale ?? 0));
-    const [mov, bus, ven, spe, ric, app] = await Promise.all([
+    const [mov, bus, ven, spe, ric, eve, app] = await Promise.all([
       supabase.from("cassa_contanti_movimenti").select("*").gte("data", aperta).order("data", { ascending: false }).order("creato_il", { ascending: false }),
       // solo le buste dichiarate rientrate, con l'importo congelato in quel
       // momento: quello e' il contante davvero arrivato in amministrazione
@@ -42775,6 +42789,7 @@ function PannelloCassaContanti({
       supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).is("evento_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
       supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento, classe_id, evento_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
+      supabase.from("eventi").select("id, stato"),
       supabase.from("corsi_date_buste").select("*").order("numero"),
     ]);
     if (mov.error) { setMsg(`Non riesco a leggere la cassa: ${mov.error.message}`); setMovimenti([]); return; }
@@ -42782,7 +42797,8 @@ function PannelloCassaContanti({
     setBuste(bus.data || []);
     setBusteAppendici(app.data || []);
     setVenditeSenzaCorso(round2((ven.data || []).reduce((s, v) => s + (v.totale || 0), 0)));
-    setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x) && !spesaDiEvento(x)).reduce((s, x) => s + (x.totale || 0), 0)));
+    const conclusi = new Set((eve.data || []).filter((e) => e.stato === "concluso").map((e) => e.id));
+    setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x) && !spesaDiEventoAperto(x, conclusi)).reduce((s, x) => s + (x.totale || 0), 0)));
     setRicorrenti(ric.data || []);
   }
   useEffect(() => { carica(); }, []);
