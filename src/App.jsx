@@ -5318,28 +5318,45 @@ function quotaVenditoreDi(totalePattuito) {
   if (base <= 50) return 50;
   return Math.ceil(base / 5) * 5;
 }
-// quota coordinatore: una percentuale secca del totale pattuito.
+// LA QUOTA COORDINATORE
 //
-// Nessun minimo e nessun arrotondamento ai 5 euro, al contrario della
-// quota venditore: quella e' un compenso che si contratta e si dice al
-// telefono, questa e' una frazione. Su mille euro fa due euro e mezzo.
+// Una percentuale secca del totale pattuito: nessun minimo e nessun
+// arrotondamento ai 5 euro, al contrario della quota venditore — quella
+// e' un compenso che si contratta e si dice al telefono, questa e' una
+// frazione. La si cambia in Impostazioni → Definizione provvigioni.
 //
 // Nata all'1% il 01/10/2026 e portata a 0,25% lo stesso giorno: sul
-// calendario di ottobre l'1% faceva 1.262 euro, troppo. Le quote gia'
-// scritte non si ricalcolano da sole — ogni iscrizione si tiene la cifra
-// pattuita quando e' stata salvata.
-const PERCENTUALE_COORDINATORE = 0.25;
-function quotaCoordinatoreDi(totalePattuito) {
-  return round2(parseNum(totalePattuito) * PERCENTUALE_COORDINATORE / 100);
+// calendario di ottobre l'1% faceva 1.262 euro, troppo.
+const CHIAVE_PERCENTUALE_COORDINATORE = "provvigioni_quotaCoordinatorePct";
+const PERCENTUALE_COORDINATORE_DEFAULT = 0.25;
+function percentualeCoordinatoreAttiva() {
+  const n = Number(LAYOUT_CACHE[CHIAVE_PERCENTUALE_COORDINATORE]);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : PERCENTUALE_COORDINATORE_DEFAULT;
 }
-// La quota coordinatore vale solo per i corsi che devono ancora
-// cominciare. E' un accordo nuovo (01/10/2026) e non si applica
-// all'indietro: su una classe gia' iniziata la casella non compare, e il
-// salvataggio non scrive quel campo — cosi' una scheda riaperta mesi dopo
-// non cancella, ne' inventa, una quota che allora non era pattuita.
+function quotaCoordinatoreDi(totalePattuito) {
+  return round2(parseNum(totalePattuito) * percentualeCoordinatoreAttiva() / 100);
+}
+// Vale solo per i corsi che devono ancora cominciare: e' un accordo nuovo
+// (01/10/2026) e non si applica all'indietro.
 function quotaCoordinatoreAttivaPer(corsoData) {
   const inizio = corsoData?.data_inizio || "";
   return !!inizio && inizio >= dataOggiStr();
+}
+// IL CONGELAMENTO VALE SOLO ALL'INDIETRO.
+//
+// Su un corso che deve ancora cominciare la quota si ricalcola sempre con
+// la percentuale di oggi: se domani si passa dallo 0,25% allo 0,3%, tutte
+// le classi future si adeguano da sole, senza che nessuno riapra novanta
+// schede. E' il motivo per cui la riga nei costi compare subito, senza
+// aspettare che qualcuno risalvi gli iscritti.
+//
+// Su un corso gia' cominciato invece comanda il numero scritto sulla
+// scheda: quello era l'accordo di allora, e un cambio di percentuale fatto
+// oggi non puo' riscrivere il passato. Se la colonna e' vuota — perche' il
+// corso e' anteriore a questo accordo — la quota e' zero.
+function quotaCoordinatoreDiIscritto(iscritto, corsoData) {
+  if (quotaCoordinatoreAttivaPer(corsoData)) return quotaCoordinatoreDi(iscritto?.totale_pattuito);
+  return iscritto?.quota_coordinatore || 0;
 }
 
 // etichette del modulo di iscrizione PDF (pagina 6, layout fisso a due colonne:
@@ -17273,6 +17290,25 @@ function DefinizioneProvvigioni() {
   const [fasce, setFasce] = useState(null);
   const [msg, setMsg] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [pctCoordinatore, setPctCoordinatore] = useImpostazioneCondivisa(CHIAVE_PERCENTUALE_COORDINATORE, PERCENTUALE_COORDINATORE_DEFAULT);
+  const [riallineando, setRiallineando] = useState(false);
+
+  // Cambiare la percentuale basta a far cambiare quello che si VEDE: sui
+  // corsi futuri la quota si ricalcola a ogni lettura. Questo tasto serve
+  // a far cambiare anche quello che e' SCRITTO sulle schede, perche' il
+  // giorno in cui quei corsi diventano passati e' il numero scritto a
+  // comandare. I corsi gia' cominciati non li tocca.
+  async function riallineaSchede() {
+    const pct = Number(pctCoordinatore);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) { setMsg("La percentuale deve stare fra 0 e 100."); return; }
+    if (!window.confirm(`Riscrivere la quota coordinatore allo ${String(pct).replace(".", ",")}% su tutte le schede dei corsi che devono ancora cominciare?\n\nI corsi gia' iniziati non vengono toccati.`)) return;
+    setRiallineando(true);
+    const { data, error } = await supabase.rpc("aggiorna_quote_coordinatore", { percentuale: pct });
+    setRiallineando(false);
+    if (error) { setMsg("Non sono riuscito ad aggiornare le schede: " + testoErrore(error)); return; }
+    const n = Number(data) || 0;
+    setMsg(n === 0 ? "Nessuna scheda da aggiornare: non ci sono corsi futuri con iscritti." : `Aggiornate ${n} sched${n === 1 ? "a" : "e"}.`);
+  }
 
   async function carica() {
     const { data, error } = await supabase.from("provvigioni_fasce").select("*").order("canale").order("margine_da");
@@ -17384,6 +17420,39 @@ function DefinizioneProvvigioni() {
         Ogni vendita congela l’importo maturato: cambiando queste fasce, le vendite già fatte non si ricalcolano.
       </div>
       {CANALI_PROVVIGIONE.map((c) => sezione(c.chiave, c.etichetta))}
+
+      {/* La quota coordinatore non e' una fascia: e' una percentuale sola
+          sul totale pattuito di ogni iscrizione, non sul margine di una
+          vendita. Sta qui perche' qui si cercano i compensi, ma ha una
+          scheda sua per non farla sembrare un quarto canale. */}
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={hStyle}>Provvigione coordinatore</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
+          Una percentuale del <b style={{ color: NAVY }}>totale pattuito</b> di ogni iscrizione — non del margine, come le fasce qui sopra.
+          Compare sulla scheda dell’allievo e come riga nei costi della classe, sotto le quote venditore.
+          {" "}Qui il congelamento vale <b style={{ color: NAVY }}>solo all’indietro</b>: i corsi che devono ancora cominciare si adeguano da soli alla percentuale di oggi, quelli gia’ iniziati si tengono la cifra con cui erano stati pattuiti.
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600 }}>Percentuale</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <input
+              style={campoNumero} inputMode="decimal" defaultValue={pctCoordinatore}
+              onBlur={(e) => {
+                const v = parseNum(e.target.value);
+                if (!Number.isFinite(v) || v < 0 || v > 100) { setMsg("La percentuale deve stare fra 0 e 100."); return; }
+                if (v !== Number(pctCoordinatore)) { setPctCoordinatore(v); setMsg(`Percentuale portata allo ${String(v).replace(".", ",")}%.`); }
+              }}
+            />
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
+          </div>
+          <Button variant="ghost" onClick={riallineaSchede} disabled={riallineando}>
+            {riallineando ? "Aggiorno…" : "Aggiorna le schede dei corsi futuri"}
+          </Button>
+        </div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
+          Su 1.000 € di pattuito fa {fmtEuroErp2(round2(1000 * (Number(pctCoordinatore) || 0) / 100))}.
+        </div>
+      </div>
 
       {/* La soglia e i premi non sono regolabili da qui: sono la stessa
           regola per tutti i canali, e metterli fra le fasce farebbe
@@ -25776,12 +25845,14 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // degli iscritti, con lo stesso vestito delle altre — bonifico e cash
   // liberi, i tre tondi B/C/1/2, il flag Busta/Scad.
   //
-  // Compare solo se c'e' qualcosa: la quota si scrive sulla scheda
-  // dell'allievo al salvataggio e vale solo per i corsi che devono ancora
-  // cominciare (vedi quotaCoordinatoreAttivaPer), quindi su una classe
-  // vecchia la somma e' zero e la riga non si disegna. Una riga da zero
-  // euro in mezzo ai costi e' rumore, non informazione.
-  const quoteCoordinatoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_coordinatore || 0), 0));
+  // Compare solo se c'e' qualcosa. Su un corso futuro la somma si calcola
+  // viva dal totale pattuito degli iscritti, quindi la riga c'e' subito,
+  // senza aspettare che qualcuno risalvi novanta schede; su uno passato
+  // vale quello che era stato scritto, e sulle classi anteriori a questo
+  // accordo e' zero e la riga non si disegna. Una riga da zero euro in
+  // mezzo ai costi e' rumore, non informazione. Vedi
+  // quotaCoordinatoreDiIscritto.
+  const quoteCoordinatoreClasse = round2(listaIscritti.reduce((s, i) => s + quotaCoordinatoreDiIscritto(i, corsoData), 0));
   const rigaCoordinatoreClasse = quoteCoordinatoreClasse > 0 ? (() => {
     const dati = conSplit(corsoData.id, {
       bonifico: corsoData.quota_coordinatore_bonifico,
@@ -30569,7 +30640,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   {quotaCoordinatoreAttiva && (
                   <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota coordinatore ({String(PERCENTUALE_COORDINATORE).replace(".", ",")}%)</div>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota coordinatore ({String(percentualeCoordinatoreAttiva()).replace(".", ",")}%)</div>
                     <div style={{ position: "relative" }}>
                       <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaCoordinatoreDi(totalePattuito).toFixed(2)} disabled />
                       {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
