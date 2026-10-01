@@ -42258,6 +42258,21 @@ function spesaDiEvento(s) {
 
 function spesaUscitaDallaBusta(s) {
   if (!s.classe_id) return false;
+  // "Cassa contanti" come metodo vuol dire che quei soldi sono usciti dal
+  // cassetto in amministrazione, non dalla busta del corso. Succede quando
+  // una quota in contanti viene rinviata nello scadenziario passivo e
+  // pagata dopo: la busta e' gia' rientrata e chiusa, quel contante li'
+  // dentro non c'e' piu'.
+  //
+  // Prima questa riga finiva fra le uscite dalla busta e non fra quelle
+  // della cassa: esattamente alla rovescia. Il 01/10/2026 erano 530 euro
+  // sul PMU Base del 14 settembre — due quote venditore e una commissione
+  // modelle — tolti a una busta da cui non erano usciti.
+  //
+  // Attenzione a non allargare la regola a "Contanti" e "Cash no iva": con
+  // quei due nomi sono scritte anche le quote pagate dalla busta in aula.
+  // Solo "Cassa contanti" nomina il cassetto.
+  if (s.metodo_pagamento === "Cassa contanti") return false;
   if (s.origine === "scadenziario_cash") return false;
   const chiave = String(s.origine_scadenziario_chiave || "");
   if (s.origine === "automatico" && chiave && !chiave.startsWith("cash_")) return false;
