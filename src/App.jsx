@@ -10232,8 +10232,47 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
 // Non e' un costo della classe e non passa dal riepilogo contabile: quella
 // riga c'e' stata per qualche ora il 01/10/2026 ed e' stata tolta di
 // proposito. Qui dentro e' l'unico posto dove questo numero vive.
+// "Commissioni sui corsi": quanto matura il coordinamento, mese per mese.
+//
+// SU TUTTO, non sulle proprie vendite. Chi coordina prende una percentuale
+// su OGNI iscrizione di OGNI corso, chiunque l'abbia chiusa: e' il
+// compenso per tenere in piedi il calendario, non una provvigione di
+// vendita. Qui dentro c'e' stato per sbaglio un filtro sul venditore, e
+// mostrava un decimo del vero.
+//
+// Si calcola sul totale pattuito, con la percentuale del corso (deroga sul
+// corso, altrimenti quella generale di Definizione provvigioni), e si
+// calcola VIVA: cambiare la percentuale in Impostazioni cambia tutti i
+// mesi all'istante.
+//
+// Tranne quelli gia' liquidati. Quelli scendono nello Storico con
+// l'importo congelato al momento del pagamento: un mese pagato non puo'
+// cambiare cifra perche' tre mesi dopo si e' decisa un'altra percentuale.
+// E' l'unico congelamento che serve, ed e' legato a un fatto — il
+// pagamento — non a una data.
+//
+// Non e' un costo della classe e non passa dal riepilogo contabile: quella
+// riga c'e' stata per qualche ora il 01/10/2026 ed e' stata tolta di
+// proposito. Qui dentro e' l'unico posto dove questo numero vive.
+// "OTTOBRE 2026" da "2026-10"
+function nomeMese(chiave) {
+  const [anno, m] = String(chiave || "").split("-").map(Number);
+  return `${(MESI[m - 1] || "").toUpperCase()} ${anno || ""}`.trim();
+}
+
 function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile }) {
-  const righePerMese = useMemo(() => {
+  const [liquidazioni, setLiquidazioni] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [inCorso, setInCorso] = useState("");
+
+  async function caricaLiquidazioni() {
+    const { data, error } = await supabase.from("commissioni_corsi_liquidazioni").select("*").order("mese", { ascending: false });
+    if (error) { setMsg("Non riesco a leggere lo storico: " + testoErrore(error)); setLiquidazioni([]); return; }
+    setLiquidazioni(data || []);
+  }
+  useEffect(() => { caricaLiquidazioni(); }, []);
+
+  const mesi = useMemo(() => {
     const perEdizione = new Map();
     (iscritti || []).forEach((i) => {
       const cd = (corsiDate || []).find((c) => c.id === i.corso_data_id);
@@ -10260,13 +10299,37 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
       m.totale = round2(m.totale + v.quota);
       m.iscritti += v.iscritti;
     });
-    // il mese piu' recente in cima: si guarda quello che si sta per
-    // prendere, non quello di un anno fa
-    return [...perMese.values()].sort((a, b) => b.chiave.localeCompare(a.chiave))
+    // dal piu' vecchio al piu' lontano: in cima i mesi appena passati,
+    // quelli che si sta per pagare; in fondo quelli ancora di la' da venire
+    return [...perMese.values()].sort((a, b) => a.chiave.localeCompare(b.chiave))
       .map((m) => ({ ...m, righe: m.righe.sort((a, b) => b.quota - a.quota) }));
   }, [iscritti, corsiDate, corsi, location]);
 
-  const totale = round2(righePerMese.reduce((s, m) => s + m.totale, 0));
+  const giaLiquidati = new Set((liquidazioni || []).map((l) => l.mese));
+  const daLiquidare = mesi.filter((m) => !giaLiquidati.has(m.chiave));
+
+  async function liquida(m) {
+    if (!window.confirm(`Segnare ${nomeMese(m.chiave)} come liquidato?\n\n${fmtEuroErp2(m.totale)} su ${m.iscritti} iscrizion${m.iscritti === 1 ? "e" : "i"}.\n\nL'importo si congela: da qui in avanti un cambio di percentuale non lo tocca piu'. Il mese scende nello Storico.`)) return;
+    setInCorso(m.chiave);
+    const { error } = await supabase.from("commissioni_corsi_liquidazioni").insert({
+      mese: m.chiave, importo: m.totale, iscritti: m.iscritti, edizioni: m.righe.length,
+      percentuale: percentualeCoordinatoreAttiva(),
+    });
+    setInCorso("");
+    if (error) { setMsg("Non sono riuscito a liquidare: " + testoErrore(error)); return; }
+    setMsg(`${nomeMese(m.chiave)} liquidato: ${fmtEuroErp2(m.totale)}.`);
+    caricaLiquidazioni();
+  }
+
+  async function riapri(l) {
+    if (!window.confirm(`Riaprire ${nomeMese(l.mese)}?\n\nTorna fra i mesi da liquidare e l'importo ricomincia a seguire la percentuale di oggi: puo' uscire diverso da ${fmtEuroErp2(l.importo)}.`)) return;
+    setInCorso(l.mese);
+    const { error } = await supabase.from("commissioni_corsi_liquidazioni").delete().eq("mese", l.mese);
+    setInCorso("");
+    if (error) { setMsg("Non sono riuscito a riaprire: " + testoErrore(error)); return; }
+    setMsg(`${nomeMese(l.mese)} riaperto.`);
+    caricaLiquidazioni();
+  }
 
   // "11–16", oppure "28 set – 2 ott" quando l'edizione scavalca il mese
   function giorni(v) {
@@ -10277,71 +10340,92 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
     if (mI === mF) return `${gI}–${gF}`;
     return `${gI} ${mese(mI)} – ${gF} ${mese(mF)}`;
   }
-  function nomeMese(chiave) {
-    const [anno, m] = chiave.split("-").map(Number);
-    return `${(MESI[m - 1] || "").toUpperCase()} ${anno}`;
-  }
 
   const griglia = isMobile ? "52px 1fr 68px 34px 62px" : "80px 1fr 150px 50px 92px";
   const intest = { ...fontBody, fontSize: isMobile ? 8.5 : 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 };
 
-  if (!righePerMese.length) {
+  function schedaMese(m) {
     return (
-      <div style={{ ...cardStyle, textAlign: "center", padding: 34, color: MUTED, ...fontBody, fontSize: 13.5 }}>
-        Nessuna iscrizione a calendario: quando ne arriva una, la commissione compare qui.
+      <div key={m.chiave} style={{ ...cardStyle, marginBottom: 14, padding: isMobile ? "12px 10px" : "16px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+          <span style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY, letterSpacing: 0.4 }}>{nomeMese(m.chiave)}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{m.iscritti} iscrizion{m.iscritti === 1 ? "e" : "i"}</span>
+            <Button variant="ghost" onClick={() => liquida(m)} disabled={inCorso === m.chiave}>
+              {inCorso === m.chiave ? "Liquido…" : "Liquida"}
+            </Button>
+          </div>
+        </div>
+
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: 30, alignItems: "center", padding: isMobile ? "0 8px" : "0 12px" }}>
+            <div style={intest}>Giorni</div>
+            <div style={intest}>Corso</div>
+            <div style={intest}>Sede</div>
+            <div style={{ ...intest, textAlign: "center" }}>Isc.</div>
+            <div style={{ ...intest, textAlign: "right" }}>Quota</div>
+          </div>
+          {m.righe.map((v) => (
+            <div key={v.id} style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, alignItems: "center", minHeight: 32, padding: isMobile ? "0 8px" : "0 12px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: MUTED, whiteSpace: "nowrap" }}>{giorni(v)}</span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: NAVY, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${v.corso} — ${String(v.pct).replace(".", ",")}% su ${fmtEuroErp2(v.pattuito)}`}>{v.corso}</span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={v.sede}>{v.sede}</span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textAlign: "center" }}>{v.iscritti}</span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(v.quota)}</span>
+            </div>
+          ))}
+          <div style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, alignItems: "center", minHeight: 36, padding: isMobile ? "0 8px" : "0 12px", background: "#F4F4F6" }}>
+            <span />
+            <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale del mese</span>
+            <span />
+            <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textAlign: "center" }}>{m.iscritti}</span>
+            <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.totale)}</span>
+          </div>
+        </div>
       </div>
     );
   }
 
+  if (liquidazioni == null) return <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 24 }}>Carico…</div>;
+
   return (
     <div>
-      <div style={{ ...cardStyle, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale maturato</div>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 3 }}>
-            Su ogni iscrizione di ogni corso, chiunque l’abbia chiusa: la percentuale del corso sul totale pattuito.
-          </div>
-        </div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 24 : 30, fontWeight: 800, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(totale)}</div>
-      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF3E4", border: `1px solid ${GOLD}55`, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>{msg}</div>}
 
-      {righePerMese.map((m) => (
-        <div key={m.chiave} style={{ ...cardStyle, marginBottom: 14, padding: isMobile ? "12px 10px" : "16px 16px" }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-            <span style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY, letterSpacing: 0.4 }}>{nomeMese(m.chiave)}</span>
-            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{m.iscritti} iscrizion{m.iscritti === 1 ? "e" : "i"}</span>
-          </div>
-
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: 30, alignItems: "center", padding: isMobile ? "0 8px" : "0 12px" }}>
-              <div style={intest}>Giorni</div>
-              <div style={intest}>Corso</div>
-              <div style={intest}>Sede</div>
-              <div style={{ ...intest, textAlign: "center" }}>Isc.</div>
-              <div style={{ ...intest, textAlign: "right" }}>Quota</div>
-            </div>
-            {m.righe.map((v) => (
-              <div key={v.id} style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, alignItems: "center", minHeight: 32, padding: isMobile ? "0 8px" : "0 12px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: MUTED, whiteSpace: "nowrap" }}>{giorni(v)}</span>
-                <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: NAVY, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${v.corso} — ${String(v.pct).replace(".", ",")}% su ${fmtEuroErp2(v.pattuito)}`}>{v.corso}</span>
-                <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={v.sede}>{v.sede}</span>
-                <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textAlign: "center" }}>{v.iscritti}</span>
-                <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(v.quota)}</span>
-              </div>
-            ))}
-            <div style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, alignItems: "center", minHeight: 36, padding: isMobile ? "0 8px" : "0 12px", background: "#F4F4F6" }}>
-              <span />
-              <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale del mese</span>
-              <span />
-              <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textAlign: "center" }}>{m.iscritti}</span>
-              <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.totale)}</span>
-            </div>
-          </div>
+      {daLiquidare.length === 0 ? (
+        <div style={{ ...cardStyle, textAlign: "center", padding: 34, color: MUTED, ...fontBody, fontSize: 13.5 }}>
+          {mesi.length === 0 ? "Nessuna iscrizione a calendario: quando ne arriva una, la commissione compare qui."
+            : "Tutti i mesi sono liquidati. Li trovi nello storico qui sotto."}
         </div>
-      ))}
+      ) : daLiquidare.map(schedaMese)}
+
+      {/* Lo storico: i mesi gia' pagati, con la cifra com'era quel giorno.
+          Qui non si ricalcola niente — e' il punto di averlo. */}
+      {liquidazioni.length > 0 && (
+        <div style={{ ...cardStyle, marginTop: 22 }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, letterSpacing: 0.4, marginBottom: 4 }}>Storico</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>
+            Mesi gia’ liquidati. L’importo è quello del giorno del pagamento: cambiare la percentuale non lo tocca più.
+          </div>
+          {liquidazioni.map((l) => (
+            <div key={l.mese} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, minWidth: isMobile ? 112 : 140 }}>{nomeMese(l.mese)}</span>
+              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 160px", minWidth: 0 }}>
+                {l.iscritti != null ? `${l.iscritti} iscrizioni` : ""}
+                {l.percentuale != null ? ` · ${String(l.percentuale).replace(".", ",")}%` : ""}
+                {l.liquidato_il ? ` · liquidato il ${fmtData(String(l.liquidato_il).slice(0, 10))}` : ""}
+              </span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 800, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(l.importo)}</span>
+              <Button variant="ghost" onClick={() => riapri(l)} disabled={inCorso === l.mese}>Riapri</Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
+
 
 function PaginaDashboardVenditori({
   corsi, location, corsiDate, iscritti, master, venditori, ricarica, onBack, apriData, onApriIscritto, venditoreBloccato,
