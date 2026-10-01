@@ -10216,8 +10216,13 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
   );
 }
 
-// "Commissioni sui corsi": quello che un venditore matura sulle iscrizioni
-// che ha chiuso, mese per mese.
+// "Commissioni sui corsi": quanto matura il coordinamento, mese per mese.
+//
+// SU TUTTO, non sulle proprie vendite. Chi coordina prende una percentuale
+// su OGNI iscrizione di OGNI corso, chiunque l'abbia chiusa: e' il
+// compenso per tenere in piedi il calendario, non una provvigione di
+// vendita. Qui dentro c'e' stato per sbaglio un filtro sul venditore, e
+// mostrava un decimo del vero.
 //
 // Si calcola sul totale pattuito, con la percentuale del corso (deroga sul
 // corso, altrimenti quella generale di Definizione provvigioni). Sempre
@@ -10227,13 +10232,10 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
 // Non e' un costo della classe e non passa dal riepilogo contabile: quella
 // riga c'e' stata per qualche ora il 01/10/2026 ed e' stata tolta di
 // proposito. Qui dentro e' l'unico posto dove questo numero vive.
-function CommissioniSuiCorsi({ venditoreSel, iscritti, corsiDate, corsi, location, isMobile }) {
+function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile }) {
   const righePerMese = useMemo(() => {
-    const mio = String(venditoreSel?.nome || "").trim().toUpperCase();
-    if (!mio) return [];
     const perEdizione = new Map();
     (iscritti || []).forEach((i) => {
-      if (String(i.tutor || "").trim().toUpperCase() !== mio) return;
       const cd = (corsiDate || []).find((c) => c.id === i.corso_data_id);
       if (!cd?.data_inizio) return;
       const corso = (corsi || []).find((c) => c.id === cd.corso_id) || null;
@@ -10262,7 +10264,7 @@ function CommissioniSuiCorsi({ venditoreSel, iscritti, corsiDate, corsi, locatio
     // prendere, non quello di un anno fa
     return [...perMese.values()].sort((a, b) => b.chiave.localeCompare(a.chiave))
       .map((m) => ({ ...m, righe: m.righe.sort((a, b) => b.quota - a.quota) }));
-  }, [venditoreSel, iscritti, corsiDate, corsi, location]);
+  }, [iscritti, corsiDate, corsi, location]);
 
   const totale = round2(righePerMese.reduce((s, m) => s + m.totale, 0));
 
@@ -10286,7 +10288,7 @@ function CommissioniSuiCorsi({ venditoreSel, iscritti, corsiDate, corsi, locatio
   if (!righePerMese.length) {
     return (
       <div style={{ ...cardStyle, textAlign: "center", padding: 34, color: MUTED, ...fontBody, fontSize: 13.5 }}>
-        Nessuna iscrizione chiusa da te: quando ne arriva una, la commissione compare qui.
+        Nessuna iscrizione a calendario: quando ne arriva una, la commissione compare qui.
       </div>
     );
   }
@@ -10297,7 +10299,7 @@ function CommissioniSuiCorsi({ venditoreSel, iscritti, corsiDate, corsi, locatio
         <div style={{ minWidth: 0 }}>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale maturato</div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 3 }}>
-            Sul totale pattuito di ogni iscrizione, con la percentuale del suo corso.
+            Su ogni iscrizione di ogni corso, chiunque l’abbia chiusa: la percentuale del corso sul totale pattuito.
           </div>
         </div>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 24 : 30, fontWeight: 800, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(totale)}</div>
@@ -10895,7 +10897,7 @@ function PaginaDashboardVenditori({
             )}
             {tabDashboardVenditore === "commissioni" && (
               <CommissioniSuiCorsi
-                venditoreSel={venditoreSel} iscritti={iscritti} corsiDate={corsiDate}
+                iscritti={iscritti} corsiDate={corsiDate}
                 corsi={corsi} location={location} isMobile={isMobile}
               />
             )}
