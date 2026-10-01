@@ -5318,12 +5318,17 @@ function quotaVenditoreDi(totalePattuito) {
   if (base <= 50) return 50;
   return Math.ceil(base / 5) * 5;
 }
-// quota coordinatore: l'1% del totale pattuito, e basta.
+// quota coordinatore: una percentuale secca del totale pattuito.
 //
 // Nessun minimo e nessun arrotondamento ai 5 euro, al contrario della
 // quota venditore: quella e' un compenso che si contratta e si dice al
-// telefono, questa e' una percentuale secca. Su mille euro fa dieci.
-const PERCENTUALE_COORDINATORE = 1;
+// telefono, questa e' una frazione. Su mille euro fa due euro e mezzo.
+//
+// Nata all'1% il 01/10/2026 e portata a 0,25% lo stesso giorno: sul
+// calendario di ottobre l'1% faceva 1.262 euro, troppo. Le quote gia'
+// scritte non si ricalcolano da sole — ogni iscrizione si tiene la cifra
+// pattuita quando e' stata salvata.
+const PERCENTUALE_COORDINATORE = 0.25;
 function quotaCoordinatoreDi(totalePattuito) {
   return round2(parseNum(totalePattuito) * PERCENTUALE_COORDINATORE / 100);
 }
@@ -18750,6 +18755,8 @@ const ICONA_RIGA_COSTO = {
   modelle: IconaGruppoTeam,
   master: IconaMasterRiga,
   assistente: IconaPersonaSemplice,
+  // il coordinatore e' una persona sola, come l'assistente: stessa icona
+  coordinatore: IconaPersonaSemplice,
   location: IconaCatCasa,
   alloggio: IconaHotelRiga,
 };
@@ -25765,6 +25772,32 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     };
   })();
 
+  // riga "Quota coordinatore": la somma delle quote scritte sulle schede
+  // degli iscritti, con lo stesso vestito delle altre — bonifico e cash
+  // liberi, i tre tondi B/C/1/2, il flag Busta/Scad.
+  //
+  // Compare solo se c'e' qualcosa: la quota si scrive sulla scheda
+  // dell'allievo al salvataggio e vale solo per i corsi che devono ancora
+  // cominciare (vedi quotaCoordinatoreAttivaPer), quindi su una classe
+  // vecchia la somma e' zero e la riga non si disegna. Una riga da zero
+  // euro in mezzo ai costi e' rumore, non informazione.
+  const quoteCoordinatoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_coordinatore || 0), 0));
+  const rigaCoordinatoreClasse = quoteCoordinatoreClasse > 0 ? (() => {
+    const dati = conSplit(corsoData.id, {
+      bonifico: corsoData.quota_coordinatore_bonifico,
+      cash: corsoData.quota_coordinatore_cash,
+    });
+    // finche' nessuno ha scelto, meta' e meta': e' il default delle righe
+    // a split libero, e i tre tondi lo mostrano gia' acceso su 1/2
+    const bonifico = dati.bonifico != null ? round2(dati.bonifico) : round2(quoteCoordinatoreClasse / 2);
+    return {
+      rigaId: corsoData.id, tabella: "corsi_date", tipo: "coordinatore", nome: "Quota coordinatore",
+      totale: quoteCoordinatoreClasse,
+      bonifico,
+      cash: round2(quoteCoordinatoreClasse - bonifico),
+    };
+  })() : null;
+
   // durata dell'edizione in giorni, dedotta dal calendario (data_inizio/
   // data_fine): serve sia al compenso master (fascia = tariffa
   // giornaliera, moltiplicata per i giorni) sia al costo location e al
@@ -26012,6 +26045,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
 
   const righeSpeseTutte = [
     rigaVenditoreClasse,
+    ...(rigaCoordinatoreClasse ? [rigaCoordinatoreClasse] : []),
     ...righeMasterClasse,
     ...(rigaLocationClasse ? [rigaLocationClasse] : []),
     ...righeAssistentiClasse,
@@ -26021,7 +26055,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   const totaleSpeseAutomaticheClasse = round2(righeSpeseTutte.reduce((s, r) => s + r.totale, 0));
 
   return {
-    listaIscritti, quoteVenditoreClasse, durataGiorniCorso,
+    listaIscritti, quoteVenditoreClasse, quoteCoordinatoreClasse, rigaCoordinatoreClasse, durataGiorniCorso,
     righeMasterClasse, rigaLocationClasse, costoLocationClasse, righeAlloggioClasse, righeAssistentiClasse,
     totaleModelleClasse, commissioneModelleClasse, rigaCommissioneModelleClasse,
     righeSpeseTutte, totaleSpeseAutomaticheClasse,
@@ -26796,6 +26830,7 @@ function PannelloRiepilogoAmministrativo({
   function campiSplitDi(tipo) {
     if (tipo === "venditore") return ["quota_venditore_bonifico", "quota_venditore_cash"];
     if (tipo === "modelle") return ["commissione_modelle_bonifico", "commissione_modelle_cash"];
+    if (tipo === "coordinatore") return ["quota_coordinatore_bonifico", "quota_coordinatore_cash"];
     return ["quota_bonifico", "quota_cash"];
   }
   function modalitaSplitMaster(r) {
@@ -30534,7 +30569,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   {quotaCoordinatoreAttiva && (
                   <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota coordinatore ({PERCENTUALE_COORDINATORE}%)</div>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota coordinatore ({String(PERCENTUALE_COORDINATORE).replace(".", ",")}%)</div>
                     <div style={{ position: "relative" }}>
                       <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaCoordinatoreDi(totalePattuito).toFixed(2)} disabled />
                       {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
