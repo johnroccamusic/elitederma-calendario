@@ -5318,6 +5318,24 @@ function quotaVenditoreDi(totalePattuito) {
   if (base <= 50) return 50;
   return Math.ceil(base / 5) * 5;
 }
+// quota coordinatore: l'1% del totale pattuito, e basta.
+//
+// Nessun minimo e nessun arrotondamento ai 5 euro, al contrario della
+// quota venditore: quella e' un compenso che si contratta e si dice al
+// telefono, questa e' una percentuale secca. Su mille euro fa dieci.
+const PERCENTUALE_COORDINATORE = 1;
+function quotaCoordinatoreDi(totalePattuito) {
+  return round2(parseNum(totalePattuito) * PERCENTUALE_COORDINATORE / 100);
+}
+// La quota coordinatore vale solo per i corsi che devono ancora
+// cominciare. E' un accordo nuovo (01/10/2026) e non si applica
+// all'indietro: su una classe gia' iniziata la casella non compare, e il
+// salvataggio non scrive quel campo — cosi' una scheda riaperta mesi dopo
+// non cancella, ne' inventa, una quota che allora non era pattuita.
+function quotaCoordinatoreAttivaPer(corsoData) {
+  const inizio = corsoData?.data_inizio || "";
+  return !!inizio && inizio >= dataOggiStr();
+}
 
 // etichette del modulo di iscrizione PDF (pagina 6, layout fisso a due colonne:
 // etichetta a sinistra, valore a destra sulla stessa riga) mappate ai campi del form
@@ -11802,6 +11820,7 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
           <RigaLettura>
             <CampoLettura label="Totale pattuito (senza IVA)" valore={d.totale_pattuito != null ? fmtEuroErp2(d.totale_pattuito) : null} minLabelHeight={34} />
             <CampoLettura label="Tipo di corso" valore={d.tipo_corso} minLabelHeight={34} />
+            {d.quota_coordinatore != null && <CampoLettura label="Quota coordinatore" valore={fmtEuroErp2(d.quota_coordinatore)} minLabelHeight={34} />}
             {d.quota_speciale != null && <CampoLettura label="Quota speciale" valore={fmtEuroErp2(d.quota_speciale)} minLabelHeight={34} />}
           </RigaLettura>
         </div>
@@ -26415,6 +26434,8 @@ function CasellaRiepilogoCash({ etichetta, valore, nota, icona, notaIcona, evide
   );
 }
 
+const CHIAVE_VENDITE_CORSO_APERTE = "riepilogo_vendite_al_corso_aperte";
+
 function PannelloRiepilogoAmministrativo({
   corsoData, iscritti, spese, venditeShop, prodottiShop, corsi = [],
   corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel,
@@ -26436,6 +26457,24 @@ function PannelloRiepilogoAmministrativo({
   // che non puo' andare a capo, quindi e' lei a decidere — trovata la
   // misura giusta per la cifra, tondo, etichetta e pastiglia scendono
   // nella stessa proporzione.
+  // "Vendite al corso" si apre e si chiude, e parte chiusa: la lista dei
+  // prodotti e' un dettaglio, mentre il numero che si cerca scorrendo il
+  // riepilogo e' il totale. Chiusa resta la banda del totale, con contanti
+  // e POS sotto.
+  //
+  // La scelta si ricorda nel browser di chi guarda: e' una preferenza di
+  // chi legge, non un dato della classe, e rifarla a ogni apertura della
+  // scheda sarebbe una seccatura. Se il browser non la sa dare — finestra
+  // anonima, dati del sito cancellati — si riparte da chiusa senza
+  // rompere niente.
+  const [venditeAperte, setVenditeAperte] = useState(() => {
+    try { return localStorage.getItem(CHIAVE_VENDITE_CORSO_APERTE) === "1"; } catch { return false; }
+  });
+  const cambiaVenditeAperte = () => setVenditeAperte((v) => {
+    try { localStorage.setItem(CHIAVE_VENDITE_CORSO_APERTE, v ? "0" : "1"); } catch { /* niente da fare */ }
+    return !v;
+  });
+
   const rigaCashRef = useRef(null);
   const [larghezzaCash, setLarghezzaCash] = useState(0);
   useLayoutEffect(() => {
@@ -27727,21 +27766,32 @@ function PannelloRiepilogoAmministrativo({
                         titolo, sottotitolo. Erano due blocchi con lo stesso
                         peso ma due vestiti diversi, e sembravano di due
                         pagine diverse. */}
-                    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, marginBottom: 14, flexWrap: "wrap" }}>
+                    <div
+                      onClick={cambiaVenditeAperte}
+                      style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, marginBottom: venditeAperte ? 14 : 10, flexWrap: "nowrap", cursor: "pointer" }}
+                    >
                       <span style={{ width: isMobile ? 38 : 46, height: isMobile ? 38 : 46, borderRadius: 12, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0 }}>
                         <IconaCarrelloPos size={isMobile ? 20 : 24} color={NAVY} />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.15 }}>Vendite al corso</div>
                         <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: MUTED, marginTop: 2 }}>
-                          Prodotti venduti agli allievi durante il corso. Il contante entra nella busta insieme al resto.
+                          {venditeAperte
+                            ? "Prodotti venduti agli allievi durante il corso. Il contante entra nella busta insieme al resto."
+                            : `${righeVenditeAlCorso.length} prodott${righeVenditeAlCorso.length === 1 ? "o" : "i"} — tocca per vedere la lista`}
                         </div>
                       </div>
+                      <span title={venditeAperte ? "Chiudi la lista" : "Apri la lista"} style={{ width: 32, height: 32, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: venditeAperte ? "rotate(180deg)" : "none" }}>
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </span>
                     </div>
 
                     {/* Le tre colonne: prodotto, quanti, quanto. La cifra e'
                         allineata a destra come nella tabella dei costi —
                         e' l'unico modo perche' le unita' si incolonnino. */}
+                    {venditeAperte && (
                     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 8 }}>
                       <div style={{ display: "grid", gridTemplateColumns: GRIGLIA_VENDITE_CORSO, gap: isMobile ? 6 : 10, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: ALTEZZA_RIGA, alignItems: "center", padding: isMobile ? "0 10px" : "0 14px" }}>
                         <div style={intestazioneVendite}>Prodotto</div>
@@ -27756,9 +27806,11 @@ function PannelloRiepilogoAmministrativo({
                         </div>
                       ))}
                     </div>
+                    )}
 
                     {/* La banda del totale, sulla stessa griglia delle righe:
-                        la cifra cade sotto la colonna che somma. */}
+                        la cifra cade sotto la colonna che somma. Resta anche
+                        a lista chiusa: e' il numero per cui si guarda qui. */}
                     <div style={{ display: "grid", gridTemplateColumns: GRIGLIA_VENDITE_CORSO, gap: isMobile ? 6 : 10, alignItems: "center", background: "#F4F4F6", borderRadius: 12, minHeight: 45, padding: isMobile ? "0 10px" : "0 14px" }}>
                       <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: isMobile ? 6 : 9, overflow: "hidden" }}>
                         <span style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -28147,6 +28199,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [emailIscritto, setEmailIscritto] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
+  // vale solo per le classi non ancora cominciate: vedi quotaCoordinatoreAttivaPer
+  const quotaCoordinatoreAttiva = quotaCoordinatoreAttivaPer(corsoData);
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
   const [fileScreenRecap, setFileScreenRecap] = useState(null);
@@ -29241,6 +29295,15 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         // se compilata, la quota speciale sostituisce ovunque la quota venditore
         // calcolata al 7%: è quest'unico campo che viene letto in tutta l'app
         quota_venditore: quotaSpeciale !== "" ? parseNum(quotaSpeciale) : (totalePattuito === "" ? null : quotaVenditoreDi(totalePattuito)),
+        // La quota coordinatore non la tocca la quota speciale: quella
+        // sostituisce il compenso del venditore, non l'1% del coordinatore.
+        //
+        // Sui corsi gia' iniziati la chiave non entra nemmeno nel payload:
+        // su un `update` vuol dire "non toccare", quindi una scheda vecchia
+        // riaperta oggi si tiene quello che c'era invece di azzerarlo.
+        ...(quotaCoordinatoreAttiva
+          ? { quota_coordinatore: totalePattuito === "" ? null : quotaCoordinatoreDi(totalePattuito) }
+          : {}),
         file_iscrizione: pathIscrizione,
         file_screen_acconto: pathAcconto,
         file_screen_recap: pathRecap,
@@ -30468,6 +30531,16 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
                     </div>
                   </div>
+                  <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
+                  {quotaCoordinatoreAttiva && (
+                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota coordinatore ({PERCENTUALE_COORDINATORE}%)</div>
+                    <div style={{ position: "relative" }}>
+                      <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaCoordinatoreDi(totalePattuito).toFixed(2)} disabled />
+                      {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
+                    </div>
+                  </div>
+                  )}
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   <div style={{ flex: "1 1 0", minWidth: 0 }}>
                     <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota speciale</div>
