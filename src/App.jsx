@@ -46878,7 +46878,7 @@ function PaginaInserimentoCostiRicavi({
   ruoloUtente, quoteVenditoriSplit, impegnoTabella = [], locationPrezzi = [],
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
-  abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, venditeShop = [],
+  abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, venditeShop = [], eventi = [],
   // servono ai cinque segnalatori in cima, gli stessi di Contabilita'
   documentoFornitoreTabella = [],
   // l'ordine delle tessere e' lo stesso di Contabilita': e' una barra di
@@ -46991,7 +46991,15 @@ function PaginaInserimentoCostiRicavi({
   // Quello che deve ancora succedere si guarda nello scadenziario, non in
   // prima nota. Qui si entra il giorno in cui i soldi si muovono.
   const oggiPN = dataOggiStr();
-  const spesePagate = (spese || []).filter((s) => s.stato === "pagata" && dataCassaPN(s) && dataCassaPN(s) <= oggiPN);
+  // E non registra il nulla. Una riga da zero euro non e' un movimento:
+  // e' una voce che qualcuno ha aperto e non ha mai riempito — nasce cosi'
+  // da "Aggiungi spesa" nel riepilogo di un corso, con l'importo a zero e
+  // lo stato "pagata" che arriva dal default della colonna. In prima nota
+  // diceva "− 0,00 € USCITA", che non e' ne' vero ne' utile.
+  //
+  // Resta dov'e' nata, nei costi della classe, dove la si riempie o la si
+  // cancella: qui sparisce e basta.
+  const spesePagate = (spese || []).filter((s) => s.stato === "pagata" && dataCassaPN(s) && dataCassaPN(s) <= oggiPN && Number(s.totale) > 0);
   const daRiconciliarePN = (s) => !s.numero_documento;
   const speseRealiFiltrate = spesePagate
     .filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine)
@@ -47019,11 +47027,24 @@ function PaginaInserimentoCostiRicavi({
   // sola: in estratto conto c'e' una riga, e qui deve essercene una
   // anche per poterla riconciliare con quella. Restano righe distinte nel
   // database, ognuna col suo corso — qui si sommano solo per leggerle.
+  // Le spese di un EVENTO si leggono come una voce sola.
+  //
+  // Una fiera non e' sette uscite: e' una trasferta, e in prima nota
+  // interessa quanto e' costata. Le righe restano distinte nel database —
+  // ognuna con la sua categoria e il suo fornitore — qui si sommano solo
+  // per leggerle, come gia' si fa per le spese coperte dallo stesso
+  // bonifico.
+  //
+  // La data e' sempre quella di FINE dell'evento: una trasferta si chiude
+  // l'ultimo giorno, e le sue spese sono sparse sui giorni prima.
+  const eventiById = useMemo(() => Object.fromEntries((eventi || []).map((e) => [e.id, e])), [eventi]);
   const righeUniteRicerca = (() => {
     const gruppi = new Map();
     const fuori = [];
     speseRealiRicercate.forEach((sp) => {
-      const g = sp.gruppo_pagamento;
+      // il bonifico cumulativo vince sull'evento: quello e' un movimento
+      // vero sull'estratto conto, da riconciliare riga contro riga
+      const g = sp.gruppo_pagamento || (sp.evento_id ? `evento_${sp.evento_id}` : null);
       if (!g) { fuori.push(normalizzaRigaReale(sp)); return; }
       if (!gruppi.has(g)) gruppi.set(g, []);
       gruppi.get(g).push(sp);
@@ -47034,11 +47055,17 @@ function PaginaInserimentoCostiRicavi({
       const capo = normalizzaRigaReale(membri[0]);
       const totale = round2(membri.reduce((t, m) => t + (Number(m.totale) || 0), 0));
       const fornitore = membri[0].fornitore_id ? fornitoriById[membri[0].fornitore_id] : null;
+      const evento = String(g).startsWith("evento_") ? eventiById[String(g).slice(7)] : null;
       cumuli.push({
         ...capo,
         id: `gruppo_${g}`, gruppo: g, speseGruppo: membri,
-        descrizione: membri[0].numero_documento ? `${fornitore?.nome || "Fornitore"} — fattura n. ${membri[0].numero_documento}` : (fornitore?.nome || "Bonifico cumulativo"),
-        sottotitolo: `${membri.length} spese: ${membri.map((m) => m.descrizione || "—").join(" · ")}`,
+        ...(evento ? { dataDocumento: evento.data_fine || evento.data_inizio || capo.dataDocumento } : {}),
+        descrizione: evento
+          ? evento.nome
+          : (membri[0].numero_documento ? `${fornitore?.nome || "Fornitore"} — fattura n. ${membri[0].numero_documento}` : (fornitore?.nome || "Bonifico cumulativo")),
+        sottotitolo: evento
+          ? `Evento · ${membri.length} spes${membri.length === 1 ? "a" : "e"}: ${membri.map((m) => m.descrizione || "—").join(" · ")}`
+          : `${membri.length} spese: ${membri.map((m) => m.descrizione || "—").join(" · ")}`,
         importo: totale,
       });
     });
@@ -73959,7 +73986,7 @@ export default function App() {
     statanalisicodici: ["corsi", "location", "corsi_date", "master", "prodotti_shop", "regole_referral_automatico"],
     statvenditealbanco: ["vendite_shop_storico"],
     statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop_storico"],
-    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno"],
+    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno", "eventi"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta"],
     venditeshop: ["vendite_shop"],
     // "corsi" e "corsi_date" servono alla colonna "Frangente": la vendita
@@ -75861,6 +75888,7 @@ export default function App() {
           spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} venditeShop={venditeShop}
+          eventi={eventi}
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
           categorieGruppi={categorieGruppi}
