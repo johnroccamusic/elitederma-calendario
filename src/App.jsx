@@ -42285,6 +42285,14 @@ function SelettorePagamentoSpesa({ stato, metodoPagamento, onCambia, stile }) {
 //
 // Un evento senza stato, o che non si trova, si considera aperto: meglio
 // una spesa che aspetta di un cassetto che si svuota da solo.
+// Lo stesso per gli incassi: il contante preso allo stand resta la' finche'
+// l'evento e' aperto, e rientra in cassa quando si chiude — consegnato
+// insieme alla busta. L'evento si tira tutto insieme, entrate e uscite.
+function incassoDiEventoAperto(v, eventiConclusi) {
+  if (!v.evento_id) return false;
+  return !(eventiConclusi instanceof Set) || !eventiConclusi.has(v.evento_id);
+}
+
 function spesaDiEventoAperto(s, eventiConclusi) {
   if (!s.evento_id) return false;
   return !(eventiConclusi instanceof Set) || !eventiConclusi.has(s.evento_id);
@@ -42776,17 +42784,17 @@ function PannelloCassaContanti({
       // solo le buste dichiarate rientrate, con l'importo congelato in quel
       // momento: quello e' il contante davvero arrivato in amministrazione
       supabase.from("corsi_date").select("id, busta_rientrata_il, busta_importo").not("busta_rientrata_il", "is", null).gte("busta_rientrata_il", aperta),
-      // Le vendite in contanti dal POS che non appartengono ne' a un corso
-      // ne' a un evento.
+      // Le vendite in contanti dal POS che non appartengono a un corso:
+      // quelle di un corso stanno gia' dentro la sua busta, e contarle qui
+      // vorrebbe dire contarle due volte.
       //
-      // Quelle di un corso stanno gia' dentro la sua busta. Quelle di un
-      // evento sono contante incassato altrove — allo stand di una fiera,
-      // spesso all'estero — e restano nelle mani di chi era li' finche'
-      // non le riporta: in cassaforte non ci sono. Sommarle al saldo fa
-      // dire alla cassa di avere soldi che sono in un'altra citta'.
-      // Verificato su Tirana il 27/09/2026: 594,76 euro di vendite allo
-      // stand contati come se fossero nel cassetto di Roma.
-      supabase.from("vendite_shop").select("totale").eq("metodo_pagamento", "contanti").is("corso_data_id", null).is("evento_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
+      // Quelle di un EVENTO dipendono da come sta l'evento, e il filtro lo
+      // fa dopo (vedi incassoDiEventoAperto): finche' la fiera e' aperta
+      // quel contante e' nelle mani di chi sta allo stand, spesso
+      // all'estero, e in cassaforte non c'e'; quando l'evento si chiude
+      // viene consegnato insieme alla busta, ed entra. Stessa regola delle
+      // spese, dalla parte opposta: l'evento si tira tutto insieme.
+      supabase.from("vendite_shop").select("totale, evento_id").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
       supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento, classe_id, evento_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
       supabase.from("eventi").select("id, stato"),
@@ -42796,8 +42804,8 @@ function PannelloCassaContanti({
     setMovimenti(mov.data || []);
     setBuste(bus.data || []);
     setBusteAppendici(app.data || []);
-    setVenditeSenzaCorso(round2((ven.data || []).reduce((s, v) => s + (v.totale || 0), 0)));
     const conclusi = new Set((eve.data || []).filter((e) => e.stato === "concluso").map((e) => e.id));
+    setVenditeSenzaCorso(round2((ven.data || []).filter((v) => !incassoDiEventoAperto(v, conclusi)).reduce((s, v) => s + (v.totale || 0), 0)));
     setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x) && !spesaDiEventoAperto(x, conclusi)).reduce((s, x) => s + (x.totale || 0), 0)));
     setRicorrenti(ric.data || []);
   }
