@@ -10305,8 +10305,20 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
       .map((m) => ({ ...m, righe: m.righe.sort((a, b) => b.quota - a.quota) }));
   }, [iscritti, corsiDate, corsi, location]);
 
-  const giaLiquidati = new Set((liquidazioni || []).map((l) => l.mese));
-  const daLiquidare = mesi.filter((m) => !giaLiquidati.has(m.chiave));
+  const perMese = new Map((liquidazioni || []).map((l) => [l.mese, l]));
+  // Un mese FINITO ha smesso di maturare — nessuna iscrizione nuova puo'
+  // piu' entrarci — quindi scende nello storico, dove aspetta di essere
+  // liquidato e poi ci resta. Sopra restano il mese in corso e quelli che
+  // devono venire: quelli che possono ancora cambiare.
+  const meseCorrente = dataOggiStr().slice(0, 7);
+  const aperti = mesi.filter((m) => m.chiave >= meseCorrente);
+  const chiusi = mesi.filter((m) => m.chiave < meseCorrente);
+  // un mese liquidato di cui non resta nessuna iscrizione a calendario non
+  // deve sparire dallo storico: c'e' stato, e qualcuno l'ha pagato
+  const orfani = (liquidazioni || []).filter((l) => !mesi.some((m) => m.chiave === l.mese))
+    .map((l) => ({ chiave: l.mese, righe: [], totale: Number(l.importo) || 0, iscritti: l.iscritti || 0 }));
+  // nello storico il piu' recente per primo: si guarda l'ultimo chiuso
+  const storico = [...chiusi, ...orfani].sort((a, b) => b.chiave.localeCompare(a.chiave));
 
   async function liquida(m) {
     if (!window.confirm(`Segnare ${nomeMese(m.chiave)} come liquidato?\n\n${fmtEuroErp2(m.totale)} su ${m.iscritti} iscrizion${m.iscritti === 1 ? "e" : "i"}.\n\nL'importo si congela: da qui in avanti un cambio di percentuale non lo tocca piu'. Il mese scende nello Storico.`)) return;
@@ -10392,39 +10404,47 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
     <div>
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF3E4", border: `1px solid ${GOLD}55`, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>{msg}</div>}
 
-      {daLiquidare.length === 0 ? (
+      {aperti.length === 0 ? (
         <div style={{ ...cardStyle, textAlign: "center", padding: 34, color: MUTED, ...fontBody, fontSize: 13.5 }}>
           {mesi.length === 0 ? "Nessuna iscrizione a calendario: quando ne arriva una, la commissione compare qui."
-            : "Tutti i mesi sono liquidati. Li trovi nello storico qui sotto."}
+            : "Nessun mese ancora aperto: quelli chiusi stanno nello storico qui sotto."}
         </div>
-      ) : daLiquidare.map(schedaMese)}
+      ) : aperti.map(schedaMese)}
 
-      {/* Lo storico: i mesi gia' pagati, con la cifra com'era quel giorno.
-          Qui non si ricalcola niente — e' il punto di averlo. */}
-      {liquidazioni.length > 0 && (
+      {/* Lo STORICO: i mesi finiti.
+          Un mese chiuso ha smesso di maturare, quindi sta qui anche se
+          nessuno l'ha ancora pagato — e si vede dallo stato. Una volta
+          liquidato mostra la cifra congelata quel giorno e non la
+          ricalcola piu': e' il punto di averlo. */}
+      {storico.length > 0 && (
         <div style={{ ...cardStyle, marginTop: 22 }}>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY, letterSpacing: 0.4, marginBottom: 4 }}>Storico</div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>
-            Mesi gia’ liquidati. L’importo è quello del giorno del pagamento: cambiare la percentuale non lo tocca più.
+            Mesi chiusi: non maturano più. Quelli liquidati tengono l’importo del giorno del pagamento — cambiare la percentuale non lo tocca.
           </div>
-          {liquidazioni.map((l) => (
-            <div key={l.mese} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, minWidth: isMobile ? 112 : 140 }}>{nomeMese(l.mese)}</span>
-              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 160px", minWidth: 0 }}>
-                {l.iscritti != null ? `${l.iscritti} iscrizioni` : ""}
-                {l.percentuale != null ? ` · ${String(l.percentuale).replace(".", ",")}%` : ""}
-                {l.liquidato_il ? ` · liquidato il ${fmtData(String(l.liquidato_il).slice(0, 10))}` : ""}
-              </span>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 800, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(l.importo)}</span>
-              <Button variant="ghost" onClick={() => riapri(l)} disabled={inCorso === l.mese}>Riapri</Button>
-            </div>
-          ))}
+          {storico.map((m) => {
+            const l = perMese.get(m.chiave) || null;
+            const importo = l ? (Number(l.importo) || 0) : m.totale;
+            const quanti = l ? (l.iscritti ?? m.iscritti) : m.iscritti;
+            return (
+              <div key={m.chiave} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, minWidth: isMobile ? 112 : 140 }}>{nomeMese(m.chiave)}</span>
+                <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 170px", minWidth: 0 }}>
+                  {quanti} iscrizion{quanti === 1 ? "e" : "i"}
+                  {l ? `${l.percentuale != null ? ` · ${String(l.percentuale).replace(".", ",")}%` : ""} · liquidato il ${fmtData(String(l.liquidato_il).slice(0, 10))}` : " · da liquidare"}
+                </span>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 800, color: l ? NAVY : "#B07D2B", whiteSpace: "nowrap" }}>{fmtEuroErp2(importo)}</span>
+                {l
+                  ? <Button variant="ghost" onClick={() => riapri(l)} disabled={inCorso === m.chiave}>Riapri</Button>
+                  : <Button variant="ghost" onClick={() => liquida(m)} disabled={inCorso === m.chiave}>{inCorso === m.chiave ? "Liquido…" : "Liquida"}</Button>}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
-
 
 
 function PaginaDashboardVenditori({
@@ -27205,8 +27225,8 @@ function PannelloRiepilogoAmministrativo({
   // due insiemi: le quote uscite dalla busta (scritte da Disponi pagamenti)
   // e quelle saldate dallo scadenziario passivo (dalla cassa contanti o con
   // bonifico). Le seconde restano "rinviate": non hanno toccato la busta
-  const chiaviSpeseEsistenti = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave && x.origine !== "scadenziario_cash").map((x) => x.origine_scadenziario_chiave));
-  const chiaviPagateDalloScadenziario = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave && x.origine === "scadenziario_cash").map((x) => x.origine_scadenziario_chiave));
+  const chiaviSpeseEsistenti = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave && !pagataDalloScadenziario(x)).map((x) => x.origine_scadenziario_chiave));
+  const chiaviPagateDalloScadenziario = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave && pagataDalloScadenziario(x)).map((x) => x.origine_scadenziario_chiave));
   // Una quota in contante puo' uscire dalla busta per due strade: o e'
   // stata pagata davvero (spesa registrata), oppure e' stata rinviata
   // perche' il contante del corso non bastava — e allora diventa un
@@ -42256,24 +42276,36 @@ function spesaDiEvento(s) {
   return !!s.evento_id;
 }
 
+// Una spesa scritta dallo scadenziario passivo, per qualunque strada.
+// Serve a un posto solo: dire che quel soldo NON e' uscito dalla busta.
+function pagataDalloScadenziario(s) {
+  return s?.origine === "scadenziario_cash" || s?.origine === "scadenziario";
+}
+
 function spesaUscitaDallaBusta(s) {
   if (!s.classe_id) return false;
-  // "Cassa contanti" come metodo vuol dire che quei soldi sono usciti dal
-  // cassetto in amministrazione, non dalla busta del corso. Succede quando
-  // una quota in contanti viene rinviata nello scadenziario passivo e
-  // pagata dopo: la busta e' gia' rientrata e chiusa, quel contante li'
-  // dentro non c'e' piu'.
+  // UNA VOLTA RINVIATA, UNA QUOTA NON TORNA PIU' SULLA BUSTA.
   //
-  // Prima questa riga finiva fra le uscite dalla busta e non fra quelle
-  // della cassa: esattamente alla rovescia. Il 01/10/2026 erano 530 euro
-  // sul PMU Base del 14 settembre — due quote venditore e una commissione
-  // modelle — tolti a una busta da cui non erano usciti.
+  // Finire nello scadenziario passivo vuol dire che quel contante dalla
+  // busta non e' uscito: la busta e' gia' rientrata e chiusa. Che poi la
+  // si paghi in contanti, con "Cash no iva" o dalla cassa contanti non
+  // cambia niente — esce da un'altra parte, e sulla busta non deve tornare
+  // mai piu'.
   //
-  // Attenzione a non allargare la regola a "Contanti" e "Cash no iva": con
-  // quei due nomi sono scritte anche le quote pagate dalla busta in aula.
-  // Solo "Cassa contanti" nomina il cassetto.
+  // Due firme, perche' due strade: `origine` quando la spesa l'ha scritta
+  // lo scadenziario, e il metodo "Cassa contanti", che nomina il cassetto
+  // e vale anche sulle righe vecchie, scritte prima che lo scadenziario si
+  // firmasse su tutto.
+  //
+  // Il 01/10/2026 erano 530 euro sul PMU Base del 14 settembre — due quote
+  // venditore e una commissione modelle — tolti a una busta da cui non
+  // erano usciti.
+  //
+  // Attenzione a non allargare la regola a chi paga "Contanti" senza
+  // passare dallo scadenziario: con quel nome "Disponi pagamenti" scrive
+  // le quote che dalla busta escono davvero.
+  if (pagataDalloScadenziario(s)) return false;
   if (s.metodo_pagamento === "Cassa contanti") return false;
-  if (s.origine === "scadenziario_cash") return false;
   const chiave = String(s.origine_scadenziario_chiave || "");
   if (s.origine === "automatico" && chiave && !chiave.startsWith("cash_")) return false;
   return true;
@@ -45887,7 +45919,12 @@ function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = [], ruolo
       allegato_path: allegatoPath,
       // pagata senza fattura: in prima nota finisce fra le spese da
       // riconciliare, e il documento si aggancia quando arriva
-      origine: dallaCassa ? "scadenziario_cash" : "automatico",
+      // La firma dello scadenziario, su TUTTE le sue scritture e non solo
+      // su quelle pagate dalla cassa. Senza, una quota rinviata e poi
+      // saldata in "Contanti" nasceva identica a una scritta da "Disponi
+      // pagamenti" — stessa origine, stessa chiave, stesso metodo — e
+      // tornava a pesare sulla busta del corso, da cui non era mai uscita.
+      origine: dallaCassa ? "scadenziario_cash" : "scadenziario",
       origine_scadenziario_chiave: item.chiave,
       ...(classificazione ? classificazionePerPayload(classificazione) : {}),
     });
