@@ -5336,6 +5336,27 @@ function percentualeCoordinatoreAttiva() {
 function quotaCoordinatoreDi(totalePattuito) {
   return round2(parseNum(totalePattuito) * percentualeCoordinatoreAttiva() / 100);
 }
+// La percentuale che vale per un corso. Scritta sul corso se c'e' una
+// deroga, altrimenti quella generale: NULL non vuol dire zero, vuol dire
+// "usa quella di Impostazioni". Cosi' si compila solo dove serve, invece
+// di riempire ventotto righe perche' una commissione esista.
+function percentualeCommissioneCorso(corso) {
+  // Il controllo esplicito su null non e' pignoleria: `Number(null)` fa
+  // ZERO, non NaN, quindi un corso senza deroga — che sono tutti, appena
+  // messa la colonna — passava il test di validita' e prendeva lo 0%.
+  // Tutte le commissioni uscivano a zero senza un errore da nessuna parte.
+  const grezzo = corso?.percentuale_commissione;
+  if (grezzo == null || grezzo === "") return percentualeCoordinatoreAttiva();
+  const n = Number(grezzo);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : percentualeCoordinatoreAttiva();
+}
+// La commissione di una singola iscrizione: la percentuale del suo corso,
+// sul totale pattuito. Si calcola sempre viva — non c'e' piu' niente da
+// congelare, da quando questa cifra non entra nei costi della classe e
+// non passa in prima nota.
+function commissioneCorsoDiIscritto(iscritto, corso) {
+  return round2(parseNum(iscritto?.totale_pattuito) * percentualeCommissioneCorso(corso) / 100);
+}
 // Vale solo per i corsi che devono ancora cominciare: e' un accordo nuovo
 // (01/10/2026) e non si applica all'indietro.
 function quotaCoordinatoreAttivaPer(corsoData) {
@@ -10195,6 +10216,131 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
   );
 }
 
+// "Commissioni sui corsi": quello che un venditore matura sulle iscrizioni
+// che ha chiuso, mese per mese.
+//
+// Si calcola sul totale pattuito, con la percentuale del corso (deroga sul
+// corso, altrimenti quella generale di Definizione provvigioni). Sempre
+// viva: non c'e' niente di congelato, quindi cambiare la percentuale in
+// Impostazioni cambia questa pagina all'istante.
+//
+// Non e' un costo della classe e non passa dal riepilogo contabile: quella
+// riga c'e' stata per qualche ora il 01/10/2026 ed e' stata tolta di
+// proposito. Qui dentro e' l'unico posto dove questo numero vive.
+function CommissioniSuiCorsi({ venditoreSel, iscritti, corsiDate, corsi, location, isMobile }) {
+  const righePerMese = useMemo(() => {
+    const mio = String(venditoreSel?.nome || "").trim().toUpperCase();
+    if (!mio) return [];
+    const perEdizione = new Map();
+    (iscritti || []).forEach((i) => {
+      if (String(i.tutor || "").trim().toUpperCase() !== mio) return;
+      const cd = (corsiDate || []).find((c) => c.id === i.corso_data_id);
+      if (!cd?.data_inizio) return;
+      const corso = (corsi || []).find((c) => c.id === cd.corso_id) || null;
+      const voce = perEdizione.get(cd.id) || {
+        id: cd.id, inizio: cd.data_inizio, fine: cd.data_fine || cd.data_inizio,
+        corso: corso?.nome || "—",
+        sede: (location || []).find((l) => l.id === cd.location_id)?.nome || "—",
+        pct: percentualeCommissioneCorso(corso),
+        iscritti: 0, pattuito: 0, quota: 0,
+      };
+      voce.iscritti += 1;
+      voce.pattuito = round2(voce.pattuito + (i.totale_pattuito || 0));
+      voce.quota = round2(voce.quota + commissioneCorsoDiIscritto(i, corso));
+      perEdizione.set(cd.id, voce);
+    });
+    const perMese = new Map();
+    [...perEdizione.values()].forEach((v) => {
+      const chiave = v.inizio.slice(0, 7);
+      if (!perMese.has(chiave)) perMese.set(chiave, { chiave, righe: [], totale: 0, iscritti: 0 });
+      const m = perMese.get(chiave);
+      m.righe.push(v);
+      m.totale = round2(m.totale + v.quota);
+      m.iscritti += v.iscritti;
+    });
+    // il mese piu' recente in cima: si guarda quello che si sta per
+    // prendere, non quello di un anno fa
+    return [...perMese.values()].sort((a, b) => b.chiave.localeCompare(a.chiave))
+      .map((m) => ({ ...m, righe: m.righe.sort((a, b) => b.quota - a.quota) }));
+  }, [venditoreSel, iscritti, corsiDate, corsi, location]);
+
+  const totale = round2(righePerMese.reduce((s, m) => s + m.totale, 0));
+
+  // "11–16", oppure "28 set – 2 ott" quando l'edizione scavalca il mese
+  function giorni(v) {
+    const [, mI, gI] = v.inizio.split("-").map(Number);
+    const [, mF, gF] = v.fine.split("-").map(Number);
+    const mese = (m) => (MESI_ABBR[m - 1] || "").toLowerCase();
+    if (v.inizio === v.fine) return String(gI);
+    if (mI === mF) return `${gI}–${gF}`;
+    return `${gI} ${mese(mI)} – ${gF} ${mese(mF)}`;
+  }
+  function nomeMese(chiave) {
+    const [anno, m] = chiave.split("-").map(Number);
+    return `${(MESI[m - 1] || "").toUpperCase()} ${anno}`;
+  }
+
+  const griglia = isMobile ? "52px 1fr 68px 34px 62px" : "80px 1fr 150px 50px 92px";
+  const intest = { ...fontBody, fontSize: isMobile ? 8.5 : 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 };
+
+  if (!righePerMese.length) {
+    return (
+      <div style={{ ...cardStyle, textAlign: "center", padding: 34, color: MUTED, ...fontBody, fontSize: 13.5 }}>
+        Nessuna iscrizione chiusa da te: quando ne arriva una, la commissione compare qui.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ ...cardStyle, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale maturato</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 3 }}>
+            Sul totale pattuito di ogni iscrizione, con la percentuale del suo corso.
+          </div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 24 : 30, fontWeight: 800, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(totale)}</div>
+      </div>
+
+      {righePerMese.map((m) => (
+        <div key={m.chiave} style={{ ...cardStyle, marginBottom: 14, padding: isMobile ? "12px 10px" : "16px 16px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+            <span style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY, letterSpacing: 0.4 }}>{nomeMese(m.chiave)}</span>
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{m.iscritti} iscrizion{m.iscritti === 1 ? "e" : "i"}</span>
+          </div>
+
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: 30, alignItems: "center", padding: isMobile ? "0 8px" : "0 12px" }}>
+              <div style={intest}>Giorni</div>
+              <div style={intest}>Corso</div>
+              <div style={intest}>Sede</div>
+              <div style={{ ...intest, textAlign: "center" }}>Isc.</div>
+              <div style={{ ...intest, textAlign: "right" }}>Quota</div>
+            </div>
+            {m.righe.map((v) => (
+              <div key={v.id} style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, alignItems: "center", minHeight: 32, padding: isMobile ? "0 8px" : "0 12px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: MUTED, whiteSpace: "nowrap" }}>{giorni(v)}</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: NAVY, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${v.corso} — ${String(v.pct).replace(".", ",")}% su ${fmtEuroErp2(v.pattuito)}`}>{v.corso}</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={v.sede}>{v.sede}</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textAlign: "center" }}>{v.iscritti}</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(v.quota)}</span>
+              </div>
+            ))}
+            <div style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, alignItems: "center", minHeight: 36, padding: isMobile ? "0 8px" : "0 12px", background: "#F4F4F6" }}>
+              <span />
+              <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale del mese</span>
+              <span />
+              <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textAlign: "center" }}>{m.iscritti}</span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 800, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.totale)}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PaginaDashboardVenditori({
   corsi, location, corsiDate, iscritti, master, venditori, ricarica, onBack, apriData, onApriIscritto, venditoreBloccato,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
@@ -10486,11 +10632,12 @@ function PaginaDashboardVenditori({
             {/* sul telefono la stessa griglia della home (quattro colonne,
                 stesso spazio): i tre tasti stanno vicini come li'. Prima
                 erano tre colonne larghe e i tasti finivano lontani */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, calc((100% - 3 * 14px) / 4))" : "repeat(3, minmax(0, 1fr))", gap: 14, justifyContent: "center", maxWidth: isMobile ? "none" : 620, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, calc((100% - 3 * 14px) / 4))" : "repeat(4, minmax(0, 1fr))", gap: 14, justifyContent: "center", maxWidth: isMobile ? "none" : 820, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
               {[
                 { chiave: "corsi", testo: "Iscrivi allievo", Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
                 { chiave: "performance", testo: "Performance di vendita", Icona: IconaFrecciaTrend },
                 { chiave: "iscrizioni", testo: "Le tue iscrizioni", Icona: IconaLaureaErp },
+                { chiave: "commissioni", testo: "Commissioni sui corsi", Icona: IconaTargetRiga },
               ].map((t) => (
                 <TileHome key={t.chiave} title={t.testo} Icona={t.Icona} onClick={() => setTabDashboardVenditore(t.chiave)} badge={t.badge} evidenziato={tabDashboardVenditore === t.chiave} etichettaDueRighe />
               ))}
@@ -10502,7 +10649,9 @@ function PaginaDashboardVenditori({
                 nome */}
             {tabDashboardVenditore !== "corsi" && (
               <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 14, textAlign: "center", textTransform: "uppercase" }}>
-                {tabDashboardVenditore === "performance" ? "Performance di vendita" : "Le tue iscrizioni"}
+                {tabDashboardVenditore === "performance" ? "Performance di vendita"
+                  : tabDashboardVenditore === "commissioni" ? "Commissioni sui corsi"
+                  : "Le tue iscrizioni"}
               </div>
             )}
 
@@ -10744,6 +10893,13 @@ function PaginaDashboardVenditori({
                 registraInterceptaIndietro={registraInterceptaIndietro}
               />
             )}
+            {tabDashboardVenditore === "commissioni" && (
+              <CommissioniSuiCorsi
+                venditoreSel={venditoreSel} iscritti={iscritti} corsiDate={corsiDate}
+                corsi={corsi} location={location} isMobile={isMobile}
+              />
+            )}
+
             {tabDashboardVenditore === "iscrizioni" && (
               <LeTueIscrizioni
                 corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
@@ -17291,24 +17447,33 @@ function DefinizioneProvvigioni() {
   const [msg, setMsg] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [pctCoordinatore, setPctCoordinatore] = useImpostazioneCondivisa(CHIAVE_PERCENTUALE_COORDINATORE, PERCENTUALE_COORDINATORE_DEFAULT);
-  const [riallineando, setRiallineando] = useState(false);
+  const [corsiOrdinati, setCorsiOrdinati] = useState([]);
 
-  // Cambiare la percentuale basta a far cambiare quello che si VEDE: sui
-  // corsi futuri la quota si ricalcola a ogni lettura. Questo tasto serve
-  // a far cambiare anche quello che e' SCRITTO sulle schede, perche' il
-  // giorno in cui quei corsi diventano passati e' il numero scritto a
-  // comandare. I corsi gia' cominciati non li tocca.
-  async function riallineaSchede() {
-    const pct = Number(pctCoordinatore);
-    if (!Number.isFinite(pct) || pct < 0 || pct > 100) { setMsg("La percentuale deve stare fra 0 e 100."); return; }
-    if (!window.confirm(`Riscrivere la quota coordinatore allo ${String(pct).replace(".", ",")}% su tutte le schede dei corsi che devono ancora cominciare?\n\nI corsi gia' iniziati non vengono toccati.`)) return;
-    setRiallineando(true);
-    const { data, error } = await supabase.rpc("aggiorna_quote_coordinatore", { percentuale: pct });
-    setRiallineando(false);
-    if (error) { setMsg("Non sono riuscito ad aggiornare le schede: " + testoErrore(error)); return; }
-    const n = Number(data) || 0;
-    setMsg(n === 0 ? "Nessuna scheda da aggiornare: non ci sono corsi futuri con iscritti." : `Aggiornate ${n} sched${n === 1 ? "a" : "e"}.`);
+  async function caricaCorsi() {
+    const { data } = await supabase.from("corsi").select("id, nome, percentuale_commissione").order("nome");
+    setCorsiOrdinati(data || []);
   }
+  useEffect(() => { caricaCorsi(); }, []);
+
+  // vuoto = nessuna deroga, cioe' NULL: diverso da zero, che vorrebbe dire
+  // "su questo corso non si prende niente"
+  async function salvaPercentualeCorso(corso, testo) {
+    const t = String(testo || "").trim();
+    const v = t === "" ? null : parseNum(t);
+    if (v != null && (!Number.isFinite(v) || v < 0 || v > 100)) { setMsg("La percentuale deve stare fra 0 e 100."); return; }
+    if (v === (corso.percentuale_commissione == null ? null : Number(corso.percentuale_commissione))) return;
+    const { error } = await supabase.from("corsi").update({ percentuale_commissione: v }).eq("id", corso.id);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(v == null ? `${corso.nome}: torna alla percentuale generale.` : `${corso.nome}: ${String(v).replace(".", ",")}%.`);
+    caricaCorsi();
+  }
+
+  // Niente tasto di riallineamento: non c'e' piu' niente da riallineare.
+  // La commissione si calcola viva dalla percentuale del corso ogni volta
+  // che la si guarda, quindi cambiare il numero qui sopra basta e avanza.
+  // C'e' stato per qualche ora il 01/10/2026, quando la cifra veniva
+  // congelata sulla scheda dell'allievo: l'RPC aggiorna_quote_coordinatore
+  // resta sul database, inoffensiva, ma non la chiama piu' nessuno.
 
   async function carica() {
     const { data, error } = await supabase.from("provvigioni_fasce").select("*").order("canale").order("margine_da");
@@ -17421,37 +17586,64 @@ function DefinizioneProvvigioni() {
       </div>
       {CANALI_PROVVIGIONE.map((c) => sezione(c.chiave, c.etichetta))}
 
-      {/* La quota coordinatore non e' una fascia: e' una percentuale sola
-          sul totale pattuito di ogni iscrizione, non sul margine di una
-          vendita. Sta qui perche' qui si cercano i compensi, ma ha una
-          scheda sua per non farla sembrare un quarto canale. */}
+      {/* La commissione sui corsi non e' una fascia: e' una percentuale sul
+          totale pattuito di un'iscrizione, non sul margine di una vendita.
+          Scheda sua, per non farla sembrare un quarto canale. */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={hStyle}>Provvigione coordinatore</div>
+        <div style={hStyle}>Commissioni sui corsi</div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
           Una percentuale del <b style={{ color: NAVY }}>totale pattuito</b> di ogni iscrizione — non del margine, come le fasce qui sopra.
-          Compare sulla scheda dell’allievo e come riga nei costi della classe, sotto le quote venditore.
-          {" "}Qui il congelamento vale <b style={{ color: NAVY }}>solo all’indietro</b>: i corsi che devono ancora cominciare si adeguano da soli alla percentuale di oggi, quelli gia’ iniziati si tengono la cifra con cui erano stati pattuiti.
+          {" "}Si vede nella dashboard del venditore, sotto <b style={{ color: NAVY }}>Commissioni sui corsi</b>, divisa per mesi: non entra nei costi della classe e non passa dal riepilogo contabile.
+          {" "}Quello che scrivi qui vale subito, ovunque: non c’è niente di congelato da aggiornare.
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600 }}>Percentuale</span>
+          <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600 }}>Percentuale generale</span>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <input
               style={campoNumero} inputMode="decimal" defaultValue={pctCoordinatore}
               onBlur={(e) => {
                 const v = parseNum(e.target.value);
                 if (!Number.isFinite(v) || v < 0 || v > 100) { setMsg("La percentuale deve stare fra 0 e 100."); return; }
-                if (v !== Number(pctCoordinatore)) { setPctCoordinatore(v); setMsg(`Percentuale portata allo ${String(v).replace(".", ",")}%.`); }
+                if (v !== Number(pctCoordinatore)) { setPctCoordinatore(v); setMsg(`Percentuale generale portata allo ${String(v).replace(".", ",")}%.`); }
               }}
             />
             <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
           </div>
-          <Button variant="ghost" onClick={riallineaSchede} disabled={riallineando}>
-            {riallineando ? "Aggiorno…" : "Aggiorna le schede dei corsi futuri"}
-          </Button>
+          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+            Su 1.000 € di pattuito fa {fmtEuroErp2(round2(1000 * (Number(pctCoordinatore) || 0) / 100))}.
+          </span>
         </div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
-          Su 1.000 € di pattuito fa {fmtEuroErp2(round2(1000 * (Number(pctCoordinatore) || 0) / 100))}.
+
+        {/* Le deroghe: un corso che vale piu' lavoro puo' avere la sua.
+            Vuoto NON vuol dire zero, vuol dire "quella generale": cosi' si
+            compila solo dove serve, invece di dover riempire ventotto
+            righe perche' una commissione esista. */}
+        <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600, marginTop: 18, marginBottom: 6 }}>
+          Deroghe per corso
         </div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
+          Lascia vuoto per usare la percentuale generale. Scrivi un numero solo dove quel corso deve valere diversamente.
+        </div>
+        {corsiOrdinati.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "6px 0" }}>Nessun corso a listino.</div>
+        ) : (
+          <div style={{ maxHeight: 260, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10 }}>
+            {corsiOrdinati.map((c) => (
+              <div key={c.id} style={{ display: "grid", gridTemplateColumns: "1fr 92px", gap: 8, alignItems: "center", padding: "5px 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.nome}>{c.nome}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <input
+                    style={campoNumero} inputMode="decimal"
+                    placeholder={String(pctCoordinatore).replace(".", ",")}
+                    defaultValue={c.percentuale_commissione ?? ""}
+                    onBlur={(e) => salvaPercentualeCorso(c, e.target.value)}
+                  />
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* La soglia e i premi non sono regolabili da qui: sono la stessa
@@ -25841,33 +26033,16 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     };
   })();
 
-  // riga "Quota coordinatore": la somma delle quote scritte sulle schede
-  // degli iscritti, con lo stesso vestito delle altre — bonifico e cash
-  // liberi, i tre tondi B/C/1/2, il flag Busta/Scad.
+  // La commissione sui corsi NON e' una riga dei costi della classe.
   //
-  // Compare solo se c'e' qualcosa. Su un corso futuro la somma si calcola
-  // viva dal totale pattuito degli iscritti, quindi la riga c'e' subito,
-  // senza aspettare che qualcuno risalvi novanta schede; su uno passato
-  // vale quello che era stato scritto, e sulle classi anteriori a questo
-  // accordo e' zero e la riga non si disegna. Una riga da zero euro in
-  // mezzo ai costi e' rumore, non informazione. Vedi
-  // quotaCoordinatoreDiIscritto.
-  const quoteCoordinatoreClasse = round2(listaIscritti.reduce((s, i) => s + quotaCoordinatoreDiIscritto(i, corsoData), 0));
-  const rigaCoordinatoreClasse = quoteCoordinatoreClasse > 0 ? (() => {
-    const dati = conSplit(corsoData.id, {
-      bonifico: corsoData.quota_coordinatore_bonifico,
-      cash: corsoData.quota_coordinatore_cash,
-    });
-    // finche' nessuno ha scelto, meta' e meta': e' il default delle righe
-    // a split libero, e i tre tondi lo mostrano gia' acceso su 1/2
-    const bonifico = dati.bonifico != null ? round2(dati.bonifico) : round2(quoteCoordinatoreClasse / 2);
-    return {
-      rigaId: corsoData.id, tabella: "corsi_date", tipo: "coordinatore", nome: "Quota coordinatore",
-      totale: quoteCoordinatoreClasse,
-      bonifico,
-      cash: round2(quoteCoordinatoreClasse - bonifico),
-    };
-  })() : null;
+  // C'e' stata, per poche ore il 01/10/2026, con lo stesso vestito delle
+  // altre. Poi e' stata tolta di proposito: vive solo nella dashboard del
+  // venditore, sotto "Commissioni sui corsi", divisa per mesi. Qui dentro
+  // non deve comparire, e nemmeno nel riepilogo contabile.
+  //
+  // Restano inutilizzate le colonne quota_coordinatore_bonifico/_cash su
+  // corsi_date: non si cancellano perche' cancellare colonne e' l'unico
+  // passo che non si torna indietro, ma nessuno le legge piu'.
 
   // durata dell'edizione in giorni, dedotta dal calendario (data_inizio/
   // data_fine): serve sia al compenso master (fascia = tariffa
@@ -26116,7 +26291,6 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
 
   const righeSpeseTutte = [
     rigaVenditoreClasse,
-    ...(rigaCoordinatoreClasse ? [rigaCoordinatoreClasse] : []),
     ...righeMasterClasse,
     ...(rigaLocationClasse ? [rigaLocationClasse] : []),
     ...righeAssistentiClasse,
@@ -26126,7 +26300,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   const totaleSpeseAutomaticheClasse = round2(righeSpeseTutte.reduce((s, r) => s + r.totale, 0));
 
   return {
-    listaIscritti, quoteVenditoreClasse, quoteCoordinatoreClasse, rigaCoordinatoreClasse, durataGiorniCorso,
+    listaIscritti, quoteVenditoreClasse, durataGiorniCorso,
     righeMasterClasse, rigaLocationClasse, costoLocationClasse, righeAlloggioClasse, righeAssistentiClasse,
     totaleModelleClasse, commissioneModelleClasse, rigaCommissioneModelleClasse,
     righeSpeseTutte, totaleSpeseAutomaticheClasse,
@@ -26901,7 +27075,6 @@ function PannelloRiepilogoAmministrativo({
   function campiSplitDi(tipo) {
     if (tipo === "venditore") return ["quota_venditore_bonifico", "quota_venditore_cash"];
     if (tipo === "modelle") return ["commissione_modelle_bonifico", "commissione_modelle_cash"];
-    if (tipo === "coordinatore") return ["quota_coordinatore_bonifico", "quota_coordinatore_cash"];
     return ["quota_bonifico", "quota_cash"];
   }
   function modalitaSplitMaster(r) {
@@ -28307,6 +28480,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
   // vale solo per le classi non ancora cominciate: vedi quotaCoordinatoreAttivaPer
   const quotaCoordinatoreAttiva = quotaCoordinatoreAttivaPer(corsoData);
+  // il corso di questa edizione: da li' viene la percentuale di commissione
+  const corsoDelCorsoData = (corsi || []).find((c) => c.id === corsoData?.corso_id) || null;
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
   const [fileScreenRecap, setFileScreenRecap] = useState(null);
@@ -29401,15 +29576,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         // se compilata, la quota speciale sostituisce ovunque la quota venditore
         // calcolata al 7%: è quest'unico campo che viene letto in tutta l'app
         quota_venditore: quotaSpeciale !== "" ? parseNum(quotaSpeciale) : (totalePattuito === "" ? null : quotaVenditoreDi(totalePattuito)),
-        // La quota coordinatore non la tocca la quota speciale: quella
-        // sostituisce il compenso del venditore, non l'1% del coordinatore.
-        //
-        // Sui corsi gia' iniziati la chiave non entra nemmeno nel payload:
-        // su un `update` vuol dire "non toccare", quindi una scheda vecchia
-        // riaperta oggi si tiene quello che c'era invece di azzerarlo.
-        ...(quotaCoordinatoreAttiva
-          ? { quota_coordinatore: totalePattuito === "" ? null : quotaCoordinatoreDi(totalePattuito) }
-          : {}),
+        // La commissione sui corsi non si scrive piu' qui: si calcola viva
+        // dalla percentuale del corso ogni volta che serve, e serve in un
+        // posto solo — "Commissioni sui corsi" nella dashboard del
+        // venditore. Niente da congelare, niente da riallineare.
         file_iscrizione: pathIscrizione,
         file_screen_acconto: pathAcconto,
         file_screen_recap: pathRecap,
@@ -30640,9 +30810,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   {quotaCoordinatoreAttiva && (
                   <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota coordinatore ({String(percentualeCoordinatoreAttiva()).replace(".", ",")}%)</div>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Commissione corso ({String(percentualeCommissioneCorso(corsoDelCorsoData)).replace(".", ",")}%)</div>
                     <div style={{ position: "relative" }}>
-                      <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaCoordinatoreDi(totalePattuito).toFixed(2)} disabled />
+                      <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : commissioneCorsoDiIscritto({ totale_pattuito: totalePattuito }, corsoDelCorsoData).toFixed(2)} disabled />
                       {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
                     </div>
                   </div>
