@@ -27796,7 +27796,7 @@ function PannelloRiepilogoAmministrativo({
                         i pagamenti sono stati disposti davvero. */}
                     <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="mano" etichetta="Cash incassato al corso" valore={contantiClasse} nota={daIncassareAncoraClasse > 0 ? `${fmtEuroErp2(daIncassareAncoraClasse)} ancora da incassare` : null} notaIcona="orologio" />
                     <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="documento" etichetta="Totale cash da pagare" valore={totaleCashDaPagareClasse} nota="dalla busta o rinviato" notaIcona="orologio" />
-                    <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="portafoglio" etichetta="Pagamenti cash presi dalla busta" valore={cashRegistratoBustaClasse} nota={cashDaDisporreClasse > 0 ? `${fmtEuroErp2(cashDaDisporreClasse)} da disporre` : null} notaIcona="portafoglioPiccolo" />
+                    <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="portafoglio" etichetta="Pagamenti cash presi dalla busta" valore={cashPresoDallaBustaClasse} nota={cashDaDisporreClasse > 0 ? `${fmtEuroErp2(cashDaDisporreClasse)} da disporre` : null} notaIcona="portafoglioPiccolo" />
                     <CasellaRiepilogoCash scala={scalaCash} isMobile={isMobile} icona="ritorno" etichetta="Pagamenti cash rinviati" valore={cashRinviatiClasse} nota={cashRinviatiClasse > 0 ? "nello scadenziario passivo" : null} notaIcona="ritorno" />
                     <CasellaRiepilogoCash
                       scala={scalaCash} isMobile={isMobile} evidenziata icona="scintilla" etichetta="Cash pulito in busta" valore={cassaContantiClasse}
@@ -32800,6 +32800,16 @@ function contiRiepilogoClasse({
     venditeContanti, venditePos, venditeTotale: round2(venditeContanti + venditePos),
     totaleCosti, risultato: round2(daIncassare - totaleCosti),
     totaleCashDaPagare, cashRegistrato, cashDaDisporre, cashRinviati,
+    // Tutto quello che esce dalla busta: quello gia' uscito davvero
+    // (`cashRegistrato`, le spese scritte e pagate in contanti sul posto) piu'
+    // quello che le righe dicono di pagare dalla busta e aspetta "Disponi
+    // pagamenti" (`cashDaDisporre`).
+    //
+    // E' il numero del riquadro "Pagamenti cash presi dalla busta", e deve
+    // essere questo perche' i tre riquadri si leggono in fila: il totale da
+    // pagare e' quello preso dalla busta piu' quello rinviato. Mostrando il
+    // solo `cashRegistrato` la somma non tornava — 1.010 contro 250 + 100 —
+    // ed e' la prima cosa che si nota guardando la riga.
     cashPresoDallaBusta: round2(cashDaDisporre + cashRegistrato),
     // "Cash pulito in busta": il cash incassato FISICAMENTE al corso meno
     // il cash uscito davvero, cioe' le spese gia' disposte e registrate.
