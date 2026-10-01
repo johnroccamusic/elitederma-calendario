@@ -42760,6 +42760,10 @@ function PannelloCassaContanti({
   const [busteAppendici, setBusteAppendici] = useState([]);
   const [venditeSenzaCorso, setVenditeSenzaCorso] = useState(0);
   const [speseDallaCassa, setSpeseDallaCassa] = useState(0);
+  // non solo il totale: anche l'elenco, perche' "Spese pagate dalla cassa
+  // − 3.027,00" da solo e' un numero cieco. Chi guarda la cassa vuole
+  // sapere QUALI, e fino al 01/10/2026 doveva fidarsi.
+  const [elencoSpeseCassa, setElencoSpeseCassa] = useState([]);
   const [ricorrenti, setRicorrenti] = useState([]);
   const [apertura, setApertura] = useState(null);
   const [aperturaData, setAperturaData] = useState("");
@@ -42795,7 +42799,7 @@ function PannelloCassaContanti({
       // viene consegnato insieme alla busta, ed entra. Stessa regola delle
       // spese, dalla parte opposta: l'evento si tira tutto insieme.
       supabase.from("vendite_shop").select("totale, evento_id").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
-      supabase.from("spese").select("totale, metodo_pagamento, stato, data_pagamento, classe_id, evento_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
+      supabase.from("spese").select("id, descrizione, totale, metodo_pagamento, stato, data_pagamento, classe_id, evento_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
       supabase.from("eventi").select("id, stato"),
       supabase.from("corsi_date_buste").select("*").order("numero"),
@@ -42806,7 +42810,9 @@ function PannelloCassaContanti({
     setBusteAppendici(app.data || []);
     const conclusi = new Set((eve.data || []).filter((e) => e.stato === "concluso").map((e) => e.id));
     setVenditeSenzaCorso(round2((ven.data || []).filter((v) => !incassoDiEventoAperto(v, conclusi)).reduce((s, v) => s + (v.totale || 0), 0)));
-    setSpeseDallaCassa(round2((spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x) && !spesaDiEventoAperto(x, conclusi)).reduce((s, x) => s + (x.totale || 0), 0)));
+    const dallaCassa = (spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x) && !spesaDiEventoAperto(x, conclusi));
+    setSpeseDallaCassa(round2(dallaCassa.reduce((s, x) => s + (x.totale || 0), 0)));
+    setElencoSpeseCassa(dallaCassa);
     setRicorrenti(ric.data || []);
   }
   useEffect(() => { carica(); }, []);
@@ -42949,7 +42955,17 @@ function PannelloCassaContanti({
     carica();
   }
 
-  const storico = (movimenti || []);
+  // Lo storico tiene insieme le tre cose che muovono il cassetto: i
+  // prelievi, i versamenti e le spese pagate dalla cassa. Le spese si
+  // vedono e basta — si cancellano da dove sono nate, non da qui — ma
+  // devono comparire, o il totale non si spiega.
+  const storico = [
+    ...(movimenti || []),
+    ...(elencoSpeseCassa || []).map((x) => ({
+      id: `spesa_${x.id}`, data: x.data_pagamento, tipo: "spesa",
+      motivo: x.descrizione || "Spesa", importo: x.totale, soloLettura: true,
+    })),
+  ].sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
   return (
     <div>
       {/* i numeri della cassa su una riga sola, telefono compreso: si
@@ -43165,20 +43181,22 @@ function PannelloCassaContanti({
       {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
 
       <div style={cardStyle}>
-        <TitoloSezioneRiepilogo grande>Storico prelievi e versamenti</TitoloSezioneRiepilogo>
+        <TitoloSezioneRiepilogo grande>Storico movimenti della cassa</TitoloSezioneRiepilogo>
         {movimenti == null ? <RigaCassaVuota testo="Carico…" />
-          : storico.length === 0 ? <RigaCassaVuota testo="Nessun prelievo e nessun versamento." />
+          : storico.length === 0 ? <RigaCassaVuota testo="Nessun prelievo, versamento o spesa pagata dalla cassa." />
           : storico.map((m) => (
             <div key={m.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "auto 1fr auto 28px" : "110px 120px 1fr 130px 32px", gap: 8, alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
               <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: MUTED, whiteSpace: "nowrap" }}>{fmtData(m.data)}</div>
               {!isMobile && (
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: m.tipo === "prelievo" ? "#C0392B" : "#2E7D32" }}>{m.tipo}</div>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: m.tipo === "versamento" ? "#2E7D32" : "#C0392B" }}>{m.tipo}</div>
               )}
               <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.motivo || "—"}</div>
-              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: m.tipo === "prelievo" ? "#C0392B" : "#2E7D32", textAlign: "right", whiteSpace: "nowrap" }}>
-                {m.tipo === "prelievo" ? "−" : "+"} {euroRiepilogo(m.importo)}
+              <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: m.tipo === "versamento" ? "#2E7D32" : "#C0392B", textAlign: "right", whiteSpace: "nowrap" }}>
+                {m.tipo === "versamento" ? "+" : "−"} {euroRiepilogo(m.importo)}
               </div>
-              <button onClick={() => eliminaMovimento(m.id)} title="Elimina movimento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", fontSize: 15, padding: 0 }}>×</button>
+              {m.soloLettura
+                ? <span title="È una spesa: si cancella da dove è stata scritta, non da qui" style={{ ...fontBody, fontSize: 12, color: MUTED, textAlign: "center" }}>·</span>
+                : <button onClick={() => eliminaMovimento(m.id)} title="Elimina movimento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", fontSize: 15, padding: 0 }}>×</button>}
             </div>
           ))}
       </div>
