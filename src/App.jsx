@@ -46978,7 +46978,20 @@ function PaginaInserimentoCostiRicavi({
   // vista/ordinata al 20. data_documento resta solo un fallback per le
   // (poche) righe storiche senza data_pagamento salvata.
   function dataCassaPN(s) { return s.data_pagamento || s.data_documento; }
-  const spesePagate = (spese || []).filter((s) => s.stato === "pagata" && dataCassaPN(s));
+  // UN LIBRO CASSA NON REGISTRA IL FUTURO.
+  //
+  // Una riga di costo creata nel riepilogo di un corso nasce con la data
+  // dell'ultimo giorno di quel corso (vedi aggiungiRigaCostoClasse) e,
+  // per il default della colonna, nasce "pagata". Se il corso deve ancora
+  // arrivare, quella e' una previsione: compariva qui come un'uscita
+  // vera, spesso a zero euro perche' l'importo non l'aveva ancora scritto
+  // nessuno. Il 01/10/2026 era "Costo pranzi" di Evolution Strokes,
+  // datato 5 ottobre.
+  //
+  // Quello che deve ancora succedere si guarda nello scadenziario, non in
+  // prima nota. Qui si entra il giorno in cui i soldi si muovono.
+  const oggiPN = dataOggiStr();
+  const spesePagate = (spese || []).filter((s) => s.stato === "pagata" && dataCassaPN(s) && dataCassaPN(s) <= oggiPN);
   const daRiconciliarePN = (s) => !s.numero_documento;
   const speseRealiFiltrate = spesePagate
     .filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine)
