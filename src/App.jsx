@@ -56668,74 +56668,144 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                   gruppo: senza, le righe di due fornitori si confondevano */}
               <span style={{ flex: 1, height: 1, background: "#EBD9AE" }} />
             </div>
-            {righe.map((r) => (
-              <div key={r.prodotto.id} style={{ ...rigaStyle, alignItems: "center", padding: "10px 0" }}>
-                <MiniaturaAdvisor prodotto={r.prodotto} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* il nome apre la scheda del prodotto: da qui si decide
-                      cosa ordinare, e la decisione si prende guardando la
-                      scheda — non riscrivendo il nome nella ricerca */}
+            {righe.map((r) => {
+              // La riga diventa una scheda a blocchi, ognuno con la sua
+              // etichetta: quando — cosa — per cosa — quanti ne restano —
+              // quanti ordinarne. Prima era una riga sola con due frasi
+              // dentro, e per capire se un prodotto era in ritardo o sotto
+              // scorta bisognava leggerla tutta.
+              const perData = r.criterio === "data" ? r.perData : null;
+              const inRitardo = perData?.stato === "ritardo";
+              const giorni = perData ? Math.abs(perData.giorni) : null;
+              const [annoL, meseL, giornoL] = String(perData?.dataLimite || "").split("-");
+              const edizione = perData?.edizioneCriticaId ? etichettaEdizione(perData.edizioneCriticaId) : null;
+              const disponibile = r.perSoglia?.disponibile ?? r.prodotto.quantita ?? 0;
+              const soglia = r.perSoglia?.soglia ?? r.prodotto.soglia_riordino ?? null;
+              const sottoSoglia = soglia != null && Number(disponibile) < Number(soglia);
+              const eti = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, whiteSpace: "nowrap", marginBottom: 5 };
+              const barra = <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />;
+              return (
+              <div key={r.prodotto.id} style={{
+                display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, flexWrap: isMobile ? "wrap" : "nowrap",
+                padding: isMobile ? "12px 10px" : "12px 14px", marginBottom: 8,
+                background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
+                boxShadow: "0 1px 3px rgba(14,27,51,0.05)",
+              }}>
+
+                {/* QUANDO. Il giorno grosso, perche' e' la cosa che
+                    decide se questa riga e' urgente o no. */}
+                <div style={{ flexShrink: 0, textAlign: "center", minWidth: 86, background: inRitardo ? "#FDECEC" : "#F6EFE2", borderRadius: 12, padding: "8px 10px" }}>
+                  <div style={{ ...eti, marginBottom: 2, color: inRitardo ? "#C0392B" : "#8A6D1D" }}>{perData ? "data ordine" : "scorta"}</div>
+                  {perData ? (
+                    <>
+                      <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
+                      <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        {(MESI_ABBR[Number(meseL) - 1] || "")} {annoL}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 800, color: "#8A6D1D", lineHeight: 1.1 }}>sotto<br />minima</div>
+                  )}
+                  {perData && (
+                    <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, marginTop: 6, padding: "3px 8px", borderRadius: 20,
+                      background: "#fff", color: inRitardo ? "#C0392B" : NAVY, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <IconaOrologioCard size={11} />
+                      {inRitardo ? `+${giorni} in ritardo` : `− ${giorni} giorni`}
+                    </div>
+                  )}
+                </div>
+
+                <MiniaturaAdvisor prodotto={r.prodotto} lato={isMobile ? 48 : 62} />
+
+                {/* COSA */}
+                <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                  <div style={eti}>prodotto da ordinare</div>
                   {onApriProdotto ? (
-                    <button
-                      onClick={() => onApriProdotto(r.prodotto.id)}
-                      title="Apri la scheda del prodotto"
-                      style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}
-                    >
+                    <button onClick={() => onApriProdotto(r.prodotto.id)} title="Apri la scheda del prodotto"
+                      style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 800, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", lineHeight: 1.15 }}>
                       {r.prodotto.nome}
                     </button>
                   ) : (
-                    <div style={{ fontWeight: 700 }}>{r.prodotto.nome}</div>
+                    <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 800, color: NAVY, lineHeight: 1.15 }}>{r.prodotto.nome}</div>
                   )}
-                  <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.4 }}>
-                    {r.criterio === "data" && r.perData ? (
-                      r.perData.stato === "ritardo"
-                        ? (
-                          <span style={{ color: "#C0392B", fontWeight: 700 }}>
-                            Dovevi ordinare il {fmtData(r.perData.dataLimite)} — {-r.perData.giorni} giorni di ritardo:
-                            <span style={{ display: "block" }}>{etichettaEdizione(r.perData.edizioneCriticaId)} non sarà coperto</span>
-                          </span>
-                        ) : (
-                          <>
-                            Ordina entro il <b>{fmtData(r.perData.dataLimite)}</b> ({r.perData.giorni} giorni)
-                            <span style={{ display: "block" }}>serve per {etichettaEdizione(r.perData.edizioneCriticaId)}</span>
-                          </>
-                        )
-                    ) : (
-                      <>Sotto scorta minima: {r.perSoglia.disponibile} disponibili contro {r.perSoglia.soglia}</>
-                    )}
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginTop: 3 }}>
+                    {fornitoreId === "__nessuno" ? "senza fornitore" : (fornitorePerId[fornitoreId]?.nome || "")}
                   </div>
+                  {r.prodotto.unita_misura && (
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{r.prodotto.unita_misura}</div>
+                  )}
                 </div>
-                {/* la quantità in una pastiglia e la freccia che porta
-                    alla scheda: il numero da solo si confondeva con il
-                    testo della riga */}
-                <div style={{ textAlign: "right", whiteSpace: "nowrap", flexShrink: 0 }}>
-                  {/* la pastiglia e' un tasto: premendola si dichiara che
-                      l'ordine e' partito, e il prodotto scende in "In
-                      attesa di ricezione" */}
+
+                {/* PER COSA: l'edizione che resterebbe scoperta */}
+                {edizione && !isMobile && barra}
+                {edizione && (
+                  <div style={{ flex: "0 1 190px", minWidth: 0 }}>
+                    <div style={eti}>evento scoperto</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <span style={{ width: 30, height: 30, borderRadius: "50%", background: "#F6EFE2", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <IconaLaureaErp size={15} color={GOLD} />
+                      </span>
+                      <span style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 800, color: NAVY, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis" }}>{edizione}</span>
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                      <IconaCalendarioCard size={12} /> {fmtData(perData.dataLimite)}
+                    </div>
+                  </div>
+                )}
+
+                {/* QUANTI NE RESTANO */}
+                {!isMobile && barra}
+                <div style={{ flex: "0 0 auto", textAlign: "center" }}>
+                  <div style={eti}>disponibilità</div>
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 800, color: sottoSoglia ? "#C0392B" : NAVY, lineHeight: 1 }}>
+                    {disponibile}{soglia != null && <span style={{ color: MUTED, fontWeight: 700 }}>/{soglia}</span>}
+                  </div>
+                  {sottoSoglia && (
+                    <div style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FDECEC", borderRadius: 20, padding: "2px 8px", marginTop: 5, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>
+                      scorta limitata
+                    </div>
+                  )}
+                </div>
+
+                {/* QUANTI ORDINARNE */}
+                {!isMobile && barra}
+                <div style={{ flex: "0 0 auto", textAlign: "center" }}>
                   <button
                     type="button"
                     onClick={() => apriSegnaOrdinato(r)}
                     disabled={salvandoRiordino === r.prodotto.id}
                     title="Segna che questo prodotto è stato ordinato, scrivendo quanti pezzi"
-                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "6px 14px", display: "inline-block", cursor: "pointer", opacity: salvandoRiordino === r.prodotto.id ? 0.5 : 1 }}
+                    style={{ ...fontBody, fontSize: 13.5, fontWeight: 800, color: "#fff", background: NAVY, border: "none", borderRadius: 26,
+                      padding: "11px 20px", cursor: "pointer", opacity: salvandoRiordino === r.prodotto.id ? 0.5 : 1,
+                      display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}
                   >
-                    {r.quantitaSuggerita != null ? `ordina ${r.quantitaSuggerita}` : "ordina"}
+                    <IconaCarrelloPos size={15} color="#fff" />
+                    {r.quantitaSuggerita > 0 ? `Ordina ${r.quantitaSuggerita}` : "Ordina"}
                   </button>
-                  <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3 }}>
-                    {r.baseQuantita === "quantita_riordino" ? "quantità di riordino del prodotto" : r.baseQuantita === "soglia_riordino" ? "per rientrare in scorta" : "quantità da valutare"}
+                  {/* "Ordina 0 — per rientrare in scorta" non e' un
+                      consiglio, e' una contraddizione: capita quando la
+                      riga sta qui per la DATA (un'edizione da coprire) ma
+                      il suggerimento si calcola sulla scorta minima, che
+                      e' gia' rispettata. Meglio ammettere che il numero
+                      non c'e' che stamparne uno sbagliato in grande. */}
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 5, maxWidth: 150 }}>
+                    {!(r.quantitaSuggerita > 0)
+                      ? "quanti, lo decidi tu"
+                      : r.baseQuantita === "quantita_riordino" ? "quantità di riordino"
+                      : r.baseQuantita === "soglia_riordino" ? "per rientrare in scorta"
+                      : "quantità da valutare"}
                   </div>
                 </div>
+
                 {onApriProdotto && (
-                  <button
-                    onClick={() => onApriProdotto(r.prodotto.id)}
-                    title="Apri la scheda del prodotto"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", border: "none", background: "none", color: MUTED, cursor: "pointer", flexShrink: 0 }}
-                  >
+                  <button onClick={() => onApriProdotto(r.prodotto.id)} title="Apri la scheda del prodotto"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: MUTED, cursor: "pointer", flexShrink: 0 }}>
                     <IconaChevronDestra size={16} color={MUTED} />
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
             {fornitoreId !== "__nessuno" && (
               <button
                 onClick={() => (fornitoreOrdineId === fornitoreId ? setFornitoreOrdineId(null) : apriOrdineFornitore(fornitoreId, righe))}
