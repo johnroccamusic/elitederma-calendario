@@ -16,7 +16,7 @@ import {
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
 import {
   leggiStampe, leggiRighe, creaStampa, salvaStampa, eliminaStampa,
-  salvaRiga, eliminaRiga, aggiungiRigaSotto, percorsoFile, caricaFile, urlPubblico,
+  salvaRiga, eliminaRiga, aggiungiRigaSotto, duplicaStampa, percorsoFile, caricaFile, urlPubblico,
 } from "./dati.js";
 
 function IconaPiu({ size = 14 }) {
@@ -175,6 +175,19 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
                         onChange={(e) => sali(s, "file_path", "file_nome", e.target.files?.[0])} />
                     </label>
                   </div>
+
+                  {/* Duplicare serve piu' di quanto sembri: lo stesso
+                      stampato cambia una riga sola — il formato, la
+                      grammatura, il fornitore — e ribattere sei campi per
+                      cambiarne uno e' lavoro buttato. */}
+                  <button
+                    onClick={() => conErrore(async () => { await duplicaStampa(s, mie); await carica(); }, "Scheda non duplicata")}
+                    style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff",
+                      border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px",
+                      marginTop: 10, width: "100%", cursor: "pointer" }}
+                  >
+                    Duplica prodotto
+                  </button>
                 </div>
 
                 {/* i dati di stampa, riga per riga */}

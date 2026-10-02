@@ -89,6 +89,34 @@ export async function aggiungiRigaSotto(stampaId, righeDellaScheda, dopoId) {
   return data;
 }
 
+// Duplicare una scheda: stesso contenuto, nome con "(copia)".
+//
+// Foto e file si tengono per RIFERIMENTO, non si ricopiano nel secchio:
+// due schede che puntano allo stesso file sono la norma — il block notes
+// A5 e quello A4 hanno la stessa grafica — e caricare un file nuovo crea
+// comunque un percorso nuovo, quindi l'una non sovrascrive mai l'altra.
+//
+// La copia nasce subito sotto l'originale: `ordine` + 1, e siccome le
+// schede si leggono anche per data di creazione finisce li' accanto.
+export async function duplicaStampa(stampa, righeDellaScheda) {
+  const { data, error } = await supabase.from("stampe_packaging").insert({
+    nome: `${stampa.nome || "Senza nome"} (copia)`,
+    foto_path: stampa.foto_path || null,
+    file_path: stampa.file_path || null,
+    file_nome: stampa.file_nome || null,
+    ordine: (Number(stampa.ordine) || 0) + 1,
+  }).select().single();
+  if (error) throw new Error(error.message);
+  const righe = [...(righeDellaScheda || [])]
+    .sort((a, b) => Number(a.ordine) - Number(b.ordine))
+    .map((r) => ({ stampa_id: data.id, etichetta: r.etichetta || "", valore: r.valore || "", ordine: r.ordine }));
+  if (righe.length > 0) {
+    const { error: e2 } = await supabase.from("stampe_packaging_righe").insert(righe);
+    if (e2) throw new Error(e2.message);
+  }
+  return data;
+}
+
 // Il percorso del file dentro il secchio: l'id della scheda fa da
 // cartella, cosi' cancellando la scheda si sa cosa buttare.
 export function percorsoFile(stampaId, nomeFile) {
