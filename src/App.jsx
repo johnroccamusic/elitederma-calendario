@@ -48499,8 +48499,19 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
       .select("*").is("risolto_il", null).order("tentato_il", { ascending: false });
     if (error) { setMsg("Non riesco a leggere l'elenco: " + testoErrore(error)); setRighe([]); return; }
     setRighe(data || []);
-    onCambiaConto?.((data || []).length);
+    // il numero sulla linguetta conta solo quelle che chiedono una mano:
+    // quelle che stanno ancora riprovando non sono un compito di nessuno
+    onCambiaConto?.((data || []).filter((r) => r.arreso).length);
   }
+  // finche' c'e' qualcosa in coda la pagina si rinfresca da sola: il
+  // ritentativo gira sul server ogni minuto, e chi guarda deve vederlo
+  // succedere senza premere niente
+  useEffect(() => {
+    if (!righe || righe.length === 0) return;
+    if (righe.every((r) => r.arreso)) return;
+    const t = setInterval(carica, 20000);
+    return () => clearInterval(t);
+  }, [righe]);
   useEffect(() => { carica(); }, []);
 
   // Due casi diversi, e si vedono dalla riga.
@@ -48566,17 +48577,19 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
 
       {righe.length === 0 ? (
         <div style={{ ...cardStyle, padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
-          Nessuna spedizione rimasta per strada. Qui finiscono le vendite al banco per cui l’ordine di
-          spedizione non è stato creato: l’indirizzo resta scritto, e si riprova da qui.
+          Niente rimasto per strada. Qui finiscono le vendite al banco che non sono state scritte fino in
+          fondo: il modulo resta conservato, il server riprova da solo ogni minuto, e se dopo sei
+          tentativi non ce la fa lo trovi scritto qui.
         </div>
       ) : (
         <>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, background: "#FDECEC", border: "1px solid #F3C9C9", borderRadius: 12, padding: "10px 13px", marginBottom: 14 }}>
             <b>Il magazzino è stato scaricato, ma qualcosa non è stato scritto.</b>
-            {" "}Dove c’è scritto <b>vendita da registrare</b> non esiste nemmeno la vendita: <b>Riprova</b> la registra insieme alla spedizione, in una scrittura sola.
-            {" "}Dove c’è <b>solo spedizione</b> la vendita c’è già e manca il pacco da spedire.
-            {" "}In tutti e due i casi il modulo è conservato qui dentro: niente da richiedere al cliente, niente da ribattere.
-            {" "}Usa <b>Archivia</b> solo se il pacco è già stato consegnato a mano o la vendita è stata annullata.
+            {" "}Non devi fare niente: il server <b>riprova da solo ogni minuto</b>, diradando i tentativi (1, 2, 5, 15, 60 minuti).
+            {" "}Riprovare è sicuro — se la scrittura di prima era in realtà riuscita, il ritentativo se ne accorge e completa quello che manca invece di sdoppiare la vendita.
+            {" "}Dopo sei tentativi si ferma e te lo dice: a quel punto non è un intoppo passeggero, è qualcosa che va guardato.
+            {" "}<b>Riprova</b> serve a forzare il tentativo subito, dopo che hai sistemato la causa.
+            {" "}<b>Archivia</b> solo se il pacco è già stato consegnato a mano o la vendita è stata annullata.
           </div>
           {righe.map((r) => {
             const d = r.dati || {};
@@ -48585,7 +48598,10 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
             return (
               <div key={r.id} style={{ ...cardStyle, marginBottom: 12, padding: isMobile ? "12px 12px" : "14px 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: r.vendita_dati ? "#C0392B" : "#B07D2B" }}>
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: r.arreso ? "#C0392B" : "#2E7D32" }}>
+                    {r.arreso ? "serve una mano" : "sto riprovando"}
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: MUTED }}>
                     {r.vendita_dati ? "vendita da registrare" : "solo spedizione"}
                   </span>
                   <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 800, color: NAVY }}>{d.destinatario_nome || (r.vendita_dati ? "Vendita al banco" : "Senza nome")}</span>
@@ -48606,6 +48622,11 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
                 {r.errore && (
                   <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", marginTop: 6 }}>Perché non è partita: {r.errore}</div>
                 )}
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
+                  {r.tentativi > 0 ? `${r.tentativi} tentativ${r.tentativi === 1 ? "o" : "i"} automatic${r.tentativi === 1 ? "o" : "i"}` : "in attesa del primo tentativo"}
+                  {!r.arreso && r.prossimo_tentativo ? ` · il prossimo alle ${String(r.prossimo_tentativo).slice(11, 16)}` : ""}
+                  {r.arreso ? " · si è fermato: va guardato" : ""}
+                </div>
               </div>
             );
           })}
