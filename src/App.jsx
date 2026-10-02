@@ -11551,13 +11551,29 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   // per sempre, e quella pagina dice quanto ha pagato ogni allievo. Ora
   // serve che qualcuno lo abbia deciso per QUESTA classe — e il permesso
   // vale solo fino alla fine del corso, dopo si chiude da se'.
-  // compare alle 6 del mattino del primo giorno di corso e resta fino
-  // all'ultimo giorno compreso: e' il momento in cui la master incassa
+  // Si apre TRE GIORNI PRIMA, alle 6 del mattino, e resta fino all'ultimo
+  // giorno di corso compreso.
+  //
+  // Prima si apriva la mattina stessa, cioe' nel momento in cui la master
+  // incassa: giusto per chi la pagina la sa gia' usare, inutile per chi la
+  // vede per la prima volta proprio mentre ha un allievo davanti che paga.
+  // Tre giorni di anticipo servono a guardarla con calma — i numeri ci sono
+  // gia', sono gli acconti incassati finora.
+  //
+  // L'interruttore resta dell'ufficio: senza A.C.M. acceso su QUESTA
+  // edizione non si vede niente, ne' prima ne' durante. L'anticipo non
+  // allarga il permesso, sposta solo quando comincia a valere.
+  const GIORNI_ANTICIPO_ACM = 3;
+  const apreAcm = (() => {
+    const d = new Date(`${corsoData.data_inizio}T06:00:00`);
+    d.setDate(d.getDate() - GIORNI_ANTICIPO_ACM);
+    return d;
+  })();
   const contabilitaVisibile = !!onApriContabilita
     && !!corsoData.token_master
     && !!corsoData.acm_attivo
     && oggiStr <= corsoData.data_fine
-    && new Date() >= new Date(`${corsoData.data_inizio}T06:00:00`);
+    && new Date() >= apreAcm;
 
   const kit = conteggioKitEdizione(iscrittiEdizione);
   const divisoreVerticale = <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />;
@@ -29858,6 +29874,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // dice quanto ha pagato ogni allievo: quando la master puo' vederla lo
   // decide l'ufficio, edizione per edizione, non il calendario.
   //
+  // Il tasto compare nella dashboard della master TRE GIORNI PRIMA
+  // dell'inizio, non la mattina stessa: serve a darle il tempo di
+  // imparare la pagina con calma, invece di vederla per la prima volta
+  // con un allievo davanti che sta pagando.
+  //
   // Si spegne da solo alla fine del corso, ma senza nessun lavoro notturno
   // che passi a chiudere gli interruttori rimasti aperti: dopo data_fine
   // non viene piu' considerato valido (vedi acmValido). Un permesso che
@@ -29869,7 +29890,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     const { error } = await supabase.from("corsi_date").update({ acm_attivo: !corsoData.acm_attivo }).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg(!corsoData.acm_attivo
-      ? "A.C.M. acceso: la master vede la contabilita' di questa classe fino alla fine del corso."
+      ? "A.C.M. acceso: la master vede la contabilita' di questa classe da tre giorni prima dell'inizio e fino alla fine del corso."
       : "A.C.M. spento: la master non vede piu' la contabilita' di questa classe.");
     ricarica(["corsi_date"]);
   }
