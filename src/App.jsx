@@ -48457,9 +48457,126 @@ function StrisciaScarichiMancati({ righe, onSistemata, isMobile }) {
   );
 }
 
+// L'ADVISOR DELLE SPEDIZIONI MANCATE.
+//
+// Al banco la vendita e l'ordine di spedizione sono due scritture in
+// sequenza. Se la seconda fallisce resta un incasso senza niente da
+// spedire, e fino al 02/10/2026 l'unica traccia era un avviso a schermo:
+// chi lo chiudeva perdeva anche l'indirizzo, che viveva solo nel modulo.
+//
+// Ora il tentativo si conserva intero, e da qui si riprova con un clic.
+// La stessa linguetta sta in due posti — "Vendite al banco", dove nasce
+// il problema, e "Ordini in arrivo", dove se ne accorge chi spedisce —
+// perche' le due persone non sono la stessa.
+function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
+  const [righe, setRighe] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [inCorso, setInCorso] = useState("");
+
+  async function carica() {
+    const { data, error } = await supabase.from("spedizioni_pos_non_riuscite")
+      .select("*").is("risolto_il", null).order("tentato_il", { ascending: false });
+    if (error) { setMsg("Non riesco a leggere l'elenco: " + testoErrore(error)); setRighe([]); return; }
+    setRighe(data || []);
+    onCambiaConto?.((data || []).length);
+  }
+  useEffect(() => { carica(); }, []);
+
+  async function riprova(r) {
+    setInCorso(r.id);
+    // si rimanda esattamente il modulo di allora: se nel frattempo e'
+    // stata corretta la causa — una colonna che mancava, un permesso —
+    // questa volta entra
+    const { data: creata, error } = await supabase.from("spedizioni_pos")
+      .insert({ ...(r.dati || {}), vendita_id: r.vendita_id }).select("id").single();
+    if (error) { setInCorso(""); setMsg(`Non è andata neanche adesso: ${testoErrore(error)}`); return; }
+    await supabase.from("spedizioni_pos_non_riuscite")
+      .update({ risolto_il: new Date().toISOString(), spedizione_id: creata.id }).eq("id", r.id);
+    setInCorso("");
+    setMsg(`Ordine di spedizione creato: ora è fra i pacchi da spedire.`);
+    carica();
+    ricarica?.(["spedizioni_pos"]);
+  }
+
+  async function archivia(r) {
+    if (!window.confirm(`Togliere dall'elenco il tentativo di ${(r.dati || {}).destinatario_nome || "questo cliente"}?\n\nUsalo quando il pacco è già stato consegnato a mano o la vendita è stata annullata: non crea nessun ordine di spedizione.`)) return;
+    setInCorso(r.id);
+    const { error } = await supabase.from("spedizioni_pos_non_riuscite")
+      .update({ risolto_il: new Date().toISOString() }).eq("id", r.id);
+    setInCorso("");
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    carica();
+  }
+
+  if (righe == null) return <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: 20 }}>Carico…</div>;
+
+  return (
+    <div>
+      {msg && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Ordine") ? "#2E7D32" : "#C0392B", background: msg.startsWith("Ordine") ? "#EDF7EE" : "#FDECEC", border: `1px solid ${msg.startsWith("Ordine") ? "#C7E3CB" : "#F3C9C9"}`, borderRadius: 10, padding: "9px 12px", marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ flex: 1, minWidth: 0 }}>{msg}</span>
+          <AzioneTesto onClick={() => setMsg("")} colore={MUTED}>chiudi</AzioneTesto>
+        </div>
+      )}
+
+      {righe.length === 0 ? (
+        <div style={{ ...cardStyle, padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
+          Nessuna spedizione rimasta per strada. Qui finiscono le vendite al banco per cui l’ordine di
+          spedizione non è stato creato: l’indirizzo resta scritto, e si riprova da qui.
+        </div>
+      ) : (
+        <>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, background: "#FDECEC", border: "1px solid #F3C9C9", borderRadius: 12, padding: "10px 13px", marginBottom: 14 }}>
+            <b>Queste vendite sono state incassate e il magazzino è stato scaricato, ma non c’è nessun pacco da spedire.</b>
+            {" "}L’indirizzo che era stato digitato è conservato qui dentro: <b>Riprova</b> crea l’ordine adesso, senza richiederlo al cliente e senza rifare la vendita.
+            {" "}Usa <b>Archivia</b> solo se il pacco è già stato consegnato a mano o la vendita è stata annullata.
+          </div>
+          {righe.map((r) => {
+            const d = r.dati || {};
+            const indirizzo = [d.indirizzo, d.civico].filter(Boolean).join(" ");
+            const citta = [d.cap, d.citta, d.provincia ? `(${d.provincia})` : null].filter(Boolean).join(" ");
+            return (
+              <div key={r.id} style={{ ...cardStyle, marginBottom: 12, padding: isMobile ? "12px 12px" : "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 800, color: NAVY }}>{d.destinatario_nome || "Senza nome"}</span>
+                  <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{r.numero_ordine ? `#${r.numero_ordine}` : "—"}</span>
+                  <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{r.tentato_il ? fmtData(String(r.tentato_il).slice(0, 10)) : ""}</span>
+                  {r.operatore && <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>· {toTitleCase(r.operatore)}</span>}
+                  <span style={{ flex: 1 }} />
+                  <Button variant="ghost" onClick={() => riprova(r)} disabled={inCorso === r.id}>
+                    {inCorso === r.id ? "Riprovo…" : "Riprova"}
+                  </Button>
+                  <AzioneTesto onClick={() => archivia(r)} colore={MUTED}>archivia</AzioneTesto>
+                </div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>
+                  {indirizzo || <span style={{ color: MUTED }}>indirizzo non compilato</span>}
+                  {citta ? ` — ${citta}` : ""}
+                  {d.cellulare ? ` · ${d.cellulare}` : ""}
+                </div>
+                {r.errore && (
+                  <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", marginTop: 6 }}>Perché non è partita: {r.errore}</div>
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
 function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, corsi, corsiDate, location, iscritti, syncEsiti = [], ruoloUtente, ricarica, onBack, titolo = "Ordini in arrivo" }) {
   const isMobile = useIsMobile();
-  const [vista, setVista] = useState("dagestire"); // dagestire | storico
+  const [vista, setVista] = useState("dagestire"); // dagestire | storico | advisor
+  const [contoAdvisor, setContoAdvisor] = useState(0);
+  // il numero sulla linguetta si sa prima di aprirla, se no non richiama
+  // nessuno: tabella piccola, letta solo qui
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("spedizioni_pos_non_riuscite").select("id", { count: "exact", head: true }).is("risolto_il", null)
+      .then(({ count }) => { if (vivo) setContoAdvisor(count || 0); });
+    return () => { vivo = false; };
+  }, []);
   const [payloadPerId, setPayloadPerId] = useState({});
   const [ordineAperto, setOrdineAperto] = useState(null);
   // Cambiare stato vuol dire scrivere sul sito e aspettare che WooCommerce
@@ -48707,9 +48824,16 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
           <TabPillola compatto={isMobile} attivo={vista === "storico"} onClick={() => setVista("storico")}>
             Storico
           </TabPillola>
+          {/* Le spedizioni rimaste per strada si vedono anche qui, non solo
+              in "Vendite al banco": chi spedisce non e' chi ha venduto. */}
+          <TabPillola compatto={isMobile} attivo={vista === "advisor"} onClick={() => setVista("advisor")}>
+            Advisor{contoAdvisor > 0 ? ` (${contoAdvisor})` : ""}
+          </TabPillola>
         </div>
 
-        {vista === "storico" ? (
+        {vista === "advisor" ? (
+          <PannelloAdvisorSpedizioni isMobile={isMobile} ricarica={ricarica} onCambiaConto={setContoAdvisor} />
+        ) : vista === "storico" ? (
           <TabellaStoricoSpedizioni voci={voci} onApriOrdine={setOrdineAperto} isMobile={isMobile} />
         ) : voci.length === 0 ? (
           <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, boxShadow: "var(--ombra-aree, none)", padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
@@ -49755,6 +49879,16 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     if (!cd) return null;
     return (corsi || []).find((c) => c.id === cd.corso_id)?.nome || null;
   };
+  const [vistaBanco, setVistaBanco] = useState("vendite"); // vendite | advisor
+  const [contoAdvisor, setContoAdvisor] = useState(0);
+  // il numero si sa prima di aprire la linguetta, se no non richiama nessuno
+  useEffect(() => {
+    if (origine !== "pos") return;
+    let vivo = true;
+    supabase.from("spedizioni_pos_non_riuscite").select("id", { count: "exact", head: true }).is("risolto_il", null)
+      .then(({ count }) => { if (vivo) setContoAdvisor(count || 0); });
+    return () => { vivo = false; };
+  }, [origine]);
   const [ordineAperto, setOrdineAperto] = useState(null);
   const [statoInModifica, setStatoInModifica] = useState(null); // id della vendita con la tendina aperta
   const [cambiandoStato, setCambiandoStato] = useState(null);
@@ -50052,6 +50186,20 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
             {msgMetodo}
           </div>
         )}
+        {/* La linguetta Advisor c'e' solo al banco: le spedizioni mancate
+            nascono da qui, ed e' qui che chi ha venduto le ritrova. */}
+        {origine === "pos" && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+            <TabPillola compatto={isMobile} attivo={vistaBanco === "vendite"} onClick={() => setVistaBanco("vendite")}>Vendite</TabPillola>
+            <TabPillola compatto={isMobile} attivo={vistaBanco === "advisor"} onClick={() => setVistaBanco("advisor")}>
+              Advisor{contoAdvisor > 0 ? ` (${contoAdvisor})` : ""}
+            </TabPillola>
+          </div>
+        )}
+
+        {origine === "pos" && vistaBanco === "advisor" ? (
+          <PannelloAdvisorSpedizioni isMobile={isMobile} ricarica={ricarica} onCambiaConto={setContoAdvisor} />
+        ) : (
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             {msgElimina && <div style={{ ...fontBody, fontSize: 13, color: msgElimina.startsWith("Vendita #") ? "#2E7D32" : "#C0392B", padding: "10px 8px" }}>{msgElimina}</div>}
@@ -50238,6 +50386,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
             </table>
           </div>
         </div>
+        )}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginTop: 28, marginBottom: 4 }}>
           <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Prodotti più venduti</div>
@@ -63126,8 +63275,30 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       if (datiSpedizione) {
         const { error: erroreSped } = await supabase.from("spedizioni_pos").insert({ ...datiSpedizione, vendita_id: venditaCreata.id });
         if (erroreSped) {
-          window.alert("Attenzione: vendita registrata, ma l'ordine di spedizione non è stato creato: " + erroreSped.message);
-          ricarica(["prodotti_shop", "vendite_shop"]);
+          // L'AVVISO NON BASTA.
+          //
+          // Qui la vendita e' gia' scritta e il magazzino gia' scaricato:
+          // se la spedizione non parte, resta un incasso senza niente da
+          // spedire. Finora c'era solo questo alert, e chi lo chiudeva non
+          // aveva piu' niente — ne' l'ordine ne' l'indirizzo, che viveva
+          // solo nel modulo appena svuotato.
+          //
+          // Dal 02/10/2026 il tentativo si scrive, con dentro il modulo
+          // INTERO: in "Vendite al banco" e in "Ordini in arrivo" c'e' una
+          // linguetta Advisor da cui si riprova con un clic. Se anche
+          // questa scrittura fallisce si torna all'avviso e basta, ma a
+          // quel punto il database e' irraggiungibile e il problema e' un
+          // altro.
+          await supabase.from("spedizioni_pos_non_riuscite").insert({
+            vendita_id: venditaCreata.id,
+            numero_ordine: venditaCreata.numero_ordine || null,
+            dati: datiSpedizione,
+            errore: erroreSped.message || String(erroreSped),
+            operatore: nomeOperatore || null,
+          });
+          window.alert("Attenzione: vendita registrata, ma l'ordine di spedizione non è stato creato: " + erroreSped.message
+            + "\n\nL'indirizzo non è andato perso: lo trovi in Vendite al banco → Advisor, e da lì puoi riprovare.");
+          ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos_non_riuscite"]);
           return;
         }
       }
