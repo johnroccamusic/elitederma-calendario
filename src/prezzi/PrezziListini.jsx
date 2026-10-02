@@ -243,7 +243,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                     {privato && <col className="c-costo" />}
                     <col className="c-num" /><col className="c-num" />
                     <col className="c-scon" /><col className="c-num" />
-                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
+                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
                   </colgroup>
                   <thead>
                     <tr>
@@ -254,7 +254,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"a master\n% sul netto"}</th><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th></>}
+                      {privato && <><th>{"a master\n% sul netto"}</th><th>{"a master\nin euro"}</th><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -288,6 +288,15 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                   ? `Vendendo lei al corso, le riconosci ${euro(r.provvigione_master_euro)} — il ${String(r.quota_master_pct).replace(".", ",")}% del margine (${euro(r.pubblico_netto - r.costo_acquisto)}), cioè il ${String(r.provvigione_master_pct).replace(".", ",")}% del prezzo netto.`
                                   : "Senza costo d'acquisto non si sa quanto margine c'è, quindi non si sa quanto cederne."}>
                                 {r.provvigione_master_pct != null ? `${String(r.provvigione_master_pct).replace(".", ",")}%` : "—"}
+                              </td>
+                              {/* la stessa cosa in euro: la percentuale serve a
+                                  confrontare i prodotti fra loro, la cifra a dire
+                                  alla master quanto prende su quel pezzo */}
+                              <td className="lst-master" data-eti={"a master\neuro"}
+                                title={r.provvigione_master_euro != null && r.costo_acquisto != null
+                                  ? `${euro(r.provvigione_master_euro)} per ogni pezzo venduto: il ${String(r.quota_master_pct).replace(".", ",")}% dei ${euro(r.pubblico_netto - r.costo_acquisto)} di margine.`
+                                  : undefined}>
+                                {r.provvigione_master_pct != null ? cifra(r.provvigione_master_euro) : "—"}
                               </td>
                               <td className="lst-resta" data-eti={"a te\nsenza"} title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
                               <td className="lst-resta-riv" data-eti={"a te\ncon"} title={r.utile_rivenditore != null ? `Vendendo a un rivenditore allo sconto massimo: ${euro(r.utile_rivenditore)} prima delle imposte, ${euro(r.ti_resta_rivenditore)} dopo.` : undefined}>{cifra(r.ti_resta_rivenditore)}</td>
