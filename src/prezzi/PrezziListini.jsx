@@ -121,6 +121,10 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     .lst-tab td.lst-costo, .lst-tab th.lst-costo { color: ${MUTED}; }
     .lst-tab td.lst-resta { font-weight: 800; }
     .lst-tab td.lst-resta-riv { color: #8A6D1D; font-weight: 800; }
+    /* la provvigione alla master: verde, perche' e' l'unica colonna che
+       dice "questo lo dai a qualcuno che non rischia niente" ed e' bene
+       non confonderla con lo sconto al rivenditore, che e' tutt'altro */
+    .lst-tab td.lst-master { color: #2E7D32; font-weight: 800; }
     /* Nel listino privato i numeri sono sette: su un telefono una riga
        sola non basta, e farla scorrere di lato vorrebbe dire nascondere
        proprio le colonne che servono a decidere. Quindi sotto i 700px il
@@ -239,7 +243,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                     {privato && <col className="c-costo" />}
                     <col className="c-num" /><col className="c-num" />
                     <col className="c-scon" /><col className="c-num" />
-                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
+                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
                   </colgroup>
                   <thead>
                     <tr>
@@ -250,7 +254,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th></>}
+                      {privato && <><th>{"a master\n% sul netto"}</th><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -279,6 +283,12 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                           <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_rivenditore)}</td>
                           {privato && (
                             <>
+                              <td className="lst-master" data-eti={"a\nmaster"}
+                                title={r.provvigione_master_pct != null
+                                  ? `Vendendo lei al corso, le riconosci ${euro(r.provvigione_master_euro)} — il ${String(r.quota_master_pct).replace(".", ",")}% del margine (${euro(r.pubblico_netto - r.costo_acquisto)}), cioè il ${String(r.provvigione_master_pct).replace(".", ",")}% del prezzo netto.`
+                                  : "Senza costo d'acquisto non si sa quanto margine c'è, quindi non si sa quanto cederne."}>
+                                {r.provvigione_master_pct != null ? `${String(r.provvigione_master_pct).replace(".", ",")}%` : "—"}
+                              </td>
                               <td className="lst-resta" data-eti={"a te\nsenza"} title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
                               <td className="lst-resta-riv" data-eti={"a te\ncon"} title={r.utile_rivenditore != null ? `Vendendo a un rivenditore allo sconto massimo: ${euro(r.utile_rivenditore)} prima delle imposte, ${euro(r.ti_resta_rivenditore)} dopo.` : undefined}>{cifra(r.ti_resta_rivenditore)}</td>
                             </>
@@ -303,6 +313,14 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
             Le imposte vere si calcolano sull'utile dell'anno, con ammortamenti e deduzioni: questo
             è un ordine di grandezza per pezzo, non il conto del commercialista. Passando su un
             numero vedi quanto era prima delle imposte.
+            {" "}
+            <b>A master</b> è quanto puoi riconoscere a una master che vende quel prodotto a un
+            corso: il {String(righe[0]?.quota_master_pct ?? 15).replace(".", ",")}% del margine
+            (netto meno costo), scritto qui come <b>percentuale del prezzo netto</b> — non del
+            lordo, che contiene l'IVA e non è tua. Non è uno sconto da rivenditore e non deve
+            somigliargli: un rivenditore anticipa i soldi, si porta la merce e si tiene
+            l'invenduto; una master vende la tua merce al tuo prezzo dentro un corso che paghi tu.
+            Dove il margine è sottile la percentuale scende da sola.
           </p>
         )}
         <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>
