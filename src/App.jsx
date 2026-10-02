@@ -55829,19 +55829,48 @@ function pianoRiordino({ prodottiShop, risultato, oggi }) {
     // un solo avviso per prodotto: vince quello più urgente, e si dice
     // sempre quale criterio l'ha generato — mai due righe sovrapposte
     const criterio = perData && (perData.stato === "ritardo" || perData.stato === "urgente" || !perSoglia) ? "data" : "soglia";
-    // quanto ordinare: se il prodotto ha una sua quantità di riordino è
-    // quella e basta (è la confezione che si compra dal fornitore, decisa
-    // una volta per tutte nella scheda); altrimenti quanto serve per
-    // rientrare in scorta
-    const suggerita = p.quantita_riordino != null
+    // QUANTO ORDINARE: il più grande fra due numeri, e poi arrotondato
+    // al lotto minimo del fornitore.
+    //
+    // 1. quello che serve per il MAGAZZINO: la quantità di riordino del
+    //    prodotto se c'è (è la confezione che si compra, decisa una volta
+    //    per tutte nella scheda), altrimenti quanto manca per rientrare
+    //    sopra la scorta minima;
+    // 2. quello che serve per i CORSI: i pezzi che i kit degli allievi
+    //    già iscritti consumeranno, meno quelli che ci sono — `mancante`.
+    //
+    // Prima contava solo il primo, e il risultato era una pagina di
+    // "Ordina 0": un prodotto finisce in elenco perché un corso lo
+    // consumerà, ma se la scorta minima è già rispettata il conto sulla
+    // scorta dà zero. Verificato il 03/10/2026: su ventidue righe,
+    // diciassette dicevano di ordinarne zero — fra cui la colla
+    // laminazione, che a quattordici allievi ne servivano dieci.
+    //
+    // E non era un problema solo delle righe nate da una data: anche le
+    // Piastrine, sotto scorta, chiedevano venti pezzi quando i corsi ne
+    // consumeranno settanta.
+    const perMagazzino = p.quantita_riordino != null
       ? p.quantita_riordino
-      : (p.soglia_riordino != null ? Math.max(0, p.soglia_riordino - disponibile) : null);
+      : (p.soglia_riordino != null ? Math.max(0, p.soglia_riordino - disponibile) : 0);
+    const perCorsi = previsione?.mancante || 0;
+    const suggerita = (p.quantita_riordino != null || p.soglia_riordino != null || perCorsi > 0)
+      ? Math.max(perMagazzino, perCorsi)
+      : null;
     daOrdinare.push({
       prodotto: p, criterio, perData, perSoglia, disponibile,
       fabbisognoTotale: previsione?.fabbisogno || 0,
+      // quanti ne mancano DAVVERO: il fabbisogno dei kit degli iscritti
+      // alle edizioni future, meno quello che c'e' gia' in magazzino.
+      // E' il numero che serve a chi ordina, e fino al 03/10/2026 non
+      // usciva da qui: il suggerimento guardava solo la scorta minima.
+      mancanteTotale: previsione?.mancante || 0,
       allieviConsiderati: previsione?.allievi || 0,
       quantitaSuggerita: suggerita != null ? arrotondaALotto(suggerita, p.lotto_minimo_ordine) : null,
-      baseQuantita: p.quantita_riordino != null ? "quantita_riordino" : (p.soglia_riordino != null ? "soglia_riordino" : null),
+      // quale dei due ha vinto: serve a scrivere sotto al tasto perché
+      // quel numero, invece di una frase che potrebbe non c'entrare
+      baseQuantita: (perCorsi > perMagazzino)
+        ? "fabbisogno_corsi"
+        : (p.quantita_riordino != null ? "quantita_riordino" : (p.soglia_riordino != null ? "soglia_riordino" : null)),
     });
   });
 
@@ -56791,6 +56820,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                   <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 5, maxWidth: 150 }}>
                     {!(r.quantitaSuggerita > 0)
                       ? "quanti, lo decidi tu"
+                      : r.baseQuantita === "fabbisogno_corsi" ? `per coprire ${r.allieviConsiderati || 0} alliev${r.allieviConsiderati === 1 ? "o" : "i"}`
                       : r.baseQuantita === "quantita_riordino" ? "quantità di riordino"
                       : r.baseQuantita === "soglia_riordino" ? "per rientrare in scorta"
                       : "quantità da valutare"}
