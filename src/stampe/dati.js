@@ -1,0 +1,108 @@
+// Stampe packaging: lettura e scrittura, niente altro.
+//
+// Una scheda per ogni cosa che si manda in tipografia — la scatola, il
+// manuale, l'adesivo — con la foto di com'e' fatta, il file da mandare, e
+// i dati di stampa riga per riga.
+//
+// Le righe sono libere di proposito. Nome, tipologia, materiale, formato,
+// dimensioni e fornitore servono sempre e nascono gia' scritte; ma ogni
+// stampa ha i suoi dettagli — la grammatura, il senso della fibra, i
+// colori — e una colonna per ognuno vorrebbe dire una tabella con quaranta
+// colonne vuote.
+import { supabase } from "../supabase.js";
+
+export const BUCKET_STAMPE = "stampe-packaging";
+
+// Le righe con cui nasce una scheda nuova: quelle che servono sempre,
+// gia' scritte e vuote, nell'ordine in cui si leggono.
+export const RIGHE_PREDEFINITE = [
+  "Nome prodotto",
+  "Tipologia",
+  "Materiale",
+  "Formato",
+  "Dimensioni template",
+  "Fornitore",
+];
+
+// Passo 10 fra una riga e l'altra: inserirne una in mezzo non obbliga a
+// rinumerare tutte quelle sotto, basta prendere il punto di mezzo.
+export const PASSO_ORDINE = 10;
+
+export async function leggiStampe() {
+  const { data, error } = await supabase
+    .from("stampe_packaging").select("*").order("ordine").order("creato_il");
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function leggiRighe() {
+  const { data, error } = await supabase
+    .from("stampe_packaging_righe").select("*").order("stampa_id").order("ordine");
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function creaStampa(nome = "") {
+  const { data, error } = await supabase
+    .from("stampe_packaging").insert({ nome }).select().single();
+  if (error) throw new Error(error.message);
+  const righe = RIGHE_PREDEFINITE.map((etichetta, i) => ({
+    stampa_id: data.id, etichetta, valore: "", ordine: (i + 1) * PASSO_ORDINE,
+  }));
+  const { error: e2 } = await supabase.from("stampe_packaging_righe").insert(righe);
+  if (e2) throw new Error(e2.message);
+  return data;
+}
+
+export async function salvaStampa(id, campi) {
+  const { error } = await supabase.from("stampe_packaging").update(campi).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function eliminaStampa(id) {
+  const { error } = await supabase.from("stampe_packaging").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function salvaRiga(id, campi) {
+  const { error } = await supabase.from("stampe_packaging_righe").update(campi).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function eliminaRiga(id) {
+  const { error } = await supabase.from("stampe_packaging_righe").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+// Una riga nuova SOTTO quella da cui si e' premuto il "+": prende il
+// punto di mezzo fra lei e la successiva, cosi' le altre non si toccano.
+// Se era l'ultima, si mette un passo piu' giu'.
+export async function aggiungiRigaSotto(stampaId, righeDellaScheda, dopoId) {
+  const ordinate = [...righeDellaScheda].sort((a, b) => Number(a.ordine) - Number(b.ordine));
+  const i = ordinate.findIndex((r) => r.id === dopoId);
+  const sopra = i >= 0 ? Number(ordinate[i].ordine) : 0;
+  const sotto = i >= 0 && ordinate[i + 1] ? Number(ordinate[i + 1].ordine) : sopra + PASSO_ORDINE * 2;
+  const { data, error } = await supabase.from("stampe_packaging_righe")
+    .insert({ stampa_id: stampaId, etichetta: "", valore: "", ordine: (sopra + sotto) / 2 })
+    .select().single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// Il percorso del file dentro il secchio: l'id della scheda fa da
+// cartella, cosi' cancellando la scheda si sa cosa buttare.
+export function percorsoFile(stampaId, nomeFile) {
+  const pulito = String(nomeFile || "file").replace(/[^A-Za-z0-9._-]/g, "_");
+  return `${stampaId}/${Date.now()}-${pulito}`;
+}
+
+export async function caricaFile(percorso, file) {
+  const { error } = await supabase.storage.from(BUCKET_STAMPE).upload(percorso, file, { upsert: true });
+  if (error) throw new Error(error.message);
+  return percorso;
+}
+
+export function urlPubblico(percorso) {
+  if (!percorso) return null;
+  return supabase.storage.from(BUCKET_STAMPE).getPublicUrl(percorso).data.publicUrl;
+}

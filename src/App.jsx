@@ -17,6 +17,7 @@ import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivell
 import { qrSvg } from "./ui/qr.js";
 import { caricaKitInAula } from "./rientri/pos";
 import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
+import StampePackaging from "./stampe/StampePackaging.jsx";
 import SchedaRientro from "./rientri/SchedaRientro.jsx";
 import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
 import MagazzinoGuasti from "./rientri/MagazzinoGuasti.jsx";
@@ -74359,6 +74360,10 @@ export default function App() {
     // "corsi" e "corsi_date" servono alla colonna "Frangente": la vendita
     // registra l'edizione, il nome del corso sta altrove
     venditealbanco: ["vendite_shop", "corsi", "corsi_date"],
+    // si legge le sue due tabelle da sola: sono piccole e non le usa
+    // nessun altro. Dichiarata lo stesso, per non finire fra le viste che
+    // ricevono dati senza averli chiesti.
+    stampepackaging: [],
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop", "impostazioni_iva"],
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
@@ -75916,6 +75921,7 @@ export default function App() {
                 onClick: () => setView("assegnazionekit"),
               }] : []),
               { chiave: "qrconsensi", title: "QR consensi modelle", descrizione: "I codici da far inquadrare alle modelle per firmare il consenso", Icona: IconaTileModelle, attivo: true, onClick: () => setView("qrconsensi") },
+              { chiave: "stampepackaging", title: "Stampe packaging", descrizione: "Cosa si manda in tipografia: file, materiali, formati e fornitori", Icona: IconaTileNormative, attivo: true, onClick: () => setView("stampepackaging") },
               // sta in home e non piu' dentro Normative: lo aprono le
               // master e chi vende, ogni volta che iscrivono qualcuno —
               // due tasti di distanza erano due di troppo
@@ -76647,6 +76653,13 @@ export default function App() {
           kitDefinizioni={kitDefinizioni}
           onApriIscritto={apriIscrittoDaAssegnazioneKit}
           onBack={() => setView("home")}
+        />
+      )}
+
+      {view === "stampepackaging" && (
+        <StampePackaging
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "stampepackaging", "Stampe packaging")}
         />
       )}
 
