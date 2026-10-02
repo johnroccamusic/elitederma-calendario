@@ -47029,7 +47029,8 @@ function PaginaInserimentoCostiRicavi({
   const daRiconciliarePN = (s) => !s.numero_documento;
   const speseRealiFiltrate = spesePagate
     .filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine)
-    .filter((s) => filtroStatoPN === "tutte" || (filtroStatoPN === "dariconciliare" ? daRiconciliarePN(s) : !daRiconciliarePN(s)))
+    .filter((s) => filtroStatoPN === "tutte" || filtroStatoPN === "duplicati"
+      || (filtroStatoPN === "dariconciliare" ? daRiconciliarePN(s) : !daRiconciliarePN(s)))
     .sort((a, b) => (dataCassaPN(b) || "").localeCompare(dataCassaPN(a) || ""));
   const conteggioDaRiconciliarePN = spesePagate.filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine && daRiconciliarePN(s)).length;
   // la ricerca filtra le spese vere PRIMA di normalizzarle e prima di
@@ -47082,13 +47083,20 @@ function PaginaInserimentoCostiRicavi({
       const totale = round2(membri.reduce((t, m) => t + (Number(m.totale) || 0), 0));
       const fornitore = membri[0].fornitore_id ? fornitoriById[membri[0].fornitore_id] : null;
       const evento = String(g).startsWith("evento_") ? eventiById[String(g).slice(7)] : null;
+      const primoNome = String(membri[0].descrizione || "").trim().toLowerCase();
+      const stessoNome = !!primoNome && membri.every((x) => String(x.descrizione || "").trim().toLowerCase() === primoNome);
       cumuli.push({
         ...capo,
         id: `gruppo_${g}`, gruppo: g, speseGruppo: membri,
         ...(evento ? { dataDocumento: evento.data_fine || evento.data_inizio || capo.dataDocumento } : {}),
+        // Se le righe si chiamano tutte uguale — e' il caso dei doppioni
+        // uniti dal tasto Duplicati — vince il loro nome: "Bonifico
+        // cumulativo" su cinque commissioni da un euro non dice niente.
         descrizione: evento
           ? evento.nome
-          : (membri[0].numero_documento ? `${fornitore?.nome || "Fornitore"} — fattura n. ${membri[0].numero_documento}` : (fornitore?.nome || "Bonifico cumulativo")),
+          : (stessoNome
+              ? `${membri[0].descrizione} ×${membri.length}`
+              : (membri[0].numero_documento ? `${fornitore?.nome || "Fornitore"} — fattura n. ${membri[0].numero_documento}` : (fornitore?.nome || "Bonifico cumulativo"))),
         sottotitolo: evento
           ? `Evento · ${membri.length} spes${membri.length === 1 ? "a" : "e"}: ${membri.map((m) => m.descrizione || "—").join(" · ")}`
           : `${membri.length} spese: ${membri.map((m) => m.descrizione || "—").join(" · ")}`,
@@ -47144,6 +47152,58 @@ function PaginaInserimentoCostiRicavi({
     : entrateNelPeriodo;
   const totaleEntrate = round2(entrateRicercate.reduce((s, e) => s + e.importo, 0));
   const saldoPeriodo = round2(totaleEntrate - totaleSpese);
+
+  // I DOPPIONI.
+  //
+  // Due movimenti sono "lo stesso" quando cadono lo stesso giorno, si
+  // chiamano uguale e valgono uguale. Il nome deve coincidere: OLGA e
+  // KATIA, stessa data e stessi 150 euro, sono due quote venditore
+  // diverse, non un errore — e le cinque commissioni di bonifico da un
+  // euro del 30 settembre sono cinque commissioni vere.
+  //
+  // Non vuol dire che siano sbagliati: vuol dire che in prima nota
+  // possono stare su una riga sola. Unire NON cancella niente — assegna
+  // alle righe lo stesso `gruppo_pagamento`, la stessa cosa che gia'
+  // tiene insieme le spese di un bonifico cumulativo: nel database
+  // restano distinte, con la loro categoria e il loro documento.
+  //
+  // Le ENTRATE si segnalano e basta. Non sono righe di una tabella: sono
+  // quote di iscrizione e vendite, calcolate da dove stanno. Unirle
+  // vorrebbe dire cancellarne una, e un incasso doppio o e' un errore da
+  // correggere alla fonte o sono due incassi veri.
+  const normaDup = (t) => String(t || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const gruppiDuplicatiPN = (() => {
+    const perChiave = new Map();
+    spesePagate
+      .filter((sp) => dataCassaPN(sp) >= range.inizio && dataCassaPN(sp) <= range.fine && !sp.gruppo_pagamento)
+      .forEach((sp) => {
+        const k = `u|${dataCassaPN(sp)}|${normaDup(sp.descrizione)}|${round2(Number(sp.totale) || 0)}`;
+        if (!perChiave.has(k)) perChiave.set(k, { chiave: k, tipo: "uscita", data: dataCassaPN(sp), nome: sp.descrizione || "—", importo: round2(Number(sp.totale) || 0), righe: [] });
+        perChiave.get(k).righe.push(sp);
+      });
+    entrateNelPeriodo.forEach((e) => {
+      const k = `e|${e.data}|${normaDup(e.titolo)}|${normaDup(e.fase)}|${e.importo}`;
+      if (!perChiave.has(k)) perChiave.set(k, { chiave: k, tipo: "entrata", data: e.data, nome: e.titolo, fase: e.fase, importo: e.importo, righe: [] });
+      perChiave.get(k).righe.push(e);
+    });
+    return [...perChiave.values()].filter((g) => g.righe.length > 1)
+      .map((g) => ({ ...g, totale: round2(g.importo * g.righe.length) }))
+      .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")) || b.totale - a.totale);
+  })();
+  const duplicatiUnibiliPN = gruppiDuplicatiPN.filter((g) => g.tipo === "uscita");
+
+  async function unisciDuplicati(g) {
+    if (!window.confirm(`Unire ${g.righe.length} righe "${g.nome}" del ${fmtData(g.data)} in una voce sola da ${fmtEuroErp2(g.totale)}?\n\nNessuna riga viene cancellata: restano nel database con la loro categoria, e in prima nota si leggono insieme. Si puo' separarle di nuovo.`)) return;
+    const gruppo = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+    const { error } = await supabase.from("spese").update({ gruppo_pagamento: gruppo }).in("id", g.righe.map((x) => x.id));
+    if (error) { setMsgPN?.("Errore: " + testoErrore(error)); return; }
+    ricarica(["spese"]);
+  }
+  async function separaGruppo(ids) {
+    const { error } = await supabase.from("spese").update({ gruppo_pagamento: null }).in("id", ids);
+    if (error) { setMsgPN?.("Errore: " + testoErrore(error)); return; }
+    ricarica(["spese"]);
+  }
 
   // i movimenti da mostrare, entrate e uscite insieme, dal piu' recente
   // Dal giorno piu' recente al piu' vecchio; dentro lo stesso giorno,
@@ -47420,6 +47480,7 @@ function PaginaInserimentoCostiRicavi({
             // tutta la fila: quattro temi fissi, e il numero dentro che
             // cambia. A zero resta spenta, perche' non c'e' niente da
             // andare a vedere.
+            { chiave: "duplicati", etichetta: "Duplicati", conto: gruppiDuplicatiPN.length, spenta: gruppiDuplicatiPN.length === 0 },
             {
               chiave: "nonpagate",
               etichetta: nonPagateContoPN > 0 ? `Non pagate · ${fmtEuroErp(nonPagateTotalePN)}` : "Non pagate",
@@ -47487,7 +47548,42 @@ function PaginaInserimentoCostiRicavi({
             </div>
           )}
 
-          {movimentiPN.length === 0 ? (
+          {filtroStatoPN === "duplicati" ? (
+            gruppiDuplicatiPN.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>
+                Nessun doppione in questo periodo: ogni movimento ha una data, un nome o un importo diverso dagli altri.
+              </div>
+            ) : (
+              <>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, background: "#FDF8EC", border: `1px solid #EBD9AE`, borderRadius: 12, padding: "10px 13px", marginBottom: 14 }}>
+                  Movimenti che cadono <b>lo stesso giorno</b>, si chiamano <b>uguale</b> e valgono <b>uguale</b>.
+                  Non vuol dire che siano sbagliati — cinque commissioni di bonifico da un euro sono cinque commissioni vere —
+                  ma in prima nota possono stare su una riga sola.
+                  {" "}<b>Unire non cancella niente:</b> le righe restano nel database con la loro categoria e il loro documento, e si possono separare di nuovo.
+                  {" "}Le entrate si segnalano soltanto: sono quote e vendite calcolate da dove stanno, e unirle vorrebbe dire cancellarne una.
+                </div>
+                {gruppiDuplicatiPN.map((g) => (
+                  <div key={g.chiave} style={{ ...cardStyle, marginBottom: 12, padding: isMobile ? "12px 12px" : "14px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                      <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: g.tipo === "entrata" ? "#2E7D32" : "#C0392B" }}>{g.tipo}</span>
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{fmtData(g.data)}</span>
+                      <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, flex: "1 1 200px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={g.nome}>{g.nome}</span>
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{g.righe.length} × {fmtEuroErp2(g.importo)}</span>
+                      <span style={{ ...fontBody, fontSize: 14.5, fontWeight: 800, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(g.totale)}</span>
+                      {g.tipo === "uscita"
+                        ? <Button variant="ghost" onClick={() => unisciDuplicati(g)}>Unisci in una voce</Button>
+                        : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, fontStyle: "italic" }}>da controllare alla fonte</span>}
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                      {g.tipo === "uscita"
+                        ? g.righe.map((x) => `${costiSottocategorieById[x.sottocategoria_id]?.nome || costiCategorieById[x.categoria_id]?.nome || "senza categoria"}${x.numero_documento ? ` · doc. ${x.numero_documento}` : ""}`).join("  ·  ")
+                        : g.righe.map((x) => `${x.fase} · ${x.metodo}`).join("  ·  ")}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )
+          ) : movimentiPN.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun movimento nel periodo.</div>
           ) : (
             <>
