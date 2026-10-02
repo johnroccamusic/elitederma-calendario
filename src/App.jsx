@@ -50054,14 +50054,14 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
         )}
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
-            {msgElimina && <div style={{ ...fontBody, fontSize: 13, color: msgElimina.startsWith("Vendita #") ? "#2E7D32" : "#C0392B", padding: "10px 14px" }}>{msgElimina}</div>}
+            {msgElimina && <div style={{ ...fontBody, fontSize: 13, color: msgElimina.startsWith("Vendita #") ? "#2E7D32" : "#C0392B", padding: "10px 8px" }}>{msgElimina}</div>}
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
                   {[{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, ...(origine === "pos"
                     ? [{ c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }]
-                    : [{ c: "cliente", l: "Cliente" }]), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Prezzo pagato" }].map((th) => (
-                    <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
+                    : [{ c: "cliente", l: "Cliente" }]), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }].map((th) => (
+                    <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                   <th style={{ width: 44, borderBottom: `1px solid ${CREAM_BORDER}` }} />
                 </tr>
@@ -50088,7 +50088,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                     const etichettaMovimento = { vendita: "Vendita", reso: "Reso", annullamento: "Annullato", cambio: "Cambio" }[v.tipo_movimento] || "Vendita";
                     return (
                       <tr key={v.id}>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                           <button
                             onClick={() => setOrdineAperto(v)}
                             title="Apri il dettaglio dell'ordine"
@@ -50099,21 +50099,21 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                             #{v.numero_ordine || v.woo_order_id}
                           </button>
                         </td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#3B6FA0" : MUTED, background: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>
                             {etichettaMovimento}
                           </span>
                         </td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
+                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                         {origine === "pos" ? (
                           <>
                             {/* Chi ha venduto. "Vendita al banco" ripetuto su
                                 ogni riga non diceva niente: era il nome della
                                 pagina scritto sedici volte. */}
-                            <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
                               {v.operatore_nome ? toTitleCase(v.operatore_nome) : <span style={{ color: MUTED, fontWeight: 400 }}>—</span>}
                             </td>
-                            <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                               {(() => {
                                 const corso = nomeCorsoDiEdizione(v.corso_data_id);
                                 if (corso) return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 8, padding: "3px 9px" }}>{corso.toUpperCase()}</span>;
@@ -50122,13 +50122,13 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                             </td>
                           </>
                         ) : (
-                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || "—"}</td>
+                          <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || "—"}</td>
                         )}
                         {/* POS o contanti: due incassi che finiscono in due
                             posti diversi — uno sul conto, l'altro in cassa —
                             e finora l'elenco non lo diceva */}
                         {origine === "pos" && (
-                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                             {/* Una tendina, non un tasto che si commuta.
                                 Un tasto che cambia stato a ogni pressione
                                 obbliga a indovinare il gesto — uno o due
@@ -50160,7 +50160,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                                 disabled={cambiandoMetodo === v.id}
                                 onChange={(e) => chiediCambioMetodo(v, e.target.value)}
                                 title="Come è stato incassato"
-                                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "4px 8px",
+                                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "4px 4px",
                                   border: `1px solid ${v.metodo_pagamento === "contanti" ? "#E8D4B0" : "#C9CEEA"}`,
                                   cursor: cambiandoMetodo === v.id ? "default" : "pointer",
                                   color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
@@ -50173,7 +50173,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                             )}
                           </td>
                         )}
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, position: "relative" }}>
+                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, position: "relative" }}>
                           {/* solo gli ordini del sito hanno uno stato da
                               cambiare: una vendita al banco non ha nulla da
                               dire a WooCommerce */}
@@ -50204,8 +50204,8 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                             </div>
                           )}
                         </td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp2(v.totale_imponibile) : "—"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
+                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp2(v.totale_imponibile) : "—"}</td>
+                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
                         {/* "Totale" e' il listino, "Prezzo pagato" quello che e'
                             entrato in cassa dopo gli sconti; senza sconti i due
                             numeri coincidono, ed e' giusto che si veda */}
@@ -50213,10 +50213,10 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                           const listino = totaleListinoVendita(v);
                           const scontata = round2(listino - (Number(v.totale) || 0)) > 0;
                           return (
-                            <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: scontata ? MUTED : NAVY, whiteSpace: "nowrap", textDecoration: scontata ? "line-through" : "none" }}>{fmtEuroErp2(listino)}</td>
+                            <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: scontata ? MUTED : NAVY, whiteSpace: "nowrap", textDecoration: scontata ? "line-through" : "none" }}>{fmtEuroErp2(listino)}</td>
                           );
                         })()}
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
+                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                         {/* il cestino: chiede conferma e non lascia traccia */}
                         <td style={{ padding: "12px 10px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                           <button
