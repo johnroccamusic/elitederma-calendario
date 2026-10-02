@@ -48503,20 +48503,44 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
   }
   useEffect(() => { carica(); }, []);
 
+  // Due casi diversi, e si vedono dalla riga.
+  //
+  // Se c'e' `vendita_dati`, a fallire e' stata la transazione intera: non
+  // esiste nemmeno la vendita, e si rifa' tutto con la stessa funzione che
+  // usa il banco — una scrittura sola, indivisibile.
+  //
+  // Se c'e' solo `dati`, la vendita esiste gia' (sono le righe nate prima
+  // del 02/10/2026, quando le scritture erano due): manca solo l'ordine di
+  // spedizione, e si crea quello.
   async function riprova(r) {
     setInCorso(r.id);
-    // si rimanda esattamente il modulo di allora: se nel frattempo e'
-    // stata corretta la causa — una colonna che mancava, un permesso —
-    // questa volta entra
-    const { data: creata, error } = await supabase.from("spedizioni_pos")
-      .insert({ ...(r.dati || {}), vendita_id: r.vendita_id }).select("id").single();
+    const haSoloSpedizione = !r.vendita_dati;
+    if (haSoloSpedizione) {
+      const { data: creata, error } = await supabase.from("spedizioni_pos")
+        .insert({ ...(r.dati || {}), vendita_id: r.vendita_id }).select("id").single();
+      if (error) { setInCorso(""); setMsg(`Non è andata neanche adesso: ${testoErrore(error)}`); return; }
+      await supabase.from("spedizioni_pos_non_riuscite")
+        .update({ risolto_il: new Date().toISOString(), spedizione_id: creata.id }).eq("id", r.id);
+      setInCorso("");
+      setMsg("Ordine di spedizione creato: ora è fra i pacchi da spedire.");
+      carica();
+      ricarica?.(["spedizioni_pos"]);
+      return;
+    }
+    const haSpedizione = r.dati && Object.keys(r.dati).length > 0;
+    const { data: esito, error } = await supabase.rpc("registra_vendita_pos", {
+      p_vendita: r.vendita_dati,
+      p_spedizione: haSpedizione ? r.dati : null,
+    });
     if (error) { setInCorso(""); setMsg(`Non è andata neanche adesso: ${testoErrore(error)}`); return; }
     await supabase.from("spedizioni_pos_non_riuscite")
-      .update({ risolto_il: new Date().toISOString(), spedizione_id: creata.id }).eq("id", r.id);
+      .update({ risolto_il: new Date().toISOString(), vendita_id: esito?.vendita_id || null, spedizione_id: esito?.spedizione_id || null }).eq("id", r.id);
     setInCorso("");
-    setMsg(`Ordine di spedizione creato: ora è fra i pacchi da spedire.`);
+    setMsg(haSpedizione
+      ? "Vendita registrata e ordine di spedizione creato."
+      : "Vendita registrata.");
     carica();
-    ricarica?.(["spedizioni_pos"]);
+    ricarica?.(["vendite_shop", "spedizioni_pos"]);
   }
 
   async function archivia(r) {
@@ -48548,8 +48572,10 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
       ) : (
         <>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, background: "#FDECEC", border: "1px solid #F3C9C9", borderRadius: 12, padding: "10px 13px", marginBottom: 14 }}>
-            <b>Queste vendite sono state incassate e il magazzino è stato scaricato, ma non c’è nessun pacco da spedire.</b>
-            {" "}L’indirizzo che era stato digitato è conservato qui dentro: <b>Riprova</b> crea l’ordine adesso, senza richiederlo al cliente e senza rifare la vendita.
+            <b>Il magazzino è stato scaricato, ma qualcosa non è stato scritto.</b>
+            {" "}Dove c’è scritto <b>vendita da registrare</b> non esiste nemmeno la vendita: <b>Riprova</b> la registra insieme alla spedizione, in una scrittura sola.
+            {" "}Dove c’è <b>solo spedizione</b> la vendita c’è già e manca il pacco da spedire.
+            {" "}In tutti e due i casi il modulo è conservato qui dentro: niente da richiedere al cliente, niente da ribattere.
             {" "}Usa <b>Archivia</b> solo se il pacco è già stato consegnato a mano o la vendita è stata annullata.
           </div>
           {righe.map((r) => {
@@ -48559,7 +48585,10 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
             return (
               <div key={r.id} style={{ ...cardStyle, marginBottom: 12, padding: isMobile ? "12px 12px" : "14px 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 800, color: NAVY }}>{d.destinatario_nome || "Senza nome"}</span>
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: r.vendita_dati ? "#C0392B" : "#B07D2B" }}>
+                    {r.vendita_dati ? "vendita da registrare" : "solo spedizione"}
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 800, color: NAVY }}>{d.destinatario_nome || (r.vendita_dati ? "Vendita al banco" : "Senza nome")}</span>
                   <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{r.numero_ordine ? `#${r.numero_ordine}` : "—"}</span>
                   <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{r.tentato_il ? fmtData(String(r.tentato_il).slice(0, 10)) : ""}</span>
                   {r.operatore && <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>· {toTitleCase(r.operatore)}</span>}
@@ -63282,47 +63311,45 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         const canaleProvvigione = corsoPosSel ? "corso" : (couponAttivo ? "referral" : null);
         provvigione = await congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale: canaleProvvigione });
       }
-      const { data: venditaCreata, error: erroreVendita } = await supabase.from("vendite_shop").insert({ ...datiVendita, ...(provvigione || {}) }).select().single();
+      // UN INVIO SOLO, E INDIVISIBILE.
+      //
+      // Vendita e ordine di spedizione partono insieme e il database li
+      // scrive in una transazione: o ci sono tutte e due o non c'e'
+      // niente. Prima erano due chiamate in fila, e quando la seconda
+      // falliva restava la prima — incasso contato, magazzino scaricato,
+      // niente da spedire. E' andata cosi' per sei giorni, dal 26/09 al
+      // 02/10/2026, per una colonna che mancava.
+      //
+      // Le due tabelle restano due, ed e' giusto: quasi nessuna vendita al
+      // banco spedisce, e una spedizione ha una vita sua. A diventare una
+      // cosa sola non sono i dati, e' la scrittura.
+      const { data: esito, error: erroreVendita } = await supabase.rpc("registra_vendita_pos", {
+        p_vendita: { ...datiVendita, ...(provvigione || {}) },
+        p_spedizione: datiSpedizione || null,
+      });
       if (erroreVendita) {
-        window.alert("Attenzione: magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message);
-        ricarica(["prodotti_shop", "vendite_shop"]);
+        // Qui non e' rimasto niente a terra: la transazione non ha scritto
+        // nulla. Ma il carrello e' gia' stato svuotato, quindi il tentativo
+        // va conservato INTERO — vendita e spedizione — o la vendita e'
+        // persa davvero. Si riprende dall'Advisor con un clic.
+        await supabase.from("spedizioni_pos_non_riuscite").insert({
+          numero_ordine: datiVendita.numero_ordine || null,
+          vendita_dati: { ...datiVendita, ...(provvigione || {}) },
+          dati: datiSpedizione || {},
+          errore: erroreVendita.message || String(erroreVendita),
+          operatore: nomeOperatore || null,
+        });
+        window.alert("Attenzione: magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message
+          + "\n\nNon è andata persa: la trovi in Vendite al banco → Advisor, e da lì la registri con un clic.");
+        ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos_non_riuscite"]);
         return;
       }
+      const venditaCreata = { id: esito?.vendita_id, numero_ordine: esito?.numero_ordine };
       // i pezzi dichiarati "dal kit" NON vengono attribuiti a una scatola
       // qui: restano segnati sulla vendita (dal_kit riga per riga) e la
       // master, a fine corso, dira' da quale kit sono usciti. Nessun
       // prelievo automatico: e' proprio la scelta al posto suo che non
       // deve piu' succedere.
-      if (datiSpedizione) {
-        const { error: erroreSped } = await supabase.from("spedizioni_pos").insert({ ...datiSpedizione, vendita_id: venditaCreata.id });
-        if (erroreSped) {
-          // L'AVVISO NON BASTA.
-          //
-          // Qui la vendita e' gia' scritta e il magazzino gia' scaricato:
-          // se la spedizione non parte, resta un incasso senza niente da
-          // spedire. Finora c'era solo questo alert, e chi lo chiudeva non
-          // aveva piu' niente — ne' l'ordine ne' l'indirizzo, che viveva
-          // solo nel modulo appena svuotato.
-          //
-          // Dal 02/10/2026 il tentativo si scrive, con dentro il modulo
-          // INTERO: in "Vendite al banco" e in "Ordini in arrivo" c'e' una
-          // linguetta Advisor da cui si riprova con un clic. Se anche
-          // questa scrittura fallisce si torna all'avviso e basta, ma a
-          // quel punto il database e' irraggiungibile e il problema e' un
-          // altro.
-          await supabase.from("spedizioni_pos_non_riuscite").insert({
-            vendita_id: venditaCreata.id,
-            numero_ordine: venditaCreata.numero_ordine || null,
-            dati: datiSpedizione,
-            errore: erroreSped.message || String(erroreSped),
-            operatore: nomeOperatore || null,
-          });
-          window.alert("Attenzione: vendita registrata, ma l'ordine di spedizione non è stato creato: " + erroreSped.message
-            + "\n\nL'indirizzo non è andato perso: lo trovi in Vendite al banco → Advisor, e da lì puoi riprovare.");
-          ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos_non_riuscite"]);
-          return;
-        }
-      }
       ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos"]);
     })();
     // da qui in poi la vendita e' registrata e il carrello e' gia' vuoto:
