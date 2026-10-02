@@ -18482,13 +18482,18 @@ function TastiSospesi({ children }) {
   );
 }
 
-function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungiCorso, onUltimeIscrizioni, onProssimeContabilita, onVerificaAcconti }) {
+function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungiCorso, onUltimeIscrizioni, onProssimeContabilita, onVerificaAcconti, onGestioneEventi }) {
   const isMobile = useIsMobile();
   const voci = [
     { chiave: "aggiungi", testo: "Aggiungi corso", Icona: IconaCorsoRiga, onClick: onAggiungiCorso },
     { chiave: "iscrizioni", testo: "Ultime iscrizioni", Icona: IconaPersonaAggiungi, onClick: onUltimeIscrizioni },
     ...(onProssimeContabilita ? [{ chiave: "contabilita", testo: "Prossime contabilità", Icona: IconaLibroContabile, onClick: onProssimeContabilita }] : []),
     { chiave: "acconti", testo: "Verifica pagamenti", Icona: IconaRicevutaErp, onClick: onVerificaAcconti, badge: numeroAccontiInAttesa },
+    // Gli eventi stanno qui dentro e non piu' in home: una fiera e un
+    // corso sono due righe dello stesso calendario — le barre degli eventi
+    // ci si vedevano gia' — e tenerli a due tasti di distanza faceva
+    // sembrare che fossero due mondi diversi.
+    ...(onGestioneEventi ? [{ chiave: "eventi", testo: "Gestione eventi", Icona: IconaTileCorsi, onClick: onGestioneEventi }] : []),
   ];
   // Gli stessi tasti della home, telefono e computer: sul telefono il
   // quadrato col disco blu e l'etichetta sotto su due righe, sul computer
@@ -18502,7 +18507,7 @@ function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungi
   );
 }
 
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [], onApriEvento, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false, apriSubitoAggiungiCorso = false }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [], onApriEvento, onApriGestioneEventi, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false, apriSubitoAggiungiCorso = false }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
@@ -18592,6 +18597,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [
                 onUltimeIscrizioni={onApriUltimeIscrizioni}
                 onProssimeContabilita={onApriProssimeContabilita}
                 onVerificaAcconti={onApriVerificaAcconti}
+                onGestioneEventi={onApriGestioneEventi}
               />
             </div>
           </TastiSospesi>
@@ -18618,6 +18624,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [
       onUltimeIscrizioni={onApriUltimeIscrizioni}
       onProssimeContabilita={onApriProssimeContabilita}
       onVerificaAcconti={onApriVerificaAcconti}
+      onGestioneEventi={onApriGestioneEventi}
     />
   ) : null;
 
@@ -18638,6 +18645,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [
           onUltimeIscrizioni={onApriUltimeIscrizioni}
           onProssimeContabilita={onApriProssimeContabilita}
           onVerificaAcconti={onApriVerificaAcconti}
+          onGestioneEventi={onApriGestioneEventi}
         />
       )}
     </>
@@ -74647,6 +74655,13 @@ export default function App() {
   // stesso lucchetto che aveva il tasto in home, che da li' e' sparito.
   function apriImpostazioni() { setAreaImpostazioni("setting"); apriViewProtetta("impostazioni"); }
   function apriGestioneDate() { apriViewProtetta("gestionedate"); }
+  // Gestione eventi non e' piu' un tasto della home: si entra da dentro
+  // "Gestione corsi ed eventi", e tornando indietro si torna li'.
+  function apriGestioneEventi(vistaDiRitorno = "gestionedate") {
+    setEventoDaAprire(null);
+    setVistaPrimaDellEvento(vistaDiRitorno);
+    setView("gestionieventi");
+  }
   function apriErp() { apriViewProtetta("erp"); }
   function apriMagazzinoShop() { apriViewProtetta("magazzinoshop"); }
   function apriInserimentoCostiRicavi() { apriViewProtetta("inserimentocostiricavi"); }
@@ -74963,7 +74978,7 @@ export default function App() {
   // compresi. I titoli seguono le etichette rinominate, come i tasti.
   const areaAbilitata = (chiave) => ruoloUtente === "programmatore" || tastoAbilitato(chiave);
   const destinazioniPreferiti = [
-    { chiave: "gestionedate", titolo: etichettaTasto("home", "gestionedate", "Gestione corsi"), apri: apriGestioneDate, figli: [] },
+    { chiave: "gestionedate", titolo: etichettaTasto("home", "gestionedate", "Gestione corsi ed eventi"), apri: apriGestioneDate, figli: [] },
     { chiave: "dashboardvenditori", titolo: etichettaTasto("home", "dashboardvenditori", "Dashboard venditori"), apri: apriLoginVenditore, figli: [] },
     { chiave: "dashboardmaster", titolo: etichettaTasto("home", "dashboardmaster", "Dashboard master"), apri: apriDashboardMaster, figli: [] },
     { chiave: "erp", titolo: etichettaTasto("home", "erp", "Amministrazione"), apri: apriErp, figli: [
@@ -75532,7 +75547,7 @@ export default function App() {
             consentiCartelle
             colonneDesktop={4}
             definizioni={[
-              { chiave: "gestionedate", title: "Gestione corsi", descrizione: "Crea, modifica e organizza tutti i corsi e le sedi", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionedate"), onClick: apriGestioneDate },
+              { chiave: "gestionedate", title: "Gestione corsi ed eventi", descrizione: "Crea e organizza corsi, sedi e le fiere a cui partecipi", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionedate"), onClick: apriGestioneDate },
               { chiave: "dashboardvenditori", title: "Dashboard venditori", descrizione: "Monitora vendite, performance e obiettivi del team", Icona: IconaTileVenditori, attivo: tastoAbilitato("dashboardvenditori"), onClick: apriLoginVenditore },
               { chiave: "dashboardmaster", title: "Dashboard master", descrizione: "Gestisci master, specializzazioni e valutazioni", Icona: IconaTileMaster, attivo: tastoAbilitato("dashboardmaster"), onClick: apriDashboardMaster },
               { chiave: "erp", title: "Amministrazione", descrizione: "Finanziaria e organizzativa", Icona: IconaTileCostiRicavi, attivo: tastoAbilitato("erp"), onClick: apriErp },
@@ -75564,7 +75579,6 @@ export default function App() {
               // master e chi vende, ogni volta che iscrivono qualcuno —
               // due tasti di distanza erano due di troppo
               { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come si iscrive un allievo, e il messaggio da mandargli dopo", Icona: IconaPersonaAggiungi, attivo: true, onClick: () => setView("iscrizioneallievi") },
-              { chiave: "gestionieventi", title: "Gestione eventi", descrizione: "Fiere e congressi: team, materiali, trasferimenti e hotel", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionieventi"), onClick: () => { setEventoDaAprire(null); setVistaPrimaDellEvento(null); setView("gestionieventi"); } },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
@@ -75648,7 +75662,8 @@ export default function App() {
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
           cronologicoDate={cronologicoDate} setCronologicoDate={setCronologicoDate}
           registraInterceptaIndietro={registraInterceptaIndietro}
-          titolo={etichettaTasto("home", "gestionedate", "Gestione corsi")}
+          onApriGestioneEventi={() => apriGestioneEventi("gestionedate")}
+          titolo={etichettaTasto("home", "gestionedate", "Gestione corsi ed eventi")}
           soloLettura={!!utenteLoggato?.soloCalendarioLettura}
         />
       )}
@@ -75659,6 +75674,7 @@ export default function App() {
           <BarraTastiGestioneCorsi
             attivo="acconti"
             numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
+            onGestioneEventi={() => apriGestioneEventi(view)}
             onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
             onUltimeIscrizioni={() => setView("ultimeiscrizioni")}
             onProssimeContabilita={() => setView("prossimecontabilita")}
@@ -76204,6 +76220,7 @@ export default function App() {
           <BarraTastiGestioneCorsi
             attivo="contabilita"
             numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
+            onGestioneEventi={() => apriGestioneEventi(view)}
             onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
             onUltimeIscrizioni={() => setView("ultimeiscrizioni")}
             onProssimeContabilita={() => {}}
@@ -76300,7 +76317,11 @@ export default function App() {
           costiCategorie={costiCategorie}
           eventoIniziale={eventoDaAprire}
           onNuovaSpesa={apriNuovaSpesaEvento}
-          onBack={() => { setEventoDaAprire(null); setView(vistaPrimaDellEvento || "home"); }}
+          // si torna da dove si e' entrati: dal calendario, dalle pagine
+          // figlie di Gestione corsi, o da Gestione corsi stessa. "home"
+          // resta solo come rete di sicurezza, da quando il tasto in home
+          // non c'e' piu'
+          onBack={() => { setEventoDaAprire(null); setView(vistaPrimaDellEvento || "gestionedate"); }}
           titolo={etichettaTasto("home", "gestionieventi", "Gestione eventi")}
         />
       )}
@@ -76548,6 +76569,7 @@ export default function App() {
           <BarraTastiGestioneCorsi
             attivo="iscrizioni"
             numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
+            onGestioneEventi={() => apriGestioneEventi(view)}
             onAggiungiCorso={() => { setAprireAggiungiCorso(true); setView("gestionedate"); }}
             onUltimeIscrizioni={() => {}}
             onProssimeContabilita={() => setView("prossimecontabilita")}
