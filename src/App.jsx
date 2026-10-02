@@ -32307,7 +32307,12 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                         >
                           <div style={{ minWidth: 0, textAlign: nienteDaIncassare ? "right" : "left" }}>
                             <div style={{ ...fontBody, fontSize: isMobile ? 13 : 11, fontWeight: 700, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
-                              {i.incassato ? "Incassato" : "Da incassare"}
+                              {/* A zero non c'e' niente da incassare, e
+                                  "Da incassare 0,00" si legge come una
+                                  cosa in sospeso quando invece il conto e'
+                                  chiuso. Il nome dice lo stato, non
+                                  l'operazione che non serve. */}
+                              {nienteDaIncassare ? "Nulla da saldare" : i.incassato ? "Incassato" : "Da incassare"}
                             </div>
                             <div style={{ ...fontBody, fontSize: isMobile ? 30 : 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap", lineHeight: 1.1 }}>{euroScheda(daIncassare)}</div>
                             {/* la data dell'incasso, modificabile: e' quella
