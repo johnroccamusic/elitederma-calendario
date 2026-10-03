@@ -56212,6 +56212,9 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
   // i fornitori richiusi a tendina: con dieci fornitori aperti la pagina
   // diventa un rotolo, e per arrivare all'ultimo si scorre tutto
   const [fornitoriChiusi, setFornitoriChiusi] = useState({});
+  // l'attesa di ricezione ha il suo: sono due elenchi diversi, e richiudere
+  // un fornitore di qua non deve richiuderlo anche di la'
+  const [attesaChiusa, setAttesaChiusa] = useState({});
   const [quantitaOrdine, setQuantitaOrdine] = useState({}); // prodottoId -> quantità suggerita all'apertura
   function apriOrdineFornitore(fornitoreId, righeGiaDaOrdinare) {
     setFornitoreOrdineId(fornitoreId);
@@ -56863,18 +56866,32 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
           />
           {inAttesaPerFornitore.map((gruppo) => (
           <div key={gruppo.chiave}>
-            {/* il titolo del fornitore: sotto ci stanno tutti i suoi
+            {/* la stessa fascia crema di "Da ordinare adesso": i due
+                elenchi sono le due meta' dello stesso lavoro e si devono
+                leggere allo stesso modo. Sotto ci stanno tutti i suoi
                 prodotti in viaggio, col numero da chiamare se tardano */}
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", padding: "14px 0 4px", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 2 }}>
-              <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{gruppo.nome}</span>
-              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12,
+              background: "#F7F0E2", border: "1px solid #EBDFC6", borderRadius: 12,
+              padding: "11px 16px", marginTop: 12, marginBottom: 8 }}>
+              <IconaScatolaErp size={18} color={GOLD} />
+              <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{gruppo.nome}</span>
+              {gruppo.telefono && (
+                <a href={`tel:${String(gruppo.telefono).replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 11.5, color: "#8A8A84", whiteSpace: "nowrap", flexShrink: 0 }}>{gruppo.telefono}</a>
+              )}
+              <span style={{ ...fontBody, fontSize: 12, color: "#8A8A84", whiteSpace: "nowrap", flexShrink: 0 }}>
                 {gruppo.righe.length} {gruppo.righe.length === 1 ? "prodotto" : "prodotti"}
               </span>
-              {gruppo.telefono && (
-                <a href={`tel:${String(gruppo.telefono).replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginLeft: "auto" }}>{gruppo.telefono}</a>
-              )}
+              <button
+                type="button"
+                onClick={() => setAttesaChiusa((prev) => ({ ...prev, [gruppo.chiave]: !prev[gruppo.chiave] }))}
+                title={attesaChiusa[gruppo.chiave] ? "Riapri il fornitore" : "Richiudi il fornitore"}
+                style={{ display: "inline-flex", alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer", flexShrink: 0,
+                  transform: attesaChiusa[gruppo.chiave] ? "none" : "rotate(180deg)" }}
+              >
+                <IconaChevronGiuErp size={16} color={NAVY} />
+              </button>
             </div>
-          {gruppo.righe.map(({ riordino, prodotto }) => {
+          {!attesaChiusa[gruppo.chiave] && gruppo.righe.map(({ riordino, prodotto }) => {
             const giorniDaOrdine = giorniTra(String(riordino.data_ordine), oggi);
             return (
               <div key={riordino.id} style={{ ...rigaStyle, alignItems: "center", padding: "10px 0" }}>
