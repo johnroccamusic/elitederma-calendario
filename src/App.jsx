@@ -56952,33 +56952,38 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                   </div>
                 </div>
 
-                {/* DISPONIBILITÀ e il tasto, incolonnati */}
+                {/* DISPONIBILITÀ: un blocco suo, come il corso scoperto
+                    nella scheda da ordinare */}
                 {sepA}
-                <div style={{ flex: "0 0 auto", textAlign: "center", minWidth: 128 }}>
+                <div style={{ flex: "0 0 auto", textAlign: "center", minWidth: 76 }}>
                   <div style={etiA}>disponibilità</div>
                   <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: sottoSogliaP ? "#C0392B" : NAVY, lineHeight: 1 }}>
                     {inMagazzino}{sogliaP != null && <span style={{ color: "#B5B5B5" }}>/{sogliaP}</span>}
                   </div>
-                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "4px 11px", marginTop: 8, display: "inline-block", whiteSpace: "nowrap" }}>
+                </div>
+
+                {/* quanto era stato ordinato, il tasto per registrare
+                    l'arrivo e il ripensamento: una colonna a se', appoggiata
+                    a destra e a meta' altezza */}
+                {sepA}
+                <div style={{ flex: "0 0 auto", alignSelf: "center", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 7 }}>
+                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "5px 13px", whiteSpace: "nowrap" }}>
                     già ordinato {riordino.quantita || 0}
-                  </div>
-                  <div style={{ marginTop: 7 }} />
+                  </span>
                   <button
                     type="button"
                     onClick={() => { setRicezioneAperta({ riordino, prodotto }); setQuantitaRicevuta(String(riordino.quantita || "")); }}
-                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 800, color: "#fff", background: NAVY, border: "none", borderRadius: 24, padding: "9px 20px", cursor: "pointer", touchAction: "manipulation",
+                    style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#fff", background: NAVY, border: "none", borderRadius: 24, padding: "9px 24px", cursor: "pointer", touchAction: "manipulation",
                       boxShadow: "0 4px 12px -4px rgba(14,27,51,0.45)" }}
                   >
                     Ricevuto
                   </button>
-                  <div>
-                    <button
-                      onClick={() => annullaOrdine(riordino)}
-                      style={{ ...fontBody, fontSize: 9.5, color: "#9A9A9A", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, marginTop: 6 }}
-                    >
-                      non l'ho ordinato
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => annullaOrdine(riordino)}
+                    style={{ ...fontBody, fontSize: 10, color: "#9A9A9A", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                  >
+                    non l'ho ordinato
+                  </button>
                 </div>
               </div>
             );
