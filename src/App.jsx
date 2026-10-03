@@ -35,6 +35,7 @@ import GestioneEventi from "./eventi/GestioneEventi.jsx";
 import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
 import SelettorePeriodo from "./ui/SelettorePeriodo.jsx";
 import PrezziListini from "./prezzi/PrezziListini.jsx";
+import RiquadriPuntiMaster from "./punti/RiquadriPuntiMaster.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -12919,6 +12920,12 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             </div>
           );
         })()}
+
+        {/* I punti, divisi per come e' stato pagato. Stanno sopra il
+            vecchio blocco e non lo sostituiscono: quella catena e' ancora
+            in ricostruzione, questi due riquadri nascono dalla view
+            v_punti_master e si reggono da soli */}
+        {masterSel && <RiquadriPuntiMaster masterId={masterSel.id} isMobile={isMobile} />}
 
         {masterSel && puntiMasterImpostazioni && (
           <div style={{ marginBottom: 20 }}>
