@@ -56713,7 +56713,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                     // il giorno centrato sul mese: il blocco si stringe sulla
                     // riga piu' larga (SET 2026) e il numero ci sta in mezzo
                     <div style={{ display: "inline-block", textAlign: "center" }}>
-                      <div style={{ ...fontDisplay, fontSize: 25, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
+                      <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
                       <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3, whiteSpace: "nowrap" }}>
                         {(MESI_ABBR[Number(meseL) - 1] || "")} {annoL}
                       </div>
@@ -56724,7 +56724,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                   {perData && (
                     <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, marginTop: 6,
                       color: inRitardo ? "#C0392B" : "#8A8A84",
-                      whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 }}>
                       <IconaOrologioCard size={10} />
                       {inRitardo ? `+ ${giorni} in ritardo` : `− ${giorni} giorni`}
                     </div>
@@ -56918,13 +56918,13 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 <div style={{ flexShrink: 0, textAlign: "left" }}>
                   <div style={etiA}>data ordine</div>
                   <div style={{ display: "inline-block", textAlign: "center" }}>
-                    <div style={{ ...fontDisplay, fontSize: 25, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{giornoO}</div>
+                    <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{giornoO}</div>
                     <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3, whiteSpace: "nowrap" }}>
                       {(MESI_ABBR[Number(meseO) - 1] || "")} {annoO}
                     </div>
                   </div>
                   <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, marginTop: 6, color: "#8A8A84",
-                    whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 }}>
                     <IconaOrologioCard size={10} />
                     {giorniDaOrdine > 0 ? `${giorniDaOrdine} giorn${giorniDaOrdine === 1 ? "o" : "i"} fa` : "oggi"}
                   </div>
