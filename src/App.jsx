@@ -56300,15 +56300,6 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
       righe: dermografiDaControllare.daScegliere,
     },
   ].filter(Boolean);
-  const numeriAdvisor = [
-    { numero: prodottiConfigurati.length, etichetta: "Prodotti attivi", sotto: `su ${prodottiConfigurati.length + prodottiDaConfigurare.length}`, Icona: IconaBorsaShop, colore: NAVY, sfondo: "#EAF0FA" },
-    ...[
-      { quanti: risultato.edizioniSenzaIscritti, numero: risultato.edizioniSenzaIscritti, etichetta: "Corsi futuri senza iscritti", sotto: "fabbisogno a zero", Icona: IconaGruppoTeam, colore: NAVY, sfondo: "#FDF8EC" },
-      { quanti: senzaMargine, numero: senzaMargine, etichetta: "Prodotti senza margine", sotto: "di sicurezza", Icona: IconaScudoSicurezza, colore: "#C0392B", sfondo: "#FBE4E1" },
-      { quanti: prodottiDaConfigurare.length, numero: prodottiDaConfigurare.length, etichetta: "Senza tempo di consegna", sotto: "non so quando ordinare", Icona: IconaCamionConsegna, colore: "#B8860B", sfondo: "#FDF8EC" },
-      { quanti: risultato.nonRisolti.length, numero: risultato.nonRisolti.length, etichetta: "Iscritti con kit non riconosciuto", sotto: "valgono come senza kit", Icona: IconaGruppoTeam, colore: "#B8860B", sfondo: "#FDF8EC" },
-    ].filter((n) => n.quanti > 0).slice(0, 2),
-  ];
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -56397,40 +56388,6 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
             </div>
           </>
         )}
-        </div>
-      </div>
-
-      <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-        {/* i numeri grossi a sinistra, il ragionamento a destra: prima era
-            un paragrafo solo, e i tre dati che contano ci si perdevano */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1.15fr) minmax(0,1fr)", gap: 18, alignItems: "start" }}>
-          <div>
-            <TestataAdvisor Icona={IconaGraficoSu} titolo="Quanto sto vedendo" />
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-              {numeriAdvisor.map((n) => (
-                <div key={n.etichetta} style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 120 }}>
-                  <span style={{ width: 44, height: 44, borderRadius: "50%", background: n.sfondo, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <n.Icona size={20} color={n.colore} />
-                  </span>
-                  <span>
-                    <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: n.colore, display: "block", lineHeight: 1 }}>{n.numero}</span>
-                    <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, display: "block", marginTop: 4, lineHeight: 1.25 }}>{n.etichetta}</span>
-                    {n.sotto && <span style={{ ...fontBody, fontSize: 11, color: MUTED, display: "block", marginTop: 2 }}>{n.sotto}</span>}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.6, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div>
-              Advisor attivo su <b>{prodottiConfigurati.length}</b> prodotti su {prodottiConfigurati.length + prodottiDaConfigurare.length}.
-              {prodottiDaConfigurare.length > 0 && <> <b>{prodottiDaConfigurare.length}</b> senza tempo di consegna: su quelli non posso dire entro quando ordinare.</>}
-            </div>
-            {risultato.nonRisolti.length > 0 && <div><b>{risultato.nonRisolti.length}</b> iscritti con kit non riconosciuto: valgono come "nessun kit" finché non li assegni qui sotto.</div>}
-            {risultato.senzaKit > 0 && <div><b>{risultato.senzaKit}</b> iscritti senza kit: nessun fabbisogno, nessun problema.</div>}
-            {risultato.edizioniSenzaIscritti > 0 && <div><b>{risultato.edizioniSenzaIscritti}</b> corsi futuri non hanno ancora iscritti: per loro il fabbisogno risulta zero.</div>}
-            {senzaMargine > 0 && <div style={{ color: "#C0392B" }}><b>{senzaMargine} prodotti senza margine di sicurezza</b>: si scrive nella scheda del prodotto, senza non calcolo la data limite d'ordine.</div>}
-          </div>
         </div>
       </div>
 
