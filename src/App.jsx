@@ -56727,19 +56727,23 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
 
                 {/* DATA ORDINE */}
                 <div style={{ flexShrink: 0, textAlign: "center" }}>
-                  <div style={{ background: inRitardo ? "#FDF0EF" : "#F3F1EC", borderRadius: 10, padding: "6px 7px", minWidth: 50 }}>
-                    <div style={{ ...eti, marginBottom: 4, color: inRitardo ? "#C0392B" : "#9A9A9A" }}>
+                  {/* la data in negativo: e' il primo appiglio della riga, e
+                      su fondo chiaro si confondeva col resto della scheda.
+                      In ritardo il fondo diventa rosso, non il testo: cosi'
+                      l'allarme si vede da lontano senza leggere */}
+                  <div style={{ background: inRitardo ? "#C0392B" : NAVY, borderRadius: 10, padding: "6px 7px", minWidth: 50 }}>
+                    <div style={{ ...eti, marginBottom: 4, color: inRitardo ? "#F6CFCA" : "#A9B4C7" }}>
                       {perData ? "data ordine" : "scorta"}
                     </div>
                     {perData ? (
                       <>
-                        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
-                        <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, marginTop: 1 }}>
+                        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{giornoL}</div>
+                        <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.3, marginTop: 1 }}>
                           {(MESI_ABBR[Number(meseL) - 1] || "")} {annoL}
                         </div>
                       </>
                     ) : (
-                      <div style={{ ...fontDisplay, fontSize: 10.5, fontWeight: 800, color: "#8A6D1D", lineHeight: 1.15 }}>sotto<br />minima</div>
+                      <div style={{ ...fontDisplay, fontSize: 10.5, fontWeight: 800, color: "#fff", lineHeight: 1.15 }}>sotto<br />minima</div>
                     )}
                   </div>
                   {perData && (
