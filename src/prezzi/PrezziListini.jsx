@@ -276,15 +276,26 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                     {b.prodotti.map((r) => {
                       const manca = r.sconto_max_pct == null;
                       return (
-                        <tr key={r.id} className={manca ? "lst-manca" : undefined} onClick={() => onApriProdotto && onApriProdotto(r.id)}
-                          style={{ cursor: onApriProdotto ? "pointer" : "default" }}
+                        // la scheda del prodotto si apre dalla foto e dal
+                        // nome, non da tutta la riga: con i numeri cliccabili
+                        // ogni passaggio sui prezzi rischiava di portare
+                        // altrove, e la casella della master non si poteva
+                        // nemmeno mettere a fuoco
+                        <tr key={r.id} className={manca ? "lst-manca" : undefined}
                           title={manca ? motivoSenzaSconto(r) : `Scontando il ${String(r.sconto_max_pct).replace(".", ",")}% il rivenditore paga ${euro(r.prezzo_rivenditore)}. Costo della merce ${euro(r.costo_acquisto)}.`}>
-                          <td className="lst-foto">
+                          <td className="lst-foto"
+                            onClick={() => onApriProdotto && onApriProdotto(r.id)}
+                            style={{ cursor: onApriProdotto ? "pointer" : "default" }}>
                             {r.foto_url
                               ? <img src={r.foto_url} alt="" loading="lazy" decoding="async" />
                               : <span className="lst-vuota" />}
                           </td>
-                          <td className="lst-nome">{r.nome}</td>
+                          <td className="lst-nome"
+                            onClick={() => onApriProdotto && onApriProdotto(r.id)}
+                            title={onApriProdotto ? "Apri la scheda del prodotto" : undefined}
+                            style={{ cursor: onApriProdotto ? "pointer" : "default" }}>
+                            {r.nome}
+                          </td>
                           {privato && <td className="lst-costo" data-eti="acq.">{cifra(r.costo_acquisto)}</td>}
                           <td data-eti="lordo">{cifra(r.pubblico_lordo)}</td>
                           <td data-eti="netto">{cifra(r.pubblico_netto)}</td>
