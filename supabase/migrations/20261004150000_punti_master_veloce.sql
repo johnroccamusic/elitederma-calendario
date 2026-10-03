@@ -1,0 +1,17 @@
+-- v_punti_master_righe: filtrare PRIMA, esplodere dopo.
+--
+-- La pagina "Punti master" andava in "canceling statement due to
+-- statement timeout". Il motivo: la vista apriva riga per riga tutte le
+-- 4.226 vendite — 12.600 righe di prodotto — e solo alla fine buttava via
+-- quelle che non appartengono a nessuna master. Sono 4.168 su 4.226.
+--
+-- Ora il CTE `vendite_master` calcola la master a livello di VENDITA e
+-- tiene solo quelle che ne hanno una: si esplodono 58 vendite invece di
+-- 4.226. Tolte anche due pigrizie che costavano care:
+--   - `v_prezzi_listini` entra in un CTE (`listino`) e si calcola una
+--     volta sola invece che per ogni riga;
+--   - l'aggancio per nome passa da un seq scan con lower() su entrambi i
+--     lati a un CTE `per_nome` preparato una volta.
+--
+-- Da timeout (oltre 120 secondi) a 266 millisecondi. I numeri non
+-- cambiano: stesse righe, stesso conto.
