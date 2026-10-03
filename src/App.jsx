@@ -36,6 +36,7 @@ import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagament
 import SelettorePeriodo from "./ui/SelettorePeriodo.jsx";
 import PrezziListini from "./prezzi/PrezziListini.jsx";
 import { usePuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
+import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -25629,6 +25630,7 @@ const AREA_MADRE_VISTA = {
   magazzinoesterni: ["magazzinoshop"],
   gestioneshop: ["magazzinoshop"],
   gestioneiva: ["erp"],
+  puntimaster: ["erp"],
 };
 // Logistica prodotti: le 4 fasi di spedizione di un'edizione, in
 // ordine. Ogni
@@ -34476,7 +34478,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, onApriFattureDaEmettere, fattureDaEmettere = 0, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
+function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, onApriPuntiMaster, onApriFattureDaEmettere, fattureDaEmettere = 0, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -34494,6 +34496,7 @@ function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti
             { chiave: "operativocorsi", title: "Operativo corsi", descrizione: "Assegna master, assistenti, leve, hotel e sedi a ogni edizione.", Icona: IconaTileMaster, attivo: true, onClick: onApriAssegnazioneMaster },
             { chiave: "anagrafiche", title: "Anagrafiche", descrizione: "Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.", Icona: IconaTileAnagrafiche, attivo: true, onClick: onApriAnagrafiche },
             { chiave: "gestioneiva", title: "Gestione IVA", descrizione: "IVA su acquisti e vendite, per aliquota e per prodotto.", Icona: IconaTileClassificazioneVoci, attivo: true, onClick: onApriGestioneIva },
+            { chiave: "puntimaster", title: "Punti master", descrizione: "Punti maturati da ogni master, shop/POS e cash, e lo scarico quando glieli paghi.", Icona: IconaTileMaster, attivo: true, onClick: onApriPuntiMaster },
             { chiave: "fattureemettere", title: "Fatture da emettere", descrizione: "Gli incassi con carta al POS, coi dati di fatturazione da controllare prima del documento.", Icona: IconaTileFattureRicevute, attivo: true, onClick: onApriFattureDaEmettere, badge: fattureDaEmettere },
           ]}
         />
@@ -75074,6 +75077,7 @@ export default function App() {
   function apriCrmShop() { apriViewProtetta("crmshop"); }
   function apriGeneraCoupon() { apriViewProtetta("generacoupon"); }
   function apriGestioneIva() { apriViewProtetta("gestioneiva"); }
+  function apriPuntiMaster() { apriViewProtetta("puntimaster"); }
   // entrando in "Vendite prodotti" si arriva sullo shop online: e' il
   // canale che si guarda tutti i giorni. I totali restano un tasto di
   // fianco, come le altre viste
@@ -75381,6 +75385,7 @@ export default function App() {
       { chiave: "operativocorsi", titolo: etichettaTasto("amministrazione", "operativocorsi", "Operativo corsi"), apri: () => setView("assegnazionemaster") },
       { chiave: "anagrafiche", titolo: etichettaTasto("amministrazione", "anagrafiche", "Anagrafiche"), apri: () => apriViewProtetta("anagrafiche") },
       { chiave: "gestioneiva", titolo: etichettaTasto("amministrazione", "gestioneiva", "Gestione IVA"), apri: apriGestioneIva },
+      { chiave: "puntimaster", titolo: etichettaTasto("amministrazione", "puntimaster", "Punti master"), apri: apriPuntiMaster },
     ] },
     { chiave: "magazzinoshop", titolo: etichettaTasto("home", "magazzinoshop", "Gestione magazzino e shop"), apri: apriMagazzinoShop, figli: [
       { chiave: "gestionemagazzino", titolo: etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino"), apri: apriMagazzino },
@@ -76112,6 +76117,7 @@ export default function App() {
           onApriAssegnazioneMaster={() => setView("assegnazionemaster")}
           onApriAnagrafiche={() => apriViewProtetta("anagrafiche")}
           onApriGestioneIva={apriGestioneIva}
+          onApriPuntiMaster={apriPuntiMaster}
           onApriFattureDaEmettere={() => setView("fattureemettere")}
           fattureDaEmettere={fattureDaEmettere}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.amministrazione?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("amministrazione", { ordine: o })}
@@ -76237,6 +76243,14 @@ export default function App() {
           colonneTasti={layoutTasti.magazzinoshop?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("magazzinoshop", { colonne: n })}
           etichetteTasti={layoutTasti.magazzinoshop?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("magazzinoshop", chiave, testo)}
           titolo={etichettaTasto("home", "magazzinoshop", "Gestione magazzino e shop")}
+        />
+      )}
+
+      {view === "puntimaster" && (
+        <PaginaPuntiMaster
+          ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
+          onBack={() => setView("erp")}
+          titolo={etichettaTasto("amministrazione", "puntimaster", "Punti master")}
         />
       )}
 
