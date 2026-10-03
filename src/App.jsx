@@ -49161,7 +49161,7 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
 // punti maturati con la regola di Dettaglio prodotti (dieci per euro
 // cedibile, per ogni pezzo venduto attraverso l'app). Qui si governa il
 // sistema; cosa vede la master nella sua dashboard si decide dopo.
-function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, coupon = [], ricarica, onBack, titolo = "Gestione punti" }) {
+function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, coupon = [], corsiDate = [], ricarica, onBack, titolo = "Gestione punti" }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "punti", direzione: "desc" });
   const [form, setForm] = useState(null);
@@ -49244,14 +49244,24 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   const [applicandoAiCorsi, setApplicandoAiCorsi] = useState(false);
   const [msgCodiciCorsi, setMsgCodiciCorsi] = useState("");
   const oggiCodici = dataOggiStr();
-  const codiciAulaDaAggiornare = (coupon || []).filter((c) =>
-    c.corsi_date_id && c.tipo_regola_sconto !== "fasce" &&
-    (!c.valido_fino_a || c.valido_fino_a >= oggiCodici));
+  // Il criterio e' il CORSO, non la scadenza del codice: un codice di una
+  // classe gia' finita non va toccato nemmeno se e' ancora valido per
+  // qualche giorno, perche' li' lo sconto e' gia' stato fatto e la regola
+  // con cui e' nato e' la storia di quelle vendite. Si riscrivono solo i
+  // codici delle classi che devono ancora finire — comprese quelle che
+  // cominciano domani.
+  const fineEdizione = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd.data_fine || cd.data_inizio]));
+  const codiciAulaDaAggiornare = (coupon || []).filter((c) => {
+    if (!c.corsi_date_id || c.tipo_regola_sconto === "fasce") return false;
+    if (c.valido_fino_a && c.valido_fino_a < oggiCodici) return false;
+    const fine = fineEdizione[c.corsi_date_id];
+    return !!fine && fine >= oggiCodici;
+  });
 
   async function applicaFasceAiCodiciAula() {
     const fasce = fasceScontoValide(gruppiFasceValidi(fasceCorso).gruppi[0]);
-    if (codiciAulaDaAggiornare.length === 0) { setMsgCodiciCorsi("Nessun codice d'aula ancora valido da aggiornare: gli altri sono già a fasce o scaduti."); return; }
-    if (!window.confirm(`Riscrivere le fasce su ${codiciAulaDaAggiornare.length} codici d'aula ancora validi, nell'app e sul sito?`)) return;
+    if (codiciAulaDaAggiornare.length === 0) { setMsgCodiciCorsi("Nessun codice da aggiornare: le classi ancora da finire hanno già le fasce, e quelle passate non si toccano."); return; }
+    if (!window.confirm(`Riscrivere le fasce su ${codiciAulaDaAggiornare.length} codici d'aula di classi ancora da finire, nell'app e sul sito?`)) return;
     setApplicandoAiCorsi(true); setMsgCodiciCorsi("");
     const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
     const { error } = await supabase.from("coupon")
@@ -49475,8 +49485,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                 </Button>
                 <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
                   I codici già emessi portano la regola con cui sono nati — i più vecchi uno sconto fisso.
-                  Questo tasto riscrive queste fasce su quelli <b>ancora validi</b>, nell'app e sul sito:
-                  quelli delle classi già finite restano come sono, perché su quelle vendite lo sconto è già stato fatto.
+                  Questo tasto riscrive queste fasce sui codici delle <b>classi che devono ancora finire</b>,
+                  comprese quelle che cominciano domani, nell'app e sul sito. I codici dei corsi già passati
+                  non si toccano: lì lo sconto è già stato fatto, e la regola con cui sono nati è la storia
+                  di quelle vendite.
                 </span>
                 {msgCodiciCorsi && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciCorsi.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciCorsi}</span>}
               </div>
@@ -74500,7 +74512,7 @@ export default function App() {
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
-    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
+    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon", "corsi_date"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti", "sync_shop_esiti"],
@@ -76888,7 +76900,7 @@ export default function App() {
       {view === "gestionepunti" && (
         <PaginaGestionePunti
           master={master} venditeShop={venditeShop} prodottiShop={prodottiShop} puntiMasterImpostazioni={puntiMasterImpostazioni}
-          regoleReferralAutomatico={regoleReferralAutomatico} coupon={coupon}
+          regoleReferralAutomatico={regoleReferralAutomatico} coupon={coupon} corsiDate={corsiDate}
           ricarica={fetchDati} onBack={() => setView("compensipremi")}
           titolo={etichettaTasto("compensipremi", "gestionepunti", "Gestione punti")}
         />
