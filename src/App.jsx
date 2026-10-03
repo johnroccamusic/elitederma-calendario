@@ -33714,8 +33714,23 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
             <span style={{ color: righeAggiornamenti.length ? NAVY : MUTED, display: "flex", flexShrink: 0, marginTop: 1 }}><IconaFumetto size={isMobile ? 14 : 16} /></span>
             {/* piccolo e su due righe al massimo: e' un promemoria da
                 leggere con la coda dell'occhio, non il diario */}
-            <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, lineHeight: 1.35, color: righeAggiornamenti.length ? NAVY : MUTED, flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflowWrap: "anywhere" }}>
-              {righeAggiornamenti.length ? righeAggiornamenti[righeAggiornamenti.length - 1] : "Nessun aggiornamento"}
+            {/* la nota del progetto e l'ultimo aggiornamento sono due cose
+                diverse e si vedono tutte e due: la nota dice COSA c'e' da
+                fare, l'aggiornamento a che punto si e'. Prima si leggeva
+                solo il secondo, e siccome nessun progetto ne aveva uno, le
+                schede dicevano tutte "Nessun aggiornamento" mentre la nota
+                stava scritta e non la vedeva nessuno. */}
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {progetto.note_iniziali && (
+                <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, lineHeight: 1.35, color: NAVY, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>
+                  {progetto.note_iniziali}
+                </span>
+              )}
+              <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, lineHeight: 1.35, color: MUTED, display: "-webkit-box", WebkitLineClamp: progetto.note_iniziali ? 1 : 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere", marginTop: progetto.note_iniziali ? 3 : 0 }}>
+                {righeAggiornamenti.length
+                  ? righeAggiornamenti[righeAggiornamenti.length - 1]
+                  : (progetto.note_iniziali ? "Nessun aggiornamento" : "Nessuna nota")}
+              </span>
             </span>
             <button
               type="button"
