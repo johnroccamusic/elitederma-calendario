@@ -499,6 +499,16 @@ const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
 // c'e' una seconda serie, fra le impostazioni condivise. Vuota = uguale
 // a carta e shop.
 const CHIAVE_FASCE_CORSI_CONTANTI = "fasceSconto_corsi_contanti";
+// Quanta parte dei punti di un prodotto needling arriva davvero alla
+// master, a scaglioni di spesa. Non e' uno sconto al cliente: il prodotto
+// vale sempre i suoi punti, questa regola dice quanti gliene restano.
+//
+// Di partenza NON toglie niente — cento per cento in tutti e tre gli
+// scaglioni. Mettere qui un esempio avrebbe spostato i punti di tutte le
+// master senza che nessuno l'avesse deciso, e una regola che nessuno ha
+// scritto e' peggio di una sbagliata: non la si va a cercare.
+const CHIAVE_PUNTI_NEEDLING = "puntiNeedling_scaglioni";
+const PUNTI_NEEDLING_DEFAULT = { soglie: [60, 120], quote: [100, 100, 100] };
 // Quando i codici d'aula sono a percentuale FISSA invece che a fasce, la
 // percentuale dei contanti e' un numero solo e sta qui — stessa ragione
 // della serie di sopra: in contanti l'IVA resta in cassa e si puo'
@@ -49278,6 +49288,23 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     ricarica(["coupon"]);
   }
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  // gli scaglioni dei punti needling: si salvano appena si tocca un numero,
+  // come le fasce dei contanti. Nessun tasto da premere, nessun numero perso
+  const [puntiNeedlingSalvati, salvaPuntiNeedling] = useImpostazioneCondivisa(CHIAVE_PUNTI_NEEDLING, PUNTI_NEEDLING_DEFAULT);
+  const puntiNeedling = {
+    soglie: Array.isArray(puntiNeedlingSalvati?.soglie) && puntiNeedlingSalvati.soglie.length === 2
+      ? puntiNeedlingSalvati.soglie : PUNTI_NEEDLING_DEFAULT.soglie,
+    quote: Array.isArray(puntiNeedlingSalvati?.quote) && puntiNeedlingSalvati.quote.length === 3
+      ? puntiNeedlingSalvati.quote : PUNTI_NEEDLING_DEFAULT.quote,
+  };
+  const cambiaPuntiNeedling = (campo, indice, testo) => {
+    const pulito = String(testo).replace(",", ".").trim();
+    const n = pulito === "" ? 0 : Number(pulito);
+    if (!Number.isFinite(n) || n < 0) return;
+    const prossimo = { soglie: [...puntiNeedling.soglie], quote: [...puntiNeedling.quote] };
+    prossimo[campo][indice] = n;
+    salvaPuntiNeedling(prossimo);
+  };
   // La seconda serie del referral: contanti e buono Amazon. Vuota vuol
   // dire "uguale a quella della carta", come per i corsi
   const [fasceReferralContanti, setFasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
@@ -49542,6 +49569,60 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce su tutti i codici personali delle master, nell'app e sul sito.
             </span>
             {msgCodiciPersonali && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciPersonali.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciPersonali}</span>}
+          </div>
+        </div>
+
+        {/* SCONTI PRODOTTI NEEDLING — non e' uno sconto al cliente: e' la
+            quota dei punti che arriva alla master, a scaglioni di spesa.
+            Sotto la prima soglia il prodotto ne vale una parte, sopra
+            l'ultima li vale tutti. Vale solo sul reparto Needling: e' una
+            leva per spingere quella linea, non una regola generale. */}
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconti prodotti needling</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 14 }}>
+            Quanta parte dei punti di un prodotto <b>needling</b> arriva davvero alla master, secondo quanto
+            si è speso in quel carrello. Non tocca il prezzo e non è uno sconto al cliente: il prodotto vale
+            sempre i suoi punti, questa tabella dice quanti gliene restano. Le soglie si leggono sul totale
+            del carrello a listino, come nelle fasce qui sopra.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
+            {[0, 1, 2].map((i) => {
+              const da = i === 0 ? 0 : puntiNeedling.soglie[i - 1];
+              const a = i < 2 ? puntiNeedling.soglie[i] : null;
+              const etichetta = i === 0
+                ? `Sotto ${fmtEuroErp2(puntiNeedling.soglie[0])}`
+                : a != null ? `Da ${fmtEuroErp2(da)} a meno di ${fmtEuroErp2(a)}` : `Da ${fmtEuroErp2(da)} in su`;
+              return (
+                <div key={i} style={{ background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "12px 14px" }}>
+                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, marginBottom: 8, lineHeight: 1.3 }}>{etichetta}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="number" min="0" max="100" step="1"
+                      value={puntiNeedling.quote[i]}
+                      onChange={(e) => cambiaPuntiNeedling("quote", i, e.target.value)}
+                      style={{ ...inputStyle, width: 86, textAlign: "center", fontWeight: 800, fontSize: 16, padding: "8px 10px" }}
+                    />
+                    <span style={{ ...fontBody, fontSize: 14, fontWeight: 800, color: NAVY }}>%</span>
+                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>dei punti</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie</span>
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>prima a</span>
+            <input type="number" min="0" step="1" value={puntiNeedling.soglie[0]}
+              onChange={(e) => cambiaPuntiNeedling("soglie", 0, e.target.value)}
+              style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€ poi a</span>
+            <input type="number" min="0" step="1" value={puntiNeedling.soglie[1]}
+              onChange={(e) => cambiaPuntiNeedling("soglie", 1, e.target.value)}
+              style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€</span>
+            <span style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700, flexBasis: "100%", marginTop: 4 }}>
+              Si salva da sé a ogni numero toccato.
+            </span>
           </div>
         </div>
 

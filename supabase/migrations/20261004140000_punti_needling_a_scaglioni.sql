@@ -1,0 +1,17 @@
+-- Gli scaglioni dei punti needling.
+--
+-- Non e' uno sconto al cliente: il prodotto vale sempre i suoi punti,
+-- questa regola dice quanti ne arrivano alla master. Tre scaglioni letti
+-- sul totale del carrello a listino — lo stesso criterio delle fasce di
+-- sconto — e vale solo sul reparto Needling: e' una leva per spingere
+-- quella linea, non una regola generale.
+--
+-- La regola sta in impostazioni_layout_tabelle, chiave
+-- `puntiNeedling_scaglioni`:
+--   {"soglie":[60,120],"quote":[50,75,100]}
+-- Se la riga non c'e', la view applica il 100% a tutti e tre: senza una
+-- decisione scritta il needling si comporta come tutto il resto.
+--
+-- Nella view: il CTE `scaglioni` legge l'impostazione, `carrello` somma il
+-- listino di ogni vendita, `quotata` sceglie lo scaglione e moltiplica i
+-- punti. Corpo completo nella migrazione 20261004120000.
