@@ -134,6 +134,9 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     .lst-nome  { text-align: left !important; white-space: normal !important;
                  font-weight: 600; line-height: 1.15; padding-left: 8px !important; }
     .lst-riv   { font-weight: 800; padding-right: 10px !important; }
+    /* lo sconto in euro: stesso oro della percentuale, e' la stessa cosa
+       detta in soldi invece che in punti */
+    .lst-tab td.lst-sconto-eur { color: #8A6D1D; font-weight: 800; }
     .lst-manca { background: #FDFAF2; }
 
     /* le larghezze: il nome prende quello che resta, i numeri stanno stretti */
@@ -257,7 +260,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                     {privato && <col className="c-costo" />}
                     <col className="c-num" /><col className="c-num" />
                     <col className="c-scon" /><col className="c-num" />
-                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
+                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
                   </colgroup>
                   <thead>
                     <tr>
@@ -268,7 +271,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"a master\n% sul prezzo riv."}</th><th>{"a master\nin euro"}</th><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th></>}
+                      {privato && <><th>{"sconto\nin euro"}</th><th>{"a master\n% sul prezzo riv."}</th><th>{"a master\nin euro"}</th><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -297,6 +300,15 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                           <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_rivenditore)}</td>
                           {privato && (
                             <>
+                              {/* quanto gli stai lasciando, in soldi: la
+                                  percentuale si confronta fra prodotti, gli
+                                  euro si contano a fine trattativa */}
+                              <td className="lst-sconto-eur" data-eti={"sconto\neuro"}
+                                title={r.prezzo_rivenditore != null
+                                  ? `Da ${euro(r.pubblico_netto)} a ${euro(r.prezzo_rivenditore)}: gli lasci ${euro(r.pubblico_netto - r.prezzo_rivenditore)} a pezzo.`
+                                  : undefined}>
+                                {r.prezzo_rivenditore != null ? cifra(r.pubblico_netto - r.prezzo_rivenditore) : "—"}
+                              </td>
                               {/* la sola casella che si scrive in questa
                                   tabella: di suo vale un terzo dello sconto
                                   del rivenditore, ma su un prodotto da
