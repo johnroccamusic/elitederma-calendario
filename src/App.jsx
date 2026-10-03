@@ -49572,13 +49572,14 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           </div>
         </div>
 
-        {/* SCONTI PRODOTTI NEEDLING — non e' uno sconto al cliente: e' la
-            quota dei punti che arriva alla master, a scaglioni di spesa.
+        {/* PUNTI ASSEGNATI CON PRODOTTI NEEDLING — non e' uno sconto al
+            cliente: e' la quota dei punti che arriva alla master, a
+            scaglioni di spesa.
             Sotto la prima soglia il prodotto ne vale una parte, sopra
             l'ultima li vale tutti. Vale solo sul reparto Needling: e' una
             leva per spingere quella linea, non una regola generale. */}
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconti prodotti needling</div>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Punti assegnati con prodotti Needling</div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 14 }}>
             Quanta parte dei punti di un prodotto <b>needling</b> arriva davvero alla master, secondo quanto
             si è speso in quel carrello. Non tocca il prezzo e non è uno sconto al cliente: il prodotto vale
