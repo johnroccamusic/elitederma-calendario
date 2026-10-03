@@ -51669,35 +51669,9 @@ const COLONNE_MAGAZZINO = [
   { label: "Incidenza costi non cedibili", campo: "incidenzaNonCedibilePct", direzioneIniziale: "desc", larghezza: 86 },
   // cento meno quella somma: lo spazio che resta da elargire
   { label: "Residuo cedibile %", campo: "cedibileResiduoPct", direzioneIniziale: "desc", larghezza: 84 },
-  // gli stessi euro, letti sul prezzo che paga il cliente
-  // due punti piu' grande del resto: e' il numero che si va a cercare
-  // quando si decide uno sconto sul prezzo esposto
-  { label: "Residuo cedibile sul lordo", campo: "cedibileResiduoLordoPct", direzioneIniziale: "desc", larghezza: 84, piuGrande: true },
-  // due righe di conto: carta e shop online versano l'IVA e stanno sul
-  // netto, e sono queste colonne; il contante tiene il lordo e sta nella
-  // seconda riga sotto ogni prodotto, accesa dal tasto "Contanti" sopra
-  // la tabella. Vedi cedibileContantiDi
-  { label: "Somma massima cedibile", campo: "sommaMassimaCedibileEuro", direzioneIniziale: "desc", larghezza: 80 },
-  // quanto si lascia al negoziante che rivende: si scrive a mano, riga
-  // per riga, e si scala dal residuo cedibile
-  { label: "Quota negoziante %", campo: "quota_negoziante_pct", direzioneIniziale: "desc", larghezza: 76 },
-  // quel che resta dopo il negoziante: e' lo spazio del venditore
-  { label: "Resta al venditore %", campo: "restaVenditorePct", direzioneIniziale: "desc", larghezza: 78 },
-  // la sicurezza che si toglie dal cedibile prima di fare i punti: la
-  // percentuale e' quella di Gestione punti, si cambia anche qui nel
-  // titolo, e vale in tutta l'app
-
-  // il tasto che riporta la percentuale del prodotto a quella generale
-  // scritta nel titolo di "Sicurezza"; nel titolo, quello per tutti
-
-  // "Punti totali prodotto" (dal 16/09/2026): il doppio dei punti del
-  // pezzo, vedi il conto piu' sotto
-  { label: "Punti totali prodotto", campo: "punti", direzioneIniziale: "desc", larghezza: 74 },
-  // tre quote dei punti totali in euro, con la percentuale scritta nel
-  // titolo della colonna (si cambia li')
-  { label: "Quota 1", campo: "quota1", direzioneIniziale: "desc", larghezza: 70, quotaIndice: 0 },
-  { label: "Quota 2", campo: "quota2", direzioneIniziale: "desc", larghezza: 70, quotaIndice: 1 },
-  { label: "Quota 3", campo: "quota3", direzioneIniziale: "desc", larghezza: 70, quotaIndice: 2 },
+  // Le otto colonne del cedibile e dei punti sono uscite di qui il
+  // 04/10/2026: i punti si calcolano a listino, e tenere due catene che
+  // rispondono alla stessa domanda vuol dire ritrovarsele diverse.
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
@@ -52317,38 +52291,6 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           </span>
         </td>
     ),
-    "Residuo cedibile sul lordo": (
-        <td style={tdStyle} title={p.cedibileResiduoLordoPct != null ? `Gli stessi ${fmtEuroErp2(p.sommaMassimaCedibileEuro)} letti sul prezzo al pubblico: e' la percentuale di sconto massima che puoi fare sul prezzo esposto senza sforare il cedibile` : "Senza prezzo al pubblico non si puo' calcolare"}>
-          <span style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: p.cedibileResiduoLordoPct == null ? MUTED : (p.cedibileResiduoLordoPct < 0 ? "#C0392B" : "#2E7D32") }}>
-            {p.cedibileResiduoLordoPct != null ? fmtPctErp(p.cedibileResiduoLordoPct) : "N/D"}
-          </span>
-        </td>
-    ),
-    "Quota negoziante %": (
-        <td style={tdStyle} title="La percentuale che lasci a un negoziante che compra per rivendere. Si scala dal residuo cedibile; vuota = non gli lasci niente" onClick={(e) => e.stopPropagation()}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
-            <input
-              value={negozianteBozza}
-              onChange={(e) => setNegozianteBozza(e.target.value)}
-              onBlur={salvaQuotaNegoziante}
-              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-              inputMode="decimal"
-              placeholder="—"
-              style={{ ...fontBody, width: 44, fontSize: 14, fontWeight: 700, color: NAVY, textAlign: "center", padding: "3px 4px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, background: "#fff", boxSizing: "border-box" }} />
-            <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>%</span>
-          </div>
-        </td>
-    ),
-    "Resta al venditore %": (
-        <td style={tdStyle} title={p.restaVenditorePct != null ? `Residuo cedibile ${fmtPctErp(p.cedibileResiduoPct)} meno il ${Number(p.quota_negoziante_pct) || 0}% del negoziante${p.restaVenditorePct < 0 ? " — negativo: stai lasciando al negoziante piu' di quanto c'e'" : ""}` : "Senza residuo cedibile non c'e' niente da dividere"}>
-          <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: p.restaVenditorePct == null ? MUTED : (p.restaVenditorePct < 0 ? "#C0392B" : "#2E7D32") }}>
-            {p.restaVenditorePct != null ? fmtPctErp(p.restaVenditorePct) : "N/D"}
-          </span>
-        </td>
-    ),
-    "Somma massima cedibile": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 14, fontWeight: 700, color: p.sommaMassimaCedibileEuro == null ? MUTED : (p.sommaMassimaCedibileEuro < 0 ? "#C0392B" : NAVY), whiteSpace: "nowrap" }} title={p.sommaMassimaCedibileEuro != null ? `Il ${fmtPctErp(p.cedibileResiduoPct)} che resta, applicato al prezzo netto di ${fmtEuroErp2(p.prezzo_vendita)}${p.sommaMassimaCedibileEuro < 0 ? " — negativo: a questo prezzo non c'e' niente da cedere" : ""}` : "Senza costo di acquisto o senza prezzo netto non si puo' calcolare"}>{p.sommaMassimaCedibileEuro != null ? fmtEuroErp2(p.sommaMassimaCedibileEuro) : "N/D"}</td>
-    ),
     "Sicurezza": (
         <td style={{ ...tdStyle, ...fontBody, fontSize: 14, color: "#B8860B", whiteSpace: "nowrap" }} title={p.sommaMassimaCedibileEuro != null ? `Il ${p.sicurezzaProdotto}% della somma massima cedibile (${fmtEuroErp2(p.sommaMassimaCedibileEuro)}) si accantona per sicurezza: i punti nascono da quello che resta. Scrivi qui una percentuale diversa per questo prodotto; vuota = quella generale (${sicurezzaPunti}%)` : "Senza cedibile non c'e' niente da accantonare"}>
           {/* casella e % sulla prima riga, allineate a quelle del titolo;
@@ -52376,9 +52318,6 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
             Riallinea %
           </button>
         </td>
-    ),
-    "Punti totali prodotto": (
-        <td style={{ ...tdStyle, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }} title={p.punti != null ? `Somma massima cedibile ${fmtEuroErp2(p.sommaMassimaCedibileEuro)} per due: un punto e' un euro, con due decimali` : (p.cedibileEuro == null ? "Senza quota cedibile non ci sono punti" : "Non in vendita al POS né sul sito: non genera punti")}>{p.punti != null ? fmtPunti(p.punti) : (p.cedibileEuro == null ? "N/D" : "—")}</td>
     ),
     ...Object.fromEntries([0, 1, 2].map((i) => [`Quota ${i + 1}`, (
         <td key={`q${i}`} style={{ ...tdStyle, ...fontBody, fontSize: 14, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }} title={p.punti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.punti)} punti totali, in euro` : "Senza punti non c'e' quota"}>{p.punti != null ? fmtEuroErp2(euroQuota(p.punti, i)) : "—"}</td>
@@ -52476,12 +52415,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     "Margine operativo": <td style={tdContanti} title={lordo != null ? `Il ${margineOperativoPct}% del prezzo al pubblico (${fmtEuroErp2(lordo)}): in contanti la base e' questa` : "Senza prezzo al pubblico non si puo' calcolare"}>{lordo != null ? fmtEuroErp2(round2((Number(lordo) * margineOperativoPct) / 100)) : "—"}</td>,
     "Incidenza costi non cedibili": <td style={{ ...tdContanti, fontWeight: 700, color: p.nonCedibileContantiPct != null && p.nonCedibileContantiPct > 100 ? "#C0392B" : undefined }} title={p.nonCedibileContantiPct != null ? `Costo ${fmtPctErp(p.costoContantiPct)} + margine operativo ${margineOperativoPct}% + costi aziendali ${incidenzaCostiPct}%, tutto sul prezzo al pubblico` : "Senza costo o senza prezzo al pubblico non si puo' calcolare"}>{p.nonCedibileContantiPct != null ? fmtPctErp(p.nonCedibileContantiPct) : "N/D"}</td>,
     "Residuo cedibile %": <td style={{ ...tdContanti, fontWeight: 700, color: p.cedibileContantiPct != null && p.cedibileContantiPct < 0 ? "#C0392B" : undefined }} title="In contanti si tiene tutto il prezzo al pubblico, quindi netto e lordo coincidono: e' questa la percentuale che resta">{p.cedibileContantiPct != null ? fmtPctErp(p.cedibileContantiPct) : "N/D"}</td>,
-    "Residuo cedibile sul lordo": <td style={{ ...tdContanti, fontSize: 15.5, fontWeight: 700, color: p.cedibileContantiPct != null && p.cedibileContantiPct < 0 ? "#C0392B" : undefined }} title="In contanti la base e' gia' il prezzo al pubblico: e' lo stesso numero della colonna accanto">{p.cedibileContantiPct != null ? fmtPctErp(p.cedibileContantiPct) : "N/D"}</td>,
-    "Resta al venditore %": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.cedibileContantiPct != null ? `Residuo in contanti meno il ${Number(p.quota_negoziante_pct) || 0}% del negoziante` : "Senza residuo non c'e' niente da dividere"}>{p.cedibileContantiPct != null ? fmtPctErp(round1Erp(p.cedibileContantiPct - (Number(p.quota_negoziante_pct) || 0))) : "N/D"}</td>,
-    "Somma massima cedibile": <td style={tdContanti} title={p.cedibileContantiEuro != null ? `Prezzo al pubblico meno costo, meno l'incidenza dei costi in contanti (${numeroFascia(incidenzaCostiPct)}%): in contanti si tiene tutto il prezzo al pubblico, IVA compresa` : "Senza costo di acquisto non si sa il margine, quindi nemmeno la quota cedibile"}>{p.cedibileContantiEuro != null ? fmtEuroErp2(p.cedibileContantiEuro) : "N/D"}</td>,
     "Sicurezza": <td style={{ ...tdContanti, color: "#B8860B" }} title={p.cedibileContantiEuro != null ? `Il ${p.sicurezzaProdotto}% del cedibile in contanti (${fmtEuroErp2(p.cedibileContantiEuro)}) si accantona per sicurezza` : "Niente cedibile in contanti"}>{p.cedibileContantiEuro != null ? `−${fmtEuroErp2(round2((Number(p.cedibileContantiEuro) * p.sicurezzaProdotto) / 100))}` : "—"}</td>,
     "Riallinea": <td style={tdContanti} />,
-    "Punti totali prodotto": <td style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Cedibile contanti ${fmtEuroErp2(p.cedibileContantiEuro)} meno la percentuale di sicurezza di Gestione punti, per due` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtPunti(p.puntiContanti) : (p.cedibileContantiEuro == null ? "N/D" : "—")}</td>,
     ...Object.fromEntries([0, 1, 2].map((i) => [`Quota ${i + 1}`, <td key={`qc${i}`} style={{ ...tdContanti, fontWeight: 700 }} title={p.puntiContanti != null ? `Il ${pctQuotaColonna(i)}% di ${fmtPunti(p.puntiContanti)} punti totali in contanti, in euro` : "Niente punti in contanti"}>{p.puntiContanti != null ? fmtEuroErp2(euroQuota(p.puntiContanti, i)) : "—"}</td>])),
   };
   const elencoColonne = colonne || COLONNE_MAGAZZINO;
