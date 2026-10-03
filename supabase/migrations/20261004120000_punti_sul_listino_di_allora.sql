@@ -1,0 +1,21 @@
+-- I punti si calcolano sul LISTINO del giorno della vendita, mai sul
+-- prezzo scontato.
+--
+-- Prima la base era quello che l'allievo aveva davvero pagato: una
+-- Consulenza Rossa ceduta a 171 invece di 180 dava 90,63 punti invece di
+-- 95,40. Sbagliato: lo sconto fatto all'allievo e' una scelta
+-- commerciale, non deve togliere punti a chi ha venduto.
+--
+-- DOVE STA IL LISTINO DI QUEL GIORNO. In due posti diversi, e nessuno dei
+-- due e' quello ovvio:
+--   POS     `prezzo_listino` sulla riga, che e' LORDO. C'e' su 110 righe
+--           su 158; sulle piu' vecchie resta solo il totale di riga, che
+--           pero' su quelle non portava sconti.
+--   online  `payload_raw.line_items[].subtotal`, che e' NETTO e PRIMA del
+--           coupon. La riga di WooCommerce si ritrova per posizione, con
+--           `with ordinality`, e si accetta solo se il nome combacia:
+--           un accoppiamento sbagliato darebbe punti del prodotto
+--           accanto, ed e' il genere di errore che non si vede.
+--
+-- La colonna `fonte_prezzo` dice da quale dei tre si e' preso, cosi' si
+-- sa sempre su quante righe il listino di allora e' certo.
