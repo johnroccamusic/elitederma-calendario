@@ -33554,15 +33554,10 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
       return m ? { data: m[1], testo: m[2], i } : { data: null, testo: r, i };
     })
     .sort((a, b) => (a.data || "9999").localeCompare(b.data || "9999") || a.i - b.i);
-  // La nota scritta alla nascita del progetto apre il diario, intera e in
-  // un blocco solo: e' il primo aggiornamento che c'e' stato, e separarla
-  // dal resto obbligava a leggere la storia in due posti.
-  const diario = [
-    ...(progetto.note_iniziali
-      ? [{ data: String(progetto.creato_il || "").slice(0, 10) || null, testo: progetto.note_iniziali, iniziale: true, i: -1 }]
-      : []),
-    ...aggiornamenti,
-  ];
+  // Sotto ci sono SOLO gli aggiornamenti: la nota iniziale si legge gia'
+  // per intero nella scheda, e ripeterla qui voleva dire scrivere due
+  // volte la stessa cosa a mezzo centimetro di distanza.
+  const diario = aggiornamenti;
   const etichettaSottile = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.2 };
   const divisore = <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />;
 
@@ -33745,19 +33740,51 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
                 schede dicevano tutte "Nessun aggiornamento" mentre la nota
                 stava scritta e non la vedeva nessuno. */}
             <span style={{ flex: 1, minWidth: 0 }}>
-              {progetto.note_iniziali && (
-                /* per intero, non tagliata a due righe: una nota che si
-                   interrompe a meta' obbliga ad aprire la scheda per
-                   sapere cosa c'e' scritto, ed e' il contrario di quello
-                   che deve fare un promemoria */
-                <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, lineHeight: 1.4, color: NAVY, display: "block", overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
-                  {progetto.note_iniziali}
+              {/* per intero, non tagliata a due righe: una nota che si
+                  interrompe a meta' obbliga ad aprire la scheda per sapere
+                  cosa c'e' scritto, ed e' il contrario di quello che deve
+                  fare un promemoria. La matita la corregge qui, dove la si
+                  sta leggendo */}
+              {notaInModifica ? (
+                <span style={{ display: "block" }}>
+                  <textarea
+                    rows={4}
+                    autoFocus
+                    value={noteIniziali}
+                    onChange={(e) => setNoteIniziali(e.target.value)}
+                    placeholder="Cosa c'è da fare…"
+                    style={{ ...inputStyle, resize: "vertical", fontSize: 13.5, background: "#fff" }}
+                  />
+                  <span style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 7 }}>
+                    <Button onClick={() => { onSalva({ note_iniziali: noteIniziali.trim() || null }); setNotaInModifica(false); }}>Salva la nota</Button>
+                    <button type="button"
+                      onClick={() => { setNoteIniziali(progetto.note_iniziali || ""); setNotaInModifica(false); }}
+                      style={{ ...fontBody, fontSize: 12.5, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer" }}>
+                      annulla
+                    </button>
+                  </span>
+                </span>
+              ) : (
+                /* la nuvola chiara: senza, la nota si confondeva con la
+                   scheda intorno e si doveva cercarla con gli occhi */
+                <span style={{ display: "flex", alignItems: "flex-start", gap: 7,
+                  background: progetto.note_iniziali ? BG_CHIARO : "transparent",
+                  borderRadius: 10, padding: progetto.note_iniziali ? "7px 10px" : "0 2px" }}>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, lineHeight: 1.4, color: progetto.note_iniziali ? NAVY : MUTED, flex: 1, minWidth: 0, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
+                    {progetto.note_iniziali || "Nessuna nota"}
+                  </span>
+                  <button type="button"
+                    onClick={() => { setNoteIniziali(progetto.note_iniziali || ""); setNotaInModifica(true); }}
+                    title={progetto.note_iniziali ? "Modifica la nota" : "Scrivi la nota"}
+                    style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: MUTED, display: "flex", flexShrink: 0 }}>
+                    <IconaMatitaNota size={13} />
+                  </button>
                 </span>
               )}
-              <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, lineHeight: 1.35, color: MUTED, display: "-webkit-box", WebkitLineClamp: progetto.note_iniziali ? 1 : 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere", marginTop: progetto.note_iniziali ? 3 : 0 }}>
+              <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, lineHeight: 1.35, color: MUTED, display: "-webkit-box", WebkitLineClamp: progetto.note_iniziali ? 1 : 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere", marginTop: progetto.note_iniziali ? 5 : 0, paddingLeft: progetto.note_iniziali ? 2 : 0 }}>
                 {aggiornamenti.length
                   ? `${aggiornamenti[aggiornamenti.length - 1].data ? fmtData(aggiornamenti[aggiornamenti.length - 1].data) + " — " : ""}${aggiornamenti[aggiornamenti.length - 1].testo}`
-                  : (progetto.note_iniziali ? "Nessun aggiornamento" : "Nessuna nota")}
+                  : "Nessun aggiornamento"}
               </span>
             </span>
             <button
@@ -33766,7 +33793,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
               title={aggiornamentiAperti ? "Chiudi gli aggiornamenti" : "Apri gli aggiornamenti"}
               style={{ display: "flex", alignItems: "center", gap: 5, background: BG_CHIARO, border: "none", borderRadius: 20, padding: "4px 9px", cursor: "pointer", flexShrink: 0 }}
             >
-              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED }}>{diario.length}</span>
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED }}>{aggiornamenti.length}</span>
               {/* la freccetta e' misurata qui, come le altre icone della
                   riga: "latoPiccola" vive dentro il Riepilogo Cash ed era
                   arrivata qui con un copia-incolla — a schermo faceva
@@ -33786,48 +33813,11 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
           {diario.length > 0 && (
             <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, background: "#fff", overflow: "hidden", marginBottom: 10 }}>
               {diario.map((a, k) => (
-                <div key={`${a.i}-${k}`} style={{ display: "flex", gap: 10, padding: "9px 12px", borderTop: k === 0 ? "none" : `1px solid ${CREAM_BORDER}`, background: a.iniziale ? BG_CHIARO : "transparent" }}>
+                <div key={`${a.i}-${k}`} style={{ display: "flex", gap: 10, padding: "9px 12px", borderTop: k === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
                   <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: a.data ? NAVY : MUTED, whiteSpace: "nowrap", flexShrink: 0, minWidth: 74 }}>
                     {a.data ? fmtData(a.data) : "senza data"}
                   </span>
-                  <span style={{ minWidth: 0, flex: 1 }}>
-                    {a.iniziale && <span style={{ ...etichettaSottile, display: "block", marginBottom: 2 }}>Nota iniziale</span>}
-                    {/* la nota si corregge dove si legge: una casella in
-                        fondo alla scheda chiedeva di scorrere fin la' per
-                        cambiare una parola che si stava guardando */}
-                    {a.iniziale && notaInModifica ? (
-                      <>
-                        <textarea
-                          rows={3}
-                          autoFocus
-                          value={noteIniziali}
-                          onChange={(e) => setNoteIniziali(e.target.value)}
-                          style={{ ...inputStyle, resize: "vertical", fontSize: 13.5, background: "#fff" }}
-                        />
-                        <span style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 7 }}>
-                          <Button
-                            onClick={() => { onSalva({ note_iniziali: noteIniziali.trim() || null }); setNotaInModifica(false); }}
-                          >
-                            Salva la nota
-                          </Button>
-                          <button type="button"
-                            onClick={() => { setNoteIniziali(progetto.note_iniziali || ""); setNotaInModifica(false); }}
-                            style={{ ...fontBody, fontSize: 12.5, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer" }}>
-                            annulla
-                          </button>
-                        </span>
-                      </>
-                    ) : (
-                      <span style={{ ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>{a.testo}</span>
-                    )}
-                  </span>
-                  {a.iniziale && !notaInModifica && (
-                    <button type="button" onClick={() => { setNoteIniziali(progetto.note_iniziali || ""); setNotaInModifica(true); }}
-                      title="Modifica la nota"
-                      style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: MUTED, display: "flex", flexShrink: 0, alignSelf: "flex-start" }}>
-                      <IconaMatitaNota size={14} />
-                    </button>
-                  )}
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>{a.testo}</span>
                 </div>
               ))}
             </div>
