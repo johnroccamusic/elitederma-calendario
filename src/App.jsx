@@ -49232,6 +49232,41 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     setMsgFasceCorso("Fasce dei codici d'aula salvate: valgono dai prossimi codici generati.");
     ricarica(["regole_referral_automatico"]);
   }
+
+  // I codici gia' emessi portano la regola con cui sono nati: quelli
+  // creati prima erano all'8,50% fisso, e salvare le fasce non li tocca.
+  // Questo tasto li riscrive, nell'app e sul sito.
+  //
+  // Solo quelli ANCORA VALIDI: riaprire il coupon di una classe finita
+  // vorrebbe dire rimettere in circolo uno sconto che era scaduto, e su
+  // quelle vendite lo sconto e' gia' stato fatto — cambiarne la regola
+  // adesso non cambierebbe nulla di quello che e' successo.
+  const [applicandoAiCorsi, setApplicandoAiCorsi] = useState(false);
+  const [msgCodiciCorsi, setMsgCodiciCorsi] = useState("");
+  const oggiCodici = dataOggiStr();
+  const codiciAulaDaAggiornare = (coupon || []).filter((c) =>
+    c.corsi_date_id && c.tipo_regola_sconto !== "fasce" &&
+    (!c.valido_fino_a || c.valido_fino_a >= oggiCodici));
+
+  async function applicaFasceAiCodiciAula() {
+    const fasce = fasceScontoValide(gruppiFasceValidi(fasceCorso).gruppi[0]);
+    if (codiciAulaDaAggiornare.length === 0) { setMsgCodiciCorsi("Nessun codice d'aula ancora valido da aggiornare: gli altri sono già a fasce o scaduti."); return; }
+    if (!window.confirm(`Riscrivere le fasce su ${codiciAulaDaAggiornare.length} codici d'aula ancora validi, nell'app e sul sito?`)) return;
+    setApplicandoAiCorsi(true); setMsgCodiciCorsi("");
+    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
+    const { error } = await supabase.from("coupon")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
+      .in("id", codiciAulaDaAggiornare.map((c) => c.id));
+    if (error) { setApplicandoAiCorsi(false); setMsgCodiciCorsi("Errore: " + testoErrore(error)); return; }
+    let sito = 0; const falliti = [];
+    for (const c of codiciAulaDaAggiornare.filter((x) => x.woo_coupon_id)) {
+      const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: c.id, aggiornaRegola: true } });
+      if (erroreSito || data?.errore) falliti.push(c.codice); else sito += 1;
+    }
+    setApplicandoAiCorsi(false);
+    setMsgCodiciCorsi(`Fasce applicate a ${codiciAulaDaAggiornare.length} codici d'aula nell'app e a ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
+    ricarica(["coupon"]);
+  }
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   // La seconda serie del referral: contanti e buono Amazon. Vuota vuol
   // dire "uguale a quella della carta", come per i corsi
@@ -49430,6 +49465,20 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
                 <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
                 {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
+              </div>
+              {/* salvare le fasce vale dai prossimi codici: questi sono
+                  quelli gia' in giro, che portano ancora la regola con cui
+                  sono nati */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
+                <Button variant="ghost" onClick={applicaFasceAiCodiciAula} disabled={applicandoAiCorsi || codiciAulaDaAggiornare.length === 0}>
+                  {applicandoAiCorsi ? "Applico…" : `Applica ai codici d'aula esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
+                </Button>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
+                  I codici già emessi portano la regola con cui sono nati — i più vecchi uno sconto fisso.
+                  Questo tasto riscrive queste fasce su quelli <b>ancora validi</b>, nell'app e sul sito:
+                  quelli delle classi già finite restano come sono, perché su quelle vendite lo sconto è già stato fatto.
+                </span>
+                {msgCodiciCorsi && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciCorsi.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciCorsi}</span>}
               </div>
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
               <FasceDiSpesa senzaWoo valore={fasceContantiCorso} onCambia={(v) => salvaFasceContanti(v)} prodottiShop={prodottiShop} isMobile={isMobile} />
