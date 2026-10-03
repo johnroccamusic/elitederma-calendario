@@ -146,8 +146,6 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     .lst-tab col.c-scon { width: 52px; }
     .lst-tab col.c-costo { width: 62px; }
     .lst-tab td.lst-costo, .lst-tab th.lst-costo { color: ${MUTED}; }
-    .lst-tab td.lst-resta { font-weight: 800; }
-    .lst-tab td.lst-resta-riv { color: #8A6D1D; font-weight: 800; }
     /* la provvigione alla master: verde, perche' e' l'unica colonna che
        dice "questo lo dai a qualcuno che non rischia niente" ed e' bene
        non confonderla con lo sconto al rivenditore, che e' tutt'altro */
@@ -260,7 +258,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                     {privato && <col className="c-costo" />}
                     <col className="c-num" /><col className="c-num" />
                     <col className="c-scon" /><col className="c-num" />
-                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
+                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
                   </colgroup>
                   <thead>
                     <tr>
@@ -271,7 +269,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"sconto\nin euro"}</th><th>{"a master\n% sul prezzo riv."}</th><th>{"a master\nin euro"}</th><th>{"a te\nsenza riv."}</th><th>{"a te\ncon riv."}</th></>}
+                      {privato && <><th>{"sconto\nin euro"}</th><th>{"a master\n% sul prezzo riv."}</th><th>{"a master\nin euro"}</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -350,8 +348,6 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                   : undefined}>
                                 {r.provvigione_master_pct != null ? cifra(r.provvigione_master_euro) : "—"}
                               </td>
-                              <td className="lst-resta" data-eti={"a te\nsenza"} title={r.utile_diretto != null ? `Vendendo tu al pubblico: ${euro(r.utile_diretto)} prima delle imposte, ${euro(r.ti_resta_diretto)} dopo.` : undefined}>{cifra(r.ti_resta_diretto)}</td>
-                              <td className="lst-resta-riv" data-eti={"a te\ncon"} title={r.utile_rivenditore != null ? `Vendendo a un rivenditore allo sconto massimo: ${euro(r.utile_rivenditore)} prima delle imposte, ${euro(r.ti_resta_rivenditore)} dopo.` : undefined}>{cifra(r.ti_resta_rivenditore)}</td>
                             </>
                           )}
                         </tr>
