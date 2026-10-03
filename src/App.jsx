@@ -56791,23 +56791,22 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                   </div>
                 )}
 
-                {/* DISPONIBILITÀ */}
+                {/* DISPONIBILITÀ e ORDINA, incolonnati: la giacenza sta sopra
+                    al tasto perche' e' il numero che fa decidere se premerlo.
+                    Separati da una riga stavano alla pari, e l'occhio doveva
+                    fare avanti e indietro fra i due per capire */}
                 {sep}
-                <div style={{ flex: "0 0 auto", minWidth: 64 }}>
+                <div style={{ flex: "0 0 auto", textAlign: "center", minWidth: 118 }}>
                   <div style={eti}>disponibilità</div>
-                  <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 800, color: sottoSoglia ? "#C0392B" : NAVY, lineHeight: 1 }}>
+                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: sottoSoglia ? "#C0392B" : NAVY, lineHeight: 1 }}>
                     {disponibile}{soglia != null && <span style={{ color: "#B5B5B5" }}>/{soglia}</span>}
                   </div>
                   {sottoSoglia && (
-                    <div style={{ ...fontBody, fontSize: 7.5, fontWeight: 700, color: "#C0392B", background: "#FDE8E6", borderRadius: 20, padding: "3px 7px", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap", display: "inline-block" }}>
+                    <div style={{ ...fontBody, fontSize: 7.5, fontWeight: 700, color: "#C0392B", background: "#FDE8E6", borderRadius: 20, padding: "3px 7px", marginTop: 5, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap", display: "inline-block" }}>
                       scorta limitata
                     </div>
                   )}
-                </div>
-
-                {/* ORDINA */}
-                {sep}
-                <div style={{ flex: "0 0 auto", textAlign: "center" }}>
+                  <div style={{ marginTop: 9 }} />
                   <button
                     type="button"
                     onClick={() => apriSegnaOrdinato(r)}
