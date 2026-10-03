@@ -1,0 +1,21 @@
+-- (nessuna modifica al database: la nota serve a ritrovare la decisione)
+--
+-- SCONTO NEEDLING. Dal 04/10/2026 i prodotti del reparto Needling non
+-- prendono piu' lo sconto dalle fasce generali: lo prendono dalla tabella
+-- "Scontistica prodotti needling" di Gestione punti, e le due non si
+-- sommano mai.
+--
+-- La regola sta in impostazioni_layout_tabelle, chiave
+-- `scontoNeedling_scaglioni`:
+--   {"soglie":[60,120],"sconti":[10,20,30]}
+-- Tutti gli sconti a zero = la tabella e' spenta e sul needling tornano a
+-- valere le fasce generali.
+--
+-- Nell'app il passaggio e' uno solo: percentualeFasciaDi, che e' il punto
+-- dove si sceglie la percentuale di un prodotto. Da li' la regola arriva
+-- al carrello del POS, al conto dei carrelli sospesi e alla percentuale
+-- media scritta sul coupon WooCommerce, senza essere ripetuta.
+--
+-- RESTA FUORI il frammento sul sito, che applica le fasce prodotto per
+-- prodotto dentro WordPress: li' il needling continua a prendere le fasce
+-- generali finche' non si aggiorna lo snippet.

@@ -4813,7 +4813,63 @@ function marginePercentualeContantiDi(prodotto) {
 }
 // "spesa": quanto vale il carrello. Senza, si resta alla prima fascia di
 // spesa — che e' quella di chi compra poco, cioe' la piu' prudente
+// ---- Needling: una tabella sua, che vince su tutte le altre ----
+//
+// Gli sconti sui prodotti needling NON vengono dalle fasce generali: li
+// decide la tabella "Scontistica prodotti needling" di Gestione punti, e
+// i due non si sommano mai. Qui ci sono i due pezzi che servono a
+// percentualeFasciaDi, che e' il punto unico dove si sceglie lo sconto di
+// un prodotto: insegnandolo li', vale al POS, nel conto del carrello e
+// nella percentuale scritta su WooCommerce, senza doverlo ripetere.
+//
+// Sono due registri di modulo e non due parametri perche'
+// percentualeFasciaDi e' chiamata da una decina di punti, molti dei quali
+// non hanno ne' le categorie ne' le impostazioni sottomano: passarglieli
+// avrebbe voluto dire toccare dieci firme e dimenticarne una.
+const WOO_CATEGORIA_NEEDLING = 64;
+let PRODOTTI_NEEDLING = new Set();
+let SCONTO_NEEDLING = null;   // { soglie: [n, n], sconti: [n, n, n] }
+
+// Si riempie quando l'app carica categorie e collegamenti: finche' e'
+// vuoto nessun prodotto risulta needling e tutto si comporta come prima.
+function registraProdottiNeedling(prodottiCategorie, categorieProdotti) {
+  const idsNeedling = new Set(
+    (categorieProdotti || []).filter((c) => c.woo_category_id === WOO_CATEGORIA_NEEDLING).map((c) => c.id)
+  );
+  if (idsNeedling.size === 0) { PRODOTTI_NEEDLING = new Set(); return; }
+  const trovati = new Set();
+  collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => {
+    if (idsNeedling.has(pc.categoria_id)) trovati.add(pc.prodotto_id);
+  });
+  PRODOTTI_NEEDLING = trovati;
+}
+function registraScontoNeedling(regola) {
+  const ok = regola && Array.isArray(regola.soglie) && regola.soglie.length === 2
+    && Array.isArray(regola.sconti) && regola.sconti.length === 3
+    && regola.sconti.some((x) => Number(x) > 0);
+  SCONTO_NEEDLING = ok ? regola : null;
+}
+function eProdottoNeedling(prodotto) {
+  return !!prodotto?.id && PRODOTTI_NEEDLING.has(prodotto.id);
+}
+// lo scaglione si legge sul totale del carrello a listino, come le fasce
+// generali: e' lo stesso gesto, e due criteri diversi nello stesso
+// carrello non si spiegherebbero a nessuno
+function percentualeNeedlingDi(spesa) {
+  if (!SCONTO_NEEDLING) return null;
+  const [s1, s2] = SCONTO_NEEDLING.soglie.map(Number);
+  const [a, b, c] = SCONTO_NEEDLING.sconti.map(Number);
+  const pct = spesa < s1 ? a : spesa < s2 ? b : c;
+  return Number.isFinite(pct) ? pct : null;
+}
+
 function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false) {
+  // I prodotti needling hanno una tabella loro e non guardano le fasce:
+  // vale quella e basta, mai la somma delle due
+  if (eProdottoNeedling(prodotto)) {
+    const pct = percentualeNeedlingDi(spesa);
+    if (pct != null) return pct;
+  }
   // Lo sconto al cliente si sceglie sul MARGINE del prodotto: piu' alto
   // il margine, piu' alto lo sconto. L'incidenza dei costi NON entra qui
   // — quella serve solo ai punti. Cambia solo la base del margine: sul
@@ -74210,6 +74266,13 @@ export default function App() {
   const [categorieProdotti, setCategorieProdotti] = useState([]);
   const [prodottiShopGrezzi, setProdottiShop] = useState([]);
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
+  // I due registri che servono allo sconto needling: si riempiono qui una
+  // volta sola e li leggono le funzioni pure che decidono la percentuale.
+  // Senza questo, percentualeFasciaDi non saprebbe quali prodotti sono
+  // needling e tutto si comporterebbe come prima — in silenzio.
+  const [scontoNeedlingRegola] = useImpostazioneCondivisa(CHIAVE_SCONTO_NEEDLING, SCONTO_NEEDLING_DEFAULT);
+  useEffect(() => { registraProdottiNeedling(prodottiCategorie, categorieProdotti); }, [prodottiCategorie, categorieProdotti]);
+  useEffect(() => { registraScontoNeedling(scontoNeedlingRegola); }, [scontoNeedlingRegola]);
   const [bundleComponenti, setBundleComponenti] = useState([]);
   // Da qui in poi "prodottiShop" sono i prodotti col costo dei bundle gia'
   // risolto dalla distinta: ogni pagina che chiede un margine ottiene la
