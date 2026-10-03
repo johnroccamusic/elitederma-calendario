@@ -18,6 +18,9 @@ const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace("."
 // dentro la tabella il simbolo non si ripete: lo dicono le intestazioni,
 // e otto colonne di numeri su un telefono non possono permetterselo
 const cifra = (n) => (n == null ? "—" : Number(n).toFixed(2).replace(".", ","));
+// le percentuali ora hanno il mezzo punto: 30 resta "30", 29,5 resta
+// "29,5", e la coda di zeri del numeric non arriva mai in pagina
+const pct = (n) => (n == null ? "—" : String(Math.round(Number(n) * 10) / 10).replace(".", ","));
 const ROSSO = "#C0392B";
 
 // `privato` accende le colonne che non si mostrano a nessuno fuori:
@@ -325,9 +328,9 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                  numero calcolato */
                               <span
                                 title={r.sconto_forzato
-                                  ? `Forzato al 5%. Il calcolo dava ${String(r.sconto_esatto_pct ?? 0).replace(".", ",")}%: su questo prodotto il margine non basta a dividere il guadagno a metà, quindi il 5% lo stai cedendo e basta.`
+                                  ? `Forzato al 5%. Il calcolo dava ${pct(r.sconto_esatto_pct ?? 0)}%: su questo prodotto il margine non basta a dividere il guadagno a metà, quindi il 5% lo stai cedendo e basta.`
                                   : undefined}
-                                style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_forzato ? ROSSO : "#8A6D1D", background: r.sconto_forzato ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_max_pct).replace(".", ",")}%</span>
+                                style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_forzato ? ROSSO : "#8A6D1D", background: r.sconto_forzato ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{pct(r.sconto_max_pct)}%</span>
                             )}
                           </td>
                           <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_rivenditore)}</td>
@@ -347,7 +350,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                               <td className="lst-punti" data-eti={"punti\nprodotto"}
                                 title={r.punti_manuali
                                   ? `Scritti a mano. La formula darebbe ${cifra(r.punti_calcolati)}: svuota la casella per tornarci.`
-                                  : `${euro(r.pubblico_netto)} di netto × ${String(r.sconto_max_pct).replace(".", ",")}% di sconto massimo × 2. Si ricalcola da sé quando cambiano i costi: scrivici dentro per fissarlo.`}>
+                                  : `${euro(r.pubblico_netto)} di netto × ${pct(r.sconto_max_pct)}% di sconto massimo × 2. Si ricalcola da sé quando cambiano i costi: scrivici dentro per fissarlo.`}>
                                 <input
                                   value={bozzaPunti[r.id] ?? (r.punti_prodotto != null ? String(r.punti_prodotto).replace(".", ",") : "")}
                                   onChange={(e) => setBozzaPunti((b) => ({ ...b, [r.id]: e.target.value }))}
@@ -393,9 +396,9 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
         <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>
           Lo <b>sconto massimo</b> è la quota che divide il guadagno a metà fra te e il rivenditore:
           concedendola, pagata la merce e i costi aziendali, a te resta quanto a lui. È arrotondata
-          al <b>5 più vicino</b>: arrotondando sempre per difetto un prodotto a 29,7% finiva al
-          25%, quasi cinque punti buttati via, e il listino sembrava fermo mentre il conto si era
-          già mosso.
+          al <b>mezzo punto più vicino</b>: 27,7% diventa 27,5%, 27,8% diventa 28%. I passi da
+          cinque erano una scure — un prodotto a 29,7% finiva al 25% — e facevano sembrare il
+          listino fermo quando il conto si era già mosso.
           Dove il calcolo darebbe <b>zero</b> la percentuale è <b>forzata al 5% e scritta in
           rosso</b>: lì il margine non basta a dividere il guadagno, e quel 5% non è un conto
           ma una scelta — lo stai cedendo e basta, perché senza nessuno sconto un rivenditore

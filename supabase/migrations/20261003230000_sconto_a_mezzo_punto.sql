@@ -1,0 +1,14 @@
+-- Lo sconto massimo si arrotonda al MEZZO PUNTO piu' vicino.
+--
+--   27,7 -> 27,5      27,8 -> 28,0
+--
+-- I passi da cinque erano una scure: per difetto un 29,7 finiva a 25, al
+-- piu' vicino finiva a 30, e in nessuno dei due casi la cifra diceva la
+-- verita'. Lo scarto adesso non supera 0,25 punti (in media 0,13).
+--
+-- Resta il pavimento del 5% dove il conto darebbe meno (sconto_forzato,
+-- 4 prodotti), ed e' l'unico punto in cui il listino concede piu' del
+-- calcolabile — per questo si scrive in rosso.
+--
+-- Corpo della view: quello della 20261003210000, con
+-- round(sconto_esatto * 2) / 2 al posto dei passi di cinque.
