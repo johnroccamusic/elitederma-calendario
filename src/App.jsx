@@ -33486,6 +33486,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   const [aggiornamentiAperti, setAggiornamentiAperti] = useState(false);
   // l'aggiornamento che si sta scrivendo: null = nessuno in corso
   const [nuovoAgg, setNuovoAgg] = useState(null);
+  const [notaInModifica, setNotaInModifica] = useState(false);
   const [noteIniziali, setNoteIniziali] = useState(progetto.note_iniziali || "");
   const [nome, setNome] = useState(progetto.nome || "");
   useEffect(() => { setNoteIniziali(progetto.note_iniziali || ""); }, [progetto.note_iniziali]);
@@ -33525,7 +33526,9 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
     const pulito = nome.trim();
     if (pulito && pulito !== progetto.nome) onSalva({ nome: pulito });
     else setNome(progetto.nome || "");
-    if (noteIniziali !== (progetto.note_iniziali || "")) onSalva({ note_iniziali: noteIniziali.trim() || null });
+    // la nota non si salva piu' da qui: ha il suo tasto accanto al testo.
+    // Lasciarla qui avrebbe scritto una bozza abbandonata ogni volta che
+    // si chiude la modifica senza aver confermato la nota
     setInModifica(false);
   }
 
@@ -33787,10 +33790,44 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
                   <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: a.data ? NAVY : MUTED, whiteSpace: "nowrap", flexShrink: 0, minWidth: 74 }}>
                     {a.data ? fmtData(a.data) : "senza data"}
                   </span>
-                  <span style={{ minWidth: 0 }}>
+                  <span style={{ minWidth: 0, flex: 1 }}>
                     {a.iniziale && <span style={{ ...etichettaSottile, display: "block", marginBottom: 2 }}>Nota iniziale</span>}
-                    <span style={{ ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>{a.testo}</span>
+                    {/* la nota si corregge dove si legge: una casella in
+                        fondo alla scheda chiedeva di scorrere fin la' per
+                        cambiare una parola che si stava guardando */}
+                    {a.iniziale && notaInModifica ? (
+                      <>
+                        <textarea
+                          rows={3}
+                          autoFocus
+                          value={noteIniziali}
+                          onChange={(e) => setNoteIniziali(e.target.value)}
+                          style={{ ...inputStyle, resize: "vertical", fontSize: 13.5, background: "#fff" }}
+                        />
+                        <span style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 7 }}>
+                          <Button
+                            onClick={() => { onSalva({ note_iniziali: noteIniziali.trim() || null }); setNotaInModifica(false); }}
+                          >
+                            Salva la nota
+                          </Button>
+                          <button type="button"
+                            onClick={() => { setNoteIniziali(progetto.note_iniziali || ""); setNotaInModifica(false); }}
+                            style={{ ...fontBody, fontSize: 12.5, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer" }}>
+                            annulla
+                          </button>
+                        </span>
+                      </>
+                    ) : (
+                      <span style={{ ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>{a.testo}</span>
+                    )}
                   </span>
+                  {a.iniziale && !notaInModifica && (
+                    <button type="button" onClick={() => { setNoteIniziali(progetto.note_iniziali || ""); setNotaInModifica(true); }}
+                      title="Modifica la nota"
+                      style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: MUTED, display: "flex", flexShrink: 0, alignSelf: "flex-start" }}>
+                      <IconaMatitaNota size={14} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -33846,20 +33883,6 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
         </div>
       )}
 
-      {/* le note iniziali si vedono solo quando si modifica: sono l'atto di
-          nascita del progetto, si scrivono una volta e non si rileggono
-          ogni giorno */}
-      {inModifica && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ ...etichettaSottile, marginBottom: 3 }}>Note iniziali</div>
-          <textarea
-            rows={3}
-            value={noteIniziali}
-            onChange={(e) => setNoteIniziali(e.target.value)}
-            style={{ ...inputStyle, resize: "vertical", fontSize: 14 }}
-          />
-        </div>
-      )}
     </div>
   );
 }
