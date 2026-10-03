@@ -35,7 +35,7 @@ import GestioneEventi from "./eventi/GestioneEventi.jsx";
 import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
 import SelettorePeriodo from "./ui/SelettorePeriodo.jsx";
 import PrezziListini from "./prezzi/PrezziListini.jsx";
-import RiquadriPuntiMaster from "./punti/RiquadriPuntiMaster.jsx";
+import { usePuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -12663,6 +12663,9 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // il totale in euro dei carrelli lo vedono solo programmatore e Chiara
   // Colonnelli; le master vedono vendite e punti, mai l'importo
   const mostraEuroCarrelli = vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato);
+  // il totale dei carrelli in euro resta spento in attesa di decidere se
+  // alla master vada mostrato: la riga che lo accendeva e' qui sotto
+  const mostraTotaleCarrelli = false;
   // le edizioni per cui un pacco e' davvero partito: il tasto "Cambi e
   // integrazioni" compare solo li', perche' altrove non c'e' una scorta
   // da cui prendere e il quadro sarebbe vuoto
@@ -12684,6 +12687,9 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
+  // i punti dalle vendite: shop/POS sul netto, cash sul lordo. Il conto sta
+  // nella view v_punti_master, qui si legge e basta
+  const puntiDaVendite = usePuntiMaster(masterSelId);
   // I punti nella dashboard restano nascosti per TUTTE le master, senza
   // eccezioni. Andrea Paura ne aveva una, aperta il 21/09/2026 e richiusa
   // il giorno dopo: finche' la tabella del cedibile non e' una sola per
@@ -12921,12 +12927,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           );
         })()}
 
-        {/* I punti, divisi per come e' stato pagato. Stanno sopra il
-            vecchio blocco e non lo sostituiscono: quella catena e' ancora
-            in ricostruzione, questi due riquadri nascono dalla view
-            v_punti_master e si reggono da soli */}
-        {masterSel && <RiquadriPuntiMaster masterId={masterSel.id} isMobile={isMobile} />}
-
         {masterSel && puntiMasterImpostazioni && (
           <div style={{ marginBottom: 20 }}>
             {/* Niente titolo, niente periodo e niente "Dettaglio per
@@ -12957,7 +12957,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // numero sulla mezzeria e basta, qualunque sia la lunghezza
               // dell'etichetta sopra: una riga o tre, il numero non si
               // sposta.
-              const schedePunti = 2 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli ? 1 : 0);
+              const schedePunti = 4 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli && mostraTotaleCarrelli ? 1 : 0);
               const cardPunti = {
                 ...cardStyle, minWidth: 0, boxSizing: "border-box",
                 padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
@@ -13002,7 +13002,18 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             // stanno tutte in fila — e il quadrato lascia il posto a una
             // scheda piu' bassa, altrimenti tre quadrati affiancati su uno
             // schermo stretto diventano tre francobolli.
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${(() => { const n = 2 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli ? 1 : 0); return n; })()}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${schedePunti}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+              {/* I punti, divisi per come si e' pagato. Stanno in questa
+                  griglia e non in una loro: due file di schede che dicono
+                  cose dello stesso ordine si leggono peggio di una */}
+              <div style={cardPunti}>
+                <div style={lblPunti}>Punti<br />shop/POS</div>
+                <div style={{ ...numPunti, color: NAVY }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_shop_pos || 0) : "…"}</div>
+              </div>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Punti<br />cash</div>
+                <div style={{ ...numPunti, color: "#8A6D1D" }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_cash || 0) : "…"}</div>
+              </div>
               {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
                   qui contano le vendite, i punti arriveranno con una regola
                   loro (da definire), e la quarta scheda resta vuota in
@@ -13028,7 +13039,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               )}
               {/* il totale in euro dei carrelli venduti: solo programmatore e
                   Chiara Colonnelli lo vedono, mai le master */}
-              {mostraEuroCarrelli && (
+              {mostraEuroCarrelli && mostraTotaleCarrelli && (
               <div style={cardPunti}>
                 <div style={lblPunti}>Totale<br />carrelli</div>
                 <div style={{ ...numPunti, color: "#2E7D32" }}>{fmtEuroErp2(provvigioniMaster.valoreCarrelli)}</div>
