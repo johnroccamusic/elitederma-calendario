@@ -56309,7 +56309,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
@@ -56714,13 +56714,13 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               // in mezza pagina — quando a destra c'e' l'attesa di
               // ricezione — i blocchi non ci stanno in fila: le righine
               // spariscono e si va a capo, invece di accavallarsi
-              const stretta = dueColonneOrdini || isMobile;
-              const eti = { ...fontBody, fontSize: 8, fontWeight: 600, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, whiteSpace: "nowrap", marginBottom: 5 };
+              const stretta = isMobile;
+              const eti = { ...fontBody, fontSize: 8, fontWeight: 600, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 };
               const sep = <span style={{ width: 1, alignSelf: "stretch", background: "#ECE9E2", flexShrink: 0 }} />;
               return (
               <div key={r.prodotto.id} style={{
-                display: "flex", alignItems: "center", columnGap: stretta ? 9 : 14,
-                flexWrap: "nowrap", padding: stretta ? "10px 10px" : "12px 14px", marginBottom: 9,
+                display: "flex", alignItems: "center", columnGap: stretta ? 9 : 18,
+                flexWrap: "nowrap", padding: stretta ? "10px 10px" : "13px 18px", marginBottom: 10,
                 background: "#fff", border: "1px solid #EFEDE7", borderRadius: 22,
                 boxShadow: "0 2px 10px -4px rgba(14,27,51,0.10)",
               }}>
@@ -56758,15 +56758,15 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 </div>
 
                 {/* PRODOTTO DA ORDINARE */}
-                <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
                   <div style={eti}>prodotto da ordinare</div>
                   {onApriProdotto ? (
                     <button onClick={() => onApriProdotto(r.prodotto.id)} title="Apri la scheda del prodotto"
-                      style={{ ...fontDisplay, fontSize: stretta ? 12.5 : 14, fontWeight: 800, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", lineHeight: 1.2, overflowWrap: "anywhere", width: "100%" }}>
+                      style={{ ...fontDisplay, fontSize: stretta ? 12.5 : 15, fontWeight: 800, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", lineHeight: 1.2, overflowWrap: "anywhere", width: "100%" }}>
                       {r.prodotto.nome}
                     </button>
                   ) : (
-                    <div style={{ ...fontDisplay, fontSize: stretta ? 12.5 : 14, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.prodotto.nome}</div>
+                    <div style={{ ...fontDisplay, fontSize: stretta ? 12.5 : 15, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.prodotto.nome}</div>
                   )}
                   <div style={{ ...fontBody, fontSize: 9, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {fornitoreId === "__nessuno" ? "senza fornitore" : (fornitorePerId[fornitoreId]?.nome || "")}
@@ -56779,12 +56779,12 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 {/* EVENTO SCOPERTO */}
                 {edizione && sep}
                 {edizione && (
-                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                  <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
                     <div style={eti}>evento scoperto</div>
                     <span style={{ width: 28, height: 28, borderRadius: "50%", background: "#F0E6D4", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 5 }}>
                       <IconaLaureaErp size={14} color={NAVY} />
                     </span>
-                    <div style={{ ...fontDisplay, fontSize: stretta ? 12 : 13.5, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{edizione}</div>
+                    <div style={{ ...fontDisplay, fontSize: stretta ? 12 : 14, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{edizione}</div>
                     <div style={{ ...fontBody, fontSize: 10, color: NAVY, marginTop: 4, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
                       <IconaCalendarioCard size={11} /> {fmtData(perData.dataLimite)}
                     </div>
