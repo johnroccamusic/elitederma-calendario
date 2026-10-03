@@ -56744,27 +56744,25 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
 
                 {/* DATA ORDINE */}
                 <div style={{ flexShrink: 0, textAlign: "center" }}>
-                  {/* la data in negativo: e' il primo appiglio della riga, e
-                      su fondo chiaro si confondeva col resto della scheda.
-                      In ritardo il fondo diventa rosso, non il testo: cosi'
-                      l'allarme si vede da lontano senza leggere */}
+                  {/* la data senza riquadro: un rettangolo pieno dentro una
+                      scheda che e' gia' un riquadro faceva scatola nella
+                      scatola. Il colore basta a dire tutto — navy, rosso se
+                      si e' in ritardo */}
                   <div style={eti}>{perData ? "data ordine" : "scorta"}</div>
-                  <div style={{ background: inRitardo ? "#C0392B" : NAVY, borderRadius: 10, padding: "7px 8px", minWidth: 54 }}>
-                    {perData ? (
-                      <>
-                        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{giornoL}</div>
-                        <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.3, marginTop: 1 }}>
-                          {(MESI_ABBR[Number(meseL) - 1] || "")} {annoL}
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ ...fontDisplay, fontSize: 10.5, fontWeight: 800, color: "#fff", lineHeight: 1.15 }}>sotto<br />minima</div>
-                    )}
-                  </div>
+                  {perData ? (
+                    <>
+                      <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
+                      <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: inRitardo ? "#C0392B" : NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>
+                        {(MESI_ABBR[Number(meseL) - 1] || "")} {annoL}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ ...fontDisplay, fontSize: 11.5, fontWeight: 800, color: "#8A6D1D", lineHeight: 1.15 }}>sotto<br />minima</div>
+                  )}
                   {perData && (
-                    <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, marginTop: 5, padding: "2px 6px", borderRadius: 20,
-                      background: inRitardo ? "#FDE8E6" : "#F0E6D4", color: inRitardo ? "#C0392B" : NAVY,
-                      whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, marginTop: 5,
+                      color: inRitardo ? "#C0392B" : "#8A8A84",
+                      whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
                       <IconaOrologioCard size={9} />
                       {inRitardo ? `+ ${giorni} in ritardo` : `− ${giorni} giorni`}
                     </div>
