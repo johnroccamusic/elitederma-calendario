@@ -56710,12 +56710,14 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                       si e' in ritardo */}
                   <div style={eti}>{perData ? "data ordine" : "scorta"}</div>
                   {perData ? (
-                    <>
-                      <div style={{ ...fontDisplay, fontSize: 21, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
-                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3 }}>
+                    // il giorno centrato sul mese: il blocco si stringe sulla
+                    // riga piu' larga (SET 2026) e il numero ci sta in mezzo
+                    <div style={{ display: "inline-block", textAlign: "center" }}>
+                      <div style={{ ...fontDisplay, fontSize: 25, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
+                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3, whiteSpace: "nowrap" }}>
                         {(MESI_ABBR[Number(meseL) - 1] || "")} {annoL}
                       </div>
-                    </>
+                    </div>
                   ) : (
                     <div style={{ ...fontDisplay, fontSize: 11.5, fontWeight: 800, color: "#8A6D1D", lineHeight: 1.15 }}>sotto<br />minima</div>
                   )}
@@ -56915,9 +56917,11 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 {/* DATA ORDINE */}
                 <div style={{ flexShrink: 0, textAlign: "left" }}>
                   <div style={etiA}>data ordine</div>
-                  <div style={{ ...fontDisplay, fontSize: 21, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{giornoO}</div>
-                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3 }}>
-                    {(MESI_ABBR[Number(meseO) - 1] || "")} {annoO}
+                  <div style={{ display: "inline-block", textAlign: "center" }}>
+                    <div style={{ ...fontDisplay, fontSize: 25, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{giornoO}</div>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3, whiteSpace: "nowrap" }}>
+                      {(MESI_ABBR[Number(meseO) - 1] || "")} {annoO}
+                    </div>
                   </div>
                   <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, marginTop: 6, color: "#8A8A84",
                     whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
