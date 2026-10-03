@@ -18,10 +18,20 @@ const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace("."
 // dentro la tabella il simbolo non si ripete: lo dicono le intestazioni,
 // e otto colonne di numeri su un telefono non possono permetterselo
 const cifra = (n) => (n == null ? "—" : Number(n).toFixed(2).replace(".", ","));
-// I punti che un prodotto genera: sei decimi del prezzo netto, un punto un
-// euro. E' una quota del netto e non del lordo perche' l'IVA non e' mai
-// tua, e non ha senso distribuire punti sui soldi dello Stato.
-const PUNTI_SU_NETTO = 0.6;
+// I punti che un prodotto genera: prezzo netto per la percentuale di sconto
+// massimo, moltiplicato per due. Un punto un euro.
+//
+// Non e' una quota fissa: segue lo sconto di ogni prodotto, quindi un
+// prodotto che si puo' scontare molto vale piu' punti di uno che non si
+// puo' scontare. Sul netto e non sul lordo perche' l'IVA non e' mai tua, e
+// distribuire punti sui soldi dello Stato non ha senso.
+//
+// Senza costo d'acquisto non c'e' sconto massimo, quindi non ci sono punti.
+const PUNTI_MOLTIPLICATORE = 2;
+function puntiProdottoListino(r) {
+  if (r.pubblico_netto == null || r.sconto_max_pct == null) return null;
+  return Number(r.pubblico_netto) * (Number(r.sconto_max_pct) / 100) * PUNTI_MOLTIPLICATORE;
+}
 const ROSSO = "#C0392B";
 
 // `privato` accende le colonne che non si mostrano a nessuno fuori:
@@ -367,10 +377,10 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                               {/* i punti del prodotto: sei decimi del prezzo
                                   netto, un punto un euro */}
                               <td className="lst-punti" data-eti={"punti\nprodotto"}
-                                title={r.pubblico_netto != null
-                                  ? `${cifra(r.pubblico_netto * PUNTI_SU_NETTO)} punti: il ${String(PUNTI_SU_NETTO * 100).replace(".", ",")}% dei ${euro(r.pubblico_netto)} di prezzo netto.`
-                                  : undefined}>
-                                {r.pubblico_netto != null ? cifra(r.pubblico_netto * PUNTI_SU_NETTO) : "—"}
+                                title={puntiProdottoListino(r) != null
+                                  ? `${euro(r.pubblico_netto)} di netto × ${String(r.sconto_max_pct).replace(".", ",")}% di sconto massimo × ${PUNTI_MOLTIPLICATORE} = ${cifra(puntiProdottoListino(r))} punti.`
+                                  : "Senza sconto massimo non si calcolano i punti: manca il costo d'acquisto."}>
+                                {cifra(puntiProdottoListino(r))}
                               </td>
                             </>
                           )}
