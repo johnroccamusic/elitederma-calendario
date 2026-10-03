@@ -27,6 +27,15 @@ export async function salvaProvvigioneMaster(prodottoId, pct) {
   if (error) throw error;
 }
 
+// I punti di un prodotto, scritti a mano. Nessun calcolo: null svuota la
+// casella e la riporta a "non ancora deciso".
+export async function salvaPuntiProdotto(prodottoId, punti) {
+  const { error } = await supabase.from("prodotti_shop")
+    .update({ punti_prodotto: punti })
+    .eq("id", prodottoId);
+  if (error) throw error;
+}
+
 // I blocchi, nell'ordine del menu del sito. Il numero combacia con
 // `blocco_ordine` della view: se cambia là, cambia qui.
 export const BLOCCHI = [

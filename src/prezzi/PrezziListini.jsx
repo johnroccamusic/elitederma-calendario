@@ -11,27 +11,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { leggiListino, csvListino, scaricaCsv, salvaProvvigioneMaster, BLOCCHI, motivoSenzaSconto } from "./dati.js";
+import { leggiListino, csvListino, scaricaCsv, salvaProvvigioneMaster, salvaPuntiProdotto, BLOCCHI, motivoSenzaSconto } from "./dati.js";
 import { iconaDelBlocco } from "./icone.jsx";
 
 const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace(".", ",")}`);
 // dentro la tabella il simbolo non si ripete: lo dicono le intestazioni,
 // e otto colonne di numeri su un telefono non possono permetterselo
 const cifra = (n) => (n == null ? "—" : Number(n).toFixed(2).replace(".", ","));
-// I punti che un prodotto genera: prezzo netto per la percentuale di sconto
-// massimo, moltiplicato per due. Un punto un euro.
-//
-// Non e' una quota fissa: segue lo sconto di ogni prodotto, quindi un
-// prodotto che si puo' scontare molto vale piu' punti di uno che non si
-// puo' scontare. Sul netto e non sul lordo perche' l'IVA non e' mai tua, e
-// distribuire punti sui soldi dello Stato non ha senso.
-//
-// Senza costo d'acquisto non c'e' sconto massimo, quindi non ci sono punti.
-const PUNTI_MOLTIPLICATORE = 2;
-function puntiProdottoListino(r) {
-  if (r.pubblico_netto == null || r.sconto_max_pct == null) return null;
-  return Number(r.pubblico_netto) * (Number(r.sconto_max_pct) / 100) * PUNTI_MOLTIPLICATORE;
-}
 const ROSSO = "#C0392B";
 
 // `privato` accende le colonne che non si mostrano a nessuno fuori:
@@ -48,6 +34,23 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   // esce dal campo: il valore buono resta quello di `righe`, questo e' solo
   // il testo in corso di battitura
   const [bozzaMaster, setBozzaMaster] = useState({});
+  const [bozzaPunti, setBozzaPunti] = useState({});
+
+  // I punti non si calcolano: li scrive una persona. Vuoto = non ancora
+  // deciso, e resta vuoto — mostrare un numero dove non c'e' una decisione
+  // e' il modo piu' rapido per non accorgersi che manca.
+  async function salvaPunti(r) {
+    const testo = bozzaPunti[r.id];
+    setBozzaPunti((b) => { const c = { ...b }; delete c[r.id]; return c; });
+    if (testo == null) return;
+    const pulito = String(testo).replace(",", ".").trim();
+    const punti = pulito === "" ? null : Number(pulito);
+    if (punti != null && (!Number.isFinite(punti) || punti < 0)) return;
+    if (punti === (r.punti_prodotto == null ? null : Number(r.punti_prodotto))) return;
+    setRighe((prev) => prev.map((x) => x.id !== r.id ? x : { ...x, punti_prodotto: punti }));
+    try { await salvaPuntiProdotto(r.id, punti); }
+    catch (e) { setErrore(`Non sono riuscito a salvare i punti di ${r.nome}: ${e?.message || e}`); }
+  }
 
   // Scrive la provvigione alla master di un prodotto. Campo vuoto = torna
   // al conto automatico (un terzo dello sconto del rivenditore), ed e' il
@@ -377,10 +380,23 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                               {/* i punti del prodotto: sei decimi del prezzo
                                   netto, un punto un euro */}
                               <td className="lst-punti" data-eti={"punti\nprodotto"}
-                                title={puntiProdottoListino(r) != null
-                                  ? `${euro(r.pubblico_netto)} di netto × ${String(r.sconto_max_pct).replace(".", ",")}% di sconto massimo × ${PUNTI_MOLTIPLICATORE} = ${cifra(puntiProdottoListino(r))} punti.`
-                                  : "Senza sconto massimo non si calcolano i punti: manca il costo d'acquisto."}>
-                                {cifra(puntiProdottoListino(r))}
+                                title="I punti di questo prodotto. Li scrivi tu: non c'è nessun calcolo dietro, e la casella vuota vuol dire «non ancora deciso».">
+                                <input
+                                  value={bozzaPunti[r.id] ?? (r.punti_prodotto != null ? String(r.punti_prodotto).replace(".", ",") : "")}
+                                  onChange={(e) => setBozzaPunti((b) => ({ ...b, [r.id]: e.target.value }))}
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={() => salvaPunti(r)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.currentTarget.blur();
+                                    if (e.key === "Escape") { setBozzaPunti((b) => { const c = { ...b }; delete c[r.id]; return c; }); e.currentTarget.blur(); }
+                                  }}
+                                  inputMode="decimal"
+                                  placeholder="—"
+                                  style={{ ...fontBody, width: 52, textAlign: "center", fontSize: 12.5, fontWeight: 800,
+                                    color: "#3B6FA0", background: r.punti_prodotto != null ? "#E9F0F7" : "transparent",
+                                    border: "1px solid transparent", borderBottom: `1px dashed ${r.punti_prodotto != null ? "#3B6FA0" : "#CFCFC7"}`,
+                                    borderRadius: 4, padding: "1px 3px", outline: "none" }}
+                                />
                               </td>
                             </>
                           )}
