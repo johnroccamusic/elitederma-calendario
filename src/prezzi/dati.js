@@ -25,6 +25,26 @@ export async function salvaPuntiProdotto(prodottoId, punti) {
   if (error) throw error;
 }
 
+// La riduzione dello sconto massimo di un reparto: punti percentuali da
+// togliere a tutti i suoi prodotti. Zero (o vuoto) significa nessuna
+// riduzione, e la riga sparisce invece di restare a zero.
+export async function leggiRiduzioniReparto() {
+  const { data, error } = await supabase.from("listino_riduzioni_blocco").select("blocco_ordine, punti");
+  if (error) throw error;
+  return Object.fromEntries((data || []).map((r) => [r.blocco_ordine, Number(r.punti)]));
+}
+
+export async function salvaRiduzioneReparto(bloccoOrdine, punti) {
+  if (!punti) {
+    const { error } = await supabase.from("listino_riduzioni_blocco").delete().eq("blocco_ordine", bloccoOrdine);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from("listino_riduzioni_blocco")
+    .upsert({ blocco_ordine: bloccoOrdine, punti, updated_at: new Date().toISOString() }, { onConflict: "blocco_ordine" });
+  if (error) throw error;
+}
+
 // I blocchi, nell'ordine del menu del sito. Il numero combacia con
 // `blocco_ordine` della view: se cambia là, cambia qui.
 export const BLOCCHI = [

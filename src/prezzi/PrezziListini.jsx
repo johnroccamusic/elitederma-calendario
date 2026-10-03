@@ -11,7 +11,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { leggiListino, csvListino, scaricaCsv, salvaPuntiProdotto, BLOCCHI, motivoSenzaSconto } from "./dati.js";
+import { leggiListino, csvListino, scaricaCsv, salvaPuntiProdotto, salvaRiduzioneReparto, BLOCCHI, motivoSenzaSconto } from "./dati.js";
 import { iconaDelBlocco } from "./icone.jsx";
 
 const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace(".", ",")}`);
@@ -37,6 +37,27 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   // esce dal campo: il valore buono resta quello di `righe`, questo e' solo
   // il testo in corso di battitura
   const [bozzaPunti, setBozzaPunti] = useState({});
+  const [bozzaRiduzione, setBozzaRiduzione] = useState({});
+
+  // La riduzione di un reparto: punti percentuali da togliere allo sconto
+  // massimo di tutti i suoi prodotti. Tocca il prezzo rivenditore, la
+  // quota master e i punti, quindi vive nel database e non in pagina —
+  // altrimenti le tre cose comincerebbero ad allontanarsi.
+  async function salvaRiduzione(n) {
+    const testo = bozzaRiduzione[n];
+    setBozzaRiduzione((b) => { const c = { ...b }; delete c[n]; return c; });
+    if (testo == null) return;
+    const pulito = String(testo).replace(",", ".").trim();
+    const punti = pulito === "" ? 0 : Number(pulito);
+    if (!Number.isFinite(punti) || punti < 0 || punti > 50) return;
+    try {
+      await salvaRiduzioneReparto(n, punti);
+      // il conto sta nella view: si rilegge tutto invece di rifarlo qui,
+      // o la pagina direbbe una cosa e il database un'altra
+      const dati = await leggiListino();
+      setRighe(dati || []);
+    } catch (e) { setErrore(`Non sono riuscito a salvare la riduzione del reparto: ${e?.message || e}`); }
+  }
 
   // I punti hanno una formula viva — netto x sconto massimo x 2, calcolata
   // nella view a ogni lettura — e una scrittura a mano che la scavalca.
@@ -267,6 +288,39 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                   <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: NAVY, letterSpacing: 0.4, lineHeight: 1.1 }}>{b.nome}</div>
                   <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{b.descrizione}</div>
                 </div>
+                {/* quanto togliere allo sconto massimo di tutto il
+                    reparto: nove su un 29% fanno 20%. Il calcolo dice
+                    quanto si POTREBBE cedere, questa casella dice quanto
+                    si vuole cedere davvero */}
+                {privato && (() => {
+                  const attuale = b.prodotti.find((r) => r.riduzione_reparto != null)?.riduzione_reparto ?? 0;
+                  const acceso = Number(attuale) > 0;
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
+                      title="Punti percentuali da togliere allo sconto massimo di tutti i prodotti di questo reparto. Vuoto o zero = nessuna riduzione.">
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        riduci di
+                      </span>
+                      <input
+                        value={bozzaRiduzione[b.n] ?? (acceso ? String(attuale).replace(".", ",") : "")}
+                        onChange={(e) => setBozzaRiduzione((x) => ({ ...x, [b.n]: e.target.value }))}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={() => salvaRiduzione(b.n)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                          if (e.key === "Escape") { setBozzaRiduzione((x) => { const c = { ...x }; delete c[b.n]; return c; }); e.currentTarget.blur(); }
+                        }}
+                        inputMode="decimal"
+                        placeholder="0"
+                        style={{ ...fontBody, width: 46, textAlign: "center", fontSize: 13.5, fontWeight: 800,
+                          color: acceso ? "#C0392B" : NAVY, background: acceso ? "#FBEBE9" : "#fff",
+                          border: `1px solid ${acceso ? "#F0C8C2" : CREAM_BORDER}`, borderRadius: 10,
+                          padding: "5px 6px", outline: "none" }}
+                      />
+                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 800, color: acceso ? "#C0392B" : MUTED }}>%</span>
+                    </div>
+                  );
+                })()}
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{b.prodotti.length} prodotti</div>
               </div>
 
