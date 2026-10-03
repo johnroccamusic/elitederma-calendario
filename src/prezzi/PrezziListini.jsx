@@ -18,6 +18,10 @@ const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace("."
 // dentro la tabella il simbolo non si ripete: lo dicono le intestazioni,
 // e otto colonne di numeri su un telefono non possono permetterselo
 const cifra = (n) => (n == null ? "—" : Number(n).toFixed(2).replace(".", ","));
+// I punti che un prodotto genera: sei decimi del prezzo netto, un punto un
+// euro. E' una quota del netto e non del lordo perche' l'IVA non e' mai
+// tua, e non ha senso distribuire punti sui soldi dello Stato.
+const PUNTI_SU_NETTO = 0.6;
 const ROSSO = "#C0392B";
 
 // `privato` accende le colonne che non si mostrano a nessuno fuori:
@@ -137,6 +141,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     /* lo sconto in euro: stesso oro della percentuale, e' la stessa cosa
        detta in soldi invece che in punti */
     .lst-tab td.lst-sconto-eur { color: #8A6D1D; font-weight: 800; }
+    .lst-tab td.lst-punti { color: #3B6FA0; font-weight: 800; }
     .lst-manca { background: #FDFAF2; }
 
     /* le larghezze: il nome prende quello che resta, i numeri stanno stretti */
@@ -258,7 +263,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                     {privato && <col className="c-costo" />}
                     <col className="c-num" /><col className="c-num" />
                     <col className="c-scon" /><col className="c-num" />
-                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
+                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
                   </colgroup>
                   <thead>
                     <tr>
@@ -269,7 +274,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"sconto\nin euro"}</th><th>{"% al master\nsul prezzo netto"}</th><th>{"a master\nin euro"}</th></>}
+                      {privato && <><th>{"sconto\nin euro"}</th><th>{"% al master\nsul prezzo netto"}</th><th>{"a master\nin euro"}</th><th>{"punti\nprodotto"}</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -358,6 +363,14 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                   ? `${euro(r.provvigione_master_euro)} per ogni pezzo venduto: il ${String(r.provvigione_master_pct).replace(".", ",")}% dei ${euro(r.pubblico_netto)} di prezzo netto.`
                                   : undefined}>
                                 {r.provvigione_master_pct != null ? cifra(r.provvigione_master_euro) : "—"}
+                              </td>
+                              {/* i punti del prodotto: sei decimi del prezzo
+                                  netto, un punto un euro */}
+                              <td className="lst-punti" data-eti={"punti\nprodotto"}
+                                title={r.pubblico_netto != null
+                                  ? `${cifra(r.pubblico_netto * PUNTI_SU_NETTO)} punti: il ${String(PUNTI_SU_NETTO * 100).replace(".", ",")}% dei ${euro(r.pubblico_netto)} di prezzo netto.`
+                                  : undefined}>
+                                {r.pubblico_netto != null ? cifra(r.pubblico_netto * PUNTI_SU_NETTO) : "—"}
                               </td>
                             </>
                           )}
