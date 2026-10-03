@@ -509,6 +509,15 @@ const CHIAVE_FASCE_CORSI_CONTANTI = "fasceSconto_corsi_contanti";
 // scritto e' peggio di una sbagliata: non la si va a cercare.
 const CHIAVE_PUNTI_NEEDLING = "puntiNeedling_scaglioni";
 const PUNTI_NEEDLING_DEFAULT = { soglie: [60, 120], quote: [100, 100, 100] };
+// Lo sconto al cliente sui soli prodotti needling, a scaglioni di spesa.
+// NON si somma agli sconti generali: su un prodotto needling vale questo e
+// basta, altrimenti due regole scritte in due posti diversi finirebbero
+// per sommarsi senza che nessuno l'abbia deciso.
+//
+// Di partenza e' zero in tutti e tre gli scaglioni: uno sconto al cliente
+// che nessuno ha scritto e' un soldo che se ne va senza una decisione.
+const CHIAVE_SCONTO_NEEDLING = "scontoNeedling_scaglioni";
+const SCONTO_NEEDLING_DEFAULT = { soglie: [60, 120], sconti: [0, 0, 0] };
 // Quando i codici d'aula sono a percentuale FISSA invece che a fasce, la
 // percentuale dei contanti e' un numero solo e sta qui — stessa ragione
 // della serie di sopra: in contanti l'IVA resta in cassa e si puo'
@@ -49297,6 +49306,22 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     quote: Array.isArray(puntiNeedlingSalvati?.quote) && puntiNeedlingSalvati.quote.length === 3
       ? puntiNeedlingSalvati.quote : PUNTI_NEEDLING_DEFAULT.quote,
   };
+  const [scontoNeedlingSalvato, salvaScontoNeedling] = useImpostazioneCondivisa(CHIAVE_SCONTO_NEEDLING, SCONTO_NEEDLING_DEFAULT);
+  const scontoNeedling = {
+    soglie: Array.isArray(scontoNeedlingSalvato?.soglie) && scontoNeedlingSalvato.soglie.length === 2
+      ? scontoNeedlingSalvato.soglie : SCONTO_NEEDLING_DEFAULT.soglie,
+    sconti: Array.isArray(scontoNeedlingSalvato?.sconti) && scontoNeedlingSalvato.sconti.length === 3
+      ? scontoNeedlingSalvato.sconti : SCONTO_NEEDLING_DEFAULT.sconti,
+  };
+  const cambiaScontoNeedling = (campo, indice, testo) => {
+    const pulito = String(testo).replace(",", ".").trim();
+    const n = pulito === "" ? 0 : Number(pulito);
+    if (!Number.isFinite(n) || n < 0) return;
+    if (campo === "sconti" && n > 100) return;
+    const prossimo = { soglie: [...scontoNeedling.soglie], sconti: [...scontoNeedling.sconti] };
+    prossimo[campo][indice] = n;
+    salvaScontoNeedling(prossimo);
+  };
   const cambiaPuntiNeedling = (campo, indice, testo) => {
     const pulito = String(testo).replace(",", ".").trim();
     const n = pulito === "" ? 0 : Number(pulito);
@@ -49624,6 +49649,65 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
             <span style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700, flexBasis: "100%", marginTop: 4 }}>
               Si salva da sé a ogni numero toccato.
             </span>
+          </div>
+        </div>
+
+        {/* SCONTISTICA PRODOTTI NEEDLING — questo invece e' uno sconto
+            vero, quello che paga meno il cliente. Vive accanto alla scheda
+            dei punti perche' si leggono insieme: quanto si cede al cliente
+            e quanto resta alla master sono due facce dello stesso carrello. */}
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Scontistica prodotti needling</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 14 }}>
+            Lo sconto che il cliente ottiene sui soli prodotti <b>needling</b>, più alto man mano che
+            si sale di spesa. <b>Non si somma</b> agli sconti generali: su un prodotto needling vale
+            questo e basta, mai tutti e due. Le soglie si leggono sul totale del carrello a listino,
+            come nelle tabelle qui sopra.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
+            {[0, 1, 2].map((i) => {
+              const da = i === 0 ? 0 : scontoNeedling.soglie[i - 1];
+              const a = i < 2 ? scontoNeedling.soglie[i] : null;
+              const etichetta = i === 0
+                ? `Sotto ${fmtEuroErp2(scontoNeedling.soglie[0])}`
+                : a != null ? `Da ${fmtEuroErp2(da)} a meno di ${fmtEuroErp2(a)}` : `Da ${fmtEuroErp2(da)} in su`;
+              const acceso = Number(scontoNeedling.sconti[i]) > 0;
+              return (
+                <div key={i} style={{ background: acceso ? "#FDF8EC" : BG, border: `1px solid ${acceso ? "#EBD9AE" : CREAM_BORDER}`, borderRadius: 14, padding: "12px 14px" }}>
+                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, marginBottom: 8, lineHeight: 1.3 }}>{etichetta}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="number" min="0" max="100" step="0.5"
+                      value={scontoNeedling.sconti[i]}
+                      onChange={(e) => cambiaScontoNeedling("sconti", i, e.target.value)}
+                      style={{ ...inputStyle, width: 86, textAlign: "center", fontWeight: 800, fontSize: 16, padding: "8px 10px", color: acceso ? "#8A6D1D" : NAVY }}
+                    />
+                    <span style={{ ...fontBody, fontSize: 14, fontWeight: 800, color: acceso ? "#8A6D1D" : NAVY }}>%</span>
+                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>al cliente</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie</span>
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>prima a</span>
+            <input type="number" min="0" step="1" value={scontoNeedling.soglie[0]}
+              onChange={(e) => cambiaScontoNeedling("soglie", 0, e.target.value)}
+              style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€ poi a</span>
+            <input type="number" min="0" step="1" value={scontoNeedling.soglie[1]}
+              onChange={(e) => cambiaScontoNeedling("soglie", 1, e.target.value)}
+              style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€</span>
+            <span style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700, flexBasis: "100%", marginTop: 4 }}>
+              Si salva da sé a ogni numero toccato.
+            </span>
+            {scontoNeedling.sconti.every((x) => !Number(x)) && (
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexBasis: "100%", lineHeight: 1.45 }}>
+                Per ora è tutto a zero: finché resta così sui prodotti needling valgono gli sconti generali.
+              </span>
+            )}
           </div>
         </div>
 
