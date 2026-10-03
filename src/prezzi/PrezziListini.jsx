@@ -11,7 +11,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { leggiListino, csvListino, scaricaCsv, BLOCCHI, motivoSenzaSconto } from "./dati.js";
+import { leggiListino, csvListino, scaricaCsv, salvaProvvigioneMaster, BLOCCHI, motivoSenzaSconto } from "./dati.js";
 import { iconaDelBlocco } from "./icone.jsx";
 
 const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace(".", ",")}`);
@@ -30,6 +30,35 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   const [errore, setErrore] = useState(null);
   const [cerca, setCerca] = useState("");
   const [bloccoScelto, setBloccoScelto] = useState(null); // null = tutti
+  // quello che si sta scrivendo nella casella della master, finche' non si
+  // esce dal campo: il valore buono resta quello di `righe`, questo e' solo
+  // il testo in corso di battitura
+  const [bozzaMaster, setBozzaMaster] = useState({});
+
+  // Scrive la provvigione alla master di un prodotto. Campo vuoto = torna
+  // al conto automatico (un terzo dello sconto del rivenditore), ed e' il
+  // modo per disfare una scelta a mano senza cercare un tasto apposta.
+  async function salvaMaster(r) {
+    const testo = bozzaMaster[r.id];
+    setBozzaMaster((b) => { const c = { ...b }; delete c[r.id]; return c; });
+    if (testo == null) return;
+    const pulito = String(testo).replace(",", ".").replace("%", "").trim();
+    const pct = pulito === "" ? null : Number(pulito);
+    if (pct != null && (!Number.isFinite(pct) || pct < 0 || pct > 100)) return;
+    const automatico = r.sconto_max_pct != null ? Math.round(r.sconto_max_pct / 3 * 10) / 10 : null;
+    const nuovo = pct == null ? automatico : pct;
+    if (nuovo === r.provvigione_master_pct && (pct != null) === !!r.provvigione_master_manuale) return;
+    // in pagina subito, sul database dopo: il numero si vede cambiare
+    // mentre si batte il successivo
+    setRighe((prev) => prev.map((x) => x.id !== r.id ? x : {
+      ...x,
+      provvigione_master_pct: nuovo,
+      provvigione_master_euro: nuovo == null ? null : Math.round(x.pubblico_netto * nuovo) / 100,
+      provvigione_master_manuale: pct != null,
+    }));
+    try { await salvaProvvigioneMaster(r.id, pct); }
+    catch (e) { setErrore(`Non sono riuscito a salvare la provvigione di ${r.nome}: ${e?.message || e}`); }
+  }
 
   useEffect(() => {
     (async () => {
@@ -268,18 +297,44 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                           <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_rivenditore)}</td>
                           {privato && (
                             <>
+                              {/* la sola casella che si scrive in questa
+                                  tabella: di suo vale un terzo dello sconto
+                                  del rivenditore, ma su un prodotto da
+                                  spingere la cifra la si decide. Svuotarla
+                                  rimette il conto automatico */}
                               <td className="lst-master" data-eti={"a\nmaster"}
-                                title={r.provvigione_master_pct != null
-                                  ? `Vendendo lei al corso, le riconosci ${euro(r.provvigione_master_euro)} — il ${String(r.quota_master_pct).replace(".", ",")}% del margine (${euro(r.pubblico_netto - r.costo_acquisto)}), cioè il ${String(r.provvigione_master_pct).replace(".", ",")}% del prezzo netto.`
-                                  : "Senza costo d'acquisto non si sa quanto margine c'è, quindi non si sa quanto cederne."}>
-                                {r.provvigione_master_pct != null ? `${String(r.provvigione_master_pct).replace(".", ",")}%` : "—"}
+                                title={r.sconto_max_pct == null
+                                  ? "Senza costo d'acquisto non si sa quanto margine c'è, quindi non si sa quanto cederne."
+                                  : r.provvigione_master_manuale
+                                    ? `Scritta a mano: ${euro(r.provvigione_master_euro)} per pezzo. Svuota la casella per tornare a un terzo dello sconto del rivenditore (${String(Math.round(r.sconto_max_pct / 3 * 10) / 10).replace(".", ",")}%).`
+                                    : `Un terzo del ${String(r.sconto_max_pct).replace(".", ",")}% che prende un rivenditore: ${euro(r.provvigione_master_euro)} per ogni pezzo venduto al corso. Scrivici dentro per deciderla tu.`}>
+                                {r.sconto_max_pct == null ? "—" : (
+                                  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 1 }}>
+                                    <input
+                                      value={bozzaMaster[r.id] ?? (r.provvigione_master_pct != null ? String(r.provvigione_master_pct).replace(".", ",") : "")}
+                                      onChange={(e) => setBozzaMaster((b) => ({ ...b, [r.id]: e.target.value }))}
+                                      onFocus={(e) => e.target.select()}
+                                      onBlur={() => salvaMaster(r)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") e.currentTarget.blur();
+                                        if (e.key === "Escape") { setBozzaMaster((b) => { const c = { ...b }; delete c[r.id]; return c; }); e.currentTarget.blur(); }
+                                      }}
+                                      inputMode="decimal"
+                                      style={{ ...fontBody, width: 42, textAlign: "right", fontSize: 12.5, fontWeight: 800,
+                                        color: "#2E7D32", background: r.provvigione_master_manuale ? "#E8F4E9" : "transparent",
+                                        border: "1px solid transparent", borderBottom: `1px dashed ${r.provvigione_master_manuale ? "#2E7D32" : "#CFCFC7"}`,
+                                        borderRadius: 4, padding: "1px 3px", outline: "none" }}
+                                    />
+                                    <span style={{ color: "#2E7D32", fontWeight: 800 }}>%</span>
+                                  </span>
+                                )}
                               </td>
                               {/* la stessa cosa in euro: la percentuale serve a
                                   confrontare i prodotti fra loro, la cifra a dire
                                   alla master quanto prende su quel pezzo */}
                               <td className="lst-master" data-eti={"a master\neuro"}
-                                title={r.provvigione_master_euro != null && r.costo_acquisto != null
-                                  ? `${euro(r.provvigione_master_euro)} per ogni pezzo venduto: il ${String(r.quota_master_pct).replace(".", ",")}% dei ${euro(r.pubblico_netto - r.costo_acquisto)} di margine.`
+                                title={r.provvigione_master_euro != null
+                                  ? `${euro(r.provvigione_master_euro)} per ogni pezzo venduto: il ${String(r.provvigione_master_pct).replace(".", ",")}% dei ${euro(r.pubblico_netto)} di prezzo netto.`
                                   : undefined}>
                                 {r.provvigione_master_pct != null ? cifra(r.provvigione_master_euro) : "—"}
                               </td>
@@ -309,12 +364,13 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
             numero vedi quanto era prima delle imposte.
             {" "}
             <b>A master</b> è quanto puoi riconoscere a una master che vende quel prodotto a un
-            corso: il {String(righe[0]?.quota_master_pct ?? 15).replace(".", ",")}% del margine
-            (netto meno costo), scritto qui come <b>percentuale del prezzo netto</b> — non del
-            lordo, che contiene l'IVA e non è tua. Non è uno sconto da rivenditore e non deve
-            somigliargli: un rivenditore anticipa i soldi, si porta la merce e si tiene
-            l'invenduto; una master vende la tua merce al tuo prezzo dentro un corso che paghi tu.
-            Dove il margine è sottile la percentuale scende da sola.
+            corso: <b>un terzo dello sconto che prende un rivenditore</b> — rivenditore al 30%,
+            master al 10% — in <b>percentuale sul prezzo netto</b>, non sul lordo, che contiene
+            l'IVA e non è tua. Il rapporto di uno a tre tiene in piedi la differenza che conta:
+            un rivenditore anticipa i soldi, si porta la merce e si tiene l'invenduto; una master
+            vende la tua merce al tuo prezzo dentro un corso che paghi tu.
+            La casella <b>si scrive</b>: su un prodotto da spingere, o dove il margine è sottile,
+            la cifra la decidi tu. Svuotarla rimette il terzo calcolato.
           </p>
         )}
         <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>

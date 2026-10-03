@@ -16,6 +16,17 @@ export async function leggiListino() {
       .order("nome", { ascending: true }));
 }
 
+// La provvigione alla master, scritta a mano su un prodotto. Vuota (null)
+// vuol dire "torna al conto automatico": un terzo dello sconto massimo
+// del rivenditore. E' l'unica scrittura di questo file — il listino per
+// il resto legge e basta.
+export async function salvaProvvigioneMaster(prodottoId, pct) {
+  const { error } = await supabase.from("prodotti_shop")
+    .update({ provvigione_master_pct: pct })
+    .eq("id", prodottoId);
+  if (error) throw error;
+}
+
 // I blocchi, nell'ordine del menu del sito. Il numero combacia con
 // `blocco_ordine` della view: se cambia là, cambia qui.
 export const BLOCCHI = [
