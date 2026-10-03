@@ -321,7 +321,15 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                             {manca ? (
                               <span className="lst-manca-eti" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
-                              <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_max_pct === 0 ? ROSSO : "#8A6D1D", background: r.sconto_max_pct === 0 ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_max_pct).replace(".", ",")}%</span>
+                              /* rosso = forzato: il conto dava zero (il
+                                 margine non basta a dividere il guadagno) e
+                                 il 5% e' una scelta commerciale, non un
+                                 numero calcolato */
+                              <span
+                                title={r.sconto_forzato
+                                  ? `Forzato al 5%. Il calcolo dava ${String(r.sconto_esatto_pct ?? 0).replace(".", ",")}%: su questo prodotto il margine non basta a dividere il guadagno a metà, quindi il 5% lo stai cedendo e basta.`
+                                  : undefined}
+                                style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_forzato ? ROSSO : "#8A6D1D", background: r.sconto_forzato ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{String(r.sconto_max_pct).replace(".", ",")}%</span>
                             )}
                           </td>
                           <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_rivenditore)}</td>
@@ -434,7 +442,11 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
         <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>
           Lo <b>sconto massimo</b> è la quota che divide il guadagno a metà fra te e il rivenditore:
           concedendola, pagata la merce e i costi aziendali, a te resta quanto a lui. È arrotondata
-          per difetto a passi di cinque — meglio concedere un punto in meno che uno in più. Il
+          per difetto a passi di cinque — meglio concedere un punto in meno che uno in più.
+          Dove il calcolo darebbe <b>zero</b> la percentuale è <b>forzata al 5% e scritta in
+          rosso</b>: lì il margine non basta a dividere il guadagno, e quel 5% non è un conto
+          ma una scelta — lo stai cedendo e basta, perché senza nessuno sconto un rivenditore
+          non avrebbe ragione di comprare. Il
           <b> prezzo rivenditore</b> è il pubblico netto meno quello sconto. Ci sono solo i prodotti
           in vendita sullo shop: fuori chi non ha prezzo, non è pubblicato o è solo interno.
         </p>

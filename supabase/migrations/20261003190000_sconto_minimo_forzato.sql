@@ -1,0 +1,16 @@
+-- Il pavimento del 5% sullo sconto del rivenditore.
+--
+-- Dove il conto dava zero — il margine non basta a dividere il guadagno a
+-- meta' fra azienda e rivenditore — il listino mostrava 0%, e uno sconto
+-- zero vuol dire che un rivenditore non ha nessuna ragione di comprare.
+-- Si forza il 5%.
+--
+-- NON E' UN CALCOLO, ed e' importante che si veda: su quelle righe il
+-- guadagno non si divide, si cede e basta. Per questo la view espone
+-- `sconto_forzato`, e la pagina scrive quelle percentuali in rosso: senza
+-- il segnale, fra un mese nessuno saprebbe piu' distinguere un 5% che
+-- esce dalla formula da un 5% messo a mano.
+--
+-- Il corpo della view e' quello della migrazione 20261003160000, con in
+-- piu' `sconto_calcolato` nel CTE `prezzi`, il greatest(5, ...) su
+-- `sconto_pct` e la colonna `sconto_forzato` in coda.
