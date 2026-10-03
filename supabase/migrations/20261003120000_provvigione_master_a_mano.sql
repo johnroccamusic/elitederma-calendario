@@ -163,9 +163,9 @@ select
   round(sconto_esatto, 1) as sconto_esatto_pct,
   iva as aliquota_iva,
   costi_aziendali_pct, sicurezza_pct, imposte_pct,
-  -- la quota si calcola sul prezzo del rivenditore: e' quello il prezzo a
-  -- cui il prodotto viene ceduto, e la master ne prende una fetta
-  round(prezzo_riv * master_pct / 100.0, 2)     as provvigione_master_euro,
+  -- la percentuale si applica al PUBBLICO NETTO: il prezzo del prodotto
+  -- senza IVA, che e' quello a cui la master vende in aula
+  round(prezzo_vendita * master_pct / 100.0, 2) as provvigione_master_euro,
   master_pct                                    as provvigione_master_pct,
   quota_master_pct,
   -- le colonne nuove vanno IN FONDO: create or replace non sa inserirle
@@ -175,4 +175,4 @@ select
 from amano;
 
 comment on view v_prezzi_listini is
-  'Listino a blocchi. Sconto massimo = la quota che divide il guadagno a meta'' fra azienda e rivenditore. provvigione_master_pct = un terzo di quello sconto, salvo il valore scritto a mano in prodotti_shop.provvigione_master_pct; provvigione_master_euro = quella percentuale applicata al PREZZO RIVENDITORE (03/10/2026).';
+  'Listino a blocchi. Sconto massimo = la quota che divide il guadagno a meta'' fra azienda e rivenditore. provvigione_master_pct = un terzo di quello sconto, salvo il valore scritto a mano in prodotti_shop.provvigione_master_pct; provvigione_master_euro = quella percentuale applicata al PUBBLICO NETTO, il prezzo senza IVA (03/10/2026).';

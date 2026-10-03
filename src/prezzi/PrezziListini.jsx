@@ -53,7 +53,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     setRighe((prev) => prev.map((x) => x.id !== r.id ? x : {
       ...x,
       provvigione_master_pct: nuovo,
-      provvigione_master_euro: nuovo == null || x.prezzo_rivenditore == null ? null : Math.round(x.prezzo_rivenditore * nuovo) / 100,
+      provvigione_master_euro: nuovo == null ? null : Math.round(x.pubblico_netto * nuovo) / 100,
       provvigione_master_manuale: pct != null,
     }));
     try { await salvaProvvigioneMaster(r.id, pct); }
@@ -327,8 +327,8 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                 title={r.sconto_max_pct == null
                                   ? "Senza costo d'acquisto non si sa quanto margine c'è, quindi non si sa quanto cederne."
                                   : r.provvigione_master_manuale
-                                    ? `Scritta a mano: ${euro(r.provvigione_master_euro)} per pezzo, cioè il ${String(r.provvigione_master_pct).replace(".", ",")}% dei ${euro(r.prezzo_rivenditore)} che paga un rivenditore. Svuota la casella per tornare a un terzo dello sconto del rivenditore (${String(Math.round(r.sconto_max_pct / 3 * 10) / 10).replace(".", ",")}%).`
-                                    : `Un terzo del ${String(r.sconto_max_pct).replace(".", ",")}% che prende un rivenditore, calcolato sui ${euro(r.prezzo_rivenditore)} che il rivenditore paga: ${euro(r.provvigione_master_euro)} per ogni pezzo venduto al corso. Scrivici dentro per deciderla tu.`}>
+                                    ? `Scritta a mano: ${euro(r.provvigione_master_euro)} per pezzo, cioè il ${String(r.provvigione_master_pct).replace(".", ",")}% dei ${euro(r.pubblico_netto)} di prezzo netto. Svuota la casella per tornare a un terzo dello sconto del rivenditore (${String(Math.round(r.sconto_max_pct / 3 * 10) / 10).replace(".", ",")}%).`
+                                    : `Un terzo del ${String(r.sconto_max_pct).replace(".", ",")}% che prende un rivenditore, calcolato sui ${euro(r.pubblico_netto)} di prezzo netto: ${euro(r.provvigione_master_euro)} per ogni pezzo venduto al corso. Scrivici dentro per deciderla tu.`}>
                                 {r.sconto_max_pct == null ? "—" : (
                                   <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 1 }}>
                                     <input
@@ -355,7 +355,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                   alla master quanto prende su quel pezzo */}
                               <td className="lst-master" data-eti={"a master\neuro"}
                                 title={r.provvigione_master_euro != null
-                                  ? `${euro(r.provvigione_master_euro)} per ogni pezzo venduto: il ${String(r.provvigione_master_pct).replace(".", ",")}% dei ${euro(r.prezzo_rivenditore)} del prezzo rivenditore.`
+                                  ? `${euro(r.provvigione_master_euro)} per ogni pezzo venduto: il ${String(r.provvigione_master_pct).replace(".", ",")}% dei ${euro(r.pubblico_netto)} di prezzo netto.`
                                   : undefined}>
                                 {r.provvigione_master_pct != null ? cifra(r.provvigione_master_euro) : "—"}
                               </td>
@@ -384,8 +384,8 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
             {" "}
             <b>A master</b> è quanto puoi riconoscere a una master che vende quel prodotto a un
             corso: <b>un terzo dello sconto che prende un rivenditore</b> — rivenditore al 30%,
-            master al 10% — applicato al <b>prezzo che paga il rivenditore</b>, che è il prezzo a
-            cui quel prodotto viene ceduto. Il rapporto di uno a tre tiene in piedi la differenza:
+            master al 10% — applicato al <b>prezzo netto</b>, cioè il prezzo del prodotto senza
+            IVA, che non è mai tua. Il rapporto di uno a tre tiene in piedi la differenza:
             un rivenditore anticipa i soldi, si porta la merce e si tiene l'invenduto; una master
             vende la tua merce al tuo prezzo dentro un corso che paghi tu.
             La casella <b>si scrive</b>: su un prodotto da spingere, o dove il margine è sottile,
