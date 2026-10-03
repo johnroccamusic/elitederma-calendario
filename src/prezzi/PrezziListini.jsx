@@ -8,7 +8,7 @@
 // listino per i rivenditori è una cosa, il prezzo dello shop un'altra.
 // Il conto sta tutto nella view `v_prezzi_listini`, così la stessa
 // formula non finisce scritta due volte in due posti che poi divergono.
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { leggiListino, csvListino, scaricaCsv, BLOCCHI, motivoSenzaSconto } from "./dati.js";
@@ -30,7 +30,6 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   const [errore, setErrore] = useState(null);
   const [cerca, setCerca] = useState("");
   const [bloccoScelto, setBloccoScelto] = useState(null); // null = tutti
-  const riferimenti = useRef({});
 
   useEffect(() => {
     (async () => {
@@ -59,17 +58,13 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     return BLOCCHI.filter((b) => per.has(b.n)).map((b) => ({ ...b, prodotti: per.get(b.n) }));
   }, [visibili]);
 
-  // le pastiglie in alto: tutti i reparti che esistono, anche quando la
+  // i reparti della tendina: tutti quelli che esistono, anche quando la
   // ricerca li ha svuotati — spariscono solo se il reparto è vuoto di suo
   const reparti = useMemo(() => {
     const presenti = new Set(righe.map((r) => r.blocco_ordine));
     return BLOCCHI.filter((b) => presenti.has(b.n));
   }, [righe]);
 
-  function vaiAl(n) {
-    setBloccoScelto(null);
-    setTimeout(() => riferimenti.current[n]?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
-  }
   function esporta() {
     scaricaCsv(csvListino(visibili), `listino-${new Date().toISOString().slice(0, 10)}.csv`);
   }
@@ -187,34 +182,24 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           <input value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="Cerca prodotto…"
             style={{ ...inputStyle, flex: "1 1 220px", minWidth: 160, fontSize: 14 }} />
+          {/* il reparto si sceglie da qui: i tredici reparti in fila uno
+              sotto l'altro erano uno schermo intero prima di arrivare al
+              primo prezzo. Il numero accanto al nome dice quanti prodotti
+              ci sono dentro, cosi' si sceglie senza aprire e richiudere */}
+          {reparti.length > 0 && (
+            <select value={bloccoScelto == null ? "" : String(bloccoScelto)}
+              onChange={(e) => setBloccoScelto(e.target.value === "" ? null : Number(e.target.value))}
+              style={{ ...inputStyle, flex: "0 1 260px", minWidth: 190, fontSize: 14, cursor: "pointer" }}>
+              <option value="">Tutti i reparti ({righe.length})</option>
+              {reparti.map((b) => (
+                <option key={b.n} value={b.n}>
+                  {b.nome} ({righe.filter((r) => r.blocco_ordine === b.n).length})
+                </option>
+              ))}
+            </select>
+          )}
           <Button variant="ghost" onClick={esporta} disabled={visibili.length === 0} style={{ fontSize: 13, padding: "8px 14px" }}>Esporta CSV</Button>
         </div>
-
-        {/* L'indice dei reparti: i nomi in chiaro, uno sotto l'altro, col
-            numero di prodotti. Cliccato porta al blocco; ricliccato lascia
-            solo quello. Niente tendina: un elenco si legge tutto insieme,
-            una tendina nasconde quello che c'e' finche' non la apri. */}
-        {reparti.length > 0 && (
-          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 4px", marginBottom: 16 }}>
-            {reparti.map((b, i) => {
-              const Ico = iconaDelBlocco(b.n);
-              const attivo = bloccoScelto === b.n;
-              const quanti = righe.filter((r) => r.blocco_ordine === b.n).length;
-              return (
-                <button key={b.n} onClick={() => (attivo ? setBloccoScelto(null) : (setBloccoScelto(null), vaiAl(b.n)))}
-                  style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left", cursor: "pointer",
-                    background: attivo ? "#F6EFE2" : "transparent", border: "none",
-                    borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}`, padding: "11px 12px" }}>
-                  <span style={{ width: 32, height: 32, borderRadius: 10, background: "#F6EFE2", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Ico s={18} c={GOLD} />
-                  </span>
-                  <span style={{ ...fontDisplay, fontSize: 15.5, fontWeight: 800, color: NAVY, letterSpacing: 0.5, flex: 1, minWidth: 0 }}>{b.nome}</span>
-                  <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{quanti}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
 
         {errore && <div style={{ ...fontBody, fontSize: 13, color: ROSSO, background: "#FBEBE9", border: "1px solid #F0C8C2", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>{errore}</div>}
         {caricando && <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, padding: "24px 4px" }}>Sto leggendo il listino…</div>}
@@ -223,7 +208,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
         {gruppi.map((b) => {
           const Ico = iconaDelBlocco(b.n);
           return (
-            <div key={b.n} ref={(el) => { riferimenti.current[b.n] = el; }}
+            <div key={b.n}
               style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 16, overflow: "hidden", scrollMarginTop: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
                 <span style={{ width: 44, height: 44, borderRadius: 14, background: "#F6EFE2", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
