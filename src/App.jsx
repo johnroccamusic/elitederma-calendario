@@ -49117,24 +49117,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   const schema = { ...SCHEMA_PUNTI_MASTER_DEFAULT, ...(schemaSalvato || {}) };
   const sicurezzaPunti = sicurezzaPuntiDi(schemaSalvato);
   // la percentuale si scrive in una bozza e diventa vera solo col tasto
-  // "Salva e ricalcola": i punti non sono salvati da nessuna parte, si
-  // leggono ogni volta dall'anagrafica, quindi cambiare la percentuale
-  // li ricalcola tutti — il tasto rende esplicito quel momento
-  const [bozzaSicurezza, setBozzaSicurezza] = useState(null);
-  const [msgRicalcolo, setMsgRicalcolo] = useState("");
-  // solo in lettura: la percentuale si scrive dalla colonna in Dettaglio
-  // prodotti, qui serve perche' la classifica qui sotto si ridisegni
-  // quando cambia
+  // solo in lettura: la percentuale di sicurezza si scrive dalla colonna in
+  // Dettaglio prodotti, qui serve perche' la classifica qui sotto si
+  // ridisegni quando cambia
   const [incidenzaCostiSalvata] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
-  const sicurezzaInBozza = bozzaSicurezza == null ? String(sicurezzaPunti) : bozzaSicurezza;
-  function salvaERicalcola() {
-    const n = Math.max(0, Math.min(100, Math.round(Number(String(sicurezzaInBozza).replace(",", ".")) || 0)));
-    salvaSchema({ ...schema, accantonamentoPct: n });
-    setBozzaSicurezza(null);
-    const tutti = (prodottiShop || []).filter((p) => p.attivo !== false);
-    const conPunti = tutti.filter((p) => puntiProdotto(p, n) != null).length;
-    setMsgRicalcolo(`Percentuale di sicurezza al ${n}%: ricalcolati i punti di ${tutti.length} prodotti, ${conPunti} ne generano.`);
-  }
   // le due quote: si salvano come impostazione condivisa, valgono per
   // tutte le master, e la dashboard le leggera' da qui
   const [quoteSalvate, salvaQuote] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
@@ -49436,106 +49422,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce su tutti i codici personali delle master, nell'app e sul sito.
             </span>
             {msgCodiciPersonali && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciPersonali.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciPersonali}</span>}
-          </div>
-        </div>
-
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Formula di fattibilità dei punti</div>
-          <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
-            <p style={{ margin: "0 0 8px" }}>
-              I punti si calcolano partendo dall'importo <b>Cedibile €</b> del prodotto. Dal Cedibile viene detratta la <b>percentuale di sicurezza</b>, attualmente impostata al {schema.accantonamentoPct}%.
-            </p>
-            <p style={{ margin: "0 0 8px" }}>
-              L'importo residuo rappresenta il <b>massimo valore economico distribuibile</b>.
-            </p>
-            <p style={{ margin: "0 0 12px" }}>
-              Questo valore sono i punti, scritti con due cifre decimali: un punto è un euro di massimo cedibile.
-            </p>
-            <div style={{ background: BG, borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Formula</div>
-              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Punti disponibili = Cedibile € × (1 − % sicurezza)</div>
-            </div>
-            {(() => {
-              const cedibile = 10;
-              const residuo = round2(cedibile * (1 - schema.accantonamentoPct / 100));
-              const punti = round2(residuo * PUNTI_PER_EURO_MASSIMO_CEDIBILE);
-              return (
-                <p style={{ margin: 0 }}>
-                  Esempio con Cedibile {fmtEuroErp2(cedibile)} e sicurezza {schema.accantonamentoPct}%:<br />
-                  <b>{fmtEuroErp2(cedibile)} → {fmtEuroErp2(residuo)} → {fmtPunti(punti)} punti</b>
-                </p>
-              );
-            })()}
-          </div>
-          {/* dal 16/09/2026 la percentuale di sicurezza NON si regola piu'
-              da qui: si scrive nella colonna "Sicurezza" di Dettaglio
-              prodotti (nel titolo quella generale, accanto a ogni prodotto
-              la sua). Qui resta solo la lettura. Il modulo di prima e' sotto,
-              spento, per riaccenderlo il giorno che servira' */}
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Percentuale di sicurezza</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{sicurezzaPunti}%</span>
-              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>generale</span>
-            </div>
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
-              Si imposta da Gestione magazzino → Dettaglio prodotti, nella colonna "Sicurezza": la percentuale nel titolo vale per tutti, quella accanto a ogni prodotto vale solo per lui.
-            </div>
-          </div>
-          {false && (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Percentuale di sicurezza</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <input
-                type="number" min="0" max="100" step="1" value={sicurezzaInBozza}
-                onChange={(e) => { setBozzaSicurezza(e.target.value); setMsgRicalcolo(""); }}
-                style={{ ...inputStyle, width: 90, textAlign: "center", padding: "8px 10px", fontWeight: 700, fontSize: 15 }}
-              />
-              <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>%</span>
-              <Button onClick={salvaERicalcola} disabled={bozzaSicurezza == null || String(bozzaSicurezza) === String(sicurezzaPunti)}>Salva e ricalcola i punti di tutti i prodotti</Button>
-            </div>
-            <div style={{ ...fontBody, fontSize: 11.5, color: msgRicalcolo ? "#2E7D32" : MUTED, fontWeight: msgRicalcolo ? 700 : 400, marginTop: 8, lineHeight: 1.5 }}>
-              {msgRicalcolo || "Vale per tutte le master e per la colonna Punti di Dettaglio prodotti. Il ricalcolo aggiorna anche la classifica qui sotto."}
-            </div>
-          </div>
-          )}
-        </div>
-
-        <div style={{ ...cardStyle, marginBottom: 22, background: "#FDF8EC", borderColor: "#EBD9AE" }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Come funzionano i punti</div>
-          <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.7 }}>
-            <p style={{ margin: "0 0 8px" }}>
-              I punti teorici della master nascono <b>sempre</b> dalla formula generale: Cedibile € meno la percentuale di sicurezza, con due decimali. <b>Lo sconto dell'allievo non li tocca</b>: un prodotto vale i suoi punti anche se è stato venduto scontato.
-            </p>
-            <ol style={{ margin: "0 0 10px", paddingLeft: 22 }}>
-              <li>Si calcola il guadagno netto teorico del prodotto: ricavo lordo (prezzo netto meno costo) meno l'incidenza dei costi aziendali, oggi il {incidenzaCostiAttiva()}%. È il "Cedibile €".</li>
-              <li>Si sottrae la percentuale di sicurezza configurata, oggi il {schema.accantonamentoPct}%.</li>
-              <li>Il risultato, con due decimali, sono i <b>punti teorici</b> della master, i "Punti bonus" della sua dashboard: un punto è un euro.</li>
-              <li>Che l'allievo paghi a listino o con lo sconto del coupon, i punti generati sono <b>gli stessi</b>: lo sconto non entra più nel conto dei punti.</li>
-              <li>L'<b>unica leva</b> su quanti punti prende davvero la master sono le quote <b>"Al corso"</b> e <b>"Fuori dal corso"</b> qui sopra: le alzi o le abbassi tu.</li>
-            </ol>
-            {(() => {
-              // un prodotto vero: 39,90 al pubblico, 10 di costo, pagato
-              // in contanti — i punti restano gli stessi anche scontato
-              const esempio = { prezzo_vendita: 32.7, costo_acquisto: 10, aliquota_iva_vendita: 22, stato: "publish" };
-              const sconto = 10;
-              const lordo = prezzoAlPubblico(esempio);
-              const pagato = round2(lordo * (1 - sconto / 100));
-              const marginePieno = round1Erp(((lordo - esempio.costo_acquisto) / lordo) * 100);
-              const teorici = puntiProdotto(esempio, schema.accantonamentoPct, true);
-              return (
-                <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
-                  <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Esempio completo</div>
-                  Un prodotto da {fmtEuroErp2(lordo)} al pubblico che costa {fmtEuroErp2(esempio.costo_acquisto)}, venduto in contanti.<br />
-                  <b>A prezzo pieno:</b> margine {fmtPctErp2(marginePieno)} → cedibile {fmtPctErp2(percentualeCedibileDi(marginePieno))} = {fmtEuroErp2((lordo * percentualeCedibileDi(marginePieno)) / 100)}, meno la sicurezza {schema.accantonamentoPct}% → <b>{fmtPunti(teorici)} punti</b>.<br />
-                  <b>Con uno sconto del {sconto}%:</b> l'allievo incassa {fmtEuroErp2(pagato)}, ma i punti generati restano <b>{fmtPunti(teorici)}</b>: lo sconto non li decurta.<br />
-                  Quanto ne arriva alla master lo decidono solo le quote per canale qui sopra.
-                </div>
-              );
-            })()}
-            <p style={{ margin: "10px 0 0" }}>
-              Vale allo stesso modo al corso, con il codice d'aula, e fuori dal corso, con il referral personale. Sul totale si applicano poi le quote "Al corso" e "Fuori dal corso", che sono l'unica cosa che sposta i punti della master.
-            </p>
           </div>
         </div>
 
