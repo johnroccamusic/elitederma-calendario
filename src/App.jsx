@@ -56918,8 +56918,8 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 <div style={{ flexShrink: 0, textAlign: "left" }}>
                   <div style={etiA}>data ordine</div>
                   <div style={{ display: "inline-block", textAlign: "center" }}>
-                    <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{giornoO}</div>
-                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3, whiteSpace: "nowrap" }}>
+                    <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: "#C0392B", lineHeight: 1 }}>{giornoO}</div>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3, whiteSpace: "nowrap" }}>
                       {(MESI_ABBR[Number(meseO) - 1] || "")} {annoO}
                     </div>
                   </div>
