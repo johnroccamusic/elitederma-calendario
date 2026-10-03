@@ -157,9 +157,6 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
        detta in soldi invece che in punti */
     .lst-tab td.lst-sconto-eur { color: #8A6D1D; font-weight: 800; }
     .lst-tab td.lst-punti { color: #3B6FA0; font-weight: 800; }
-    /* i punti in contanti: lo stesso blu piu' scuro, per dire "stessa
-       famiglia" senza confondersi con la casella che si scrive */
-    .lst-tab td.lst-punti-cash { color: #26527C; font-weight: 800; }
     .lst-manca { background: #FDFAF2; }
 
     /* le larghezze: il nome prende quello che resta, i numeri stanno stretti */
@@ -169,10 +166,10 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     .lst-tab col.c-scon { width: 52px; }
     .lst-tab col.c-costo { width: 62px; }
     .lst-tab td.lst-costo, .lst-tab th.lst-costo { color: ${MUTED}; }
-    /* Nel listino privato i numeri sono sei: su un telefono una riga
+    /* Nel listino privato i numeri sono cinque: su un telefono una riga
        sola non basta, e farla scorrere di lato vorrebbe dire nascondere
        proprio le colonne che servono a decidere. Quindi sotto i 700px il
-       nome prende la riga intera e i sei numeri si dispongono sotto, in
+       nome prende la riga intera e i cinque numeri si dispongono sotto, in
        griglia, ciascuno con la sua etichetta. Tutto in una schermata,
        niente da trascinare. */
     @media (max-width: 700px) {
@@ -277,7 +274,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                     {privato && <col className="c-costo" />}
                     <col className="c-num" /><col className="c-num" />
                     <col className="c-scon" /><col className="c-num" />
-                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
+                    {privato && <><col className="c-num" /><col className="c-num" /><col className="c-num" /></>}
                   </colgroup>
                   <thead>
                     <tr>
@@ -288,7 +285,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"sconto\nin euro"}</th><th>{"punti\nprodotto"}</th><th>{"punti prodotto\ncash"}</th></>}
+                      {privato && <><th>{"sconto\nin euro"}</th><th>{"punti\nprodotto"}</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -368,17 +365,6 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                     borderRadius: 4, padding: "1px 3px", outline: "none" }}
                                 />
                               </td>
-                              {/* gli stessi punti sul lordo: in contanti non
-                                  si emette fattura e l'IVA non si scorpora,
-                                  quindi la base e' il prezzo intero che il
-                                  cliente tira fuori di tasca. Non si scrive:
-                                  segue sempre il conto */}
-                              <td className="lst-punti-cash" data-eti={"punti\ncash"}
-                                title={r.punti_cash != null
-                                  ? `${euro(r.pubblico_lordo)} di lordo × ${String(r.sconto_max_pct).replace(".", ",")}% di sconto massimo × 2 = ${cifra(r.punti_cash)} punti.`
-                                  : undefined}>
-                                {cifra(r.punti_cash)}
-                              </td>
                             </>
                           )}
                         </tr>
@@ -413,10 +399,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
           ma una scelta — lo stai cedendo e basta, perché senza nessuno sconto un rivenditore
           non avrebbe ragione di comprare. I <b>punti prodotto</b> sono prezzo netto × sconto
           massimo × 2: si ricalcolano da sé a ogni apertura, quindi seguono i costi quando
-          cambiano. Scrivere un numero nella casella lo fissa — svuotarla rimette la formula.
-          I <b>punti cash</b> sono lo stesso conto sul <b>lordo</b>: in contanti non si emette
-          fattura, l'IVA non si scorpora, e la base è il prezzo intero che il cliente tira fuori
-          di tasca. Quelli non si scrivono, seguono sempre il calcolo. Il
+          cambiano. Scrivere un numero nella casella lo fissa — svuotarla rimette la formula. Il
           <b> prezzo rivenditore</b> è il pubblico netto meno quello sconto. Ci sono solo i prodotti
           in vendita sullo shop: fuori chi non ha prezzo, non è pubblicato o è solo interno.
         </p>
