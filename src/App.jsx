@@ -56716,12 +56716,12 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               // spariscono e si va a capo, invece di accavallarsi
               const stretta = isMobile;
               const eti = { ...fontBody, fontSize: 8, fontWeight: 600, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 };
-              const sep = <span style={{ width: 1, alignSelf: "stretch", background: "#ECE9E2", flexShrink: 0 }} />;
+              const sep = <span style={{ width: 1, alignSelf: "stretch", background: "#D8D8D4", flexShrink: 0 }} />;
               return (
               <div key={r.prodotto.id} style={{
                 display: "flex", alignItems: "flex-start", columnGap: stretta ? 9 : 18,
                 flexWrap: "nowrap", padding: stretta ? "10px 10px" : "13px 18px", marginBottom: 10,
-                background: "#fff", border: "1px solid #EFEDE7", borderRadius: 22,
+                background: "#F1F1F0", border: "1px solid #E2E2DF", borderRadius: 22,
                 boxShadow: "0 2px 10px -4px rgba(14,27,51,0.10)",
               }}>
 
@@ -56755,7 +56755,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 </div>
 
                 {/* FOTO */}
-                <div style={{ flexShrink: 0, marginTop: 16, width: stretta ? 52 : 70, height: stretta ? 52 : 70, borderRadius: 11, background: "#ECECEC", border: "1px solid #DEDEDE", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <div style={{ flexShrink: 0, marginTop: 16, width: stretta ? 52 : 70, height: stretta ? 52 : 70, borderRadius: 11, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   <MiniaturaAdvisor prodotto={r.prodotto} lato={stretta ? 46 : 64} />
                 </div>
 
@@ -56831,7 +56831,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
 
                 {onApriProdotto && (
                   <button onClick={() => onApriProdotto(r.prodotto.id)} title="Apri la scheda del prodotto"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", alignSelf: "center", width: 26, height: 26, borderRadius: "50%", border: "1px solid #ECE9E2", background: "#fff", color: "#9A9A9A", cursor: "pointer", flexShrink: 0 }}>
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", alignSelf: "center", width: 26, height: 26, borderRadius: "50%", border: "1px solid #D8D8D4", background: "#fff", color: "#9A9A9A", cursor: "pointer", flexShrink: 0 }}>
                     <IconaChevronDestra size={13} color="#9A9A9A" />
                   </button>
                 )}
