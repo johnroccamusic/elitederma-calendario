@@ -33484,7 +33484,8 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   // la casella per scrivere parte chiusa anche quando un aggiornamento
   // c'e': la riga qui sotto lo mostra gia', e aperta lo ripeteva due volte
   const [aggiornamentiAperti, setAggiornamentiAperti] = useState(false);
-  const [noteSviluppo, setNoteSviluppo] = useState(progetto.note_sviluppo || "");
+  // l'aggiornamento che si sta scrivendo: null = nessuno in corso
+  const [nuovoAgg, setNuovoAgg] = useState(null);
   const [noteIniziali, setNoteIniziali] = useState(progetto.note_iniziali || "");
   const [nome, setNome] = useState(progetto.nome || "");
   useEffect(() => { setNoteSviluppo(progetto.note_sviluppo || ""); }, [progetto.note_sviluppo]);
@@ -33538,7 +33539,19 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   // sviluppo. Non e' un conteggio esatto di "interventi" — non li
   // registriamo uno per uno — ma dice a colpo d'occhio se qualcuno ci ha
   // messo mano o se la scheda e' ferma da quando e' nata.
+  // Ogni aggiornamento e' una riga di note_sviluppo scritta come
+  // "[AAAA-MM-GG] testo". La data davanti serve a due cose: ordinare in
+  // cronologico senza una tabella nuova, e dire QUANDO e' successo —
+  // prima gli aggiornamenti erano righe libere senza data, e a distanza
+  // di un mese non si sapeva piu' se una frase fosse di ieri o di luglio.
+  // Le righe vecchie senza data restano leggibili e si mettono in fondo.
   const righeAggiornamenti = (progetto.note_sviluppo || "").split("\n").map((r) => r.trim()).filter(Boolean);
+  const aggiornamenti = righeAggiornamenti
+    .map((r, i) => {
+      const m = r.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*(.*)$/);
+      return m ? { data: m[1], testo: m[2], i } : { data: null, testo: r, i };
+    })
+    .sort((a, b) => (a.data || "9999").localeCompare(b.data || "9999") || a.i - b.i);
   const etichettaSottile = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.2 };
   const divisore = <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER, flexShrink: 0 }} />;
 
@@ -33727,8 +33740,8 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
                 </span>
               )}
               <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, lineHeight: 1.35, color: MUTED, display: "-webkit-box", WebkitLineClamp: progetto.note_iniziali ? 1 : 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere", marginTop: progetto.note_iniziali ? 3 : 0 }}>
-                {righeAggiornamenti.length
-                  ? righeAggiornamenti[righeAggiornamenti.length - 1]
+                {aggiornamenti.length
+                  ? `${aggiornamenti[aggiornamenti.length - 1].data ? fmtData(aggiornamenti[aggiornamenti.length - 1].data) + " — " : ""}${aggiornamenti[aggiornamenti.length - 1].testo}`
                   : (progetto.note_iniziali ? "Nessun aggiornamento" : "Nessuna nota")}
               </span>
             </span>
@@ -33752,14 +33765,70 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
       </div>
 
       {aggiornamentiAperti && (
-        <textarea
-          rows={3}
-          value={noteSviluppo}
-          onChange={(e) => setNoteSviluppo(e.target.value)}
-          onBlur={() => { if (noteSviluppo !== (progetto.note_sviluppo || "")) onSalva({ note_sviluppo: noteSviluppo.trim() || null }); }}
-          placeholder="Scrivi un aggiornamento…"
-          style={{ ...inputStyle, resize: "vertical", fontSize: 14, marginTop: 10, background: "#fff" }}
-        />
+        <div style={{ marginTop: 10 }}>
+          {/* il diario, dal piu' vecchio al piu' recente: si legge come una
+              storia, e l'ultima riga e' quella che conta */}
+          {aggiornamenti.length > 0 && (
+            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, background: "#fff", overflow: "hidden", marginBottom: 10 }}>
+              {aggiornamenti.map((a, k) => (
+                <div key={`${a.i}-${k}`} style={{ display: "flex", gap: 10, padding: "9px 12px", borderTop: k === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: a.data ? NAVY : MUTED, whiteSpace: "nowrap", flexShrink: 0, minWidth: 74 }}>
+                    {a.data ? fmtData(a.data) : "senza data"}
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.4 }}>{a.testo}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {nuovoAgg ? (
+            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, background: "#fff", padding: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                <span style={{ ...etichettaSottile }}>Data</span>
+                <input
+                  type="date"
+                  value={nuovoAgg.data}
+                  onChange={(e) => setNuovoAgg((v) => ({ ...v, data: e.target.value }))}
+                  style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 13 }}
+                />
+              </div>
+              <textarea
+                rows={3}
+                autoFocus
+                value={nuovoAgg.testo}
+                onChange={(e) => setNuovoAgg((v) => ({ ...v, testo: e.target.value }))}
+                placeholder="Cos'è successo…"
+                style={{ ...inputStyle, resize: "vertical", fontSize: 14 }}
+              />
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+                <Button
+                  onClick={() => {
+                    const testo = (nuovoAgg.testo || "").trim();
+                    if (!testo || !nuovoAgg.data) return;
+                    // si accoda in fondo e si riordina in lettura: cosi' si
+                    // puo' aggiungere un aggiornamento con una data vecchia
+                    // senza che il testo salvato vada riscritto tutto
+                    const riga = `[${nuovoAgg.data}] ${testo.replace(/\n+/g, " ")}`;
+                    const nuovo = [...righeAggiornamenti, riga].join("\n");
+                    onSalva({ note_sviluppo: nuovo });
+                    setNuovoAgg(null);
+                  }}
+                  disabled={!(nuovoAgg.testo || "").trim() || !nuovoAgg.data}
+                >
+                  Conferma
+                </Button>
+                <button type="button" onClick={() => setNuovoAgg(null)}
+                  style={{ ...fontBody, fontSize: 12.5, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer" }}>
+                  annulla
+                </button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="ghost" onClick={() => setNuovoAgg({ data: dataOggiStr(), testo: "" })}>
+              Aggiungi aggiornamento
+            </Button>
+          )}
+        </div>
       )}
 
       {/* le note iniziali si vedono solo quando si modifica: sono l'atto di
