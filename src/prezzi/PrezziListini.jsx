@@ -36,9 +36,11 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   const [bozzaMaster, setBozzaMaster] = useState({});
   const [bozzaPunti, setBozzaPunti] = useState({});
 
-  // I punti non si calcolano: li scrive una persona. Vuoto = non ancora
-  // deciso, e resta vuoto — mostrare un numero dove non c'e' una decisione
-  // e' il modo piu' rapido per non accorgersi che manca.
+  // I punti hanno una formula viva — netto x sconto massimo x 2, calcolata
+  // nella view a ogni lettura — e una scrittura a mano che la scavalca.
+  // Svuotare la casella e' il modo per tornare alla formula, e quando un
+  // costo cambiera' il numero si muovera' da solo: scriverlo a mano lo
+  // congela, ed e' giusto che si veda (fondo azzurro).
   async function salvaPunti(r) {
     const testo = bozzaPunti[r.id];
     setBozzaPunti((b) => { const c = { ...b }; delete c[r.id]; return c; });
@@ -46,8 +48,12 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
     const pulito = String(testo).replace(",", ".").trim();
     const punti = pulito === "" ? null : Number(pulito);
     if (punti != null && (!Number.isFinite(punti) || punti < 0)) return;
-    if (punti === (r.punti_prodotto == null ? null : Number(r.punti_prodotto))) return;
-    setRighe((prev) => prev.map((x) => x.id !== r.id ? x : { ...x, punti_prodotto: punti }));
+    if (punti == null && !r.punti_manuali) return;
+    setRighe((prev) => prev.map((x) => x.id !== r.id ? x : {
+      ...x,
+      punti_prodotto: punti == null ? x.punti_calcolati : punti,
+      punti_manuali: punti != null,
+    }));
     try { await salvaPuntiProdotto(r.id, punti); }
     catch (e) { setErrore(`Non sono riuscito a salvare i punti di ${r.nome}: ${e?.message || e}`); }
   }
@@ -388,7 +394,9 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                               {/* i punti del prodotto: sei decimi del prezzo
                                   netto, un punto un euro */}
                               <td className="lst-punti" data-eti={"punti\nprodotto"}
-                                title="I punti di questo prodotto. Li scrivi tu: non c'è nessun calcolo dietro, e la casella vuota vuol dire «non ancora deciso».">
+                                title={r.punti_manuali
+                                  ? `Scritti a mano. La formula darebbe ${cifra(r.punti_calcolati)}: svuota la casella per tornarci.`
+                                  : `${euro(r.pubblico_netto)} di netto × ${String(r.sconto_max_pct).replace(".", ",")}% di sconto massimo × 2. Si ricalcola da sé quando cambiano i costi: scrivici dentro per fissarlo.`}>
                                 <input
                                   value={bozzaPunti[r.id] ?? (r.punti_prodotto != null ? String(r.punti_prodotto).replace(".", ",") : "")}
                                   onChange={(e) => setBozzaPunti((b) => ({ ...b, [r.id]: e.target.value }))}
@@ -401,8 +409,8 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                                   inputMode="decimal"
                                   placeholder="—"
                                   style={{ ...fontBody, width: 52, textAlign: "center", fontSize: 12.5, fontWeight: 800,
-                                    color: "#3B6FA0", background: r.punti_prodotto != null ? "#E9F0F7" : "transparent",
-                                    border: "1px solid transparent", borderBottom: `1px dashed ${r.punti_prodotto != null ? "#3B6FA0" : "#CFCFC7"}`,
+                                    color: "#3B6FA0", background: r.punti_manuali ? "#E9F0F7" : "transparent",
+                                    border: "1px solid transparent", borderBottom: `1px dashed ${r.punti_manuali ? "#3B6FA0" : "#CFCFC7"}`,
                                     borderRadius: 4, padding: "1px 3px", outline: "none" }}
                                 />
                               </td>
@@ -446,7 +454,9 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
           Dove il calcolo darebbe <b>zero</b> la percentuale è <b>forzata al 5% e scritta in
           rosso</b>: lì il margine non basta a dividere il guadagno, e quel 5% non è un conto
           ma una scelta — lo stai cedendo e basta, perché senza nessuno sconto un rivenditore
-          non avrebbe ragione di comprare. Il
+          non avrebbe ragione di comprare. I <b>punti prodotto</b> sono prezzo netto × sconto
+          massimo × 2: si ricalcolano da sé a ogni apertura, quindi seguono i costi quando
+          cambiano. Scrivere un numero nella casella lo fissa — svuotarla rimette la formula. Il
           <b> prezzo rivenditore</b> è il pubblico netto meno quello sconto. Ci sono solo i prodotti
           in vendita sullo shop: fuori chi non ha prezzo, non è pubblicato o è solo interno.
         </p>

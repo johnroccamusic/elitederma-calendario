@@ -1,0 +1,15 @@
+-- I punti tornano a essere una formula, non un numero scritto.
+--
+-- punti_prodotto = prezzo netto x sconto massimo x 2, calcolato dentro la
+-- view a ogni lettura. Non e' un valore salvato: il giorno che cambia un
+-- costo d'acquisto cambia il margine, cambia lo sconto massimo e i punti
+-- si muovono da soli. Era la richiesta: niente ricalcoli da lanciare a
+-- mano, perche' un ricalcolo che qualcuno deve ricordarsi di fare prima o
+-- poi non viene fatto.
+--
+-- prodotti_shop.punti_prodotto resta, ma cambia mestiere: non e' piu' IL
+-- valore, e' l'eccezione che scavalca la formula. Vuota = formula viva, e
+-- la view lo dice con `punti_manuali` perche' in pagina si distinguano.
+--
+-- Il corpo della view e' quello della 20261003190000, con in piu'
+-- `punti_calcolati` nel CTE `utili`, il coalesce in coda e `punti_manuali`.
