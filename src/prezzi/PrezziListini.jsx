@@ -393,7 +393,9 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
         <p style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>
           Lo <b>sconto massimo</b> è la quota che divide il guadagno a metà fra te e il rivenditore:
           concedendola, pagata la merce e i costi aziendali, a te resta quanto a lui. È arrotondata
-          per difetto a passi di cinque — meglio concedere un punto in meno che uno in più.
+          al <b>5 più vicino</b>: arrotondando sempre per difetto un prodotto a 29,7% finiva al
+          25%, quasi cinque punti buttati via, e il listino sembrava fermo mentre il conto si era
+          già mosso.
           Dove il calcolo darebbe <b>zero</b> la percentuale è <b>forzata al 5% e scritta in
           rosso</b>: lì il margine non basta a dividere il guadagno, e quel 5% non è un conto
           ma una scelta — lo stai cedendo e basta, perché senza nessuno sconto un rivenditore

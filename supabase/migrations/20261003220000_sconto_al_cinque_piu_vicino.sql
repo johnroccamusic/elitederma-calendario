@@ -1,0 +1,14 @@
+-- Lo sconto massimo si arrotonda al 5 PIU' VICINO, non piu' per difetto.
+--
+-- Per difetto un prodotto con sconto esatto 29,7% finiva al 25%: quasi
+-- cinque punti buttati via, e soprattutto il listino SEMBRAVA FERMO —
+-- alzato un prezzo, il conto esatto si muoveva da 27 a 29,7 ma la cifra
+-- mostrata restava 25, e chi guardava concludeva che il listino non si
+-- fosse aggiornato. Era il caso dei needling il 03/10/2026.
+--
+-- Al piu' vicino si concede al massimo mezzo passo (2,5 punti) in piu'
+-- del calcolabile, contro i quasi 5 che si perdevano prima. Sui 181
+-- prodotti: 59 salgono, 122 restano, nessuno scende.
+--
+-- Il corpo della view e' quello della 20261003210000, con round() al
+-- posto di floor() nel CTE `prezzi`.
