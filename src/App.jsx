@@ -33488,7 +33488,6 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   const [nuovoAgg, setNuovoAgg] = useState(null);
   const [noteIniziali, setNoteIniziali] = useState(progetto.note_iniziali || "");
   const [nome, setNome] = useState(progetto.nome || "");
-  useEffect(() => { setNoteSviluppo(progetto.note_sviluppo || ""); }, [progetto.note_sviluppo]);
   useEffect(() => { setNoteIniziali(progetto.note_iniziali || ""); }, [progetto.note_iniziali]);
   useEffect(() => { setNome(progetto.nome || ""); }, [progetto.nome]);
 
