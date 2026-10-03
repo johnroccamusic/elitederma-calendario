@@ -47797,7 +47797,21 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
   // si fa dopo.
   const [corsoScelto, setCorsoScelto] = useState("");
   const [associando, setAssociando] = useState(false);
+  // Gli eventi non sono corsi (tabella loro), ma una vendita al banco puo'
+  // essere nata li' quanto in aula — Tirana e' l'esempio. La modale li
+  // legge da se': sono pochi e non vale la pena farli passare di prop in
+  // prop da ogni chiamante
+  const [eventi, setEventi] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const { data } = await supabase.from("eventi").select("id, nome, data_inizio, data_fine").order("data_inizio", { ascending: false });
+      if (vivo) setEventi(data || []);
+    })();
+    return () => { vivo = false; };
+  }, []);
   const oggiAssoc = dataOggiStr();
+  const eventoAssociato = vendita?.evento_id ? (eventi || []).find((e) => e.id === vendita.evento_id) || null : null;
   const corsoAssociato = vendita?.corso_data_id
     ? (() => {
         const cd = (corsiDate || []).find((x) => x.id === vendita.corso_data_id);
@@ -47810,18 +47824,25 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
     .filter((cd) => cd.data_inizio <= oggiAssoc)
     .sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""))
     .slice(0, 60);
-  async function associaACorso() {
+  // la scelta e' una sola: o una classe o un evento, mai tutti e due. Una
+  // vendita appartiene a un frangente solo, e lasciarne due aperti
+  // vorrebbe dire contarla due volte quando si tirano le somme
+  async function associaAFrangente() {
     if (!corsoScelto) return;
+    const [tipo, id] = corsoScelto.split(":");
     setAssociando(true);
-    const { error } = await supabase.from("vendite_shop").update({ corso_data_id: corsoScelto }).eq("id", vendita.id);
+    const campi = tipo === "evento"
+      ? { evento_id: id, corso_data_id: null }
+      : { corso_data_id: id, evento_id: null };
+    const { error } = await supabase.from("vendite_shop").update(campi).eq("id", vendita.id);
     setAssociando(false);
     if (error) { window.alert("Non associata: " + testoErrore(error)); return; }
     onAssociato?.();
   }
   async function togliAssociazione() {
-    if (!window.confirm("Togliere questa vendita dal corso a cui è associata?")) return;
+    if (!window.confirm("Togliere questa vendita dal corso o dall'evento a cui è associata?")) return;
     setAssociando(true);
-    const { error } = await supabase.from("vendite_shop").update({ corso_data_id: null }).eq("id", vendita.id);
+    const { error } = await supabase.from("vendite_shop").update({ corso_data_id: null, evento_id: null }).eq("id", vendita.id);
     setAssociando(false);
     if (error) { window.alert("Non tolta: " + testoErrore(error)); return; }
     onAssociato?.();
@@ -47909,11 +47930,19 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
       {vendita?.origine === "pos" && (
         <div style={{ background: BG, borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
           <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 7 }}>Frangente</div>
-          {corsoAssociato ? (
+          {(corsoAssociato || eventoAssociato) ? (
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 8, padding: "4px 10px" }}>
-                {corsoAssociato.nome.toUpperCase()} · {fmtData(corsoAssociato.cd.data_inizio)}
-              </span>
+              {corsoAssociato ? (
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 8, padding: "4px 10px" }}>
+                  {corsoAssociato.nome.toUpperCase()} · {fmtData(corsoAssociato.cd.data_inizio)}
+                </span>
+              ) : (
+                /* l'evento si veste d'oro: a colpo d'occhio si distingue da
+                   una classe senza dover leggere il nome */
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", borderRadius: 8, padding: "4px 10px" }}>
+                  {String(eventoAssociato.nome || "").toUpperCase()} · {fmtData(eventoAssociato.data_inizio)} · evento
+                </span>
+              )}
               <button onClick={togliAssociazione} disabled={associando} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
                 togli
               </button>
@@ -47921,17 +47950,26 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <select value={corsoScelto} onChange={(e) => setCorsoScelto(e.target.value)} style={{ ...inputStyle, flex: "1 1 260px", minWidth: 0 }}>
-                <option value="">Associa a un corso…</option>
-                {corsiAssociabili.map((cd) => {
-                  const nome = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "—";
-                  return <option key={cd.id} value={cd.id}>{fmtData(cd.data_inizio)} — {nome.toUpperCase()}</option>;
-                })}
+                <option value="">Associa a un corso o a un evento…</option>
+                {eventi.length > 0 && (
+                  <optgroup label="Eventi">
+                    {eventi.map((e) => (
+                      <option key={e.id} value={`evento:${e.id}`}>{fmtData(e.data_inizio)} — {String(e.nome || "").toUpperCase()}</option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Corsi">
+                  {corsiAssociabili.map((cd) => {
+                    const nome = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "—";
+                    return <option key={cd.id} value={`corso:${cd.id}`}>{fmtData(cd.data_inizio)} — {nome.toUpperCase()}</option>;
+                  })}
+                </optgroup>
               </select>
-              <Button onClick={associaACorso} disabled={!corsoScelto || associando}>{associando ? "Associo…" : "Associa"}</Button>
+              <Button onClick={associaAFrangente} disabled={!corsoScelto || associando}>{associando ? "Associo…" : "Associa"}</Button>
             </div>
           )}
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 7, lineHeight: 1.45 }}>
-            Associare non cambia i soldi: nessuno sconto viene applicato ora, e gli importi restano quelli della vendita. Cambia solo a quale classe viene contata.
+            Associare non cambia i soldi: nessuno sconto viene applicato ora, e gli importi restano quelli della vendita. Cambia solo a quale classe — o a quale evento — viene contata. Una sola delle due: scegliendo un evento la classe si libera, e viceversa.
           </div>
         </div>
       )}
@@ -49996,6 +50034,17 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   // chi ha battuto la vendita: al banco le master usano il POS a turno, e
   // per controllare l'incasso di una serve poterle isolare
   const [operatoreSel, setOperatoreSel] = useState("");
+  // i nomi degli eventi, per la pastiglia nell'elenco: pochi record, letti
+  // una volta sola all'apertura della pagina
+  const [eventiPerId, setEventiPerId] = useState({});
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const { data } = await supabase.from("eventi").select("id, nome");
+      if (vivo) setEventiPerId(Object.fromEntries((data || []).map((e) => [e.id, e.nome])));
+    })();
+    return () => { vivo = false; };
+  }, []);
   const [recuperando, setRecuperando] = useState(false);
   const [msgRecupero, setMsgRecupero] = useState("");
 
@@ -50272,6 +50321,11 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                               {(() => {
                                 const corso = nomeCorsoDiEdizione(v.corso_data_id);
                                 if (corso) return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 8, padding: "3px 9px" }}>{corso.toUpperCase()}</span>;
+                                // l'evento ha la sua pastiglia, in oro: una
+                                // vendita nata a Tirana non e' una vendita
+                                // "al banco" come le altre
+                                const evento = v.evento_id ? (eventiPerId[v.evento_id] || "evento") : null;
+                                if (evento) return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", borderRadius: 8, padding: "3px 9px" }}>{String(evento).toUpperCase()}</span>;
                                 return <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Al banco</span>;
                               })()}
                             </td>
