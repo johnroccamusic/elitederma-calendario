@@ -1,0 +1,12 @@
+-- "Punti prodotto cash": gli stessi punti, calcolati sul LORDO.
+--
+--   punti_cash = prezzo lordo x sconto massimo x 2
+--
+-- Perche' il lordo e non il netto. In contanti non si emette fattura e
+-- l'IVA non si scorpora: quello che entra e' il prezzo intero che il
+-- cliente tira fuori di tasca, e i punti vanno contati su quello. Con la
+-- fattura la base torna a essere il netto, che e' la colonna accanto.
+--
+-- Non si scrive a mano: segue sempre il conto, come il resto del listino.
+-- Il corpo della view e' quello della 20261003200000 con in piu'
+-- `punti_cash` nel CTE `utili` e la colonna in coda.
