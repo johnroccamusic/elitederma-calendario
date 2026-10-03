@@ -49993,6 +49993,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   const [dataA, setDataA] = useState("");
   const [statoSel, setStatoSel] = useState("");
   const [metodoSel, setMetodoSel] = useState("");
+  // chi ha battuto la vendita: al banco le master usano il POS a turno, e
+  // per controllare l'incasso di una serve poterle isolare
+  const [operatoreSel, setOperatoreSel] = useState("");
   const [recuperando, setRecuperando] = useState(false);
   const [msgRecupero, setMsgRecupero] = useState("");
 
@@ -50037,12 +50040,21 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     ? { inizio: dataDa || "0000-01-01", fine: dataA || "9999-12-31" }
     : periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
   const statiPresenti = [...new Set(venditeOrigine.map((v) => v.stato).filter(Boolean))].sort();
+  // solo chi ha davvero battuto qualcosa: una tendina con tutte le master
+  // dell'accademia farebbe scorrere nomi che qui non hanno mai venduto.
+  // Si tiene l'id, non il nome: due persone omonime sono due persone
+  const operatoriPresenti = [...new Map(
+    venditeOrigine
+      .filter((v) => v.operatore_id && v.operatore_nome)
+      .map((v) => [v.operatore_id, [v.operatore_id, v.operatore_nome, v.operatore_tipo]])
+  ).values()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), "it"));
 
   const venditeFiltrate = venditeOrigine.filter((v) => {
     const data = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     if (data && (data < range.inizio || data > range.fine)) return false;
     if (statoSel && v.stato !== statoSel) return false;
     if (metodoSel && (v.metodo_pagamento || "") !== metodoSel) return false;
+    if (operatoreSel && v.operatore_id !== operatoreSel) return false;
     return true;
   });
 
@@ -50112,6 +50124,17 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
             <option value="">Tutti gli stati</option>
             {statiPresenti.map((s) => <option key={s} value={s}>{etichettaStatoVenditaShop(s)}</option>)}
           </select>
+          {origine === "pos" && operatoriPresenti.length > 1 && (
+            <select style={{ ...inputStyle, width: "auto", minWidth: 170 }} value={operatoreSel} onChange={(e) => setOperatoreSel(e.target.value)}>
+              {/* non solo master: al banco battono anche i venditori, e una
+                  tendina che le nascondesse farebbe sparire 1.600 euro
+                  senza dirlo */}
+              <option value="">Tutti gli operatori</option>
+              {operatoriPresenti.map(([id, nome, tipo]) => (
+                <option key={id} value={id}>{toTitleCase(nome)}{tipo && tipo !== "master" ? ` (${tipo})` : ""}</option>
+              ))}
+            </select>
+          )}
           {origine === "pos" && (
             <select style={{ ...inputStyle, width: "auto", minWidth: 150 }} value={metodoSel} onChange={(e) => setMetodoSel(e.target.value)}>
               <option value="">POS e contanti</option>
