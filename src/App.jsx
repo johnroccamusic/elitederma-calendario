@@ -56715,113 +56715,113 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               // ricezione — i blocchi non ci stanno in fila: le righine
               // spariscono e si va a capo, invece di accavallarsi
               const stretta = dueColonneOrdini || isMobile;
-              const eti = { ...fontBody, fontSize: 9.5, fontWeight: 600, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 1, whiteSpace: "nowrap", marginBottom: 7 };
+              const eti = { ...fontBody, fontSize: 8, fontWeight: 600, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, whiteSpace: "nowrap", marginBottom: 5 };
               const sep = <span style={{ width: 1, alignSelf: "stretch", background: "#ECE9E2", flexShrink: 0 }} />;
               return (
               <div key={r.prodotto.id} style={{
-                display: "flex", alignItems: "center", columnGap: stretta ? 12 : 20, rowGap: 14,
-                flexWrap: "wrap", padding: stretta ? "12px 12px" : "14px 18px", marginBottom: 10,
+                display: "flex", alignItems: "center", columnGap: stretta ? 9 : 14,
+                flexWrap: "nowrap", padding: stretta ? "10px 10px" : "12px 14px", marginBottom: 9,
                 background: "#fff", border: "1px solid #EFEDE7", borderRadius: 22,
                 boxShadow: "0 2px 10px -4px rgba(14,27,51,0.10)",
               }}>
 
                 {/* DATA ORDINE */}
                 <div style={{ flexShrink: 0, textAlign: "center" }}>
-                  <div style={{ background: inRitardo ? "#FDF0EF" : "#F3F1EC", borderRadius: 14, padding: "10px 14px", minWidth: 92 }}>
+                  <div style={{ background: inRitardo ? "#FDF0EF" : "#F3F1EC", borderRadius: 10, padding: "6px 7px", minWidth: 50 }}>
                     <div style={{ ...eti, marginBottom: 4, color: inRitardo ? "#C0392B" : "#9A9A9A" }}>
                       {perData ? "data ordine" : "scorta"}
                     </div>
                     {perData ? (
                       <>
-                        <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
-                        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 3 }}>
+                        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
+                        <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, marginTop: 1 }}>
                           {(MESI_ABBR[Number(meseL) - 1] || "")} {annoL}
                         </div>
                       </>
                     ) : (
-                      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: "#8A6D1D", lineHeight: 1.15 }}>sotto<br />minima</div>
+                      <div style={{ ...fontDisplay, fontSize: 10.5, fontWeight: 800, color: "#8A6D1D", lineHeight: 1.15 }}>sotto<br />minima</div>
                     )}
                   </div>
                   {perData && (
-                    <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, marginTop: 8, padding: "5px 11px", borderRadius: 20,
+                    <div style={{ ...fontBody, fontSize: 8, fontWeight: 700, marginTop: 5, padding: "2px 6px", borderRadius: 20,
                       background: inRitardo ? "#FDE8E6" : "#F0E6D4", color: inRitardo ? "#C0392B" : NAVY,
                       whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <IconaOrologioCard size={12} />
+                      <IconaOrologioCard size={9} />
                       {inRitardo ? `+ ${giorni} in ritardo` : `− ${giorni} giorni`}
                     </div>
                   )}
                 </div>
 
                 {/* FOTO */}
-                <div style={{ flexShrink: 0, width: stretta ? 64 : 92, height: stretta ? 64 : 92, borderRadius: 14, background: "#F3F1EC", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  <MiniaturaAdvisor prodotto={r.prodotto} lato={stretta ? 58 : 84} />
+                <div style={{ flexShrink: 0, width: stretta ? 52 : 70, height: stretta ? 52 : 70, borderRadius: 11, background: "#F3F1EC", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  <MiniaturaAdvisor prodotto={r.prodotto} lato={stretta ? 46 : 64} />
                 </div>
 
                 {/* PRODOTTO DA ORDINARE */}
-                <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+                <div style={{ flex: "1 1 0", minWidth: 0 }}>
                   <div style={eti}>prodotto da ordinare</div>
                   {onApriProdotto ? (
                     <button onClick={() => onApriProdotto(r.prodotto.id)} title="Apri la scheda del prodotto"
-                      style={{ ...fontDisplay, fontSize: stretta ? 15 : 17, fontWeight: 800, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", lineHeight: 1.2, overflowWrap: "anywhere", width: "100%" }}>
+                      style={{ ...fontDisplay, fontSize: stretta ? 12.5 : 14, fontWeight: 800, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", lineHeight: 1.2, overflowWrap: "anywhere", width: "100%" }}>
                       {r.prodotto.nome}
                     </button>
                   ) : (
-                    <div style={{ ...fontDisplay, fontSize: stretta ? 15 : 17, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.prodotto.nome}</div>
+                    <div style={{ ...fontDisplay, fontSize: stretta ? 12.5 : 14, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{r.prodotto.nome}</div>
                   )}
-                  <div style={{ ...fontBody, fontSize: 10.5, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 6 }}>
+                  <div style={{ ...fontBody, fontSize: 9, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {fornitoreId === "__nessuno" ? "senza fornitore" : (fornitorePerId[fornitoreId]?.nome || "")}
                   </div>
                   {r.prodotto.unita_misura && (
-                    <div style={{ ...fontBody, fontSize: 11, color: "#9A9A9A", marginTop: 2 }}>{r.prodotto.unita_misura}</div>
+                    <div style={{ ...fontBody, fontSize: 9.5, color: "#9A9A9A", marginTop: 1 }}>{r.prodotto.unita_misura}</div>
                   )}
                 </div>
 
                 {/* EVENTO SCOPERTO */}
-                {edizione && !stretta && sep}
+                {edizione && sep}
                 {edizione && (
-                  <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
                     <div style={eti}>evento scoperto</div>
-                    <span style={{ width: 38, height: 38, borderRadius: "50%", background: "#F0E6D4", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 7 }}>
-                      <IconaLaureaErp size={19} color={NAVY} />
+                    <span style={{ width: 28, height: 28, borderRadius: "50%", background: "#F0E6D4", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 5 }}>
+                      <IconaLaureaErp size={14} color={NAVY} />
                     </span>
-                    <div style={{ ...fontDisplay, fontSize: stretta ? 14 : 16, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{edizione}</div>
-                    <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                      <IconaCalendarioCard size={13} /> {fmtData(perData.dataLimite)}
+                    <div style={{ ...fontDisplay, fontSize: stretta ? 12 : 13.5, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{edizione}</div>
+                    <div style={{ ...fontBody, fontSize: 10, color: NAVY, marginTop: 4, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+                      <IconaCalendarioCard size={11} /> {fmtData(perData.dataLimite)}
                     </div>
                   </div>
                 )}
 
                 {/* DISPONIBILITÀ */}
-                {!stretta && sep}
-                <div style={{ flex: "0 0 auto", minWidth: 86 }}>
+                {sep}
+                <div style={{ flex: "0 0 auto", minWidth: 64 }}>
                   <div style={eti}>disponibilità</div>
-                  <div style={{ ...fontDisplay, fontSize: 25, fontWeight: 800, color: sottoSoglia ? "#C0392B" : NAVY, lineHeight: 1 }}>
+                  <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 800, color: sottoSoglia ? "#C0392B" : NAVY, lineHeight: 1 }}>
                     {disponibile}{soglia != null && <span style={{ color: "#B5B5B5" }}>/{soglia}</span>}
                   </div>
                   {sottoSoglia && (
-                    <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: "#C0392B", background: "#FDE8E6", borderRadius: 20, padding: "4px 9px", marginTop: 8, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap", display: "inline-block" }}>
+                    <div style={{ ...fontBody, fontSize: 7.5, fontWeight: 700, color: "#C0392B", background: "#FDE8E6", borderRadius: 20, padding: "3px 7px", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap", display: "inline-block" }}>
                       scorta limitata
                     </div>
                   )}
                 </div>
 
                 {/* ORDINA */}
-                {!stretta && sep}
-                <div style={{ flex: "0 0 auto", textAlign: "center", marginLeft: stretta ? "auto" : 0 }}>
+                {sep}
+                <div style={{ flex: "0 0 auto", textAlign: "center" }}>
                   <button
                     type="button"
                     onClick={() => apriSegnaOrdinato(r)}
                     disabled={salvandoRiordino === r.prodotto.id}
                     title="Segna che questo prodotto è stato ordinato, scrivendo quanti pezzi"
-                    style={{ ...fontBody, fontSize: 14, fontWeight: 800, color: "#fff", background: NAVY, border: "none", borderRadius: 30,
-                      padding: "13px 24px", cursor: "pointer", opacity: salvandoRiordino === r.prodotto.id ? 0.5 : 1,
+                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 800, color: "#fff", background: NAVY, border: "none", borderRadius: 24,
+                      padding: "9px 15px", cursor: "pointer", opacity: salvandoRiordino === r.prodotto.id ? 0.5 : 1,
                       display: "inline-flex", alignItems: "center", gap: 9, whiteSpace: "nowrap",
                       boxShadow: "0 4px 12px -4px rgba(14,27,51,0.45)" }}
                   >
-                    <IconaCarrelloPos size={16} color="#fff" />
+                    <IconaCarrelloPos size={13} color="#fff" />
                     {r.quantitaSuggerita > 0 ? `Ordina ${r.quantitaSuggerita}` : "Ordina"}
                   </button>
-                  <div style={{ ...fontBody, fontSize: 11, color: "#9A9A9A", marginTop: 8, maxWidth: 160 }}>
+                  <div style={{ ...fontBody, fontSize: 9, color: "#9A9A9A", marginTop: 5, maxWidth: 108, lineHeight: 1.3 }}>
                     {!(r.quantitaSuggerita > 0)
                       ? "quanti, lo decidi tu"
                       : r.baseQuantita === "fabbisogno_corsi" ? `per coprire ${r.allieviConsiderati || 0} alliev${r.allieviConsiderati === 1 ? "o" : "i"}`
@@ -56833,8 +56833,8 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
 
                 {onApriProdotto && (
                   <button onClick={() => onApriProdotto(r.prodotto.id)} title="Apri la scheda del prodotto"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: "50%", border: "1px solid #ECE9E2", background: "#fff", color: "#9A9A9A", cursor: "pointer", flexShrink: 0 }}>
-                    <IconaChevronDestra size={15} color="#9A9A9A" />
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", border: "1px solid #ECE9E2", background: "#fff", color: "#9A9A9A", cursor: "pointer", flexShrink: 0 }}>
+                    <IconaChevronDestra size={13} color="#9A9A9A" />
                   </button>
                 )}
               </div>
