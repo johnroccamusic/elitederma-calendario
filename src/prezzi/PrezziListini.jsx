@@ -314,6 +314,16 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                             title={onApriProdotto ? "Apri la scheda del prodotto" : undefined}
                             style={{ cursor: onApriProdotto ? "pointer" : "default" }}>
                             {r.nome}
+                            {/* i prodotti che non stanno sullo shop: si
+                                vendono solo al banco, ma fanno punti come
+                                tutti gli altri */}
+                            {r.sullo_shop === false && (
+                              <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#8A6D1D",
+                                background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999,
+                                padding: "2px 7px", marginLeft: 7, whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                                solo POS
+                              </span>
+                            )}
                           </td>
                           {privato && <td className="lst-costo" data-eti="acq.">{cifra(r.costo_acquisto)}</td>}
                           <td data-eti="lordo">{cifra(r.pubblico_lordo)}</td>

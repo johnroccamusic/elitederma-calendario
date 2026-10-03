@@ -1,0 +1,18 @@
+-- Nel listino entrano anche i prodotti che si vendono solo al banco.
+--
+-- Prima il filtro era "sta sullo shop": woo_product_id, stato publish e
+-- non solo_offline. Fuori restavano consulenze, magliette e qualche ago,
+-- che si vendono dal POS dell'app e generano punti come tutti gli altri.
+-- Il risultato si vedeva in dashboard: una master che aveva venduto
+-- quattro consulenze risultava a zero punti.
+--
+-- Il filtro vero e' il PREZZO: senza prezzo di vendita non c'e' niente da
+-- mettere a listino, qualunque sia lo stato sullo shop. Restano fuori le
+-- vetrine, i prodotti spenti e le spese di spedizione.
+--
+-- La colonna `sullo_shop` dice da dove si vende, e la pagina marca con
+-- "solo POS" i dodici che non stanno in vetrina.
+--
+-- Corpo completo della view: 20261003230000, con il nuovo `in_vendita`,
+-- `sullo_shop` in coda e gli arrotondamenti a un decimale su
+-- sconto_max_pct e provvigione_master_pct.
