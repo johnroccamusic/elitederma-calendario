@@ -64034,10 +64034,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           spedizione, fattura. Sono indipendenti — si spedisce senza
           fatturare e si fattura senza spedire — e stanno SEMPRE su una
           riga sola, che siano tre o che siano due (chi non puo' fare
-          omaggi ne vede due). Sul telefono ogni colonna si incolonna
-          dentro di se' — tondo, nome, levetta — perche' in orizzontale
-          "Aggiungi spese spedizione" non ci starebbe mai in un terzo di
-          schermo. I moduli si aprono sotto. */}
+          omaggi ne vede due). Dentro ogni colonna si va in verticale —
+          tondo, nome, levetta — perche' in orizzontale "Aggiungi spese
+          spedizione" non ci starebbe mai in un terzo di riquadro, ne' sul
+          telefono ne' sul monitor: si spezzava lettera per lettera. I
+          moduli si aprono sotto. */}
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 7 }}>Altre opzioni</div>
       <div style={{
         // Su un iPad in verticale il carrello e' largo un terzo di
@@ -64062,31 +64063,32 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               ? <span style={{ height: 1, background: CREAM_BORDER, flexShrink: 0, margin: "0 8px" }} />
               : <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />)}
             <div style={{
-              display: "flex", flexDirection: isMobile && !righeOpzioni ? "column" : "row", alignItems: "center",
-              gap: isMobile && !righeOpzioni ? 5 : 9, flex: "1 1 0", minWidth: 0, minHeight: 44,
-              padding: isMobile && !righeOpzioni ? "8px 4px" : "8px 10px",
-              textAlign: isMobile && !righeOpzioni ? "center" : "left",
+              display: "flex", flexDirection: righeOpzioni ? "row" : "column", alignItems: "center",
+              gap: righeOpzioni ? 9 : (isMobile ? 5 : 7), flex: "1 1 0", minWidth: 0, minHeight: 44,
+              padding: righeOpzioni ? "8px 10px" : (isMobile ? "8px 4px" : "10px 6px"),
+              textAlign: righeOpzioni ? "left" : "center",
             }}>
-              {isMobile && !righeOpzioni ? (
+              {righeOpzioni ? (
                 <>
-                  {/* il nome sopra, e sotto il tondo accanto alla levetta:
-                      in colonna il riquadro diventava alto il doppio, e
-                      sul telefono quell'altezza la si paga in scorrimento */}
-                  <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{o.testo}</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <span style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(180deg, #FEFAF1 0%, #F7EAD1 100%)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: OMBRA_POS.tondo }}>
-                      <o.Icona size={16} color={GOLD} />
-                    </span>
-                    <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo />
-                  </span>
-                </>
-              ) : (
-                <>
+                  {/* una opzione per riga: lo spazio in orizzontale c'e'
+                      tutto, e il tondo accanto al nome si legge meglio */}
                   <span style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(180deg, #FEFAF1 0%, #F7EAD1 100%)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: OMBRA_POS.tondo }}>
                     <o.Icona size={19} color={GOLD} />
                   </span>
-                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{o.testo}</span>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{o.testo}</span>
                   <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} />
+                </>
+              ) : (
+                <>
+                  {/* tre colonne affiancate: in orizzontale al nome restava
+                      un terzo di riquadro e "Aggiungi spese spedizione" si
+                      spezzava lettera per lettera. Incolonnati — tondo,
+                      nome, levetta — il nome ha tutta la colonna */}
+                  <span style={{ width: isMobile ? 30 : 38, height: isMobile ? 30 : 38, borderRadius: "50%", background: "linear-gradient(180deg, #FEFAF1 0%, #F7EAD1 100%)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: OMBRA_POS.tondo }}>
+                    <o.Icona size={isMobile ? 16 : 19} color={GOLD} />
+                  </span>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{o.testo}</span>
+                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} />
                 </>
               )}
             </div>
