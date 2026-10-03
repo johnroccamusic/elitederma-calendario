@@ -56719,7 +56719,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               const sep = <span style={{ width: 1, alignSelf: "stretch", background: "#ECE9E2", flexShrink: 0 }} />;
               return (
               <div key={r.prodotto.id} style={{
-                display: "flex", alignItems: "center", columnGap: stretta ? 9 : 18,
+                display: "flex", alignItems: "flex-start", columnGap: stretta ? 9 : 18,
                 flexWrap: "nowrap", padding: stretta ? "10px 10px" : "13px 18px", marginBottom: 10,
                 background: "#fff", border: "1px solid #EFEDE7", borderRadius: 22,
                 boxShadow: "0 2px 10px -4px rgba(14,27,51,0.10)",
@@ -56731,10 +56731,8 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                       su fondo chiaro si confondeva col resto della scheda.
                       In ritardo il fondo diventa rosso, non il testo: cosi'
                       l'allarme si vede da lontano senza leggere */}
-                  <div style={{ background: inRitardo ? "#C0392B" : NAVY, borderRadius: 10, padding: "6px 7px", minWidth: 50 }}>
-                    <div style={{ ...eti, marginBottom: 4, color: inRitardo ? "#F6CFCA" : "#A9B4C7" }}>
-                      {perData ? "data ordine" : "scorta"}
-                    </div>
+                  <div style={eti}>{perData ? "data ordine" : "scorta"}</div>
+                  <div style={{ background: inRitardo ? "#C0392B" : NAVY, borderRadius: 10, padding: "7px 8px", minWidth: 54 }}>
                     {perData ? (
                       <>
                         <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{giornoL}</div>
@@ -56757,7 +56755,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 </div>
 
                 {/* FOTO */}
-                <div style={{ flexShrink: 0, width: stretta ? 52 : 70, height: stretta ? 52 : 70, borderRadius: 11, background: "#ECECEC", border: "1px solid #DEDEDE", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <div style={{ flexShrink: 0, marginTop: 16, width: stretta ? 52 : 70, height: stretta ? 52 : 70, borderRadius: 11, background: "#ECECEC", border: "1px solid #DEDEDE", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   <MiniaturaAdvisor prodotto={r.prodotto} lato={stretta ? 46 : 64} />
                 </div>
 
@@ -56833,7 +56831,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
 
                 {onApriProdotto && (
                   <button onClick={() => onApriProdotto(r.prodotto.id)} title="Apri la scheda del prodotto"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", border: "1px solid #ECE9E2", background: "#fff", color: "#9A9A9A", cursor: "pointer", flexShrink: 0 }}>
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", alignSelf: "center", width: 26, height: 26, borderRadius: "50%", border: "1px solid #ECE9E2", background: "#fff", color: "#9A9A9A", cursor: "pointer", flexShrink: 0 }}>
                     <IconaChevronDestra size={13} color="#9A9A9A" />
                   </button>
                 )}
