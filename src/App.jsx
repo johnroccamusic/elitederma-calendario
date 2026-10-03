@@ -74260,7 +74260,7 @@ export default function App() {
     // corto a meta' lavoro.
     vendite_shop: async () => {
       const query = () => {
-        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi, busta_numero").eq("simulazione", false);
+        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi, busta_numero").eq("simulazione", false);
         return (venditeStoricoIntero.current ? q : q.gte("data_ordine", DA_QUANDO_VENDITE_IN_MEMORIA)).order("data_ordine", { ascending: false }).order("id");
       };
       setVenditeShop(await leggiTutte(query));
