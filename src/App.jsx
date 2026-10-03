@@ -56893,46 +56893,88 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
             </div>
           {!attesaChiusa[gruppo.chiave] && gruppo.righe.map(({ riordino, prodotto }) => {
             const giorniDaOrdine = giorniTra(String(riordino.data_ordine), oggi);
+            const [annoO, meseO, giornoO] = String(riordino.data_ordine || "").split("-");
+            const inMagazzino = prodotto.quantita || 0;
+            const sogliaP = prodotto.soglia_riordino ?? null;
+            const sottoSogliaP = sogliaP != null && Number(inMagazzino) < Number(sogliaP);
+            const etiA = { ...fontBody, fontSize: 9, fontWeight: 700, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 };
+            const sepA = <span style={{ width: 1, alignSelf: "stretch", background: "#D8D8D4", flexShrink: 0 }} />;
             return (
-              <div key={riordino.id} style={{ ...rigaStyle, alignItems: "center", padding: "10px 0" }}>
-                <MiniaturaAdvisor prodotto={prodotto} />
-                <div style={{ flex: 1, minWidth: 0 }}>
+              // la stessa scheda di "Da ordinare adesso": fondo grigio, foto
+              // nel riquadro bianco, blocchi divisi dalle righine. Cambiano
+              // due cose sole — sotto la data c'e' da quanto si aspetta
+              // invece dei giorni che mancano, e al posto del corso scoperto
+              // c'e' quanto se ne ha in magazzino adesso
+              <div key={riordino.id} style={{
+                display: "flex", alignItems: "flex-start", columnGap: isMobile ? 9 : 18,
+                flexWrap: "nowrap", padding: isMobile ? "10px 10px" : "13px 18px", marginBottom: 10,
+                background: "#F1F1F0", border: "1px solid #E2E2DF", borderRadius: 22,
+                boxShadow: "0 2px 10px -4px rgba(14,27,51,0.10)",
+              }}>
+
+                {/* DATA ORDINE */}
+                <div style={{ flexShrink: 0, textAlign: "left" }}>
+                  <div style={etiA}>data ordine</div>
+                  <div style={{ ...fontDisplay, fontSize: 21, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{giornoO}</div>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3 }}>
+                    {(MESI_ABBR[Number(meseO) - 1] || "")} {annoO}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, marginTop: 6, color: "#8A8A84",
+                    whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <IconaOrologioCard size={10} />
+                    {giorniDaOrdine > 0 ? `${giorniDaOrdine} giorn${giorniDaOrdine === 1 ? "o" : "i"} fa` : "oggi"}
+                  </div>
+                </div>
+
+                {/* FOTO */}
+                <div style={{ flexShrink: 0, marginTop: 16, width: isMobile ? 56 : 76, height: isMobile ? 56 : 76, borderRadius: 18, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  <MiniaturaAdvisor prodotto={prodotto} lato={isMobile ? 48 : 66} />
+                </div>
+
+                {/* PRODOTTO */}
+                {sepA}
+                <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
+                  <div style={etiA}>prodotto in arrivo</div>
                   {onApriProdotto ? (
-                    <button
-                      onClick={() => onApriProdotto(prodotto.id)}
-                      title="Apri la scheda del prodotto"
-                      style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}
-                    >
+                    <button onClick={() => onApriProdotto(prodotto.id)} title="Apri la scheda del prodotto"
+                      style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 15, fontWeight: 800, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", lineHeight: 1.2, overflowWrap: "anywhere", width: "100%" }}>
                       {prodotto.nome}
                     </button>
                   ) : (
-                    <div style={{ fontWeight: 700 }}>{prodotto.nome}</div>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 15, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{prodotto.nome}</div>
                   )}
-                  <div style={{ fontSize: 12, color: MUTED }}>
-                    Ordinato il {fmtData(riordino.data_ordine)}
-                    {giorniDaOrdine > 0 ? ` — ${giorniDaOrdine} giorn${giorniDaOrdine === 1 ? "o" : "i"} fa` : " — oggi"}
-                    {" · "}in magazzino adesso {prodotto.quantita || 0}
+                  <div style={{ ...fontBody, fontSize: 9, color: "#9A9A9A", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {gruppo.nome}
                   </div>
                 </div>
-                {/* in colonna a destra: quanto era stato ordinato, il tasto
-                    per registrare l'arrivo e, sotto, il ripensamento */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, whiteSpace: "nowrap", flexShrink: 0 }}>
-                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "6px 14px" }}>
+
+                {/* DISPONIBILITÀ e il tasto, incolonnati */}
+                {sepA}
+                <div style={{ flex: "0 0 auto", textAlign: "center", minWidth: 128 }}>
+                  <div style={etiA}>disponibilità</div>
+                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: sottoSogliaP ? "#C0392B" : NAVY, lineHeight: 1 }}>
+                    {inMagazzino}{sogliaP != null && <span style={{ color: "#B5B5B5" }}>/{sogliaP}</span>}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "4px 11px", marginTop: 8, display: "inline-block", whiteSpace: "nowrap" }}>
                     già ordinato {riordino.quantita || 0}
-                  </span>
+                  </div>
+                  <div style={{ marginTop: 7 }} />
                   <button
                     type="button"
                     onClick={() => { setRicezioneAperta({ riordino, prodotto }); setQuantitaRicevuta(String(riordino.quantita || "")); }}
-                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "9px 20px", cursor: "pointer", touchAction: "manipulation" }}
+                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 800, color: "#fff", background: NAVY, border: "none", borderRadius: 24, padding: "9px 20px", cursor: "pointer", touchAction: "manipulation",
+                      boxShadow: "0 4px 12px -4px rgba(14,27,51,0.45)" }}
                   >
                     Ricevuto
                   </button>
-                  <button
-                    onClick={() => annullaOrdine(riordino)}
-                    style={{ ...fontBody, fontSize: 11, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
-                  >
-                    non l'ho ordinato
-                  </button>
+                  <div>
+                    <button
+                      onClick={() => annullaOrdine(riordino)}
+                      style={{ ...fontBody, fontSize: 9.5, color: "#9A9A9A", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, marginTop: 6 }}
+                    >
+                      non l'ho ordinato
+                    </button>
+                  </div>
                 </div>
               </div>
             );
