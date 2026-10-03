@@ -269,7 +269,7 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
                       <th>{"pubbl.\nnetto"}</th>
                       <th>{"sconto\nmax"}</th>
                       <th>{"prezzo\nrivend."}</th>
-                      {privato && <><th>{"sconto\nin euro"}</th><th>{"a master\n% sul prezzo riv."}</th><th>{"a master\nin euro"}</th></>}
+                      {privato && <><th>{"sconto\nin euro"}</th><th>{"% al master\nsul prezzo netto"}</th><th>{"a master\nin euro"}</th></>}
                     </tr>
                   </thead>
                   <tbody>
