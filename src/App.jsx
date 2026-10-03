@@ -56753,7 +56753,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 </div>
 
                 {/* FOTO */}
-                <div style={{ flexShrink: 0, width: stretta ? 52 : 70, height: stretta ? 52 : 70, borderRadius: 11, background: "#F3F1EC", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <div style={{ flexShrink: 0, width: stretta ? 52 : 70, height: stretta ? 52 : 70, borderRadius: 11, background: "#ECECEC", border: "1px solid #DEDEDE", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   <MiniaturaAdvisor prodotto={r.prodotto} lato={stretta ? 46 : 64} />
                 </div>
 
@@ -56781,9 +56781,6 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 {edizione && (
                   <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
                     <div style={eti}>evento scoperto</div>
-                    <span style={{ width: 28, height: 28, borderRadius: "50%", background: "#F0E6D4", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 5 }}>
-                      <IconaLaureaErp size={14} color={NAVY} />
-                    </span>
                     <div style={{ ...fontDisplay, fontSize: stretta ? 12 : 14, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{edizione}</div>
                     <div style={{ ...fontBody, fontSize: 10, color: NAVY, marginTop: 4, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
                       <IconaCalendarioCard size={11} /> {fmtData(perData.dataLimite)}
