@@ -56209,6 +56209,9 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
   // apre di fianco all'elenco, con i prodotti di quel fornitore ordinati
   // per quanto sono sotto scorta, e alla fine genera la proforma in PDF.
   const [fornitoreOrdineId, setFornitoreOrdineId] = useState(null);
+  // i fornitori richiusi a tendina: con dieci fornitori aperti la pagina
+  // diventa un rotolo, e per arrivare all'ultimo si scorre tutto
+  const [fornitoriChiusi, setFornitoriChiusi] = useState({});
   const [quantitaOrdine, setQuantitaOrdine] = useState({}); // prodottoId -> quantità suggerita all'apertura
   function apriOrdineFornitore(fornitoreId, righeGiaDaOrdinare) {
     setFornitoreOrdineId(fornitoreId);
@@ -56688,16 +56691,30 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Niente da ordinare: nessun prodotto è in ritardo, in scadenza d'ordine o sotto scorta minima.</div>
         ) : perFornitore.map(([fornitoreId, righe]) => (
           <div key={fornitoreId} style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <IconaScatolaErp size={15} color={GOLD} />
-              <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
+            {/* La testata del fornitore e' una fascia crema, non piu' una
+                scritta con una linea di seguito: il gruppo si riconosce da
+                lontano e si richiude con un dito. A destra quanti prodotti
+                ci sono dentro, cosi' si sa cosa si sta chiudendo. */}
+            <button
+              type="button"
+              onClick={() => setFornitoriChiusi((prev) => ({ ...prev, [fornitoreId]: !prev[fornitoreId] }))}
+              title={fornitoriChiusi[fornitoreId] ? "Riapri il fornitore" : "Richiudi il fornitore"}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+                background: "#F7F0E2", border: "1px solid #EBDFC6", borderRadius: 12,
+                padding: "11px 16px", marginBottom: 8, cursor: "pointer" }}
+            >
+              <IconaScatolaErp size={18} color={GOLD} />
+              <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 1.2, flex: 1, minWidth: 0, lineHeight: 1.2 }}>
                 {fornitoreId === "__nessuno" ? "Senza fornitore assegnato" : (fornitorePerId[fornitoreId]?.nome || "Fornitore")}
               </span>
-              {/* la linea che continua fino a bordo scheda tiene insieme il
-                  gruppo: senza, le righe di due fornitori si confondevano */}
-              <span style={{ flex: 1, height: 1, background: "#EBD9AE" }} />
-            </div>
-            {righe.map((r) => {
+              <span style={{ ...fontBody, fontSize: 12, color: "#8A8A84", whiteSpace: "nowrap", flexShrink: 0 }}>
+                {righe.length} {righe.length === 1 ? "prodotto" : "prodotti"}
+              </span>
+              <span style={{ display: "inline-flex", flexShrink: 0, color: NAVY, transform: fornitoriChiusi[fornitoreId] ? "none" : "rotate(180deg)" }}>
+                <IconaChevronGiuErp size={16} color={NAVY} />
+              </span>
+            </button>
+            {!fornitoriChiusi[fornitoreId] && righe.map((r) => {
               // La scheda dello schema: cinque blocchi su una riga, con le
               // righine verticali che li separano. I colori sono quelli di
               // casa — crema per i fondi e per le pastiglie, navy per il
@@ -56838,7 +56855,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               </div>
               );
             })}
-            {fornitoreId !== "__nessuno" && (
+            {fornitoreId !== "__nessuno" && !fornitoriChiusi[fornitoreId] && (
               <button
                 onClick={() => (fornitoreOrdineId === fornitoreId ? setFornitoreOrdineId(null) : apriOrdineFornitore(fornitoreId, righe))}
                 style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: fornitoreOrdineId === fornitoreId ? "#fff" : NAVY, background: fornitoreOrdineId === fornitoreId ? NAVY : "#fff", border: `1px solid ${fornitoreOrdineId === fornitoreId ? NAVY : CREAM_BORDER}`, borderRadius: 14, padding: "7px 12px", cursor: "pointer", display: "block", margin: "8px auto 0" }}
