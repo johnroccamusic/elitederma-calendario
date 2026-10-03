@@ -126,7 +126,10 @@ utili as (
     case when p.costo is not null then p.prezzo_vendita * (1 - p.sicurezza_pct/100.0) - p.costo end as utile_diretto,
     case when p.costo is not null and p.sconto_pct is not null
          then p.prezzo_vendita * (1 - p.sconto_pct/100.0) * (1 - p.sicurezza_pct/100.0) - p.costo end as utile_riv,
-    case when p.costo is not null then greatest(0, p.prezzo_vendita - p.costo) end as margine_secco
+    case when p.costo is not null then greatest(0, p.prezzo_vendita - p.costo) end as margine_secco,
+    -- la base della provvigione alla master: il prezzo che paga un
+    -- rivenditore, non il pubblico netto
+    case when p.sconto_pct is not null then round(p.prezzo_vendita * (1 - p.sconto_pct/100.0), 2) end as prezzo_riv
   from prezzi p
 ),
 -- la scelta a mano si pesca qui invece di passarla di CTE in CTE: un
@@ -152,7 +155,7 @@ select
   round(prezzo_vendita * (1 + iva / 100.0), 2) as pubblico_lordo,
   round(prezzo_vendita, 2)                     as pubblico_netto,
   sconto_pct                                   as sconto_max_pct,
-  case when sconto_pct is not null then round(prezzo_vendita * (1 - sconto_pct/100.0), 2) end as prezzo_rivenditore,
+  prezzo_riv                                   as prezzo_rivenditore,
   round(utile_diretto, 2) as utile_diretto,
   round(utile_riv, 2)     as utile_rivenditore,
   round(case when utile_diretto > 0 then utile_diretto * (1 - imposte_pct/100.0) else utile_diretto end, 2) as ti_resta_diretto,
@@ -160,9 +163,9 @@ select
   round(sconto_esatto, 1) as sconto_esatto_pct,
   iva as aliquota_iva,
   costi_aziendali_pct, sicurezza_pct, imposte_pct,
-  -- gli euro seguono la percentuale, non piu' il margine: la percentuale
-  -- e' la cifra che si decide, e l'importo e' la sua conseguenza
-  round(prezzo_vendita * master_pct / 100.0, 2) as provvigione_master_euro,
+  -- la quota si calcola sul prezzo del rivenditore: e' quello il prezzo a
+  -- cui il prodotto viene ceduto, e la master ne prende una fetta
+  round(prezzo_riv * master_pct / 100.0, 2)     as provvigione_master_euro,
   master_pct                                    as provvigione_master_pct,
   quota_master_pct,
   -- le colonne nuove vanno IN FONDO: create or replace non sa inserirle
@@ -172,4 +175,4 @@ select
 from amano;
 
 comment on view v_prezzi_listini is
-  'Listino a blocchi. Sconto massimo = la quota che divide il guadagno a meta'' fra azienda e rivenditore. provvigione_master_pct = un terzo di quello sconto, in percentuale sul netto, salvo il valore scritto a mano in prodotti_shop.provvigione_master_pct (03/10/2026).';
+  'Listino a blocchi. Sconto massimo = la quota che divide il guadagno a meta'' fra azienda e rivenditore. provvigione_master_pct = un terzo di quello sconto, salvo il valore scritto a mano in prodotti_shop.provvigione_master_pct; provvigione_master_euro = quella percentuale applicata al PREZZO RIVENDITORE (03/10/2026).';
