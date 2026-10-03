@@ -56689,7 +56689,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               // ricezione — i blocchi non ci stanno in fila: le righine
               // spariscono e si va a capo, invece di accavallarsi
               const stretta = isMobile;
-              const eti = { ...fontBody, fontSize: 8, fontWeight: 600, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 };
+              const eti = { ...fontBody, fontSize: 9, fontWeight: 700, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 };
               const sep = <span style={{ width: 1, alignSelf: "stretch", background: "#D8D8D4", flexShrink: 0 }} />;
               return (
               <div key={r.prodotto.id} style={{
@@ -56700,7 +56700,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               }}>
 
                 {/* DATA ORDINE */}
-                <div style={{ flexShrink: 0, textAlign: "center" }}>
+                <div style={{ flexShrink: 0, textAlign: "left" }}>
                   {/* la data senza riquadro: un rettangolo pieno dentro una
                       scheda che e' gia' un riquadro faceva scatola nella
                       scatola. Il colore basta a dire tutto — navy, rosso se
@@ -56708,8 +56708,8 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                   <div style={eti}>{perData ? "data ordine" : "scorta"}</div>
                   {perData ? (
                     <>
-                      <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
-                      <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: inRitardo ? "#C0392B" : NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>
+                      <div style={{ ...fontDisplay, fontSize: 21, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, lineHeight: 1 }}>{giornoL}</div>
+                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: inRitardo ? "#C0392B" : NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3 }}>
                         {(MESI_ABBR[Number(meseL) - 1] || "")} {annoL}
                       </div>
                     </>
@@ -56717,18 +56717,18 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                     <div style={{ ...fontDisplay, fontSize: 11.5, fontWeight: 800, color: "#8A6D1D", lineHeight: 1.15 }}>sotto<br />minima</div>
                   )}
                   {perData && (
-                    <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, marginTop: 5,
+                    <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, marginTop: 6,
                       color: inRitardo ? "#C0392B" : "#8A8A84",
                       whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                      <IconaOrologioCard size={9} />
+                      <IconaOrologioCard size={10} />
                       {inRitardo ? `+ ${giorni} in ritardo` : `− ${giorni} giorni`}
                     </div>
                   )}
                 </div>
 
                 {/* FOTO */}
-                <div style={{ flexShrink: 0, marginTop: 16, width: stretta ? 52 : 70, height: stretta ? 52 : 70, borderRadius: 11, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  <MiniaturaAdvisor prodotto={r.prodotto} lato={stretta ? 46 : 64} />
+                <div style={{ flexShrink: 0, marginTop: 16, width: stretta ? 56 : 76, height: stretta ? 56 : 76, borderRadius: 18, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  <MiniaturaAdvisor prodotto={r.prodotto} lato={stretta ? 48 : 66} />
                 </div>
 
                 {/* PRODOTTO DA ORDINARE */}
