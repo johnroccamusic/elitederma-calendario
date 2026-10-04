@@ -63530,6 +63530,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // sconti molto diversi. Si leggeva "−4,81%" su un carrello che ne stava
   // ricevendo l'8,55: il conto era giusto, il cartellino no.
   const percentualeErogata = subtotale > 0 ? round2((scontoApplicato / subtotale) * 100) : 0;
+  // ...ma su un carrello di soli prodotti needling quella frazione dice
+  // una bugia diversa: la regola del needling e' una percentuale SUL
+  // NETTO, e raccontata sul lordo il 30% diventa "24,59%". Gli euro sono
+  // gli stessi, il numero no — e nessuno riconosce la regola che ha
+  // appena deciso. Quando tutte le righe scontate sono needling si scrive
+  // la percentuale vera, dicendo su cosa.
+  const righeNeedlingScontate = couponAFasce
+    ? carrello.filter((r) => !righeSenzaMargine.includes(r))
+    : [];
+  const tuttoNeedling = righeNeedlingScontate.length > 0
+    && righeNeedlingScontate.every((r) => eProdottoNeedling(prodottiPerId[r.prodottoId]));
+  const pctNeedlingCarrello = tuttoNeedling ? percentualeNeedlingDi(subtotale) : null;
   // Quanto manca alla fascia di spesa successiva. Si dice SOLO la cifra
   // che manca, mai quanto sconto si otterrebbe: la percentuale media
   // dipende da COSA si aggiunge, non da quanto si spende — un prodotto a
@@ -63538,6 +63550,20 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // sarebbe promettere una cosa falsa.
   const mancaAllaFascia = (() => {
     if (!couponAFasce || subtotale <= 0) return null;
+    // Carrello tutto needling: le soglie sono le sue, non quelle delle
+    // fasce. Senza questo si leggeva "mancano 11 € per la prossima
+    // fascia" su un carrello dove superare quella soglia non cambiava un
+    // centesimo, perche' il needling ha una tabella tutta sua.
+    if (tuttoNeedling) {
+      if (!SCONTO_NEEDLING) return null;
+      const [s1, s2] = SCONTO_NEEDLING.soglie.map(Number);
+      const [a, b, c] = SCONTO_NEEDLING.sconti.map(Number);
+      const prossima = subtotale < s1 ? { soglia: s1, poi: b, ora: a }
+        : subtotale < s2 ? { soglia: s2, poi: c, ora: b } : null;
+      if (!prossima || !(prossima.poi > prossima.ora)) return null;
+      const manca = round2(prossima.soglia - subtotale);
+      return manca > 0 ? manca : null;
+    }
     const g = gruppiFasceValidi(fasceCouponAttive);
     const i = indiceFasciaSpesa(subtotale, g.soglie);
     if (i >= 3) return null;
@@ -64268,7 +64294,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               saprebbe se e' quello giusto */}
           {corsoPosSel && couponAttivo && couponAttivo.corsi_date_id === corsoPosSel.id && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
-              Sconto del corso applicato: −{fmtPctErp2(percentualeErogata)}
+              Sconto del corso applicato: −{pctNeedlingCarrello != null ? `${fmtPctErp2(pctNeedlingCarrello)} sul netto` : fmtPctErp2(percentualeErogata)}
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
               {fasceContantiInUso && (
                 <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{couponPersonaleAttivo && metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
@@ -64492,7 +64518,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY }}>
                 <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
                 <span style={{ whiteSpace: "nowrap" }}>Applica sconto del corso</span>
-                {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{fmtPctErp2(percentualeErogata)}</span>}
+                {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{pctNeedlingCarrello != null ? `${fmtPctErp2(pctNeedlingCarrello)} sul netto` : fmtPctErp2(percentualeErogata)}</span>}
               </label>
             )}
             {/* il separatore solo se a sinistra c'e' davvero qualcosa */}
@@ -64516,7 +64542,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
                   couponAttivo ? (
                     <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 3 }}>
-                      Codice valido: −{fmtPctErp2(percentualeErogata)}
+                      Codice valido: −{pctNeedlingCarrello != null ? `${fmtPctErp2(pctNeedlingCarrello)} sul netto` : fmtPctErp2(percentualeErogata)}
                       {/* quanto durera': un codice a uso singolo sparisce dopo
                           questo carrello, e saperlo prima evita di cercarlo
                           alla vendita dopo credendo che sia sparito per errore */}
