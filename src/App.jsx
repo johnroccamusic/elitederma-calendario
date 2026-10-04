@@ -510,6 +510,7 @@ const CHIAVE_FASCE_CORSI_CONTANTI = "fasceSconto_corsi_contanti";
 const CHIAVE_PUNTI_NEEDLING = "puntiNeedling_scaglioni";
 const PUNTI_NEEDLING_DEFAULT = { soglie: [60, 120], quote: [100, 100, 100] };
 // Lo sconto al cliente sui soli prodotti needling, a scaglioni di spesa.
+// Le percentuali sono SUL NETTO, non sul lordo come quelle delle fasce.
 // NON si somma agli sconti generali: su un prodotto needling vale questo e
 // basta, altrimenti due regole scritte in due posti diversi finirebbero
 // per sommarsi senza che nessuno l'abbia deciso.
@@ -4865,10 +4866,20 @@ function percentualeNeedlingDi(spesa) {
 
 function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false) {
   // I prodotti needling hanno una tabella loro e non guardano le fasce:
-  // vale quella e basta, mai la somma delle due
+  // vale quella e basta, mai la somma delle due.
+  //
+  // E SI LEGGE SUL NETTO, non sul lordo come le fasce generali. Siccome
+  // chi chiama questa funzione moltiplica per il prezzo LORDO della riga,
+  // la percentuale va riportata a quella base: il 30% del netto e' il
+  // 24,59% del lordo con IVA al 22, e sono lo stesso euro. Dividere qui
+  // e' l'unico modo per non dover spiegare la differenza in cinque punti
+  // diversi del codice.
   if (eProdottoNeedling(prodotto)) {
     const pct = percentualeNeedlingDi(spesa);
-    if (pct != null) return pct;
+    if (pct != null) {
+      const iva = Number(prodotto?.aliquota_iva_vendita ?? ALIQUOTA_IVA_STANDARD) || 0;
+      return pct / (1 + iva / 100);
+    }
   }
   // Lo sconto al cliente si sceglie sul MARGINE del prodotto: piu' alto
   // il margine, piu' alto lo sconto. L'incidenza dei costi NON entra qui
@@ -49828,9 +49839,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Scontistica prodotti needling</div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 14 }}>
             Lo sconto che il cliente ottiene sui soli prodotti <b>needling</b>, più alto man mano che
-            si sale di spesa. <b>Non si somma</b> agli sconti generali: su un prodotto needling vale
-            questo e basta, mai tutti e due. Le soglie si leggono sul totale del carrello a listino,
-            come nelle tabelle qui sopra.
+            si sale di spesa. Percentuali <b>sul prezzo netto</b> — non sul lordo, come invece sono
+            quelle delle fasce qui sopra. <b>Non si somma</b> agli sconti generali: su un prodotto
+            needling vale questo e basta, mai tutti e due. Le soglie si leggono sul totale del
+            carrello a listino, come nelle tabelle qui sopra.
           </div>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
             {[0, 1, 2].map((i) => {
@@ -49851,7 +49863,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                       style={{ ...inputStyle, width: 86, textAlign: "center", fontWeight: 800, fontSize: 16, padding: "8px 10px", color: acceso ? "#8A6D1D" : NAVY }}
                     />
                     <span style={{ ...fontBody, fontSize: 14, fontWeight: 800, color: acceso ? "#8A6D1D" : NAVY }}>%</span>
-                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>al cliente</span>
+                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>sul netto</span>
                   </div>
                 </div>
               );
