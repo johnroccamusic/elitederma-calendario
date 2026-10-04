@@ -49440,6 +49440,8 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // quelle vendite lo sconto e' gia' stato fatto — cambiarne la regola
   // adesso non cambierebbe nulla di quello che e' successo.
   const [applicandoAiCorsi, setApplicandoAiCorsi] = useState(false);
+  const [confermaAula, setConfermaAula] = useState(false);
+  const [confermaPersonali, setConfermaPersonali] = useState(false);
   const [msgCodiciCorsi, setMsgCodiciCorsi] = useState("");
   const oggiCodici = dataOggiStr();
   // Il criterio e' il CORSO, non la scadenza del codice: un codice di una
@@ -49449,8 +49451,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // codici delle classi che devono ancora finire — comprese quelle che
   // cominciano domani.
   const fineEdizione = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd.data_fine || cd.data_inizio]));
+  // Il filtro NON esclude piu' chi ha gia' le fasce. Lo faceva, e il
+  // tasto si spegneva da solo: con il needling la regola di oggi e' due
+  // cose — le fasce E la tabella del needling — e un codice nato con le
+  // fasce vecchie risulta "a posto" pur non avendo mai sentito nominare
+  // il needling. Il tasto riscrive la regola di adesso, punto.
   const codiciAulaDaAggiornare = (coupon || []).filter((c) => {
-    if (!c.corsi_date_id || c.tipo_regola_sconto === "fasce") return false;
+    if (!c.corsi_date_id) return false;
     if (c.valido_fino_a && c.valido_fino_a < oggiCodici) return false;
     const fine = fineEdizione[c.corsi_date_id];
     return !!fine && fine >= oggiCodici;
@@ -49458,8 +49465,16 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
 
   async function applicaFasceAiCodiciAula() {
     const fasce = fasceScontoValide(gruppiFasceValidi(fasceCorso).gruppi[0]);
-    if (codiciAulaDaAggiornare.length === 0) { setMsgCodiciCorsi("Nessun codice da aggiornare: le classi ancora da finire hanno già le fasce, e quelle passate non si toccano."); return; }
-    if (!window.confirm(`Riscrivere le fasce su ${codiciAulaDaAggiornare.length} codici d'aula di classi ancora da finire, nell'app e sul sito?`)) return;
+    if (codiciAulaDaAggiornare.length === 0) { setMsgCodiciCorsi("Nessun codice da aggiornare: non ci sono classi ancora da finire."); return; }
+    // due passaggi invece di window.confirm: dalla app aggiunta alla
+    // schermata principale quella finestra non compare e torna false, e
+    // il tasto sembrerebbe rotto
+    if (!confermaAula) {
+      setConfermaAula(true);
+      setMsgCodiciCorsi(`Riscrivo le regole di oggi — fasce e sconto needling — su ${codiciAulaDaAggiornare.length} codici di classi ancora da finire, nell'app e sul sito. Premi di nuovo per confermare.`);
+      return;
+    }
+    setConfermaAula(false);
     setApplicandoAiCorsi(true); setMsgCodiciCorsi("");
     const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
     const { error } = await supabase.from("coupon")
@@ -49526,7 +49541,14 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     const fasce = fasceScontoValide(gruppiFasceValidi(regolaReferralMaster?.fasce).gruppi[0]);
     const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id);
     if (personali.length === 0) { setMsgCodiciPersonali("Nessun codice personale da aggiornare."); return; }
-    if (!window.confirm(`Riscrivere le fasce su ${personali.length} codici personali, nell'app e sul sito?`)) return;
+    // due passaggi, non window.confirm: dalla app aggiunta alla schermata
+    // principale quella finestra non compare e torna false
+    if (!confermaPersonali) {
+      setConfermaPersonali(true);
+      setMsgCodiciPersonali(`Riscrivo le regole di oggi — fasce e sconto needling — su ${personali.length} codici personali, nell'app e sul sito. Premi di nuovo per confermare.`);
+      return;
+    }
+    setConfermaPersonali(false);
     setApplicandoAiCodici(true); setMsgCodiciPersonali("");
     const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
     const { error } = await supabase.from("coupon")
@@ -49712,7 +49734,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                   sono nati */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
                 <Button variant="ghost" onClick={applicaFasceAiCodiciAula} disabled={applicandoAiCorsi || codiciAulaDaAggiornare.length === 0}>
-                  {applicandoAiCorsi ? "Applico…" : `Applica ai codici d'aula esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
+                  {applicandoAiCorsi ? "Applico…" : confermaAula ? `Confermo, riscrivi su ${codiciAulaDaAggiornare.length} codici` : `Applica ai codici d'aula esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
                 </Button>
                 <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
                   I codici già emessi portano la regola con cui sono nati — i più vecchi uno sconto fisso.
@@ -49768,7 +49790,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
             {!referralContantiUgualiACarta && <Button variant="ghost" onClick={() => setFasceReferralContanti([])}>Rimetti uguali a carta e shop</Button>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
-            <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Applico…" : "Applica ai codici personali esistenti"}</Button>
+            <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Applico…" : confermaPersonali ? "Confermo, riscrivi i codici personali" : "Applica ai codici personali esistenti"}</Button>
             <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
               I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce su tutti i codici personali delle master, nell'app e sul sito.
             </span>
