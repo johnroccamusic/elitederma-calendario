@@ -64041,6 +64041,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               }).map((v) => {
                 const badgeTipo = { vendita: null, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" }, omaggio: { l: "Omaggio", c: GOLD, s: "#FBF1D9" } }[v.tipo_movimento];
                 const articoli = (Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ");
+                // Chi ha comprato. Il POS non chiede il nome del cliente,
+                // ma chi vende lo scrive quasi sempre nelle note — "ordine
+                // claudia guadagnino", "Martina castagna". Si mostra
+                // cliente_nome quando c'e' (gli ordini dello shop ce
+                // l'hanno) e altrimenti la nota, che e' dove quel nome
+                // vive davvero.
+                const acquirente = String(v.cliente_nome || v.note || "").trim();
                 const aperta = storicoAperto === v.id;
                 return (
                   <button
@@ -64056,6 +64063,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                       {badgeTipo && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: badgeTipo.c, background: badgeTipo.s, borderRadius: 7, padding: "2px 7px", flexShrink: 0 }}>{badgeTipo.l}</span>}
                       <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 800, color: v.totale < 0 ? "#C0392B" : NAVY, flexShrink: 0 }}>{fmtEuroErp2(v.totale)}</span>
                     </span>
+                    {acquirente && (
+                      <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "block", marginTop: 3, lineHeight: 1.3, overflowWrap: "anywhere" }}>
+                        {acquirente}
+                      </span>
+                    )}
                     <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "block", marginTop: 4, lineHeight: 1.35,
                       ...(aperta ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>
                       {articoli || "—"}
