@@ -63021,6 +63021,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [regolaReferralPos] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   const [fasceReferralContantiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const [note, setNote] = useState("");
+  // Il nome di chi compra, facoltativo. Finora non lo chiedeva nessuno e
+  // chi vendeva lo infilava nelle note: adesso ha un campo suo, e la nota
+  // torna a servire per le note. Si scrive su cliente_nome, la stessa
+  // colonna degli ordini dello shop, cosi' le due origini si leggono allo
+  // stesso modo invece di avere ognuna la sua.
+  const [clientePos, setClientePos] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
   const [mostraStorico, setMostraStorico] = useState(false);
@@ -63401,7 +63407,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metodoPagamento, couponAttivo?.id, pctContantiCorsiPos]);
   function nuovaVendita() {
-    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
+    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setClientePos(""); setMsg("");
     // la provenienza vale per i pezzi di quel carrello, non e' una regola
     // che resta accesa: il carrello dopo ripone la sua domanda
     setDalKitPerProdotto({});
@@ -63794,6 +63800,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       origine: "pos",
       metodo_pagamento: omaggioAttivo ? null : metodoPagamento,
       note: note.trim() || null,
+      cliente_nome: clientePos.trim() || null,
       tipo_movimento: omaggioAttivo ? "omaggio" : "vendita",
       // Chi "ha fatto" la vendita, cioe' a chi contano punti e
       // provvigione. Normalmente e' chi la sta battendo; quando un
@@ -64047,7 +64054,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 // cliente_nome quando c'e' (gli ordini dello shop ce
                 // l'hanno) e altrimenti la nota, che e' dove quel nome
                 // vive davvero.
-                const acquirente = String(v.cliente_nome || v.note || "").trim();
+                // tutti e due, non l'uno al posto dell'altro: se manca uno
+                // resta l'altro, e quando ci sono entrambi si leggono per
+                // quello che sono — il nome in navy, la nota sotto
+                const acquirente = String(v.cliente_nome || "").trim();
+                const notaVendita = String(v.note || "").trim();
                 const aperta = storicoAperto === v.id;
                 return (
                   <button
@@ -64066,6 +64077,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     {acquirente && (
                       <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, display: "block", marginTop: 3, lineHeight: 1.3, overflowWrap: "anywhere" }}>
                         {acquirente}
+                      </span>
+                    )}
+                    {notaVendita && (
+                      <span style={{ ...fontBody, fontSize: 11.5, fontStyle: "italic", color: acquirente ? MUTED : NAVY, display: "block", marginTop: 2, lineHeight: 1.3, overflowWrap: "anywhere" }}>
+                        {notaVendita}
                       </span>
                     )}
                     <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "block", marginTop: 4, lineHeight: 1.35,
@@ -64865,6 +64881,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       )}
       {!isMobile && (
         <div style={{ marginBottom: 14 }}>
+          <div style={etichettaPos}>Cliente (opzionale)</div>
+          <input
+            value={clientePos} onChange={(e) => setClientePos(e.target.value)}
+            style={{ ...inputStyle, background: BG, boxShadow: OMBRA_POS.incassato, marginBottom: 12 }}
+            placeholder="Nome di chi compra"
+          />
           <div style={etichettaPos}>{omaggioAttivo ? "Nota (obbligatoria per l'omaggio)" : "Note (opzionale)"}</div>
           {/* la matita in fondo al riquadro: dice che si scrive, senza
               bisogno di un'etichetta in piu' */}
@@ -64880,6 +64902,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       )}
       {isMobile && (
         <div style={{ marginBottom: 4 }}>
+          <input
+            value={clientePos} onChange={(e) => setClientePos(e.target.value)}
+            style={{ ...inputStyle, padding: "8px 10px", fontSize: 12.5, marginBottom: 6 }}
+            placeholder="Cliente (opzionale)"
+          />
           <input
             value={note} onChange={(e) => setNote(e.target.value)}
             style={{ ...inputStyle, padding: "8px 10px", fontSize: 12.5, ...(omaggioAttivo && !note.trim() ? { border: "1px solid #C0392B" } : {}) }}
