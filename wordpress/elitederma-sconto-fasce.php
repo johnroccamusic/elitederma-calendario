@@ -190,7 +190,7 @@ function elitederma_meta_prodotto( $prodotto, $chiave ) {
 add_filter( 'woocommerce_cart_totals_coupon_label', 'elitederma_etichetta_coupon_fasce', 10, 2 );
 
 function elitederma_etichetta_coupon_fasce( $etichetta, $coupon ) {
-	if ( $coupon->get_meta( '_ed_fasce_sconto' ) || '' !== (string) $coupon->get_meta( '_ed_sconto_margine_pct' ) ) {
+	if ( $coupon->get_meta( '_ed_fasce_sconto' ) || '' !== (string) $coupon->get_meta( '_ed_sconto_margine_pct' ) || $coupon->get_meta( '_ed_needling' ) ) {
 		$etichetta .= ' — sconto variabile per prodotto';
 	}
 	return $etichetta;
