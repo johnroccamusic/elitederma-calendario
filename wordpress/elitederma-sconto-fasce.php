@@ -48,34 +48,16 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 
 	$fasce_grezze    = $coupon->get_meta( '_ed_fasce_sconto' );
 	$pct_sul_margine = $coupon->get_meta( '_ed_sconto_margine_pct' );
+	$needling_grezzo = $coupon->get_meta( '_ed_needling' );
 
-	// Nessuno dei due contrassegni: non e' un coupon dell'accademia, o e'
+	// Nessuno dei tre contrassegni: non e' un coupon dell'accademia, o e'
 	// una normale percentuale sul prezzo. Si lascia fare a WooCommerce,
 	// esattamente come prima che questo file esistesse.
-	if ( empty( $fasce_grezze ) && '' === (string) $pct_sul_margine ) {
+	if ( empty( $fasce_grezze ) && '' === (string) $pct_sul_margine && empty( $needling_grezzo ) ) {
 		return $sconto;
 	}
 
 	$prodotto = $riga_carrello['data'];
-
-	// ---- CASO 2: una percentuale sola, ma letta sul GUADAGNO ----
-	// "15%" vuol dire quindici euro ogni cento guadagnati, non ogni cento
-	// incassati. Il guadagno per pezzo lo scrive il gestionale sul
-	// prodotto, gia' in euro e gia' netto: qui non si calcola niente, si
-	// legge.
-	if ( empty( $fasce_grezze ) ) {
-		$margine_eur = elitederma_meta_prodotto( $prodotto, '_ed_margine_eur' );
-		if ( '' === $margine_eur ) {
-			return 0.0; // guadagno sconosciuto: non si sconta
-		}
-		$quantita = isset( $riga_carrello['quantity'] ) ? (int) $riga_carrello['quantity'] : 1;
-		// $singolo = true quando WooCommerce sta scontando UN pezzo e
-		// moltiplichera' lui per la quantita'; false quando chiede lo
-		// sconto dell'intera riga
-		$pezzi = $singolo ? 1 : max( 1, $quantita );
-		$importo = (float) $margine_eur * (float) $pct_sul_margine / 100 * $pezzi;
-		return round( min( $importo, (float) $importo_da_scontare ), wc_get_rounding_precision() );
-	}
 
 	// ---- CASO 0: NEEDLING, che ha una tabella sua ----
 	//
@@ -88,7 +70,6 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 	//    non quanto rende il prodotto;
 	//  - la percentuale si legge SUL PREZZO NETTO, mentre le fasce sono
 	//    sul lordo. Il 30% di needling sono trenta euro ogni cento netti.
-	$needling_grezzo = $coupon->get_meta( '_ed_needling' );
 	if ( ! empty( $needling_grezzo ) && elitederma_e_needling( $prodotto ) ) {
 		$needling = json_decode( $needling_grezzo, true );
 		$soglie   = isset( $needling['soglie'] ) && is_array( $needling['soglie'] ) ? $needling['soglie'] : array();
@@ -117,6 +98,26 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 
 			return round( min( $importo, (float) $importo_da_scontare ), wc_get_rounding_precision() );
 		}
+	}
+
+
+	// ---- CASO 2: una percentuale sola, ma letta sul GUADAGNO ----
+	// "15%" vuol dire quindici euro ogni cento guadagnati, non ogni cento
+	// incassati. Il guadagno per pezzo lo scrive il gestionale sul
+	// prodotto, gia' in euro e gia' netto: qui non si calcola niente, si
+	// legge.
+	if ( empty( $fasce_grezze ) ) {
+		$margine_eur = elitederma_meta_prodotto( $prodotto, '_ed_margine_eur' );
+		if ( '' === $margine_eur ) {
+			return 0.0; // guadagno sconosciuto: non si sconta
+		}
+		$quantita = isset( $riga_carrello['quantity'] ) ? (int) $riga_carrello['quantity'] : 1;
+		// $singolo = true quando WooCommerce sta scontando UN pezzo e
+		// moltiplichera' lui per la quantita'; false quando chiede lo
+		// sconto dell'intera riga
+		$pezzi = $singolo ? 1 : max( 1, $quantita );
+		$importo = (float) $margine_eur * (float) $pct_sul_margine / 100 * $pezzi;
+		return round( min( $importo, (float) $importo_da_scontare ), wc_get_rounding_precision() );
 	}
 
 	// ---- CASO 1: sconto a fasce ----
