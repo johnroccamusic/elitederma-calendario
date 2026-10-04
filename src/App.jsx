@@ -63496,7 +63496,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       },
     });
     setCreandoQr(false);
-    if (error || data?.errore) { setMsgQr("Non sono riuscito a chiedere il pagamento: " + (data?.errore || error?.message || "errore sconosciuto")); return; }
+    if (error || data?.errore) {
+      // il messaggio vero, non "errore sconosciuto": al banco serve sapere
+      // se riprovare o passare al terminale
+      const dettaglio = data?.errore || error?.message || "nessuna risposta dal server";
+      setMsgQr(`QR non creato: ${dettaglio}. Puoi incassare col POS esterno e confermare la vendita a mano.`);
+      return;
+    }
+    if (!data?.codice) {
+      setMsgQr("QR non creato: il server ha risposto senza codice. Riprova, oppure incassa col POS esterno.");
+      return;
+    }
     setRichiestaQr(data);
     setStatoQr("in_attesa");
   }
@@ -64629,11 +64639,19 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 </div>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: MUTED, flex: "1 1 180px", lineHeight: 1.45 }}>
-                    La cliente inquadra, paga e scrive lei i dati per la fattura.
+                  {/* un tasto spento senza una ragione scritta sembra un
+                      tasto rotto: chi sta al banco preme, non succede
+                      niente, e non ha modo di capire perche' */}
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: (carrello.length === 0 || totaleDaIncassare <= 0) ? "#8A6D1D" : MUTED, flex: "1 1 180px", lineHeight: 1.45 }}>
+                    {carrello.length === 0
+                      ? "Il carrello è vuoto: aggiungi i prodotti e il QR si accende."
+                      : totaleDaIncassare <= 0
+                        ? "Il totale da incassare è zero: non c'è niente da far pagare."
+                        : "La cliente inquadra, paga e scrive lei i dati per la fattura."}
                   </span>
                   <button
                     type="button" onClick={chiediPagamentoQr} data-niente-ombra
+                    title={carrello.length === 0 ? "Carrello vuoto" : totaleDaIncassare <= 0 ? "Totale a zero" : "Prepara il QR da far inquadrare"}
                     disabled={creandoQr || carrello.length === 0 || totaleDaIncassare <= 0}
                     style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: creandoQr || carrello.length === 0 ? "default" : "pointer", opacity: creandoQr || carrello.length === 0 || totaleDaIncassare <= 0 ? 0.45 : 1, whiteSpace: "nowrap" }}
                   >
