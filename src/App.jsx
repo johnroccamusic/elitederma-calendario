@@ -50229,6 +50229,13 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   // 04/10/2026 su due vendite di Stefania Sanna, ed era gia' successo ai
   // progetti (dove la conferma era stata rifatta per questo motivo).
   const [venditaDaEliminare, setVenditaDaEliminare] = useState(null);
+  // a che punto e' la cancellazione: ogni componente del kit passa da
+  // WooCommerce e ci mette qualche secondo, quindi una vendita con otto
+  // componenti puo' prendersi mezzo minuto. Senza un avanzamento scritto
+  // sembra che non stia succedendo niente, si preme di nuovo o si cambia
+  // pagina — e il giro muore a meta', lasciando il magazzino rimesso solo
+  // in parte e la vendita ancora li'. E' successo il 04/10/2026.
+  const [avanzamento, setAvanzamento] = useState(null); // { fatti, totali }
   function chiediCancellazione(v) {
     if (v.tipo_movimento && v.tipo_movimento !== "vendita") { setMsgElimina("Questa riga è un movimento legato a una vendita: cancella la vendita originale e sparisce anche lei."); return; }
     setMsgElimina("");
@@ -50256,23 +50263,36 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     const giaAnnullata = collegate.some((x) => x.tipo_movimento === "annullamento");
     const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
     const rimetteStock = !v.prelevato_dai_kit && !giaAnnullata && righe.some((r) => r.quantita > 0);
-    setVenditaDaEliminare(null);
     setEliminandoVendita(v.id); setMsgElimina("");
     if (rimetteStock) {
       const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
       const perNome = Object.fromEntries((prodottiShop || []).map((p) => [String(p.nome || "").trim().toLowerCase(), p]));
+      // prima si fa l'elenco completo di cosa va rimesso, poi lo si
+      // percorre: cosi' si puo' dire "3 di 8" invece di far aspettare al
+      // buio, ed e' il buio che faceva interrompere il giro a meta'
+      const daRimettere = [];
       for (const r of righe) {
         if (!(r.quantita > 0)) continue;
         const prodotto = (r.prodotto_id && perId[r.prodotto_id]) || perNome[String(r.nome || "").trim().toLowerCase()];
         if (!prodotto) continue;
-        const righeDaMuovere = bundleVirtuale(prodotto)
-          ? righeBundleCon(prodotto.id, bundleComponenti, perId).map((b) => ({ prodotto: b.prodotto, quantita: r.quantita * b.quantitaPerBundle }))
-          : [{ prodotto, quantita: r.quantita }];
-        for (const m of righeDaMuovere) {
-          const errore = await muoviStock(m.prodotto, m.quantita, { origine: "reso", nota: `Vendita #${v.numero_ordine || v.woo_order_id} cancellata` });
-          if (errore) { setEliminandoVendita(null); setMsgElimina("Magazzino non aggiornato, vendita NON cancellata: " + errore); return; }
+        if (bundleVirtuale(prodotto)) {
+          righeBundleCon(prodotto.id, bundleComponenti, perId).forEach((b) => daRimettere.push({ prodotto: b.prodotto, quantita: r.quantita * b.quantitaPerBundle }));
+        } else {
+          daRimettere.push({ prodotto, quantita: r.quantita });
         }
       }
+      setAvanzamento({ fatti: 0, totali: daRimettere.length });
+      for (let i = 0; i < daRimettere.length; i += 1) {
+        const m = daRimettere[i];
+        const errore = await muoviStock(m.prodotto, m.quantita, { origine: "reso", nota: `Vendita #${v.numero_ordine || v.woo_order_id} cancellata` });
+        if (errore) {
+          setAvanzamento(null); setEliminandoVendita(null);
+          setMsgElimina(`Magazzino non aggiornato al passo ${i + 1} di ${daRimettere.length}, vendita NON cancellata: ${errore}`);
+          return;
+        }
+        setAvanzamento({ fatti: i + 1, totali: daRimettere.length });
+      }
+      setAvanzamento(null);
     }
     // la spedizione al banco e le sue righe preparate, poi i movimenti
     // collegati, poi la vendita
@@ -50284,7 +50304,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     if (collegate.length > 0) await supabase.from("vendite_shop").delete().in("id", collegate.map((x) => x.id));
     const { error } = await supabase.from("vendite_shop").delete().eq("id", v.id);
     setEliminandoVendita(null);
-    if (error) { setMsgElimina("Vendita non cancellata: " + testoErrore(error)); return; }
+    if (error) { setVenditaDaEliminare(null); setAvanzamento(null); setMsgElimina("Vendita non cancellata: " + testoErrore(error)); return; }
     // Il contante di quella vendita non e' mai stato incassato. Per una
     // vendita al banco, o di un corso con la busta ancora aperta, la cassa
     // se ne accorge da sola. Se invece la vendita stava in una busta gia'
@@ -50320,6 +50340,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     setMsgElimina(`Vendita #${v.numero_ordine || v.woo_order_id} cancellata${rimetteStock ? ", magazzino rimesso a posto" : ""}${bustaRiaperta}.`);
     // via dall'elenco subito, prima e indipendentemente dal ricarico
     setIdEliminati((prev) => { const n = new Set(prev); n.add(v.id); (collegate || []).forEach((x) => n.add(x.id)); return n; });
+    setVenditaDaEliminare(null); setAvanzamento(null);
     ricarica(["vendite_shop", "prodotti_shop", "spedizioni_pos", "corsi_date"]);
   }
   // "Frangente": in quale occasione e' stata fatta la vendita. Il POS
@@ -50589,9 +50610,23 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
           </div>
           <ul style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5, margin: "0 0 18px", paddingLeft: 18 }}>
             {avvisiCancellazione(venditaDaEliminare).map((r, i) => <li key={i} style={{ marginBottom: 4 }}>{r}</li>)}
+            {avvisiCancellazione(venditaDaEliminare).some((r) => r.startsWith("I pezzi venduti")) && (
+              <li style={{ marginBottom: 4 }}>Ci vuole qualche secondo per pezzo: aspetta che finisca senza cambiare pagina.</li>
+            )}
           </ul>
+          {/* l'avanzamento, mentre il magazzino torna indietro pezzo per
+              pezzo: ogni passo e' una chiamata a WooCommerce e ci mette
+              qualche secondo. Chi guarda deve vedere che si sta muovendo,
+              o chiude la pagina e lascia il giro a meta' */}
+          {eliminandoVendita === venditaDaEliminare.id && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: BG, borderRadius: 10, padding: "9px 12px", marginBottom: 12, lineHeight: 1.45 }}>
+              {avanzamento
+                ? <>Rimetto in magazzino: <b>{avanzamento.fatti} di {avanzamento.totali}</b>. Non chiudere la pagina.</>
+                : <>Sto cancellando… non chiudere la pagina.</>}
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
-            <Button variant="ghost" onClick={() => setVenditaDaEliminare(null)}>Annulla</Button>
+            <Button variant="ghost" onClick={() => setVenditaDaEliminare(null)} disabled={eliminandoVendita === venditaDaEliminare.id}>Annulla</Button>
             <Button variant="danger" onClick={() => eliminaVendita(venditaDaEliminare)} disabled={eliminandoVendita === venditaDaEliminare.id}>
               {eliminandoVendita === venditaDaEliminare.id ? "Cancello…" : "Sì, cancella"}
             </Button>
