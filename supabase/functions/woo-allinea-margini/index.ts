@@ -44,7 +44,12 @@ Deno.serve(async (req) => {
   const { data: prodotti, error } = await supabase
     .from("prodotti_shop")
     .select("id, nome, woo_product_id, prezzo_vendita, costo_acquisto")
-    .not("woo_product_id", "is", null);
+    .not("woo_product_id", "is", null)
+    // I ritirati restano fuori: il loro id su WooCommerce non esiste
+    // piu', e ogni allineamento tornava con "ID non valido" su righe che
+    // non si potevano sistemare. Tre errori fissi a ogni giro insegnano
+    // solo a non leggere piu' il messaggio.
+    .not("attivo", "is", false);
   if (error) return json({ errore: "Lettura prodotti: " + error.message }, 500);
 
   const aggiornamenti = (prodotti || []).map((p: any) => {
