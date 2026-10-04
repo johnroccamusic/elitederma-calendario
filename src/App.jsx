@@ -62989,6 +62989,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // Non e' un metodo di pagamento in piu': e' il modo di incassare del
   // POS che c'e' gia'.
   const [richiestaQr, setRichiestaQr] = useState(null);   // { codice, indirizzo }
+  // sul telefono l'elenco degli articoli sta su due righe: toccando la
+  // scheda si apre per intero. Null = nessuna aperta
+  const [storicoAperto, setStoricoAperto] = useState(null);
   const [statoQr, setStatoQr] = useState("in_attesa");
   const [creandoQr, setCreandoQr] = useState(false);
   // Col metodo POS ci sono due modi di incassare davvero, e vanno detti
@@ -64020,6 +64023,56 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </div>
             </div>
           </div>
+          {/* Sul telefono la tabella non ci sta: sette colonne in 390
+              pixel schiacciano "Prodotti" in una striscia verticale, e una
+              vendita con quattro articoli diventa alta uno schermo. Li' si
+              passa a una scheda per vendita, con l'elenco degli articoli
+              su due righe e il resto in fila. */}
+          {isMobile ? (
+            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+              {ordinaStorico(venditePos, {
+                vendita: (v) => Number(v.numero_ordine) || (v.numero_ordine || ""),
+                tipo: (v) => v.tipo_movimento || "vendita",
+                data: (v) => v.data_ordine || "",
+                operatore: (v) => v.operatore_nome || "",
+                prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => pr.nome).join(", "),
+                metodo: (v) => v.metodo_pagamento || "",
+                totale: (v) => v.totale ?? null,
+              }).map((v) => {
+                const badgeTipo = { vendita: null, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" }, omaggio: { l: "Omaggio", c: GOLD, s: "#FBF1D9" } }[v.tipo_movimento];
+                const articoli = (Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ");
+                const aperta = storicoAperto === v.id;
+                return (
+                  <button
+                    key={v.id} type="button"
+                    onClick={() => setStoricoAperto(aperta ? null : v.id)}
+                    style={{ ...cardStyle, padding: "11px 13px", marginBottom: 0, textAlign: "left", width: "100%", border: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}
+                  >
+                    <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0 }}>
+                        {v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}
+                        <span style={{ fontWeight: 400, color: MUTED }}>{" · "}{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</span>
+                      </span>
+                      {badgeTipo && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: badgeTipo.c, background: badgeTipo.s, borderRadius: 7, padding: "2px 7px", flexShrink: 0 }}>{badgeTipo.l}</span>}
+                      <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 800, color: v.totale < 0 ? "#C0392B" : NAVY, flexShrink: 0 }}>{fmtEuroErp2(v.totale)}</span>
+                    </span>
+                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "block", marginTop: 4, lineHeight: 1.35,
+                      ...(aperta ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>
+                      {articoli || "—"}
+                    </span>
+                    <span style={{ ...fontBody, fontSize: 10, color: "#B5B5B5", display: "block", marginTop: 4 }}>
+                      {v.numero_ordine}{vedeTutteLeVendite && v.operatore_nome ? ` · ${toTitleCase(v.operatore_nome)}` : ""}
+                    </span>
+                  </button>
+                );
+              })}
+              {venditePos.length === 0 && (
+                <div style={{ ...cardStyle, ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: "20px 14px" }}>
+                  {vedeTutteLeVendite ? "Nessuna vendita al banco registrata." : "Non hai ancora registrato nessuna vendita al banco."}
+                </div>
+              )}
+            </div>
+          ) : (
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 14 }}>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
@@ -64064,6 +64117,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </table>
             </div>
           </div>
+          )}
         </div>
       </div>
     );
