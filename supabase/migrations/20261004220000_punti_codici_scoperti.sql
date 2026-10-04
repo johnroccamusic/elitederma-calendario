@@ -12,14 +12,15 @@
 -- quando qualcosa si rompe.
 --
 -- LE ESCLUSIONI. I codici automatici di YITH per i punti fedelta'
--- (`ywpar_discount_...`) non devono dare punti per natura, e senza
+-- (`ywpar_discount_...`) e `master20` non devono dare punti per natura,
+-- e senza
 -- escluderli la tabella sarebbe sempre piena. Un allarme che suona sempre
 -- e' un allarme spento: la stessa lezione dei tre errori fissi
 -- dell'allineamento margini. I modelli stanno in
 -- impostazioni_layout_tabelle -> puntiMaster_codiciDaIgnorare, non nel
 -- codice, perche' ne arriveranno altri.
 insert into impostazioni_layout_tabelle (chiave, valore)
-values ('puntiMaster_codiciDaIgnorare', '["ywpar_discount_%"]'::jsonb)
+values ('puntiMaster_codiciDaIgnorare', '["ywpar_discount_%", "master20"]'::jsonb)
 on conflict (chiave) do nothing;
 
 create or replace view v_punti_codici_scoperti
