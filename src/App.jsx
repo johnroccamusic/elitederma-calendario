@@ -5698,6 +5698,20 @@ async function bytesLogoSenzaBordi(bucket, percorso) {
   }
 }
 
+// Gli eventi in corso OGGI, fra quelli letti. Sta fuori dal componente
+// perche' una regola che dipende dalla data del giorno non si puo'
+// provare se vive dentro a una schermata: cosi' le si passano le date
+// che si vogliono.
+function eventiInCorsoOggi(eventi, oggi) {
+  return (eventi || []).filter((ev) => {
+    // su un evento gia' concluso la cassa e' stata tirata: attaccarci
+    // una vendita nuova sposterebbe un conto gia' chiuso
+    if (ev.stato === "concluso" || ev.stato === "annullato") return false;
+    const dal = ev.data_inizio || ev.data_fine;
+    const al = ev.data_fine || ev.data_inizio;
+    return !!dal && !!al && dal <= oggi && oggi <= al;
+  });
+}
 function dataOggiStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -62730,12 +62744,26 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     let vivo = true;
     const da = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     const a = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-    supabase.from("eventi").select("id, nome, data_inizio, data_fine, citta")
+    supabase.from("eventi").select("id, nome, data_inizio, data_fine, citta, stato")
       .lte("data_inizio", a).gte("data_fine", da).neq("stato", "annullato")
       .order("data_inizio")
       .then(({ data }) => { if (vivo) setEventiAperti(data || []); });
     return () => { vivo = false; };
   }, []);
+  // La barra "Sei a un evento?" si fa vedere SOLO nei giorni dell'evento.
+  // La lettura prende una settimana prima e una dopo, perche' serve a
+  // ritrovare l'evento di un carrello sospeso; ma fuori dai giorni veri
+  // la domanda non ha risposta diversa da "no", e al banco una tendina
+  // inutile e' una tendina che prima o poi qualcuno sbaglia.
+  const eventiOggi = useMemo(() => eventiInCorsoOggi(eventiAperti, dataOggiStr()), [eventiAperti]);
+  // ...con un'eccezione: se un carrello gia' aperto e' agganciato a un
+  // evento finito ieri, la tendina resta, o l'aggancio sparirebbe dalla
+  // vista senza che nessuno possa toglierlo.
+  const eventiPerLaTendina = useMemo(() => {
+    if (!eventoPosId || eventiOggi.some((ev) => ev.id === eventoPosId)) return eventiOggi;
+    const scelto = (eventiAperti || []).find((ev) => ev.id === eventoPosId);
+    return scelto ? [...eventiOggi, scelto] : eventiOggi;
+  }, [eventiOggi, eventiAperti, eventoPosId]);
   const eventoPosSel = eventiAperti.find((e) => e.id === eventoPosId) || null;
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
   // Capita che un amministratore dia una mano a una master vendendo dal
@@ -64236,12 +64264,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           il magazzino scende come sempre, e la riga resta agganciata
           all'evento cosi' in Gestione eventi si sa quanto di quello che
           e' partito e' stato venduto e quanto deve tornare. */}
-      {eventiAperti.length > 0 && (
+      {eventiPerLaTendina.length > 0 && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
           <Field label="Sei a un evento?">
             <select style={inputStyle} value={eventoPosId} onChange={(e) => setEventoPosId(e.target.value)}>
               <option value="">— vendita non legata a un evento —</option>
-              {eventiAperti.map((ev) => (
+              {eventiPerLaTendina.map((ev) => (
                 <option key={ev.id} value={ev.id}>{ev.nome}{ev.citta ? ` · ${ev.citta}` : ""}</option>
               ))}
             </select>
