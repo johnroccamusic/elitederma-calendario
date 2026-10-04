@@ -50296,6 +50296,8 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
       }
     }
     setMsgElimina(`Vendita #${v.numero_ordine || v.woo_order_id} cancellata${rimetteStock ? ", magazzino rimesso a posto" : ""}${bustaRiaperta}.`);
+    // via dall'elenco subito, prima e indipendentemente dal ricarico
+    setIdEliminati((prev) => { const n = new Set(prev); n.add(v.id); (collegate || []).forEach((x) => n.add(x.id)); return n; });
     ricarica(["vendite_shop", "prodotti_shop", "spedizioni_pos", "corsi_date"]);
   }
   // "Frangente": in quale occasione e' stata fatta la vendita. Il POS
@@ -50355,6 +50357,15 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   // prop: si vede il cambio "tornare indietro da solo" anche quando sul
   // database e' andato a buon fine.
   const [metodoCorretto, setMetodoCorretto] = useState({});
+  // Le vendite cancellate in questa sessione, tenute da parte per id.
+  //
+  // Il ricarico dopo la cancellazione di solito basta, ma se fallisce — o
+  // se la pagina sta mostrando una lettura piu' vecchia — la riga resta
+  // li' e si puo' provare a cancellarla all'infinito senza vederla
+  // sparire: la seconda volta la delete non trova piu' niente, dice
+  // "fatto" e non cambia nulla. Succede davvero (04/10/2026). Queste
+  // sparizioni locali tolgono la riga comunque.
+  const [idEliminati, setIdEliminati] = useState(() => new Set());
   const [msgMetodo, setMsgMetodo] = useState("");
   // La conferma sta DENTRO la riga, non in una finestra del browser.
   //
@@ -50480,7 +50491,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   }
 
   const venditeOrigine = (venditeShop || [])
-    .filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio")
+    .filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio" && !idEliminati.has(v.id))
     .map((v) => (metodoCorretto[v.id] ? { ...v, ...metodoCorretto[v.id] } : v));
 
   // "tutto" non esiste in rangePeriodoErp (pensato per l'ERP, senza
