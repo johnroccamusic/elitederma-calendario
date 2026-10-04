@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Elitederma — Sconto a fasce
  * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. I prodotti del reparto Needling hanno invece una tabella loro, a scaglioni di spesa e sul prezzo netto. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
- * Version: 1.1
+ * Version: 1.2
  * Author: Elitederma
  */
 
@@ -37,6 +37,11 @@ if ( ! defined( 'ELITEDERMA_CATEGORIA_NEEDLING' ) ) {
 
 add_filter( 'woocommerce_coupon_get_discount_amount', 'elitederma_sconto_a_fasce', 10, 5 );
 
+// La guardia c'e' per Code Snippets, non per PHP: quando salva o
+// accende uno snippet lo esegue DUE volte nella stessa richiesta, una
+// per controllarlo e una per attivarlo, e alla seconda la funzione
+// risulta gia' dichiarata. Senza questa riga lo snippet non si accende.
+if ( ! function_exists( 'elitederma_sconto_a_fasce' ) ) :
 function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrello, $singolo, $coupon ) {
 
 	// "fixed_cart" sconta il carrello intero e non ha una riga: li' non
@@ -153,6 +158,7 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 
 	return round( (float) $importo_da_scontare * $percentuale / 100, wc_get_rounding_precision() );
 }
+endif;
 
 /**
  * Il prodotto appartiene al reparto Needling?
@@ -163,16 +169,19 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
  * cambia in un posto solo. Su una variante si guarda il padre, che e'
  * dove stanno le categorie.
  */
+if ( ! function_exists( 'elitederma_e_needling' ) ) :
 function elitederma_e_needling( $prodotto ) {
 	$id = $prodotto->get_parent_id() ? $prodotto->get_parent_id() : $prodotto->get_id();
 	return has_term( ELITEDERMA_CATEGORIA_NEEDLING, 'product_cat', $id );
 }
+endif;
 
 /**
  * Legge un campo del prodotto guardando prima la variante e poi il
  * prodotto padre: su un prodotto con varianti il dato puo' stare
  * sull'una o sull'altro.
  */
+if ( ! function_exists( 'elitederma_meta_prodotto' ) ) :
 function elitederma_meta_prodotto( $prodotto, $chiave ) {
 	$valore = $prodotto->get_meta( $chiave );
 	if ( '' === $valore || null === $valore ) {
@@ -183,15 +192,18 @@ function elitederma_meta_prodotto( $prodotto, $chiave ) {
 	}
 	return ( null === $valore ) ? '' : (string) $valore;
 }
+endif;
 
 // In pagina carrello, accanto al coupon, una riga che spiega perche' lo
 // sconto non e' "il 10% di tutto": chi compra deve poter capire il
 // totale che gli viene chiesto.
 add_filter( 'woocommerce_cart_totals_coupon_label', 'elitederma_etichetta_coupon_fasce', 10, 2 );
 
+if ( ! function_exists( 'elitederma_etichetta_coupon_fasce' ) ) :
 function elitederma_etichetta_coupon_fasce( $etichetta, $coupon ) {
 	if ( $coupon->get_meta( '_ed_fasce_sconto' ) || '' !== (string) $coupon->get_meta( '_ed_sconto_margine_pct' ) || $coupon->get_meta( '_ed_needling' ) ) {
 		$etichetta .= ' — sconto variabile per prodotto';
 	}
 	return $etichetta;
 }
+endif;
