@@ -86,17 +86,27 @@ Deno.serve(async (req) => {
   // il carico da mandare al sito: la scadenza (stringa vuota, non null:
   // e' cosi' che WooCommerce toglie una scadenza) e/o la regola di sconto,
   // costruita come in woo-crea-coupon
+  // La tabella degli sconti needling viaggia con ogni coupon: lo snippet
+  // sul sito la legge da li'. Sta su un coupon e non in un'opzione di
+  // WordPress perche' cosi' nessuno deve ricordarsi di aggiornare due
+  // posti: si riscrive insieme alla regola, con lo stesso tasto.
+  const { data: rigaNeedling } = await supabase
+    .from("impostazioni_layout_tabelle").select("valore").eq("chiave", "scontoNeedling_scaglioni").maybeSingle();
+  const needling = rigaNeedling?.valore ?? null;
+  const needlingAttivo = needling && Array.isArray(needling.sconti) && needling.sconti.some((x: unknown) => Number(x) > 0);
+  const metaNeedling = { key: "_ed_needling", value: needlingAttivo ? JSON.stringify(needling) : "" };
+
   const payloadWoo: Record<string, unknown> = {};
   if (haValidoFinoA) payloadWoo.date_expires = validoFinoA === null ? "" : validoFinoA;
   if (aggiornaRegola) {
     payloadWoo.discount_type = "percent";
     payloadWoo.amount = String(riga.valore ?? 0);
     if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
-      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, { key: "_ed_sconto_margine_pct", value: "" }];
+      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling];
     } else if (riga.base_sconto === "margine") {
-      payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, { key: "_ed_fasce_sconto", value: "" }];
+      payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, { key: "_ed_fasce_sconto", value: "" }, metaNeedling];
     } else {
-      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: "" }, { key: "_ed_sconto_margine_pct", value: "" }];
+      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: "" }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling];
     }
   }
 

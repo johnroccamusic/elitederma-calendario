@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Elitederma — Sconto a fasce
- * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
- * Version: 1.0
+ * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. I prodotti del reparto Needling hanno invece una tabella loro, a scaglioni di spesa e sul prezzo netto. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
+ * Version: 1.1
  * Author: Elitederma
  */
 
@@ -28,6 +28,12 @@
 // come un normale coupon in percentuale.
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+// La categoria "Needling" su WooCommerce. Se un giorno cambiasse, si
+// cambia qui e basta: e' l'unico punto che la nomina.
+if ( ! defined( 'ELITEDERMA_CATEGORIA_NEEDLING' ) ) {
+	define( 'ELITEDERMA_CATEGORIA_NEEDLING', 64 );
+}
 
 add_filter( 'woocommerce_coupon_get_discount_amount', 'elitederma_sconto_a_fasce', 10, 5 );
 
@@ -71,6 +77,48 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 		return round( min( $importo, (float) $importo_da_scontare ), wc_get_rounding_precision() );
 	}
 
+	// ---- CASO 0: NEEDLING, che ha una tabella sua ----
+	//
+	// I prodotti del reparto Needling non guardano le fasce: lo sconto lo
+	// decide la loro tabella, a scaglioni di spesa, e le due non si
+	// sommano mai. E' la stessa regola che applica il POS dell'app.
+	//
+	// Due differenze dalle fasce, ed e' importante non confonderle:
+	//  - lo scaglione lo sceglie QUANTO SI SPENDE in tutto il carrello,
+	//    non quanto rende il prodotto;
+	//  - la percentuale si legge SUL PREZZO NETTO, mentre le fasce sono
+	//    sul lordo. Il 30% di needling sono trenta euro ogni cento netti.
+	$needling_grezzo = $coupon->get_meta( '_ed_needling' );
+	if ( ! empty( $needling_grezzo ) && elitederma_e_needling( $prodotto ) ) {
+		$needling = json_decode( $needling_grezzo, true );
+		$soglie   = isset( $needling['soglie'] ) && is_array( $needling['soglie'] ) ? $needling['soglie'] : array();
+		$sconti   = isset( $needling['sconti'] ) && is_array( $needling['sconti'] ) ? $needling['sconti'] : array();
+
+		if ( count( $soglie ) === 2 && count( $sconti ) === 3 ) {
+			// il totale del carrello a listino, IVA compresa e prima di
+			// qualunque sconto: e' la stessa base che legge il POS
+			$speso = 0.0;
+			if ( function_exists( 'WC' ) && WC()->cart ) {
+				$speso = (float) WC()->cart->get_subtotal() + (float) WC()->cart->get_subtotal_tax();
+			}
+			$pct = (float) ( $speso < (float) $soglie[0] ? $sconti[0] : ( $speso < (float) $soglie[1] ? $sconti[1] : $sconti[2] ) );
+
+			if ( $pct <= 0 ) {
+				return 0.0; // tabella spenta su questo scaglione: niente sconto
+			}
+
+			// la percentuale e' sul NETTO: si prende il prezzo senza IVA e
+			// si sconta quello. Applicarla al lordo darebbe un quinto in
+			// piu' di sconto senza che nessuno l'abbia deciso.
+			$netto_unitario = (float) wc_get_price_excluding_tax( $prodotto, array( 'qty' => 1 ) );
+			$quantita       = isset( $riga_carrello['quantity'] ) ? (int) $riga_carrello['quantity'] : 1;
+			$pezzi          = $singolo ? 1 : max( 1, $quantita );
+			$importo        = $netto_unitario * $pct / 100 * $pezzi;
+
+			return round( min( $importo, (float) $importo_da_scontare ), wc_get_rounding_precision() );
+		}
+	}
+
 	// ---- CASO 1: sconto a fasce ----
 	$fasce = json_decode( $fasce_grezze, true );
 	if ( ! is_array( $fasce ) || ! count( $fasce ) ) {
@@ -103,6 +151,20 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 	}
 
 	return round( (float) $importo_da_scontare * $percentuale / 100, wc_get_rounding_precision() );
+}
+
+/**
+ * Il prodotto appartiene al reparto Needling?
+ *
+ * Si guarda la categoria di WooCommerce (id 64) invece di un
+ * contrassegno scritto sul prodotto: il contrassegno andrebbe tenuto
+ * aggiornato su duecento schede, la categoria e' gia' li' e la si
+ * cambia in un posto solo. Su una variante si guarda il padre, che e'
+ * dove stanno le categorie.
+ */
+function elitederma_e_needling( $prodotto ) {
+	$id = $prodotto->get_parent_id() ? $prodotto->get_parent_id() : $prodotto->get_id();
+	return has_term( ELITEDERMA_CATEGORIA_NEEDLING, 'product_cat', $id );
 }
 
 /**

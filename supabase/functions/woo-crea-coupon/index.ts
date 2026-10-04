@@ -106,8 +106,17 @@ Deno.serve(async (req) => {
   // viene disattivato il coupon continua a funzionare, semplicemente
   // torna a essere una percentuale sola. Meglio uno sconto approssimato
   // che un carrello rotto.
+  // La tabella degli sconti needling viaggia con il coupon come le fasce:
+  // il frammento la legge da li' e, sui prodotti di quel reparto, usa
+  // quella invece delle fasce. Le due non si sommano mai.
+  const { data: rigaNeedling } = await supabase
+    .from("impostazioni_layout_tabelle").select("valore").eq("chiave", "scontoNeedling_scaglioni").maybeSingle();
+  const needling = rigaNeedling?.valore ?? null;
+  const needlingAttivo = needling && Array.isArray(needling.sconti) && needling.sconti.some((x: unknown) => Number(x) > 0);
+  const metaNeedling = needlingAttivo ? [{ key: "_ed_needling", value: JSON.stringify(needling) }] : [];
+
   if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
-    payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }];
+    payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, ...metaNeedling];
   } else if (riga.base_sconto === "margine") {
     // Anche la percentuale unica "sul margine" va detta al sito per
     // quello che e': il 15% di quei dieci euro di guadagno, non il 15%
@@ -115,7 +124,7 @@ Deno.serve(async (req) => {
     // giusta sul totale degli ordini e sbagliata su ogni singolo
     // carrello. Il frammento legge questo e il margine in euro scritto
     // sul prodotto, e fa il conto esatto riga per riga.
-    payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }];
+    payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, ...metaNeedling];
   }
 
   try {
