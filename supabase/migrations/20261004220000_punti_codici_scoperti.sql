@@ -13,8 +13,7 @@
 --
 -- LE ESCLUSIONI. I codici automatici di YITH per i punti fedelta'
 -- (`ywpar_discount_...`) e `master20` non devono dare punti per natura,
--- e senza
--- escluderli la tabella sarebbe sempre piena. Un allarme che suona sempre
+-- e senza escluderli la tabella sarebbe sempre piena. Un allarme che suona sempre
 -- e' un allarme spento: la stessa lezione dei tre errori fissi
 -- dell'allineamento margini. I modelli stanno in
 -- impostazioni_layout_tabelle -> puntiMaster_codiciDaIgnorare, non nel
