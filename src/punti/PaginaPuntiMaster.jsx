@@ -32,20 +32,30 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
   const [errore, setErrore] = useState(null);
   const [scaricando, setScaricando] = useState(null);
   const [daConfermare, setDaConfermare] = useState(null);
+  // Le vendite fatte con un codice che non ha dato punti a nessuno. In
+  // condizioni normali questo elenco e' vuoto; una riga vuol dire che
+  // qualcosa si e' scollegato fra app, WooCommerce e listino privato.
+  // Serve perche' un punto che non arriva non si vede: non compare da
+  // nessuna parte, e l'assenza non si nota finche' qualcuno non protesta.
+  const [scoperte, setScoperte] = useState([]);
   const stagione = stagioneCorrente();
 
   const leggi = useCallback(async () => {
     setCaricando(true);
     try {
-      const [a, b, c] = await Promise.all([
+      const [a, b, c, d] = await Promise.all([
         supabase.from("v_punti_master").select("*").order("punti_totali", { ascending: false }),
         supabase.from("v_punti_master_stagioni").select("*"),
         supabase.from("punti_master_scarichi").select("*").order("scaricato_fino_a", { ascending: false }),
+        supabase.from("v_punti_codici_scoperti").select("*").order("data", { ascending: false }),
       ]);
       if (a.error) throw a.error;
       setRighe(a.data || []);
       setStagioni(b.data || []);
       setScarichi(c.data || []);
+      // un errore qui non deve impedire di vedere i punti: il controllo e'
+      // un di piu', la pagina serve anche senza
+      setScoperte(d.error ? [] : (d.data || []));
       setErrore(null);
     } catch (e) { setErrore(e?.message || "Errore di lettura"); }
     setCaricando(false);
@@ -213,6 +223,52 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {!caricando && (
+          <div style={{ marginTop: 22, background: scoperte.length ? "#FBEBE9" : "#fff",
+            border: `1px solid ${scoperte.length ? "#F0C8C2" : CREAM_BORDER}`, borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ padding: "12px 16px" }}>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: scoperte.length ? "#C0392B" : NAVY }}>
+                {scoperte.length ? `Codici senza padrone (${scoperte.length})` : "Codici senza padrone: nessuno"}
+              </div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>
+                {scoperte.length
+                  ? "Vendite fatte con un codice che non ha dato punti a nessuno. Vanno guardate: o il codice non e nato nell app, o gli manca la master."
+                  : "Ogni vendita con un codice sconto ha trovato la sua master. Se un giorno compare qualcosa qui, e qui che si vede."}
+              </div>
+            </div>
+            {scoperte.length > 0 && (
+              <div style={{ overflowX: "auto", background: "#fff" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+                  <thead>
+                    <tr style={{ background: "#FAF6EE" }}>
+                      <th style={{ ...th, textAlign: "left" }}>Data</th>
+                      <th style={{ ...th, textAlign: "left" }}>Ordine</th>
+                      <th style={{ ...th, textAlign: "left" }}>Codice</th>
+                      <th style={{ ...th, textAlign: "left" }}>Cliente</th>
+                      <th style={th}>Totale</th>
+                      <th style={{ ...th, textAlign: "left" }}>Perche</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scoperte.map((r) => (
+                      <tr key={r.vendita_id}>
+                        <td style={{ ...td, textAlign: "left" }}>
+                          {new Date(r.data).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" })}
+                        </td>
+                        <td style={{ ...td, textAlign: "left", color: MUTED }}>{r.numero_ordine || "—"}</td>
+                        <td style={{ ...td, textAlign: "left", fontWeight: 700 }}>{r.codice}</td>
+                        <td style={{ ...td, textAlign: "left" }}>{r.cliente_nome || "—"}</td>
+                        <td style={td}>{punti(r.totale)} &euro;</td>
+                        <td style={{ ...td, textAlign: "left", color: "#C0392B", whiteSpace: "normal" }}>{r.motivo}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
