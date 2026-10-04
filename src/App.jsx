@@ -50220,21 +50220,43 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   // cancellano da soli: si cancella la vendita a cui appartengono.
   const [eliminandoVendita, setEliminandoVendita] = useState(null);
   const [msgElimina, setMsgElimina] = useState("");
+  // La conferma e' una finestra dell'app, non window.confirm.
+  //
+  // Nell'app aggiunta alla schermata home — e in qualche browser con i
+  // popup bloccati — window.confirm non compare e torna false: si preme
+  // il cestino, non parte nessuna chiamata, e la riga resta li'. Si puo'
+  // riprovare all'infinito senza capire perche'. E' successo il
+  // 04/10/2026 su due vendite di Stefania Sanna, ed era gia' successo ai
+  // progetti (dove la conferma era stata rifatta per questo motivo).
+  const [venditaDaEliminare, setVenditaDaEliminare] = useState(null);
+  function chiediCancellazione(v) {
+    if (v.tipo_movimento && v.tipo_movimento !== "vendita") { setMsgElimina("Questa riga è un movimento legato a una vendita: cancella la vendita originale e sparisce anche lei."); return; }
+    setMsgElimina("");
+    setVenditaDaEliminare(v);
+  }
+  // Il testo della conferma: le stesse cose che diceva prima, ma su una
+  // finestra che si vede davvero.
+  function avvisiCancellazione(v) {
+    if (!v) return [];
+    const collegate = (venditeShop || []).filter((x) => x.vendita_collegata_id === v.id);
+    const giaAnnullata = collegate.some((x) => x.tipo_movimento === "annullamento");
+    const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
+    const rimetteStock = !v.prelevato_dai_kit && !giaAnnullata && righe.some((r) => r.quantita > 0);
+    return [
+      "Non ne resterà traccia: sparisce da prima nota, cassa contanti, provvigioni e statistiche.",
+      collegate.length > 0 ? `Spariscono anche ${collegate.length} movimenti collegati (annullamenti, resi o cambi).` : null,
+      rimetteStock ? "I pezzi venduti tornano in magazzino." : (v.prelevato_dai_kit ? "I pezzi erano usciti dai kit del corso: il magazzino non cambia." : giaAnnullata ? "Era già annullata: il magazzino non cambia." : null),
+      v.metodo_pagamento === "contanti" && (Number(v.totale) || 0) > 0 && !giaAnnullata ? `I ${fmtEuroErp2(Number(v.totale))} in contanti non sono mai stati incassati: se la busta del corso era già in cassa, si riapre e torna da approvare.` : null,
+    ].filter(Boolean);
+  }
+
   async function eliminaVendita(v) {
     if (v.tipo_movimento && v.tipo_movimento !== "vendita") { setMsgElimina("Questa riga è un movimento legato a una vendita: cancella la vendita originale e sparisce anche lei."); return; }
     const collegate = (venditeShop || []).filter((x) => x.vendita_collegata_id === v.id);
     const giaAnnullata = collegate.some((x) => x.tipo_movimento === "annullamento");
     const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
     const rimetteStock = !v.prelevato_dai_kit && !giaAnnullata && righe.some((r) => r.quantita > 0);
-    const testo = [
-      `Vuoi veramente cancellare la vendita #${v.numero_ordine || v.woo_order_id} del ${v.data_ordine ? fmtData(String(v.data_ordine).slice(0, 10)) : "—"} da ${fmtEuroErp2(Number(v.totale) || 0)}?`,
-      "",
-      "Non ne resterà traccia: sparisce da prima nota, cassa contanti, provvigioni e statistiche.",
-      collegate.length > 0 ? `Spariscono anche ${collegate.length} movimenti collegati (annullamenti, resi o cambi).` : null,
-      rimetteStock ? "I pezzi venduti tornano in magazzino." : (v.prelevato_dai_kit ? "I pezzi erano usciti dai kit del corso: il magazzino non cambia." : giaAnnullata ? "Era già annullata: il magazzino non cambia." : null),
-      v.metodo_pagamento === "contanti" && (Number(v.totale) || 0) > 0 && !giaAnnullata ? `I ${fmtEuroErp2(Number(v.totale))} in contanti non sono mai stati incassati: se la busta del corso era già in cassa, si riapre e torna da approvare.` : null,
-    ].filter((r) => r !== null).join("\n");
-    if (!window.confirm(testo)) return;
+    setVenditaDaEliminare(null);
     setEliminandoVendita(v.id); setMsgElimina("");
     if (rimetteStock) {
       const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
@@ -50555,6 +50577,27 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   })();
 
   return (
+    <>
+      {/* la conferma di cancellazione: una finestra dell'app, che si vede
+          anche dove window.confirm non comparirebbe */}
+      {venditaDaEliminare && (
+        <Modal title="Cancellare la vendita?" onClose={() => setVenditaDaEliminare(null)} maxWidth={460}>
+          <div style={{ ...fontBody, fontSize: 14, color: NAVY, lineHeight: 1.45, marginBottom: 10 }}>
+            Vendita <strong>#{venditaDaEliminare.numero_ordine || venditaDaEliminare.woo_order_id}</strong> del{" "}
+            {venditaDaEliminare.data_ordine ? fmtData(String(venditaDaEliminare.data_ordine).slice(0, 10)) : "—"} da{" "}
+            <strong>{fmtEuroErp2(Number(venditaDaEliminare.totale) || 0)}</strong>.
+          </div>
+          <ul style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5, margin: "0 0 18px", paddingLeft: 18 }}>
+            {avvisiCancellazione(venditaDaEliminare).map((r, i) => <li key={i} style={{ marginBottom: 4 }}>{r}</li>)}
+          </ul>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+            <Button variant="ghost" onClick={() => setVenditaDaEliminare(null)}>Annulla</Button>
+            <Button variant="danger" onClick={() => eliminaVendita(venditaDaEliminare)} disabled={eliminandoVendita === venditaDaEliminare.id}>
+              {eliminandoVendita === venditaDaEliminare.id ? "Cancello…" : "Sì, cancella"}
+            </Button>
+          </div>
+        </Modal>
+      )}
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         {/* Il tondo di uscita stava appoggiato sopra la pagina con un
@@ -50847,7 +50890,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                         {/* il cestino: chiede conferma e non lascia traccia */}
                         <td style={{ padding: "12px 10px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                           <button
-                            onClick={() => eliminaVendita(v)}
+                            onClick={() => chiediCancellazione(v)}
                             disabled={eliminandoVendita === v.id}
                             title={v.tipo_movimento && v.tipo_movimento !== "vendita" ? "Si cancella la vendita originale: sparisce anche questo movimento" : "Cancella la vendita, senza lasciarne traccia"}
                             style={{ border: "none", background: "none", cursor: "pointer", color: v.tipo_movimento && v.tipo_movimento !== "vendita" ? MUTED : "#C0392B", padding: 6, display: "flex", opacity: eliminandoVendita === v.id ? 0.5 : 1 }}
@@ -50932,6 +50975,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
         />
       )}
     </div>
+    </>
   );
 }
 
