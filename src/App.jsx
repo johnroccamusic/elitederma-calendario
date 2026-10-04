@@ -63535,7 +63535,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // NETTO, e raccontata sul lordo il 30% diventa "24,59%". Gli euro sono
   // gli stessi, il numero no — e nessuno riconosce la regola che ha
   // appena deciso. Quando tutte le righe scontate sono needling si scrive
-  // la percentuale vera, dicendo su cosa.
+  // la percentuale vera, quella decisa nella scheda.
   const righeNeedlingScontate = couponAFasce
     ? carrello.filter((r) => !righeSenzaMargine.includes(r))
     : [];
@@ -64294,7 +64294,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               saprebbe se e' quello giusto */}
           {corsoPosSel && couponAttivo && couponAttivo.corsi_date_id === corsoPosSel.id && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
-              Sconto del corso applicato: −{pctNeedlingCarrello != null ? `${fmtPctErp2(pctNeedlingCarrello)} sul netto` : fmtPctErp2(percentualeErogata)}
+              Sconto del corso applicato: −{pctNeedlingCarrello != null ? fmtPctErp2(pctNeedlingCarrello) : fmtPctErp2(percentualeErogata)}
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
               {fasceContantiInUso && (
                 <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{couponPersonaleAttivo && metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
@@ -64518,7 +64518,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY }}>
                 <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
                 <span style={{ whiteSpace: "nowrap" }}>Applica sconto del corso</span>
-                {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{pctNeedlingCarrello != null ? `${fmtPctErp2(pctNeedlingCarrello)} sul netto` : fmtPctErp2(percentualeErogata)}</span>}
+                {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{pctNeedlingCarrello != null ? fmtPctErp2(pctNeedlingCarrello) : fmtPctErp2(percentualeErogata)}</span>}
               </label>
             )}
             {/* il separatore solo se a sinistra c'e' davvero qualcosa */}
@@ -64542,7 +64542,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
                   couponAttivo ? (
                     <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 3 }}>
-                      Codice valido: −{pctNeedlingCarrello != null ? `${fmtPctErp2(pctNeedlingCarrello)} sul netto` : fmtPctErp2(percentualeErogata)}
+                      Codice valido: −{pctNeedlingCarrello != null ? fmtPctErp2(pctNeedlingCarrello) : fmtPctErp2(percentualeErogata)}
                       {/* quanto durera': un codice a uso singolo sparisce dopo
                           questo carrello, e saperlo prima evita di cercarlo
                           alla vendita dopo credendo che sia sparito per errore */}
