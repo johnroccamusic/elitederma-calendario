@@ -115,7 +115,9 @@ function elitederma_svuota_cache( $richiesta ) {
 			if ( class_exists( 'Breeze_PurgeVarnish' ) ) {
 				$varnish = new Breeze_PurgeVarnish();
 				$host = wp_parse_url( home_url(), PHP_URL_HOST );
-				$tutto = wp_remote_request( home_url( '/' ), array(
+				// NON si chiama $tutto: quella e' la richiesta di svuotare
+				// tutto, e riusarne il nome qui dentro la cancellerebbe
+				$rispostaVarnish = wp_remote_request( home_url( '/' ), array(
 					'method'  => 'PURGE',
 					'timeout' => 10,
 					'headers' => array(
@@ -123,7 +125,7 @@ function elitederma_svuota_cache( $richiesta ) {
 						'Host'           => $host,
 					),
 				) );
-				$codice = is_wp_error( $tutto ) ? 0 : (int) wp_remote_retrieve_response_code( $tutto );
+				$codice = is_wp_error( $rispostaVarnish ) ? 0 : (int) wp_remote_retrieve_response_code( $rispostaVarnish );
 				$dati['passi'][] = 'varnish:regex:' . ( $codice ?: 'ko' );
 
 				if ( $codice < 200 || $codice >= 400 ) {
