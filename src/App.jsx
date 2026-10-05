@@ -5698,18 +5698,25 @@ async function bytesLogoSenzaBordi(bucket, percorso) {
   }
 }
 
-// Gli eventi in corso OGGI, fra quelli letti. Sta fuori dal componente
-// perche' una regola che dipende dalla data del giorno non si puo'
-// provare se vive dentro a una schermata: cosi' le si passano le date
-// che si vogliono.
-function eventiInCorsoOggi(eventi, oggi) {
+// Un paio di giorni prima e un paio dopo: alla fiera si vende anche il
+// giorno dell'allestimento e quello dello smontaggio, e un banco che la
+// sera prima non ti fa scegliere l'evento costringe a sistemare le righe
+// dopo. Fuori da quella finestra la domanda non ha risposta diversa da
+// "no", e una tendina inutile prima o poi qualcuno la sbaglia.
+const GIORNI_ATTORNO_EVENTO = 2;
+// Sta fuori dal componente perche' una regola che dipende dalla data del
+// giorno non si puo' provare se vive dentro a una schermata: cosi' le si
+// passano le date che si vogliono.
+function eventiAttiviAlBanco(eventi, oggi, margine = GIORNI_ATTORNO_EVENTO) {
+  const primo = addGiorni(oggi, -margine);
+  const ultimo = addGiorni(oggi, margine);
   return (eventi || []).filter((ev) => {
     // su un evento gia' concluso la cassa e' stata tirata: attaccarci
     // una vendita nuova sposterebbe un conto gia' chiuso
     if (ev.stato === "concluso" || ev.stato === "annullato") return false;
     const dal = ev.data_inizio || ev.data_fine;
     const al = ev.data_fine || ev.data_inizio;
-    return !!dal && !!al && dal <= oggi && oggi <= al;
+    return !!dal && !!al && dal <= ultimo && al >= primo;
   });
 }
 function dataOggiStr() {
@@ -62750,12 +62757,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       .then(({ data }) => { if (vivo) setEventiAperti(data || []); });
     return () => { vivo = false; };
   }, []);
-  // La barra "Sei a un evento?" si fa vedere SOLO nei giorni dell'evento.
-  // La lettura prende una settimana prima e una dopo, perche' serve a
-  // ritrovare l'evento di un carrello sospeso; ma fuori dai giorni veri
-  // la domanda non ha risposta diversa da "no", e al banco una tendina
-  // inutile e' una tendina che prima o poi qualcuno sbaglia.
-  const eventiOggi = useMemo(() => eventiInCorsoOggi(eventiAperti, dataOggiStr()), [eventiAperti]);
+  // La barra "Sei a un evento?" si fa vedere nei giorni dell'evento piu'
+  // un paio prima e un paio dopo. La lettura ne prende sette per parte,
+  // perche' serve anche a ritrovare l'evento di un carrello sospeso.
+  const eventiOggi = useMemo(() => eventiAttiviAlBanco(eventiAperti, dataOggiStr()), [eventiAperti]);
   // ...con un'eccezione: se un carrello gia' aperto e' agganciato a un
   // evento finito ieri, la tendina resta, o l'aggancio sparirebbe dalla
   // vista senza che nessuno possa toglierlo.
