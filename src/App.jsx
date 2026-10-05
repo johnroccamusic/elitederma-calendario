@@ -2217,6 +2217,42 @@ function iconaCategoriaPos(nome) {
 // ognuna e il nome sotto o di fianco, separati da un filetto. Scorre in
 // orizzontale perche' le categorie sono trenta e non ci staranno mai tutte:
 // si scorre come uno scaffale, invece di far crescere la pagina.
+// La linguetta che apre e chiude le categorie al banco, appesa sotto la
+// striscia. Era una parolina di nove punti e mezzo in minuscolo: con le
+// categorie chiuse di default nessuno la trovava, e il banco sembrava
+// senza filtri. Ora e' una pastiglia blu con la freccia che gira, e dice
+// quale categoria e' attiva quando la tendina e' chiusa — altrimenti si
+// resta a guardare un elenco filtrato senza sapere perche'.
+function LinguettaCategoriePos({ aperta, onSwitch, nomeFiltro = "", compatta = false }) {
+  const etichetta = !aperta && nomeFiltro ? nomeFiltro : "Categorie";
+  return (
+    <div style={{ display: "flex", justifyContent: "center", marginTop: -1 }}>
+      <button
+        onClick={onSwitch}
+        aria-label={aperta ? "Nascondi le categorie" : "Mostra le categorie"}
+        aria-expanded={aperta}
+        title={aperta ? "Ritrai le categorie" : "Mostra le categorie"}
+        style={{
+          ...fontBody, fontSize: compatta ? 11.5 : 12.5, fontWeight: 700, letterSpacing: 0.2,
+          lineHeight: 1, display: "inline-flex", alignItems: "center", gap: 6,
+          padding: compatta ? "6px 13px 7px" : "7px 16px 8px", cursor: "pointer",
+          background: NAVY, color: "#fff",
+          border: "1px solid rgba(255,255,255,0.22)", borderTop: "none",
+          borderRadius: "0 0 12px 12px",
+          boxShadow: "0 3px 10px rgba(14,27,51,0.26)",
+          maxWidth: "70vw", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis",
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{etichetta}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: aperta ? "rotate(180deg)" : "none", transition: "transform 220ms ease", flexShrink: 0 }}>
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+    </div>
+  );
+}
 function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = false }) {
   const isMobile = useIsMobile();
   const voci = [{ id: "", nome: "Tutti" }, ...(categorie || [])];
@@ -63125,10 +63161,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // la pagina e le tre stanno in fila, nel cassetto pure
   const righeOpzioni = schermoStretto && !isMobile;
   const [cassettoCarrello, setCassettoCarrello] = useState(false);
-  // da scrivania la striscia parte aperta e si ritrae con la stessa
-  // linguetta del telefono: lo stato e' separato perche' i due schermi
-  // hanno abitudini diverse
-  const [categorieAperteDesktop, setCategorieAperteDesktop] = useState(true);
+  // Chiuse all'ingresso su tutti e due gli schermi: trenta caselle prima
+  // del primo prodotto sono trenta caselle che quasi nessuno usa, e chi
+  // cerca scrive nella barra. Si aprono dalla linguetta. Lo stato resta
+  // separato perche' i due schermi si ritraggono in punti diversi.
+  const [categorieAperteDesktop, setCategorieAperteDesktop] = useState(false);
   const [mostraMenu, setMostraMenu] = useState(false); // solo mobile: menu "⋮" con le azioni che su desktop sono tasti a testo
 
   const categorieNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
@@ -65251,23 +65288,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </div>
             </div>
           </div>
-          {/* la linguetta, come quella del dock ma appesa sotto: la parola
-              e basta, grande quanto serve a contenerla. Quando c'e' un
-              filtro attivo e la tendina e' chiusa si scurisce, cosi' si sa
-              che l'elenco non e' tutto */}
-          <div style={{ display: "flex", justifyContent: "center", marginTop: -1 }}>
-            <button
-              onClick={() => setCategorieATendina((v) => !v)}
-              aria-label={categorieATendina ? "Nascondi le categorie" : "Mostra le categorie"}
-              aria-expanded={categorieATendina}
-              style={{
-                ...fontBody, fontSize: 9.5, fontWeight: 600, letterSpacing: 0.3, lineHeight: 1, textTransform: "lowercase",
-                padding: "3px 8px 4px", cursor: "pointer",
-                background: !categorieATendina && categoriaSel ? NAVY : "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-                border: "1px solid rgba(255,255,255,0.22)", borderTop: "none", borderRadius: "0 0 9px 9px", color: "#fff",
-              }}
-            >categorie</button>
-          </div>
+          <LinguettaCategoriePos
+            aperta={categorieATendina}
+            onSwitch={() => setCategorieATendina((v) => !v)}
+            nomeFiltro={categorieNomeById[categoriaSel] || ""}
+            compatta
+          />
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 0, padding: "6px 14px" }}>{elencoProdotti}</div>
@@ -65543,20 +65569,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   </div>
                 </div>
               </div>
-              <div style={{ display: "flex", justifyContent: "center", marginTop: -1 }}>
-                <button
-                  onClick={() => setCategorieAperteDesktop((v) => !v)}
-                  aria-label={categorieAperteDesktop ? "Nascondi le categorie" : "Mostra le categorie"}
-                  aria-expanded={categorieAperteDesktop}
-                  title={categorieAperteDesktop ? "Ritrai le categorie" : "Mostra le categorie"}
-                  style={{
-                    ...fontBody, fontSize: 10, fontWeight: 600, letterSpacing: 0.3, lineHeight: 1, textTransform: "lowercase",
-                    padding: "3px 10px 4px", cursor: "pointer",
-                    background: !categorieAperteDesktop && categoriaSel ? NAVY : "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-                    border: "1px solid rgba(255,255,255,0.22)", borderTop: "none", borderRadius: "0 0 9px 9px", color: "#fff",
-                  }}
-                >categorie</button>
-              </div>
+              <LinguettaCategoriePos
+                aperta={categorieAperteDesktop}
+                onSwitch={() => setCategorieAperteDesktop((v) => !v)}
+                nomeFiltro={categorieNomeById[categoriaSel] || ""}
+              />
             </div>
 
             {elencoProdotti}
