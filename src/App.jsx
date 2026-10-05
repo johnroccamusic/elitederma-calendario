@@ -48852,6 +48852,36 @@ function StrisciaScarichiMancati({ righe, onSistemata, isMobile }) {
 // aprire i bundle nei loro pezzi, preparaScarichi per verificare che
 // nessuna giacenza vada sotto zero, registra_vendita_pos per scrivere, e
 // applicaScarichi che resta l'unico punto che tocca lo stock.
+// LA REGOLA, e sta scritta in un posto solo apposta: l'indirizzo di una
+// spedizione pagata col QR e' quello che ha compilato l'allieva su
+// Stripe. Lo scrive lei, lo rilegge lei sulla ricevuta, ed e' l'unico che
+// risponde se il pacco non arriva.
+async function creaPaccoDaStripe(pagamento, venditaId = null, prodottiRiga = null) {
+  const c = pagamento?.cliente || {};
+  if (!c.indirizzo && !c.citta) return "La cliente non ha lasciato un indirizzo su Stripe: il pacco va composto a mano.";
+  const idVendita = venditaId || pagamento.vendita_id;
+  if (!idVendita) return "Manca la vendita a cui agganciare il pacco.";
+  let righe = prodottiRiga;
+  if (!righe) {
+    const { data: v } = await supabase.from("vendite_shop").select("prodotti").eq("id", idVendita).maybeSingle();
+    righe = v?.prodotti || [];
+  }
+  const { error } = await supabase.from("spedizioni_pos").insert({
+    vendita_id: idVendita,
+    corso_data_id: pagamento.corso_data_id || null,
+    destinatario_nome: [c.nome, c.cognome].filter(Boolean).join(" ").trim() || null,
+    nome: c.nome || null, cognome: c.cognome || null,
+    indirizzo: c.indirizzo || null, civico: c.civico || null,
+    citta: c.citta || null, cap: c.cap || null,
+    provincia: (c.provincia || "").toUpperCase().slice(0, 2) || null,
+    cellulare: c.telefono || null,
+    richiede_fattura: false,
+    // la riga della spedizione e' un costo, non merce: nel pacco non ci va
+    prodotti: (righe || []).filter((x) => !x.spedizione && !/^spedizione$/i.test(x.nome || "")),
+  });
+  return error ? "Ordine di spedizione non creato: " + testoErrore(error) : null;
+}
+
 function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
   const [righe, setRighe] = useState(null);
   const [msg, setMsg] = useState("");
@@ -48859,17 +48889,56 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
 
   async function carica() {
     const { data, error } = await supabase.from("pagamenti_pos")
-      .select("*").not("pagato_il", "is", null).is("vendita_id", null)
+      .select("*").not("pagato_il", "is", null)
       .order("pagato_il", { ascending: false });
     if (error) { setMsg("Non riesco a leggere gli incassi: " + testoErrore(error)); setRighe([]); return; }
-    setRighe(data || []);
-    onCambiaConto?.((data || []).length);
+    const pagati = data || [];
+    // Due guasti diversi, stesso elenco perche' per chi guarda sono la
+    // stessa cosa: soldi entrati e qualcosa rimasto indietro.
+    //   - l'incasso senza vendita: la schermata del QR si e' chiusa prima
+    //     che la cliente pagasse, e non l'ha raccolto nessuno;
+    //   - la vendita senza pacco: la spedizione era pagata, ma l'ordine
+    //     non e' mai entrato in coda. E' successo con due ordini del
+    //     04/10/2026, incassati e fermi.
+    const conVendita = pagati.filter((p) => p.vendita_id);
+    let vendite = [];
+    let spedizioni = [];
+    if (conVendita.length) {
+      const ids = conVendita.map((p) => p.vendita_id);
+      const [v, sp] = await Promise.all([
+        supabase.from("vendite_shop").select("id, numero_ordine, prodotti").in("id", ids),
+        supabase.from("spedizioni_pos").select("vendita_id").in("vendita_id", ids),
+      ]);
+      vendite = v.data || [];
+      spedizioni = sp.data || [];
+    }
+    const venditaPerId = Object.fromEntries(vendite.map((v) => [v.id, v]));
+    const haPacco = new Set(spedizioni.map((x) => x.vendita_id));
+    const elenco = pagati
+      .map((p) => {
+        if (!p.vendita_id) return { ...p, guasto: "senza_vendita" };
+        const v = venditaPerId[p.vendita_id];
+        const spedizionePagata = (v?.prodotti || []).some((x) => x.spedizione || /^spedizione$/i.test(x.nome || ""));
+        if (spedizionePagata && !haPacco.has(p.vendita_id)) return { ...p, guasto: "senza_pacco", numero_ordine: v?.numero_ordine };
+        return null;
+      })
+      .filter(Boolean);
+    setRighe(elenco);
+    onCambiaConto?.(elenco.length);
   }
   useEffect(() => { carica(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   async function registra(r) {
     setInCorso(r.id); setMsg("");
     try {
+      if (r.guasto === "senza_pacco") {
+        const errorePacco = await creaPaccoDaStripe(r);
+        setMsg(errorePacco || `Ordine di spedizione creato per ${r.numero_ordine || "la vendita"}.`);
+        await carica();
+        ricarica?.(["spedizioni_pos"]);
+        setInCorso("");
+        return;
+      }
       const [prodottiShop, bundleComponenti] = await Promise.all([
         leggiTutte(() => supabase.from("prodotti_shop").select("*")),
         leggiTutte(() => supabase.from("bundle_componenti").select("*")),
@@ -48945,21 +49014,9 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
       // non entrava in coda da nessuna parte, e nessuno lo preparava:
       // e' successo con i due ordini di Stefania del 04/10/2026.
       const spedizionePagata = prodottiRiga.some((x) => x.spedizione);
-      const datiSpedizione = spedizionePagata && (cliente.indirizzo || cliente.citta) ? {
-        corso_data_id: r.corso_data_id || null,
-        destinatario_nome: [cliente.nome, cliente.cognome].filter(Boolean).join(" ").trim() || null,
-        nome: cliente.nome || null, cognome: cliente.cognome || null,
-        indirizzo: cliente.indirizzo || null, civico: cliente.civico || null,
-        citta: cliente.citta || null, cap: cliente.cap || null,
-        provincia: (cliente.provincia || "").toUpperCase().slice(0, 2) || null,
-        cellulare: cliente.telefono || null,
-        richiede_fattura: false,
-        // la riga della spedizione non e' merce: nel pacco non ci va
-        prodotti: prodottiRiga.filter((x) => !x.spedizione),
-      } : null;
 
       const { data: esito, error } = await supabase.rpc("registra_vendita_pos", {
-        p_vendita: { ...vendita, ...(provvigione || {}) }, p_spedizione: datiSpedizione,
+        p_vendita: { ...vendita, ...(provvigione || {}) }, p_spedizione: null,
       });
       if (error) { setMsg("La vendita non e' stata registrata: " + testoErrore(error)); setInCorso(""); return; }
 
@@ -48968,7 +49025,15 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
         if (erroreScarico) setMsg("Vendita registrata, ma il magazzino non si e' scaricato del tutto: " + erroreScarico);
       }
       await supabase.from("pagamenti_pos").update({ vendita_id: esito.vendita_id }).eq("id", r.id);
-      if (!msg) setMsg(`Vendita ${esito.numero_ordine} registrata${datiSpedizione ? ", col suo ordine di spedizione" : ""}.`);
+      // se la spedizione era pagata, il pacco nasce con la vendita e con
+      // l'indirizzo scritto dall'allieva: una sola strada per tutti e due
+      // i casi di questo pannello
+      let notaPacco = "";
+      if (spedizionePagata && !esito?.gia_presente) {
+        const errorePacco = await creaPaccoDaStripe(r, esito.vendita_id, prodottiRiga);
+        notaPacco = errorePacco ? " " + errorePacco : ", col suo ordine di spedizione";
+      }
+      if (!msg) setMsg(`Vendita ${esito.numero_ordine} registrata${notaPacco}.`);
       await carica();
       ricarica?.(["prodotti_shop", "vendite_shop"]);
     } catch (e) {
@@ -48988,12 +49053,12 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
         borderRadius: 16, overflow: "hidden" }}>
         <div style={{ padding: "12px 16px" }}>
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: righe.length ? "#C0392B" : NAVY }}>
-            {righe.length ? `Incassi col QR senza vendita (${righe.length})` : "Incassi col QR: tutti registrati"}
+            {righe.length ? `Incassi col QR rimasti indietro (${righe.length})` : "Incassi col QR: tutti a posto"}
           </div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>
             {righe.length
-              ? "Soldi arrivati su Stripe, vendita mai registrata: succede quando la schermata del QR si chiude prima che la cliente paghi. Registrandola qui scende anche il magazzino."
-              : "Ogni pagamento col QR e diventato una vendita. Se un giorno compare qualcosa qui, e qui che si recupera."}
+              ? "Soldi arrivati su Stripe e qualcosa rimasto indietro: o la vendita non e stata registrata — succede quando la schermata del QR si chiude prima che la cliente paghi — oppure la spedizione era pagata ma il pacco non e mai entrato in coda. Da qui si recuperano."
+              : "Ogni pagamento col QR e diventato una vendita, e ogni spedizione pagata ha il suo pacco in coda. Se un giorno compare qualcosa qui, e qui che si recupera."}
           </div>
         </div>
         {righe.map((r) => (
@@ -49005,13 +49070,17 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
               </div>
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>
                 {new Date(r.pagato_il).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                {" · "}
+                <b style={{ color: "#C0392B" }}>
+                  {r.guasto === "senza_pacco" ? "spedizione pagata, pacco mai messo in coda" : "vendita mai registrata"}
+                </b>
                 {" · "}{(r.righe || []).map((x) => x.nome).join(", ") || "nessuna riga"}
               </div>
             </div>
             <button onClick={() => registra(r)} disabled={inCorso === r.id} data-niente-ombra
               style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none",
                 borderRadius: 14, padding: "7px 13px", cursor: inCorso === r.id ? "default" : "pointer", flexShrink: 0 }}>
-              {inCorso === r.id ? "Registro…" : "Registra la vendita"}
+              {inCorso === r.id ? "Registro…" : r.guasto === "senza_pacco" ? "Crea il pacco" : "Registra la vendita"}
             </button>
           </div>
         ))}
@@ -63474,6 +63543,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // per l'IVA, per i punti e per le fasce restano tutti e due "POS".
   const [modoIncassoPos, setModoIncassoPos] = useState("esterno");
   const [msgQr, setMsgQr] = useState("");
+  // quello che l'allieva ha compilato su Stripe: nome, indirizzo, telefono.
+  // E' un riferimento e non uno stato perche' serve dentro alla chiusura
+  // della vendita, che parte nello stesso istante in cui arriva.
+  const datiAllievaStripe = useRef(null);
   const [linkAmazonCopiato, setLinkAmazonCopiato] = useState(false);
   async function copiaLinkAmazon() {
     try { await navigator.clipboard.writeText(LINK_BUONO_AMAZON); setLinkAmazonCopiato(true); setTimeout(() => setLinkAmazonCopiato(false), 1800); }
@@ -64117,9 +64190,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     if (!richiestaQr?.codice || statoQr === "pagato") return;
     let vivo = true;
     const battito = setInterval(async () => {
-      const { data } = await supabase.from("pagamenti_pos").select("stato").eq("codice", richiestaQr.codice).maybeSingle();
+      const { data } = await supabase.from("pagamenti_pos").select("stato, cliente").eq("codice", richiestaQr.codice).maybeSingle();
       if (!vivo || !data) return;
-      if (data.stato === "da_verificare" || data.stato === "fatturato") setStatoQr("pagato");
+      if (data.stato === "da_verificare" || data.stato === "fatturato") {
+        // LA REGOLA: l'indirizzo di una spedizione pagata col QR e' quello
+        // che ha scritto l'allieva pagando, non quello che qualcuno ha
+        // battuto al banco. Lo scrive lei, lo rilegge lei sulla ricevuta,
+        // ed e' l'unico che risponde se il pacco non arriva. Si tiene da
+        // parte qui perche' fra un attimo la vendita si chiude da sola.
+        datiAllievaStripe.current = data.cliente || null;
+        setStatoQr("pagato");
+      }
       else if (data.stato === "scaduto" || data.stato === "annullato") setStatoQr(data.stato);
     }, 3000);
     return () => { vivo = false; clearInterval(battito); };
@@ -64158,6 +64239,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // resta da togliere di mezzo la finestra del QR
       setRichiestaQr(null);
       setStatoQr("in_attesa");
+      datiAllievaStripe.current = null;
       setCassettoCarrello(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64341,21 +64423,30 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         : {}),
     };
 
+    // Pagato col QR: comanda quello che ha scritto l'allieva su Stripe.
+    // Al banco quell'indirizzo lo si ribatte a orecchio, e un numero
+    // civico sbagliato lo scopre il corriere. Dove lei non ha scritto
+    // niente resta quello del banco, che e' meglio di un campo vuoto.
+    const da = datiAllievaStripe.current || null;
+    const oppure = (dallAllieva, dalBanco) => {
+      const a = String(dallAllieva || "").trim();
+      return a || (String(dalBanco || "").trim() || null);
+    };
     const datiSpedizione = spedizioneAttiva ? {
       corso_data_id: corsoPosSel?.id || null,
       evento_id: eventoPosSel?.id || null,
       iscritto_id: spedIscrittoId || null,
-      destinatario_nome: spedDestinatario,
-      nome: spedNome.trim(),
-      cognome: spedCognome.trim(),
-      indirizzo: spedIndirizzo.trim() || null,
-      civico: spedCivico.trim() || null,
-      citta: spedCitta.trim() || null,
-      cap: spedCap.trim() || null,
-      provincia: spedProvincia.trim().toUpperCase() || null,
+      destinatario_nome: oppure([da?.nome, da?.cognome].filter(Boolean).join(" "), spedDestinatario),
+      nome: oppure(da?.nome, spedNome),
+      cognome: oppure(da?.cognome, spedCognome),
+      indirizzo: oppure(da?.indirizzo, spedIndirizzo),
+      civico: oppure(da?.civico, spedCivico),
+      citta: oppure(da?.citta, spedCitta),
+      cap: oppure(da?.cap, spedCap),
+      provincia: (oppure(da?.provincia, spedProvincia) || "").toUpperCase().slice(0, 2) || null,
       citofono: spedCitofono.trim() || null,
       interno: spedInterno.trim() || null,
-      cellulare: spedCellulare.trim() || null,
+      cellulare: oppure(da?.telefono, spedCellulare),
       richiede_fattura: fattAttiva,
       fattura_ditta: fattAttiva ? (fatturaFinale.ditta || null) : null,
       fattura_piva: fattAttiva ? (fatturaFinale.piva || null) : null,
