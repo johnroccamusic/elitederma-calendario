@@ -39,7 +39,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // Le guardie function_exists ci sono per Code Snippets, non per PHP:
 // quando salva o accende uno snippet lo esegue DUE volte nella stessa
 // richiesta, e alla seconda le funzioni risultano gia' dichiarate.
-if ( ! function_exists( 'elitederma_email_a_codice' ) ) :
+if ( ! function_exists( 'elitederma_email_a_codice' ) ) {
 /**
  * L'indirizzo sembra generato a macchina?
  * Restituisce il motivo (stringa) oppure '' se e' un indirizzo normale.
@@ -52,8 +52,15 @@ function elitederma_email_a_codice( $email ) {
 	}
 	$nome = substr( $email, 0, $chiocciola );
 
-	// 1. codice esadecimale puro: la firma di quelli arrivati finora
-	if ( preg_match( '/^[0-9a-f]{12,}$/', $nome ) ) {
+	// 1. codice esadecimale puro: la firma di quelli arrivati finora.
+	//
+	// La lunghezza si misura con strlen invece che col quantificatore
+	// dell'espressione regolare, che si scriverebbe con le parentesi
+	// graffe: quelle, per il controllo di sintassi di Code Snippets,
+	// sembrano graffe di codice, e lo snippet si rifiutava di accendersi
+	// dicendo che ne trovava una spaiata. In questo file non ce n'e'
+	// nessuna fuori dal codice vero, nemmeno nei commenti.
+	if ( strlen( $nome ) >= 12 && preg_match( '/^[0-9a-f]+$/', $nome ) ) {
 		return 'esadecimale';
 	}
 
@@ -74,9 +81,9 @@ function elitederma_email_a_codice( $email ) {
 
 	return '';
 }
-endif;
+}
 
-if ( ! function_exists( 'elitederma_ferma_registrazione_bot' ) ) :
+if ( ! function_exists( 'elitederma_ferma_registrazione_bot' ) ) {
 /**
  * Il messaggio e' volutamente generico e rivolto a una persona: un bot non
  * lo legge, e a una cliente vera non si spiega quale regola ha incrociato
@@ -95,7 +102,7 @@ function elitederma_ferma_registrazione_bot( $errori, $nome_utente = '', $email 
 	}
 	return $errori;
 }
-endif;
+}
 
 // Il modulo "Registrati" della pagina Il mio account, che e' la porta da
 // cui stanno entrando.
@@ -105,9 +112,9 @@ add_filter( 'woocommerce_registration_errors', 'elitederma_ferma_registrazione_b
 // E la registrazione di WordPress, per il giorno in cui qualcuno la
 // riaprisse: la firma della chiamata e' diversa, l'email e' il secondo
 // argomento.
-if ( ! function_exists( 'elitederma_ferma_registrazione_wp' ) ) :
+if ( ! function_exists( 'elitederma_ferma_registrazione_wp' ) ) {
 function elitederma_ferma_registrazione_wp( $errori, $nome_utente, $email ) {
 	return elitederma_ferma_registrazione_bot( $errori, $nome_utente, $email );
 }
-endif;
+}
 add_filter( 'registration_errors', 'elitederma_ferma_registrazione_wp', 10, 3 );
