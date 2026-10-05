@@ -48632,7 +48632,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
 // quella dello shop, ma i dati del cliente arrivano da quanto scritto al
 // banco (spedizioni_pos) e non c'è nessuno stato da cambiare sul sito —
 // c'è solo da dire se il pacco è partito
-function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, onButtaProva, occupato, isMobile, presi = {}, onSegnaRiga }) {
+function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, onSegnaConsegnata, onButtaProva, occupato, isMobile, presi = {}, onSegnaRiga }) {
   const righe = Array.isArray(spedizione?.prodotti) ? spedizione.prodotti : [];
   // le righe gia' consegnate in aula non si prendono dallo scaffale: fuori
   // dal conteggio, altrimenti "tutto preso" non arriverebbe mai
@@ -48647,6 +48647,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
     spedizione?.cellulare || iscritto?.telefono,
   ].filter(Boolean);
   const senzaSpedizione = !!spedizione?.senzaSpedizione;
+  const daSedeCentrale = !!spedizione?.daSedeCentrale;
   const righeFattura = spedizione?.richiede_fattura ? [
     spedizione?.fattura_ditta,
     spedizione?.fattura_piva && `P. IVA ${spedizione.fattura_piva}`,
@@ -48724,6 +48725,27 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
           <RiquadroIndirizzo Icona={IconaRicevutaErp} titolo="Fatturazione" righe={righeFattura} />
         </div>
       </div>
+
+      {/* Un ordine fatto alla sede centrale non e' un pacco: la merce la
+          prende Raffaele dal magazzino di sotto e la consegna a mano alla
+          master, che e' li'. Niente indirizzo, niente corriere — serve solo
+          che qualcuno sappia cosa preparare, e un modo per dire che e'
+          fatto. */}
+      {daSedeCentrale && (
+        <>
+        <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "20px 0 7px" }}>Da preparare in sede</div>
+        <button
+          onClick={onSegnaConsegnata}
+          title="Segna che i prodotti sono stati presi dal magazzino e consegnati alla master"
+          style={{
+            ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "9px 14px",
+            cursor: "pointer", background: NAVY, color: "#fff", border: "none",
+          }}
+        >
+          Consegnato alla master
+        </button>
+        </>
+      )}
 
       {/* una prova consegnata a mano non ha nessuna spedizione da seguire:
           i due tasti la farebbero solo sembrare un pacco che non esiste */}
@@ -49218,6 +49240,28 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
   const statoDi = (riga) => statiOttimisti[riga.id] || riga.stato;
   const quantiInLavorazione = soloShop.filter((v) => statoDi(v) === "processing").length;
   const quantiPosDaSpedire = (spedizioniPos || []).filter((sp) => statoDi(sp) === "da_spedire").length;
+  // "consegnato alla master": la merce e' uscita dal magazzino ed e' andata
+  // in mano a chi la vende. Si scrive sulla vendita, nella colonna che
+  // vuol dire gia' questo — consegnato_in_aula — invece di inventarne una.
+  async function segnaConsegnataInSede(sp) {
+    if (!window.confirm("Segnare che i prodotti sono stati presi dal magazzino e consegnati alla master?")) return;
+    // sparisce subito dall'elenco e poi si conferma col database: e' lo
+    // stesso modo in cui questa pagina segna un pacco come partito
+    setStatiOttimisti((prev) => ({ ...prev, [sp.id]: "consegnato" }));
+    const { error } = await supabase.from("vendite_shop").update({ consegnato_in_aula: true }).eq("id", sp.vendita_id);
+    if (error) {
+      setStatiOttimisti((prev) => { const nuovo = { ...prev }; delete nuovo[sp.id]; return nuovo; });
+      window.alert("Non sono riuscito a segnarla: " + error.message);
+      return;
+    }
+    ricarica(["vendite_shop"]);
+  }
+
+  // le edizioni che si tengono in una sede contrassegnata "sede centrale"
+  const sediCentraliPerCorso = useMemo(() => {
+    const centrali = new Set((location || []).filter((l) => l.sede_centrale).map((l) => l.id));
+    return new Set((corsiDate || []).filter((cd) => centrali.has(cd.location_id)).map((cd) => cd.id));
+  }, [location, corsiDate]);
 
   // shop online e banco finiscono nella stessa fila, ordinati per data: chi
   // prepara i pacchi non ha due code separate da guardare, ne ha una sola
@@ -49242,9 +49286,37 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
         },
         vendita: v,
       }));
-    const tutte = [...daShop, ...daPos, ...proveSenzaSpedizione].sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    // VENDUTO ALLA SEDE CENTRALE = DA SPEDIRE.
+    //
+    // A un corso normale la merce passa di mano in aula e non c'e' niente
+    // da spedire. Alla sede centrale no: li' la master non ha la merce
+    // addosso, quindi qualunque cosa venda al banco deve partire da
+    // magazzino. Chi vende non ha l'indirizzo sotto mano e non lo chiede
+    // al banco: la vendita si incassa lo stesso e arriva qui, dove chi
+    // prepara i pacchi lo rintraccia.
+    //
+    // Quali sedi siano "centrali" lo dice il contrassegno sulla sede, non
+    // un elenco di nomi scritto qui: domani se ne aggiunge una spuntandola.
+    const venditeDaSedeCentrale = (vista === "dagestire" ? (venditeShop || []) : [])
+      .filter((v) => v.origine === "pos"
+        && !v.simulazione
+        && (v.tipo_movimento || "vendita") === "vendita"
+        && v.corso_data_id
+        && sediCentraliPerCorso.has(v.corso_data_id)
+        && v.consegnato_in_aula !== true
+        && statiOttimisti[v.id] !== "consegnato"
+        && !(spedizioniPos || []).some((sp) => sp.vendita_id === v.id))
+      .map((v) => ({
+        tipo: "pos", chiave: `c${v.id}`, data: v.data_ordine || "",
+        spedizione: {
+          id: v.id, vendita_id: v.id, senzaSpedizione: true, daSedeCentrale: true,
+          prodotti: v.prodotti, destinatario_nome: v.cliente_nome, ts: v.data_ordine, stato: "da_spedire",
+        },
+        vendita: v,
+      }));
+    const tutte = [...daShop, ...daPos, ...proveSenzaSpedizione, ...venditeDaSedeCentrale].sort((a, b) => String(b.data).localeCompare(String(a.data)));
     return vista === "storico" ? tutte.slice(0, 200) : tutte;
-  }, [soloShop, spedizioniPos, vista, venditaPerId, statiOttimisti]);
+  }, [soloShop, spedizioniPos, vista, venditaPerId, statiOttimisti, venditeShop, venditeSimulate, sediCentraliPerCorso]);
   const ordini = useMemo(() => voci.filter((v) => v.tipo === "woo").map((v) => v.vendita), [voci]);
 
   // gli stati cambiano anche da fuori (dal sito, o da un collega): questa
@@ -49449,6 +49521,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
                   sede={cd ? toTitleCase(locById[cd.location_id]?.nome || "") : null}
                   iscritto={sp.iscritto_id ? iscrittoById[sp.iscritto_id] : null}
                   onSegnaSpedita={() => segnaSpeditaPos(sp)}
+                  onSegnaConsegnata={() => segnaConsegnataInSede(sp)}
                   presi={righePrese[voce.chiave] || {}}
                   onSegnaRiga={(indice, valore) => segnaRigaPresa(voce, indice, valore)}
                   onButtaProva={sp.simulazione && programmatore ? () => buttaProva(sp) : null}
@@ -63080,6 +63153,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }, [eventiOggi, eventiAperti, eventoPosId]);
   const eventoPosSel = eventiAperti.find((e) => e.id === eventoPosId) || null;
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
+  // il corso si tiene nella sede centrale o negli uffici? Lo dice il
+  // contrassegno sulla sede, non un elenco di nomi
+  const sedeCentraleDelCorso = !!corsoPosSel
+    && !!(location || []).find((l) => l.id === corsoPosSel.location_id)?.sede_centrale;
   // Capita che un amministratore dia una mano a una master vendendo dal
   // proprio telefono. La vendita e' sua, non di chi tiene il telefono:
   // punti, provvigione e riconoscimento devono andare alla master. Ma
@@ -64216,7 +64293,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
       prelevato_dai_kit: !!corsoPosSel && prelevatoDaiKit,
-      consegnato_in_aula: corsoPosSel ? !spedizioneAttiva : null,
+      // Alla sede centrale la merce non ce l'ha la master: la prende
+      // Raffaele dal magazzino e gliela porta. Quindi non e' consegnata in
+      // aula, e l'ordine deve comparire in logistica da preparare — senza
+      // indirizzo e senza corriere, che non c'entrano niente.
+      consegnato_in_aula: corsoPosSel ? (sedeCentraleDelCorso ? false : !spedizioneAttiva) : null,
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
       richiede_fattura: fattAttiva,
