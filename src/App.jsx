@@ -48798,6 +48798,174 @@ function StrisciaScarichiMancati({ righe, onSistemata, isMobile }) {
   );
 }
 
+// L'ADVISOR DEGLI INCASSI STRIPE SENZA VENDITA.
+//
+// Col QR la vendita si chiude da sola: il POS chiede al database ogni tre
+// secondi se i soldi sono arrivati e, appena arrivano, registra. Funziona
+// pero' solo finche' quella schermata resta aperta. Se la master chiude
+// l'app, il telefono si blocca, o lei annulla il QR e ne rigenera un
+// altro, il pagamento arriva e non lo raccoglie piu' nessuno: l'incasso
+// resta su Stripe e la vendita non esiste. Magazzino fermo, prima nota
+// muta, punti non maturati.
+//
+// E' andata cosi' per sei incassi, 583,74 euro fra il 25/09 e il
+// 04/10/2026, recuperati a mano. Da qui si recuperano con un clic, e
+// soprattutto SI VEDONO: il numero sulla linguetta dell'Advisor li conta
+// anche senza aprirla, perche' un incasso che non diventa vendita non
+// alza nessun errore — semplicemente non c'e', e l'assenza non si nota.
+//
+// La vendita nasce dalla stessa strada del banco: righeScarico per
+// aprire i bundle nei loro pezzi, preparaScarichi per verificare che
+// nessuna giacenza vada sotto zero, registra_vendita_pos per scrivere, e
+// applicaScarichi che resta l'unico punto che tocca lo stock.
+function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
+  const [righe, setRighe] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [inCorso, setInCorso] = useState("");
+
+  async function carica() {
+    const { data, error } = await supabase.from("pagamenti_pos")
+      .select("*").not("pagato_il", "is", null).is("vendita_id", null)
+      .order("pagato_il", { ascending: false });
+    if (error) { setMsg("Non riesco a leggere gli incassi: " + testoErrore(error)); setRighe([]); return; }
+    setRighe(data || []);
+    onCambiaConto?.((data || []).length);
+  }
+  useEffect(() => { carica(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  async function registra(r) {
+    setInCorso(r.id); setMsg("");
+    try {
+      const [prodottiShop, bundleComponenti] = await Promise.all([
+        leggiTutte(() => supabase.from("prodotti_shop").select("*")),
+        leggiTutte(() => supabase.from("bundle_componenti").select("*")),
+      ]);
+      const perId = Object.fromEntries((prodottiShop || []).map((x) => [x.id, x]));
+      const perNome = new Map((prodottiShop || []).map((x) => [x.nome.trim().toLowerCase(), x]));
+
+      const righeCarrello = [];
+      const prodottiRiga = [];
+      let imponibile = 0;
+      for (const riga of (r.righe || [])) {
+        // la quantita' sta scritta dentro al nome ("2 × Ago ..."), non in
+        // un campo: la richiesta di pagamento nasce da un'etichetta
+        const pezzi = /^(\d+)\s*[×x]\s*(.+)$/.exec(riga.nome || "");
+        const quantita = pezzi ? Number(pezzi[1]) : 1;
+        const nome = (pezzi ? pezzi[2] : riga.nome || "").trim();
+        const totaleRiga = round2(Number(riga.prezzo) || 0);
+        if (/^spedizione$/i.test(nome)) {
+          prodottiRiga.push({ prodotto_id: null, nome: "Spedizione", quantita: 1, prezzo_listino: totaleRiga,
+            sconto_riga: 0, sconto_pct: 0, totale_riga: totaleRiga, spedizione: true });
+          imponibile += totaleRiga / 1.22;
+          continue;
+        }
+        const prodotto = perNome.get(nome.toLowerCase());
+        if (!prodotto) { setMsg(`"${nome}" non esiste piu' fra i prodotti: la vendita va rifatta a mano dal banco.`); setInCorso(""); return; }
+        const iva = Number(prodotto.aliquota_iva_vendita ?? ALIQUOTA_IVA_STANDARD) || 0;
+        imponibile += totaleRiga / (1 + iva / 100);
+        righeCarrello.push({ prodotto, quantita });
+        prodottiRiga.push({ prodotto_id: prodotto.id, nome: prodotto.nome, quantita,
+          // nella richiesta di pagamento resta solo il prezzo gia'
+          // scontato: il listino di quel giorno non l'ha salvato nessuno
+          prezzo_listino: round2(totaleRiga / quantita), sconto_riga: 0, sconto_pct: 0, totale_riga: totaleRiga });
+      }
+
+      const daScaricare = righeCarrello.flatMap((x) => righeScarico(x.prodotto, x.quantita, bundleComponenti, perId));
+      const piano = preparaScarichi(daScaricare, { mostraAvviso: (t) => setMsg(t) });
+      if (!piano) { setInCorso(""); return; }
+
+      const totale = round2(Number(r.importo) || 0);
+      imponibile = round2(imponibile);
+      const cliente = r.cliente || {};
+      let provvigione = null;
+      if (r.operatore_tipo === "master" && r.corso_data_id) {
+        provvigione = await congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale: "corso" });
+      }
+      const vendita = {
+        woo_order_id: null,
+        // il codice della richiesta nel numero: rilanciare due volte non
+        // crea due vendite, ci pensa registra_vendita_pos
+        numero_ordine: `POS-STRIPE-${r.codice}`,
+        data_ordine: r.pagato_il,
+        stato: "completed",
+        totale, totale_imponibile: imponibile, totale_iva: round2(totale - imponibile),
+        prodotti: prodottiRiga,
+        origine: "pos",
+        // col QR si paga con la carta: per la vendita, per l'IVA e per i
+        // punti e' un incasso POS come quello del terminale
+        metodo_pagamento: "pos",
+        note: `Recupero pagamento Stripe ${r.codice}`,
+        cliente_nome: [cliente.nome, cliente.cognome].filter(Boolean).join(" ").trim() || null,
+        tipo_movimento: "vendita",
+        operatore_tipo: r.operatore_tipo, operatore_id: r.operatore_id, operatore_nome: r.operatore_nome,
+        corso_data_id: r.corso_data_id || null,
+        cliente_fattura_id: r.cliente_fattura_id || null,
+        // la fattura la governa la richiesta di pagamento, non la vendita:
+        // metterla anche qui vorrebbe dire chiederla due volte
+        richiede_fattura: false,
+      };
+
+      const { data: esito, error } = await supabase.rpc("registra_vendita_pos", {
+        p_vendita: { ...vendita, ...(provvigione || {}) }, p_spedizione: null,
+      });
+      if (error) { setMsg("La vendita non e' stata registrata: " + testoErrore(error)); setInCorso(""); return; }
+
+      if (!esito?.gia_presente) {
+        const erroreScarico = await applicaScarichi(piano, { origine: "vendita_pos", nota: `Recupero Stripe ${r.codice}`, utente: r.operatore_nome });
+        if (erroreScarico) setMsg("Vendita registrata, ma il magazzino non si e' scaricato del tutto: " + erroreScarico);
+      }
+      await supabase.from("pagamenti_pos").update({ vendita_id: esito.vendita_id }).eq("id", r.id);
+      if (!msg) setMsg(`Vendita ${esito.numero_ordine} registrata.`);
+      await carica();
+      ricarica?.(["prodotti_shop", "vendite_shop"]);
+    } catch (e) {
+      setMsg("Non sono riuscito a registrare: " + (e?.message || String(e)));
+    }
+    setInCorso("");
+  }
+
+  if (righe === null) return <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, padding: "18px 4px" }}>Sto guardando gli incassi…</div>;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.includes("registrata") ? "#2E7D32" : "#C0392B",
+        background: msg.includes("registrata") ? "#E9F6EC" : "#FBEBE9", border: `1px solid ${msg.includes("registrata") ? "#CFE8D5" : "#F0C8C2"}`,
+        borderRadius: 12, padding: "10px 14px", marginBottom: 10 }}>{msg}</div>}
+      <div style={{ background: righe.length ? "#FBEBE9" : "#fff", border: `1px solid ${righe.length ? "#F0C8C2" : CREAM_BORDER}`,
+        borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 800, color: righe.length ? "#C0392B" : NAVY }}>
+            {righe.length ? `Incassi col QR senza vendita (${righe.length})` : "Incassi col QR: tutti registrati"}
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>
+            {righe.length
+              ? "Soldi arrivati su Stripe, vendita mai registrata: succede quando la schermata del QR si chiude prima che la cliente paghi. Registrandola qui scende anche il magazzino."
+              : "Ogni pagamento col QR e diventato una vendita. Se un giorno compare qualcosa qui, e qui che si recupera."}
+          </div>
+        </div>
+        {righe.map((r) => (
+          <div key={r.id} style={{ background: "#fff", borderTop: `1px solid ${CREAM_BORDER}`, padding: isMobile ? "10px 12px" : "11px 16px",
+            display: "flex", alignItems: "center", gap: 10, flexWrap: isMobile ? "wrap" : "nowrap" }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
+                {Number(r.importo).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} &euro; · {r.operatore_nome || "—"}
+              </div>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>
+                {new Date(r.pagato_il).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                {" · "}{(r.righe || []).map((x) => x.nome).join(", ") || "nessuna riga"}
+              </div>
+            </div>
+            <button onClick={() => registra(r)} disabled={inCorso === r.id} data-niente-ombra
+              style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none",
+                borderRadius: 14, padding: "7px 13px", cursor: inCorso === r.id ? "default" : "pointer", flexShrink: 0 }}>
+              {inCorso === r.id ? "Registro…" : "Registra la vendita"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 // L'ADVISOR DELLE SPEDIZIONI MANCATE.
 //
 // Al banco la vendita e l'ordine di spedizione sono due scritture in
@@ -48960,12 +49128,19 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("dagestire"); // dagestire | storico | advisor
   const [contoAdvisor, setContoAdvisor] = useState(0);
+  // gli incassi col QR rimasti senza vendita si contano insieme alle
+  // spedizioni mancate: per chi guarda sono la stessa cosa, roba del
+  // banco che chiede una mano
+  const [contoIncassi, setContoIncassi] = useState(0);
   // il numero sulla linguetta si sa prima di aprirla, se no non richiama
   // nessuno: tabella piccola, letta solo qui
   useEffect(() => {
     let vivo = true;
     supabase.from("spedizioni_pos_non_riuscite").select("id", { count: "exact", head: true }).is("risolto_il", null)
       .then(({ count }) => { if (vivo) setContoAdvisor(count || 0); });
+    supabase.from("pagamenti_pos").select("id", { count: "exact", head: true })
+      .not("pagato_il", "is", null).is("vendita_id", null)
+      .then(({ count }) => { if (vivo) setContoIncassi(count || 0); });
     return () => { vivo = false; };
   }, []);
   const [payloadPerId, setPayloadPerId] = useState({});
@@ -49218,12 +49393,15 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
           {/* Le spedizioni rimaste per strada si vedono anche qui, non solo
               in "Vendite al banco": chi spedisce non e' chi ha venduto. */}
           <TabPillola compatto={isMobile} attivo={vista === "advisor"} onClick={() => setVista("advisor")}>
-            Advisor{contoAdvisor > 0 ? ` (${contoAdvisor})` : ""}
+            Advisor{contoAdvisor + contoIncassi > 0 ? ` (${contoAdvisor + contoIncassi})` : ""}
           </TabPillola>
         </div>
 
         {vista === "advisor" ? (
-          <PannelloAdvisorSpedizioni isMobile={isMobile} ricarica={ricarica} onCambiaConto={setContoAdvisor} />
+          <>
+            <PannelloAdvisorIncassiStripe isMobile={isMobile} ricarica={ricarica} onCambiaConto={setContoIncassi} />
+            <PannelloAdvisorSpedizioni isMobile={isMobile} ricarica={ricarica} onCambiaConto={setContoAdvisor} />
+          </>
         ) : vista === "storico" ? (
           <TabellaStoricoSpedizioni voci={voci} onApriOrdine={setOrdineAperto} isMobile={isMobile} />
         ) : voci.length === 0 ? (
@@ -50434,12 +50612,19 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   };
   const [vistaBanco, setVistaBanco] = useState("vendite"); // vendite | advisor
   const [contoAdvisor, setContoAdvisor] = useState(0);
+  // gli incassi col QR rimasti senza vendita si contano insieme alle
+  // spedizioni mancate: per chi guarda sono la stessa cosa, roba del
+  // banco che chiede una mano
+  const [contoIncassi, setContoIncassi] = useState(0);
   // il numero si sa prima di aprire la linguetta, se no non richiama nessuno
   useEffect(() => {
     if (origine !== "pos") return;
     let vivo = true;
     supabase.from("spedizioni_pos_non_riuscite").select("id", { count: "exact", head: true }).is("risolto_il", null)
       .then(({ count }) => { if (vivo) setContoAdvisor(count || 0); });
+    supabase.from("pagamenti_pos").select("id", { count: "exact", head: true })
+      .not("pagato_il", "is", null).is("vendita_id", null)
+      .then(({ count }) => { if (vivo) setContoIncassi(count || 0); });
     return () => { vivo = false; };
   }, [origine]);
   const [ordineAperto, setOrdineAperto] = useState(null);
@@ -50823,13 +51008,16 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
           <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
             <TabPillola compatto={isMobile} attivo={vistaBanco === "vendite"} onClick={() => setVistaBanco("vendite")}>Vendite</TabPillola>
             <TabPillola compatto={isMobile} attivo={vistaBanco === "advisor"} onClick={() => setVistaBanco("advisor")}>
-              Advisor{contoAdvisor > 0 ? ` (${contoAdvisor})` : ""}
+              Advisor{contoAdvisor + contoIncassi > 0 ? ` (${contoAdvisor + contoIncassi})` : ""}
             </TabPillola>
           </div>
         )}
 
         {origine === "pos" && vistaBanco === "advisor" ? (
-          <PannelloAdvisorSpedizioni isMobile={isMobile} ricarica={ricarica} onCambiaConto={setContoAdvisor} />
+          <>
+            <PannelloAdvisorIncassiStripe isMobile={isMobile} ricarica={ricarica} onCambiaConto={setContoIncassi} />
+            <PannelloAdvisorSpedizioni isMobile={isMobile} ricarica={ricarica} onCambiaConto={setContoAdvisor} />
+          </>
         ) : (
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
