@@ -49342,7 +49342,9 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
     // sparisce subito dall'elenco e poi si conferma col database: e' lo
     // stesso modo in cui questa pagina segna un pacco come partito
     setStatiOttimisti((prev) => ({ ...prev, [sp.id]: "consegnato" }));
-    const { error } = await supabase.from("vendite_shop").update({ consegnato_in_aula: true }).eq("id", sp.vendita_id);
+    const { error } = await supabase.from("vendite_shop")
+      .update({ preparata_in_sede_il: new Date().toISOString(), consegnato_in_aula: true })
+      .eq("id", sp.vendita_id);
     if (error) {
       setStatiOttimisti((prev) => { const nuovo = { ...prev }; delete nuovo[sp.id]; return nuovo; });
       window.alert("Non sono riuscito a segnarla: " + error.message);
@@ -49406,7 +49408,9 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
         && (v.tipo_movimento || "vendita") === "vendita"
         && v.corso_data_id
         && sediCentraliPerCorso.has(v.corso_data_id)
-        && v.consegnato_in_aula !== true
+        // "preparata" lo scrive SOLO chi preme il tasto qui: non dipende
+        // da quale versione dell'app aveva in mano chi ha venduto
+        && !v.preparata_in_sede_il
         && statiOttimisti[v.id] !== "consegnato"
         && !(spedizioniPos || []).some((sp) => sp.vendita_id === v.id))
       .map((v) => ({
@@ -63264,10 +63268,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }, [eventiOggi, eventiAperti, eventoPosId]);
   const eventoPosSel = eventiAperti.find((e) => e.id === eventoPosId) || null;
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
-  // il corso si tiene nella sede centrale o negli uffici? Lo dice il
-  // contrassegno sulla sede, non un elenco di nomi
-  const sedeCentraleDelCorso = !!corsoPosSel
-    && !!(location || []).find((l) => l.id === corsoPosSel.location_id)?.sede_centrale;
   // Capita che un amministratore dia una mano a una master vendendo dal
   // proprio telefono. La vendita e' sua, non di chi tiene il telefono:
   // punti, provvigione e riconoscimento devono andare alla master. Ma
@@ -64417,11 +64417,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
       prelevato_dai_kit: !!corsoPosSel && prelevatoDaiKit,
-      // Alla sede centrale la merce non ce l'ha la master: la prende
-      // Raffaele dal magazzino e gliela porta. Quindi non e' consegnata in
-      // aula, e l'ordine deve comparire in logistica da preparare — senza
-      // indirizzo e senza corriere, che non c'entrano niente.
-      consegnato_in_aula: corsoPosSel ? (sedeCentraleDelCorso ? false : !spedizioneAttiva) : null,
+      consegnato_in_aula: corsoPosSel ? !spedizioneAttiva : null,
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
       richiede_fattura: fattAttiva,
