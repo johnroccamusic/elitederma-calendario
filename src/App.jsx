@@ -40409,13 +40409,16 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
         finita: (g.cd.data_fine || g.cd.data_inizio) < oggi,
         allievi: g.allievi.sort((a, b) => `${a.cognome} ${a.nome}`.localeCompare(`${b.cognome} ${b.nome}`)),
       }))
-      // i corsi già finiti per primi: lì il diploma andava consegnato e
-      // non è stato consegnato, è il debito più vecchio
-      .sort((a, b) => (b.finita - a.finita) || String(a.cd.data_inizio).localeCompare(String(b.cd.data_inizio)));
+      // Le classi già finite restano fuori. Il pacchetto serve a far
+      // uscire il diploma a fine corso: su una classe chiusa quel momento
+      // è passato, e quello che andava fatto si sistema sulla scheda
+      // dell'allievo, non da qui. Tenerle in elenco voleva dire una
+      // pagina lunga il doppio di cose su cui non si può più agire.
+      .filter((g) => !g.finita)
+      .sort((a, b) => String(a.cd.data_inizio).localeCompare(String(b.cd.data_inizio)));
   }, [iscritti, corsiDate, corsi, location, kitDefinizioni, oggi]);
 
   const quanti = classi.reduce((s, g) => s + g.allievi.length, 0);
-  const finite = classi.filter((g) => g.finita);
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -40439,7 +40442,7 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 6, lineHeight: 1.6 }}>
                 Il diploma viene solo dal pacchetto: senza, a fine corso non esce niente. Clicca un nome, scegli il
                 pacchetto nella sua scheda e salva — sparisce da qui da solo.
-                {finite.length > 0 && <> <b style={{ color: "#C0392B" }}>In cima ci sono {finite.length} class{finite.length === 1 ? "e" : "i"} già finite</b>: lì il diploma andava già consegnato.</>}
+                Le classi già finite non compaiono: lì il momento del diploma è passato.
               </div>
             </div>
 
@@ -40447,7 +40450,7 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
               const disponibili = pacchettiPerCorso[g.cd.corso_id] || [];
               return (
                 <div key={g.cd.id} style={{ ...cardStyle, padding: isMobile ? "12px 14px" : "14px 18px", marginBottom: 10,
-                  borderLeft: g.finita ? "4px solid #C0392B" : `4px solid ${GOLD}` }}>
+                  borderLeft: `4px solid ${GOLD}` }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
                     <span style={{ ...fontBody, fontSize: isMobile ? 13.5 : 14.5, fontWeight: 700, color: NAVY }}>
                       {(g.corso?.nome || "?").toUpperCase()} · {(g.sede?.nome || "?").toUpperCase()}
@@ -40455,11 +40458,6 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
                     <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
                       {fmtDataCompatta(g.cd.data_inizio, g.cd.data_fine)}
                     </span>
-                    {g.finita && (
-                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#C0392B", background: "#FBEBE9", border: "1px solid #F0C8C2", borderRadius: 999, padding: "2px 8px" }}>
-                        già finito
-                      </span>
-                    )}
                   </div>
                   <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
                     {disponibili.length > 0
@@ -75057,13 +75055,23 @@ export default function App() {
         // leggiTutte e non un select secco: oltre mille righe PostgREST
         // taglia in silenzio, e un conto tagliato qui vorrebbe dire una
         // tessera che sparisce mentre c'e' ancora gente da sistemare
-        const [iscrittiKit, kits] = await Promise.all([
-          leggiTutte(() => supabase.from("iscritti").select("id, kit_id").order("id")),
+        const [iscrittiKit, kits, date] = await Promise.all([
+          leggiTutte(() => supabase.from("iscritti").select("id, kit_id, corso_data_id").order("id")),
           leggiTutte(() => supabase.from("kit_definizioni").select("id, diploma_path").order("id")),
+          leggiTutte(() => supabase.from("corsi_date").select("id, data_inizio, data_fine").order("id")),
         ]);
         if (!vivo) return;
         const conDiploma = new Set((kits || []).filter((k) => k.diploma_path).map((k) => k.id));
-        setAllieviSenzaKit((iscrittiKit || []).filter((i) => !i.kit_id || !conDiploma.has(i.kit_id)).length);
+        // le classi gia' finite non si contano: la pagina non le mostra
+        // piu', e una tessera che dice un numero piu' grande di quello che
+        // si trova aprendola e' una tessera che non si crede piu'
+        const oggiStr = dataOggiStr();
+        const ancoraDaFare = new Set((date || [])
+          .filter((d) => (d.data_fine || d.data_inizio) >= oggiStr)
+          .map((d) => d.id));
+        setAllieviSenzaKit((iscrittiKit || [])
+          .filter((i) => (!i.kit_id || !conDiploma.has(i.kit_id)) && ancoraDaFare.has(i.corso_data_id))
+          .length);
       } catch (e) {
         // se il conto non si puo' fare, la tessera non si mostra: meglio
         // non mostrarla che mostrarla con un numero inventato
