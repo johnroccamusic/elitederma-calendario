@@ -49873,8 +49873,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // quelle vendite lo sconto e' gia' stato fatto — cambiarne la regola
   // adesso non cambierebbe nulla di quello che e' successo.
   const [applicandoAiCorsi, setApplicandoAiCorsi] = useState(false);
-  const [confermaAula, setConfermaAula] = useState(false);
-  const [confermaPersonali, setConfermaPersonali] = useState(false);
   const [msgCodiciCorsi, setMsgCodiciCorsi] = useState("");
   const oggiCodici = dataOggiStr();
   // Il criterio e' il CORSO, non la scadenza del codice: un codice di una
@@ -49899,28 +49897,38 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   async function applicaFasceAiCodiciAula() {
     const fasce = fasceScontoValide(gruppiFasceValidi(fasceCorso).gruppi[0]);
     if (codiciAulaDaAggiornare.length === 0) { setMsgCodiciCorsi("Nessun codice da aggiornare: non ci sono classi ancora da finire."); return; }
-    // due passaggi invece di window.confirm: dalla app aggiunta alla
-    // schermata principale quella finestra non compare e torna false, e
-    // il tasto sembrerebbe rotto
-    if (!confermaAula) {
-      setConfermaAula(true);
-      setMsgCodiciCorsi(`Riscrivo le regole di oggi — fasce e sconto needling — su ${codiciAulaDaAggiornare.length} codici di classi ancora da finire, nell'app e sul sito. Premi di nuovo per confermare.`);
+    // UNA pressione sola. C'erano due passaggi — premi, poi conferma — ed
+    // era peggio di window.confirm: chi preme vede lo stesso messaggio e
+    // non sa se la seconda pressione e' arrivata. Riscrivere la regola di
+    // oggi sui codici di oggi e' un'operazione che si puo' ripetere
+    // all'infinito senza cambiare niente, quindi non c'e' niente da
+    // proteggere con una conferma.
+    setApplicandoAiCorsi(true);
+    setMsgCodiciCorsi(`Riscrivo le regole di oggi su ${codiciAulaDaAggiornare.length} codici d'aula…`);
+    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
+    // .select() non e' un vezzo: senza, PostgREST risponde "va bene" anche
+    // quando non ha toccato una riga, e il messaggio direbbe fatto su
+    // diciotto codici mentre nel database non e' cambiato niente. Cosi' il
+    // numero che si legge e' il numero delle righe cambiate davvero.
+    const { data: riscritti, error } = await supabase.from("coupon")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
+      .in("id", codiciAulaDaAggiornare.map((c) => c.id))
+      .select("id");
+    if (error) { setApplicandoAiCorsi(false); setMsgCodiciCorsi("Errore: " + testoErrore(error)); return; }
+    if (!riscritti || riscritti.length === 0) {
+      setApplicandoAiCorsi(false);
+      setMsgCodiciCorsi("Errore: il database non ha cambiato nessuna riga. I codici sono rimasti come prima.");
       return;
     }
-    setConfermaAula(false);
-    setApplicandoAiCorsi(true); setMsgCodiciCorsi("");
-    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
-    const { error } = await supabase.from("coupon")
-      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
-      .in("id", codiciAulaDaAggiornare.map((c) => c.id));
-    if (error) { setApplicandoAiCorsi(false); setMsgCodiciCorsi("Errore: " + testoErrore(error)); return; }
     let sito = 0; const falliti = [];
-    for (const c of codiciAulaDaAggiornare.filter((x) => x.woo_coupon_id)) {
+    const conSito = codiciAulaDaAggiornare.filter((x) => x.woo_coupon_id);
+    for (const c of conSito) {
+      setMsgCodiciCorsi(`Riscritti ${riscritti.length} codici nell'app. Ora il sito: ${sito + falliti.length} di ${conSito.length}…`);
       const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: c.id, aggiornaRegola: true } });
       if (erroreSito || data?.errore) falliti.push(c.codice); else sito += 1;
     }
     setApplicandoAiCorsi(false);
-    setMsgCodiciCorsi(`Fasce applicate a ${codiciAulaDaAggiornare.length} codici d'aula nell'app e a ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
+    setMsgCodiciCorsi(`Fatto: ${riscritti.length} codici d'aula riscritti nell'app e ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
     ricarica(["coupon"]);
   }
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
@@ -49974,27 +49982,29 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     const fasce = fasceScontoValide(gruppiFasceValidi(regolaReferralMaster?.fasce).gruppi[0]);
     const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id);
     if (personali.length === 0) { setMsgCodiciPersonali("Nessun codice personale da aggiornare."); return; }
-    // due passaggi, non window.confirm: dalla app aggiunta alla schermata
-    // principale quella finestra non compare e torna false
-    if (!confermaPersonali) {
-      setConfermaPersonali(true);
-      setMsgCodiciPersonali(`Riscrivo le regole di oggi — fasce e sconto needling — su ${personali.length} codici personali, nell'app e sul sito. Premi di nuovo per confermare.`);
+    // una pressione sola, e il conto vero: vedi la gemella qui sopra
+    setApplicandoAiCodici(true);
+    setMsgCodiciPersonali(`Riscrivo le regole di oggi su ${personali.length} codici personali…`);
+    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
+    const { data: riscritti, error } = await supabase.from("coupon")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
+      .in("id", personali.map((c) => c.id))
+      .select("id");
+    if (error) { setApplicandoAiCodici(false); setMsgCodiciPersonali("Errore: " + testoErrore(error)); return; }
+    if (!riscritti || riscritti.length === 0) {
+      setApplicandoAiCodici(false);
+      setMsgCodiciPersonali("Errore: il database non ha cambiato nessuna riga. I codici sono rimasti come prima.");
       return;
     }
-    setConfermaPersonali(false);
-    setApplicandoAiCodici(true); setMsgCodiciPersonali("");
-    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
-    const { error } = await supabase.from("coupon")
-      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
-      .in("id", personali.map((c) => c.id));
-    if (error) { setApplicandoAiCodici(false); setMsgCodiciPersonali("Errore: " + testoErrore(error)); return; }
     let sito = 0; const falliti = [];
-    for (const c of personali.filter((x) => x.woo_coupon_id)) {
+    const conSito = personali.filter((x) => x.woo_coupon_id);
+    for (const c of conSito) {
+      setMsgCodiciPersonali(`Riscritti ${riscritti.length} codici nell'app. Ora il sito: ${sito + falliti.length} di ${conSito.length}…`);
       const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: c.id, aggiornaRegola: true } });
       if (erroreSito || data?.errore) falliti.push(c.codice); else sito += 1;
     }
     setApplicandoAiCodici(false);
-    setMsgCodiciPersonali(`Fasce applicate a ${personali.length} codici personali nell'app e a ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
+    setMsgCodiciPersonali(`Fatto: ${riscritti.length} codici personali riscritti nell'app e ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
     ricarica(["coupon"]);
   }
 
@@ -50167,7 +50177,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                   sono nati */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
                 <Button variant="ghost" onClick={applicaFasceAiCodiciAula} disabled={applicandoAiCorsi || codiciAulaDaAggiornare.length === 0}>
-                  {applicandoAiCorsi ? "Applico…" : confermaAula ? `Confermo, riscrivi su ${codiciAulaDaAggiornare.length} codici` : `Applica ai codici d'aula esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
+                  {applicandoAiCorsi ? "Riscrivo…" : `Applica ai codici d'aula esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
                 </Button>
                 <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
                   I codici già emessi portano la regola con cui sono nati — i più vecchi uno sconto fisso.
@@ -50223,7 +50233,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
             {!referralContantiUgualiACarta && <Button variant="ghost" onClick={() => setFasceReferralContanti([])}>Rimetti uguali a carta e shop</Button>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
-            <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Applico…" : confermaPersonali ? "Confermo, riscrivi i codici personali" : "Applica ai codici personali esistenti"}</Button>
+            <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Riscrivo…" : "Applica ai codici personali esistenti"}</Button>
             <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
               I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce su tutti i codici personali delle master, nell'app e sul sito.
             </span>
