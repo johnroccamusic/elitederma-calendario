@@ -49874,6 +49874,14 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // adesso non cambierebbe nulla di quello che e' successo.
   const [applicandoAiCorsi, setApplicandoAiCorsi] = useState(false);
   const [msgCodiciCorsi, setMsgCodiciCorsi] = useState("");
+  // Si riscrivono solo i codici che valgono su TUTTO il catalogo. Un
+  // codice ristretto a certe categorie o a certi prodotti e' stato fatto
+  // a mano per un motivo, e la sua percentuale fa parte di quel motivo:
+  // need30 e' il 30% sui prodotti needling, in aula e sullo shop, e le
+  // fasce di margine glielo porterebbero a circa il 4% sul sito.
+  const valeSuTuttoIlCatalogo = (c) =>
+    (c.ambito || "tutto") === "tutto"
+    && !(c.categorie_ids || []).length && !(c.prodotti_ids || []).length;
   const oggiCodici = dataOggiStr();
   // Il criterio e' il CORSO, non la scadenza del codice: un codice di una
   // classe gia' finita non va toccato nemmeno se e' ancora valido per
@@ -49889,6 +49897,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // il needling. Il tasto riscrive la regola di adesso, punto.
   const codiciAulaDaAggiornare = (coupon || []).filter((c) => {
     if (!c.corsi_date_id) return false;
+    if (!valeSuTuttoIlCatalogo(c)) return false;
     if (c.valido_fino_a && c.valido_fino_a < oggiCodici) return false;
     const fine = fineEdizione[c.corsi_date_id];
     return !!fine && fine >= oggiCodici;
@@ -49980,7 +49989,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     // la riga di base: sul coupon e sul sito viaggia quella, le fasce di
     // spesa le applica il POS che il carrello ce l'ha
     const fasce = fasceScontoValide(gruppiFasceValidi(regolaReferralMaster?.fasce).gruppi[0]);
-    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id);
+    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && valeSuTuttoIlCatalogo(c));
     if (personali.length === 0) { setMsgCodiciPersonali("Nessun codice personale da aggiornare."); return; }
     // una pressione sola, e il conto vero: vedi la gemella qui sopra
     setApplicandoAiCodici(true);
@@ -50235,7 +50244,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
             <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Riscrivo…" : "Applica ai codici personali esistenti"}</Button>
             <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
-              I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce su tutti i codici personali delle master, nell'app e sul sito.
+              I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce sui codici personali delle master, nell'app e sul sito. Restano fuori quelli legati a certe categorie o a certi prodotti — need30 e simili: lì la percentuale è stata scelta a mano e non si tocca.
             </span>
             {msgCodiciPersonali && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciPersonali.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciPersonali}</span>}
           </div>
