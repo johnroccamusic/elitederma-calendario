@@ -30,6 +30,9 @@
 // (senza la riga "<?php") → "Esegui ovunque" → Salva e attiva. Niente da
 // cambiare: la chiave arriva dallo snippet del menu.
 
+// Le guardie function_exists ci sono per Code Snippets, non per PHP:
+// quando salva o accende uno snippet lo esegue DUE volte nella stessa
+// richiesta, e alla seconda le funzioni risultano gia' dichiarate.
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 // Svuota la cache del sito (Breeze + Cloudflare di Cloudways) su richiesta
@@ -49,6 +52,7 @@ add_action( 'rest_api_init', function () {
 	) );
 } );
 
+if ( ! function_exists( 'elitederma_svuota_cache_autorizzato' ) ) :
 function elitederma_svuota_cache_autorizzato( $richiesta ) {
 	$chiave = $richiesta->get_header( 'x-elitederma-secret' );
 	if ( ! $chiave || ! defined( 'ELITEDERMA_BRIDGE_SECRET' ) ) {
@@ -56,11 +60,13 @@ function elitederma_svuota_cache_autorizzato( $richiesta ) {
 	}
 	return hash_equals( ELITEDERMA_BRIDGE_SECRET, $chiave );
 }
+endif;
 
 // Corpo atteso: { "prodotti": [699, 668], "tutto": false }
 //   prodotti — id WooCommerce dei prodotti toccati: si svuota la pagina di
 //              ognuno piu' le pagine di elenco (shop, categorie)
 //   tutto    — true per svuotare l'intera cache del sito
+if ( ! function_exists( 'elitederma_svuota_cache' ) ) :
 function elitederma_svuota_cache( $richiesta ) {
 	$corpo    = $richiesta->get_json_params();
 	$prodotti = isset( $corpo['prodotti'] ) && is_array( $corpo['prodotti'] ) ? array_map( 'intval', $corpo['prodotti'] ) : array();
@@ -91,11 +97,46 @@ function elitederma_svuota_cache( $richiesta ) {
 			}
 			Breeze_PurgeCache::breeze_cache_flush();
 			$dati['passi'][] = 'locale';
+			// VARNISH, TUTTO E NON SOLO LA HOME.
+			//
+			// Qui c'era purge_cache( home_url('/') ): svuotava la sola
+			// pagina iniziale, e tutte le altre restavano in Varnish.
+			// Cloudflare poi andava a prendere da li' l'HTML vecchio e lo
+			// serviva come fosse fresco. E' cosi' che la griglia di
+			// /laminazione/ ha continuato a dire "Leggi tutto" su un
+			// prodotto che WooCommerce dava gia' disponibile: il dato era
+			// giusto, la pagina veniva da due cache piu' in la'.
+			//
+			// Varnish si svuota tutto con una PURGE sulla home e
+			// l'intestazione che chiede di trattare l'indirizzo come
+			// espressione regolare: e' il modo di Cloudways. Se il server
+			// non la capisce resta il giro di prima, una pagina alla
+			// volta, sulle pagine pubblicate — meglio lente che vecchie.
 			if ( class_exists( 'Breeze_PurgeVarnish' ) ) {
 				$varnish = new Breeze_PurgeVarnish();
-				if ( method_exists( $varnish, 'purge_cache' ) ) {
-					$varnish->purge_cache( home_url( '/' ) );
-					$dati['passi'][] = 'varnish';
+				$host = wp_parse_url( home_url(), PHP_URL_HOST );
+				$tutto = wp_remote_request( home_url( '/' ), array(
+					'method'  => 'PURGE',
+					'timeout' => 10,
+					'headers' => array(
+						'X-Purge-Method' => 'regex',
+						'Host'           => $host,
+					),
+				) );
+				$codice = is_wp_error( $tutto ) ? 0 : (int) wp_remote_retrieve_response_code( $tutto );
+				$dati['passi'][] = 'varnish:regex:' . ( $codice ?: 'ko' );
+
+				if ( $codice < 200 || $codice >= 400 ) {
+					if ( method_exists( $varnish, 'purge_cache' ) ) {
+						$indirizzi = array( home_url( '/' ) );
+						foreach ( get_posts( array( 'post_type' => array( 'page', 'product' ), 'post_status' => 'publish', 'numberposts' => 300, 'fields' => 'ids' ) ) as $pid ) {
+							$indirizzi[] = get_permalink( $pid );
+						}
+						foreach ( array_unique( array_filter( $indirizzi ) ) as $indirizzo ) {
+							$varnish->purge_cache( $indirizzo );
+						}
+						$dati['passi'][] = 'varnish:' . count( $indirizzi ) . ' pagine';
+					}
 				}
 			}
 			if ( $cf_classe && method_exists( 'Breeze_CloudFlare_Helper', 'reset_all_cache' ) ) {
@@ -137,3 +178,4 @@ function elitederma_svuota_cache( $richiesta ) {
 
 	return new WP_REST_Response( array( 'ok' => true, 'dati' => $dati ), 200 );
 }
+endif;
