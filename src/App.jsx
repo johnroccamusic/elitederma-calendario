@@ -64954,7 +64954,32 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {r.nome}
+                  {(() => {
+                    // Quanto sconta QUESTA riga, e solo quello: la
+                    // percentuale, accanto al nome. Gli euro e il prezzo
+                    // finale li dice gia' il riquadro dei totali, e sotto
+                    // ogni prodotto diventavano tre numeri da leggere per
+                    // sapere una cosa sola.
+                    //
+                    // Sui prodotti needling si scrive la percentuale della
+                    // loro tabella, che e' sul netto: raccontata sul lordo
+                    // il 30% diventerebbe 24,59 e non combacerebbe con
+                    // quella in cima al carrello.
+                    const suoSconto = scontoDiRiga(r);
+                    if (!(suoSconto > 0)) return null;
+                    const lordoRiga = round2(r.prezzo * r.quantita);
+                    const pctNeedling = eProdottoNeedling(prodottiPerId[r.prodottoId]) ? percentualeNeedlingDi(subtotale) : null;
+                    const pct = pctNeedling != null && couponAFasce
+                      ? pctNeedling
+                      : (lordoRiga > 0 ? Math.round((suoSconto / lordoRiga) * 1000) / 10 : 0);
+                    // "30%" e non "30,00%": i decimali si scrivono solo
+                    // quando ci sono davvero
+                    const scritta = Number.isInteger(pct) ? String(pct) : String(Math.round(pct * 10) / 10).replace(".", ",");
+                    return <span style={{ color: "#2E7D32", fontWeight: 800 }}>{"  "}−{scritta}%</span>;
+                  })()}
+                </div>
                 {correzionePrezzo ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
                     <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>€</span>
@@ -64980,29 +65005,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 ) : (
                   <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
                 )}
-                {(() => {
-                  // quanto sconta QUESTA riga, e quanto resta da pagare.
-                  // Compare solo quando c'e' davvero uno sconto: su un
-                  // carrello a prezzo pieno sarebbe una riga di zeri.
-                  const suoSconto = scontoDiRiga(r);
-                  if (!(suoSconto > 0)) return null;
-                  const lordoRiga = round2(r.prezzo * r.quantita);
-                  // Su un prodotto needling si scrive la percentuale della
-                  // sua tabella, che e' sul NETTO: raccontata sul lordo il
-                  // 30% diventa 24,59 e non combacia con quella scritta in
-                  // cima al carrello. Stessi euro, due numeri diversi: e'
-                  // il modo piu' veloce per non far fidare nessuno.
-                  const pctNeedling = eProdottoNeedling(prodottiPerId[r.prodottoId]) ? percentualeNeedlingDi(subtotale) : null;
-                  const pct = pctNeedling != null && couponAFasce
-                    ? pctNeedling
-                    : (lordoRiga > 0 ? Math.round((suoSconto / lordoRiga) * 1000) / 10 : 0);
-                  return (
-                    <div style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: "#2E7D32", marginTop: 1 }}>
-                      −{fmtPctErp2(pct)} · −{fmtEuroErp2(suoSconto)}
-                      <span style={{ color: grigioCarrello, fontWeight: 600 }}> → {fmtEuroErp2(round2(lordoRiga - suoSconto))}</span>
-                    </div>
-                  );
-                })()}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
                 <button onClick={() => decrementaRiga(r.prodottoId)} data-niente-ombra style={{ width: isMobile ? 24 : 28, height: isMobile ? 24 : 28, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)", boxShadow: OMBRA_POS.tondo, color: NAVY, ...fontBody, fontSize: isMobile ? 14 : 16, fontWeight: 700, lineHeight: 1, cursor: "pointer" }}>−</button>
