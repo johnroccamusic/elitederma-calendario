@@ -9622,8 +9622,13 @@ function PillolaSegmentata({ voci, valore, onCambia, compatto }) {
   const [aspettoPillole] = useAspettoTasti();
   return (
     <div style={{
-      display: "inline-flex", alignItems: "stretch", flexShrink: 0,
-      background: aspettoPillole.pillole.colore, borderRadius: 14, padding: 5, gap: 2,
+      display: "inline-flex", alignItems: "stretch",
+      // da telefono la pastiglia si lascia stringere invece di spingere
+      // la vicina a capo: due pastiglie una sopra l'altra occupano il
+      // doppio dell'altezza per dire le stesse due cose
+      flexShrink: compatto ? 1 : 0, minWidth: 0,
+      background: aspettoPillole.pillole.colore, borderRadius: 14,
+      padding: compatto ? 4 : 5, gap: 2,
       boxShadow: ombraCssTasto(aspettoPillole.pillole.ombra),
     }}>
       {voci.map((v) => {
@@ -9633,15 +9638,18 @@ function PillolaSegmentata({ voci, valore, onCambia, compatto }) {
             key={v.chiave}
             onClick={() => onCambia(v.chiave)}
             style={{
-              ...fontBody, fontSize: compatto ? 11 : 13, fontWeight: 700,
-              padding: compatto ? "10px 12px" : "13px 18px", borderRadius: 10, border: "none",
+              ...fontBody, fontSize: compatto ? 10.5 : 13, fontWeight: 700,
+              padding: compatto ? "10px 8px" : "13px 18px", borderRadius: 10, border: "none",
               background: attivo ? "#fff" : "transparent",
               color: attivo ? NAVY : MUTED,
               boxShadow: attivo ? "0 1px 3px rgba(14,27,51,0.12)" : "none",
               cursor: "pointer", display: "flex", alignItems: "center", gap: compatto ? 4 : 6, whiteSpace: "nowrap",
+              // su uno schermo molto stretto l'ultima parola si accorcia
+              // con i puntini: brutto, ma meglio di due righe
+              minWidth: 0, overflow: "hidden", textOverflow: "ellipsis",
             }}
           >
-            {v.Icona && <v.Icona size={compatto ? 13 : 15} color={attivo ? NAVY : MUTED} />}
+            {v.Icona && <v.Icona size={compatto ? 12 : 15} color={attivo ? NAVY : MUTED} />}
             {v.testo}
           </button>
         );
@@ -9921,7 +9929,11 @@ function SezioneDateCorsi({
               </button>
             </div>
           )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "space-between", gap: isMobile ? 6 : 10, flexWrap: "wrap", marginBottom: 12 }}>
+          {/* Da telefono le due pastiglie stanno in riga e basta: andando a
+              capo occupavano il doppio dell'altezza prima ancora del primo
+              corso, e su Android si vedeva solo quello. Se lo schermo e'
+              davvero stretto si stringono loro. */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? 5 : 10, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: 12, minWidth: 0 }}>
             <PillolaSegmentata
               compatto={isMobile}
               valore={vistaDateTab}
@@ -9931,7 +9943,7 @@ function SezioneDateCorsi({
                 { chiave: "archivio", testo: "Passati" },
               ]}
             />
-            <div style={{ display: "flex", gap: isMobile ? 3 : 6, alignItems: "center", flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: isMobile ? 3 : 6, alignItems: "center", flexShrink: isMobile ? 1 : 0, minWidth: 0 }}>
               {!modoForzato && (
                 <>
                   <PillolaSegmentata
