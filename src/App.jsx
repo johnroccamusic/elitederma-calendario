@@ -62784,13 +62784,25 @@ const DURATA_MASSIMA_TAP = 600;
 function usaTapNonScorrimento(onTap, attivo = true) {
   const partenza = useRef(null);
   if (!attivo || !onTap) return {};
+  // Dentro alla riga ci sono comandi propri (il "+", per dire). Il tocco
+  // della riga NON deve valere quando parte da uno di quelli: il "+" ha
+  // gia' il suo onClick, e lo stopPropagation che ci mette non serve a
+  // niente qui — fermare il click non ferma il pointerup, che e' un altro
+  // evento e arriva comunque alla riga. Risultato: un tocco sul "+"
+  // aggiungeva DUE pezzi al carrello, uno per strada.
+  // Niente [role=button] in questo elenco: lo porta la riga stessa, e
+  // cercandolo si spegnerebbe proprio il tocco che si vuole riconoscere.
+  const suUnComandoSuo = (e) => !!e.target?.closest?.("button, a, input, select, textarea");
+
   return {
     onPointerDown: (e) => {
+      if (suUnComandoSuo(e)) { partenza.current = null; return; }
       partenza.current = { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId };
     },
     onPointerUp: (e) => {
       const p = partenza.current;
       partenza.current = null;
+      if (suUnComandoSuo(e)) return;
       if (!p || p.id !== e.pointerId) return;
       const spostato = Math.hypot(e.clientX - p.x, e.clientY - p.y);
       if (spostato > SPOSTAMENTO_MASSIMO_TAP) return;      // stava scorrendo
