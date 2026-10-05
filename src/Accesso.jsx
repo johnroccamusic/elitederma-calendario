@@ -99,8 +99,27 @@ function rottaPubblica() {
   return PARAMETRI_PUBBLICI.some((nome) => !!query.get(nome));
 }
 
+// La sessione di Supabase vive in localStorage. Se il browser non lo
+// lascia scrivere — navigazione privata, "Blocca tutti i cookie" su
+// Safari — l'accesso non si ricorda MAI, e dall'esterno sembra che l'app
+// sia rotta: si entra, si esce, e la volta dopo richiede tutto daccapo.
+// Da qui non si puo' rimediare, ma si puo' smettere di farlo sembrare un
+// mistero: se la memoria non tiene, lo si scrive sotto al modulo.
+function memoriaDelSitoFunziona() {
+  try {
+    const chiave = "__genyon_prova__";
+    window.localStorage.setItem(chiave, "1");
+    const letto = window.localStorage.getItem(chiave);
+    window.localStorage.removeItem(chiave);
+    return letto === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function Accesso() {
   const [sessione, setSessione] = useState(null);
+  const [memoriaOk] = useState(memoriaDelSitoFunziona);
   const [caricamento, setCaricamento] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -161,6 +180,20 @@ export default function Accesso() {
           <p style={{ margin: "0 0 24px", fontSize: 12, color: "#8B8FA3" }}>
             Area riservata allo staff.
           </p>
+
+          {!memoriaOk && (
+            <div style={{
+              margin: "0 0 20px", padding: "10px 12px", borderRadius: 10,
+              background: "#FBEBE9", border: "1px solid #F0C8C2", fontSize: 12.5, lineHeight: 1.45, color: "#8C2F22",
+            }}>
+              <b>Questo browser non conserva l'accesso.</b> Entrerai lo stesso, ma
+              la prossima volta ti richiedera' email e password. Succede in
+              navigazione privata, oppure con Safari impostato per bloccare
+              tutti i cookie: Impostazioni → App → Safari → togli "Blocca tutti
+              i cookie". Su iPhone e iPad conviene anche aggiungere GENYON alla
+              schermata Home, dal tasto Condividi.
+            </div>
+          )}
 
           <label style={{ display: "block", fontSize: 12.5, color: NAVY, marginBottom: 6 }}>Email</label>
           <input
