@@ -53384,6 +53384,31 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // da nessuna parte
   const [canaleSel, setCanaleSel] = useState("");
   const [ricercaProdotto, setRicercaProdotto] = useState("");
+  // "Aggiorna lo shop": spinge su WooCommerce la situazione vera dell'app
+  // — giacenze meno i pezzi promessi nei carrelli sospesi, e fuori dal
+  // negozio chi ha la spunta "Non sullo shop". L'app lo fa gia' da sola a
+  // ogni vendita e a ogni carrello messo da parte; questo tasto serve per
+  // tutto il resto: una spunta cambiata a mano, una sincronizzazione che
+  // ha riportato indietro un numero dal sito, una scrittura fallita che
+  // nessuno ha visto.
+  const [allineandoShop, setAllineandoShop] = useState(false);
+  const [esitoAllineaShop, setEsitoAllineaShop] = useState("");
+  async function aggiornaLoShop() {
+    setAllineandoShop(true); setEsitoAllineaShop("");
+    try {
+      const { data, error } = await supabase.functions.invoke("woo-riallinea-shop");
+      if (error || data?.errore) setEsitoAllineaShop("Non riuscito: " + (data?.errore || error.message));
+      else {
+        const pezzi = [`${data.giacenze} giacenze aggiornate`];
+        if (data.nascosti) pezzi.push(`${data.nascosti} tolti dal negozio (${(data.dettaglio_nascosti || []).join(", ")})`);
+        if (data.saltati) pezzi.push(`${data.saltati} saltati, fra bozze e bundle senza giacenza propria`);
+        if (data.falliti?.length) pezzi.push(`non riusciti: ${data.falliti.join("; ")}`);
+        setEsitoAllineaShop(pezzi.join(" · "));
+        ricarica(["prodotti_shop"]);
+      }
+    } catch (e) { setEsitoAllineaShop("Non riuscito: " + (e?.message || e)); }
+    setAllineandoShop(false);
+  }
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
   const [paginaMagazzino, setPaginaMagazzino] = useState(0);
@@ -54448,6 +54473,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 Azzera filtri
               </button>
             )}
+            <button
+              onClick={aggiornaLoShop}
+              disabled={allineandoShop}
+              title="Riscrive su WooCommerce le giacenze di tutti i prodotti, tolti i pezzi promessi nei carrelli sospesi, e toglie dal negozio quelli con la spunta Non sullo shop"
+              style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "8px 14px", cursor: allineandoShop ? "default" : "pointer", whiteSpace: "nowrap", opacity: allineandoShop ? 0.6 : 1 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4" /><path d="M21 3v6h-6" /></svg>
+              {allineandoShop ? "Scrivo sul sito…" : "Aggiorna lo shop"}
+            </button>
             {/* la seconda riga di conto: cedibile e punti di chi paga in
                 contanti, sotto ogni prodotto. Un tasto solo per tutti */}
             {vistaProdotti === "elenco" && (
@@ -54462,6 +54496,14 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </button>
             )}
           </div>
+          {esitoAllineaShop && (
+            <div style={{ ...fontBody, fontSize: 12.5, lineHeight: 1.45, padding: "9px 13px", borderRadius: 12,
+              color: esitoAllineaShop.startsWith("Non riuscito") ? "#C0392B" : "#2E7D32",
+              background: esitoAllineaShop.startsWith("Non riuscito") ? "#FBEBE9" : "#E9F6EC",
+              border: `1px solid ${esitoAllineaShop.startsWith("Non riuscito") ? "#F0C8C2" : "#CFE8D5"}` }}>
+              {esitoAllineaShop}
+            </div>
+          )}
           {/* da telefono la barra e' larga quanto l'elenco che filtra e i
               cinque si dividono lo spazio: sporgeva oltre la tabella, e una
               barra piu' larga di cio' che governa sembra appartenere a
@@ -56046,6 +56088,25 @@ function pianoScarico(prodotto, quantita, { sogliaInvalicabile = false } = {}) {
 // "è in vendita online?" non è un campo suo: sono tre segnali che devono
 // dire tutti sì (ha un id WooCommerce, non è una bozza, non è marcato solo
 // offline). Tenerlo derivato evita una quarta verità che si disallinea
+// Rimette in pari WooCommerce su alcuni prodotti: quello che il sito puo'
+// vendere non e' la giacenza, e' la giacenza MENO i pezzi gia' promessi in
+// un carrello sospeso. Il banco quei pezzi non li rivende da sempre; il
+// sito non ne sapeva niente e continuava a venderli.
+//
+// Si chiama dopo ogni cosa che cambia l'una o gli altri: una vendita, un
+// carrello messo da parte, uno ripreso o buttato. Non blocca chi la
+// chiama e non fa fallire niente — se il sito non risponde, il tasto
+// "Aggiorna lo shop" in Gestione magazzino rimette tutto in pari.
+async function allineaShop(prodottiIds) {
+  const ids = [...new Set((prodottiIds || []).filter(Boolean))];
+  if (ids.length === 0) return;
+  try {
+    const { data, error } = await supabase.functions.invoke("woo-riallinea-shop", { body: { prodottiIds: ids } });
+    if (error || data?.errore) console.error("Riallineamento shop non riuscito:", data?.errore || error?.message);
+  } catch (e) {
+    console.error("Riallineamento shop non riuscito:", e?.message || e);
+  }
+}
 function pubblicatoSuShop(p) {
   // "privato" su WooCommerce vuol dire che il prodotto esiste sul sito ma
   // lo vede solo chi è dentro come amministratore: per il cliente non è in
@@ -63561,6 +63622,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       nome, note: note.trim() || nome, aggiornato: adesso, totale: totaleDaIncassare,
     };
     salvaCarrelliSospesi(esistente ? lista.map((c) => (c.id === voce.id ? voce : c)) : [...lista, voce]);
+    // i pezzi appena promessi spariscono anche dallo shop
+    allineaShop((voce.carrello || []).map((r) => r.prodottoId));
     setCarrelloSospesoId(null);
     nuovaVendita();
     setCarrelloEspanso(false);
@@ -63606,6 +63669,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   function eliminaCarrelloSospeso(c) {
     if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}"? I suoi pezzi tornano in vendita.`)) return;
     salvaCarrelliSospesi(sospesiAttuali().filter((x) => x.id !== c.id));
+    // "i suoi pezzi tornano in vendita" vale anche sul sito, non solo qui
+    allineaShop((c.carrello || []).map((r) => r.prodottoId));
     if (carrelloSospesoId === c.id) setCarrelloSospesoId(null);
   }
   // Il coupon di un'edizione: uno solo, quello nato per quella classe.
@@ -64224,6 +64289,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       if (pianiVendita.length > 0) {
         const erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", utente: nomeOperatore });
         if (erroreScarico) { window.alert("Attenzione: " + erroreScarico); ricarica(["prodotti_shop"]); return; }
+        // lo scarico ha gia' scritto la giacenza nuova sul sito, ma senza
+        // togliere i pezzi promessi negli altri carrelli sospesi: qui si
+        // rimette la disponibilita' vera
+        allineaShop(pianiVendita.map((x) => x.prodotto?.id));
       }
 
       // La provvigione della master si congela qui, insieme alla vendita:
