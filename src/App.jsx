@@ -28087,21 +28087,21 @@ function PannelloRiepilogoAmministrativo({
                               <PastigliaPagamento testo="Pagato" colore="#2E7D32" sfondo="#E9F6EC" titolo="Contante gia' registrato come spesa pagata" />
                             ) : !r.flagPerVenditore && r.pagatoDalloScadenziario ? (
                               <PastigliaPagamento testo="Da scad." colore="#1F4E8C" sfondo="#EEF3FA" titolo="Saldata dallo scadenziario passivo, non dalla busta" />
-                            ) : !r.flagPerVenditore && r.rinvioAutomatico ? (
-                              <PastigliaPagamento testo="Cash insuff." colore="#C0392B" sfondo="#FDECEC" titolo="Il contante del corso non basta per questa quota: va nello scadenziario" />
                             ) : !r.flagPerVenditore && (r.cash || 0) > 0 ? (
                               <SegmentoModalita
                                 valori={["Busta", "Scad."]}
                                 attivo={r.cashRinviato ? "Scad." : "Busta"}
                                 titoli={{
-                                  Busta: "La quota in contanti esce dalla busta di questo corso e va in prima nota con Pagamenti effettuati",
+                                  Busta: r.rinvioAutomatico
+                                    ? "Il contante di questa classe non basta: finché non ne entra altro, questa quota non può uscire dalla busta"
+                                    : "La quota in contanti esce dalla busta di questo corso e va in prima nota con Pagamenti effettuati",
                                   "Scad.": "La quota in contanti va nello scadenziario passivo (Quadro impegni): si decide poi se pagarla dalla cassa contanti o con bonifico",
                                 }}
                                 onSceglie={(scelta) => {
                                   if (scelta === "Scad.") { if (!r.cashRinviato && !r.rinvioAutomatico) rinviaCashAgliImpegni(r); return; }
                                   if (!r.cashRinviato) return;
                                   // Busta: solo se il contante che resta la copre
-                                  if (r.rinvioAutomatico || r.cash > disponibileDopoLeScelte + 0.004) { setMsg(`Impossibile pagare "${r.nome}" con il cash del corso: rinvia la scadenza.`); return; }
+                                  if (r.rinvioAutomatico || r.cash > disponibileDopoLeScelte + 0.004) { setMsg(`Il contante di questa classe non basta per "${r.nome}": ${fmtEuroErp2(r.cash)} contro ${fmtEuroErp2(Math.max(0, disponibileDopoLeScelte))} rimasti. Resta nello scadenziario.`); return; }
                                   riportaCashSulCorso(r);
                                 }}
                               />
@@ -28215,19 +28215,20 @@ function PannelloRiepilogoAmministrativo({
                                         const rv = venditoriDecisi.find((x) => x.chiave === v.chiave);
                                         if (rv?.cashPagato) return <PastigliaPagamento testo="Pagato" colore="#2E7D32" sfondo="#E9F6EC" titolo="Quota gia' in prima nota, pagata dalla busta" />;
                                         if (rv?.pagatoDalloScadenziario) return <PastigliaPagamento testo="Da scad." colore="#1F4E8C" sfondo="#EEF3FA" titolo="Saldata dallo scadenziario passivo, non dalla busta" />;
-                                        if (rv?.rinvioAutomatico) return <PastigliaPagamento testo="Cash insuff." colore="#C0392B" sfondo="#FDECEC" titolo="Il contante del corso non basta per questa quota" />;
                                         return (
                                           <SegmentoModalita
                                             valori={["Busta", "Scad."]}
                                             attivo={rv?.cashRinviato ? "Scad." : "Busta"}
                                             titoli={{
-                                              Busta: "La quota in contanti di questo venditore esce dalla busta del corso",
+                                              Busta: rv?.rinvioAutomatico
+                                                ? "Il contante di questa classe non basta: finché non ne entra altro, questa quota non può uscire dalla busta"
+                                                : "La quota in contanti di questo venditore esce dalla busta del corso",
                                               "Scad.": "La quota in contanti di questo venditore va nello scadenziario passivo",
                                             }}
                                             onSceglie={(scelta) => {
                                               if (scelta === "Scad.") { if (!rv?.cashRinviato && !rv?.rinvioAutomatico) rinviaCashAgliImpegni({ ...rv, nome: `${v.nome} (quota venditore)` }); return; }
                                               if (!rv?.cashRinviato) return;
-                                              if (rv.rinvioAutomatico || rv.suoCash > disponibileDopoLeScelte + 0.004) { setMsg(`Impossibile pagare ${v.nome} con il cash del corso: rinvia la scadenza.`); return; }
+                                              if (rv.rinvioAutomatico || rv.suoCash > disponibileDopoLeScelte + 0.004) { setMsg(`Il contante di questa classe non basta per ${v.nome}: ${fmtEuroErp2(rv.suoCash)} contro ${fmtEuroErp2(Math.max(0, disponibileDopoLeScelte))} rimasti. Resta nello scadenziario.`); return; }
                                               riportaCashSulCorso({ ...rv, nome: v.nome });
                                             }}
                                           />
