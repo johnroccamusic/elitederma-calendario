@@ -48939,8 +48939,27 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
         richiede_fattura: false,
       };
 
+      // Se fra le righe c'e' la spedizione, la cliente l'ha pagata: va
+      // preparato un pacco, e l'indirizzo e' quello che ha compilato lei
+      // su Stripe. Senza questa parte la vendita rientrava ma il pacco
+      // non entrava in coda da nessuna parte, e nessuno lo preparava:
+      // e' successo con i due ordini di Stefania del 04/10/2026.
+      const spedizionePagata = prodottiRiga.some((x) => x.spedizione);
+      const datiSpedizione = spedizionePagata && (cliente.indirizzo || cliente.citta) ? {
+        corso_data_id: r.corso_data_id || null,
+        destinatario_nome: [cliente.nome, cliente.cognome].filter(Boolean).join(" ").trim() || null,
+        nome: cliente.nome || null, cognome: cliente.cognome || null,
+        indirizzo: cliente.indirizzo || null, civico: cliente.civico || null,
+        citta: cliente.citta || null, cap: cliente.cap || null,
+        provincia: (cliente.provincia || "").toUpperCase().slice(0, 2) || null,
+        cellulare: cliente.telefono || null,
+        richiede_fattura: false,
+        // la riga della spedizione non e' merce: nel pacco non ci va
+        prodotti: prodottiRiga.filter((x) => !x.spedizione),
+      } : null;
+
       const { data: esito, error } = await supabase.rpc("registra_vendita_pos", {
-        p_vendita: { ...vendita, ...(provvigione || {}) }, p_spedizione: null,
+        p_vendita: { ...vendita, ...(provvigione || {}) }, p_spedizione: datiSpedizione,
       });
       if (error) { setMsg("La vendita non e' stata registrata: " + testoErrore(error)); setInCorso(""); return; }
 
@@ -48949,7 +48968,7 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
         if (erroreScarico) setMsg("Vendita registrata, ma il magazzino non si e' scaricato del tutto: " + erroreScarico);
       }
       await supabase.from("pagamenti_pos").update({ vendita_id: esito.vendita_id }).eq("id", r.id);
-      if (!msg) setMsg(`Vendita ${esito.numero_ordine} registrata.`);
+      if (!msg) setMsg(`Vendita ${esito.numero_ordine} registrata${datiSpedizione ? ", col suo ordine di spedizione" : ""}.`);
       await carica();
       ricarica?.(["prodotti_shop", "vendite_shop"]);
     } catch (e) {
