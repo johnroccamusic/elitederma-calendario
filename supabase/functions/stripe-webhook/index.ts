@@ -128,5 +128,23 @@ Deno.serve(async (req) => {
   }).eq("id", richiesta.id).eq("stato", "in_attesa");
   if (error) { console.error("Non sono riuscito a segnare il pagamento:", error.message); return new Response("Errore salvataggio", { status: 500 }); }
 
+  // LA VENDITA NON LA SCRIVE QUESTO WEBHOOK, e non e' una svista.
+  //
+  // La scrive la schermata del POS, che resta in ascolto e registra appena
+  // il pagamento arriva: li' c'e' il carrello vero, lo sconto applicato e
+  // la provvigione della master, che va congelata con le fasce di oggi.
+  // Scriverla anche qui vorrebbe dire due vendite con due numeri diversi.
+  //
+  // Il guaio e' che quella schermata puo' chiudersi prima — la master passa
+  // ad altro, il telefono si blocca, l'app si ricarica per un aggiornamento
+  // — e allora i soldi arrivano e non li raccoglie nessuno: e' successo
+  // sette volte in dieci giorni.
+  //
+  // La rete sta sul database: ogni cinque minuti un lavoro programmato
+  // guarda i pagamenti incassati da piu' di cinque minuti che non hanno
+  // ancora una vendita, e la scrive lui. Cinque minuti sono il tempo che si
+  // da' al POS per farlo per bene; dopo, meglio una vendita senza
+  // provvigione che un incasso che non risulta.
+
   return new Response("ok", { status: 200 });
 });

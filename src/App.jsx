@@ -64462,6 +64462,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       prodotti: prodottiRiga,
     } : null;
     const nomeOperatore = operatore?.nome || null;
+    // il codice del pagamento col QR, fotografato adesso: fra poco la
+    // finestra sara' gia' stata chiusa e lo stato azzerato
+    const codiceQrDiQuestaVendita = richiestaQr?.codice || null;
     const etichettaEsito = omaggioAttivo ? "Omaggio registrato" : "Vendita registrata";
 
     // Il cliente della fattura entra (o si aggiorna) in anagrafica prima
@@ -64559,6 +64562,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         return;
       }
       const venditaCreata = { id: esito?.vendita_id, numero_ordine: esito?.numero_ordine };
+
+      // Il pagamento col QR si lega alla sua vendita. Senza questa riga la
+      // rete che gira ogni cinque minuti sul database — quella che
+      // raccoglie gli incassi rimasti senza vendita perche' la schermata
+      // si era chiusa — ne scriverebbe una seconda, con un altro numero.
+      if (codiceQrDiQuestaVendita && esito?.vendita_id) {
+        await supabase.from("pagamenti_pos")
+          .update({ vendita_id: esito.vendita_id, aggiornato_il: new Date().toISOString() })
+          .eq("codice", codiceQrDiQuestaVendita);
+      }
       // i pezzi dichiarati "dal kit" NON vengono attribuiti a una scatola
       // qui: restano segnati sulla vendita (dal_kit riga per riga) e la
       // master, a fine corso, dira' da quale kit sono usciti. Nessun
