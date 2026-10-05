@@ -22,9 +22,15 @@
 //   - lo stato di chi e' gia' in bozza o privato sul sito. Una bozza e'
 //     una decisione presa li', e pubblicarla d'ufficio sarebbe peggio del
 //     disallineamento che si vuole togliere.
-//   - i bundle virtuali: non hanno giacenza propria, la loro
-//     disponibilita' la decidono i componenti. Scriverci sopra un numero
-//     vorrebbe dire inventarlo.
+//   - il prezzo: lo governa il listino, non questo tasto.
+//
+// I BUNDLE VIRTUALI non hanno giacenza propria, e il numero scritto nella
+// loro riga non vuol dire niente. La disponibilita' si conta dai pezzi,
+// come fa il banco: quanti bundle interi si riescono a comporre con i
+// componenti che ci sono. Saltarli — come faceva la prima versione di
+// questo file — li lasciava fermi a quello che il sito aveva: due
+// risultavano "Esaurito" sullo shop mentre i pezzi per comporli erano in
+// magazzino.
 //   - il prezzo: lo governa il listino, non questo tasto.
 //
 // Variabili d'ambiente: WC_SITE_URL / WC_CONSUMER_KEY_WRITE /
@@ -87,11 +93,25 @@ Deno.serve(async (req) => {
     }
   }
 
+  const { data: distinta } = await supabase
+    .from("bundle_componenti").select("bundle_id, componente_id, quantita_per_bundle");
+  const componentiDi: Record<string, { id: string; per: number }[]> = {};
+  for (const r of distinta || []) {
+    const per = Number(r.quantita_per_bundle) || 0;
+    if (!r.bundle_id || !r.componente_id || per <= 0) continue;
+    (componentiDi[r.bundle_id] ||= []).push({ id: r.componente_id, per });
+  }
+
   const { data: prodotti, error } = await supabase
     .from("prodotti_shop")
-    .select("id, nome, woo_product_id, stato, attivo, solo_offline, quantita, tipo_prodotto, bundle_con_giacenza_fisica")
-    .not("woo_product_id", "is", null);
+    // TUTTI, anche quelli fuori dallo shop: un componente senza id su
+    // WooCommerce non si pubblica, ma i suoi pezzi contano lo stesso per
+    // il bundle che lo contiene. Chi non ha l'id si salta nel giro sotto.
+    .select("id, nome, woo_product_id, stato, attivo, solo_offline, quantita, tipo_prodotto, bundle_con_giacenza_fisica");
   if (error) return json({ errore: "Lettura prodotti: " + error.message }, 500);
+
+  const perIdProdotto: Record<string, { quantita: unknown }> = {};
+  for (const p of prodotti || []) perIdProdotto[p.id as string] = p as { quantita: unknown };
 
   const daAggiornare: Record<string, unknown>[] = [];
   const nascosti: { id: string; nome: string; woo: number }[] = [];
@@ -100,6 +120,7 @@ Deno.serve(async (req) => {
 
   for (const p of prodotti || []) {
     if (soloQuesti && !soloQuesti.has(p.id)) continue;
+    if (p.woo_product_id == null) continue; // non sta sul sito: niente da allineare
     const woo = Number(p.woo_product_id);
     const fuoriCatalogo = p.solo_offline === true || p.attivo === false;
 
@@ -114,15 +135,35 @@ Deno.serve(async (req) => {
     }
 
     if (p.stato !== "publish") { saltati.push({ nome: p.nome, perche: `sul sito e' "${p.stato}"` }); continue; }
-    if (p.tipo_prodotto === "bundle" && !p.bundle_con_giacenza_fisica) {
-      saltati.push({ nome: p.nome, perche: "bundle senza giacenza propria" });
-      continue;
+
+    const virtuale = p.tipo_prodotto === "bundle" && !p.bundle_con_giacenza_fisica;
+    let quantita: number;
+    if (virtuale) {
+      const pezzi = componentiDi[p.id] || [];
+      if (pezzi.length === 0) { saltati.push({ nome: p.nome, perche: "bundle senza distinta" }); continue; }
+      // quanti se ne compongono: lo decide il componente che finisce
+      // prima, con i suoi pezzi gia' al netto di quelli promessi
+      let interi = Infinity;
+      let mancante = "";
+      for (const c of pezzi) {
+        const comp = perIdProdotto[c.id];
+        const in_casa = Number(comp?.quantita);
+        if (!comp || !Number.isFinite(in_casa)) { interi = NaN; mancante = c.id; break; }
+        const liberi = Math.max(0, in_casa - (promessi[c.id] || 0));
+        interi = Math.min(interi, Math.floor(liberi / c.per));
+      }
+      if (!Number.isFinite(interi)) { saltati.push({ nome: p.nome, perche: `componente senza giacenza (${mancante})` }); continue; }
+      quantita = interi;
+    } else {
+      const in_casa = Number(p.quantita);
+      if (!Number.isFinite(in_casa)) { saltati.push({ nome: p.nome, perche: "giacenza non scritta" }); continue; }
+      quantita = in_casa;
     }
-    const quantita = Number(p.quantita);
-    if (!Number.isFinite(quantita)) { saltati.push({ nome: p.nome, perche: "giacenza non scritta" }); continue; }
+
     // quello che il sito puo' davvero vendere: i pezzi in casa meno
     // quelli gia' promessi in un carrello sospeso. Mai sotto zero.
-    const impegnati = promessi[p.id] || 0;
+    // Su un bundle i promessi sono gia' stati tolti ai componenti.
+    const impegnati = virtuale ? 0 : (promessi[p.id] || 0);
     const disponibile = Math.max(0, quantita - impegnati);
 
     // solo la quantita', esattamente come fa woo-aggiorna-prodotto a ogni
