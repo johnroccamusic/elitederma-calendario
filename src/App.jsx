@@ -49373,7 +49373,9 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
     const proveSenzaSpedizione = (vista === "dagestire" ? (venditeSimulate || []) : [])
       .filter((v) => !(spedizioniPos || []).some((sp) => sp.vendita_id === v.id))
       .map((v) => ({
-        tipo: "pos", chiave: `s${v.id}`, data: v.data_ordine || "",
+        // chiave "w" come le vendite online: la spunta si aggancia alla
+        // vendita, e cosi' si ritrova rileggendo righe_preparate_spedizione
+        tipo: "pos", chiave: `w${v.id}`, data: v.data_ordine || "",
         spedizione: {
           id: v.id, vendita_id: v.id, simulazione: true, senzaSpedizione: true,
           prodotti: v.prodotti, destinatario_nome: v.cliente_nome, ts: v.data_ordine, stato: "da_spedire",
@@ -49408,7 +49410,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
         && statiOttimisti[v.id] !== "consegnato"
         && !(spedizioniPos || []).some((sp) => sp.vendita_id === v.id))
       .map((v) => ({
-        tipo: "pos", chiave: `c${v.id}`, data: v.data_ordine || "",
+        tipo: "pos", chiave: `w${v.id}`, data: v.data_ordine || "",
         spedizione: {
           id: v.id, vendita_id: v.id, senzaSpedizione: true, daSedeCentrale: true,
           prodotti: v.prodotti, destinatario_nome: v.cliente_nome, ts: v.data_ordine, stato: "da_spedire",
@@ -49462,9 +49464,17 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
       if (preso) dellaVoce[indice] = true; else delete dellaVoce[indice];
       return { ...prev, [chiave]: dellaVoce };
     });
-    const riferimento = voce.tipo === "woo" ? { vendita_id: voce.vendita.id } : { spedizione_pos_id: voce.spedizione.id };
-    const colonna = voce.tipo === "woo" ? "vendita_id" : "spedizione_pos_id";
-    const valore = voce.tipo === "woo" ? voce.vendita.id : voce.spedizione.id;
+    // A cosa si aggancia la spunta. Un pacco vero ha la sua riga in
+    // spedizioni_pos; una vendita che pacco non e' — una prova consegnata
+    // a mano, un ordine da preparare in sede — no, e il suo "id" qui
+    // dentro e' quello della VENDITA. Agganciarla alla spedizione faceva
+    // rifiutare la scrittura dalla chiave esterna:
+    // "righe_preparate_spedizione_spedizione_pos_id_fkey".
+    const perVendita = voce.tipo === "woo" || !!voce.spedizione?.senzaSpedizione;
+    const id = perVendita ? voce.vendita.id : voce.spedizione.id;
+    const colonna = perVendita ? "vendita_id" : "spedizione_pos_id";
+    const riferimento = { [colonna]: id };
+    const valore = id;
     const { error } = preso
       ? await supabase.from("righe_preparate_spedizione").insert({ ...riferimento, indice_riga: indice })
       : await supabase.from("righe_preparate_spedizione").delete().eq(colonna, valore).eq("indice_riga", indice);
