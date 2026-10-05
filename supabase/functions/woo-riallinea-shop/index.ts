@@ -212,8 +212,16 @@ Deno.serve(async (req) => {
     await supabase.from("prodotti_shop").update({ stato: "private" }).in("id", nascostiDavvero.map((n) => n.id));
   }
 
+  // La cache. Svuotare le pagine UNA PER UNA non basta quando si e'
+  // toccato tutto il catalogo: Breeze svuota la sua, ma Cloudflare ha
+  // continuato a servire una copia vecchia di oltre un'ora, e sulla
+  // pagina dell'espositore si leggeva "Esaurito" mentre WooCommerce
+  // diceva gia' "Disponibile". Su un giro completo si svuota tutto, che
+  // e' l'unica strada che risulta arrivare anche a Cloudflare; su un giro
+  // mirato — dopo una vendita, dopo un carrello sospeso — restano le
+  // singole pagine, che e' giusto e costa molto meno.
   const avvisoCache = riusciti.size
-    ? await svuotaCacheSito({ prodottiWooIds: [...riusciti] })
+    ? await svuotaCacheSito(soloQuesti ? { prodottiWooIds: [...riusciti] } : { tutto: true })
     : null;
 
   return json({
