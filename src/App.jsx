@@ -49158,6 +49158,11 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
   );
 }
 
+// Il giorno in cui gli ordini della sede centrale hanno cominciato a
+// comparire qui. Serve a non tirare dentro lo storico: quelle vendite sono
+// state consegnate a mano quando sono state fatte, e nessuno le aveva
+// registrate come consegnate perche' non c'era niente da registrare.
+const INIZIO_PREPARAZIONI_SEDE = "2026-10-05";
 function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, corsi, corsiDate, location, iscritti, syncEsiti = [], ruoloUtente, ricarica, onBack, titolo = "Ordini in arrivo" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("dagestire"); // dagestire | storico | advisor
@@ -49299,6 +49304,13 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
     // un elenco di nomi scritto qui: domani se ne aggiunge una spuntandola.
     const venditeDaSedeCentrale = (vista === "dagestire" ? (venditeShop || []) : [])
       .filter((v) => v.origine === "pos"
+        // Da quando esiste questa lista, e non un giorno prima. Le vendite
+        // di prima sono gia' state consegnate a mano mesi fa: farle
+        // comparire adesso come "da preparare" vorrebbe dire chiedere a
+        // Raffaele di rifare un lavoro gia' fatto. Su quelle il campo
+        // "consegnato in aula" non e' mai stato scritto — non perche' non
+        // sia successo, ma perche' nessuno lo registrava.
+        && String(v.data_ordine || "") >= INIZIO_PREPARAZIONI_SEDE
         && !v.simulazione
         && (v.tipo_movimento || "vendita") === "vendita"
         && v.corso_data_id
