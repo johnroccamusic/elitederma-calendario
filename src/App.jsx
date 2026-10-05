@@ -65013,11 +65013,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   fila, e su una riga di carrello la larghezza e' quello
                   che manca sempre. */}
               {(() => {
-                const lato = isMobile ? 17 : 19;
+                // il 40% in piu' di com'erano nati (17/19): a dito, due
+                // quadrotti da diciassette punti si sbagliavano
+                const lato = isMobile ? 24 : 27;
                 const quadro = {
-                  width: lato, height: lato, borderRadius: 6,
+                  width: lato, height: lato, borderRadius: 8,
                   border: `1.5px solid ${NAVY}`, background: "#fff", color: NAVY,
-                  ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 800, lineHeight: 1,
+                  ...fontBody, fontSize: isMobile ? 18 : 19, fontWeight: 800, lineHeight: 1,
                   display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
                 };
                 const pieno = r.quantita >= tettoRiga;
