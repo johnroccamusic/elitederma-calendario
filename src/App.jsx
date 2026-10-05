@@ -65006,13 +65006,35 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
                 )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
-                <button onClick={() => decrementaRiga(r.prodottoId)} data-niente-ombra style={{ width: isMobile ? 24 : 28, height: isMobile ? 24 : 28, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)", boxShadow: OMBRA_POS.tondo, color: NAVY, ...fontBody, fontSize: isMobile ? 14 : 16, fontWeight: 700, lineHeight: 1, cursor: "pointer" }}>−</button>
-                {/* il numero in una casellina, come sul disegno: fra due
-                    tondi in rilievo un numero nudo sembrava un'etichetta */}
-                <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, minWidth: isMobile ? 24 : 30, textAlign: "center", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: isMobile ? "3px 2px" : "4px 3px", boxShadow: OMBRA_POS.incassato }}>{r.quantita}</span>
-                <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= tettoRiga} data-niente-ombra style={{ width: isMobile ? 24 : 28, height: isMobile ? 24 : 28, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)", boxShadow: r.quantita >= tettoRiga ? "none" : OMBRA_POS.tondo, color: NAVY, ...fontBody, fontSize: isMobile ? 14 : 16, fontWeight: 700, lineHeight: 1, cursor: r.quantita >= tettoRiga ? "default" : "pointer", opacity: r.quantita >= tettoRiga ? 0.4 : 1 }}>+</button>
-              </div>
+              {/* La quantita' e i suoi due comandi, come sul disegno: il
+                  numero a sinistra, e a destra due quadrotti smussati uno
+                  sopra l'altro — il piu' in alto, il meno sotto.
+                  Impilati prendono meta' larghezza di quando stavano in
+                  fila, e su una riga di carrello la larghezza e' quello
+                  che manca sempre. */}
+              {(() => {
+                const lato = isMobile ? 17 : 19;
+                const quadro = {
+                  width: lato, height: lato, borderRadius: 6,
+                  border: `1.5px solid ${NAVY}`, background: "#fff", color: NAVY,
+                  ...fontBody, fontSize: isMobile ? 13 : 14, fontWeight: 800, lineHeight: 1,
+                  display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+                };
+                const pieno = r.quantita >= tettoRiga;
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, minWidth: isMobile ? 24 : 30, textAlign: "center", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: isMobile ? "3px 2px" : "4px 3px", boxShadow: OMBRA_POS.incassato }}>{r.quantita}</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      <button onClick={() => incrementaRiga(r.prodottoId)} disabled={pieno} data-niente-ombra
+                        title={pieno ? "Non ci sono altri pezzi disponibili" : "Un pezzo in piu'"}
+                        style={{ ...quadro, cursor: pieno ? "default" : "pointer", opacity: pieno ? 0.35 : 1 }}>+</button>
+                      <button onClick={() => decrementaRiga(r.prodottoId)} data-niente-ombra
+                        title="Un pezzo in meno"
+                        style={{ ...quadro, cursor: "pointer" }}>−</button>
+                    </div>
+                  </div>
+                );
+              })()}
               <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, width: isMobile ? 52 : 62, textAlign: "right" }}>{fmtEuroErp2(round2(r.prezzo * r.quantita))}</div>
               {/* il cestino in un tondo rosato: e' l'unico gesto che
                   toglie roba, e deve distinguersi senza gridare */}
