@@ -64832,7 +64832,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             }}>
               <option value="">— vendita non legata a un corso —</option>
               {corsiEleggibiliPos.map((cd) => (
-                <option key={cd.id} value={cd.id}>{corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}{cd.data_fine < oggiStrPos ? ` · concluso il ${fmtData(cd.data_fine)}` : ""}</option>
+                // LA DATA CI VUOLE. Due edizioni dello stesso corso nella
+                // stessa citta' si leggevano identiche — "NEEDLING · Napoli"
+                // e "NEEDLING · Napoli" — e si sceglieva a caso. E' successo
+                // il 05/10/2026: scelta quella di febbraio, che il codice
+                // sconto non ce l'ha ancora, e al banco lo sconto risultava
+                // zero senza che niente dicesse perche'.
+                <option key={cd.id} value={cd.id}>
+                  {corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}
+                  {" · "}{fmtDataCompatta(cd.data_inizio, cd.data_fine)}
+                  {cd.data_fine < oggiStrPos ? " · concluso" : ""}
+                </option>
               ))}
             </select>
           </Field>
