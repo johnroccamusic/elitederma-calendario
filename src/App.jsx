@@ -64112,6 +64112,26 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return migliore ? manca : null;
   })();
   const totaleNetto = round2(subtotale - scontoApplicato);
+
+  // Lo sconto di UNA riga, con la stessa regola che usa l'incasso: chi
+  // guarda il carrello deve leggere lo stesso numero che finira' scritto
+  // sulla vendita, non una stima fatta col totale spalmato. Su un
+  // carrello a fasce ogni prodotto ha la sua percentuale — quella del suo
+  // margine — e dal totale in fondo non si capiva da dove venisse.
+  function scontoDiRiga(r) {
+    const lordoRiga = round2(r.prezzo * r.quantita);
+    if (omaggioAttivo || lordoRiga <= 0) return 0;
+    if (couponAFasce) {
+      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento))) / 100);
+    }
+    if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
+    if (scontoNum > 0) {
+      return scontoTipo === "percentuale"
+        ? round2((lordoRiga * scontoNum) / 100)
+        : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
+    }
+    return 0;
+  }
   // La spedizione si paga: 6,90 sul totale quando la vendita va spedita.
   // Entra nel conto come una riga a se', cosi' il totale e' sempre la
   // somma delle righe; un omaggio non la fa pagare
@@ -64960,6 +64980,29 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 ) : (
                   <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
                 )}
+                {(() => {
+                  // quanto sconta QUESTA riga, e quanto resta da pagare.
+                  // Compare solo quando c'e' davvero uno sconto: su un
+                  // carrello a prezzo pieno sarebbe una riga di zeri.
+                  const suoSconto = scontoDiRiga(r);
+                  if (!(suoSconto > 0)) return null;
+                  const lordoRiga = round2(r.prezzo * r.quantita);
+                  // Su un prodotto needling si scrive la percentuale della
+                  // sua tabella, che e' sul NETTO: raccontata sul lordo il
+                  // 30% diventa 24,59 e non combacia con quella scritta in
+                  // cima al carrello. Stessi euro, due numeri diversi: e'
+                  // il modo piu' veloce per non far fidare nessuno.
+                  const pctNeedling = eProdottoNeedling(prodottiPerId[r.prodottoId]) ? percentualeNeedlingDi(subtotale) : null;
+                  const pct = pctNeedling != null && couponAFasce
+                    ? pctNeedling
+                    : (lordoRiga > 0 ? Math.round((suoSconto / lordoRiga) * 1000) / 10 : 0);
+                  return (
+                    <div style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, fontWeight: 700, color: "#2E7D32", marginTop: 1 }}>
+                      −{fmtPctErp2(pct)} · −{fmtEuroErp2(suoSconto)}
+                      <span style={{ color: grigioCarrello, fontWeight: 600 }}> → {fmtEuroErp2(round2(lordoRiga - suoSconto))}</span>
+                    </div>
+                  );
+                })()}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
                 <button onClick={() => decrementaRiga(r.prodottoId)} data-niente-ombra style={{ width: isMobile ? 24 : 28, height: isMobile ? 24 : 28, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)", boxShadow: OMBRA_POS.tondo, color: NAVY, ...fontBody, fontSize: isMobile ? 14 : 16, fontWeight: 700, lineHeight: 1, cursor: "pointer" }}>−</button>
