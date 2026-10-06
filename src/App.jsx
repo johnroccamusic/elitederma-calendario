@@ -27752,10 +27752,17 @@ function PannelloRiepilogoAmministrativo({
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     // le vendite in contanti contate in questa busta si marcano come sue:
     // una collegata al corso da domani in poi andra' nell'appendice
-    if (rientrata) {
-      await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", corsoData.id).eq("metodo_pagamento", "contanti").is("busta_numero", null);
-    } else {
-      await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", 1);
+    // Se questa seconda scrittura non riesce, la busta risulta rientrata
+    // ma le sue vendite restano senza numero: una vendita in contanti di
+    // domani finirebbe dentro questa busta invece di aprire l'appendice.
+    // E' un conto che non torna, quindi si dice.
+    const { error: erroreVendite } = rientrata
+      ? await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", corsoData.id).eq("metodo_pagamento", "contanti").is("busta_numero", null)
+      : await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", 1);
+    if (erroreVendite) {
+      setMsg(`Busta segnata, ma le vendite in contanti non sono state marcate: ${testoErrore(erroreVendite)}. Riprova, o i prossimi incassi finiranno nella busta sbagliata.`);
+      ricarica(["corsi_date", "vendite_shop"]);
+      return;
     }
     setMsg(rientrata ? "Busta segnata come rientrata: il contante è in cassa." : "Busta rimessa fuori dalla cassa.");
     ricarica(["corsi_date", "vendite_shop"]);
@@ -27849,7 +27856,14 @@ function PannelloRiepilogoAmministrativo({
     const { error } = await supabase.from("corsi_date_buste").insert({ corso_data_id: corsoData.id, numero: a.numero, rientrata_il: dataOggiStr(), importo: a.pulito });
     if (error) { setSalvandoAppendice(false); setMsg("Errore: " + testoErrore(error)); return; }
     if (a.vendite.length > 0) {
-      await supabase.from("vendite_shop").update({ busta_numero: a.numero }).in("id", a.vendite.map((v) => v.id));
+      const { error: erroreVendite } = await supabase.from("vendite_shop")
+        .update({ busta_numero: a.numero }).in("id", a.vendite.map((v) => v.id));
+      if (erroreVendite) {
+        setSalvandoAppendice(false);
+        setMsg(`Busta ${a.numero} messa in cassa, ma le sue vendite non hanno preso il numero: ${testoErrore(erroreVendite)}. Riaprila e rifalla, o quegli incassi finiranno anche nella busta dopo.`);
+        await caricaBusteAppendici();
+        return;
+      }
     }
     setSalvandoAppendice(false);
     setMsg(`Busta ${a.numero} in cassa: ${fmtEuroErp2(a.pulito)} entrati in cassa contanti.`);
@@ -27866,8 +27880,14 @@ function PannelloRiepilogoAmministrativo({
     setSalvandoAppendice(true);
     const { error } = await supabase.from("corsi_date_buste").delete().eq("id", ultima.id);
     if (error) { setSalvandoAppendice(false); setMsg("Errore: " + testoErrore(error)); return; }
-    await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", ultima.numero);
+    const { error: erroreVendite } = await supabase.from("vendite_shop")
+      .update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", ultima.numero);
     setSalvandoAppendice(false);
+    if (erroreVendite) {
+      setMsg(`Busta ${ultima.numero} rimessa fuori, ma le sue vendite hanno ancora il suo numero: ${testoErrore(erroreVendite)}. Finché resta così quegli incassi non rientrano in nessuna busta.`);
+      await caricaBusteAppendici();
+      return;
+    }
     setMsg(`Busta ${ultima.numero} rimessa fuori dalla cassa.`);
     await caricaBusteAppendici();
     ricarica(["vendite_shop"]);
