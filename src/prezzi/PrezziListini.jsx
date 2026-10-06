@@ -12,6 +12,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { leggiListino, csvListino, scaricaCsv, salvaPuntiProdotto, salvaRiduzioneReparto, BLOCCHI, motivoSenzaSconto } from "./dati.js";
+import { creaListinoPdf, scaricaPdf } from "./listinoPdf.js";
 import { iconaDelBlocco } from "./icone.jsx";
 
 const euro = (n) => (n == null ? "—" : `€ ${Number(n).toFixed(2).replace(".", ",")}`);
@@ -27,7 +28,7 @@ const ROSSO = "#C0392B";
 // il prezzo di acquisto in testa, e in coda quello che resta in tasca
 // vendendo al pubblico o a un rivenditore. E' la stessa tabella, non una
 // copia: due tabelle sugli stessi numeri finirebbero per divergere.
-export default function PrezziListini({ privato = false, onApriProdotto, onBack, titoloIndietro = "Magazzino e shop", titolo = "Prezzi e listini" }) {
+export default function PrezziListini({ privato = false, getPdfLib, onApriProdotto, onBack, titoloIndietro = "Magazzino e shop", titolo = "Prezzi e listini" }) {
   const [righe, setRighe] = useState([]);
   const [caricando, setCaricando] = useState(true);
   const [errore, setErrore] = useState(null);
@@ -140,6 +141,32 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
   function esporta() {
     scaricaCsv(csvListino(visibili), `listino-${new Date().toISOString().slice(0, 10)}.csv`);
   }
+
+  // Il listino da mandare ai rivenditori: A4, diviso per reparti, con la
+  // foto di ogni prodotto. Ci mette qualche secondo perche' le foto si
+  // scaricano una per una, quindi il tasto dice a che punto e'.
+  const [creandoPdf, setCreandoPdf] = useState(null);
+  async function creaListino() {
+    if (creandoPdf) return;
+    setErrore(null);
+    setCreandoPdf({ fatti: 0, quanti: visibili.length });
+    try {
+      // le stesse righe che si vedono: se hai filtrato un reparto, il PDF
+      // e' di quel reparto. Quello che si guarda e' quello che si stampa.
+      const { bytes, prodotti, pagine } = await creaListinoPdf(visibili, {
+        getPdfLib,
+        onAvanzamento: (fatti, quanti) => setCreandoPdf({ fatti, quanti }),
+      });
+      scaricaPdf(bytes, `listino-rivenditore-${new Date().toISOString().slice(0, 10)}.pdf`);
+      setCreandoPdf(null);
+      setErrore(null);
+      setEsitoPdf(`Listino creato: ${prodotti} prodotti su ${pagine} pagine.`);
+    } catch (e) {
+      setCreandoPdf(null);
+      setErrore(`Non sono riuscito a creare il listino: ${e?.message || e}`);
+    }
+  }
+  const [esitoPdf, setEsitoPdf] = useState("");
 
   // Il foglio della tabella. Sta qui e non negli stili inline perche' sotto
   // i 700px la tabella non e' piu' una tabella: diventa un blocco per
@@ -269,8 +296,17 @@ export default function PrezziListini({ privato = false, onApriProdotto, onBack,
             </select>
           )}
           <Button variant="ghost" onClick={esporta} disabled={visibili.length === 0} style={{ fontSize: 13, padding: "8px 14px" }}>Esporta CSV</Button>
+          <Button onClick={creaListino} disabled={visibili.length === 0 || !!creandoPdf} style={{ fontSize: 13, padding: "8px 14px" }}>
+            {creandoPdf ? `Creo il listino… ${creandoPdf.fatti}/${creandoPdf.quanti}` : "Crea listino"}
+          </Button>
         </div>
 
+        {esitoPdf && (
+          <div style={{ ...fontBody, fontSize: 13, color: "#2E7D32", background: "#EDF7EE", border: "1px solid #C7E3CB", borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ flex: 1, minWidth: 0 }}>{esitoPdf}</span>
+            <span onClick={() => setEsitoPdf("")} style={{ cursor: "pointer", textDecoration: "underline", color: MUTED }}>chiudi</span>
+          </div>
+        )}
         {errore && <div style={{ ...fontBody, fontSize: 13, color: ROSSO, background: "#FBEBE9", border: "1px solid #F0C8C2", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>{errore}</div>}
         {caricando && <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, padding: "24px 4px" }}>Sto leggendo il listino…</div>}
         {!caricando && gruppi.length === 0 && !errore && <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, padding: "24px 4px" }}>Nessun prodotto corrisponde alla ricerca.</div>}

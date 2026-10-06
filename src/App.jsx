@@ -78244,6 +78244,7 @@ export default function App() {
       {view === "listinoprivato" && (
         <PrezziListini
           privato
+          getPdfLib={getPdfLib}
           onApriProdotto={(prodottoId) => apriProdottoInMagazzino(prodottoId, "listinoprivato")}
           onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "listinoprivato", "Listino privato")}
@@ -78252,6 +78253,7 @@ export default function App() {
 
       {view === "prezzilistini" && (
         <PrezziListini
+          getPdfLib={getPdfLib}
           onApriProdotto={(prodottoId) => apriProdottoInMagazzino(prodottoId, "prezzilistini")}
           onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "prezzilistini", "Prezzi e listini")}
