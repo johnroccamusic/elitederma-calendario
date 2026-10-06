@@ -56969,10 +56969,18 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
     const q = Math.round(Number(String(quantitaRicevuta).replace(",", ".")));
     if (!Number.isFinite(q) || q < 0) { window.alert("Scrivi quanti pezzi sono arrivati."); return; }
     setSalvandoRiordino(prodotto.id);
-    const { data: attuale } = await supabase.from("prodotti_shop").select("quantita").eq("id", prodotto.id).maybeSingle();
-    const nuova = (Number(attuale?.quantita) || 0) + q;
-    const { error: erroreStock } = await supabase.from("prodotti_shop").update({ quantita: nuova }).eq("id", prodotto.id);
-    if (erroreStock) { setSalvandoRiordino(null); window.alert("Non sono riuscito a caricare il magazzino: " + erroreStock.message); return; }
+    // Dal 6/10/2026 passa da muoviStock come tutto il resto. Scriveva la
+    // giacenza da solo, e si portava dietro due buchi: il carico non
+    // finiva nei movimenti di magazzino — la merce entrava senza lasciare
+    // traccia — e soprattutto NON toccava WooCommerce. Arrivavano cinquanta
+    // pezzi, in casa risultavano, e sullo shop il prodotto restava
+    // esaurito finche' qualcuno non premeva "Aggiorna lo shop".
+    const erroreStock = await muoviStock(prodotto, q, {
+      origine: "ricezione_ordine",
+      nota: `Arrivati ${q} pezzi dall'ordine al fornitore`,
+      riferimento: riordino.id,
+    });
+    if (erroreStock) { setSalvandoRiordino(null); window.alert("Non sono riuscito a caricare il magazzino: " + erroreStock); return; }
     const { error } = await supabase.from("riordini_in_corso")
       .update({ stato: "ricevuto", data_ricezione: dataOggiStr(), quantita_ricevuta: q })
       .eq("id", riordino.id);
