@@ -75521,7 +75521,7 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
 // callback di navigazione interna (onBack/onCambiaSottoVista/…) sono no-op
 // qui, perché in questa vista non esiste una cronologia condivisa tra le
 // colonne — "← Indietro" in alto chiude l'intera vista e basta
-function VistaSchedeAffiancate({ quoteVenditoriSplit, locationPrezzi = [], iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
+function VistaSchedeAffiancate({ quoteVenditoriSplit, locationPrezzi = [], iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, puoAssegnareModelle = false, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop = [], accontiDaVerificare, ricarica, onBack }) {
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 0 60px" }}>
@@ -75536,10 +75536,17 @@ function VistaSchedeAffiancate({ quoteVenditoriSplit, locationPrezzi = [], iscri
             if (!cd) return null;
             return (
               <div key={iscritto.id} style={{ flex: "0 0 680px", width: 680 }}>
+                {/* puoAssegnareModelle arriva da fuori. Qui dentro si
+                    chiamava puoAprireVista("gestionemodelle"), che pero'
+                    vive dentro App: da questo componente, che e' un altro,
+                    non si vede. La vista moriva al primo disegno con
+                    "puoAprireVista is not defined", e la build non lo dice
+                    — un identificatore che non esiste, dentro il JSX, si
+                    scopre solo aprendo la pagina. */}
                 <SchedaData
                   utentiApp={utentiApp}
                   quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi}
-                  puoAssegnareModelle={puoAprireVista("gestionemodelle")}
+                  puoAssegnareModelle={puoAssegnareModelle}
                   ruoloUtente={ruoloUtente}
                   codiceAmministratoreAttuale={codiceAmministratoreAttuale}
                   corsoData={cd}
@@ -77936,6 +77943,8 @@ export default function App() {
           impegni={impegnoTabella}
           quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi}
           iscrittiArr={schedeAffiancateIscritti}
+          puoAssegnareModelle={puoAprireVista("gestionemodelle")}
+          venditeShop={venditeShop}
           ruoloUtente={ruoloUtente}
           codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
