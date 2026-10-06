@@ -4649,6 +4649,39 @@ function sicurezzaDelProdotto(p, sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT
   const n = Number(p?.sicurezza_punti_pct);
   return p?.sicurezza_punti_pct != null && Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : sicurezzaGenerale;
 }
+// A quale prodotto si riferisce una riga di vendita.
+//
+// Il banco scrive `prodotto_id`: lo ha sotto mano, e basta quello. Un
+// ordine che arriva dallo shop no — porta l'id di WooCommerce, lo SKU e
+// il nome, e l'id del nostro database non ce l'ha. Chi cercava solo per
+// `prodotto_id` su quelle righe non trovava niente, e una riga senza
+// prodotto non genera punti: dal 1/9/2026 erano 297 righe su 568, cioe'
+// piu' della meta' del venduto. Debora Fumagalli, che vende solo online
+// col suo referral, risultava a zero punti con 370 euro di venduto.
+//
+// Si prova in ordine di sicurezza: l'id nostro, poi quello di
+// WooCommerce, poi lo SKU, infine il nome. Gli indici si costruiscono una
+// volta sola e si passano: dentro un giro su migliaia di righe, rifarli
+// ogni volta e' lavoro buttato.
+function indiciProdotti(prodottiShop) {
+  const perId = new Map(), perWoo = new Map(), perSku = new Map(), perNome = new Map();
+  (prodottiShop || []).forEach((p) => {
+    perId.set(p.id, p);
+    if (p.woo_product_id != null) perWoo.set(String(p.woo_product_id), p);
+    if (p.sku) perSku.set(String(p.sku).trim().toLowerCase(), p);
+    const nome = String(p.nome || "").trim().toLowerCase();
+    if (nome && !perNome.has(nome)) perNome.set(nome, p);
+  });
+  return { perId, perWoo, perSku, perNome };
+}
+function prodottoDellaRiga(riga, indici) {
+  if (!riga || !indici) return null;
+  return (riga.prodotto_id && indici.perId.get(riga.prodotto_id))
+    || (riga.woo_product_id != null && indici.perWoo.get(String(riga.woo_product_id)))
+    || (riga.sku && indici.perSku.get(String(riga.sku).trim().toLowerCase()))
+    || indici.perNome.get(String(riga.nome || "").trim().toLowerCase())
+    || null;
+}
 function puntiProdotto(p, sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, contanti = false) {
   if (!p) return null;
   const sicurezzaPct = sicurezzaDelProdotto(p, sicurezzaGenerale);
@@ -12994,7 +13027,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     // canale. Si leggono dall'anagrafica di oggi, non dal prezzo pagato:
     // un prodotto vale i suoi punti anche se e' stato scontato. Un reso
     // ha pezzi negativi e li toglie da solo
-    const prodottoPerIdPunti = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+    const indiciPunti = indiciProdotti(prodottiShop);
     // i punti ACCUMULATI: gli stessi punti divisi per canale — al corso se
     // la vendita e' legata a una classe, fuori altrimenti — e poi ridotti
     // con le quote decise in Gestione punti. Quando arrivera' la
@@ -13018,7 +13051,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         : fasceReferralDash;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
         if (r.spedizione) return;
-        const prodotto = prodottoPerIdPunti[r.prodotto_id];
+        const prodotto = prodottoDellaRiga(r, indiciPunti);
         // pagata in contanti o con buono Amazon -> la riga dei contanti;
         // carta o sito -> l'altra
         const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento));
@@ -50428,7 +50461,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // pezzi. Un reso ha pezzi negativi e si toglie da solo
   const classifica = useMemo(() => {
     if (!puntiMasterImpostazioni) return [];
-    const prodottoPerId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+    const indici = indiciProdotti(prodottiShop);
     return (master || []).map((m) => {
       const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
       let puntiCorso = 0, puntiFuori = 0, pezzi = 0, pezziSenzaPunti = 0, euro = 0, vendite = 0;
@@ -50460,7 +50493,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           if (r.spedizione) return;
         if (r.spedizione) return;
           const q = Number(r.quantita) || 0;
-          const prodotto = prodottoPerId[r.prodotto_id];
+          const prodotto = prodottoDellaRiga(r, indici);
           const pp = puntiProdotto(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento));
           pezzi += q;
           if (pp == null) { pezziSenzaPunti += q; return; }
