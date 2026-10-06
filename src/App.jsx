@@ -43758,8 +43758,16 @@ function controparteBanca(descrizione, causale) {
 // Appaia i due file per data + importo, consumando le righe man mano: due
 // movimenti identici nello stesso giorno restano distinti perche' se ne
 // prende uno per volta invece di riusare sempre il primo.
-function unisciEstrattoBanca(ofx, righeCsv, nomeFile) {
-  const conto = ofx?.conto || "BPL";
+function unisciEstrattoBanca(ofx, righeCsv, nomeFile, contoGiaInUso = null) {
+  // Il conto lo dice l'OFX. Il CSV no — e quando si carica il solo CSV si
+  // finiva su un conto inventato, "BPL", che per l'app e' un altro conto:
+  // gli stessi quindici movimenti del 6 ottobre, caricati una volta col
+  // CSV e una con l'OFX, sono entrati due volte. In "Da allineare" la
+  // stessa spesa compariva due volte, una sotto ogni copia.
+  //
+  // Se in archivio c'e' gia' un conto, e' quello: non si inventa un
+  // secondo nome per lo stesso conto corrente.
+  const conto = ofx?.conto || contoGiaInUso || "BPL";
   const disponibili = (righeCsv || []).map((r) => ({ r, usata: false }));
 
   // senza OFX si lavora sul solo CSV: nessun identificativo della banca,
@@ -43796,10 +43804,17 @@ function unisciEstrattoBanca(ofx, righeCsv, nomeFile) {
 
     // l'impronta: l'identificativo della banca se c'e' — e' quello che
     // rende innocuo ricaricare lo stesso periodo — altrimenti i campi
-    // messi in fila, con il progressivo a separare i doppi veri
+    // messi in fila, con il progressivo a separare i doppi veri.
+    //
+    // La descrizione NON entra nell'impronta. Lo stesso movimento si
+    // scrive in due modi a seconda di dove lo si legge: il CSV dice
+    // "Competenze complessive al 30/09/2026", l'OFX ci incolla davanti la
+    // causale e dice "INTERESSI/COMPETENZA Competenze complessive al
+    // 30/09/2026". Due impronte diverse per la stessa riga di banca, e il
+    // controllo dei doppioni non se ne accorgeva.
     const impronta = m.riferimento
       ? `${conto}:${m.riferimento}`
-      : `${conto}|${giorno}|${m.importo}|${(descrizione || "").slice(0, 120)}|${progressivo}`;
+      : `${conto}|${giorno}|${m.importo}|${progressivo}`;
 
     return {
       conto,
@@ -44348,7 +44363,10 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
 
     const ofx = fileOfx ? leggiEstrattoOfx(fileOfx.testo) : null;
     const righeCsv = fileCsv ? leggiEstrattoCsv(fileCsv.testo) : [];
-    const letti = unisciEstrattoBanca(ofx, righeCsv, (fileOfx || fileCsv).nome);
+    // il conto gia' in archivio, per non inventarne un secondo quando si
+    // carica il solo CSV: si prende quello del movimento piu' recente
+    const contoGiaInUso = (movimenti || []).find((m) => m.conto && m.conto !== "BPL")?.conto || null;
+    const letti = unisciEstrattoBanca(ofx, righeCsv, (fileOfx || fileCsv).nome, contoGiaInUso);
 
     // la contabilita' parte dal 1 luglio: quello che viene prima non entra
     const dentro = letti.filter((m) => m.data_operazione >= INIZIO_CONTABILITA);
