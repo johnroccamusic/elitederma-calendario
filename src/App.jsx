@@ -44249,6 +44249,9 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   // "sì, ma da dove viene?" — e la risposta era a due filtri di distanza.
   const [direzione, setDirezione] = useState("tutte");
   const [anteprima, setAnteprima] = useState(null);
+  // l'estratto conto arriva in due file: il primo che si sceglie resta
+  // qui ad aspettare l'altro invece di partire da solo
+  const [fileInAttesa, setFileInAttesa] = useState({ ofx: null, csv: null });
   const [msg, setMsg] = useState("");
   const [importando, setImportando] = useState(false);
   const [leggendo, setLeggendo] = useState(false);
@@ -44352,12 +44355,38 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
     setLeggendo(true); setMsg(""); setAnteprima(null);
 
     const testi = await Promise.all(files.map((f) => f.text().then((t) => ({ nome: f.name, testo: t }))));
-    const fileOfx = testi.find((t) => /<OFX>|OFXHEADER/i.test(t.testo));
-    const fileCsv = testi.find((t) => t !== fileOfx && /data movimento/i.test(t.testo.slice(0, 500)));
+    const ofxOra = testi.find((t) => /<OFX>|OFXHEADER/i.test(t.testo)) || null;
+    const csvOra = testi.find((t) => t !== ofxOra && /data movimento/i.test(t.testo.slice(0, 500))) || null;
 
-    if (!fileOfx && !fileCsv) {
+    if (!ofxOra && !csvOra) {
       setLeggendo(false);
       setMsg("Questi file non sembrano un estratto conto: servono l'OFX e il CSV scaricati dall'home banking.");
+      return;
+    }
+
+    // I DUE FILE SI ASPETTANO.
+    //
+    // L'estratto conto e' fatto di due pezzi: l'OFX, che porta il numero
+    // di conto e l'identificativo di ogni movimento, e il CSV, che porta
+    // la descrizione per esteso e la causale. Un movimento solo, scritto
+    // su due fogli.
+    //
+    // Prima bastava sceglierne uno e l'import partiva. Sceglierli uno per
+    // volta — che e' quello che succede quando il dito va su un file alla
+    // volta — voleva dire importare due volte lo stesso estratto: la
+    // prima senza numero di conto, la seconda con le descrizioni scritte
+    // in un altro modo. Il 6 ottobre e' andata cosi', a ventun secondi di
+    // distanza, e in "Da allineare" ogni spesa compariva due volte.
+    //
+    // Adesso il primo file resta in mano e si aspetta l'altro.
+    const fileOfx = ofxOra || fileInAttesa.ofx;
+    const fileCsv = csvOra || fileInAttesa.csv;
+    setFileInAttesa({ ofx: fileOfx, csv: fileCsv });
+    if (!fileOfx || !fileCsv) {
+      setLeggendo(false);
+      setMsg(fileOfx
+        ? `Letto l'OFX (${fileOfx.nome}). Adesso carica anche il CSV: lo unisco a questo in un estratto solo.`
+        : `Letto il CSV (${fileCsv.nome}). Adesso carica anche l'OFX: senza, mancano il numero di conto e gli identificativi dei movimenti.`);
       return;
     }
 
@@ -44372,8 +44401,15 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
     const dentro = letti.filter((m) => m.data_operazione >= INIZIO_CONTABILITA);
     const fuori = letti.length - dentro.length;
 
+    // Due reti, non una. L'impronta riconosce la riga quando arriva dalla
+    // stessa strada; la chiave "cosa e' il movimento" — conto, giorno,
+    // importo, progressivo — la riconosce anche quando arriva dall'altra,
+    // e un movimento letto dall'OFX ha un'impronta diversa dallo stesso
+    // movimento letto dal CSV.
+    const chiaveMovimento = (m) => `${m.conto}|${m.data_operazione}|${m.importo}|${m.progressivo}`;
     const impronteEsistenti = new Set((movimenti || []).map((m) => m.impronta));
-    const nuovi = dentro.filter((m) => !impronteEsistenti.has(m.impronta));
+    const chiaviEsistenti = new Set((movimenti || []).map(chiaveMovimento));
+    const nuovi = dentro.filter((m) => !impronteEsistenti.has(m.impronta) && !chiaviEsistenti.has(chiaveMovimento(m)));
 
     setLeggendo(false);
     setAnteprima({
@@ -44416,6 +44452,7 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
     setImportando(false);
     setMsg(`Importati ${anteprima.righe.length} movimenti.${automatici > 0 ? ` ${automatici} contabilizzati in automatico con le regole.` : ""}`);
     setAnteprima(null);
+    setFileInAttesa({ ofx: null, csv: null });
     await carica();
     if (automatici > 0) ricarica?.(["spese"]);
   }
@@ -44629,9 +44666,21 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
           </label>
         </div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
-          Dall'home banking, movimenti dal {fmtData(INIZIO_CONTABILITA)} in poi: scarica una volta in <b>OFX</b> e una in <b>CSV</b> (separatore punto e virgola), poi selezionali qui tutti e due insieme.
-          L'OFX porta l'identificativo che impedisce i doppioni, il CSV la descrizione per intero.
+          Dall'home banking, movimenti dal {fmtData(INIZIO_CONTABILITA)} in poi: scarica una volta in <b>OFX</b> e una in <b>CSV</b> (separatore punto e virgola).
+          L'OFX porta il numero di conto e l'identificativo che impedisce i doppioni, il CSV la descrizione per intero: sono due fogli dello stesso estratto, e si uniscono in un movimento solo.
+          {" "}Puoi sceglierli insieme o uno alla volta — il primo aspetta l'altro.
         </div>
+        {/* cosa ho in mano e cosa manca: finche' non ci sono tutti e due
+            non si importa niente, e va detto senza farlo cercare */}
+        {!anteprima && (fileInAttesa.ofx || fileInAttesa.csv) && !(fileInAttesa.ofx && fileInAttesa.csv) && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: "#B8860B", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "9px 12px", marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              In mano ho <b>{fileInAttesa.ofx ? "l'OFX" : "il CSV"}</b> ({(fileInAttesa.ofx || fileInAttesa.csv).nome}).
+              {" "}Manca <b>{fileInAttesa.ofx ? "il CSV" : "l'OFX"}</b>: caricalo e li unisco.
+            </span>
+            <AzioneTesto onClick={() => { setFileInAttesa({ ofx: null, csv: null }); setMsg(""); }} colore={MUTED}>ricomincia</AzioneTesto>
+          </div>
+        )}
 
         {anteprima && (
           <div style={{ marginTop: 14, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14 }}>
@@ -44659,7 +44708,7 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
                 style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: anteprima.righe.length ? NAVY : MUTED, border: "none", borderRadius: 18, padding: "10px 18px", cursor: anteprima.righe.length && !importando ? "pointer" : "default" }}>
                 {importando ? "Importo…" : anteprima.righe.length ? `Importa ${anteprima.righe.length} movimenti` : "Niente di nuovo da importare"}
               </button>
-              <button onClick={() => setAnteprima(null)}
+              <button onClick={() => { setAnteprima(null); setFileInAttesa({ ofx: null, csv: null }); }}
                 style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: "10px 18px", cursor: "pointer" }}>
                 Annulla
               </button>
