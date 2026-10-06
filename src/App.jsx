@@ -49744,6 +49744,15 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
     return { risultato, daOrdinare: piano.daOrdinare.length, ritardi };
   }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop]);
 
+  // Togliere un prodotto dagli avvisi e' una scrittura sola, e si vede
+  // subito: il prodotto sparisce dall'elenco appena i dati tornano.
+  async function escludiDallAdvisor(p) {
+    const { error } = await supabase.from("prodotti_shop")
+      .update({ escludi_da_advisor: true }).eq("id", p.id).select("id");
+    if (error) { window.alert("Non sono riuscito a toglierlo: " + testoErrore(error)); return; }
+    await ricarica(["prodotti_shop"]);
+  }
+
   const { risultato, daOrdinare, ritardi } = sintesi;
   const critico = !!risultato.dataCriticaComplessiva;
   const colore = ritardi || critico ? "#C0392B" : daOrdinare ? "#B8860B" : "#2E7D32";
@@ -49779,6 +49788,7 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
         <PannelloAvvisiMagazzino
           avvisi={avvisi}
           onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
+          onEscludiDallAdvisor={escludiDallAdvisor}
         />
       </div>
       {apriConfezioneBoxId && (
@@ -54167,6 +54177,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     };
   });
 
+  // stesso gesto della pagina Advisor: il prodotto esce dagli avvisi di
+  // scorta e si rimette dalla sua scheda
+  async function escludiDallAdvisorMag(p) {
+    const { error } = await supabase.from("prodotti_shop")
+      .update({ escludi_da_advisor: true }).eq("id", p.id).select("id");
+    if (error) { window.alert("Non sono riuscito a toglierlo: " + testoErrore(error)); return; }
+    await ricarica(["prodotti_shop"]);
+  }
+
   const sottoScorta = prodottiConStato.filter((p) => p.sottoScorta);
   const senzaCosto = prodottiConStato.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
   const fermi = prodottiConStato.filter((p) => p.inVendita && p.giorniFermo > 90);
@@ -54475,6 +54494,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             immaginePerProdotto={immaginePerProdottoMagazzino}
             onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
             onApriScheda={(p) => apriScheda(p)}
+            onEscludiDallAdvisor={escludiDallAdvisorMag}
             fornitoreApertoId={ordineFornitore?.fornitoreId || null}
             onAggiorna={() => ricarica(["prodotti_shop", "corsi_date"])}
             onOrdineFornitore={(p) => setOrdineFornitore(
@@ -55768,7 +55788,7 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
     </div>
   );
 }
-function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0, etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId, onAggiorna }) {
+function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0, etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId, onAggiorna, onEscludiDallAdvisor }) {
   const isMobile = useIsMobile();
   const daAprire = avvisi.filter((a) => a.tipo === "apri_pacco");
   const daRiordinare = avvisi.filter((a) => a.tipo !== "apri_pacco");
@@ -56071,6 +56091,19 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
                             {onApriScheda ? (
                               <button onClick={() => onApriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Apri scheda</button>
                             ) : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>—</span>}
+                            {/* Si toglie da qui, dove uno se ne accorge:
+                                aprire la scheda del prodotto per spegnere
+                                un avviso che si ha davanti e' un giro
+                                lungo, e infatti non lo fa nessuno. */}
+                            {onEscludiDallAdvisor && (
+                              <button
+                                onClick={() => onEscludiDallAdvisor(p)}
+                                title={`Non considerare piu' "${p.nome}" negli avvisi di scorta. Si rimette dalla scheda del prodotto.`}
+                                style={{ ...fontBody, fontSize: 11, fontWeight: 700, lineHeight: 1.25, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "6px 10px", cursor: "pointer", maxWidth: 150, whiteSpace: "normal" }}
+                              >
+                                Non considerare
+                              </button>
+                            )}
                             {/* l'ordine si fa al fornitore, non al singolo
                                 prodotto: da qui si apre il suo ordine, con
                                 accanto tutto il resto che sta finendo */}
@@ -56190,6 +56223,12 @@ function calcolaAvvisiMagazzino(prodottiShop, giaOrdinati) {
   const avvisi = [];
   attivi.forEach((p) => {
     if (p.giacenza_propria === false || p.conta_magazzino === false) return;
+    // "Non considerare nell'Advisor": un prodotto che sta a zero e ci
+    // resta per scelta — il lettino, l'espositore — non e' una cosa da
+    // ordinare. Vale per gli avvisi di scorta; se poi quel prodotto
+    // servisse a un corso in calendario lo dice lo stesso, perche' li'
+    // c'e' una data e una classe che resta scoperta.
+    if (p.escludi_da_advisor) return;
     if ((p.quantita || 0) < 0) avvisi.push({ tipo: "negativo", prodotto: p });
     const stock = p.quantita || 0;
     const sottoSoglia = (p.soglia_riordino != null && stock < p.soglia_riordino) || stock <= 0;
@@ -67461,6 +67500,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       prodottoSfusoId: p.prodotto_sfuso_id || "",
       pezziConfezione: p.pezzi_per_confezione != null ? String(p.pezzi_per_confezione) : "",
       scortaMinima: p.soglia_riordino != null ? String(p.soglia_riordino) : "",
+      escludiDaAdvisor: !!p.escludi_da_advisor,
       leadTime: p.lead_time_giorni != null ? String(p.lead_time_giorni) : "",
       giorniSicurezza: p.giorni_sicurezza != null ? String(p.giorni_sicurezza) : "",
       fornitoreId: p.fornitore_id || "",
@@ -67541,6 +67581,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       prodottoPadreId: padreId || "",
       bundleFisica: false, componentiAccompagnano: false, prodottoSfusoId: "", pezziConfezione: "",
       scortaMinima: "", leadTime: "", giorniSicurezza: "", fornitoreId: "", lottoMinimo: "", quantitaRiordino: "",
+      escludiDaAdvisor: false,
       backorder: false, backorderTesto: "",
       wooProductId: null,
       categorieIds: categoriaSelId ? [categoriaSelId] : [],
@@ -67896,6 +67937,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       // (26,80 -> 32,70 -> 26,80) non c'e' niente da forzare e il campo
       iva_verificata: true,
       soglia_riordino: interoOpzionale(f.scortaMinima),
+      escludi_da_advisor: !!f.escludiDaAdvisor,
       lead_time_giorni: interoOpzionale(f.leadTime),
       giorni_sicurezza: interoOpzionale(f.giorniSicurezza),
       fornitore_id: f.fornitoreId || null,
@@ -69063,6 +69105,24 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               <input style={spCampo} inputMode="numeric" value={prodottoForm.quantitaRiordino} onChange={(e) => aggiornaForm({ quantitaRiordino: e.target.value })} placeholder="—" />
             </div>
           </div>
+          {/* Il lettino, l'espositore, il camice: stanno a zero e ci
+              restano per scelta. Senza questa spunta tornano nell'elenco
+              degli avvisi ogni volta, e un elenco che dice sempre le
+              stesse cose smette di essere letto. */}
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 9, cursor: "pointer", marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={!!prodottoForm.escludiDaAdvisor}
+              onChange={(e) => aggiornaForm({ escludiDaAdvisor: e.target.checked })}
+              style={{ width: 16, height: 16, marginTop: 1, cursor: "pointer", flexShrink: 0 }}
+            />
+            <span style={{ minWidth: 0 }}>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: SP_TESTO, display: "block" }}>Non considerare nell'Advisor</span>
+              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                Non compare più fra gli avvisi di scorta finché resta accesa. Se servisse a un corso in calendario te lo dice lo stesso: lì c'è una data.
+              </span>
+            </span>
+          </label>
           <SpNota sfondo="#F1F3F6">
             <b style={{ color: SP_TESTO }}>Quantità di riordino</b>: i pezzi che ordini di solito di questo prodotto. Serve a preparare l'ordine al fornitore già compilato; il lotto minimo resta il limite sotto cui non si può scendere.
             <div style={{ marginTop: 6 }}>Senza tempo di consegna l'Advisor non può dire entro quando ordinare: resta solo l'avviso "sotto scorta".</div>
