@@ -206,6 +206,47 @@ function salvaLayoutCondiviso(chiave, valore) {
 // appena deciso
 const LAYOUT_SEZIONI_TOCCATE = {};
 const LAYOUT_INVII = {};
+// Le liste condivise che si FONDONO invece di sovrascriversi.
+//
+// Un elenco salvato per intero e' l'ultimo che scrive a vincere. Sui
+// carrelli sospesi questo vuol dire perderne uno: due banchi che ne
+// sospendono uno a pochi secondi di distanza, e quello del primo sparisce
+// — con i suoi pezzi che tornano in vendita sul sito mentre sono gia'
+// promessi a una cliente. Non e' teoria: la copia locale puo' essere
+// vecchia di ore, perche' si rilegge solo quando la pagina torna in vista.
+//
+// Per queste chiavi, al momento di scrivere si rilegge il database e si
+// fondono le due liste per id: restano le voci degli altri, di ogni voce
+// vince la piu' recente, e se ne vanno solo quelle che QUESTO dispositivo
+// ha davvero tolto. La chiave e' quella di CHIAVE_CARRELLI_SOSPESI, che
+// nasce piu' sotto.
+const LISTE_DA_FONDERE = new Set(["pos_carrelliSospesi"]);
+const LAYOUT_RIMOSSI = {};
+// Da chiamare PRIMA di salvare, con la lista com'era e come diventa: e'
+// l'unico modo di distinguere "questa voce non ce l'ho" da "questa voce
+// l'ho buttata io".
+function segnaVociRimosse(chiave, prima, dopo) {
+  if (!LISTE_DA_FONDERE.has(chiave)) return;
+  const restano = new Set((dopo || []).map((x) => x?.id).filter(Boolean));
+  const andate = (prima || []).map((x) => x?.id).filter((id) => id && !restano.has(id));
+  if (!andate.length) return;
+  if (!LAYOUT_RIMOSSI[chiave]) LAYOUT_RIMOSSI[chiave] = new Set();
+  andate.forEach((id) => LAYOUT_RIMOSSI[chiave].add(id));
+}
+const quandoAggiornata = (v) => String(v?.aggiornato || v?.creato || "");
+function fondiListaCondivisa(remota, locale, rimossi) {
+  const perId = new Map();
+  (Array.isArray(remota) ? remota : []).forEach((v) => { if (v?.id) perId.set(v.id, v); });
+  (Array.isArray(locale) ? locale : []).forEach((v) => {
+    if (!v?.id) return;
+    const gia = perId.get(v.id);
+    // di una voce che c'e' da tutte e due le parti vince quella toccata
+    // per ultima, non quella di chi scrive adesso
+    perId.set(v.id, !gia || quandoAggiornata(v) >= quandoAggiornata(gia) ? v : gia);
+  });
+  (rimossi || new Set()).forEach((id) => perId.delete(id));
+  return [...perId.values()];
+}
 function inviaImpostazioneCondivisa(chiave) {
   clearTimeout(LAYOUT_TIMER[chiave]);
   LAYOUT_TIMER[chiave] = null;
@@ -226,6 +267,21 @@ function inviaImpostazioneCondivisa(chiave) {
           notificaLayout(chiave);
         }
       } catch { /* senza risposta si manda la copia intera, come prima */ }
+    }
+    if (LISTE_DA_FONDERE.has(chiave) && Array.isArray(valore)) {
+      const rimossi = LAYOUT_RIMOSSI[chiave] || new Set();
+      LAYOUT_RIMOSSI[chiave] = new Set();
+      try {
+        const { data } = await supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle();
+        valore = fondiListaCondivisa(data?.valore, valore, rimossi);
+        LAYOUT_CACHE[chiave] = valore;
+        scriviCacheLocaleLayout(chiave, valore);
+        notificaLayout(chiave);
+      } catch {
+        // niente risposta: si manda la copia locale, com'era prima. Meglio
+        // una lista vecchia scritta che un carrello perso in silenzio
+        rimossi.forEach((id) => LAYOUT_RIMOSSI[chiave].add(id));
+      }
     }
     const { error } = await supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
     if (error) console.warn("Impostazione non salvata:", error.message);
@@ -37197,7 +37253,9 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
   function eliminaSospeso(c) {
     if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}" di ${c.operatore?.nome ? toTitleCase(c.operatore.nome) : "operatore sconosciuto"}? I suoi pezzi tornano in vendita.`)) return;
     const attuali = Array.isArray(LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI]) ? LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI] : [];
-    salvaCarrelliSospesiTutti(attuali.filter((x) => x.id !== c.id));
+    const dopo = attuali.filter((x) => x.id !== c.id);
+    segnaVociRimosse(CHIAVE_CARRELLI_SOSPESI, attuali, dopo);
+    salvaCarrelliSospesiTutti(dopo);
   }
   // Rettifica: chi amministra puo' legare un carrello sospeso a un corso,
   // anche uno concluso negli ultimi 5 giorni. Scrive l'edizione scelta
@@ -63947,7 +64005,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   function eliminaCarrelloSospeso(c) {
     if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}"? I suoi pezzi tornano in vendita.`)) return;
-    salvaCarrelliSospesi(sospesiAttuali().filter((x) => x.id !== c.id));
+    const prima = sospesiAttuali();
+    const dopo = prima.filter((x) => x.id !== c.id);
+    segnaVociRimosse(CHIAVE_CARRELLI_SOSPESI, prima, dopo);
+    salvaCarrelliSospesi(dopo);
     // "i suoi pezzi tornano in vendita" vale anche sul sito, non solo qui
     allineaShop((c.carrello || []).map((r) => r.prodottoId));
     if (carrelloSospesoId === c.id) setCarrelloSospesoId(null);
@@ -64597,7 +64658,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
     // pagato: non e' piu' sospeso
     if (carrelloSospesoId) {
-      salvaCarrelliSospesi(sospesiAttuali().filter((c) => c.id !== carrelloSospesoId));
+      const primaDellaVendita = sospesiAttuali();
+      const senzaQuestoCarrello = primaDellaVendita.filter((c) => c.id !== carrelloSospesoId);
+      segnaVociRimosse(CHIAVE_CARRELLI_SOSPESI, primaDellaVendita, senzaQuestoCarrello);
+      salvaCarrelliSospesi(senzaQuestoCarrello);
       setCarrelloSospesoId(null);
     }
     nuovaVendita();
