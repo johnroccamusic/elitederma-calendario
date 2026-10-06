@@ -47292,6 +47292,130 @@ function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAsso
   );
 }
 
+// ---------- Doppioni di pagamento ----------
+// Diverso da "Duplicati", che cerca righe IDENTICHE — stesso giorno,
+// stesso nome, stesso importo — per unirle in una voce sola.
+//
+// Qui si cerca lo stesso pagamento inserito DUE VOLTE: a mano una volta e
+// dal fornitore un'altra, o due volte a distanza di qualche giorno. Non e'
+// mai identico — la descrizione cambia di una parola, la data di qualche
+// giorno, l'importo di qualche centesimo — e proprio per questo il filtro
+// esatto non lo trova. Di questi non se ne unisce uno: se ne CANCELLA uno.
+//
+// Le parole corte si buttano: "di", "il", "srl" non dicono niente su chi
+// sia il pagamento, e tenerle farebbe somigliare fra loro due righe che
+// hanno in comune solo quelle.
+function paroleConfronto(testo) {
+  return new Set(
+    String(testo || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((p) => p.length > 2),
+  );
+}
+function testoConfronto(testo) {
+  return String(testo || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+// Quanto si somigliano due descrizioni: quante parole hanno in comune,
+// sul totale delle parole di tutte e due (Dice). 1 = stesse parole.
+function somiglianzaTesti(a, b) {
+  const pa = paroleConfronto(a), pb = paroleConfronto(b);
+  if (!pa.size || !pb.size) {
+    const ta = testoConfronto(a), tb = testoConfronto(b);
+    return ta && ta === tb ? 1 : 0;
+  }
+  let comuni = 0;
+  pa.forEach((p) => { if (pb.has(p)) comuni += 1; });
+  return (2 * comuni) / (pa.size + pb.size);
+}
+// Due descrizioni sono LO STESSO pagamento?
+//
+// Non basta che si somiglino: "OLGA (quota venditore)" e "KATIA (quota
+// venditore)" somigliano al 67% e sono due persone diverse, come
+// "Rimborso spese Chiara" e "Rimborso spese Giulia". A fare la differenza
+// non e' quanto hanno in comune, e' se hanno qualcosa che le SEPARA.
+//
+// Quindi la regola e' una sola: una dev'essere la versione CORTA
+// dell'altra — tutte le sue parole stanno nell'altra, come "Costo Master
+// — PATRIZIA SAVI" dentro "Costo Master — PATRIZIA SAVI - Henne, Roma, 26
+// set". Se tutte e due hanno una parola che all'altra manca, sono due
+// cose: "Laminazione" contro "Extension" sono due corsi diversi anche se
+// il resto della riga e' identico all'86%.
+//
+// Si perde qualche doppione scritto con un refuso. Meglio: un elenco
+// pieno di roba da scartare non lo guarda piu' nessuno.
+function stessoPagamento(a, b) {
+  const pa = paroleConfronto(a), pb = paroleConfronto(b);
+  if (!pa.size || !pb.size) {
+    const ta = testoConfronto(a), tb = testoConfronto(b);
+    return !!ta && ta === tb;
+  }
+  const [corta, lunga] = pa.size <= pb.size ? [pa, pb] : [pb, pa];
+  let dentro = true;
+  corta.forEach((p) => { if (!lunga.has(p)) dentro = false; });
+  return dentro;
+}
+const GIORNI_DOPPIONE_PAGAMENTO = 7;
+function giorniFra(a, b) {
+  const da = new Date(`${String(a).slice(0, 10)}T00:00:00Z`).getTime();
+  const db = new Date(`${String(b).slice(0, 10)}T00:00:00Z`).getTime();
+  if (!Number.isFinite(da) || !Number.isFinite(db)) return Infinity;
+  return Math.abs(da - db) / 86400000;
+}
+// Due importi si somigliano se distano meno del 2%, e comunque mai piu' di
+// mezzo euro su cifre piccole: su 1.200 € il 2% sono 24 €, che e' troppo
+// per dire "stesso pagamento"; il tetto tiene i conti ragionevoli.
+function importiSimili(a, b) {
+  const x = Math.abs(Number(a) || 0), y = Math.abs(Number(b) || 0);
+  if (x === 0 && y === 0) return true;
+  const scarto = Math.abs(x - y);
+  return scarto <= Math.max(0.5, Math.min(0.02 * Math.max(x, y), 10));
+}
+// Gruppi di righe che potrebbero essere lo stesso pagamento scritto due
+// volte. Le righe arrivano gia' filtrate sul periodo; `dataDi` dice dove
+// leggere la data, perche' in prima nota la data che conta e' quella di
+// cassa, non quella del documento.
+function trovaDoppioniPagamento(righe, dataDi) {
+  const elenco = (righe || []).filter((r) => r && dataDi(r));
+  // insieme-di-appartenenza: due righe simili finiscono nello stesso
+  // gruppo anche quando a somigliarsi sono A-B e B-C ma non A-C
+  const padre = elenco.map((_, i) => i);
+  const radice = (i) => { while (padre[i] !== i) { padre[i] = padre[padre[i]]; i = padre[i]; } return i; };
+  const unisci = (i, j) => { const a = radice(i), b = radice(j); if (a !== b) padre[a] = b; };
+  for (let i = 0; i < elenco.length; i += 1) {
+    for (let j = i + 1; j < elenco.length; j += 1) {
+      const a = elenco[i], b = elenco[j];
+      if (giorniFra(dataDi(a), dataDi(b)) > GIORNI_DOPPIONE_PAGAMENTO) continue;
+      if (!importiSimili(a.totale, b.totale)) continue;
+      if (!stessoPagamento(a.descrizione, b.descrizione)) continue;
+      unisci(i, j);
+    }
+  }
+  const perRadice = new Map();
+  elenco.forEach((r, i) => {
+    const k = radice(i);
+    if (!perRadice.has(k)) perRadice.set(k, []);
+    perRadice.get(k).push(r);
+  });
+  return [...perRadice.values()]
+    .filter((g) => g.length > 1)
+    .map((g) => {
+      const ordinate = [...g].sort((x, y) => String(dataDi(x)).localeCompare(String(dataDi(y))));
+      return {
+        chiave: ordinate.map((r) => r.id).join("|"),
+        righe: ordinate,
+        data: dataDi(ordinate[0]),
+        nome: ordinate[0].descrizione || "—",
+        // quanto si rischia di aver pagato in piu': tutto tranne uno
+        inEccesso: round2(ordinate.slice(1).reduce((s, r) => s + (Number(r.totale) || 0), 0)),
+        // identici in tutto e per tutto, o solo somiglianti?
+        identici: ordinate.every((r) => testoConfronto(r.descrizione) === testoConfronto(ordinate[0].descrizione)
+          && String(dataDi(r)).slice(0, 10) === String(dataDi(ordinate[0])).slice(0, 10)
+          && round2(Number(r.totale) || 0) === round2(Number(ordinate[0].totale) || 0)),
+      };
+    })
+    .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")) || b.inEccesso - a.inEccesso);
+}
+
 function PaginaInserimentoCostiRicavi({
   ruoloUtente, quoteVenditoriSplit, impegnoTabella = [], locationPrezzi = [],
   spese, costiCategorie, costiSottocategorie, fornitori,
@@ -47584,6 +47708,32 @@ function PaginaInserimentoCostiRicavi({
   })();
   const duplicatiUnibiliPN = gruppiDuplicatiPN.filter((g) => g.tipo === "uscita");
 
+  // Lo stesso pagamento scritto due volte: nome simile, giorno vicino,
+  // importo quasi uguale. Si guarda solo fra le USCITE: un'entrata non e'
+  // una riga di tabella, e' una quota o una vendita calcolata da dove sta.
+  const doppioniPagamentoPN = useMemo(
+    () => trovaDoppioniPagamento(
+      spesePagate.filter((sp) => dataCassaPN(sp) >= range.inizio && dataCassaPN(sp) <= range.fine),
+      dataCassaPN,
+    ),
+    [spesePagate, range.inizio, range.fine],
+  );
+  const [doppioneInCorso, setDoppioneInCorso] = useState("");
+  // Si cancella UNA riga, quella scelta, e si dice prima cosa si porta
+  // dietro. Le attribuzioni della spesa se ne vanno con lei (e' giusto:
+  // sono sue); una fattura eventualmente collegata resta, e si slega.
+  async function cancellaDoppione(riga) {
+    const quanto = fmtEuroErp2(Number(riga.totale) || 0);
+    if (!window.confirm(`Cancellare "${riga.descrizione || "questa spesa"}" del ${fmtData(dataCassaPN(riga))} da ${quanto}?\n\nSparisce dalla prima nota e dai conti. Se era associata a una fattura, la fattura resta ma torna senza spesa.\n\nNon si può annullare.`)) return;
+    setDoppioneInCorso(riga.id);
+    const { data: cancellate, error } = await supabase.from("spese").delete().eq("id", riga.id).select("id");
+    setDoppioneInCorso("");
+    if (error) { setMsgPN?.("Non sono riuscito a cancellarla: " + testoErrore(error)); return; }
+    if (!(cancellate || []).length) { setMsgPN?.("Non è stata cancellata nessuna riga: ricarica la pagina e riprova."); return; }
+    setMsgPN?.(`Cancellata "${riga.descrizione || "la spesa"}" da ${quanto}.`);
+    ricarica(["spese", "spese_attribuzioni"]);
+  }
+
   async function unisciDuplicati(g) {
     if (!window.confirm(`Unire ${g.righe.length} righe "${g.nome}" del ${fmtData(g.data)} in una voce sola da ${fmtEuroErp2(g.totale)}?\n\nNessuna riga viene cancellata: restano nel database con la loro categoria, e in prima nota si leggono insieme. Si puo' separarle di nuovo.`)) return;
     const gruppo = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
@@ -47873,6 +48023,10 @@ function PaginaInserimentoCostiRicavi({
             // cambia. A zero resta spenta, perche' non c'e' niente da
             // andare a vedere.
             { chiave: "duplicati", etichetta: "Duplicati", conto: gruppiDuplicatiPN.length, spenta: gruppiDuplicatiPN.length === 0 },
+            // "Duplicati" cerca righe identiche da unire; questa cerca lo
+            // stesso pagamento scritto due volte — nome simile, giorno
+            // vicino, importo quasi uguale — di cui uno va cancellato
+            { chiave: "doppionipagamento", etichetta: "Doppioni di pagamento", conto: doppioniPagamentoPN.length, spenta: doppioniPagamentoPN.length === 0 },
             {
               chiave: "nonpagate",
               etichetta: nonPagateContoPN > 0 ? `Non pagate · ${fmtEuroErp(nonPagateTotalePN)}` : "Non pagate",
@@ -47940,7 +48094,60 @@ function PaginaInserimentoCostiRicavi({
             </div>
           )}
 
-          {filtroStatoPN === "duplicati" ? (
+          {filtroStatoPN === "doppionipagamento" ? (
+            doppioniPagamentoPN.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>
+                Nessun doppione in questo periodo: non ci sono due pagamenti che si somiglino per nome, giorno e importo.
+              </div>
+            ) : (
+              <>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 13px", marginBottom: 14 }}>
+                  Pagamenti che <b>si somigliano</b>: nome simile, giorno vicino (entro {GIORNI_DOPPIONE_PAGAMENTO} giorni), importo quasi uguale.
+                  È lo stesso pagamento scritto due volte — una a mano e una dal fornitore, o due volte a qualche giorno di distanza.
+                  {" "}Qui <b>non si uniscono: se ne cancella uno</b>, e la cancellazione non si annulla.
+                  {" "}Guarda la categoria e il documento di ognuna prima di scegliere quale tenere: due righe simili possono anche essere due pagamenti veri.
+                </div>
+                {doppioniPagamentoPN.map((g) => (
+                  <div key={g.chiave} style={{ ...cardStyle, marginBottom: 12, padding: isMobile ? "12px 12px" : "14px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                      <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, flex: "1 1 220px", minWidth: 0 }}>{g.nome}</span>
+                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: g.identici ? "#C0392B" : "#B8860B", textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>
+                        {g.identici ? "identici" : "somiglianti"}
+                      </span>
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>
+                        {g.righe.length} righe · in più {fmtEuroErp2(g.inEccesso)}
+                      </span>
+                    </div>
+                    {g.righe.map((r) => (
+                      <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", minWidth: 78 }}>{fmtData(dataCassaPN(r))}</span>
+                        <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 200px", minWidth: 0 }}>
+                          {r.descrizione || "—"}
+                          {/* la classe, quando c'e': su "Costo Master —
+                              PATRIZIA SAVI" scritto tre volte e' l'unica
+                              cosa che dice se sono tre corsi o tre copie */}
+                          <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED }}>
+                            {costiSottocategorieById[r.sottocategoria_id]?.nome || costiCategorieById[r.categoria_id]?.nome || "senza categoria"}
+                            {r.numero_documento ? ` · doc. ${r.numero_documento}` : ""}
+                            {r.metodo_pagamento ? ` · ${r.metodo_pagamento}` : ""}
+                            {etichettaCorsoPN(corsiDateById[r.classe_id]) ? ` · ${etichettaCorsoPN(corsiDateById[r.classe_id])}` : ""}
+                          </span>
+                        </span>
+                        <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap" }}>− {fmtEuroErp2(Number(r.totale) || 0)}</span>
+                        <Button
+                          variant="danger"
+                          disabled={doppioneInCorso === r.id}
+                          onClick={() => cancellaDoppione(r)}
+                        >
+                          {doppioneInCorso === r.id ? "Cancello…" : "Cancella questa"}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </>
+            )
+          ) : filtroStatoPN === "duplicati" ? (
             gruppiDuplicatiPN.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>
                 Nessun doppione in questo periodo: ogni movimento ha una data, un nome o un importo diverso dagli altri.
