@@ -11,7 +11,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { leggiListino, csvListino, scaricaCsv, salvaPuntiProdotto, salvaRiduzioneReparto, BLOCCHI, motivoSenzaSconto } from "./dati.js";
+import { leggiListino, csvListino, scaricaCsv, salvaPuntiProdotto, salvaRiduzioneReparto, BLOCCHI, motivoSenzaSconto, leggiRepartiEsclusi, salvaRepartiEsclusi } from "./dati.js";
 import { creaListinoPdf, scaricaPdf } from "./listinoPdf.js";
 import { iconaDelBlocco } from "./icone.jsx";
 
@@ -39,6 +39,18 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
   // il testo in corso di battitura
   const [bozzaPunti, setBozzaPunti] = useState({});
   const [bozzaRiduzione, setBozzaRiduzione] = useState({});
+  // I reparti spenti non entrano nel listino PDF. Di serie sono tutti
+  // accesi: si elencano gli ESCLUSI, cosi' un reparto nuovo entra da solo
+  // invece di restare fuori perche' nessuno si e' ricordato di accenderlo.
+  const [repartiEsclusi, setRepartiEsclusi] = useState([]);
+  useEffect(() => { leggiRepartiEsclusi().then(setRepartiEsclusi); }, []);
+  const escluso = (n) => repartiEsclusi.includes(n);
+  async function cambiaReparto(n, acceso) {
+    const nuovo = acceso ? repartiEsclusi.filter((x) => x !== n) : [...new Set([...repartiEsclusi, n])];
+    setRepartiEsclusi(nuovo);
+    try { await salvaRepartiEsclusi(nuovo); }
+    catch (e) { setErrore(`La scelta del reparto non e' stata salvata: ${e?.message || e}`); }
+  }
 
   // La riduzione di un reparto: punti percentuali da togliere allo sconto
   // massimo di tutti i suoi prodotti. Tocca il prezzo rivenditore, la
@@ -121,6 +133,16 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
     () => righe.filter((r) => (!q || (r.nome || "").toLowerCase().includes(q)) && (bloccoScelto == null || r.blocco_ordine === bloccoScelto)),
     [righe, q, bloccoScelto]);
 
+  // Quello che finisce nel PDF: le righe che si vedono, meno i reparti
+  // spenti. Il filtro della pagina vale ancora — se stai guardando un
+  // reparto solo, il listino e' di quello — e la spunta toglie altro.
+  const perIlPdf = useMemo(
+    () => visibili.filter((r) => !repartiEsclusi.includes(r.blocco_ordine)),
+    [visibili, repartiEsclusi]);
+  const repartiNelPdf = useMemo(
+    () => new Set(perIlPdf.map((r) => r.blocco_ordine)).size,
+    [perIlPdf]);
+
   // i reparti che hanno davvero qualcosa dentro, nell'ordine del menu
   const gruppi = useMemo(() => {
     const per = new Map();
@@ -149,11 +171,11 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
   async function creaListino() {
     if (creandoPdf) return;
     setErrore(null);
-    setCreandoPdf({ fatti: 0, quanti: visibili.length });
+    setCreandoPdf({ fatti: 0, quanti: perIlPdf.length });
     try {
       // le stesse righe che si vedono: se hai filtrato un reparto, il PDF
       // e' di quel reparto. Quello che si guarda e' quello che si stampa.
-      const { bytes, prodotti, pagine } = await creaListinoPdf(visibili, {
+      const { bytes, prodotti, pagine } = await creaListinoPdf(perIlPdf, {
         getPdfLib,
         onAvanzamento: (fatti, quanti) => setCreandoPdf({ fatti, quanti }),
       });
@@ -296,7 +318,8 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
             </select>
           )}
           <Button variant="ghost" onClick={esporta} disabled={visibili.length === 0} style={{ fontSize: 13, padding: "8px 14px" }}>Esporta CSV</Button>
-          <Button onClick={creaListino} disabled={visibili.length === 0 || !!creandoPdf} style={{ fontSize: 13, padding: "8px 14px" }}>
+          <Button onClick={creaListino} disabled={perIlPdf.length === 0 || !!creandoPdf} style={{ fontSize: 13, padding: "8px 14px" }}
+            title={perIlPdf.length === 0 ? "Nessun reparto acceso: non c'e' niente da mettere nel listino" : `${perIlPdf.length} prodotti in ${repartiNelPdf} repart${repartiNelPdf === 1 ? "o" : "i"}`}>
             {creandoPdf ? `Creo il listino… ${creandoPdf.fatti}/${creandoPdf.quanti}` : "Crea listino"}
           </Button>
         </div>
@@ -358,6 +381,25 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
                   );
                 })()}
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{b.prodotti.length} prodotti</div>
+                {/* Dentro o fuori dal listino PDF. Di serie dentro: si
+                    spengono quelli che non si vogliono mandare, e la
+                    scelta resta anche domani. */}
+                <label
+                  title={escluso(b.n) ? `"${b.nome}" resta fuori dal listino PDF` : `"${b.nome}" entra nel listino PDF`}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0, cursor: "pointer",
+                    background: escluso(b.n) ? "#fff" : "#EDF7EE", border: `1px solid ${escluso(b.n) ? CREAM_BORDER : "#C7E3CB"}`,
+                    borderRadius: 20, padding: "6px 11px" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!escluso(b.n)}
+                    onChange={(e) => cambiaReparto(b.n, e.target.checked)}
+                    style={{ width: 15, height: 15, cursor: "pointer" }}
+                  />
+                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: escluso(b.n) ? MUTED : "#2E7D32", whiteSpace: "nowrap" }}>
+                    {escluso(b.n) ? "fuori dal listino" : "nel listino"}
+                  </span>
+                </label>
               </div>
 
               <div className={privato ? "lst-privato" : undefined}>

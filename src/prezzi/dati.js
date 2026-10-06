@@ -45,6 +45,27 @@ export async function salvaRiduzioneReparto(bloccoOrdine, punti) {
   if (error) throw error;
 }
 
+// I reparti che NON entrano nel listino PDF. Si ricordano fra una volta e
+// l'altra: chi prepara un listino per i rivenditori lo rifa' con le stesse
+// esclusioni, e rispuntarle ogni volta e' lavoro ripetuto.
+//
+// Stanno nella cassetta delle impostazioni condivise, come le altre scelte
+// di lavoro: una riga chiave/valore, niente tabella nuova.
+export const CHIAVE_REPARTI_ESCLUSI = "listino_reparti_esclusi";
+
+export async function leggiRepartiEsclusi() {
+  const { data, error } = await supabase.from("impostazioni_layout_tabelle")
+    .select("valore").eq("chiave", CHIAVE_REPARTI_ESCLUSI).maybeSingle();
+  if (error) return [];
+  return Array.isArray(data?.valore) ? data.valore.map(Number) : [];
+}
+
+export async function salvaRepartiEsclusi(numeri) {
+  const { error } = await supabase.from("impostazioni_layout_tabelle")
+    .upsert({ chiave: CHIAVE_REPARTI_ESCLUSI, valore: numeri, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
+  if (error) throw error;
+}
+
 // I blocchi, nell'ordine del menu del sito. Il numero combacia con
 // `blocco_ordine` della view: se cambia là, cambia qui.
 export const BLOCCHI = [

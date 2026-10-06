@@ -9,7 +9,11 @@
 import { useState } from "react";
 import { NAVY, CREAM_BORDER, MUTED, fontBody, inputStyle, round2, numeroFascia } from "./stile.js";
 
-export function Button({ children, onClick, variant = "primary", style = {}, disabled }) {
+// `title` e' la spiegazione che compare fermando il dito (o il mouse) sul
+// tasto. Non c'era, e due tasti che la passavano se la vedevano buttare
+// via in silenzio — quello che pubblica sulla dashboard della master e
+// quello che ripristina i pagamenti cash, dove la spiegazione conta.
+export function Button({ children, onClick, variant = "primary", style = {}, disabled, title }) {
   const base = {
     ...fontBody,
     fontSize: 14,
@@ -25,7 +29,7 @@ export function Button({ children, onClick, variant = "primary", style = {}, dis
     danger: { background: "#fff", color: "#C0392B", border: "1px solid #C0392B" },
   };
   return (
-    <button disabled={disabled} onClick={onClick} style={{ ...base, ...variants[variant], ...style }}>
+    <button disabled={disabled} onClick={onClick} title={title} style={{ ...base, ...variants[variant], ...style }}>
       {children}
     </button>
   );
