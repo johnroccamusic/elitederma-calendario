@@ -989,13 +989,39 @@ function dispositivoTouchPiccolo() {
   try { return navigator.maxTouchPoints > 0 && Math.min(window.screen.width, window.screen.height) <= 900; } catch (e) { return false; }
 }
 function CorniceTelefono({ attiva, children }) {
+  // L'ALTEZZA SEGUE LA FINESTRA.
+  //
+  // Il telefono simulato e' alto 844 punti. Su una finestra piu' bassa —
+  // ed e' il caso normale, una finestra di browser non e' mai alta come un
+  // iPhone intero — la sua meta' di sotto finiva fuori dallo schermo, e
+  // tutto quello che nell'app sta appiccicato in basso (il dock, la
+  // pastiglia dello zoom) si vedeva in mezzo al contenuto invece che sul
+  // bordo inferiore del telefono.
+  //
+  // Quindi il telefono si accorcia quanto serve: resta un telefono, ma
+  // sta tutto dentro la finestra, e il bordo di sotto e' dove uno se lo
+  // aspetta.
+  const [altezzaFinestra, setAltezzaFinestra] = useState(() => (typeof window === "undefined" ? ALTEZZA_VISTA_MOBILE + 48 : window.innerHeight));
+  useEffect(() => {
+    if (!attiva) return undefined;
+    const aggiorna = () => setAltezzaFinestra(window.innerHeight);
+    window.addEventListener("resize", aggiorna);
+    aggiorna();
+    return () => window.removeEventListener("resize", aggiorna);
+  }, [attiva]);
   if (!attiva) return children;
+  const altezzaSchermo = Math.max(420, Math.min(ALTEZZA_VISTA_MOBILE, altezzaFinestra - 48));
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 0, background: "radial-gradient(circle at 50% 30%, #3A3F4B 0%, #14171E 70%)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "auto", padding: 24 }}>
-      <div style={{ width: LARGHEZZA_VISTA_MOBILE + 24, height: ALTEZZA_VISTA_MOBILE + 24, flexShrink: 0, borderRadius: 54, background: "#0B0D12", boxShadow: "0 30px 80px rgba(0,0,0,0.6), inset 0 0 0 2px #2A2E38", padding: 12, boxSizing: "border-box", position: "relative" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 0, background: "radial-gradient(circle at 50% 30%, #3A3F4B 0%, #14171E 70%)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "auto", padding: 12 }}>
+      <div style={{ width: LARGHEZZA_VISTA_MOBILE + 24, height: altezzaSchermo + 24, flexShrink: 0, borderRadius: 54, background: "#0B0D12", boxShadow: "0 30px 80px rgba(0,0,0,0.6), inset 0 0 0 2px #2A2E38", padding: 12, boxSizing: "border-box", position: "relative" }}>
         {/* la tacca in cima, per capire subito che e' un telefono */}
         <div style={{ position: "absolute", top: 22, left: "50%", transform: "translateX(-50%)", width: 110, height: 28, borderRadius: 16, background: "#0B0D12", zIndex: 2 }} />
-        <div style={{ width: LARGHEZZA_VISTA_MOBILE, height: ALTEZZA_VISTA_MOBILE, borderRadius: 44, overflow: "auto", background: "#F6F1E7", position: "relative", transform: "translateZ(0)", WebkitOverflowScrolling: "touch" }}>
+        {/* Lo schermo. Il transform serve a tenere dentro il telefono
+            tutto cio' che nell'app e' "position: fixed" — dock, pastiglie,
+            finestre. `contain` e `willChange` dicono la stessa cosa in due
+            altri modi: dove il transform da solo non basta (succede su
+            WebKit) ci pensa uno degli altri due. */}
+        <div style={{ width: LARGHEZZA_VISTA_MOBILE, height: altezzaSchermo, borderRadius: 44, overflow: "auto", background: "#F6F1E7", position: "relative", transform: "translateZ(0)", willChange: "transform", contain: "layout paint", WebkitOverflowScrolling: "touch" }}>
           {children}
         </div>
       </div>
