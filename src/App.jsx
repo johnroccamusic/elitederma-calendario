@@ -56195,10 +56195,21 @@ function calcolaAvvisiMagazzino(prodottiShop, giaOrdinati) {
     const sottoSoglia = (p.soglia_riordino != null && stock < p.soglia_riordino) || stock <= 0;
     if (!sottoSoglia) return;
     if (ordinati.has(p.id)) return;
+    // un bundle virtuale non ha una giacenza sua: la sua disponibilita' si
+    // calcola dai componenti, e il numero scritto sulla sua riga non vuol
+    // dire niente. Per tutto il resto l'avviso si da' e basta.
+    if (bundleVirtuale(p)) return;
     const box = boxPerSfusoId.get(p.id) || null;
+    // il pacco sigillato sullo scaffale cambia il gesto — si apre, non si
+    // ordina — ma non e' una condizione per essere avvisati. Lo era: fino
+    // al 6/10/2026 chi non aveva ne' un pacco collegato ne' la giacenza
+    // fisica di bundle non compariva da nessuna parte, e di 27 prodotti
+    // sotto la scorta minima l'Advisor ne nominava 7. Gli altri 20 —
+    // Sensitive Cream a zero, dermografi a zero, pinze a 16 su 20 —
+    // stavano sotto soglia in silenzio.
     if (box && (box.quantita || 0) > 0) avvisi.push({ tipo: "apri_pacco", prodotto: p, box });
     else if (box) avvisi.push({ tipo: "riordina", prodotto: p, box });
-    else if (p.bundle_con_giacenza_fisica) avvisi.push({ tipo: "riordina", prodotto: p });
+    else avvisi.push({ tipo: "riordina", prodotto: p });
   });
   const ordine = { negativo: 0, apri_pacco: 1, riordina: 2 };
   return avvisi.sort((a, b) => ordine[a.tipo] - ordine[b.tipo]);
@@ -75742,7 +75753,6 @@ export default function App() {
     statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop_storico"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno", "eventi"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta"],
-    venditeshop: ["vendite_shop"],
     // "corsi" e "corsi_date" servono alla colonna "Frangente": la vendita
     // registra l'edizione, il nome del corso sta altrove
     venditealbanco: ["vendite_shop", "corsi", "corsi_date"],

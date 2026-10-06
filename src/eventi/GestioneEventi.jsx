@@ -1096,7 +1096,6 @@ export default function GestioneEventi({ location = [], master = [], assistente 
         {!creando && aperto && (
           <SchedaEvento
             evento={aperto} location={location} persone={persone} prodotti={prodottiShop} hotel={hotel}
-            onNuovaSpesa={onNuovaSpesa}
             bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa}
             onIndietro={() => setApertoId(null)}
             onCambiato={ricarica}
