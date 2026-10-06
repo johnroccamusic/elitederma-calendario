@@ -11344,6 +11344,19 @@ function TastoApriLinkSlide({ corso }) {
   const isMobile = useIsMobile();
   const [linkSlide] = useImpostazioneCondivisa(CHIAVE_LINK_SLIDE_CORSI, {});
   const [aperto, setAperto] = useState(false);
+  // "Copia link": se il visore resta bianco perche' il sito rifiuta di
+  // stare dentro un'altra pagina, la master lo incolla in un browser a
+  // parte.
+  //
+  // Sta QUI, prima del return, e non piu' in mezzo al componente. Il link
+  // delle slide arriva dalle impostazioni condivise, cioe' un attimo dopo
+  // il primo disegno: al primo giro `url` e' vuoto, si usciva subito e i
+  // hook erano cinque; appena il link arrivava si andava avanti e
+  // diventavano sei. React conta gli hook, e quando il numero cambia
+  // spegne tutto — "Rendered more hooks than during the previous render",
+  // la dashboard di Martina Mei che si apriva su una pagina di errore.
+  // Succedeva solo alle master che hanno un corso con le slide.
+  const [copiato, setCopiato] = useState(false);
   const url = corso ? (linkSlide || {})[corso.id] : null;
   if (!url) return null;
   function apri(e) {
@@ -11357,9 +11370,6 @@ function TastoApriLinkSlide({ corso }) {
     if (richiesta) { try { const r = richiesta.call(el); if (r && r.catch) r.catch(() => {}); } catch { /* si resta nella finestra */ } }
     setAperto(true);
   }
-  // "Copia link": se il visore resta bianco perche' il sito rifiuta di
-  // stare dentro un'altra pagina, la master lo incolla in un browser a parte
-  const [copiato, setCopiato] = useState(false);
   async function copia(e) {
     e.stopPropagation();
     try { await navigator.clipboard.writeText(url); setCopiato(true); setTimeout(() => setCopiato(false), 1800); }
