@@ -35,6 +35,50 @@ export async function leggiStampe() {
   return data || [];
 }
 
+// I file di una scheda: copertina, pagine interne, fustella. Sono un
+// elenco e non due colonne perche' "quanti file ha questa stampa" non ha
+// una risposta fissa — il catalogo ne ha due, l'astuccio uno, il quaderno
+// con la fustella tre.
+export async function leggiFileStampe() {
+  const { data, error } = await supabase
+    .from("stampe_packaging_file").select("*").order("stampa_id").order("ordine");
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function aggiungiFile(stampaId, file, etichetta = "", fileDellaScheda = []) {
+  const percorso = percorsoFile(stampaId, file.name);
+  await caricaFile(percorso, file);
+  const ultimo = fileDellaScheda.reduce((max, f) => Math.max(max, Number(f.ordine) || 0), 0);
+  const { data, error } = await supabase.from("stampe_packaging_file")
+    .insert({ stampa_id: stampaId, percorso, nome: file.name, etichetta, ordine: ultimo + PASSO_ORDINE })
+    .select().single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// Sostituire il file di una riga che esiste gia': il percorso nuovo
+// prende il posto del vecchio, l'etichetta resta quella che era.
+export async function sostituisciFile(rigaId, stampaId, file) {
+  const percorso = percorsoFile(stampaId, file.name);
+  await caricaFile(percorso, file);
+  await salvaFile(rigaId, { percorso, nome: file.name });
+  return percorso;
+}
+
+export async function salvaFile(id, campi) {
+  const { error } = await supabase.from("stampe_packaging_file").update(campi).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+// Si toglie la riga, non il file dal secchio: due schede possono puntare
+// allo stesso file (il duplicato lo fa apposta), e cancellarlo da sotto
+// l'altra sarebbe un danno silenzioso.
+export async function eliminaFile(id) {
+  const { error } = await supabase.from("stampe_packaging_file").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function leggiRighe() {
   const { data, error } = await supabase
     .from("stampe_packaging_righe").select("*").order("stampa_id").order("ordine");
@@ -98,7 +142,7 @@ export async function aggiungiRigaSotto(stampaId, righeDellaScheda, dopoId) {
 //
 // La copia nasce subito sotto l'originale: `ordine` + 1, e siccome le
 // schede si leggono anche per data di creazione finisce li' accanto.
-export async function duplicaStampa(stampa, righeDellaScheda) {
+export async function duplicaStampa(stampa, righeDellaScheda, fileDellaScheda = []) {
   const { data, error } = await supabase.from("stampe_packaging").insert({
     nome: `${stampa.nome || "Senza nome"} (copia)`,
     foto_path: stampa.foto_path || null,
@@ -113,6 +157,13 @@ export async function duplicaStampa(stampa, righeDellaScheda) {
   if (righe.length > 0) {
     const { error: e2 } = await supabase.from("stampe_packaging_righe").insert(righe);
     if (e2) throw new Error(e2.message);
+  }
+  const file = [...(fileDellaScheda || [])]
+    .sort((a, b) => Number(a.ordine) - Number(b.ordine))
+    .map((f) => ({ stampa_id: data.id, percorso: f.percorso, nome: f.nome || "", etichetta: f.etichetta || "", ordine: f.ordine }));
+  if (file.length > 0) {
+    const { error: e3 } = await supabase.from("stampe_packaging_file").insert(file);
+    if (e3) throw new Error(e3.message);
   }
   return data;
 }

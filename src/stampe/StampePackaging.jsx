@@ -17,6 +17,7 @@ import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
 import {
   leggiStampe, leggiRighe, creaStampa, salvaStampa, eliminaStampa,
   salvaRiga, eliminaRiga, aggiungiRigaSotto, duplicaStampa, percorsoFile, caricaFile, urlPubblico,
+  leggiFileStampe, aggiungiFile, sostituisciFile, salvaFile, eliminaFile,
 } from "./dati.js";
 
 function IconaPiu({ size = 14 }) {
@@ -42,13 +43,14 @@ const card = {
 export default function StampePackaging({ onBack, titolo = "Stampe packaging" }) {
   const [stampe, setStampe] = useState(null);
   const [righe, setRighe] = useState([]);
+  const [fileStampe, setFileStampe] = useState([]);
   const [msg, setMsg] = useState("");
   const [occupato, setOccupato] = useState("");
 
   async function carica() {
     try {
-      const [s, r] = await Promise.all([leggiStampe(), leggiRighe()]);
-      setStampe(s); setRighe(r);
+      const [s, r, f] = await Promise.all([leggiStampe(), leggiRighe(), leggiFileStampe()]);
+      setStampe(s); setRighe(r); setFileStampe(f);
     } catch (e) { setMsg("Non riesco a leggere le schede: " + e.message); setStampe([]); }
   }
   useEffect(() => { carica(); }, []);
@@ -59,6 +61,13 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
     Object.values(m).forEach((v) => v.sort((a, b) => Number(a.ordine) - Number(b.ordine)));
     return m;
   }, [righe]);
+
+  const filePerStampa = useMemo(() => {
+    const m = {};
+    fileStampe.forEach((f) => { (m[f.stampa_id] = m[f.stampa_id] || []).push(f); });
+    Object.values(m).forEach((v) => v.sort((a, b) => Number(a.ordine) - Number(b.ordine)));
+    return m;
+  }, [fileStampe]);
 
   async function conErrore(f, dove) {
     try { await f(); } catch (e) { setMsg(`${dove}: ${e.message}`); }
@@ -83,8 +92,35 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
   }
 
   async function butta(s) {
-    if (!window.confirm(`Eliminare la scheda${s.nome ? ` "${s.nome}"` : ""}?\n\nSpariscono anche le sue righe. La foto e il file restano nell'archivio.`)) return;
+    if (!window.confirm(`Eliminare la scheda${s.nome ? ` "${s.nome}"` : ""}?\n\nSpariscono anche le sue righe. La foto e i file restano nell'archivio.`)) return;
     await conErrore(async () => { await eliminaStampa(s.id); await carica(); }, "Scheda non eliminata");
+  }
+
+  // Un file in piu' sulla scheda: copertina, pagine interne, fustella.
+  async function caricaNuovoFile(s, file) {
+    if (!file) return;
+    setOccupato(`${s.id}:nuovo-file`);
+    await conErrore(async () => {
+      await aggiungiFile(s.id, file, "", filePerStampa[s.id] || []);
+      await carica();
+    }, "Caricamento non riuscito");
+    setOccupato("");
+  }
+  async function rimpiazzaFile(s, riga, file) {
+    if (!file) return;
+    setOccupato(`file:${riga.id}`);
+    await conErrore(async () => { await sostituisciFile(riga.id, s.id, file); await carica(); }, "Caricamento non riuscito");
+    setOccupato("");
+  }
+  // L'etichetta si scrive a ogni carattere, come tutto il resto della
+  // pagina: niente tasto Salva da ricordarsi.
+  async function cambiaEtichettaFile(riga, valore) {
+    setFileStampe((p) => p.map((x) => (x.id === riga.id ? { ...x, etichetta: valore } : x)));
+    await conErrore(() => salvaFile(riga.id, { etichetta: valore }), "Etichetta non salvata");
+  }
+  async function buttaFile(riga) {
+    if (!window.confirm(`Togliere "${riga.nome || "questo file"}" dalla scheda?`)) return;
+    await conErrore(async () => { await eliminaFile(riga.id); await carica(); }, "File non tolto");
   }
 
   async function sali(s, campo, nomeCampo, file) {
@@ -132,7 +168,7 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
         ) : stampe.map((s) => {
           const mie = righePerStampa[s.id] || [];
           const foto = urlPubblico(s.foto_path);
-          const file = urlPubblico(s.file_path);
+          const suoiFile = filePerStampa[s.id] || [];
           return (
             <div key={s.id} style={card}>
               <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
@@ -155,24 +191,52 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
                       onChange={(e) => sali(s, "foto_path", null, e.target.files?.[0])} />
                   </label>
 
+                  {/* I file sono un elenco, non uno solo: quasi ogni
+                      stampato viaggia in piu' pezzi — la copertina e le
+                      pagine interne vanno in macchina separate — e
+                      l'etichetta accanto a ognuno dice quale pezzo e'. */}
                   <div style={{ marginTop: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 10 }}>
                     <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-                      File per la stampa
+                      File per la stampa{suoiFile.length > 1 ? ` (${suoiFile.length})` : ""}
                     </div>
-                    {s.file_path ? (
-                      <div style={{ ...fontBody, fontSize: 12, color: NAVY, wordBreak: "break-all" }}>
-                        <a href={file} download={s.file_nome || ""} target="_blank" rel="noreferrer"
-                          style={{ color: NAVY, fontWeight: 700 }}>
-                          ⤓ {s.file_nome || "scarica"}
-                        </a>
-                      </div>
-                    ) : (
+                    {suoiFile.length === 0 && (
                       <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun file caricato</div>
                     )}
-                    <label style={{ display: "inline-block", marginTop: 8, cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD }}>
-                      {occupato === `${s.id}:file_path` ? "Carico…" : s.file_path ? "Sostituisci file" : "Carica file"}
+                    {suoiFile.map((f, i) => (
+                      <div key={f.id} style={{ paddingTop: i === 0 ? 0 : 8, marginTop: i === 0 ? 0 : 8, borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                        <input
+                          value={f.etichetta || ""}
+                          onChange={(e) => cambiaEtichettaFile(f, e.target.value)}
+                          placeholder={i === 0 ? "Copertina" : "Pagine interne"}
+                          style={{ ...inputStyle, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, padding: "4px 7px", width: "100%", marginBottom: 5 }}
+                        />
+                        <div style={{ ...fontBody, fontSize: 12, color: NAVY, wordBreak: "break-all" }}>
+                          <a href={urlPubblico(f.percorso)} download={f.nome || ""} target="_blank" rel="noreferrer"
+                            style={{ color: NAVY, fontWeight: 700 }}>
+                            ⤓ {f.nome || "scarica"}
+                          </a>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 5, flexWrap: "wrap" }}>
+                          <label style={{ cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD }}>
+                            {occupato === `file:${f.id}` ? "Carico…" : "Sostituisci"}
+                            <input type="file" style={{ display: "none" }}
+                              onChange={(e) => rimpiazzaFile(s, f, e.target.files?.[0])} />
+                          </label>
+                          <button
+                            onClick={() => buttaFile(f)}
+                            title="Togli questo file dalla scheda"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                          >
+                            <IconaCestino size={12} /> Togli
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: suoiFile.length ? 10 : 8, cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD }}>
+                      <IconaPiu size={12} />
+                      {occupato === `${s.id}:nuovo-file` ? "Carico…" : suoiFile.length ? "Aggiungi un altro file" : "Carica file"}
                       <input type="file" style={{ display: "none" }}
-                        onChange={(e) => sali(s, "file_path", "file_nome", e.target.files?.[0])} />
+                        onChange={(e) => caricaNuovoFile(s, e.target.files?.[0])} />
                     </label>
                   </div>
 
@@ -181,7 +245,7 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
                       grammatura, il fornitore — e ribattere sei campi per
                       cambiarne uno e' lavoro buttato. */}
                   <button
-                    onClick={() => conErrore(async () => { await duplicaStampa(s, mie); await carica(); }, "Scheda non duplicata")}
+                    onClick={() => conErrore(async () => { await duplicaStampa(s, mie, suoiFile); await carica(); }, "Scheda non duplicata")}
                     style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff",
                       border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px",
                       marginTop: 10, width: "100%", cursor: "pointer" }}

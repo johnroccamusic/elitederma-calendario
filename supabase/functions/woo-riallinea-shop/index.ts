@@ -184,6 +184,13 @@ Deno.serve(async (req) => {
   let scritti = 0;
   const falliti: string[] = [];
   const riusciti = new Set<number>();
+  // Il nome, non il numero. WooCommerce risponde con il suo id — "prodotto
+  // 672: ID non valido" — e quel numero in magazzino non lo conosce
+  // nessuno: per sapere chi fosse bisognava cercarlo a mano nel database.
+  const nomePerWoo = new Map<number, string>();
+  for (const g of giacenze) nomePerWoo.set(g.woo, g.nome);
+  for (const n of nascosti) nomePerWoo.set(n.woo, n.nome);
+  const chiE = (id: number) => `${nomePerWoo.get(Number(id)) || "prodotto sconosciuto"} (id ${id})`;
   for (let i = 0; i < daAggiornare.length; i += A_GRUPPI_DI) {
     const gruppo = daAggiornare.slice(i, i + A_GRUPPI_DI);
     const risposta = await fetch(`${siteUrl}/wp-json/wc/v3/products/batch`, {
@@ -192,12 +199,12 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ update: gruppo }),
     });
     if (!risposta.ok) {
-      falliti.push(`gruppo ${i / A_GRUPPI_DI + 1}: WooCommerce ha risposto ${risposta.status}`);
+      falliti.push(`${gruppo.map((r) => chiE(Number(r.id))).join(", ")}: WooCommerce ha risposto ${risposta.status}`);
       continue;
     }
     const esito = await risposta.json();
     for (const riga of esito?.update || []) {
-      if (riga?.error) falliti.push(`prodotto ${riga.id}: ${riga.error.message}`);
+      if (riga?.error) falliti.push(`${chiE(Number(riga.id))}: ${riga.error.message}`);
       else { scritti += 1; riusciti.add(Number(riga.id)); }
     }
   }
