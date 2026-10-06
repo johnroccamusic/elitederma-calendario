@@ -49081,7 +49081,13 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
         const erroreScarico = await applicaScarichi(piano, { origine: "vendita_pos", nota: `Recupero Stripe ${r.codice}`, utente: r.operatore_nome });
         if (erroreScarico) setMsg("Vendita registrata, ma il magazzino non si e' scaricato del tutto: " + erroreScarico);
       }
-      await supabase.from("pagamenti_pos").update({ vendita_id: esito.vendita_id }).eq("id", r.id);
+      // il legame col pagamento e' quello che impedisce al recupero di
+      // ripassare su questo incasso: se non si scrive, lo si dice
+      const { data: legate, error: erroreLegame } = await supabase.from("pagamenti_pos")
+        .update({ vendita_id: esito.vendita_id }).eq("id", r.id).select("id");
+      if (erroreLegame || !(legate || []).length) {
+        setMsg(`Vendita ${esito.numero_ordine} registrata, ma l'incasso e' rimasto scollegato${erroreLegame ? `: ${testoErrore(erroreLegame)}` : ""}. Riprova fra poco, o resta in questo elenco.`);
+      }
       // se la spedizione era pagata, il pacco nasce con la vendita e con
       // l'indirizzo scritto dall'allieva: una sola strada per tutti e due
       // i casi di questo pannello
@@ -64552,6 +64558,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       origine: "pos",
       metodo_pagamento: omaggioAttivo ? null : metodoPagamento,
       note: note.trim() || null,
+      // Il codice dell'incasso col QR, scritto SULLA vendita. E' la
+      // difesa contro il doppione: il legame sull'incasso puo' non
+      // scriversi, questo invece entra nella stessa transazione della
+      // vendita, e il recupero automatico guarda anche qui prima di
+      // registrarne un'altra.
+      pagamento_codice: richiestaQr?.codice || null,
       cliente_nome: clientePos.trim() || null,
       tipo_movimento: omaggioAttivo ? "omaggio" : "vendita",
       // Chi "ha fatto" la vendita, cioe' a chi contano punti e
@@ -64733,14 +64745,33 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         window.alert(`Vendita ${esito?.numero_ordine || ""} registrata.\n\nIl magazzino però non si è scaricato del tutto: ${erroreScarico}\n\nControlla la giacenza di quel prodotto in Gestione magazzino.`);
       }
 
-      // Il pagamento col QR si lega alla sua vendita. Senza questa riga la
-      // rete che gira ogni cinque minuti sul database — quella che
+      // Il pagamento col QR si lega alla sua vendita. Senza questo legame
+      // la rete che gira ogni cinque minuti sul database — quella che
       // raccoglie gli incassi rimasti senza vendita perche' la schermata
-      // si era chiusa — ne scriverebbe una seconda, con un altro numero.
+      // si era chiusa — ne scriverebbe una SECONDA, con un altro numero e
+      // un altro scarico di magazzino.
+      //
+      // Per questo non si scrive e via: si controlla che la riga sia
+      // stata toccata davvero (.select, perche' senza PostgREST risponde
+      // "va bene" anche quando non ha cambiato niente), si riprova, e se
+      // non si riesce lo si dice subito — meglio un avviso adesso che una
+      // vendita doppia fra cinque minuti.
       if (codiceQrDiQuestaVendita && esito?.vendita_id) {
-        await supabase.from("pagamenti_pos")
-          .update({ vendita_id: esito.vendita_id, aggiornato_il: new Date().toISOString() })
-          .eq("codice", codiceQrDiQuestaVendita);
+        let collegato = false;
+        let ultimoErrore = null;
+        for (let tentativo = 1; tentativo <= 3 && !collegato; tentativo += 1) {
+          const { data: legate, error: erroreLegame } = await supabase.from("pagamenti_pos")
+            .update({ vendita_id: esito.vendita_id, aggiornato_il: new Date().toISOString() })
+            .eq("codice", codiceQrDiQuestaVendita)
+            .select("id");
+          ultimoErrore = erroreLegame;
+          collegato = !erroreLegame && (legate || []).length > 0;
+          if (!collegato && tentativo < 3) await new Promise((r) => setTimeout(r, 400 * tentativo));
+        }
+        if (!collegato) {
+          window.alert(`La vendita ${esito?.numero_ordine || ""} è registrata, ma non sono riuscito a legarla al pagamento col QR${ultimoErrore ? ` (${ultimoErrore.message})` : ""}.`
+            + "\n\nFra cinque minuti il sistema potrebbe registrarne una seconda per lo stesso incasso: controlla Vendite al banco e, se compare un doppione, annullalo.");
+        }
       }
       // i pezzi dichiarati "dal kit" NON vengono attribuiti a una scatola
       // qui: restano segnati sulla vendita (dal_kit riga per riga) e la
