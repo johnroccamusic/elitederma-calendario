@@ -58415,10 +58415,19 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     const qta = Number(quantitaResa);
     if (!(qta > 0) || qta > rigaSelezionata.quantita) { setMsg("Quantità non valida."); return; }
     setSalvando(true); setMsg("");
+    // Il prodotto si ritrova dal NOME scritto sulla riga della vendita. Se
+    // nel frattempo quel prodotto e' stato rinominato, non lo si trova
+    // piu': prima si tirava dritto in silenzio e il reso veniva registrato
+    // senza che un pezzo rientrasse in magazzino. Adesso il reso si
+    // registra lo stesso — i soldi tornano alla cliente comunque — ma si
+    // dice quale pezzo e' rimasto fuori dal conto.
     const p = prodottoPerNome(rigaSelezionata.nome);
+    let avvisoMagazzino = "";
     if (p) {
       const erroreMagazzino = await ripristinaStock(p, qta);
       if (erroreMagazzino) { setSalvando(false); setMsg("Errore magazzino: " + erroreMagazzino); return; }
+    } else {
+      avvisoMagazzino = ` In magazzino non è rientrato niente: non c'è più nessun prodotto che si chiami "${rigaSelezionata.nome}" (rinominato?). Rimetti i pezzi a mano.`;
     }
     const importoReso = round2(rigaSelezionata.prezzoUnitario * qta);
     const imponibile = round2(importoReso / 1.22);
@@ -58433,7 +58442,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     });
     setSalvando(false);
     if (erroreInsert) { setMsg("Magazzino aggiornato, ma il reso non è stato registrato: " + erroreInsert.message); return; }
-    setMsg("Reso registrato.");
+    setMsg("Reso registrato." + avvisoMagazzino);
     tornaAllaRicerca();
     ricarica(["prodotti_shop", "vendite_shop"]);
   }
@@ -58443,10 +58452,13 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     const v = rigaSelezionata.vendita;
     const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
     setSalvando(true); setMsg("");
+    // le righe che non si riconoscono piu' per nome: l'annullamento si fa
+    // comunque, ma quei pezzi in magazzino non rientrano e va detto
+    const nonRitrovate = [];
     for (const riga of righe) {
       if (!(riga.quantita > 0)) continue;
       const p = prodottoPerNome(riga.nome);
-      if (!p) continue;
+      if (!p) { nonRitrovate.push(riga.nome); continue; }
       const erroreMagazzino = await ripristinaStock(p, riga.quantita);
       if (erroreMagazzino) { setSalvando(false); setMsg(`Errore magazzino ("${riga.nome}"): ` + erroreMagazzino); return; }
     }
@@ -58460,7 +58472,8 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     });
     setSalvando(false);
     if (erroreInsert) { setMsg("Magazzino aggiornato, ma l'annullamento non è stato registrato: " + erroreInsert.message); return; }
-    setMsg("Vendita annullata.");
+    setMsg("Vendita annullata."
+      + (nonRitrovate.length ? ` In magazzino non sono rientrati: ${nonRitrovate.join(", ")} — non c'è più nessun prodotto con quel nome. Rimettili a mano.` : ""));
     tornaAllaRicerca();
     ricarica(["prodotti_shop", "vendite_shop"]);
   }
@@ -58481,10 +58494,13 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
 
     setSalvando(true); setMsg("");
 
-    // rientrano tutti i prodotti scelti
+    // rientrano tutti i prodotti scelti. Quelli che per nome non si
+    // ritrovano piu' non rientrano: il cambio si fa lo stesso, ma non in
+    // silenzio come prima
+    const rientriMancati = [];
     for (const r of prodottiRientranti) {
       const p = prodottoPerNome(r.nome);
-      if (!p) continue;
+      if (!p) { rientriMancati.push(r.nome); continue; }
       const erroreMagazzino = await ripristinaStock(p, Number(r.quantitaResa));
       if (erroreMagazzino) { setSalvando(false); setMsg(`Errore magazzino ("${r.nome}"): ` + erroreMagazzino); return; }
     }
@@ -58513,7 +58529,8 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     });
     setSalvando(false);
     if (erroreInsert) { setMsg("Magazzino aggiornato, ma il cambio non è stato registrato: " + erroreInsert.message); return; }
-    setMsg("Cambio registrato.");
+    setMsg("Cambio registrato."
+      + (rientriMancati.length ? ` In magazzino non sono rientrati: ${rientriMancati.join(", ")} — non c'è più nessun prodotto con quel nome. Rimettili a mano.` : ""));
     tornaAllaRicerca();
     ricarica(["prodotti_shop", "vendite_shop"]);
   }
