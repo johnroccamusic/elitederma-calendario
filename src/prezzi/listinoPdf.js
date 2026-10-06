@@ -156,6 +156,20 @@ async function inParallelo(elementi, quanti, lavoro) {
   await Promise.all(Array.from({ length: Math.min(quanti, elementi.length) }, operaio));
 }
 
+// I dati della societa' stanno in Setting, una riga sola
+// (`intestazione_societa`). Si leggono qui: se non arrivano, il listino si
+// fa lo stesso — un piede senza partita IVA e' meno grave di un listino
+// che non esce.
+async function datiSocieta() {
+  try {
+    const { data } = await supabase.from("intestazione_societa").select("*").maybeSingle();
+    if (!data) return [];
+    return ["nome", "indirizzo", "indirizzo_2", "riga_4", "riga_5"]
+      .map((c) => String(data[c] || "").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+  } catch { return []; }
+}
+
 export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
   const { PDFDocument, StandardFonts, rgb } = await (getPdfLib || caricaPdfLibLocale)();
   const reparti = raggruppaPerReparto(righe);
@@ -163,6 +177,7 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
 
   // Tutte le foto prima, poi si disegna: cosi' l'attesa e' una sola e la
   // barra di avanzamento dice una cosa vera.
+  const righeSocieta = await datiSocieta();
   const fotoPerProdotto = new Map();
   const tutti = reparti.flatMap((r) => r.prodotti);
   let scaricate = 0;
@@ -176,6 +191,9 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
   pdf.setTitle("Listino rivenditore Elitederma");
   const normale = await pdf.embedFont(StandardFonts.Helvetica);
   const grassetto = await pdf.embedFont(StandardFonts.HelveticaBold);
+  // il nome della ditta vuole le grazie, come sulla carta intestata
+  const serif = await pdf.embedFont(StandardFonts.TimesRoman);
+  const serifGrassetto = await pdf.embedFont(StandardFonts.TimesRomanBold);
   const colore = (c) => rgb(c[0], c[1], c[2]);
 
   // le colonne: x di partenza e larghezza utile. I prezzi si scrivono
@@ -199,22 +217,66 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
     pagina.drawText(t, { x: destra - font.widthOfTextAtSize(t, dimensione), y: yRiga, size: dimensione, font, color: colore(c) });
   };
 
+  // Le lettere distanziate. pdf-lib non sa spaziare un testo, quindi si
+  // disegna una lettera alla volta: su un titolo di dieci caratteri costa
+  // niente, e senza quello spazio fra le lettere il nome non ha l'aria che
+  // ha sulla carta intestata.
+  function larghezzaSpaziata(testo, font, dimensione, extra) {
+    const t = soloWinAnsi(testo);
+    if (!t) return 0;
+    return font.widthOfTextAtSize(t, dimensione) + extra * (t.length - 1);
+  }
+  function scriviSpaziato(testo, x, yRiga, font, dimensione, extra, c) {
+    let cursore = x;
+    for (const lettera of soloWinAnsi(testo)) {
+      pagina.drawText(lettera, { x: cursore, y: yRiga, size: dimensione, font, color: colore(c) });
+      cursore += font.widthOfTextAtSize(lettera, dimensione) + extra;
+    }
+    return cursore - extra - x;
+  }
+
   function nuovaPagina() {
     pagina = pdf.addPage([A4.larghezza, A4.altezza]);
     numeroPagina += 1;
     y = A4.altezza - MARGINE;
+    const data = new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric", timeZone: "Europe/Rome" });
 
-    // la testata: solo sulla prima pagina per esteso, sulle altre una riga
     if (numeroPagina === 1) {
-      pagina.drawText("LISTINO RIVENDITORE", { x: MARGINE, y: y - 22, size: 22, font: grassetto, color: colore(NAVY) });
-      pagina.drawText("Elitederma", { x: MARGINE, y: y - 40, size: 11, font: normale, color: colore(ORO) });
-      const data = new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric", timeZone: "Europe/Rome" });
-      scriviDestra(`Aggiornato al ${data}`, destraPagina, y - 40, normale, 9, GRIGIO);
-      y -= 62;
+      // LA TESTATA. Il nome comanda: grande, in grazie, con le lettere
+      // distanziate, e sotto una riga d'oro larga quanto lui. "Listino
+      // rivenditore" viene dopo, piu' piccolo: e' cosa e', non chi e'.
+      const yNome = y - 30;
+      const larghezzaNomeDitta = scriviSpaziato("ELITEDERMA", MARGINE, yNome, serifGrassetto, 30, 2.6, NAVY);
+      // il cerchietto della registrazione, alzato e piccolo come su una
+      // carta intestata vera
+      pagina.drawText("®", { x: MARGINE + larghezzaNomeDitta + 5, y: yNome + 17, size: 8, font: serif, color: colore(NAVY) });
+      pagina.drawLine({
+        start: { x: MARGINE, y: yNome - 9 }, end: { x: MARGINE + larghezzaNomeDitta, y: yNome - 9 },
+        thickness: 1.6, color: colore(ORO),
+      });
+      scriviSpaziato("LISTINO RIVENDITORE", MARGINE, yNome - 27, normale, 14, 2.2, NAVY);
+
+      // la riga verticale e, a destra, la data: piccola, distanziata, con
+      // il suo trattino d'oro sotto
+      const xRiga = MARGINE + larghezzaNomeDitta + 46;
+      pagina.drawLine({ start: { x: xRiga, y: yNome + 22 }, end: { x: xRiga, y: yNome - 30 }, thickness: 0.8, color: colore(BORDO) });
+      const righeData = ["AGGIORNATO AL", data.toUpperCase()];
+      righeData.forEach((t, i) => {
+        const larg = larghezzaSpaziata(t, grassetto, 8, 1.4);
+        scriviSpaziato(t, destraPagina - larg, yNome + 4 - i * 12, grassetto, 8, 1.4, i === 0 ? GRIGIO : NAVY);
+        if (i === 1) {
+          pagina.drawLine({ start: { x: destraPagina - larg, y: yNome - 14 }, end: { x: destraPagina, y: yNome - 14 }, thickness: 1.2, color: colore(ORO) });
+        }
+      });
+      y = yNome - 52;
     } else {
-      pagina.drawText("LISTINO RIVENDITORE", { x: MARGINE, y: y - 12, size: 10, font: grassetto, color: colore(NAVY) });
-      scriviDestra(`pagina ${numeroPagina}`, destraPagina, y - 12, normale, 9, GRIGIO);
-      y -= 30;
+      // le pagine dopo: la stessa testata in piccolo, perche' un foglio
+      // staccato dal mazzo deve dire da solo di chi e'
+      const larg = scriviSpaziato("ELITEDERMA", MARGINE, y - 12, serifGrassetto, 13, 1.4, NAVY);
+      pagina.drawLine({ start: { x: MARGINE, y: y - 17 }, end: { x: MARGINE + larg, y: y - 17 }, thickness: 1, color: colore(ORO) });
+      scriviSpaziato("LISTINO RIVENDITORE", MARGINE + larg + 14, y - 12, normale, 9, 1.2, GRIGIO);
+      scriviDestra(data.toUpperCase(), destraPagina, y - 12, grassetto, 8, GRIGIO);
+      y -= 34;
     }
     intestazioneColonne();
   }
@@ -274,15 +336,22 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
     y -= 6;
   }
 
-  // il piede, su tutte le pagine: un listino senza data in mano a un
-  // rivenditore e' un listino di cui non si sa piu' se vale
+  // IL PIEDE, su tutte le pagine. Qui stanno i dati della societa': un
+  // listino gira, viene stampato, finisce in mano a qualcuno che magari
+  // vuole ordinare — e deve poter leggere chi siamo e dove scrivere senza
+  // tornare a cercare la mail con cui gliel'abbiamo mandato.
   const data = new Date().toLocaleDateString("it-IT", { timeZone: "Europe/Rome" });
+  const rigaSocieta = righeSocieta.length
+    ? righeSocieta.join("  \u00B7  ")
+    : "Elitederma";
   pdf.getPages().forEach((pg, i) => {
-    pg.drawText(soloWinAnsi(`Elitederma - Listino rivenditore del ${data} - prezzi IVA inclusa`), {
-      x: MARGINE, y: 20, size: 7.5, font: normale, color: colore(GRIGIO),
+    pg.drawLine({ start: { x: MARGINE, y: 34 }, end: { x: destraPagina, y: 34 }, thickness: 0.6, color: colore(BORDO) });
+    pg.drawText(soloWinAnsi(rigaSocieta), { x: MARGINE, y: 24, size: 7, font: normale, color: colore(GRIGIO) });
+    pg.drawText(soloWinAnsi(`Listino rivenditore del ${data} - prezzi IVA inclusa`), {
+      x: MARGINE, y: 15, size: 7, font: normale, color: colore(GRIGIO),
     });
     const n = `${i + 1} / ${pdf.getPageCount()}`;
-    pg.drawText(n, { x: destraPagina - normale.widthOfTextAtSize(n, 7.5), y: 20, size: 7.5, font: normale, color: colore(GRIGIO) });
+    pg.drawText(n, { x: destraPagina - grassetto.widthOfTextAtSize(n, 8), y: 15, size: 8, font: grassetto, color: colore(NAVY) });
   });
 
   return { bytes: await pdf.save(), prodotti: quanti, pagine: pdf.getPageCount() };
