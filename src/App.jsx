@@ -77794,6 +77794,12 @@ export default function App() {
             colonneDesktop={4}
             definizioni={[
               { chiave: "gestionedate", title: "Gestione corsi ed eventi", descrizione: "Crea e organizza corsi, sedi e le fiere a cui partecipi", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionedate"), onClick: apriGestioneDate },
+              // Gestione eventi in home, ma SOLO per chi non puo' entrare
+              // in "Gestione corsi ed eventi". Chi amministra ci arriva da
+              // li' dentro, come sempre, e non si ritrova una tessera in
+              // piu' sulla home; chi deve occuparsi solo delle fiere —
+              // Andrea, Raffaele — ha il suo tasto e non passa per i corsi.
+              { chiave: "gestionieventi", title: "Gestione eventi", descrizione: "Le fiere e gli eventi: spese, incassi e materiale", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionieventi") && !tastoAbilitato("gestionedate"), onClick: () => apriGestioneEventi("home") },
               { chiave: "dashboardvenditori", title: "Dashboard venditori", descrizione: "Monitora vendite, performance e obiettivi del team", Icona: IconaTileVenditori, attivo: tastoAbilitato("dashboardvenditori"), onClick: apriLoginVenditore },
               { chiave: "dashboardmaster", title: "Dashboard master", descrizione: "Gestisci master, specializzazioni e valutazioni", Icona: IconaTileMaster, attivo: tastoAbilitato("dashboardmaster"), onClick: apriDashboardMaster },
               { chiave: "erp", title: "Amministrazione", descrizione: "Finanziaria e organizzativa", Icona: IconaTileCostiRicavi, attivo: tastoAbilitato("erp"), onClick: apriErp },
