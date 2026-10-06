@@ -64606,9 +64606,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       : `${etichettaEsito}.${fattAttiva ? " Fattura da emettere." : ""}`);
 
     (async () => {
+      // Lo scarico che non riesce NON ferma piu' la vendita. Si fermava, e
+      // con il carrello gia' svuotato quella vendita era persa: incasso
+      // fatto, niente scritto da nessuna parte, e intanto una parte dei
+      // pezzi era gia' uscita dal magazzino. Una giacenza sbagliata si
+      // corregge guardando il prodotto; un incasso mai registrato non si
+      // ritrova piu'.
+      let erroreScarico = null;
       if (pianiVendita.length > 0) {
-        const erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", utente: nomeOperatore });
-        if (erroreScarico) { window.alert("Attenzione: " + erroreScarico); ricarica(["prodotti_shop"]); return; }
+        erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", utente: nomeOperatore });
         // lo scarico ha gia' scritto la giacenza nuova sul sito, ma senza
         // togliere i pezzi promessi negli altri carrelli sospesi: qui si
         // rimette la disponibilita' vera
@@ -64657,6 +64663,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         return;
       }
       const venditaCreata = { id: esito?.vendita_id, numero_ordine: esito?.numero_ordine };
+      // La vendita c'e'. Se lo scarico era andato storto lo si dice adesso,
+      // a cose scritte, e si dice quale prodotto andare a guardare.
+      if (erroreScarico) {
+        window.alert(`Vendita ${esito?.numero_ordine || ""} registrata.\n\nIl magazzino però non si è scaricato del tutto: ${erroreScarico}\n\nControlla la giacenza di quel prodotto in Gestione magazzino.`);
+      }
 
       // Il pagamento col QR si lega alla sua vendita. Senza questa riga la
       // rete che gira ogni cinque minuti sul database — quella che
