@@ -511,6 +511,16 @@ const CHIAVE_REGOLA_REFERRAL_MASTER = "referralMaster_regolaSconto";
 // casa). Due percentuali, decise in Gestione punti
 const CHIAVE_QUOTE_PUNTI_MASTER = "puntiMaster_quotePerCanale";
 const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
+// Quanto vale in euro un punto della master, in percentuale. Un punto e'
+// un euro, ma alla master ne va una fetta: una per i punti fatti col POS
+// a carta e sullo shop, una — piu' alta — per quelli fatti in contanti o
+// col buono Amazon, dove l'incasso costa meno di commissioni.
+//
+// E' una cosa diversa dalle quote qui sopra: quelle dicono QUANTI punti
+// le vanno (al corso / fuori corso), queste dicono quanto le vengono
+// pagati. Le due si moltiplicano.
+const CHIAVE_PERCENTUALI_EURO_PUNTI = "puntiMaster_percentualiEuro";
+const PERCENTUALI_EURO_PUNTI_DEFAULT = { posShop: 15, cash: 20 };
 // Le tre colonne "Quota" di Dettaglio prodotti (16/09/2026): una
 // percentuale dei punti totali prodotto, in euro (un punto e' un euro).
 // Le percentuali si scrivono in cima alle colonne e restano per tutti
@@ -50197,6 +50207,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     const n = Math.max(0, Math.min(100, Math.round(Number(valore) || 0)));
     salvaQuote({ ...quote, [canale]: n });
   };
+  // le due percentuali che trasformano i punti in euro
+  const [percEuroSalvate, salvaPercEuro] = useImpostazioneCondivisa(CHIAVE_PERCENTUALI_EURO_PUNTI, PERCENTUALI_EURO_PUNTI_DEFAULT);
+  const percEuro = { ...PERCENTUALI_EURO_PUNTI_DEFAULT, ...(percEuroSalvate || {}) };
+  const cambiaPercEuro = (canale, valore) => {
+    const n = Math.max(0, Math.min(100, Math.round((Number(valore) || 0) * 10) / 10));
+    salvaPercEuro({ ...percEuro, [canale]: n });
+  };
   // Le due tabelle di sconto vivono qui perche' decidono i punti: lo
   // sconto che l'allievo usa e' cedibile che se ne va, e quello che resta
   // e' della master. Sono le stesse regole che stanno in Genera coupon —
@@ -50416,6 +50433,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
       const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
       let puntiCorso = 0, puntiFuori = 0, pezzi = 0, pezziSenzaPunti = 0, euro = 0, vendite = 0;
       let puntiTeorici = 0;
+      // gli stessi punti, divisi per come li ha incassati: carta/shop da
+      // una parte, contanti e buono Amazon dall'altra. Servono alle due
+      // percentuali che li trasformano in euro
+      let puntiPosShop = 0, puntiCash = 0;
       righe.forEach((v) => {
         euro += Number(v.totale) || 0;
         if ((v.totale || 0) > 0) vendite += 1;
@@ -50449,12 +50470,23 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           // divisi per canale. Le quote al corso / fuori corso, piu' sotto,
           // sono l'unica leva su quanto ne prende la master
           if (alCorso) puntiCorso += teorici; else puntiFuori += teorici;
+          // la quota del canale vale anche qui: alla master arrivano i
+          // punti gia' ridotti dal "quanti", poi il "quanto le vengono
+          // pagati" lavora su quelli
+          const suoi = teorici * ((alCorso ? quote.corso : quote.fuoriCorso) / 100);
+          if (contantiVendita) puntiCash += suoi; else puntiPosShop += suoi;
         });
       });
       const puntiMaster = round2((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
-      return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici: round2(puntiTeorici), puntiCorso: round2(puntiCorso), puntiFuori: round2(puntiFuori), punti: round2(puntiCorso + puntiFuori), puntiMaster, euro: round2(euro) };
+      // un punto e' un euro: la percentuale si applica ai punti e il
+      // risultato e' gia' in euro
+      const euroPosShop = round2((puntiPosShop * percEuro.posShop) / 100);
+      const euroCash = round2((puntiCash * percEuro.cash) / 100);
+      return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici: round2(puntiTeorici), puntiCorso: round2(puntiCorso), puntiFuori: round2(puntiFuori), punti: round2(puntiCorso + puntiFuori), puntiMaster,
+        puntiPosShop: round2(puntiPosShop), puntiCash: round2(puntiCash), euroPosShop, euroCash, euroTotale: round2(euroPosShop + euroCash),
+        euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster, incidenzaCostiSalvata]);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, percEuro.posShop, percEuro.cash, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster, incidenzaCostiSalvata]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
@@ -50508,6 +50540,41 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                   />
                   <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
                   <button onClick={() => cambiaQuota(q.canale, quote[q.canale] + 5)} title="Cinque punti in più"
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* QUANTO LE VENGONO PAGATI.
+            Le quote qui sopra dicono quanti punti vanno alla master; queste
+            due dicono quanto vale ognuno. Sono separate perche' il contante
+            e il buono Amazon costano meno di commissioni, e quella
+            differenza si puo' riconoscere a chi incassa cosi'. */}
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Quanto vale un punto, in euro</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            Un punto è un euro, ma alla master ne va una percentuale. Dipende da come è stato incassato: con la carta al banco o sullo shop, oppure in contanti o con buono Amazon.
+            {" "}Si applicano ai punti che le spettano — cioè dopo le quote qui sopra — e il risultato è l’euro che matura, nelle due colonne della classifica.
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {[
+              { canale: "posShop", etichetta: "POS e shop", spiega: "Carta al banco, e tutto quello che arriva dallo shop online." },
+              { canale: "cash", etichetta: "Contanti e buono Amazon", spiega: "Incassi che non pagano commissioni: alla master se ne riconosce di più." },
+            ].map((q) => (
+              <div key={q.canale} style={{ flex: "1 1 260px", background: BG, borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{q.etichetta}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45, marginBottom: 10 }}>{q.spiega}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => cambiaPercEuro(q.canale, percEuro[q.canale] - 1)} title="Un punto in meno"
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
+                  <CampoNumero
+                    valore={percEuro[q.canale]} onCambia={(n) => cambiaPercEuro(q.canale, n)} min={0} max={100}
+                    style={{ ...inputStyle, width: 70, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
+                  />
+                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
+                  <button onClick={() => cambiaPercEuro(q.canale, percEuro[q.canale] + 1)} title="Un punto in più"
                     style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
                 </div>
               </div>
@@ -50752,13 +50819,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
                 <thead>
                   <tr>
-                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiTeorici", l: "Punti teorici" }, { c: "puntiCorso", l: "Al corso" }, { c: "puntiFuori", l: "Fuori corso" }, { c: "puntiMaster", l: "Alla master" }, { c: "euro", l: "Valore venduto" }].map((h) => (
+                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiTeorici", l: "Punti teorici" }, { c: "puntiCorso", l: "Al corso" }, { c: "puntiFuori", l: "Fuori corso" }, { c: "puntiMaster", l: "Alla master" }, { c: "euroPosShop", l: `€ POS e shop (${percEuro.posShop}%)` }, { c: "euroCash", l: `€ contanti (${percEuro.cash}%)` }, { c: "euroTotale", l: "€ maturati" }, { c: "euro", l: "Valore venduto" }].map((h) => (
                       <ThOrdina key={h.c} campo={h.c} ordine={ordine} onOrdina={cambiaOrdine} style={th}>{h.l}</ThOrdina>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiTeorici: (r) => r.puntiTeorici, puntiCorso: (r) => r.puntiCorso, puntiFuori: (r) => r.puntiFuori, puntiMaster: (r) => r.puntiMaster, euro: (r) => r.euro }).map((r) => (
+                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiTeorici: (r) => r.puntiTeorici, puntiCorso: (r) => r.puntiCorso, puntiFuori: (r) => r.puntiFuori, puntiMaster: (r) => r.puntiMaster, euroPosShop: (r) => r.euroPosShop, euroCash: (r) => r.euroCash, euroTotale: (r) => r.euroTotale, euro: (r) => r.euro }).map((r) => (
                     <tr key={r.master.id}>
                       <td style={{ ...td, fontWeight: 700 }}>{toTitleCase(r.master.nome)}</td>
                       <td style={td}>{r.vendite}</td>
@@ -50767,6 +50834,11 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                       <td style={td} title={`${quote.corso}% alla master`}>{fmtPunti(r.puntiCorso)}</td>
                       <td style={td} title={`${quote.fuoriCorso}% alla master`}>{fmtPunti(r.puntiFuori)}</td>
                       <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }}>{fmtPunti(r.puntiMaster)}</td>
+                      {/* i punti diventano euro: la percentuale del canale
+                          applicata ai punti che le spettano */}
+                      <td style={td} title={`${fmtPunti(r.puntiPosShop)} punti incassati con carta o sullo shop, al ${percEuro.posShop}%`}>{fmtEuroErp2(r.euroPosShop)}</td>
+                      <td style={td} title={`${fmtPunti(r.puntiCash)} punti incassati in contanti o con buono Amazon, al ${percEuro.cash}%`}>{fmtEuroErp2(r.euroCash)}</td>
+                      <td style={{ ...td, fontWeight: 800, color: "#2E7D32", fontSize: 14 }}>{fmtEuroErp2(r.euroTotale)}</td>
                       <td style={td}>{fmtEuroErp2(r.euro)}</td>
                     </tr>
                   ))}
