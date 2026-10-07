@@ -583,8 +583,6 @@ const PUNTI_NEEDLING_DEFAULT = { soglie: [60, 120], quote: [100, 100, 100] };
 //
 // Di partenza e' zero in tutti e tre gli scaglioni: uno sconto al cliente
 // che nessuno ha scritto e' un soldo che se ne va senza una decisione.
-const CHIAVE_SCONTO_NEEDLING = "scontoNeedling_scaglioni";
-const SCONTO_NEEDLING_DEFAULT = { soglie: [60, 120], sconti: [0, 0, 0] };
 // Quando i codici d'aula sono a percentuale FISSA invece che a fasce, la
 // percentuale dei contanti e' un numero solo e sta qui — stessa ragione
 // della serie di sopra: in contanti l'IVA resta in cassa e si puo'
@@ -4975,36 +4973,19 @@ function marginePercentualeContantiDi(prodotto) {
 }
 // "spesa": quanto vale il carrello. Senza, si resta alla prima fascia di
 // spesa — che e' quella di chi compra poco, cioe' la piu' prudente
-// ---- Needling: una tabella sua, che vince su tutte le altre ----
-//
-// Gli sconti sui prodotti needling NON vengono dalle fasce generali: li
-// decide la tabella "Scontistica prodotti needling" di Gestione punti, e
-// i due non si sommano mai. Qui ci sono i due pezzi che servono a
-// percentualeFasciaDi, che e' il punto unico dove si sceglie lo sconto di
-// un prodotto: insegnandolo li', vale al POS, nel conto del carrello e
-// nella percentuale scritta su WooCommerce, senza doverlo ripetere.
-//
-// Sono due registri di modulo e non due parametri perche'
-// percentualeFasciaDi e' chiamata da una decina di punti, molti dei quali
-// non hanno ne' le categorie ne' le impostazioni sottomano: passarglieli
-// avrebbe voluto dire toccare dieci firme e dimenticarne una.
-const WOO_CATEGORIA_NEEDLING = 64;
-let PRODOTTI_NEEDLING = new Set();
-let SCONTO_NEEDLING = null;   // { soglie: [n, n], sconti: [n, n, n] }
 
-// Si riempie quando l'app carica categorie e collegamenti: finche' e'
-// vuoto nessun prodotto risulta needling e tutto si comporta come prima.
-function registraProdottiNeedling(prodottiCategorie, categorieProdotti) {
-  const idsNeedling = new Set(
-    (categorieProdotti || []).filter((c) => c.woo_category_id === WOO_CATEGORIA_NEEDLING).map((c) => c.id)
-  );
-  if (idsNeedling.size === 0) { PRODOTTI_NEEDLING = new Set(); return; }
-  const trovati = new Set();
-  collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => {
-    if (idsNeedling.has(pc.categoria_id)) trovati.add(pc.prodotto_id);
-  });
-  PRODOTTI_NEEDLING = trovati;
-}
+// ---- Le eccezioni per categoria di un codice ----
+//
+// Qui c'era il needling: una tabella di sconti che valeva per tutti i
+// codici, scritta in Gestione punti. Dal 7/10/2026 non esiste piu'. Le
+// eccezioni le decide ogni codice per conto suo — "su questa categoria
+// questa percentuale" — e un codice che non ne ha scritte tratta ogni
+// prodotto allo stesso modo: comanda il margine.
+//
+// L'indice sta nel modulo e non in un parametro perche' percentualeFasciaDi
+// e' chiamata da una decina di punti, molti dei quali le categorie non le
+// hanno sottomano: passargliele avrebbe voluto dire toccare dieci firme e
+// dimenticarne una.
 
 // Le categorie di ogni prodotto, categorie madri comprese. Servono alle
 // eccezioni di un codice: "sui needling 30%" deve valere anche per un
@@ -5035,26 +5016,6 @@ function percentualeEccezioneDi(prodotto, eccezioni) {
   });
   return migliore;
 }
-function registraScontoNeedling(regola) {
-  const ok = regola && Array.isArray(regola.soglie) && regola.soglie.length === 2
-    && Array.isArray(regola.sconti) && regola.sconti.length === 3
-    && regola.sconti.some((x) => Number(x) > 0);
-  SCONTO_NEEDLING = ok ? regola : null;
-}
-function eProdottoNeedling(prodotto) {
-  return !!prodotto?.id && PRODOTTI_NEEDLING.has(prodotto.id);
-}
-// lo scaglione si legge sul totale del carrello a listino, come le fasce
-// generali: e' lo stesso gesto, e due criteri diversi nello stesso
-// carrello non si spiegherebbero a nessuno
-function percentualeNeedlingDi(spesa) {
-  if (!SCONTO_NEEDLING) return null;
-  const [s1, s2] = SCONTO_NEEDLING.soglie.map(Number);
-  const [a, b, c] = SCONTO_NEEDLING.sconti.map(Number);
-  const pct = spesa < s1 ? a : spesa < s2 ? b : c;
-  return Number.isFinite(pct) ? pct : null;
-}
-
 function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false, eccezioni = null) {
   // PRIMA DI TUTTO le eccezioni del codice, se ne ha. Un codice con
   // regole proprie dice "su questa categoria vale questa percentuale", e
@@ -5067,22 +5028,11 @@ function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false, eccez
     const iva = Number(prodotto?.aliquota_iva_vendita ?? ALIQUOTA_IVA_STANDARD) || 0;
     return pctEccezione / (1 + iva / 100);
   }
-  // I prodotti needling hanno una tabella loro e non guardano le fasce:
-  // vale quella e basta, mai la somma delle due.
-  //
-  // E SI LEGGE SUL NETTO, non sul lordo come le fasce generali. Siccome
-  // chi chiama questa funzione moltiplica per il prezzo LORDO della riga,
-  // la percentuale va riportata a quella base: il 30% del netto e' il
-  // 24,59% del lordo con IVA al 22, e sono lo stesso euro. Dividere qui
-  // e' l'unico modo per non dover spiegare la differenza in cinque punti
-  // diversi del codice.
-  if (eProdottoNeedling(prodotto)) {
-    const pct = percentualeNeedlingDi(spesa);
-    if (pct != null) {
-      const iva = Number(prodotto?.aliquota_iva_vendita ?? ALIQUOTA_IVA_STANDARD) || 0;
-      return pct / (1 + iva / 100);
-    }
-  }
+  // Qui c'era la deroga del needling: una tabella a parte che valeva per
+  // tutti i codici. Tolta il 7/10/2026 — le eccezioni adesso le decide
+  // ogni singolo codice, in "Regole di un codice". Un codice d'aula o un
+  // referral senza eccezioni scritte tratta i prodotti needling come
+  // tutti gli altri: comanda il margine.
   // Lo sconto al cliente si sceglie sul MARGINE del prodotto: piu' alto
   // il margine, piu' alto lo sconto. L'incidenza dei costi NON entra qui
   // — quella serve solo ai punti. Cambia solo la base del margine: sul
@@ -50520,22 +50470,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     quote: Array.isArray(puntiNeedlingSalvati?.quote) && puntiNeedlingSalvati.quote.length === 3
       ? puntiNeedlingSalvati.quote : PUNTI_NEEDLING_DEFAULT.quote,
   };
-  const [scontoNeedlingSalvato, salvaScontoNeedling] = useImpostazioneCondivisa(CHIAVE_SCONTO_NEEDLING, SCONTO_NEEDLING_DEFAULT);
-  const scontoNeedling = {
-    soglie: Array.isArray(scontoNeedlingSalvato?.soglie) && scontoNeedlingSalvato.soglie.length === 2
-      ? scontoNeedlingSalvato.soglie : SCONTO_NEEDLING_DEFAULT.soglie,
-    sconti: Array.isArray(scontoNeedlingSalvato?.sconti) && scontoNeedlingSalvato.sconti.length === 3
-      ? scontoNeedlingSalvato.sconti : SCONTO_NEEDLING_DEFAULT.sconti,
-  };
-  const cambiaScontoNeedling = (campo, indice, testo) => {
-    const pulito = String(testo).replace(",", ".").trim();
-    const n = pulito === "" ? 0 : Number(pulito);
-    if (!Number.isFinite(n) || n < 0) return;
-    if (campo === "sconti" && n > 100) return;
-    const prossimo = { soglie: [...scontoNeedling.soglie], sconti: [...scontoNeedling.sconti] };
-    prossimo[campo][indice] = n;
-    salvaScontoNeedling(prossimo);
-  };
   const cambiaPuntiNeedling = (campo, indice, testo) => {
     const pulito = String(testo).replace(",", ".").trim();
     const n = pulito === "" ? 0 : Number(pulito);
@@ -51023,65 +50957,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           </div>
         </div>
 
-        {/* SCONTISTICA PRODOTTI NEEDLING — questo invece e' uno sconto
-            vero, quello che paga meno il cliente. Vive accanto alla scheda
-            dei punti perche' si leggono insieme: quanto si cede al cliente
-            e quanto resta alla master sono due facce dello stesso carrello. */}
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Scontistica prodotti needling</div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 14 }}>
-            Lo sconto che il cliente ottiene sui soli prodotti <b>needling</b>, più alto man mano che
-            si sale di spesa. Percentuali <b>sul prezzo netto</b> — non sul lordo, come invece sono
-            quelle delle fasce qui sopra. <b>Non si somma</b> agli sconti generali: su un prodotto
-            needling vale questo e basta, mai tutti e due. Le soglie si leggono sul totale del
-            carrello a listino, come nelle tabelle qui sopra.
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
-            {[0, 1, 2].map((i) => {
-              const da = i === 0 ? 0 : scontoNeedling.soglie[i - 1];
-              const a = i < 2 ? scontoNeedling.soglie[i] : null;
-              const etichetta = i === 0
-                ? `Sotto ${fmtEuroErp2(scontoNeedling.soglie[0])}`
-                : a != null ? `Da ${fmtEuroErp2(da)} a meno di ${fmtEuroErp2(a)}` : `Da ${fmtEuroErp2(da)} in su`;
-              const acceso = Number(scontoNeedling.sconti[i]) > 0;
-              return (
-                <div key={i} style={{ background: acceso ? "#FDF8EC" : BG, border: `1px solid ${acceso ? "#EBD9AE" : CREAM_BORDER}`, borderRadius: 14, padding: "12px 14px" }}>
-                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, marginBottom: 8, lineHeight: 1.3 }}>{etichetta}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      type="number" min="0" max="100" step="0.5"
-                      value={scontoNeedling.sconti[i]}
-                      onChange={(e) => cambiaScontoNeedling("sconti", i, e.target.value)}
-                      style={{ ...inputStyle, width: 86, textAlign: "center", fontWeight: 800, fontSize: 16, padding: "8px 10px", color: acceso ? "#8A6D1D" : NAVY }}
-                    />
-                    <span style={{ ...fontBody, fontSize: 14, fontWeight: 800, color: acceso ? "#8A6D1D" : NAVY }}>%</span>
-                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>sul netto</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie</span>
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>prima a</span>
-            <input type="number" min="0" step="1" value={scontoNeedling.soglie[0]}
-              onChange={(e) => cambiaScontoNeedling("soglie", 0, e.target.value)}
-              style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€ poi a</span>
-            <input type="number" min="0" step="1" value={scontoNeedling.soglie[1]}
-              onChange={(e) => cambiaScontoNeedling("soglie", 1, e.target.value)}
-              style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€</span>
-            <span style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700, flexBasis: "100%", marginTop: 4 }}>
-              Si salva da sé a ogni numero toccato.
-            </span>
-            {scontoNeedling.sconti.every((x) => !Number(x)) && (
-              <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexBasis: "100%", lineHeight: 1.45 }}>
-                Per ora è tutto a zero: finché resta così sui prodotti needling valgono gli sconti generali.
-              </span>
-            )}
-          </div>
-        </div>
+        {/* Qui c'era "Scontistica prodotti needling": una tabella di
+            sconti che valeva per TUTTI i codici. Tolta il 7/10/2026 —
+            le eccezioni adesso le decide ogni codice per conto suo, in
+            "Regole di un codice" qui sopra, dove si sceglie la categoria
+            e la percentuale. Un codice d'aula o un referral senza
+            eccezioni scritte tratta i needling come tutti gli altri
+            prodotti: comanda il margine. */}
 
         <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Punti per master</div>
         {classifica.length === 0 ? (
@@ -64890,18 +64772,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // sconti molto diversi. Si leggeva "−4,81%" su un carrello che ne stava
   // ricevendo l'8,55: il conto era giusto, il cartellino no.
   const percentualeErogata = subtotale > 0 ? round2((scontoApplicato / subtotale) * 100) : 0;
-  // ...ma su un carrello di soli prodotti needling quella frazione dice
-  // una bugia diversa: la regola del needling e' una percentuale SUL
-  // NETTO, e raccontata sul lordo il 30% diventa "24,59%". Gli euro sono
-  // gli stessi, il numero no — e nessuno riconosce la regola che ha
-  // appena deciso. Quando tutte le righe scontate sono needling si scrive
-  // la percentuale vera, quella decisa nella scheda.
-  const righeNeedlingScontate = couponAFasce
-    ? carrello.filter((r) => !righeSenzaMargine.includes(r))
-    : [];
-  const tuttoNeedling = righeNeedlingScontate.length > 0
-    && righeNeedlingScontate.every((r) => eProdottoNeedling(prodottiPerId[r.prodottoId]));
-  const pctNeedlingCarrello = tuttoNeedling ? percentualeNeedlingDi(subtotale) : null;
   // Quanto manca alla fascia di spesa successiva. Si dice SOLO la cifra
   // che manca, mai quanto sconto si otterrebbe: la percentuale media
   // dipende da COSA si aggiunge, non da quanto si spende — un prodotto a
@@ -64910,20 +64780,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // sarebbe promettere una cosa falsa.
   const mancaAllaFascia = (() => {
     if (!couponAFasce || subtotale <= 0) return null;
-    // Carrello tutto needling: le soglie sono le sue, non quelle delle
-    // fasce. Senza questo si leggeva "mancano 11 € per la prossima
-    // fascia" su un carrello dove superare quella soglia non cambiava un
-    // centesimo, perche' il needling ha una tabella tutta sua.
-    if (tuttoNeedling) {
-      if (!SCONTO_NEEDLING) return null;
-      const [s1, s2] = SCONTO_NEEDLING.soglie.map(Number);
-      const [a, b, c] = SCONTO_NEEDLING.sconti.map(Number);
-      const prossima = subtotale < s1 ? { soglia: s1, poi: b, ora: a }
-        : subtotale < s2 ? { soglia: s2, poi: c, ora: b } : null;
-      if (!prossima || !(prossima.poi > prossima.ora)) return null;
-      const manca = round2(prossima.soglia - subtotale);
-      return manca > 0 ? manca : null;
-    }
     const g = gruppiFasceValidi(fasceCouponAttive);
     const i = indiceFasciaSpesa(subtotale, g.soglie);
     if (i >= 3) return null;
@@ -65758,7 +65614,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               saprebbe se e' quello giusto */}
           {corsoPosSel && couponAttivo && couponAttivo.corsi_date_id === corsoPosSel.id && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
-              Sconto del corso applicato: −{pctNeedlingCarrello != null ? fmtPctErp2(pctNeedlingCarrello) : fmtPctErp2(percentualeErogata)}
+              Sconto del corso applicato: −{fmtPctErp2(percentualeErogata)}
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
               {fasceContantiInUso && (
                 <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{couponPersonaleAttivo && metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
@@ -65825,16 +65681,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     // ogni prodotto diventavano tre numeri da leggere per
                     // sapere una cosa sola.
                     //
-                    // Sui prodotti needling si scrive la percentuale della
-                    // loro tabella, che e' sul netto: raccontata sul lordo
-                    // il 30% diventerebbe 24,59 e non combacerebbe con
-                    // quella in cima al carrello.
+                    // Su un prodotto preso da un'eccezione del codice si
+                    // scrive la percentuale dell'eccezione, che e' sul
+                    // netto: raccontata sul lordo un 30% diventerebbe
+                    // 24,59 e non sarebbe il numero che si e' scritto in
+                    // "Regole di un codice".
                     const suoSconto = scontoDiRiga(r);
                     if (!(suoSconto > 0)) return null;
                     const lordoRiga = round2(r.prezzo * r.quantita);
-                    const pctNeedling = eProdottoNeedling(prodottiPerId[r.prodottoId]) ? percentualeNeedlingDi(subtotale) : null;
-                    const pct = pctNeedling != null && couponAFasce
-                      ? pctNeedling
+                    const pctEccezione = percentualeEccezioneDi(prodottiPerId[r.prodottoId], eccezioniCodice);
+                    const pct = pctEccezione != null && couponAFasce
+                      ? pctEccezione
                       : (lordoRiga > 0 ? Math.round((suoSconto / lordoRiga) * 1000) / 10 : 0);
                     // "30%" e non "30,00%": i decimali si scrivono solo
                     // quando ci sono davvero
@@ -66031,7 +65888,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY }}>
                 <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
                 <span style={{ whiteSpace: "nowrap" }}>Applica sconto del corso</span>
-                {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{pctNeedlingCarrello != null ? fmtPctErp2(pctNeedlingCarrello) : fmtPctErp2(percentualeErogata)}</span>}
+                {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{fmtPctErp2(percentualeErogata)}</span>}
               </label>
             )}
             {/* il separatore solo se a sinistra c'e' davvero qualcosa */}
@@ -66055,7 +65912,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
                   couponAttivo ? (
                     <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 3 }}>
-                      Codice valido: −{pctNeedlingCarrello != null ? fmtPctErp2(pctNeedlingCarrello) : fmtPctErp2(percentualeErogata)}
+                      Codice valido: −{fmtPctErp2(percentualeErogata)}
                       {/* quanto durera': un codice a uso singolo sparisce dopo
                           questo carrello, e saperlo prima evita di cercarlo
                           alla vendita dopo credendo che sia sparito per errore */}
@@ -76174,14 +76031,9 @@ export default function App() {
   // volta sola e li leggono le funzioni pure che decidono la percentuale.
   // Senza questo, percentualeFasciaDi non saprebbe quali prodotti sono
   // needling e tutto si comporterebbe come prima — in silenzio.
-  const [scontoNeedlingRegola] = useImpostazioneCondivisa(CHIAVE_SCONTO_NEEDLING, SCONTO_NEEDLING_DEFAULT);
-  useEffect(() => {
-    registraProdottiNeedling(prodottiCategorie, categorieProdotti);
-    // lo stesso giro serve alle eccezioni per categoria dei codici con
-    // regole proprie: si fa una volta sola, qui
-    registraCategorieProdotti(prodottiCategorie, categorieProdotti);
-  }, [prodottiCategorie, categorieProdotti]);
-  useEffect(() => { registraScontoNeedling(scontoNeedlingRegola); }, [scontoNeedlingRegola]);
+  // le categorie di ogni prodotto: servono alle eccezioni per categoria
+  // dei codici con regole proprie
+  useEffect(() => { registraCategorieProdotti(prodottiCategorie, categorieProdotti); }, [prodottiCategorie, categorieProdotti]);
   const [bundleComponenti, setBundleComponenti] = useState([]);
   // Da qui in poi "prodottiShop" sono i prodotti col costo dei bundle gia'
   // risolto dalla distinta: ogni pagina che chiede un margine ottiene la
