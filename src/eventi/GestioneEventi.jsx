@@ -321,8 +321,18 @@ function SchedaMateriali({ eventoId, prodotti }) {
     return (prodotti || []).filter((p) => String(p.nome || "").toLowerCase().includes(q)).slice(0, 8);
   }, [cerca, prodotti]);
 
+  // Il nome come si chiama OGGI. Sulla riga ne resta scritto uno, da
+  // quando la riga e' nata, e invecchia: rinominato un prodotto, qui
+  // restava il nome di prima. Si rilegge dall'anagrafica per id; quello
+  // salvato serve solo alle voci scritte a mano, che un id non ce l'hanno.
+  const perId = useMemo(() => new Map((prodotti || []).map((p) => [p.id, p])), [prodotti]);
+  const nomeVivo = (r) => (r.prodotto_id && perId.get(r.prodotto_id)?.nome) || r.nome;
+
   async function aggiungiProdotto(p) {
     await aggiungiRiga("eventi_materiali", { evento_id: eventoId, prodotto_id: p.id, nome: p.nome, quantita: 1, ordine: (righe || []).length });
+    // il nome si scrive lo stesso, ma come rete: se un domani il prodotto
+    // esce dall'anagrafica la riga non resta senza nome. A schermo comanda
+    // sempre quello vivo
     setCerca(""); ricarica();
   }
   async function aggiungiVoce() {
@@ -382,7 +392,7 @@ function SchedaMateriali({ eventoId, prodotti }) {
           <div key={r.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
-                {r.nome}
+                {nomeVivo(r)}
                 {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginLeft: 8 }}>a catalogo</span>}
               </span>
               <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />

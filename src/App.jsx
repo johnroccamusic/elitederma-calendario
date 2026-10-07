@@ -4741,6 +4741,21 @@ function prodottoDellaRiga(riga, indici) {
     || indici.perNome.get(String(riga.nome || "").trim().toLowerCase())
     || null;
 }
+// Il nome di un prodotto come si chiama OGGI.
+//
+// Le righe salvate — una vendita, una spedizione, il materiale di un
+// evento — portano dentro il nome che il prodotto aveva il giorno in cui
+// sono state scritte. E' una fotografia, e invecchia: rinominato un
+// prodotto, mezza app continuava a chiamarlo come prima, ognuna in un
+// punto diverso, senza che niente lo dicesse.
+//
+// Qui il nome si rilegge sempre dall'anagrafica, passando per l'id (o il
+// codice del sito, o lo sku). Quello salvato resta solo come ultima
+// risorsa: serve alle righe di un prodotto che dall'anagrafica e' stato
+// tolto, e che altrimenti diventerebbero una riga senza nome.
+function nomeVivoDellaRiga(riga, indici) {
+  return prodottoDellaRiga(riga, indici)?.nome || riga?.nome || "—";
+}
 function puntiProdotto(p, sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, contanti = false) {
   if (!p) return null;
   const sicurezzaPct = sicurezzaDelProdotto(p, sicurezzaGenerale);
@@ -38064,27 +38079,67 @@ function costruisciClientiShop(venditeShop) {
 // voci_shop_classificazione: due elenchi separati (una voce "corso" non
 // entra mai nella classifica prodotti, e viceversa). Le voci non ancora
 // classificate contano come prodotto di default, ma sono segnalate.
-function costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione) {
+function costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, prodottiShop) {
   const mappaTipo = Object.fromEntries((vociShopClassificazione || []).map((v) => [v.nome, v.tipo]));
-  const perNomeProdotto = {};
-  const perNomeCorso = {};
-  (venditeShop || []).filter((v) => v.origine === "woocommerce").forEach((v) => {
+  const indici = indiciProdotti(prodottiShop);
+  const righeOrdini = (venditeShop || []).filter((v) => v.origine === "woocommerce");
+
+  // I nomi che un prodotto ha avuto, imparati dai dati.
+  //
+  // Le righe piu' vecchie non portano ne' il codice del sito ne' lo sku:
+  // di loro si sa solo il nome che il prodotto aveva allora. Ma le righe
+  // che quel codice ce l'hanno insegnano a quale prodotto quel nome
+  // apparteneva, e cosi' anche le antiche si riattaccano al gruppo giusto
+  // invece di restare una riga a parte in fondo alla classifica.
+  const prodottoPerNomeStorico = new Map();
+  righeOrdini.forEach((v) => {
     (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
-      const nome = (riga?.nome || "").trim();
+      const p = prodottoDellaRiga(riga, indici);
+      const nome = String(riga?.nome || "").trim().toLowerCase();
+      if (p && nome && !prodottoPerNomeStorico.has(nome)) prodottoPerNomeStorico.set(nome, p);
+    });
+  });
+
+  const perProdotto = {};
+  const perCorso = {};
+  righeOrdini.forEach((v) => {
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
+      // Si raggruppa per PRODOTTO, non per nome.
+      //
+      // Raggruppando per nome, rinominare un prodotto ne spezzava la
+      // storia in due righe che non si parlavano piu': una col nome
+      // vecchio fino a ieri, una col nuovo da oggi, e nessuna delle due
+      // diceva la verita'. Dove il prodotto si riconosce — dall'id del
+      // sito, dallo sku — comanda lui; il nome resta la chiave solo per
+      // le righe di prodotti che dal catalogo non ci sono piu', che
+      // altro appiglio non hanno.
+      const nomeSalvato = (riga?.nome || "").trim();
+      const prodotto = prodottoDellaRiga(riga, indici)
+        || prodottoPerNomeStorico.get(nomeSalvato.toLowerCase())
+        || null;
+      const nome = (prodotto?.nome || nomeSalvato).trim();
       if (!nome) return;
-      const tipo = mappaTipo[nome] || "prodotto";
+      // La classificazione e' scritta sul nome di quando e' stata decisa:
+      // si guarda anche quello vecchio, altrimenti un prodotto rinominato
+      // tornerebbe "non classificato" e rientrerebbe in classifica da una
+      // porta che qualcuno gli aveva chiuso.
+      const tipo = mappaTipo[nome] ?? mappaTipo[nomeSalvato] ?? "prodotto";
       if (tipo === "escluso") return;
-      const bucket = tipo === "corso" ? perNomeCorso : perNomeProdotto;
-      if (!bucket[nome]) bucket[nome] = { nome, quantita: 0, incasso: 0 };
-      bucket[nome].quantita += riga.quantita || 0;
-      bucket[nome].incasso += riga.totale_riga || 0;
+      const bucket = tipo === "corso" ? perCorso : perProdotto;
+      const chiave = prodotto?.id || nome.toLowerCase();
+      if (!bucket[chiave]) bucket[chiave] = { nome, quantita: 0, incasso: 0, classificato: mappaTipo[nome] != null || mappaTipo[nomeSalvato] != null };
+      // il nome che si legge e' sempre quello di oggi, anche se la riga
+      // piu' vecchia del gruppo ne portava un altro
+      bucket[chiave].nome = nome;
+      bucket[chiave].quantita += riga.quantita || 0;
+      bucket[chiave].incasso += riga.totale_riga || 0;
     });
   });
   const ordinaPerIncasso = (mappa) => Object.values(mappa).sort((a, b) => b.incasso - a.incasso);
   return {
-    classificaProdotti: ordinaPerIncasso(perNomeProdotto),
-    classificaCorsi: ordinaPerIncasso(perNomeCorso),
-    vociNonClassificateDistinte: new Set(Object.keys({ ...perNomeProdotto, ...perNomeCorso }).filter((n) => !(n in mappaTipo))).size,
+    classificaProdotti: ordinaPerIncasso(perProdotto),
+    classificaCorsi: ordinaPerIncasso(perCorso),
+    vociNonClassificateDistinte: [...Object.values(perProdotto), ...Object.values(perCorso)].filter((x) => !x.classificato).length,
   };
 }
 
@@ -38100,7 +38155,7 @@ const COLONNE_CRM_SHOP = [
   { chiave: "giorniMedi", etichetta: "Giorni medi fra ordini" },
 ];
 
-function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificazioneVoci, onBack, titolo = "CRM Shop Online" }) {
+function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = [], onApriClassificazioneVoci, onBack, titolo = "CRM Shop Online" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("clienti"); // clienti | classifica
   const [ricerca, setRicerca] = useState("");
@@ -38109,7 +38164,7 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificaz
   const [chiaveAperta, setChiaveAperta] = useState(null);
 
   const clienti = useMemo(() => costruisciClientiShop(venditeShop), [venditeShop]);
-  const classifica = useMemo(() => costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione), [venditeShop, vociShopClassificazione]);
+  const classifica = useMemo(() => costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, prodottiShop), [venditeShop, vociShopClassificazione, prodottiShop]);
 
   const kpi = useMemo(() => {
     const totale = clienti.length;
@@ -76827,7 +76882,7 @@ export default function App() {
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
-    crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
+    crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm", "prodotti_shop"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
     statvenditeshop: ["vendite_shop_storico", "woo_coupon"],
@@ -78710,7 +78765,7 @@ export default function App() {
       )}
 
       {view === "crmshop" && (
-        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "CRM Shop Online")} />
+        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} prodottiShop={prodottiShop} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "CRM Shop Online")} />
       )}
 
       {view === "generacoupon" && (
