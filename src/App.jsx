@@ -38939,6 +38939,61 @@ function SchedaScaglioniNeedling({ chiave, predefinito, campo, titolo, spiegazio
   );
 }
 
+// Un coupon e' della serie needling se lo dice la sua colonna, oppure se
+// l'edizione a cui e' legato e' un corso di needling.
+//
+// Le due cose non coincidono sempre: i codici nati prima dell'08/10/2026
+// non hanno la colonna, e leggerla da sola li farebbe comparire nella
+// lista sbagliata — proprio quella in cui si va a guardare quale regola
+// seguono.
+function couponDiSerieNeedling(c, edizioniNeedling) {
+  if (c.serie_regole === "needling") return true;
+  if (c.serie_regole) return false;
+  return !!c.corsi_date_id && edizioniNeedling.has(c.corsi_date_id);
+}
+
+// Lo storico dei codici nati da soli, uno per serie: senza questa lista
+// non c'e' modo di sapere con quale regola e' nato un codice gia' emesso,
+// che e' esattamente la domanda che ci si fa guardandolo.
+function StoricoCodiciAutomatici({ codici, master, corsi, corsiDate, location, titolo, vuoto, onElimina, eliminandoId }) {
+  return (
+    <>
+      <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, margin: "24px 0 10px" }}>{titolo} ({codici.length})</div>
+      {codici.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{vuoto}</div>
+      ) : codici.map((c) => {
+        const m = (master || []).find((mm) => mm.id === c.master_id);
+        const cd = (corsiDate || []).find((x) => x.id === c.corsi_date_id);
+        const corsoNome = cd ? (corsi || []).find((co) => co.id === cd.corso_id)?.nome : null;
+        const locNome = cd ? (location || []).find((l) => l.id === cd.location_id)?.nome : null;
+        const dettaglioCorso = cd ? `${corsoNome || "—"} · ${toTitleCase(locNome || "—")} · ${fmtData(cd.data_inizio)}–${fmtData(cd.data_fine)}` : null;
+        const statoInfo = ETICHETTA_STATO_COUPON[c.stato] || ETICHETTA_STATO_COUPON.bozza;
+        // un codice nato prima che le serie esistessero: la regola che
+        // segue e' quella con cui e' nato, e nessuno l'ha piu' toccata
+        const senzaSerie = !c.serie_regole;
+        return (
+          <div key={c.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{c.codice}</span>
+                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: statoInfo.colore, borderRadius: 20, padding: "2px 9px" }}>{statoInfo.testo}</span>
+                {senzaSerie && (
+                  <span title="Nato prima che le serie esistessero: porta ancora la regola con cui è stato creato"
+                    style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "2px 9px" }}>regola d'origine</span>
+                )}
+              </div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>{m ? toTitleCase(m.nome) : "—"}{dettaglioCorso ? ` · ${dettaglioCorso}` : ""} · {c.tipo_regola_sconto === "fasce" ? "a fasce" : "percentuale fissa"} · {c.valore}% al sito {c.valido_fino_a ? `· scade il ${fmtData(c.valido_fino_a)}` : ""}</div>
+            </div>
+            <button onClick={() => onElimina(c)} disabled={eliminandoId === c.id} title="Elimina coupon" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+            </button>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 // La linguetta "Generazione automatica codici needling".
 //
 // E' la gemella di "Generazione automatica", con due differenze che sono
@@ -38951,7 +39006,7 @@ function SchedaScaglioniNeedling({ chiave, predefinito, campo, titolo, spiegazio
 //
 // Da qui in avanti le edizioni dei corsi che si chiamano "needling"
 // prendono il loro codice da questa sezione, non dall'altra.
-function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, corsiDate, ricarica, isMobile }) {
+function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, corsiDate, location, master, codiciGenerati = [], onElimina, eliminandoId, ricarica, isMobile }) {
   const [form, setForm] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
@@ -39074,6 +39129,12 @@ function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, c
           </div>
         </div>
       )}
+
+      <StoricoCodiciAutomatici
+        codici={codiciGenerati} master={master} corsi={corsi} corsiDate={corsiDate} location={location}
+        titolo="Codici needling già generati" vuoto="Nessun codice ancora: il primo nascerà quando comincia la prossima edizione di needling."
+        onElimina={onElimina} eliminandoId={eliminandoId}
+      />
     </div>
   );
 }
@@ -39397,6 +39458,11 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     ricarica(["coupon"]);
   }
   const couponAutomatici = useMemo(() => [...(coupon || [])].filter((c) => c.generato_da_cron).sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")), [coupon]);
+  // ognuno nella sua lista: guardando un codice si deve capire quale
+  // regola segue, e due serie in un elenco solo non lo dicono
+  const edizioniNeedlingGen = useMemo(() => edizioniDiNeedling(corsiDate, corsi), [corsiDate, corsi]);
+  const couponAutomaticiNeedling = useMemo(() => couponAutomatici.filter((c) => couponDiSerieNeedling(c, edizioniNeedlingGen)), [couponAutomatici, edizioniNeedlingGen]);
+  const couponAutomaticiCorsi = useMemo(() => couponAutomatici.filter((c) => !couponDiSerieNeedling(c, edizioniNeedlingGen)), [couponAutomatici, edizioniNeedlingGen]);
 
   const prodottiFiltrati = useMemo(() => {
     const q = ricercaProdotti.trim().toLowerCase();
@@ -39597,7 +39663,9 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         {tab === "needling" && (
           <PannelloCodiciNeedling
             regoleNeedling={regoleReferralNeedling} prodottiShop={prodottiShop}
-            coupon={coupon} corsi={corsi} corsiDate={corsiDate} ricarica={ricarica} isMobile={isMobile}
+            coupon={coupon} corsi={corsi} corsiDate={corsiDate} location={location} master={master}
+            codiciGenerati={couponAutomaticiNeedling} onElimina={eliminaCoupon} eliminandoId={eliminandoId}
+            ricarica={ricarica} isMobile={isMobile}
           />
         )}
 
@@ -39706,31 +39774,11 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               </div>
             )}
 
-            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, margin: "24px 0 10px" }}>Storico referral automatici ({couponAutomatici.length})</div>
-            {couponAutomatici.length === 0 ? (
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun codice generato in automatico ancora.</div>
-            ) : couponAutomatici.map((c) => {
-              const m = (master || []).find((mm) => mm.id === c.master_id);
-              const cd = (corsiDate || []).find((x) => x.id === c.corsi_date_id);
-              const corsoNome = cd ? (corsi || []).find((co) => co.id === cd.corso_id)?.nome : null;
-              const locNome = cd ? (location || []).find((l) => l.id === cd.location_id)?.nome : null;
-              const dettaglioCorso = cd ? `${corsoNome || "—"} · ${toTitleCase(locNome || "—")} · ${fmtData(cd.data_inizio)}–${fmtData(cd.data_fine)}` : null;
-              const statoInfo = ETICHETTA_STATO_COUPON[c.stato] || ETICHETTA_STATO_COUPON.bozza;
-              return (
-                <div key={c.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{c.codice}</span>
-                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: statoInfo.colore, borderRadius: 20, padding: "2px 9px" }}>{statoInfo.testo}</span>
-                    </div>
-                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>{m ? toTitleCase(m.nome) : "—"}{dettaglioCorso ? ` · ${dettaglioCorso}` : ""} · {c.valore}% {c.valido_fino_a ? `· scade il ${fmtData(c.valido_fino_a)}` : ""}</div>
-                  </div>
-                  <button onClick={() => eliminaCoupon(c)} disabled={eliminandoId === c.id} title="Elimina coupon" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
-                  </button>
-                </div>
-              );
-            })}
+            <StoricoCodiciAutomatici
+              codici={couponAutomaticiCorsi} master={master} corsi={corsi} corsiDate={corsiDate} location={location}
+              titolo="Storico referral automatici" vuoto="Nessun codice generato in automatico ancora."
+              onElimina={eliminaCoupon} eliminandoId={eliminandoId}
+            />
           </div>
         )}
       </div>
