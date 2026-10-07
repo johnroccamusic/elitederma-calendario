@@ -19474,11 +19474,16 @@ function IconaDiRigaCosto({ tipo, size = 17 }) {
 // sopra — sei elementi per dire una cosa sola, e nessuno dei tre
 // sembrava escludere gli altri, che invece e' esattamente quello che
 // fanno.
-function SegmentoModalita({ valori = ["B", "C", "1/2"], attivo, onSceglie, titoli = {}, bloccato = false }) {
+// `previsto` e' il valore acceso che pero' non e' ancora stato scritto da
+// nessuna parte: lo si disegna a tratteggio invece che pieno. Serve a
+// distinguere una scelta fatta da una previsione — leggere "Scad." e non
+// trovare un euro nello scadenziario e' successo davvero, su Udine.
+function SegmentoModalita({ valori = ["B", "C", "1/2"], attivo, onSceglie, titoli = {}, bloccato = false, previsto = null }) {
   return (
     <span style={{ display: "inline-flex", gap: 4, justifyContent: "center" }}>
       {valori.map((chiave) => {
         const acceso = attivo === chiave;
+        const soloPrevisto = acceso && previsto === chiave;
         return (
           <button
             key={chiave} type="button" title={titoli[chiave]}
@@ -19493,9 +19498,9 @@ function SegmentoModalita({ valori = ["B", "C", "1/2"], attivo, onSceglie, titol
               ...fontBody, fontSize: 9, fontWeight: 700, lineHeight: 1,
               width: 23, height: 23, minWidth: 23, flexShrink: 0, padding: 0, borderRadius: 7,
               display: "inline-flex", alignItems: "center", justifyContent: "center",
-              border: `1px solid ${acceso ? NAVY : CREAM_BORDER}`,
-              background: acceso ? NAVY : "#fff",
-              color: acceso ? "#fff" : (bloccato ? "#C9C4B8" : MUTED),
+              border: `1px ${soloPrevisto ? "dashed" : "solid"} ${acceso ? NAVY : CREAM_BORDER}`,
+              background: soloPrevisto ? "#EEF3FA" : (acceso ? NAVY : "#fff"),
+              color: soloPrevisto ? NAVY : (acceso ? "#fff" : (bloccato ? "#C9C4B8" : MUTED)),
               cursor: bloccato ? "default" : "pointer",
             }}
           >
@@ -28249,14 +28254,26 @@ function PannelloRiepilogoAmministrativo({
                               <SegmentoModalita
                                 valori={["Busta", "Scad."]}
                                 attivo={r.cashRinviato ? "Scad." : "Busta"}
+                                previsto={r.rinvioAutomatico ? "Scad." : null}
                                 titoli={{
                                   Busta: r.rinvioAutomatico
                                     ? "Il contante di questa classe non basta: finché non ne entra altro, questa quota non può uscire dalla busta"
                                     : "La quota in contanti esce dalla busta di questo corso e va in prima nota con Pagamenti effettuati",
-                                  "Scad.": "La quota in contanti va nello scadenziario passivo (Quadro impegni): si decide poi se pagarla dalla cassa contanti o con bonifico",
+                                  "Scad.": r.rinvioAutomatico
+                                    ? "Previsto nello scadenziario perché il contante non basta, ma non ancora scritto: premi qui per scriverlo subito, o lo scriverà «Disponi pagamenti»"
+                                    : "La quota in contanti va nello scadenziario passivo (Quadro impegni): si decide poi se pagarla dalla cassa contanti o con bonifico",
                                 }}
                                 onSceglie={(scelta) => {
-                                  if (scelta === "Scad.") { if (!r.cashRinviato && !r.rinvioAutomatico) rinviaCashAgliImpegni(r); return; }
+                                  // Premere "Scad." SCRIVE l'impegno, anche
+                                  // quando la pastiglia era gia' li' da sola
+                                  // perche' il contante non bastava. Prima
+                                  // non faceva niente: si leggeva "Scad.",
+                                  // si premeva "Scad.", e nello scadenziario
+                                  // non compariva un euro finche' qualcuno
+                                  // non premeva "Disponi pagamenti". Chi
+                                  // guardava vedeva una scelta fatta e un
+                                  // importo che non arrivava mai.
+                                  if (scelta === "Scad.") { if (!r.impegnoCash && !r.pagatoDalloScadenziario) rinviaCashAgliImpegni(r); return; }
                                   if (!r.cashRinviato) return;
                                   // Busta: solo se il contante che resta la copre
                                   if (r.rinvioAutomatico || r.cash > disponibileDopoLeScelte + 0.004) { setMsg(`Il contante di questa classe non basta per "${r.nome}": ${fmtEuroErp2(r.cash)} contro ${fmtEuroErp2(Math.max(0, disponibileDopoLeScelte))} rimasti. Resta nello scadenziario.`); return; }
@@ -28377,14 +28394,18 @@ function PannelloRiepilogoAmministrativo({
                                           <SegmentoModalita
                                             valori={["Busta", "Scad."]}
                                             attivo={rv?.cashRinviato ? "Scad." : "Busta"}
+                                            previsto={rv?.rinvioAutomatico ? "Scad." : null}
                                             titoli={{
                                               Busta: rv?.rinvioAutomatico
                                                 ? "Il contante di questa classe non basta: finché non ne entra altro, questa quota non può uscire dalla busta"
                                                 : "La quota in contanti di questo venditore esce dalla busta del corso",
-                                              "Scad.": "La quota in contanti di questo venditore va nello scadenziario passivo",
+                                              "Scad.": rv?.rinvioAutomatico
+                                                ? "Previsto nello scadenziario perché il contante non basta, ma non ancora scritto: premi qui per scriverlo subito, o lo scriverà «Disponi pagamenti»"
+                                                : "La quota in contanti di questo venditore va nello scadenziario passivo",
                                             }}
                                             onSceglie={(scelta) => {
-                                              if (scelta === "Scad.") { if (!rv?.cashRinviato && !rv?.rinvioAutomatico) rinviaCashAgliImpegni({ ...rv, nome: `${v.nome} (quota venditore)` }); return; }
+                                              // come sopra: premere "Scad." scrive, non guarda
+                                              if (scelta === "Scad.") { if (!rv?.impegnoCash && !rv?.pagatoDalloScadenziario) rinviaCashAgliImpegni({ ...rv, nome: `${v.nome} (quota venditore)` }); return; }
                                               if (!rv?.cashRinviato) return;
                                               if (rv.rinvioAutomatico || rv.suoCash > disponibileDopoLeScelte + 0.004) { setMsg(`Il contante di questa classe non basta per ${v.nome}: ${fmtEuroErp2(rv.suoCash)} contro ${fmtEuroErp2(Math.max(0, disponibileDopoLeScelte))} rimasti. Resta nello scadenziario.`); return; }
                                               riportaCashSulCorso({ ...rv, nome: v.nome });
