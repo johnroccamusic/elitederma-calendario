@@ -68261,9 +68261,20 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // senza prezzo: qui non compaiono, perche' riordinare una cosa che sullo
   // shop non c'e' non vuol dire niente. A parita' di posizione decide il
   // nome, come fa WooCommerce quando i menu_order sono uguali
+  // La posizione di un prodotto dentro QUESTA categoria. Stava sul
+  // prodotto, uno solo per tutte: siccome quasi meta' dei prodotti online
+  // sta in piu' di una categoria, riordinarne una rimandava all'aria
+  // l'altra. Se la coppia non ha ancora una posizione sua vale quella
+  // vecchia del prodotto, cosi' niente si sposta da solo.
+  const posizioneInCategoria = (prodottoId) => {
+    if (!categoriaSelId) return null;
+    const riga = (prodottiCategorie || []).find((pc) => pc.prodotto_id === prodottoId && pc.categoria_id === categoriaSelId);
+    return riga?.ordine_vetrina ?? null;
+  };
+  const ordineVetrinaDi = (p) => posizioneInCategoria(p.id) ?? p.ordine_vetrina ?? 0;
   const prodottiVetrina = prodottiBase
     .filter((p) => isOnlineWoo(p))
-    .sort((a, b) => (a.ordine_vetrina ?? 0) - (b.ordine_vetrina ?? 0) || a.nome.localeCompare(b.nome));
+    .sort((a, b) => ordineVetrinaDi(a) - ordineVetrinaDi(b) || a.nome.localeCompare(b.nome));
   const inRiordino = ordineVetrinaBozza != null;
   const prodottiInRiordino = inRiordino
     ? ordineVetrinaBozza.map((id) => prodottiVetrina.find((p) => p.id === id)).filter(Boolean)
@@ -68278,9 +68289,19 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       const lista = [...(prec || [])];
       const partenza = lista.indexOf(daId);
       if (partenza < 0) return prec;
+      const destinazione = lista.indexOf(aId);
+      if (destinazione < 0) { lista.splice(partenza, 1); lista.push(daId); return lista; }
+      // Verso il BASSO si finisce dopo il bersaglio, verso l'alto prima.
+      //
+      // Prima si infilava sempre prima: trascinando in giu' il prodotto
+      // si fermava una posizione sopra il punto dove lo si lasciava, e
+      // spostarlo di un posto solo non faceva proprio niente. Dopo il
+      // salvataggio l'ordine non era quello che si era disegnato, e
+      // sembrava che il salvataggio avesse fatto di testa sua.
+      const inGiu = destinazione > partenza;
       lista.splice(partenza, 1);
       const arrivo = lista.indexOf(aId);
-      lista.splice(arrivo < 0 ? lista.length : arrivo, 0, daId);
+      lista.splice(inGiu ? arrivo + 1 : arrivo, 0, daId);
       return lista;
     });
   }
@@ -68292,9 +68313,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // posizioni distanziate di dieci: cosi' domani si puo' infilare un
     // prodotto in mezzo senza rinumerare tutta la categoria
     const posizioni = ordineVetrinaBozza.map((id, indice) => ({ prodottoId: id, posizione: (indice + 1) * 10 }));
+    // senza la categoria l'ordine tornerebbe a essere uno solo per
+    // prodotto, e riordinare qui rimanderebbe all'aria le altre vetrine
+    const categoriaId = categoriaSelId || null;
     const { data: sessione } = await supabase.auth.getSession();
     const { data, error } = await supabase.functions.invoke("woo-ordina-prodotti", {
-      body: { posizioni },
+      body: { posizioni, categoriaId },
       headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
     });
     setSalvandoOrdineVetrina(false);
@@ -68315,7 +68339,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     if (data?.errore) { setMsgOrdineVetrina("Errore: " + data.errore + (data.dettaglio ? ` — ${String(data.dettaglio).slice(0, 300)}` : "")); return; }
     setOrdineVetrinaBozza(null);
     setMsgOrdineVetrina(`Ordine salvato sullo shop: ${data?.aggiornati ?? 0} prodotti.`);
-    ricarica(["prodotti_shop"]);
+    ricarica(["prodotti_shop", "prodotti_categorie"]);
   }
 
   function categorieAppiattite() {

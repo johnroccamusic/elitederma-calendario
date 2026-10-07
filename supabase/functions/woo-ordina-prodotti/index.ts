@@ -1,8 +1,14 @@
 // Edge Function "woo-ordina-prodotti"
 // Riscrive l'ordine dei prodotti dentro una categoria dello shop: riceve
 // le posizioni decise trascinando in "Gestione shop" e le manda a
-// WooCommerce come "menu_order", poi le rispecchia in
-// prodotti_shop.ordine_vetrina.
+// WooCommerce, poi le rispecchia nel database.
+//
+// Dall'08/10/2026 l'ordine e' DI OGNI CATEGORIA, non del prodotto. Su 195
+// prodotti online 95 stanno in piu' di una categoria: con un numero solo
+// per prodotto, riordinare Laminazione rimandava all'aria HENNE e
+// viceversa. Adesso la posizione si scrive su prodotti_categorie e, sul
+// sito, in un campo che porta il codice della categoria
+// (`_ed_ordine_cat_<id>`) che il frammento legge negli elenchi.
 //
 // Le posizioni arrivano gia' calcolate dall'app (10, 20, 30...): lo
 // spazio fra un numero e l'altro serve a chi domani vorra' infilare un
@@ -57,9 +63,11 @@ Deno.serve(async (req) => {
   const auth = "Basic " + btoa(`${consumerKey}:${consumerSecret}`);
 
   let posizioni: { prodottoId?: string; posizione?: number }[] = [];
+  let categoriaId: string | null = null;
   try {
     const corpo = await req.json();
     posizioni = Array.isArray(corpo?.posizioni) ? corpo.posizioni : [];
+    categoriaId = corpo?.categoriaId || null;
   } catch {
     return risposta({ errore: "Corpo della richiesta non leggibile" }, 400);
   }
@@ -82,6 +90,18 @@ Deno.serve(async (req) => {
   // che sullo shop non c'e', e semplicemente non ha una posizione
   const saltati = richieste.length - daScrivere.length;
   if (daScrivere.length === 0) return risposta({ aggiornati: 0, saltati });
+
+  // Il codice della categoria sul sito. Serve al campo per categoria:
+  // WooCommerce ha un "menu_order" solo per prodotto, quindi la posizione
+  // dentro una categoria si scrive in un campo che porta il nome della
+  // categoria, e il frammento sul sito ordina per quello quando il
+  // cliente apre quell'elenco.
+  let wooCategoria: number | null = null;
+  if (categoriaId) {
+    const { data: cat } = await supabase.from("categorie_prodotti")
+      .select("woo_category_id").eq("id", categoriaId).maybeSingle();
+    wooCategoria = cat?.woo_category_id ?? null;
+  }
   console.log("woo-ordina-prodotti: scrivo", daScrivere.length, "posizioni, saltati", saltati);
 
   try {
@@ -90,7 +110,19 @@ Deno.serve(async (req) => {
       const rispostaWoo = await fetch(`${siteUrl}/wp-json/wc/v3/products/batch`, {
         method: "POST",
         headers: { Authorization: auth, "Content-Type": "application/json" },
-        body: JSON.stringify({ update: fetta.map((r) => ({ id: r.wooId, menu_order: r.posizione })) }),
+        body: JSON.stringify({
+          update: fetta.map((r) => ({
+            id: r.wooId,
+            // menu_order resta: lo legge la pagina generale dello shop,
+            // che una categoria non ce l'ha. Li' l'ultimo riordino fatto
+            // e' l'ordine buono, ed e' il meglio che si possa dire senza
+            // sapere da dove sta guardando il cliente.
+            menu_order: r.posizione,
+            ...(wooCategoria != null
+              ? { meta_data: [{ key: `_ed_ordine_cat_${wooCategoria}`, value: String(r.posizione) }] }
+              : {}),
+          })),
+        }),
       });
       if (!rispostaWoo.ok) {
         const testo = await rispostaWoo.text();
@@ -118,6 +150,17 @@ Deno.serve(async (req) => {
   for (const r of daScrivere) {
     const { error } = await supabase.from("prodotti_shop").update({ ordine_vetrina: r.posizione }).eq("id", r.prodottoId);
     if (error) return risposta({ errore: "Salvato sullo shop, ma non nel database: " + error.message }, 500);
+  }
+  // E la posizione DENTRO questa categoria, che e' quella che conta: un
+  // prodotto sta spesso in due o tre categorie, e finche' l'ordine era uno
+  // solo riordinarne una rimandava all'aria le altre.
+  if (categoriaId) {
+    for (const r of daScrivere) {
+      const { error } = await supabase.from("prodotti_categorie")
+        .update({ ordine_vetrina: r.posizione })
+        .eq("prodotto_id", r.prodottoId).eq("categoria_id", categoriaId);
+      if (error) return risposta({ errore: "Salvato sullo shop, ma non nel database: " + error.message }, 500);
+    }
   }
 
   // l'ordine nuovo si vede nelle pagine di elenco, che sono in cache

@@ -245,3 +245,47 @@ function elitederma_etichetta_coupon_fasce( $etichetta, $coupon ) {
 	return $etichetta;
 }
 endif;
+
+/**
+ * L'ordine dei prodotti DENTRO una categoria.
+ *
+ * WooCommerce ha un "menu_order" solo per prodotto: se un prodotto sta in
+ * tre categorie, la sua posizione e' la stessa in tutte e tre, e
+ * riordinarne una rimanda all'aria le altre. Sul nostro catalogo succede
+ * su quasi meta' dei prodotti.
+ *
+ * Il gestionale scrive su ogni prodotto un campo per ogni categoria in cui
+ * sta — `_ed_ordine_cat_<id della categoria>` — e qui, quando il cliente
+ * apre quell'elenco, si ordina per quel campo.
+ *
+ * Chi non ce l'ha scritto finisce in fondo invece che in testa: un
+ * prodotto nuovo non deve scavalcare quelli messi in ordine a mano.
+ * Fuori dalle pagine di categoria non si tocca niente: li' comanda
+ * "menu_order", come sempre.
+ */
+add_action( 'pre_get_posts', 'elitederma_ordine_per_categoria', 20 );
+
+if ( ! function_exists( 'elitederma_ordine_per_categoria' ) ) :
+function elitederma_ordine_per_categoria( $query ) {
+	if ( is_admin() || ! $query->is_main_query() || ! is_product_category() ) {
+		return;
+	}
+	// Se il cliente ha scelto lui un ordinamento — prezzo, novita',
+	// popolarita' — comanda la sua scelta, non la nostra vetrina.
+	$scelto = isset( $_GET['orderby'] ) ? sanitize_text_field( wp_unslash( $_GET['orderby'] ) ) : '';
+	if ( '' !== $scelto && 'menu_order' !== $scelto ) {
+		return;
+	}
+	$termine = get_queried_object();
+	if ( ! $termine || ! isset( $termine->term_id ) ) {
+		return;
+	}
+	$chiave = '_ed_ordine_cat_' . (int) $termine->term_id;
+	$query->set( 'meta_query', array(
+		'relation' => 'OR',
+		'ed_posizione'    => array( 'key' => $chiave, 'type' => 'NUMERIC', 'compare' => 'EXISTS' ),
+		'ed_senza_posizione' => array( 'key' => $chiave, 'compare' => 'NOT EXISTS' ),
+	) );
+	$query->set( 'orderby', array( 'ed_posizione' => 'ASC', 'menu_order' => 'ASC', 'title' => 'ASC' ) );
+}
+endif;
