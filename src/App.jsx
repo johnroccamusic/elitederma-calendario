@@ -67931,6 +67931,48 @@ function SpNota({ children, sfondo = SP_GRIGIO, colore = SP_SPENTO }) {
 /** La linea sottile che separa un blocco dall'altro. */
 const SpRigaSeparatrice = () => <div style={{ height: 1, background: SP_BORDO, margin: "18px 0" }} />;
 
+// La riga verticale fra due colonne, da trascinare per allargarle.
+//
+// Prima era un filo da un pixel dentro una striscia invisibile: chi non
+// sapeva che si potesse trascinare non lo scopriva mai, e infatti non lo
+// scopriva nessuno. Adesso al passaggio del mouse la riga si ingrossa e
+// compare l'impugnatura coi puntini — la stessa che si vede ovunque ci
+// sia qualcosa da trascinare.
+//
+// Doppio clic rimette la larghezza di partenza: dopo una trascinata
+// sbagliata, l'alternativa era trascinare al pixel finche' tornava bene.
+function ManigliaFraPannelli({ onInizia, onMuovi, onFine, onRimetti, personalizzata = false }) {
+  const [sotto, setSotto] = useState(false);
+  const [presa, setPresa] = useState(false);
+  const accesa = sotto || presa;
+  return (
+    <div
+      onPointerDown={(e) => { setPresa(true); onInizia(e); }}
+      onPointerMove={onMuovi}
+      onPointerUp={(e) => { setPresa(false); onFine(e); }}
+      onPointerCancel={(e) => { setPresa(false); onFine(e); }}
+      onMouseEnter={() => setSotto(true)}
+      onMouseLeave={() => setSotto(false)}
+      onDoubleClick={() => { if (personalizzata && onRimetti) onRimetti(); }}
+      title={personalizzata
+        ? "Trascina per allargare o restringere. Doppio clic per rimettere la larghezza di partenza."
+        : "Trascina per allargare o restringere questa colonna"}
+      style={{ position: "absolute", top: 0, right: -10, bottom: 0, width: 20, cursor: "col-resize", touchAction: "none", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}
+    >
+      <div style={{ position: "absolute", top: 0, bottom: 0, width: accesa ? 3 : 1, borderRadius: 2, background: accesa ? GOLD : CREAM_BORDER, transition: "width .12s, background .12s" }} />
+      <div style={{
+        position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+        background: accesa ? GOLD : "#FFFFFF", border: `1px solid ${accesa ? GOLD : CREAM_BORDER}`,
+        borderRadius: 7, padding: "7px 3px", opacity: accesa ? 1 : 0.55, transition: "opacity .12s, background .12s",
+      }}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} style={{ width: 3, height: 3, borderRadius: "50%", background: accesa ? "#FFFFFF" : MUTED, display: "block" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId, soloScheda = false, onSchedaChiusa, onSchedaApertaSu }) {
   // i dati che questa pagina usa davvero, dichiarati QUI e non solo nella
   // mappa delle viste: se un domani la pagina viene incorporata altrove
@@ -68027,10 +68069,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [salvandoMenu, setSalvandoMenu] = useState(false);
   const [pagineWp, setPagineWp] = useState([]); // pagine reali di WordPress, per il tipo "Pagina" nella modale voce di menu
 
-  // larghezza delle due colonne strette del Front Office trascinabile col
-  // mouse (stesso pattern di "Dettaglio prodotti"/Assegnazione Master),
-  // salvata per sempre in questo browser — evita i titoli mozzati quando
-  // il nome di una voce è lungo
+  // Larghezza delle due colonne strette, trascinabile col mouse (stesso
+  // pattern di "Dettaglio prodotti"/Assegnazione Master): evita i titoli
+  // mozzati quando il nome di una voce e' lungo.
+  //
+  // E' un'impostazione CONDIVISA, non del browser di chi trascina: chi
+  // allarga una colonna la allarga per tutti. Il commento diceva "per
+  // sempre in questo browser" ed era falso — useLayoutCondiviso scrive
+  // sul database. Si rimette com'era con un doppio clic sulla maniglia.
   const [largFo, setLargFo] = useLayoutCondiviso(CHIAVE_LARGHEZZE_FRONTOFFICE, {});
   function larghezzaFoDi(chiave, larghezzaDefault) { return largFo[chiave] ?? larghezzaDefault; }
 
@@ -68055,6 +68101,28 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     return () => { if (ro) ro.disconnect(); window.removeEventListener("resize", misura); window.removeEventListener("zoom-pagina", misura); };
   }, [vista, isMobile, soloScheda]);
   const colonneStrette = larghezzaGriglia > 0 && larghezzaGriglia < 1150;
+  // Le larghezze trascinate col mouse valgono SEMPRE, anche quando la
+  // finestra e' stretta. Prima no: sotto i 1150px la griglia passava alle
+  // proporzioni e le larghezze scelte venivano ignorate in silenzio — si
+  // trascinava, il numero si salvava, e non si muoveva niente. E' il
+  // motivo per cui sembrava che le maniglie non funzionassero.
+  //
+  // Quello che resta della vecchia regola e' la protezione: alla scheda
+  // non si scende mai sotto i 340px. Se le due colonne di sinistra
+  // chiedono piu' spazio di quello che c'e', si restringono tutte e due
+  // in proporzione invece di spingere la terza fuori dalla pagina.
+  function colonneBackOffice() {
+    const albero = larghezzaFoDi("boAlbero", 280);
+    const lista = larghezzaFoDi("boLista", 340);
+    const aMano = largFo.boAlbero != null || largFo.boLista != null;
+    if (colonneStrette && !aMano) return "minmax(140px, 0.9fr) minmax(180px, 1.1fr) minmax(340px, 1.8fr)";
+    const spazio = larghezzaGriglia > 0 ? larghezzaGriglia - 32 - 340 : null;
+    if (spazio != null && spazio > 0 && albero + lista > spazio) {
+      const fattore = spazio / (albero + lista);
+      return `${Math.max(140, Math.round(albero * fattore))}px ${Math.max(140, Math.round(lista * fattore))}px minmax(0,1fr)`;
+    }
+    return `${albero}px ${lista}px minmax(0,1fr)`;
+  }
   const ridimFoRef = React.useRef(null);
   function iniziaRidimFo(e, chiave, larghezzaAttuale) {
     e.preventDefault();
@@ -68072,16 +68140,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }
   function manigliaColonnaFo(chiave, larghezzaAttuale) {
     return (
-      <div
-        onPointerDown={(e) => iniziaRidimFo(e, chiave, larghezzaAttuale)}
-        onPointerMove={muoviRidimFo}
-        onPointerUp={fineRidimFo}
-        onPointerCancel={fineRidimFo}
-        title="Trascina per allargare/restringere"
-        style={{ position: "absolute", top: 0, right: -8, bottom: 0, width: 16, cursor: "col-resize", touchAction: "none", zIndex: 3, display: "flex", justifyContent: "center" }}
-      >
-        <div style={{ width: 1, height: "100%", background: CREAM_BORDER }} />
-      </div>
+      <ManigliaFraPannelli
+        key={chiave}
+        onInizia={(e) => iniziaRidimFo(e, chiave, larghezzaAttuale)}
+        onMuovi={muoviRidimFo}
+        onFine={fineRidimFo}
+        onRimetti={() => { const { [chiave]: _via, ...resto } = largFo; setLargFo(resto); }}
+        personalizzata={largFo[chiave] != null}
+      />
     );
   }
 
@@ -70459,9 +70525,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             ref={rifGriglia}
             style={{
               display: "grid",
-              gridTemplateColumns: colonneStrette
-                ? "minmax(140px, 0.9fr) minmax(180px, 1.1fr) minmax(340px, 1.8fr)"
-                : `${larghezzaFoDi("boAlbero", 280)}px ${larghezzaFoDi("boLista", 340)}px minmax(0,1fr)`,
+              gridTemplateColumns: colonneBackOffice(),
               gap: 16, alignItems: "start",
             }}
           >
