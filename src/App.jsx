@@ -38695,6 +38695,102 @@ function SchedaFasceCodiceAula({ regoleReferralAutomatico, prodottiShop, coupon,
   );
 }
 
+// Le due tabelle dello sconto che il referral personale di ogni master
+// fa ai suoi clienti.
+//
+// Gemella di SchedaFasceCodiceAula e spostata per lo stesso motivo: le
+// fasce stavano in Gestione punti e i codici si creano qui, in Genera
+// coupon → Genera referral code. Due pagine che scrivevano la stessa
+// impostazione senza vedersi.
+function SchedaFasceReferralPersonale({ prodottiShop, coupon, ricarica, isMobile }) {
+  const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  // La seconda serie del referral: contanti e buono Amazon. Vuota vuol
+  // dire "uguale a quella della carta", come per i corsi
+  const [fasceReferralContanti, setFasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
+  const referralContantiUgualiACarta = !serieScontoScritta(fasceReferralContanti);
+  // Le fasce del referral personale si salvano fra le impostazioni, ma i
+  // codici gia' emessi portano la LORO regola, copiata quando sono nati:
+  // i 17 codici delle master erano rimasti al 15% fisso mentre qui si
+  // regolavano le fasce. Questo tasto riscrive la regola su tutti i
+  // codici personali, nel database e sul sito
+  const [applicandoAiCodici, setApplicandoAiCodici] = useState(false);
+  const [msgCodiciPersonali, setMsgCodiciPersonali] = useState("");
+  async function applicaFasceAiCodiciPersonali() {
+    // la riga di base: sul coupon e sul sito viaggia quella, le fasce di
+    // spesa le applica il POS che il carrello ce l'ha
+    const fasce = fasceScontoValide(gruppiFasceValidi(regolaReferralMaster?.fasce).gruppi[0]);
+    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && codiceSuTuttoIlCatalogo(c));
+    if (personali.length === 0) { setMsgCodiciPersonali("Nessun codice personale da aggiornare."); return; }
+    // una pressione sola, e il conto vero: vedi la gemella dei codici d'aula
+    setApplicandoAiCodici(true);
+    setMsgCodiciPersonali(`Riscrivo le regole di oggi su ${personali.length} codici personali…`);
+    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
+    const { data: riscritti, error } = await supabase.from("coupon")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
+      .in("id", personali.map((c) => c.id))
+      .select("id");
+    if (error) { setApplicandoAiCodici(false); setMsgCodiciPersonali("Errore: " + testoErrore(error)); return; }
+    if (!riscritti || riscritti.length === 0) {
+      setApplicandoAiCodici(false);
+      setMsgCodiciPersonali("Errore: il database non ha cambiato nessuna riga. I codici sono rimasti come prima.");
+      return;
+    }
+    let sito = 0; const falliti = [];
+    const conSito = personali.filter((x) => x.woo_coupon_id);
+    for (const c of conSito) {
+      setMsgCodiciPersonali(`Riscritti ${riscritti.length} codici nell'app. Ora il sito: ${sito + falliti.length} di ${conSito.length}…`);
+      const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: c.id, aggiornaRegola: true } });
+      if (erroreSito || data?.errore) falliti.push(c.codice); else sito += 1;
+    }
+    setApplicandoAiCodici(false);
+    setMsgCodiciPersonali(`Fatto: ${riscritti.length} codici personali riscritti nell'app e ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
+    ricarica(["coupon"]);
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 22 }}>
+      <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto con il referral personale</div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+        Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Stesse quattro fasce di spesa del codice d'aula e <b style={{ color: NAVY }}>due serie</b> come lì: una per carta e shop, una per i contanti e il buono Amazon incassati al banco. Si salva appena la cambi.
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop</div>
+      <FasceDiSpesa
+        valore={regolaReferralMaster?.fasce}
+        onCambia={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: gruppiFasceValidi(f) })}
+        prodottiShop={prodottiShop} isMobile={isMobile}
+      />
+      <div style={{ marginBottom: 18 }} />
+      {/* La seconda serie, rimessa il 19/09/2026. Era stata tolta il
+          17/09 con la motivazione che "una master non incassa
+          contanti": i contanti al banco li incassa, e senza questa
+          serie il referral era l'unico codice che non cambiava sconto
+          cambiando il pagamento. */}
+      <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
+      <FasceDiSpesa
+        senzaWoo
+        valore={fasceReferralContanti}
+        onCambia={(v) => setFasceReferralContanti(gruppiFasceValidi(v))}
+        prodottiShop={prodottiShop} isMobile={isMobile}
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4, marginBottom: 18 }}>
+        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: referralContantiUgualiACarta ? MUTED : "#2E7D32" }}>
+          {referralContantiUgualiACarta
+            ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo."
+            : "Serie salvata: il POS la applica quando il referral si usa pagando in contanti o con buono Amazon."}
+        </span>
+        {!referralContantiUgualiACarta && <Button variant="ghost" onClick={() => setFasceReferralContanti([])}>Rimetti uguali a carta e shop</Button>}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
+        <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Riscrivo…" : "Applica ai codici personali esistenti"}</Button>
+        <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
+          I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce sui codici personali delle master, nell'app e sul sito. Restano fuori quelli legati a certe categorie o a certi prodotti — need30 e simili: lì la percentuale è stata scelta a mano e non si tocca.
+        </span>
+        {msgCodiciPersonali && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciPersonali.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciPersonali}</span>}
+      </div>
+    </div>
+  );
+}
+
 function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
   const { ordine: ordineClassifica, cambiaOrdine: cambiaOrdineClassifica, ordina: ordinaClassifica } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
@@ -38870,7 +38966,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   // poco a chiunque lo venda, e una percentuale per persona voleva dire
   // due strade per la stessa cosa, con meta' dei codici fatti in un modo
   // e meta' nell'altro.
-  const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  // Le fasce le disegna e le salva SchedaFasceReferralPersonale qui
+  // sotto: stessa impostazione condivisa, quindi questa lettura si
+  // aggiorna da sola appena di la' si tocca un numero.
+  const [regolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   // La serie della carta, ed e' giusto cosi': questo pannello scrive il
   // coupon su WooCommerce, e il sito non incassa contanti. La serie dei
   // contanti vale solo al banco, dove la applica il POS.
@@ -39219,12 +39318,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                 come alternativa voleva dire due strade per la stessa
                 cosa, con la meta' dei codici fatti in un modo e l'altra
                 meta' nell'altro. */}
-            {/* la stessa tabella di Punti master, non una a riga sola:
-                scrivono sulla stessa impostazione */}
-            <FasceDiSpesa
-              valore={regolaReferralMaster?.fasce}
-              onCambia={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: gruppiFasceValidi(f) })}
-              prodottiShop={prodottiShop} isMobile={isMobile}
+            {/* le due tabelle arrivate qui da Gestione punti: si salvano
+                da sole, numero per numero */}
+            <SchedaFasceReferralPersonale
+              prodottiShop={prodottiShop} coupon={coupon} ricarica={ricarica} isMobile={isMobile}
             />
             {masterOrdinate.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master trovata.</div>
@@ -50425,7 +50522,10 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     ? fasceCartaSalvate
     : (regoleReferralAutomatico ? gruppiFasceValidi(regoleReferralAutomatico.fasce_sconto) : null);
   const [fasceContantiSalvate] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
-  const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  // Come le fasce dei corsi: si REGOLANO in Genera coupon → Genera
+  // referral code, qui si leggono per sapere quanto sconto ha fatto il
+  // codice personale su ogni vendita.
+  const [regolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   // gli scaglioni dei punti needling: si salvano appena si tocca un numero,
   // come le fasce dei contanti. Nessun tasto da premere, nessun numero perso
   const [puntiNeedlingSalvati, salvaPuntiNeedling] = useImpostazioneCondivisa(CHIAVE_PUNTI_NEEDLING, PUNTI_NEEDLING_DEFAULT);
@@ -50443,49 +50543,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     prossimo[campo][indice] = n;
     salvaPuntiNeedling(prossimo);
   };
-  // La seconda serie del referral: contanti e buono Amazon. Vuota vuol
-  // dire "uguale a quella della carta", come per i corsi
-  const [fasceReferralContanti, setFasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
-  const referralContantiUgualiACarta = !serieScontoScritta(fasceReferralContanti);
-  // Le fasce del referral personale si salvano fra le impostazioni, ma i
-  // codici gia' emessi portano la LORO regola, copiata quando sono nati:
-  // i 17 codici delle master erano rimasti al 15% fisso mentre qui si
-  // regolavano le fasce. Questo tasto riscrive la regola su tutti i
-  // codici personali, nel database e sul sito
-  const [applicandoAiCodici, setApplicandoAiCodici] = useState(false);
-  const [msgCodiciPersonali, setMsgCodiciPersonali] = useState("");
-  async function applicaFasceAiCodiciPersonali() {
-    // la riga di base: sul coupon e sul sito viaggia quella, le fasce di
-    // spesa le applica il POS che il carrello ce l'ha
-    const fasce = fasceScontoValide(gruppiFasceValidi(regolaReferralMaster?.fasce).gruppi[0]);
-    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && codiceSuTuttoIlCatalogo(c));
-    if (personali.length === 0) { setMsgCodiciPersonali("Nessun codice personale da aggiornare."); return; }
-    // una pressione sola, e il conto vero: vedi la gemella qui sopra
-    setApplicandoAiCodici(true);
-    setMsgCodiciPersonali(`Riscrivo le regole di oggi su ${personali.length} codici personali…`);
-    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
-    const { data: riscritti, error } = await supabase.from("coupon")
-      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
-      .in("id", personali.map((c) => c.id))
-      .select("id");
-    if (error) { setApplicandoAiCodici(false); setMsgCodiciPersonali("Errore: " + testoErrore(error)); return; }
-    if (!riscritti || riscritti.length === 0) {
-      setApplicandoAiCodici(false);
-      setMsgCodiciPersonali("Errore: il database non ha cambiato nessuna riga. I codici sono rimasti come prima.");
-      return;
-    }
-    let sito = 0; const falliti = [];
-    const conSito = personali.filter((x) => x.woo_coupon_id);
-    for (const c of conSito) {
-      setMsgCodiciPersonali(`Riscritti ${riscritti.length} codici nell'app. Ora il sito: ${sito + falliti.length} di ${conSito.length}…`);
-      const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: c.id, aggiornaRegola: true } });
-      if (erroreSito || data?.errore) falliti.push(c.codice); else sito += 1;
-    }
-    setApplicandoAiCodici(false);
-    setMsgCodiciPersonali(`Fatto: ${riscritti.length} codici personali riscritti nell'app e ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
-    ricarica(["coupon"]);
-  }
-
+  const [fasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
 
   async function salvaFinestra() {
     if (!form?.data_inizio || !form?.data_fine) { setMsg("Indica sia la data di inizio sia quella di fine della raccolta."); return; }
@@ -50653,47 +50711,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto con il referral personale</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Stesse quattro fasce di spesa del codice d'aula — che ora si regolano in Genera coupon → Generazione automatica — e <b style={{ color: NAVY }}>due serie</b> come lì: una per carta e shop, una per i contanti e il buono Amazon incassati al banco. Si salva appena la cambi.
-          </div>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop</div>
-          <FasceDiSpesa
-            valore={regolaReferralMaster?.fasce}
-            onCambia={(f) => setRegolaReferralMaster({ tipo: "fasce", fasce: gruppiFasceValidi(f) })}
-            prodottiShop={prodottiShop} isMobile={isMobile}
-          />
-          <div style={{ marginBottom: 18 }} />
-          {/* La seconda serie, rimessa il 19/09/2026. Era stata tolta il
-              17/09 con la motivazione che "una master non incassa
-              contanti": i contanti al banco li incassa, e senza questa
-              serie il referral era l'unico codice che non cambiava sconto
-              cambiando il pagamento. */}
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
-          <FasceDiSpesa
-            senzaWoo
-            valore={fasceReferralContanti}
-            onCambia={(v) => setFasceReferralContanti(gruppiFasceValidi(v))}
-            prodottiShop={prodottiShop} isMobile={isMobile}
-          />
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4, marginBottom: 18 }}>
-            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: referralContantiUgualiACarta ? MUTED : "#2E7D32" }}>
-              {referralContantiUgualiACarta
-                ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo."
-                : "Serie salvata: il POS la applica quando il referral si usa pagando in contanti o con buono Amazon."}
-            </span>
-            {!referralContantiUgualiACarta && <Button variant="ghost" onClick={() => setFasceReferralContanti([])}>Rimetti uguali a carta e shop</Button>}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
-            <Button onClick={applicaFasceAiCodiciPersonali} disabled={applicandoAiCodici}>{applicandoAiCodici ? "Riscrivo…" : "Applica ai codici personali esistenti"}</Button>
-            <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
-              I codici già emessi portano la regola con cui sono nati: questo tasto riscrive queste fasce sui codici personali delle master, nell'app e sul sito. Restano fuori quelli legati a certe categorie o a certi prodotti — need30 e simili: lì la percentuale è stata scelta a mano e non si tocca.
-            </span>
-            {msgCodiciPersonali && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciPersonali.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciPersonali}</span>}
           </div>
         </div>
 
