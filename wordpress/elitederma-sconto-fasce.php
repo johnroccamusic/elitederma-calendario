@@ -258,34 +258,51 @@ endif;
  * sta — `_ed_ordine_cat_<id della categoria>` — e qui, quando il cliente
  * apre quell'elenco, si ordina per quel campo.
  *
- * Chi non ce l'ha scritto finisce in fondo invece che in testa: un
- * prodotto nuovo non deve scavalcare quelli messi in ordine a mano.
- * Fuori dalle pagine di categoria non si tocca niente: li' comanda
- * "menu_order", come sempre.
+ * Si tocca la query SQL invece di passare da "orderby", e per due ragioni
+ * che abbiamo imparato provando:
+ *
+ *  - WooCommerce decide l'ordine del catalogo DOPO pre_get_posts, nel suo
+ *    get_catalog_ordering_args, e quello che si scrive prima lo sovrascrive
+ *    lui. Il primo tentativo era li' e non comandava niente: l'archivio
+ *    continuava a seguire menu_order.
+ *  - un ordinamento per meta_key normale farebbe SPARIRE i prodotti che
+ *    quel campo non ce l'hanno. Con la giunzione a sinistra restano, e
+ *    finiscono in fondo: un prodotto nuovo non deve scavalcare quelli
+ *    messi in ordine a mano, ma nemmeno sparire dalla vetrina.
+ *
+ * Fuori dalle pagine di categoria non si tocca niente, e se il cliente
+ * sceglie lui un ordinamento — prezzo, novita' — comanda la sua scelta.
  */
-add_action( 'pre_get_posts', 'elitederma_ordine_per_categoria', 20 );
+add_filter( 'posts_clauses', 'elitederma_ordine_per_categoria', 20, 2 );
 
 if ( ! function_exists( 'elitederma_ordine_per_categoria' ) ) :
-function elitederma_ordine_per_categoria( $query ) {
-	if ( is_admin() || ! $query->is_main_query() || ! is_product_category() ) {
-		return;
-	}
-	// Se il cliente ha scelto lui un ordinamento — prezzo, novita',
-	// popolarita' — comanda la sua scelta, non la nostra vetrina.
-	$scelto = isset( $_GET['orderby'] ) ? sanitize_text_field( wp_unslash( $_GET['orderby'] ) ) : '';
-	if ( '' !== $scelto && 'menu_order' !== $scelto ) {
-		return;
-	}
-	$termine = get_queried_object();
-	if ( ! $termine || ! isset( $termine->term_id ) ) {
-		return;
-	}
-	$chiave = '_ed_ordine_cat_' . (int) $termine->term_id;
-	$query->set( 'meta_query', array(
-		'relation' => 'OR',
-		'ed_posizione'    => array( 'key' => $chiave, 'type' => 'NUMERIC', 'compare' => 'EXISTS' ),
-		'ed_senza_posizione' => array( 'key' => $chiave, 'compare' => 'NOT EXISTS' ),
-	) );
-	$query->set( 'orderby', array( 'ed_posizione' => 'ASC', 'menu_order' => 'ASC', 'title' => 'ASC' ) );
+function elitederma_ordine_per_categoria( $clausole, $query ) {
+    if ( is_admin() || ! is_a( $query, 'WP_Query' ) || ! $query->is_main_query() ) {
+        return $clausole;
+    }
+    if ( ! $query->is_tax( 'product_cat' ) ) {
+        return $clausole;
+    }
+    // Se il cliente ha scelto lui un ordinamento — prezzo, novita',
+    // popolarita' — comanda la sua scelta, non la nostra vetrina.
+    $scelto = isset( $_GET['orderby'] ) ? sanitize_text_field( wp_unslash( $_GET['orderby'] ) ) : '';
+    if ( '' !== $scelto && 'menu_order' !== $scelto ) {
+        return $clausole;
+    }
+    $termine = $query->get_queried_object();
+    if ( ! $termine || ! isset( $termine->term_id ) ) {
+        return $clausole;
+    }
+
+    global $wpdb;
+    $chiave = '_ed_ordine_cat_' . (int) $termine->term_id;
+    $clausole['join'] .= $wpdb->prepare(
+        " LEFT JOIN {$wpdb->postmeta} AS ed_ordine ON ( ed_ordine.post_id = {$wpdb->posts}.ID AND ed_ordine.meta_key = %s ) ",
+        $chiave
+    );
+    // 999999 e' "non ha una posizione": in fondo, e fra loro si ordinano
+    // come faceva WooCommerce prima che questo file esistesse.
+    $clausole['orderby'] = " COALESCE( CAST( ed_ordine.meta_value AS UNSIGNED ), 999999 ) ASC, {$wpdb->posts}.menu_order ASC, {$wpdb->posts}.post_title ASC ";
+    return $clausole;
 }
 endif;
