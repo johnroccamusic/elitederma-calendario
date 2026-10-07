@@ -39011,7 +39011,36 @@ function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, c
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
   const [generando, setGenerando] = useState(false);
-  const [fasceNeedlingCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_NEEDLING_CARTA, null);
+  const [fasceNeedlingCarta, salvaNeedlingCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_NEEDLING_CARTA, null);
+  const [, salvaNeedlingContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_NEEDLING_CONTANTI, []);
+  // le tabelle degli altri corsi: servono a partire da li' invece che da
+  // zero. Una serie nuova nasce con la riga di base sola, e la riga di
+  // base spalmata su quattro fasce di spesa e' una tabella piatta —
+  // sembra scritta, ma la spesa non conta piu' niente.
+  const [fasceCorsiCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+  const [fasceCorsiContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const [copiando, setCopiando] = useState(false);
+  const sePuoCopiare = serieScontoScritta(fasceCorsiCarta);
+  async function copiaDaiCorsi() {
+    if (!sePuoCopiare) return;
+    setCopiando(true); setMsg("");
+    const carta = gruppiFasceValidi(fasceCorsiCarta);
+    salvaNeedlingCarta(carta);
+    // la serie dei contanti si copia solo se di la' e' scritta: vuota
+    // vuol dire "uguale a carta", ed e' giusto che resti vuota anche qui
+    salvaNeedlingContanti(serieScontoScritta(fasceCorsiContanti) ? gruppiFasceValidi(fasceCorsiContanti) : []);
+    let errore = null;
+    if (regoleNeedling?.id) {
+      const { error } = await supabase.from("regole_referral_automatico")
+        .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasceScontoValide(carta.gruppi[0]), aggiornato_ts: new Date().toISOString() })
+        .eq("id", regoleNeedling.id);
+      errore = error || null;
+    }
+    setCopiando(false);
+    if (errore) { setMsg("Errore: " + testoErrore(errore)); return; }
+    setMsg("Fasce copiate dai corsi normali: da qui si cambiano solo per il needling.");
+    ricarica(["regole_referral_automatico"]);
+  }
   useEffect(() => { if (regoleNeedling && !form) setForm(regoleNeedling); }, [regoleNeedling]);
 
   const quantiCorsi = (corsi || []).filter((c) => eCorsoNeedling(c.nome)).length;
@@ -39062,6 +39091,16 @@ function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, c
         Un corso entra in questa serie se si chiama <b style={{ color: NAVY }}>needling</b>:
         oggi sono {quantiCorsi === 1 ? "1 corso" : `${quantiCorsi} corsi`} e {edizioniFuture === 1 ? "1 edizione ancora da finire" : `${edizioniFuture} edizioni ancora da finire`}.
       </div>
+
+      {sePuoCopiare && (
+        <div style={{ ...cardStyle, marginBottom: 22, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "14px 18px" }}>
+          <Button variant="ghost" onClick={copiaDaiCorsi} disabled={copiando}>{copiando ? "Copio…" : "Copia le fasce dai corsi normali"}</Button>
+          <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 260px", lineHeight: 1.45 }}>
+            Ricopia qui le due tabelle di <b>Generazione automatica</b>, soglie comprese, e poi le si cambia
+            solo dove serve. Sovrascrive quello che c'è adesso in questa sezione; i codici già emessi non si toccano.
+          </span>
+        </div>
+      )}
 
       <SchedaFasceCodiceAula
         serie="needling"
