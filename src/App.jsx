@@ -38592,6 +38592,10 @@ function SchedaFasceCodiceAula({
   regoleReferralAutomatico, prodottiShop, coupon, corsiDate, corsi, ricarica, isMobile,
   serie = "corsi", chiaveCarta = CHIAVE_FASCE_CORSI_CARTA, chiaveContanti = CHIAVE_FASCE_CORSI_CONTANTI,
   titolo = "Sconto ai corsi, con il codice d'aula",
+  // Da dove si puo' ricopiare una tabella gia' fatta. Una serie nuova
+  // nasce vuota, e riscrivere a mano ventiquattro numeri per poi
+  // cambiarne due e' il modo migliore per sbagliarne uno.
+  copiaDa = null, onCopiaCarta = null, onCopiaContanti = null, copiando = false,
 }) {
   const [fasceCartaSalvate, salvaFasceCarta] = useImpostazioneCondivisa(chiaveCarta, null);
   const fasceCorso = serieScontoScritta(fasceCartaSalvate)
@@ -38742,7 +38746,16 @@ function SchedaFasceCodiceAula({
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
       ) : (
         <>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop online</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carta e shop online</div>
+            {onCopiaCarta && (
+              <button onClick={onCopiaCarta} disabled={copiando}
+                title={`Ricopia qui questa tabella come sta in ${copiaDa}, soglie comprese. Poi la cambi solo dove serve.`}
+                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "3px 11px", cursor: copiando ? "default" : "pointer" }}>
+                {copiando ? "Copio…" : `Copia da ${copiaDa}`}
+              </button>
+            )}
+          </div>
           <FasceDiSpesa valore={fasceCorso} onCambia={cambiaFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
             <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
@@ -38764,7 +38777,16 @@ function SchedaFasceCodiceAula({
             </span>
             {msgCodiciCorsi && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciCorsi.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciCorsi}</span>}
           </div>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6 }}>Contanti o buono Amazon dal POS dell'app</div>
+            {onCopiaContanti && (
+              <button onClick={onCopiaContanti} disabled={copiando}
+                title={`Ricopia qui la serie dei contanti come sta in ${copiaDa}. Se di là è vuota — cioè uguale a carta e shop — resta vuota anche qui.`}
+                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", background: "none", border: "1px solid #EBD9AE", borderRadius: 20, padding: "3px 11px", cursor: copiando ? "default" : "pointer" }}>
+                {copiando ? "Copio…" : `Copia da ${copiaDa}`}
+              </button>
+            )}
+          </div>
           <FasceDiSpesa senzaWoo valore={fasceContantiCorso} onCambia={(v) => salvaFasceContanti(v)} prodottiShop={prodottiShop} isMobile={isMobile} />
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: contantiUgualiACarta ? MUTED : "#2E7D32" }}>
@@ -39021,14 +39043,15 @@ function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, c
   const [fasceCorsiContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const [copiando, setCopiando] = useState(false);
   const sePuoCopiare = serieScontoScritta(fasceCorsiCarta);
-  async function copiaDaiCorsi() {
+  // Copiare la tabella della carta vuol dire anche riscrivere la riga di
+  // base sulla regola della serie: e' quella che viaggia sul coupon e che
+  // leggono il sito e il cron. Senza, il sito resterebbe alle percentuali
+  // di prima mentre il banco applica le nuove.
+  async function copiaCartaDaiCorsi() {
     if (!sePuoCopiare) return;
     setCopiando(true); setMsg("");
     const carta = gruppiFasceValidi(fasceCorsiCarta);
     salvaNeedlingCarta(carta);
-    // la serie dei contanti si copia solo se di la' e' scritta: vuota
-    // vuol dire "uguale a carta", ed e' giusto che resti vuota anche qui
-    salvaNeedlingContanti(serieScontoScritta(fasceCorsiContanti) ? gruppiFasceValidi(fasceCorsiContanti) : []);
     let errore = null;
     if (regoleNeedling?.id) {
       const { error } = await supabase.from("regole_referral_automatico")
@@ -39038,8 +39061,18 @@ function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, c
     }
     setCopiando(false);
     if (errore) { setMsg("Errore: " + testoErrore(errore)); return; }
-    setMsg("Fasce copiate dai corsi normali: da qui si cambiano solo per il needling.");
+    setMsg("Carta e shop copiate dai corsi generici: da qui si cambiano solo per il needling.");
     ricarica(["regole_referral_automatico"]);
+  }
+  // La serie dei contanti si copia solo se di la' e' scritta: vuota vuol
+  // dire "uguale a carta e shop", ed e' giusto che resti vuota anche qui
+  function copiaContantiDaiCorsi() {
+    setMsg("");
+    const scritta = serieScontoScritta(fasceCorsiContanti);
+    salvaNeedlingContanti(scritta ? gruppiFasceValidi(fasceCorsiContanti) : []);
+    setMsg(scritta
+      ? "Contanti copiati dai corsi generici."
+      : "Sui corsi generici i contanti sono uguali a carta e shop: qui sono stati rimessi uguali anche loro.");
   }
   useEffect(() => { if (regoleNeedling && !form) setForm(regoleNeedling); }, [regoleNeedling]);
 
@@ -39092,18 +39125,12 @@ function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, c
         oggi sono {quantiCorsi === 1 ? "1 corso" : `${quantiCorsi} corsi`} e {edizioniFuture === 1 ? "1 edizione ancora da finire" : `${edizioniFuture} edizioni ancora da finire`}.
       </div>
 
-      {sePuoCopiare && (
-        <div style={{ ...cardStyle, marginBottom: 22, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "14px 18px" }}>
-          <Button variant="ghost" onClick={copiaDaiCorsi} disabled={copiando}>{copiando ? "Copio…" : "Copia le fasce dai corsi normali"}</Button>
-          <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 260px", lineHeight: 1.45 }}>
-            Ricopia qui le due tabelle di <b>Generazione automatica</b>, soglie comprese, e poi le si cambia
-            solo dove serve. Sovrascrive quello che c'è adesso in questa sezione; i codici già emessi non si toccano.
-          </span>
-        </div>
-      )}
-
       <SchedaFasceCodiceAula
         serie="needling"
+        copiaDa="corsi generici"
+        onCopiaCarta={sePuoCopiare ? copiaCartaDaiCorsi : null}
+        onCopiaContanti={sePuoCopiare ? copiaContantiDaiCorsi : null}
+        copiando={copiando}
         chiaveCarta={CHIAVE_FASCE_NEEDLING_CARTA}
         chiaveContanti={CHIAVE_FASCE_NEEDLING_CONTANTI}
         titolo="Sconto ai corsi di needling, con il codice d'aula"
