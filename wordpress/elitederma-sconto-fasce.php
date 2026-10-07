@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Elitederma — Sconto a fasce
+ * Plugin Name: Elitederma - Sconto a fasce
  * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. I prodotti del reparto Needling hanno invece una tabella loro, a scaglioni di spesa e sul prezzo netto. I coupon di acquisto delle master cedono una quota di quello che su ogni pezzo si puo' cedere. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
  * Version: 1.3
  * Author: Elitederma
@@ -16,9 +16,9 @@
 // righe, non si potrebbe.
 //
 // Come funziona, in due pezzi che arrivano entrambi dal gestionale:
-//   - su ogni PRODOTTO c'e' un campo nascosto `_ed_margine_pct`, quanto
+//   - su ogni PRODOTTO c'e' un campo nascosto _ed_margine_pct, quanto
 //     rende quel prodotto in percentuale;
-//   - sul COUPON c'e' un campo nascosto `_ed_fasce_sconto`, le fasce con
+//   - sul COUPON c'e' un campo nascosto _ed_fasce_sconto, le fasce con
 //     la loro percentuale.
 // Qui si mette insieme: si guarda quanto rende il prodotto, si trova la
 // sua fascia, si applica quella percentuale.
@@ -41,7 +41,7 @@ add_filter( 'woocommerce_coupon_get_discount_amount', 'elitederma_sconto_a_fasce
 // accende uno snippet lo esegue DUE volte nella stessa richiesta, una
 // per controllarlo e una per attivarlo, e alla seconda la funzione
 // risulta gia' dichiarata. Senza questa riga lo snippet non si accende.
-if ( ! function_exists( 'elitederma_sconto_a_fasce' ) ) :
+if ( ! function_exists( 'elitederma_sconto_a_fasce' ) ) {
 function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrello, $singolo, $coupon ) {
 
 	// "fixed_cart" sconta il carrello intero e non ha una riga: li' non
@@ -68,12 +68,12 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 	// ---- CASO M: IL LISTINO DELLE MASTER ----
 	//
 	// Una master non compra per rivendere: compra per se'. Le si cede una
-	// FETTA di quello che su quel pezzo si potrebbe cedere — il massimo e'
+	// FETTA di quello che su quel pezzo si potrebbe cedere - il massimo e'
 	// il prezzo del rivenditore, che il rischio del magazzino se lo prende.
 	//
 	// Sul prodotto il gestionale scrive quanti euro si possono cedere
-	// (`_ed_cedibile_eur`, netti, per pezzo) e in quale reparto sta
-	// (`_ed_blocco`). Sul coupon viaggia solo la quota: una generale e, se
+	// (_ed_cedibile_eur, netti, per pezzo) e in quale reparto sta
+	// (_ed_blocco). Sul coupon viaggia solo la quota: una generale e, se
 	// c'e', una diversa per reparto. Cosi' cambiare la quota non obbliga a
 	// riscrivere trecento prodotti, e il conto e' lo stesso che fa il POS.
 	//
@@ -88,7 +88,7 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 		$pct = isset( $quota['generale'] ) ? (float) $quota['generale'] : 0.0;
 		$blocco = elitederma_meta_prodotto( $prodotto, '_ed_blocco' );
 		// La quota del reparto vince su quella generale. Zero e' una
-		// quota vera — "qui non si sconta" — e si distingue da "non
+		// quota vera - "qui non si sconta" - e si distingue da "non
 		// scritta", che e' la chiave che non c'e'.
 		if ( '' !== $blocco && isset( $quota['reparti'] ) && is_array( $quota['reparti'] ) && array_key_exists( $blocco, $quota['reparti'] ) ) {
 			$pct = (float) $quota['reparti'][ $blocco ];
@@ -172,7 +172,7 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 	$margine = elitederma_meta_prodotto( $prodotto, '_ed_margine_pct' );
 
 	// Margine sconosciuto: niente sconto su questa riga. E' la stessa
-	// regola del banco — non si regala qualcosa di cui non si sa quanto
+	// regola del banco - non si regala qualcosa di cui non si sa quanto
 	// vale.
 	if ( '' === $margine ) {
 		return 0.0;
@@ -196,7 +196,7 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 
 	return round( (float) $importo_da_scontare * $percentuale / 100, wc_get_rounding_precision() );
 }
-endif;
+}
 
 /**
  * Il prodotto appartiene al reparto Needling?
@@ -207,19 +207,19 @@ endif;
  * cambia in un posto solo. Su una variante si guarda il padre, che e'
  * dove stanno le categorie.
  */
-if ( ! function_exists( 'elitederma_e_needling' ) ) :
+if ( ! function_exists( 'elitederma_e_needling' ) ) {
 function elitederma_e_needling( $prodotto ) {
 	$id = $prodotto->get_parent_id() ? $prodotto->get_parent_id() : $prodotto->get_id();
 	return has_term( ELITEDERMA_CATEGORIA_NEEDLING, 'product_cat', $id );
 }
-endif;
+}
 
 /**
  * Legge un campo del prodotto guardando prima la variante e poi il
  * prodotto padre: su un prodotto con varianti il dato puo' stare
  * sull'una o sull'altro.
  */
-if ( ! function_exists( 'elitederma_meta_prodotto' ) ) :
+if ( ! function_exists( 'elitederma_meta_prodotto' ) ) {
 function elitederma_meta_prodotto( $prodotto, $chiave ) {
 	$valore = $prodotto->get_meta( $chiave );
 	if ( '' === $valore || null === $valore ) {
@@ -230,21 +230,21 @@ function elitederma_meta_prodotto( $prodotto, $chiave ) {
 	}
 	return ( null === $valore ) ? '' : (string) $valore;
 }
-endif;
+}
 
 // In pagina carrello, accanto al coupon, una riga che spiega perche' lo
 // sconto non e' "il 10% di tutto": chi compra deve poter capire il
 // totale che gli viene chiesto.
 add_filter( 'woocommerce_cart_totals_coupon_label', 'elitederma_etichetta_coupon_fasce', 10, 2 );
 
-if ( ! function_exists( 'elitederma_etichetta_coupon_fasce' ) ) :
+if ( ! function_exists( 'elitederma_etichetta_coupon_fasce' ) ) {
 function elitederma_etichetta_coupon_fasce( $etichetta, $coupon ) {
 	if ( $coupon->get_meta( '_ed_fasce_sconto' ) || '' !== (string) $coupon->get_meta( '_ed_sconto_margine_pct' ) || $coupon->get_meta( '_ed_needling' ) || $coupon->get_meta( '_ed_quota_master' ) ) {
-		$etichetta .= ' — sconto variabile per prodotto';
+		$etichetta .= ' - sconto variabile per prodotto';
 	}
 	return $etichetta;
 }
-endif;
+}
 
 /**
  * L'ordine dei prodotti DENTRO una categoria.
@@ -255,7 +255,7 @@ endif;
  * su quasi meta' dei prodotti.
  *
  * Il gestionale scrive su ogni prodotto un campo per ogni categoria in cui
- * sta — `_ed_ordine_cat_<id della categoria>` — e qui, quando il cliente
+ * sta - _ed_ordine_cat_<id della categoria> - e qui, quando il cliente
  * apre quell'elenco, si ordina per quel campo.
  *
  * Si tocca la query SQL invece di passare da "orderby", e per due ragioni
@@ -271,11 +271,11 @@ endif;
  *    messi in ordine a mano, ma nemmeno sparire dalla vetrina.
  *
  * Fuori dalle pagine di categoria non si tocca niente, e se il cliente
- * sceglie lui un ordinamento — prezzo, novita' — comanda la sua scelta.
+ * sceglie lui un ordinamento - prezzo, novita' - comanda la sua scelta.
  */
 add_filter( 'posts_clauses', 'elitederma_ordine_per_categoria', 20, 2 );
 
-if ( ! function_exists( 'elitederma_ordine_per_categoria' ) ) :
+if ( ! function_exists( 'elitederma_ordine_per_categoria' ) ) {
 function elitederma_ordine_per_categoria( $clausole, $query ) {
     if ( is_admin() || ! is_a( $query, 'WP_Query' ) || ! $query->is_main_query() ) {
         return $clausole;
@@ -283,8 +283,8 @@ function elitederma_ordine_per_categoria( $clausole, $query ) {
     if ( ! $query->is_tax( 'product_cat' ) ) {
         return $clausole;
     }
-    // Se il cliente ha scelto lui un ordinamento — prezzo, novita',
-    // popolarita' — comanda la sua scelta, non la nostra vetrina.
+    // Se il cliente ha scelto lui un ordinamento - prezzo, novita',
+    // popolarita' - comanda la sua scelta, non la nostra vetrina.
     $scelto = isset( $_GET['orderby'] ) ? sanitize_text_field( wp_unslash( $_GET['orderby'] ) ) : '';
     if ( '' !== $scelto && 'menu_order' !== $scelto ) {
         return $clausole;
@@ -305,4 +305,4 @@ function elitederma_ordine_per_categoria( $clausole, $query ) {
     $clausole['orderby'] = " COALESCE( CAST( ed_ordine.meta_value AS UNSIGNED ), 999999 ) ASC, {$wpdb->posts}.menu_order ASC, {$wpdb->posts}.post_title ASC ";
     return $clausole;
 }
-endif;
+}
