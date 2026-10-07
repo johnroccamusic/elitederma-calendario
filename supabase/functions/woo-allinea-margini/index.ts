@@ -1,7 +1,10 @@
 // Edge Function "woo-allinea-margini"
 //
 // Scrive su OGNI prodotto di WooCommerce quanto rende, in percentuale,
-// in un campo nascosto: `_ed_margine_pct`.
+// in un campo nascosto: `_ed_margine_pct`. E accanto, dall'08/10/2026,
+// quanti euro di quel pezzo si possono cedere (`_ed_cedibile_eur`) e in
+// quale reparto del listino sta (`_ed_blocco`): sono i due numeri su cui
+// si regge il listino delle master.
 //
 // Serve allo sconto a fasce. Un coupon di WooCommerce ha una percentuale
 // sola per tutto il carrello: non sa scontare il 5% su un prodotto e il
@@ -41,6 +44,17 @@ Deno.serve(async (req) => {
   const secret = Deno.env.get("WC_CONSUMER_SECRET_WRITE");
   if (!siteUrl || !key || !secret) return json({ errore: "Configurazione WooCommerce (scrittura) mancante" }, 500);
 
+  // Il listino: da li' arrivano lo sconto massimo di ogni prodotto e il
+  // reparto a cui appartiene. Sono i due numeri che servono al listino
+  // delle master, e vengono dalla view perche' la' dentro c'e' gia'
+  // tutto — riduzioni di reparto comprese — e una seconda formula qui
+  // comincerebbe a divergere dal giorno dopo.
+  const { data: listino } = await supabase
+    .from("v_prezzi_listini")
+    .select("id, blocco_ordine, pubblico_netto, sconto_max_pct");
+  const perId: Record<string, any> = {};
+  (listino || []).forEach((r: any) => { perId[r.id] = r; });
+
   const { data: prodotti, error } = await supabase
     .from("prodotti_shop")
     .select("id, nome, woo_product_id, prezzo_vendita, costo_acquisto")
@@ -64,11 +78,26 @@ Deno.serve(async (req) => {
     // Ricavarli dal prezzo in carrello vorrebbe dire sapere l'aliquota
     // riga per riga; scritti qui, il sito non deve calcolare niente.
     const margineEuro = noto ? String(Math.round((netto - Number(costo)) * 100) / 100) : "";
+    // Per il listino delle master: quanti euro di questo pezzo si
+    // POSSONO cedere, e in quale reparto sta.
+    //
+    // Si scrive il cedibile, non lo sconto della master, per la stessa
+    // ragione per cui sopra si scrive il margine e non la fascia:
+    // cambiare la quota non deve obbligare a riscrivere trecento
+    // prodotti. La quota viaggia sul coupon, e il reparto serve al sito
+    // per sapere quale quota applicare quando un reparto ha la sua.
+    const l = perId[p.id];
+    const cedibilePct = l?.sconto_max_pct;
+    const nettoListino = Number(l?.pubblico_netto);
+    const cedibileEuro = cedibilePct != null && nettoListino > 0
+      ? String(Math.round(nettoListino * Number(cedibilePct)) / 100) : "";
     return {
       id: p.woo_product_id,
       meta_data: [
         { key: "_ed_margine_pct", value: margine },
         { key: "_ed_margine_eur", value: margineEuro },
+        { key: "_ed_cedibile_eur", value: cedibileEuro },
+        { key: "_ed_blocco", value: l?.blocco_ordine != null ? String(l.blocco_ordine) : "" },
       ],
     };
   });

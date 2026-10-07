@@ -187,8 +187,19 @@ export function quotaMasterDi(quota, bloccoOrdine) {
 export function prezzoMasterDi(r, quotaPct) {
   const max = r?.sconto_max_pct;
   const netto = Number(r?.pubblico_netto);
-  if (max == null || !(netto > 0)) return { pct: null, prezzo: null, risparmio: null };
-  const pct = Math.round(Number(max) * (Number(quotaPct) || 0)) / 100;
-  const prezzo = Math.round(netto * (1 - pct / 100) * 100) / 100;
-  return { pct, prezzo, risparmio: Math.round((netto - prezzo) * 100) / 100 };
+  if (max == null || !(netto > 0)) return { pct: null, prezzo: null, risparmio: null, cedibile: null };
+  // Si parte dagli EURO cedibili, non dalla percentuale.
+  //
+  // E' lo stesso numero che l'allineamento scrive su ogni prodotto di
+  // WooCommerce (`_ed_cedibile_eur`), e il sito fa esattamente questa
+  // moltiplicazione. Arrotondare prima la percentuale — 31,5 x 33,5% =
+  // 10,5525, letto 10,55 — spostava fino a due centesimi sui prodotti
+  // cari: il banco e il sito dicevano due prezzi diversi sulla stessa
+  // riga. Partendo dagli euro la differenza non puo' nascere.
+  const cedibile = Math.round(netto * Number(max)) / 100;
+  const sconto = Math.round(cedibile * (Number(quotaPct) || 0)) / 100;
+  const prezzo = Math.round((netto - sconto) * 100) / 100;
+  // la percentuale serve a leggersi, non a calcolare: si ricava indietro
+  const pct = Math.round((sconto / netto) * 10000) / 100;
+  return { pct, prezzo, risparmio: sconto, cedibile };
 }

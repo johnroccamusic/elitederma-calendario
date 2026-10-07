@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Elitederma — Sconto a fasce
- * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. I prodotti del reparto Needling hanno invece una tabella loro, a scaglioni di spesa e sul prezzo netto. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
+ * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. I prodotti del reparto Needling hanno invece una tabella loro, a scaglioni di spesa e sul prezzo netto. I coupon di acquisto delle master cedono una quota di quello che su ogni pezzo si puo' cedere. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
  * Version: 1.2
  * Author: Elitederma
  */
@@ -54,15 +54,53 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 	$fasce_grezze    = $coupon->get_meta( '_ed_fasce_sconto' );
 	$pct_sul_margine = $coupon->get_meta( '_ed_sconto_margine_pct' );
 	$needling_grezzo = $coupon->get_meta( '_ed_needling' );
+	$quota_master    = $coupon->get_meta( '_ed_quota_master' );
 
 	// Nessuno dei tre contrassegni: non e' un coupon dell'accademia, o e'
 	// una normale percentuale sul prezzo. Si lascia fare a WooCommerce,
 	// esattamente come prima che questo file esistesse.
-	if ( empty( $fasce_grezze ) && '' === (string) $pct_sul_margine && empty( $needling_grezzo ) ) {
+	if ( empty( $fasce_grezze ) && '' === (string) $pct_sul_margine && empty( $needling_grezzo ) && empty( $quota_master ) ) {
 		return $sconto;
 	}
 
 	$prodotto = $riga_carrello['data'];
+
+	// ---- CASO M: IL LISTINO DELLE MASTER ----
+	//
+	// Una master non compra per rivendere: compra per se'. Le si cede una
+	// FETTA di quello che su quel pezzo si potrebbe cedere — il massimo e'
+	// il prezzo del rivenditore, che il rischio del magazzino se lo prende.
+	//
+	// Sul prodotto il gestionale scrive quanti euro si possono cedere
+	// (`_ed_cedibile_eur`, netti, per pezzo) e in quale reparto sta
+	// (`_ed_blocco`). Sul coupon viaggia solo la quota: una generale e, se
+	// c'e', una diversa per reparto. Cosi' cambiare la quota non obbliga a
+	// riscrivere trecento prodotti, e il conto e' lo stesso che fa il POS.
+	//
+	// Gli euro sono gia' netti: non si tocca l'IVA, come nel caso del
+	// margine qui sotto.
+	if ( ! empty( $quota_master ) ) {
+		$quota = json_decode( $quota_master, true );
+		$cedibile = elitederma_meta_prodotto( $prodotto, '_ed_cedibile_eur' );
+		if ( '' === $cedibile ) {
+			return 0.0; // non si sa quanto si puo' cedere: non si sconta
+		}
+		$pct = isset( $quota['generale'] ) ? (float) $quota['generale'] : 0.0;
+		$blocco = elitederma_meta_prodotto( $prodotto, '_ed_blocco' );
+		// La quota del reparto vince su quella generale. Zero e' una
+		// quota vera — "qui non si sconta" — e si distingue da "non
+		// scritta", che e' la chiave che non c'e'.
+		if ( '' !== $blocco && isset( $quota['reparti'] ) && is_array( $quota['reparti'] ) && array_key_exists( $blocco, $quota['reparti'] ) ) {
+			$pct = (float) $quota['reparti'][ $blocco ];
+		}
+		if ( $pct <= 0 ) {
+			return 0.0;
+		}
+		$quantita = isset( $riga_carrello['quantity'] ) ? (int) $riga_carrello['quantity'] : 1;
+		$pezzi    = $singolo ? 1 : max( 1, $quantita );
+		$importo  = (float) $cedibile * $pct / 100 * $pezzi;
+		return round( min( $importo, (float) $importo_da_scontare ), wc_get_rounding_precision() );
+	}
 
 	// ---- CASO 0: NEEDLING, che ha una tabella sua ----
 	//
@@ -201,7 +239,7 @@ add_filter( 'woocommerce_cart_totals_coupon_label', 'elitederma_etichetta_coupon
 
 if ( ! function_exists( 'elitederma_etichetta_coupon_fasce' ) ) :
 function elitederma_etichetta_coupon_fasce( $etichetta, $coupon ) {
-	if ( $coupon->get_meta( '_ed_fasce_sconto' ) || '' !== (string) $coupon->get_meta( '_ed_sconto_margine_pct' ) || $coupon->get_meta( '_ed_needling' ) ) {
+	if ( $coupon->get_meta( '_ed_fasce_sconto' ) || '' !== (string) $coupon->get_meta( '_ed_sconto_margine_pct' ) || $coupon->get_meta( '_ed_needling' ) || $coupon->get_meta( '_ed_quota_master' ) ) {
 		$etichetta .= ' — sconto variabile per prodotto';
 	}
 	return $etichetta;
