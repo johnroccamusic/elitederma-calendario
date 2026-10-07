@@ -137,3 +137,58 @@ export function scaricaCsv(testo, nomeFile) {
   // senza revoke il blob resta in memoria finché non si chiude la pagina
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// ---------- Il listino delle master ----------
+//
+// Alle master non si cede il massimo: quello e' il prezzo del
+// rivenditore, che compra per rivendere e si prende il rischio del
+// magazzino. Alla master si cede una FETTA di quel massimo, decisa qui.
+//
+// Una quota generale, e se serve una diversa per reparto: sui pigmenti si
+// puo' essere piu' larghi che sui dermografi. Il conto resta quello della
+// view — sconto massimo per prodotto — e qui si decide solo quanta parte
+// di quello spazio si regala.
+export const CHIAVE_QUOTA_MASTER = "listino_master_quota";
+export const QUOTA_MASTER_DEFAULT = 50;
+
+export async function leggiQuotaMaster() {
+  const { data, error } = await supabase.from("impostazioni_layout_tabelle")
+    .select("valore").eq("chiave", CHIAVE_QUOTA_MASTER).maybeSingle();
+  if (error || !data?.valore || typeof data.valore !== "object") return { generale: QUOTA_MASTER_DEFAULT, reparti: {} };
+  const v = data.valore;
+  return {
+    generale: Number.isFinite(Number(v.generale)) ? Number(v.generale) : QUOTA_MASTER_DEFAULT,
+    reparti: v.reparti && typeof v.reparti === "object" ? v.reparti : {},
+  };
+}
+
+export async function salvaQuotaMaster(quota) {
+  const { error } = await supabase.from("impostazioni_layout_tabelle")
+    .upsert({ chiave: CHIAVE_QUOTA_MASTER, valore: quota, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
+  if (error) throw error;
+}
+
+// La quota che vale su un reparto: la sua se c'e' scritta, altrimenti
+// quella generale. Zero e' una quota valida — vuol dire "niente sconto" —
+// quindi si distingue da "non scritta", che e' null o stringa vuota.
+export function quotaMasterDi(quota, bloccoOrdine) {
+  const sua = quota?.reparti?.[bloccoOrdine];
+  const n = Number(sua);
+  if (sua != null && sua !== "" && Number.isFinite(n) && n >= 0) return n;
+  const g = Number(quota?.generale);
+  return Number.isFinite(g) && g >= 0 ? g : QUOTA_MASTER_DEFAULT;
+}
+
+// Lo sconto e il prezzo di una master su un prodotto.
+//
+// La percentuale si legge sul prezzo NETTO, come lo sconto massimo e come
+// il prezzo rivenditore: e' la stessa base, altrimenti due righe della
+// stessa tabella direbbero due cose diverse.
+export function prezzoMasterDi(r, quotaPct) {
+  const max = r?.sconto_max_pct;
+  const netto = Number(r?.pubblico_netto);
+  if (max == null || !(netto > 0)) return { pct: null, prezzo: null, risparmio: null };
+  const pct = Math.round(Number(max) * (Number(quotaPct) || 0)) / 100;
+  const prezzo = Math.round(netto * (1 - pct / 100) * 100) / 100;
+  return { pct, prezzo, risparmio: Math.round((netto - prezzo) * 100) / 100 };
+}

@@ -11,7 +11,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, MUTED, GOLD, FAMIGLIA_STRETTA, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
-import { leggiListino, csvListino, scaricaCsv, salvaPuntiProdotto, salvaRiduzioneReparto, BLOCCHI, motivoSenzaSconto, leggiRepartiEsclusi, salvaRepartiEsclusi } from "./dati.js";
+import { leggiListino, csvListino, scaricaCsv, salvaPuntiProdotto, salvaRiduzioneReparto, BLOCCHI, motivoSenzaSconto, leggiRepartiEsclusi, salvaRepartiEsclusi, leggiQuotaMaster, salvaQuotaMaster, quotaMasterDi, prezzoMasterDi, QUOTA_MASTER_DEFAULT } from "./dati.js";
 import { creaListinoPdf, scaricaPdf } from "./listinoPdf.js";
 import { iconaDelBlocco } from "./icone.jsx";
 
@@ -22,6 +22,11 @@ const cifra = (n) => (n == null ? "—" : Number(n).toFixed(2).replace(".", ",")
 // le percentuali ora hanno il mezzo punto: 30 resta "30", 29,5 resta
 // "29,5", e la coda di zeri del numeric non arriva mai in pagina
 const pct = (n) => (n == null ? "—" : String(Math.round(Number(n) * 10) / 10).replace(".", ","));
+// La quota delle master fa spesso mezzi centesimi di punto — il 50% di
+// 31,5 e' 15,75 — e arrotondarla a un decimale fa sballare il conto a chi
+// lo rifa' a mano: 15,8 su 36,80 non da' 31,00. Qui i due decimali si
+// tengono, e gli zeri in coda no.
+const pct2 = (n) => (n == null ? "—" : String(Math.round(Number(n) * 100) / 100).replace(".", ","));
 const ROSSO = "#C0392B";
 
 // `privato` accende le colonne che non si mostrano a nessuno fuori:
@@ -44,6 +49,37 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
   // invece di restare fuori perche' nessuno si e' ricordato di accenderlo.
   const [repartiEsclusi, setRepartiEsclusi] = useState([]);
   useEffect(() => { leggiRepartiEsclusi().then(setRepartiEsclusi); }, []);
+  // Due listini sugli stessi numeri: quello dei rivenditori, che e' lo
+  // sconto massimo, e quello delle master, che e' una fetta di quello.
+  // Non sono due tabelle: e' la stessa, con due colonne che cambiano —
+  // due tabelle sugli stessi prezzi finirebbero per divergere.
+  const [listino, setListino] = useState("rivenditori"); // rivenditori | master
+  const perMaster = listino === "master";
+  const [quota, setQuota] = useState({ generale: QUOTA_MASTER_DEFAULT, reparti: {} });
+  const [bozzaQuota, setBozzaQuota] = useState({});
+  useEffect(() => { leggiQuotaMaster().then(setQuota); }, []);
+  async function scriviQuota(prossima) {
+    setQuota(prossima);
+    try { await salvaQuotaMaster(prossima); }
+    catch (e) { setErrore(`La quota delle master non e' stata salvata: ${e?.message || e}`); }
+  }
+  // Vuoto cancella la quota del reparto e lo rimette su quella generale:
+  // e' la differenza fra "qui zero sconto" e "qui vale la regola comune",
+  // e senza quella differenza non si puo' tornare indietro.
+  function salvaQuotaReparto(n) {
+    const testo = bozzaQuota[n];
+    setBozzaQuota((x) => { const c = { ...x }; delete c[n]; return c; });
+    if (testo === undefined) return;
+    const pulito = String(testo).replace(",", ".").trim();
+    const reparti = { ...(quota.reparti || {}) };
+    if (pulito === "") delete reparti[n];
+    else {
+      const v = Number(pulito);
+      if (!Number.isFinite(v) || v < 0 || v > 100) return;
+      reparti[n] = v;
+    }
+    scriviQuota({ ...quota, reparti });
+  }
   const escluso = (n) => repartiEsclusi.includes(n);
   async function cambiaReparto(n, acceso) {
     const nuovo = acceso ? repartiEsclusi.filter((x) => x !== n) : [...new Set([...repartiEsclusi, n])];
@@ -317,12 +353,62 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
               ))}
             </select>
           )}
+          <div style={{ display: "inline-flex", background: BG, borderRadius: 20, padding: 3, flexShrink: 0 }}>
+            {[{ v: "rivenditori", l: "Rivenditori" }, { v: "master", l: "Master" }].map((t) => (
+              <button key={t.v} onClick={() => setListino(t.v)}
+                title={t.v === "master"
+                  ? "Quanto paga una master: una fetta dello sconto massimo, non tutto"
+                  : "Quanto paga un rivenditore: lo sconto massimo concedibile"}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 18, border: "none",
+                  background: listino === t.v ? NAVY : "transparent", color: listino === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                {t.l}
+              </button>
+            ))}
+          </div>
           <Button variant="ghost" onClick={esporta} disabled={visibili.length === 0} style={{ fontSize: 13, padding: "8px 14px" }}>Esporta CSV</Button>
           <Button onClick={creaListino} disabled={perIlPdf.length === 0 || !!creandoPdf} style={{ fontSize: 13, padding: "8px 14px" }}
             title={perIlPdf.length === 0 ? "Nessun reparto acceso: non c'e' niente da mettere nel listino" : `${perIlPdf.length} prodotti in ${repartiNelPdf} repart${repartiNelPdf === 1 ? "o" : "i"}`}>
             {creandoPdf ? `Creo il listino… ${creandoPdf.fatti}/${creandoPdf.quanti}` : "Crea listino"}
           </Button>
         </div>
+
+        {perMaster && (
+          <div style={{ background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 14, padding: "12px 16px", marginBottom: 14,
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ ...fontBody, fontSize: 13, color: "#8A6D1D", lineHeight: 1.5, flex: "1 1 280px", minWidth: 0 }}>
+              Alle master si cede una <b style={{ color: NAVY }}>parte</b> dello sconto massimo, non tutto: il massimo è il prezzo
+              del rivenditore, che compra per rivendere e si prende il rischio del magazzino. Scrivi qui quanta parte,
+              e ogni prodotto si ricalcola da sé. Un reparto può averne una sua: la si scrive accanto al suo nome.
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                le master prendono il
+              </span>
+              <input
+                value={bozzaQuota.generale ?? String(quota.generale).replace(".", ",")}
+                onChange={(e) => setBozzaQuota((x) => ({ ...x, generale: e.target.value }))}
+                onFocus={(e) => e.target.select()}
+                onBlur={() => {
+                  const testo = bozzaQuota.generale;
+                  setBozzaQuota((x) => { const c = { ...x }; delete c.generale; return c; });
+                  if (testo === undefined) return;
+                  const v = Number(String(testo).replace(",", ".").trim());
+                  if (!Number.isFinite(v) || v < 0 || v > 100) return;
+                  scriviQuota({ ...quota, generale: v });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") { setBozzaQuota((x) => { const c = { ...x }; delete c.generale; return c; }); e.currentTarget.blur(); }
+                }}
+                inputMode="decimal"
+                style={{ ...fontBody, width: 64, textAlign: "center", fontSize: 16, fontWeight: 800, color: NAVY,
+                  background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "7px 8px", outline: "none" }}
+              />
+              <span style={{ ...fontBody, fontSize: 14, fontWeight: 800, color: NAVY }}>%</span>
+              <span style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D" }}>dello sconto massimo</span>
+            </div>
+          </div>
+        )}
 
         {esitoPdf && (
           <div style={{ ...fontBody, fontSize: 13, color: "#2E7D32", background: "#EDF7EE", border: "1px solid #C7E3CB", borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -351,7 +437,36 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
                     reparto: nove su un 29% fanno 20%. Il calcolo dice
                     quanto si POTREBBE cedere, questa casella dice quanto
                     si vuole cedere davvero */}
-                {privato && (() => {
+                {perMaster && (() => {
+                  const sua = quota.reparti?.[b.n];
+                  const scritta = sua != null && sua !== "";
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
+                      title={`Quanta parte dello sconto massimo prendono le master su "${b.nome}". Vuoto = vale la quota generale (${pct(quota.generale)}%).`}>
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        master
+                      </span>
+                      <input
+                        value={bozzaQuota[b.n] ?? (scritta ? String(sua).replace(".", ",") : "")}
+                        onChange={(e) => setBozzaQuota((x) => ({ ...x, [b.n]: e.target.value }))}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={() => salvaQuotaReparto(b.n)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                          if (e.key === "Escape") { setBozzaQuota((x) => { const c = { ...x }; delete c[b.n]; return c; }); e.currentTarget.blur(); }
+                        }}
+                        inputMode="decimal"
+                        placeholder={String(quota.generale).replace(".", ",")}
+                        style={{ ...fontBody, width: 46, textAlign: "center", fontSize: 13.5, fontWeight: 800,
+                          color: scritta ? "#2E7D32" : NAVY, background: scritta ? "#EDF7EE" : "#fff",
+                          border: `1px solid ${scritta ? "#C7E3CB" : CREAM_BORDER}`, borderRadius: 10,
+                          padding: "5px 6px", outline: "none" }}
+                      />
+                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 800, color: scritta ? "#2E7D32" : MUTED }}>%</span>
+                    </div>
+                  );
+                })()}
+                {privato && !perMaster && (() => {
                   const attuale = b.prodotti.find((r) => r.riduzione_reparto != null)?.riduzione_reparto ?? 0;
                   const acceso = Number(attuale) > 0;
                   return (
@@ -418,14 +533,16 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
                       {privato && <th className="lst-costo">{"prezzo\nacquisto"}</th>}
                       <th>{"pubbl.\nlordo"}</th>
                       <th>{"pubbl.\nnetto"}</th>
-                      <th>{"sconto\nmax"}</th>
-                      <th>{"prezzo\nrivend."}</th>
+                      <th>{perMaster ? "sconto\nmaster" : "sconto\nmax"}</th>
+                      <th>{perMaster ? "prezzo\nmaster" : "prezzo\nrivend."}</th>
                       {privato && <><th>{"sconto\nin euro"}</th><th>{"punti\nprodotto"}</th></>}
                     </tr>
                   </thead>
                   <tbody>
                     {b.prodotti.map((r) => {
                       const manca = r.sconto_max_pct == null;
+                      const quotaRiga = quotaMasterDi(quota, b.n);
+                      const master = prezzoMasterDi(r, quotaRiga);
                       return (
                         // la scheda del prodotto si apre dalla foto e dal
                         // nome, non da tutta la riga: con i numeri cliccabili
@@ -433,7 +550,11 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
                         // altrove, e la casella della master non si poteva
                         // nemmeno mettere a fuoco
                         <tr key={r.id} className={manca ? "lst-manca" : undefined}
-                          title={manca ? motivoSenzaSconto(r) : `Scontando il ${String(r.sconto_max_pct).replace(".", ",")}% il rivenditore paga ${euro(r.prezzo_rivenditore)}. Costo della merce ${euro(r.costo_acquisto)}.`}>
+                          title={manca
+                            ? motivoSenzaSconto(r)
+                            : (perMaster
+                              ? `Scontando il ${pct2(master.pct)}% la master paga ${euro(master.prezzo)}. Il massimo cedibile è ${pct(r.sconto_max_pct)}%, cioè ${euro(r.prezzo_rivenditore)}.`
+                              : `Scontando il ${String(r.sconto_max_pct).replace(".", ",")}% il rivenditore paga ${euro(r.prezzo_rivenditore)}. Costo della merce ${euro(r.costo_acquisto)}.`)}>
                           <td className="lst-foto"
                             onClick={() => onApriProdotto && onApriProdotto(r.id)}
                             style={{ cursor: onApriProdotto ? "pointer" : "default" }}>
@@ -460,7 +581,7 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
                           {privato && <td className="lst-costo" data-eti="acq.">{cifra(r.costo_acquisto)}</td>}
                           <td data-eti="lordo">{cifra(r.pubblico_lordo)}</td>
                           <td data-eti="netto">{cifra(r.pubblico_netto)}</td>
-                          <td data-eti="sconto">
+                          <td data-eti={perMaster ? "master" : "sconto"}>
                             {manca ? (
                               <span className="lst-manca-eti" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>costo mancante</span>
                             ) : (
@@ -469,13 +590,18 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
                                  il 5% e' una scelta commerciale, non un
                                  numero calcolato */
                               <span
-                                title={r.sconto_forzato
-                                  ? `Forzato al 5%. Il calcolo dava ${pct(r.sconto_esatto_pct ?? 0)}%: su questo prodotto il margine non basta a dividere il guadagno a metà, quindi il 5% lo stai cedendo e basta.`
-                                  : undefined}
-                                style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: r.sconto_forzato ? ROSSO : "#8A6D1D", background: r.sconto_forzato ? "#FBEBE9" : "#F6EFE2", borderRadius: 999, padding: "4px 10px" }}>{pct(r.sconto_max_pct)}%</span>
+                                title={perMaster
+                                  ? `Il ${pct(quotaRiga)}% dello sconto massimo (${pct(r.sconto_max_pct)}%) fa ${pct2(master.pct)}%: la master paga ${euro(master.prezzo)} invece di ${euro(r.pubblico_netto)}, cioè ${euro(master.risparmio)} in meno a pezzo.`
+                                  : (r.sconto_forzato
+                                    ? `Forzato al 5%. Il calcolo dava ${pct(r.sconto_esatto_pct ?? 0)}%: su questo prodotto il margine non basta a dividere il guadagno a metà, quindi il 5% lo stai cedendo e basta.`
+                                    : undefined)}
+                                style={{ ...fontBody, fontSize: 12, fontWeight: 800,
+                                  color: perMaster ? "#2E7D32" : (r.sconto_forzato ? ROSSO : "#8A6D1D"),
+                                  background: perMaster ? "#EDF7EE" : (r.sconto_forzato ? "#FBEBE9" : "#F6EFE2"),
+                                  borderRadius: 999, padding: "4px 10px" }}>{perMaster ? pct2(master.pct) : pct(r.sconto_max_pct)}%</span>
                             )}
                           </td>
-                          <td className="lst-riv" data-eti="paga">{cifra(r.prezzo_rivenditore)}</td>
+                          <td className="lst-riv" data-eti={perMaster ? "paga" : "paga"}>{cifra(perMaster ? master.prezzo : r.prezzo_rivenditore)}</td>
                           {privato && (
                             <>
                               {/* quanto gli stai lasciando, in soldi: la
