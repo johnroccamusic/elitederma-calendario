@@ -2,8 +2,7 @@
 //
 // Una pagina per leggere, non per consultare: i prodotti divisi per
 // reparto, nello stesso ordine del menu del sito, ognuno con la sua foto,
-// il prezzo al pubblico, lo sconto riservato e quello che paga il
-// rivenditore.
+// il prezzo al pubblico e quello che paga il rivenditore.
 //
 // Si costruisce nel browser come tutti gli altri PDF dell'app. L'unica
 // cosa che passa dal server sono le foto: stanno sul sito, e il sito non
@@ -200,9 +199,12 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
   const xFoto = MARGINE;
   const xNome = MARGINE + LATO_FOTO + 10;
   const destraPagina = A4.larghezza - MARGINE;
+  // Due colonne, non tre. Lo sconto in percentuale c'era e se n'e' andato
+  // l'08/10/2026: a chi compra interessa quanto paga, e una percentuale
+  // scritta accanto al prezzo e' un invito a contrattare su quella invece
+  // che sul prezzo. Resta nel listino dentro l'app, dove serve a decidere.
   const colonne = [
-    { titolo: "Prezzo al pubblico", destra: destraPagina - 232 },
-    { titolo: "Sconto", destra: destraPagina - 132 },
+    { titolo: "Prezzo al pubblico", destra: destraPagina - 160 },
     { titolo: "Prezzo rivenditore", destra: destraPagina },
   ];
   const larghezzaNome = colonne[0].destra - 92 - xNome;
