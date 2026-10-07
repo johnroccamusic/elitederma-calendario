@@ -109,9 +109,18 @@ Deno.serve(async (req) => {
   // La tabella degli sconti needling viaggia con il coupon come le fasce:
   // il frammento la legge da li' e, sui prodotti di quel reparto, usa
   // quella invece delle fasce. Le due non si sommano mai.
-  const { data: rigaNeedling } = await supabase
-    .from("impostazioni_layout_tabelle").select("valore").eq("chiave", "scontoNeedling_scaglioni").maybeSingle();
-  const needling = rigaNeedling?.valore ?? null;
+  //
+  // Dall'08/10/2026 parte SOLO con i codici dei corsi di needling. Prima
+  // partiva con tutti, e il risultato era che un codice d'aula di un
+  // corso di extension faceva il 30% sui needling sullo shop mentre al
+  // banco non lo faceva: la stessa riga, due prezzi diversi.
+  const diSerieNeedling = riga.serie_regole === "needling";
+  let needling: any = null;
+  if (diSerieNeedling) {
+    const { data: rigaNeedling } = await supabase
+      .from("impostazioni_layout_tabelle").select("valore").eq("chiave", "scontoNeedling_scaglioni").maybeSingle();
+    needling = rigaNeedling?.valore ?? null;
+  }
   const needlingAttivo = needling && Array.isArray(needling.sconti) && needling.sconti.some((x: unknown) => Number(x) > 0);
   const metaNeedling = needlingAttivo ? [{ key: "_ed_needling", value: JSON.stringify(needling) }] : [];
 

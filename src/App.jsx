@@ -575,6 +575,29 @@ const CHIAVE_FASCE_CORSI_CONTANTI = "fasceSconto_corsi_contanti";
 // scritto e' peggio di una sbagliata: non la si va a cercare.
 const CHIAVE_PUNTI_NEEDLING = "puntiNeedling_scaglioni";
 const PUNTI_NEEDLING_DEFAULT = { soglie: [60, 120], quote: [100, 100, 100] };
+// Le fasce della serie needling: le stesse quattro righe di spesa per sei
+// scaglioni di margine degli altri corsi, ma scritte a parte. I corsi di
+// needling vendono un altro carrello e possono scontare diversamente.
+const CHIAVE_FASCE_NEEDLING_CARTA = "fasceSconto_corsiNeedling_carta";
+const CHIAVE_FASCE_NEEDLING_CONTANTI = "fasceSconto_corsiNeedling_contanti";
+// L'eccezione della serie: sui prodotti del reparto Needling non valgono
+// le fasce, vale questa tabella a scaglioni di spesa. Le percentuali sono
+// SUL NETTO, non sul lordo come le fasce, e le due non si sommano mai.
+//
+// E' la tabella che viaggia con il coupon come "_ed_needling" e che il
+// frammento elitederma-sconto-fasce.php applica sul sito. Dall'08/10/2026
+// parte SOLO con i codici dei corsi di needling: prima partiva con tutti,
+// e un codice normale faceva ancora il 30% sui needling sullo shop.
+const CHIAVE_SCONTO_NEEDLING = "scontoNeedling_scaglioni";
+const SCONTO_NEEDLING_DEFAULT = { soglie: [70, 150], sconti: [0, 0, 0] };
+function scaglioniNeedlingValidi(v, predefinito) {
+  return {
+    soglie: Array.isArray(v?.soglie) && v.soglie.length === 2 ? v.soglie : predefinito.soglie,
+    ...(predefinito.sconti
+      ? { sconti: Array.isArray(v?.sconti) && v.sconti.length === 3 ? v.sconti : predefinito.sconti }
+      : { quote: Array.isArray(v?.quote) && v.quote.length === 3 ? v.quote : predefinito.quote }),
+  };
+}
 // Lo sconto al cliente sui soli prodotti needling, a scaglioni di spesa.
 // Le percentuali sono SUL NETTO, non sul lordo come quelle delle fasce.
 // NON si somma agli sconti generali: su un prodotto needling vale questo e
@@ -4974,16 +4997,42 @@ function marginePercentualeContantiDi(prodotto) {
 // "spesa": quanto vale il carrello. Senza, si resta alla prima fascia di
 // spesa — che e' quella di chi compra poco, cioe' la piu' prudente
 
-// Niente eccezioni, oggi. Qui c'erano due cose, tolte tutte e due il
-// 7/10/2026: la tabella di sconto del needling, che valeva per ogni
-// codice, e le eccezioni per categoria scritte sul singolo codice. Lo
-// sconto di un prodotto lo decide il suo margine, e basta.
+// L'eccezione del reparto Needling, pronta da dare a percentualeFasciaDi.
 //
-// Le eccezioni torneranno, fatte in un altro modo. Quando sara', il posto
-// e' questo: percentualeFasciaDi e' il punto unico dove si sceglie lo
-// sconto di un prodotto, e insegnandolo qui vale al POS, nel conto del
-// carrello e nella percentuale scritta su WooCommerce.
-function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false) {
+// Il 7/10/2026 la tabella del needling e' stata tolta perche' valeva per
+// OGNI codice: un codice d'aula di un corso di extension faceva il 30%
+// sui needling senza che nessuno l'avesse deciso. Dall'08/10/2026 e'
+// tornata, ma appesa a una serie sola — quella dei corsi di needling — e
+// chi chiama deve dire esplicitamente che sta applicando quel codice.
+//
+// Risponde con la percentuale SUL LORDO, o null se il prodotto non e' di
+// quel reparto o la tabella e' spenta. La conversione sta qui perche' chi
+// chiama moltiplica sempre per il lordo: la tabella invece e' sul netto,
+// e trenta euro ogni cento netti non sono trenta ogni cento lordi.
+function eccezioneNeedlingDa(tabella, idNeedling) {
+  const t = scaglioniNeedlingValidi(tabella, SCONTO_NEEDLING_DEFAULT);
+  if (!t.sconti.some((x) => Number(x) > 0)) return null;
+  const insieme = idNeedling instanceof Set ? idNeedling : new Set(idNeedling || []);
+  if (insieme.size === 0) return null;
+  return (prodotto, spesa) => {
+    if (!prodotto?.id || !insieme.has(prodotto.id)) return null;
+    const pctNetto = Number(spesa < t.soglie[0] ? t.sconti[0] : (spesa < t.soglie[1] ? t.sconti[1] : t.sconti[2])) || 0;
+    if (!(pctNetto > 0)) return null;
+    const iva = Number(prodotto.aliquota_iva_vendita ?? ALIQUOTA_IVA_STANDARD) || 0;
+    return pctNetto / (1 + iva / 100);
+  };
+}
+// percentualeFasciaDi e' il punto unico dove si sceglie lo sconto di un
+// prodotto: quello che si insegna qui vale al POS, nel conto del carrello
+// e nella percentuale media scritta su WooCommerce.
+function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false, eccezioneNeedling = null) {
+  // L'eccezione viene PRIMA delle fasce e non si somma mai a loro: su un
+  // prodotto del reparto comanda quanto si e' speso in tutto il carrello,
+  // non quanto rende il prodotto. E' la stessa regola che applica il sito.
+  if (eccezioneNeedling) {
+    const pct = eccezioneNeedling(prodotto, spesa);
+    if (pct != null) return pct;
+  }
   // Lo sconto al cliente si sceglie sul MARGINE del prodotto: piu' alto
   // il margine, piu' alto lo sconto. L'incidenza dei costi NON entra qui
   // — quella serve solo ai punti. Cambia solo la base del margine: sul
@@ -4998,12 +5047,12 @@ function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false) {
   const i = FASCE_MARGINE.findIndex((f) => m <= f.a);
   return elenco[i === -1 ? elenco.length - 1 : i].percentuale;
 }
-function scontoAFasceCarrello(righe, prodottoPerId, fasce, contanti = false) {
+function scontoAFasceCarrello(righe, prodottoPerId, fasce, contanti = false, eccezioneNeedling = null) {
   // prima si somma quanto si spende, poi si sceglie la serie: la fascia
   // di spesa la decide il carrello intero, non la singola riga
   const spesa = round2((righe || []).reduce((s, r) => s + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
   return round2((righe || []).reduce((s, r) => {
-    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce, spesa, contanti);
+    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce, spesa, contanti, eccezioneNeedling);
     return s + (pct > 0 ? (r.prezzo * r.quantita * pct) / 100 : 0);
   }, 0));
 }
@@ -38512,6 +38561,22 @@ function codiceSuTuttoIlCatalogo(c) {
     && !(c.categorie_ids || []).length && !(c.prodotti_ids || []).length;
 }
 
+// Un corso di needling si riconosce dal NOME. Non dalla categoria: nel
+// database "NEEDLING" sta sotto ESTETICA insieme a laminazione, henne' e
+// extension, quindi la categoria non lo distingue da niente.
+//
+// Il prezzo di questa scelta e' che un corso rinominato esce dalla serie
+// in silenzio: oggi ce n'e' uno solo, "NEEDLING", e se un domani ne
+// nascesse un altro scritto diversamente andra' chiamato cosi' anche lui.
+function eCorsoNeedling(nome) {
+  return /needling/i.test(String(nome || ""));
+}
+// Le edizioni che sono corsi di needling, per id di corsi_date.
+function edizioniDiNeedling(corsiDate, corsi) {
+  const needling = new Set((corsi || []).filter((c) => eCorsoNeedling(c.nome)).map((c) => c.id));
+  return new Set((corsiDate || []).filter((cd) => needling.has(cd.corso_id)).map((cd) => cd.id));
+}
+
 // Le due tabelle dello sconto che il codice d'aula fa agli allievi.
 //
 // Stavano in Gestione punti e dal 07/10/2026 stanno qui, in Genera
@@ -38519,14 +38584,22 @@ function codiceSuTuttoIlCatalogo(c) {
 // resto del codice d'aula (validita', cumulabilita', utilizzi), e
 // averle in due pagine diverse voleva dire due schermate che scrivevano
 // sulla stessa impostazione senza vedersi.
-function SchedaFasceCodiceAula({ regoleReferralAutomatico, prodottiShop, coupon, corsiDate, ricarica, isMobile }) {
-  const [fasceCartaSalvate, salvaFasceCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+// Dall'08/10/2026 e' la scheda di UNA serie: quella dei corsi normali o
+// quella dei corsi di needling. Le due hanno tabelle proprie, una riga di
+// regole propria e codici propri — cambia solo da dove legge e dove
+// scrive, quindi e' lo stesso componente con due chiavi diverse.
+function SchedaFasceCodiceAula({
+  regoleReferralAutomatico, prodottiShop, coupon, corsiDate, corsi, ricarica, isMobile,
+  serie = "corsi", chiaveCarta = CHIAVE_FASCE_CORSI_CARTA, chiaveContanti = CHIAVE_FASCE_CORSI_CONTANTI,
+  titolo = "Sconto ai corsi, con il codice d'aula",
+}) {
+  const [fasceCartaSalvate, salvaFasceCarta] = useImpostazioneCondivisa(chiaveCarta, null);
   const fasceCorso = serieScontoScritta(fasceCartaSalvate)
     ? fasceCartaSalvate
     : (regoleReferralAutomatico ? gruppiFasceValidi(regoleReferralAutomatico.fasce_sconto) : null);
   // la seconda serie, per chi paga in contanti al POS dell'app: si salva
   // appena la si tocca, come il referral personale. Vuota = come la carta
-  const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(chiaveContanti, []);
   const fasceContantiCorso = fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, true);
   const contantiUgualiACarta = !serieScontoScritta(fasceContantiSalvate);
   // la percentuale dei contanti quando i codici d'aula sono a secco
@@ -38574,9 +38647,15 @@ function SchedaFasceCodiceAula({ regoleReferralAutomatico, prodottiShop, coupon,
   const fineEdizione = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd.data_fine || cd.data_inizio]));
   // Il filtro NON esclude chi ha gia' le fasce: il tasto riscrive la
   // regola di adesso, e ripeterlo non cambia niente.
+  // Ogni serie riscrive SOLO i propri codici. Un codice d'aula di un
+  // corso normale e uno di un corso di needling hanno due tabelle
+  // diverse: se il tasto di una serie toccasse i codici dell'altra,
+  // premere i due tasti in ordine diverso darebbe risultati diversi.
+  const edizioniNeedling = edizioniDiNeedling(corsiDate, corsi);
   const codiciAulaDaAggiornare = (coupon || []).filter((c) => {
     if (!c.corsi_date_id) return false;
     if (!codiceSuTuttoIlCatalogo(c)) return false;
+    if (edizioniNeedling.has(c.corsi_date_id) !== (serie === "needling")) return false;
     if (c.valido_fino_a && c.valido_fino_a < oggiCodici) return false;
     const fine = fineEdizione[c.corsi_date_id];
     return !!fine && fine >= oggiCodici;
@@ -38599,7 +38678,10 @@ function SchedaFasceCodiceAula({ regoleReferralAutomatico, prodottiShop, coupon,
     // diciotto codici mentre nel database non e' cambiato niente. Cosi' il
     // numero che si legge e' il numero delle righe cambiate davvero.
     const { data: riscritti, error } = await supabase.from("coupon")
-      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
+      // serie_regole viene scritta anche qui: i codici nati prima
+      // dell'08/10/2026 non ce l'hanno, e senza il POS non saprebbe quale
+      // delle due tabelle applicare
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo", serie_regole: serie })
       .in("id", codiciAulaDaAggiornare.map((c) => c.id))
       .select("id");
     if (error) { setApplicandoAiCorsi(false); setMsgCodiciCorsi("Errore: " + testoErrore(error)); return; }
@@ -38622,9 +38704,10 @@ function SchedaFasceCodiceAula({ regoleReferralAutomatico, prodottiShop, coupon,
 
   return (
     <div style={{ ...cardStyle, marginBottom: 22 }}>
-      <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto ai corsi, con il codice d'aula</div>
+      <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>{titolo}</div>
       <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
         Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine del prodotto: piu' alto il margine, piu' alto lo sconto. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app.
+        {serie === "needling" && <> Valgono sui corsi di <b style={{ color: NAVY }}>needling</b>, e su quelli soltanto.</>}
       </div>
       {/* Dal 22/09/2026 i codici d'aula possono stare a percentuale
           fissa invece che a fasce. Questa tabella resta scritta e
@@ -38670,7 +38753,7 @@ function SchedaFasceCodiceAula({ regoleReferralAutomatico, prodottiShop, coupon,
               sono nati */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
             <Button variant="ghost" onClick={applicaFasceAiCodiciAula} disabled={applicandoAiCorsi || codiciAulaDaAggiornare.length === 0}>
-              {applicandoAiCorsi ? "Riscrivo…" : `Applica ai codici d'aula esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
+              {applicandoAiCorsi ? "Riscrivo…" : `Applica ai codici ${serie === "needling" ? "needling" : "d'aula"} esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
             </Button>
             <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
               I codici già emessi portano la regola con cui sono nati — i più vecchi uno sconto fisso.
@@ -38791,7 +38874,211 @@ function SchedaFasceReferralPersonale({ prodottiShop, coupon, ricarica, isMobile
   );
 }
 
-function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
+// Tre scaglioni di spesa e due soglie: la forma che hanno sia l'eccezione
+// di sconto del reparto Needling sia la quota dei punti che arriva alla
+// master. Stessa tabella, due significati, quindi un componente solo con
+// la chiave e l'etichetta che cambiano.
+//
+// Si salva da se' a ogni numero toccato, come le fasce: uno stato locale
+// riempito una volta sola perderebbe i numeri scritti e non lo direbbe.
+function SchedaScaglioniNeedling({ chiave, predefinito, campo, titolo, spiegazione, suffisso, isMobile }) {
+  const [salvati, salva] = useImpostazioneCondivisa(chiave, predefinito);
+  const valori = scaglioniNeedlingValidi(salvati, predefinito);
+  const cambia = (quale, indice, testo) => {
+    const pulito = String(testo).replace(",", ".").trim();
+    const n = pulito === "" ? 0 : Number(pulito);
+    if (!Number.isFinite(n) || n < 0) return;
+    const prossimo = { soglie: [...valori.soglie], [campo]: [...valori[campo]] };
+    prossimo[quale][indice] = n;
+    salva(prossimo);
+  };
+  return (
+    <div style={{ ...cardStyle, marginBottom: 22 }}>
+      <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>{titolo}</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 14 }}>{spiegazione}</div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
+        {[0, 1, 2].map((i) => {
+          const da = i === 0 ? 0 : valori.soglie[i - 1];
+          const a = i < 2 ? valori.soglie[i] : null;
+          const etichetta = i === 0
+            ? `Sotto ${fmtEuroErp2(valori.soglie[0])}`
+            : a != null ? `Da ${fmtEuroErp2(da)} a meno di ${fmtEuroErp2(a)}` : `Da ${fmtEuroErp2(da)} in su`;
+          return (
+            <div key={i} style={{ background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "12px 14px" }}>
+              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, marginBottom: 8, lineHeight: 1.3 }}>{etichetta}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  type="number" min="0" max="100" step="1"
+                  value={valori[campo][i]}
+                  onChange={(e) => cambia(campo, i, e.target.value)}
+                  style={{ ...inputStyle, width: 86, textAlign: "center", fontWeight: 800, fontSize: 16, padding: "8px 10px" }}
+                />
+                <span style={{ ...fontBody, fontSize: 14, fontWeight: 800, color: NAVY }}>%</span>
+                <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{suffisso}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie</span>
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>prima a</span>
+        <input type="number" min="0" step="1" value={valori.soglie[0]}
+          onChange={(e) => cambia("soglie", 0, e.target.value)}
+          style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€ poi a</span>
+        <input type="number" min="0" step="1" value={valori.soglie[1]}
+          onChange={(e) => cambia("soglie", 1, e.target.value)}
+          style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€</span>
+        <span style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700, flexBasis: "100%", marginTop: 4 }}>
+          Si salva da sé a ogni numero toccato.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// La linguetta "Generazione automatica codici needling".
+//
+// E' la gemella di "Generazione automatica", con due differenze che sono
+// tutta la ragione per cui esiste:
+//  - le fasce sono sue, scritte su chiavi proprie: un corso di needling
+//    vende un altro carrello e puo' scontare diversamente;
+//  - c'e' l'ECCEZIONE del reparto Needling, che sugli altri corsi non
+//    vale piu'. Sui prodotti di quel reparto non comanda il margine:
+//    comanda quella tabella, a scaglioni di spesa e sul netto.
+//
+// Da qui in avanti le edizioni dei corsi che si chiamano "needling"
+// prendono il loro codice da questa sezione, non dall'altra.
+function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, corsiDate, ricarica, isMobile }) {
+  const [form, setForm] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [generando, setGenerando] = useState(false);
+  const [fasceNeedlingCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_NEEDLING_CARTA, null);
+  useEffect(() => { if (regoleNeedling && !form) setForm(regoleNeedling); }, [regoleNeedling]);
+
+  const quantiCorsi = (corsi || []).filter((c) => eCorsoNeedling(c.nome)).length;
+  const edizioniFuture = (() => {
+    const edizioni = edizioniDiNeedling(corsiDate, corsi);
+    const oggi = dataOggiStr();
+    return (corsiDate || []).filter((cd) => edizioni.has(cd.id) && (cd.data_fine || cd.data_inizio) >= oggi).length;
+  })();
+
+  async function salvaRegole() {
+    if (!form?.id) return;
+    setSalvando(true); setMsg("");
+    const { error } = await supabase.from("regole_referral_automatico").update({
+      tipo_regola_sconto: "fasce",
+      // la sola riga di base, come la leggono il sito e il cron: viene
+      // dalla tabella condivisa quando c'e' scritta, non da questo modulo
+      fasce_sconto: fasceScontoValide(serieScontoScritta(fasceNeedlingCarta) ? gruppiFasceValidi(fasceNeedlingCarta).gruppi[0] : form.fasce_sconto),
+      giorni_validita_dopo_corso: Number(form.giorni_validita_dopo_corso) || 0,
+      valido_durante_corso: !!form.valido_durante_corso,
+      non_cumulabile: !!form.non_cumulabile,
+      utilizzi_max: form.utilizzi_max === "" || form.utilizzi_max == null ? null : Number(form.utilizzi_max),
+      utilizzi_max_per_cliente: form.utilizzi_max_per_cliente === "" || form.utilizzi_max_per_cliente == null ? null : Number(form.utilizzi_max_per_cliente),
+      spesa_minima: form.spesa_minima === "" || form.spesa_minima == null ? null : parseNum(form.spesa_minima),
+      aggiornato_ts: new Date().toISOString(),
+    }).eq("id", form.id);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg("Regole dei codici needling salvate.");
+    ricarica(["regole_referral_automatico"]);
+  }
+  async function generaCodiciOggi() {
+    setGenerando(true); setMsg("");
+    const { data, error } = await supabase.functions.invoke("genera-referral-automatico", { body: {} });
+    setGenerando(false);
+    if (error || data?.errore) { setMsg("Errore: " + (data?.errore || error.message)); return; }
+    setMsg(`Fatto: ${data?.creati ?? 0} codici generati (tutte le serie).`);
+    ricarica(["coupon"]);
+  }
+
+  return (
+    <div>
+      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16, lineHeight: 1.55 }}>
+        Le regole dei codici che nascono quando comincia un <b style={{ color: NAVY }}>corso di needling</b>.
+        Funzionano come quelle degli altri corsi — stesse quattro fasce di spesa per sei scaglioni di margine,
+        carta/shop e contanti — con in più l'eccezione sul reparto Needling: su quei prodotti non comanda
+        il margine, comanda la tabella a scaglioni qui sotto, e le due non si sommano mai.
+        <br />
+        Un corso entra in questa serie se si chiama <b style={{ color: NAVY }}>needling</b>:
+        oggi sono {quantiCorsi === 1 ? "1 corso" : `${quantiCorsi} corsi`} e {edizioniFuture === 1 ? "1 edizione ancora da finire" : `${edizioniFuture} edizioni ancora da finire`}.
+      </div>
+
+      <SchedaFasceCodiceAula
+        serie="needling"
+        chiaveCarta={CHIAVE_FASCE_NEEDLING_CARTA}
+        chiaveContanti={CHIAVE_FASCE_NEEDLING_CONTANTI}
+        titolo="Sconto ai corsi di needling, con il codice d'aula"
+        regoleReferralAutomatico={regoleNeedling} prodottiShop={prodottiShop}
+        coupon={coupon} corsiDate={corsiDate} corsi={corsi} ricarica={ricarica} isMobile={isMobile}
+      />
+
+      <SchedaScaglioniNeedling
+        chiave={CHIAVE_SCONTO_NEEDLING} predefinito={SCONTO_NEEDLING_DEFAULT} campo="sconti"
+        titolo="Eccezione: i prodotti del reparto Needling"
+        suffisso="di sconto"
+        isMobile={isMobile}
+        spiegazione={<>
+          Sui prodotti della categoria <b>Needling</b> le fasce qui sopra non valgono: lo sconto lo decide
+          questa tabella, e lo scaglione lo sceglie <b>quanto si è speso</b> in tutto il carrello, non quanto
+          rende il prodotto. Le percentuali sono <b>sul prezzo netto</b> — il 30% sono trenta euro ogni cento
+          netti — mentre le fasce sono sul lordo. Le due non si sommano mai.
+          <br />
+          Zero su uno scaglione vuol dire nessuno sconto lì. Questa tabella viaggia con il codice fino al sito:
+          la applica anche lo shop, non solo il banco.
+        </>}
+      />
+
+      <SchedaScaglioniNeedling
+        chiave={CHIAVE_PUNTI_NEEDLING} predefinito={PUNTI_NEEDLING_DEFAULT} campo="quote"
+        titolo="Punti assegnati con prodotti Needling"
+        suffisso="dei punti"
+        isMobile={isMobile}
+        spiegazione={<>
+          Quanta parte dei punti di un prodotto <b>needling</b> arriva davvero alla master, secondo quanto
+          si è speso in quel carrello. Non tocca il prezzo e non è uno sconto al cliente: il prodotto vale
+          sempre i suoi punti, questa tabella dice quanti gliene restano. Le soglie si leggono sul totale
+          del carrello a listino, come nelle fasce qui sopra.
+        </>}
+      />
+
+      {!form ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
+      ) : (
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 12 }}>Come nasce il codice</div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 220px" }}><Field label="Validità dopo la fine del corso (giorni)"><input type="number" min="0" style={inputStyle} value={form.giorni_validita_dopo_corso} onChange={(e) => setForm({ ...form, giorni_validita_dopo_corso: e.target.value })} /></Field></div>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+            <input type="checkbox" checked={!!form.valido_durante_corso} onChange={(e) => setForm({ ...form, valido_durante_corso: e.target.checked })} style={{ width: 15, height: 15 }} />
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Valido già durante il corso (non solo dopo la fine)</span>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+            <input type="checkbox" checked={!!form.non_cumulabile} onChange={(e) => setForm({ ...form, non_cumulabile: e.target.checked })} style={{ width: 15, height: 15 }} />
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Non cumulabile con altri coupon</span>
+          </label>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 150px" }}><Field label="Utilizzi massimi"><input type="number" min="0" style={inputStyle} value={form.utilizzi_max ?? ""} onChange={(e) => setForm({ ...form, utilizzi_max: e.target.value })} placeholder="Illimitati" /></Field></div>
+            <div style={{ flex: "1 1 150px" }}><Field label="Utilizzi max per cliente"><input type="number" min="0" style={inputStyle} value={form.utilizzi_max_per_cliente ?? ""} onChange={(e) => setForm({ ...form, utilizzi_max_per_cliente: e.target.value })} placeholder="Illimitati" /></Field></div>
+            <div style={{ flex: "1 1 150px" }}><Field label="Spesa minima (€)"><input type="number" min="0" step="0.01" style={inputStyle} value={form.spesa_minima ?? ""} onChange={(e) => setForm({ ...form, spesa_minima: e.target.value })} placeholder="Nessuna" /></Field></div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <Button onClick={salvaRegole} disabled={salvando}>{salvando ? "Salvo…" : "Salva regole"}</Button>
+            <Button variant="ghost" onClick={generaCodiciOggi} disabled={generando}>{generando ? "Genero…" : "Genera i codici di oggi"}</Button>
+            {msg && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msg.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msg}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, regoleReferralNeedling, venditeShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
   const { ordine: ordineClassifica, cambiaOrdine: cambiaOrdineClassifica, ordina: ordinaClassifica } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("manuale");
@@ -39181,7 +39468,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "referral", l: "Genera referral code" }].map((t) => (
+          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "needling", l: "Generazione automatica codici needling" }, { v: "referral", l: "Genera referral code" }].map((t) => (
             <button key={t.v} onClick={() => { setTab(t.v); setMsg(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 18, border: "none", background: tab === t.v ? NAVY : BG, color: tab === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
               {t.l}
             </button>
@@ -39307,6 +39594,13 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         </>
         )}
 
+        {tab === "needling" && (
+          <PannelloCodiciNeedling
+            regoleNeedling={regoleReferralNeedling} prodottiShop={prodottiShop}
+            coupon={coupon} corsi={corsi} corsiDate={corsiDate} ricarica={ricarica} isMobile={isMobile}
+          />
+        )}
+
         {tab === "referral" && (
           <div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
@@ -39371,7 +39665,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                 tasto "Salva regole" qui sotto */}
             <SchedaFasceCodiceAula
               regoleReferralAutomatico={regoleReferralAutomatico} prodottiShop={prodottiShop}
-              coupon={coupon} corsiDate={corsiDate} ricarica={ricarica} isMobile={isMobile}
+              coupon={coupon} corsiDate={corsiDate} corsi={corsi} ricarica={ricarica} isMobile={isMobile}
             />
             {!regoleForm ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
@@ -50526,23 +50820,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // referral code, qui si leggono per sapere quanto sconto ha fatto il
   // codice personale su ogni vendita.
   const [regolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
-  // gli scaglioni dei punti needling: si salvano appena si tocca un numero,
-  // come le fasce dei contanti. Nessun tasto da premere, nessun numero perso
-  const [puntiNeedlingSalvati, salvaPuntiNeedling] = useImpostazioneCondivisa(CHIAVE_PUNTI_NEEDLING, PUNTI_NEEDLING_DEFAULT);
-  const puntiNeedling = {
-    soglie: Array.isArray(puntiNeedlingSalvati?.soglie) && puntiNeedlingSalvati.soglie.length === 2
-      ? puntiNeedlingSalvati.soglie : PUNTI_NEEDLING_DEFAULT.soglie,
-    quote: Array.isArray(puntiNeedlingSalvati?.quote) && puntiNeedlingSalvati.quote.length === 3
-      ? puntiNeedlingSalvati.quote : PUNTI_NEEDLING_DEFAULT.quote,
-  };
-  const cambiaPuntiNeedling = (campo, indice, testo) => {
-    const pulito = String(testo).replace(",", ".").trim();
-    const n = pulito === "" ? 0 : Number(pulito);
-    if (!Number.isFinite(n) || n < 0) return;
-    const prossimo = { soglie: [...puntiNeedling.soglie], quote: [...puntiNeedling.quote] };
-    prossimo[campo][indice] = n;
-    salvaPuntiNeedling(prossimo);
-  };
   const [fasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
 
   async function salvaFinestra() {
@@ -50714,68 +50991,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           </div>
         </div>
 
-        {/* PUNTI ASSEGNATI CON PRODOTTI NEEDLING — non e' uno sconto al
-            cliente: e' la quota dei punti che arriva alla master, a
-            scaglioni di spesa.
-            Sotto la prima soglia il prodotto ne vale una parte, sopra
-            l'ultima li vale tutti. Vale solo sul reparto Needling: e' una
-            leva per spingere quella linea, non una regola generale. */}
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Punti assegnati con prodotti Needling</div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 14 }}>
-            Quanta parte dei punti di un prodotto <b>needling</b> arriva davvero alla master, secondo quanto
-            si è speso in quel carrello. Non tocca il prezzo e non è uno sconto al cliente: il prodotto vale
-            sempre i suoi punti, questa tabella dice quanti gliene restano. Le soglie si leggono sul totale
-            del carrello a listino, come nelle fasce qui sopra.
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
-            {[0, 1, 2].map((i) => {
-              const da = i === 0 ? 0 : puntiNeedling.soglie[i - 1];
-              const a = i < 2 ? puntiNeedling.soglie[i] : null;
-              const etichetta = i === 0
-                ? `Sotto ${fmtEuroErp2(puntiNeedling.soglie[0])}`
-                : a != null ? `Da ${fmtEuroErp2(da)} a meno di ${fmtEuroErp2(a)}` : `Da ${fmtEuroErp2(da)} in su`;
-              return (
-                <div key={i} style={{ background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "12px 14px" }}>
-                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, marginBottom: 8, lineHeight: 1.3 }}>{etichetta}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      type="number" min="0" max="100" step="1"
-                      value={puntiNeedling.quote[i]}
-                      onChange={(e) => cambiaPuntiNeedling("quote", i, e.target.value)}
-                      style={{ ...inputStyle, width: 86, textAlign: "center", fontWeight: 800, fontSize: 16, padding: "8px 10px" }}
-                    />
-                    <span style={{ ...fontBody, fontSize: 14, fontWeight: 800, color: NAVY }}>%</span>
-                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>dei punti</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Soglie</span>
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>prima a</span>
-            <input type="number" min="0" step="1" value={puntiNeedling.soglie[0]}
-              onChange={(e) => cambiaPuntiNeedling("soglie", 0, e.target.value)}
-              style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€ poi a</span>
-            <input type="number" min="0" step="1" value={puntiNeedling.soglie[1]}
-              onChange={(e) => cambiaPuntiNeedling("soglie", 1, e.target.value)}
-              style={{ ...inputStyle, width: 90, textAlign: "center", fontWeight: 700, padding: "7px 8px" }} />
-            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€</span>
-            <span style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700, flexBasis: "100%", marginTop: 4 }}>
-              Si salva da sé a ogni numero toccato.
-            </span>
-          </div>
-        </div>
-
-        {/* Qui c'era "Scontistica prodotti needling": una tabella di
-            sconti che valeva per TUTTI i codici. Tolta il 7/10/2026 —
-            le eccezioni adesso le decide ogni codice per conto suo, in
-            "Regole di un codice" qui sopra, dove si sceglie la categoria
-            e la percentuale. Un codice d'aula o un referral senza
-            eccezioni scritte tratta i needling come tutti gli altri
-            prodotti: comanda il margine. */}
+        {/* Qui c'erano la scontistica e i punti dei prodotti needling.
+            Dall'08/10/2026 stanno tutti e due in Genera coupon →
+            Generazione automatica codici needling, insieme alle fasce di
+            quella serie: l'eccezione del reparto vale solo sui codici dei
+            corsi di needling, e il posto dove si decide quella serie e'
+            quello. Sugli altri codici i needling sono prodotti come gli
+            altri: comanda il margine. */}
 
         <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Punti per master</div>
         {classifica.length === 0 ? (
@@ -64078,6 +64300,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // il referral personale ha una tabella sola, valida comunque si paghi
   const [regolaReferralPos] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   const [fasceReferralContantiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
+  // la serie dei corsi di needling: fasce proprie e, soprattutto,
+  // l'eccezione sui prodotti di quel reparto
+  const [fasceNeedlingCartaPos] = useImpostazioneCondivisa(CHIAVE_FASCE_NEEDLING_CARTA, null);
+  const [fasceNeedlingContantiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_NEEDLING_CONTANTI, []);
+  const [scontoNeedlingPos] = useImpostazioneCondivisa(CHIAVE_SCONTO_NEEDLING, SCONTO_NEEDLING_DEFAULT);
   const [note, setNote] = useState("");
   // Il nome di chi compra, facoltativo. Finora non lo chiedeva nessuno e
   // chi vendeva lo infilava nelle note: adesso ha un campo suo, e la nota
@@ -64145,6 +64372,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const categorieOrdinate = [...(categorieProdotti || [])].filter((c) => !c.escludi_vendita_diretta).sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
   collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+  // I prodotti del reparto Needling: li serve l'eccezione dei codici
+  // della serie needling. Il reparto si riconosce dal nome della
+  // categoria, come il corso — un solo posto da rinominare, se mai.
+  const idCategorieNeedling = new Set((categorieProdotti || []).filter((c) => /needling/i.test(c.nome || "")).map((c) => c.id));
+  const idProdottiNeedling = new Set(
+    Object.keys(categorieIdPerProdottoId).filter((pid) => (categorieIdPerProdottoId[pid] || []).some((cid) => idCategorieNeedling.has(cid)))
+  );
   const immagineUrlPerProdotto = {};
   [...(prodottiImmagini || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).forEach((im) => { if (!immagineUrlPerProdotto[im.prodotto_id]) immagineUrlPerProdotto[im.prodotto_id] = im.url; });
 
@@ -64540,29 +64774,40 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // un codice personale (della master, senza classe) pagato in contanti o
   // con buono Amazon prende invece la seconda serie del referral
   const couponPersonaleAttivo = !!couponAttivo?.master_id && !couponAttivo?.corsi_date_id;
+  // il codice di un corso di NEEDLING ha la sua serie di fasce, scritta
+  // in Genera coupon → Generazione automatica codici needling
+  const couponNeedlingAttivo = couponAttivo?.serie_regole === "needling";
+  const cartaDiClasse = couponNeedlingAttivo ? fasceNeedlingCartaPos : fasceCorsiCartaPos;
+  const contantiDiClasse = couponNeedlingAttivo ? fasceNeedlingContantiPos : fasceContantiCorsiPos;
   const fasceCouponAttive = couponAFasce
     ? (couponPersonaleAttivo
       ? fasceCorsiPerPagamento(
           serieScontoScritta(regolaReferralPos?.fasce) ? regolaReferralPos.fasce : couponAttivo.fasce_sconto,
           fasceReferralContantiPos, pagamentoContaComeContanti(metodoPagamento))
       : fasceCorsiPerPagamento(
-          !!couponAttivo.corsi_date_id && serieScontoScritta(fasceCorsiCartaPos) ? fasceCorsiCartaPos : couponAttivo.fasce_sconto,
-          fasceContantiCorsiPos,
+          !!couponAttivo.corsi_date_id && serieScontoScritta(cartaDiClasse) ? cartaDiClasse : couponAttivo.fasce_sconto,
+          contantiDiClasse,
           !!couponAttivo.corsi_date_id && pagamentoContaComeContanti(metodoPagamento)))
     : null;
+  // L'eccezione del reparto vale SOLO col codice di un corso di needling:
+  // su tutti gli altri un prodotto needling si sconta come gli altri,
+  // sul suo margine. E' la regola che il 7/10 mancava da questa parte e
+  // che il sito applicava lo stesso.
+  const eccezioneNeedlingPos = couponNeedlingAttivo && couponAFasce
+    ? eccezioneNeedlingDa(scontoNeedlingPos, idProdottiNeedling) : null;
   // "sta valendo la serie dei contanti": vale per tutti e due i codici,
   // ognuno con la sua serie
   const fasceContantiInUso = couponAFasce && pagamentoContaComeContanti(metodoPagamento) && (couponPersonaleAttivo
     ? serieScontoScritta(fasceReferralContantiPos)
     : serieScontoScritta(fasceContantiCorsiPos));
   const scontoCoupon = couponAFasce
-    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento))
+    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)
     : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
   const righeSenzaMargine = couponAFasce
-    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento)) <= 0)
+    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos) <= 0)
     : couponNum > 0 && couponSulMargine
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
@@ -64603,7 +64848,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const lordoRiga = round2(r.prezzo * r.quantita);
     if (omaggioAttivo || lordoRiga <= 0) return 0;
     if (couponAFasce) {
-      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento))) / 100);
+      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)) / 100);
     }
     if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
     if (scontoNum > 0) {
@@ -64836,7 +65081,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     let scontiRiga = carrello.map((r, i) => {
       const lordoRiga = lordiRiga[i];
       if (omaggioAttivo || lordoRiga <= 0) return 0;
-      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento))) / 100);
+      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)) / 100);
       if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
       if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
       return 0;
@@ -75908,6 +76153,8 @@ export default function App() {
   const [vociShopClassificazione, setVociShopClassificazione] = useState([]);
   const [coupon, setCoupon] = useState([]);
   const [regoleReferralAutomatico, setRegoleReferralAutomatico] = useState(null);
+  // le regole della serie needling: stessa tabella, riga serie='needling'
+  const [regoleReferralNeedling, setRegoleReferralNeedling] = useState(null);
   const [puntiMasterImpostazioni, setPuntiMasterImpostazioni] = useState(null);
   const [allieviCrm, setAllieviCrm] = useState([]);
   const [storicoAllievi, setStoricoAllievi] = useState([]);
@@ -76117,7 +76364,15 @@ export default function App() {
     hotel_periodi_speciali: async () => setHotelPeriodi((await supabase.from("hotel_periodi_speciali").select("*").order("data_inizio")).data || []),
     voci_shop_classificazione: async () => setVociShopClassificazione((await supabase.from("voci_shop_classificazione").select("*")).data || []),
     coupon: async () => setCoupon((await supabase.from("coupon").select("*").order("created_at", { ascending: false })).data || []),
-    regole_referral_automatico: async () => setRegoleReferralAutomatico((await supabase.from("regole_referral_automatico").select("*").limit(1).maybeSingle()).data || null),
+    // Due righe, dal 08/10/2026: una per i corsi normali e una per i
+    // corsi di needling. Erano una sola, letta con .limit(1): con due
+    // righe quella lettura avrebbe pescato a caso, e meta' dei giorni i
+    // codici sarebbero nati con le regole dell'altra serie.
+    regole_referral_automatico: async () => {
+      const righe = (await supabase.from("regole_referral_automatico").select("*")).data || [];
+      setRegoleReferralAutomatico(righe.find((r) => (r.serie || "corsi") === "corsi") || null);
+      setRegoleReferralNeedling(righe.find((r) => r.serie === "needling") || null);
+    },
     punti_master_impostazioni: async () => setPuntiMasterImpostazioni((await supabase.from("punti_master_impostazioni").select("*").limit(1).maybeSingle()).data || null),
     impostazioni_categorie_gruppi: async () => setCategorieGruppi((await supabase.from("impostazioni_categorie_gruppi").select("*").limit(1)).data?.[0] || null),
     impostazioni_layout_assegnazione_master: async () => setLayoutAssegnazioneMaster((await supabase.from("impostazioni_layout_assegnazione_master").select("*").limit(1)).data?.[0] || null),
@@ -78145,7 +78400,7 @@ export default function App() {
         <PaginaGeneraCoupon
           coupon={coupon} categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} master={master}
           corsi={corsi} corsiDate={corsiDate} location={location}
-          regoleReferralAutomatico={regoleReferralAutomatico}
+          regoleReferralAutomatico={regoleReferralAutomatico} regoleReferralNeedling={regoleReferralNeedling}
           venditeShop={venditeShop}
           puntiMasterImpostazioni={puntiMasterImpostazioni}
           ricarica={fetchDati} onBack={() => setView("compensipremi")}

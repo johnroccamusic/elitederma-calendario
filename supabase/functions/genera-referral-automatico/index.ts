@@ -86,12 +86,19 @@ Deno.serve(async (req) => {
       // body vuoto ({}) o assente: normale invocazione quotidiana del cron
     }
 
-    const { data: regole } = await supabase.from("regole_referral_automatico").select("*").limit(1).maybeSingle();
-    if (!regole) {
+    // Due serie di regole dall'08/10/2026: "corsi" e "needling". Un corso
+    // di needling prende il suo codice dalla seconda — percentuali
+    // diverse, e l'eccezione sul reparto Needling che sugli altri non
+    // vale. Era una riga sola letta con .limit(1): con due righe quella
+    // lettura avrebbe pescato a caso.
+    const { data: righeRegole } = await supabase.from("regole_referral_automatico").select("*");
+    const regolePerSerie: Record<string, any> = {};
+    (righeRegole || []).forEach((r: any) => { regolePerSerie[r.serie || "corsi"] = r; });
+    if (!regolePerSerie.corsi) {
       return new Response(JSON.stringify({ errore: "regole_referral_automatico non configurata" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    let queryCorsi = supabase.from("corsi_date").select("id, data_inizio, data_fine, master_id").not("master_id", "is", null);
+    let queryCorsi = supabase.from("corsi_date").select("id, data_inizio, data_fine, master_id, corso_id").not("master_id", "is", null);
     queryCorsi = backfill ? queryCorsi.lte("data_inizio", oggi) : queryCorsi.eq("data_inizio", oggi);
     const { data: corsiCandidati } = await queryCorsi;
     if (!corsiCandidati?.length) {
@@ -112,47 +119,71 @@ Deno.serve(async (req) => {
     const masterById: Record<string, { id: string; nome: string }> = {};
     (masterInfo || []).forEach((m: any) => { masterById[m.id] = m; });
 
+    // Quale corso e' di needling. Si riconosce dal NOME, come nell'app:
+    // nel database "NEEDLING" sta sotto la categoria ESTETICA insieme a
+    // laminazione ed extension, quindi la categoria non lo distingue.
+    const corsoIds = [...new Set(corsiDaGenerare.map((c: any) => c.corso_id).filter(Boolean))];
+    let corsiInfo: any[] = [];
+    if (corsoIds.length) {
+      const { data } = await supabase.from("corsi").select("id, nome").in("id", corsoIds);
+      corsiInfo = data || [];
+    }
+    const corsiNeedling = new Set(corsiInfo.filter((c: any) => /needling/i.test(String(c.nome || ""))).map((c: any) => c.id));
+    const serieDi = (corso: any) => (corsiNeedling.has(corso.corso_id) ? "needling" : "corsi");
+
     // Su cosa si legge la percentuale, e quanto vale tradotta per il
     // sito. WooCommerce conosce solo percentuali sul prezzo al pubblico:
     // sul netto la conversione e' esatta, sul margine e' la migliore
     // possibile (il margine cambia da prodotto a prodotto, una
     // percentuale sola non lo segue riga per riga — al POS invece si').
-    const baseSconto = ["lordo", "netto", "margine"].includes(regole.base_sconto) ? regole.base_sconto : "lordo";
-    const aFasce = regole.tipo_regola_sconto === "fasce";
-    let margineMedio = 0;
-    let percentualeMediaFasce = 0;
-    if (baseSconto === "margine" || aFasce) {
-      const { data: catalogo } = await supabase
-        .from("prodotti_shop")
-        .select("prezzo_vendita, costo_acquisto, aliquota_iva_vendita")
-        .gt("prezzo_vendita", 0);
-      let netto = 0, margine = 0, lordo = 0, sconto = 0;
-      const fasce = Array.isArray(regole.fasce_sconto) ? regole.fasce_sconto : [];
-      // sei fasce: cinque larghe 16,5 punti di margine e l'ultima 17,5,
-      // cosi' da 0 a 100 non resta scoperto niente
-      const CONFINI_FASCE = [16.5, 33, 49.5, 66, 82.5, 100];
-      const pctFascia = (m: number | null) => {
-        if (m == null) return 0;
-        const i = CONFINI_FASCE.findIndex((limite) => m <= limite);
-        return Number(fasce[i === -1 ? CONFINI_FASCE.length - 1 : i]?.percentuale) || 0;
-      };
-      (catalogo || []).forEach((p: any) => {
-        const nettoP = Number(p.prezzo_vendita);
-        const costo = p.costo_acquisto;
-        const m = costo == null ? null : ((nettoP - Number(costo)) / nettoP) * 100;
-        if (m != null && m > 0) { netto += nettoP; margine += nettoP - Number(costo); }
-        const lordoP = nettoP * (1 + (Number(p.aliquota_iva_vendita ?? 22) || 0) / 100);
-        lordo += lordoP;
-        sconto += (lordoP * pctFascia(m)) / 100;
-      });
-      margineMedio = netto > 0 ? (margine / netto) * 100 : 0;
-      percentualeMediaFasce = lordo > 0 ? Math.round((sconto / lordo) * 10000) / 100 : 0;
+    //
+    // Il conto si fa una volta per SERIE: due serie hanno due tabelle di
+    // fasce, e quindi due medie diverse da scrivere sul sito.
+    const { data: catalogo } = await supabase
+      .from("prodotti_shop")
+      .select("prezzo_vendita, costo_acquisto, aliquota_iva_vendita")
+      .gt("prezzo_vendita", 0);
+    // sei fasce: cinque larghe 16,5 punti di margine e l'ultima 17,5,
+    // cosi' da 0 a 100 non resta scoperto niente
+    const CONFINI_FASCE = [16.5, 33, 49.5, 66, 82.5, 100];
+    function conti(regole: any) {
+      const baseSconto = ["lordo", "netto", "margine"].includes(regole.base_sconto) ? regole.base_sconto : "lordo";
+      const aFasce = regole.tipo_regola_sconto === "fasce";
+      let margineMedio = 0;
+      let percentualeMediaFasce = 0;
+      if (baseSconto === "margine" || aFasce) {
+        let netto = 0, margine = 0, lordo = 0, sconto = 0;
+        const fasce = Array.isArray(regole.fasce_sconto) ? regole.fasce_sconto : [];
+        const pctFascia = (m: number | null) => {
+          if (m == null) return 0;
+          const i = CONFINI_FASCE.findIndex((limite) => m <= limite);
+          return Number(fasce[i === -1 ? CONFINI_FASCE.length - 1 : i]?.percentuale) || 0;
+        };
+        (catalogo || []).forEach((p: any) => {
+          const nettoP = Number(p.prezzo_vendita);
+          const costo = p.costo_acquisto;
+          const m = costo == null ? null : ((nettoP - Number(costo)) / nettoP) * 100;
+          if (m != null && m > 0) { netto += nettoP; margine += nettoP - Number(costo); }
+          const lordoP = nettoP * (1 + (Number(p.aliquota_iva_vendita ?? 22) || 0) / 100);
+          lordo += lordoP;
+          sconto += (lordoP * pctFascia(m)) / 100;
+        });
+        margineMedio = netto > 0 ? (margine / netto) * 100 : 0;
+        percentualeMediaFasce = lordo > 0 ? Math.round((sconto / lordo) * 10000) / 100 : 0;
+      }
+      return { baseSconto, aFasce, margineMedio, percentualeMediaFasce };
     }
+    const contiPerSerie: Record<string, ReturnType<typeof conti>> = {};
+    Object.keys(regolePerSerie).forEach((serie) => { contiPerSerie[serie] = conti(regolePerSerie[serie]); });
 
-    const risultati: { master: string; corsoDataId: string; codice?: string; errore?: string }[] = [];
+    const risultati: { master: string; corsoDataId: string; codice?: string; serie?: string; errore?: string }[] = [];
     for (const corso of corsiDaGenerare as any[]) {
       const m = masterById[corso.master_id];
       if (!m) continue;
+      // da quale serie nasce questo codice, e quindi con quali regole
+      const serie = serieDi(corso);
+      const regole = regolePerSerie[serie] || regolePerSerie.corsi;
+      const { baseSconto, aFasce, margineMedio, percentualeMediaFasce } = contiPerSerie[serie] || contiPerSerie.corsi;
       const codice = await generaCodiceUnivoco(m.nome);
       // nel registro PRIMA di creare il coupon vero: se qualcosa fallisce
       // dopo, il codice resta comunque bruciato per sempre, mai riassegnato
@@ -190,6 +221,10 @@ Deno.serve(async (req) => {
         stato: "bozza",
         master_id: m.id,
         corsi_date_id: corso.id,
+        // Senza questa, il POS non saprebbe quale delle due tabelle di
+        // fasce applicare, e l'eccezione del reparto Needling partirebbe
+        // con tutti i codici invece che solo con questi.
+        serie_regole: serie,
         generato_da_cron: true,
         creato_da: backfill ? "backfill" : "cron",
       }).select().single();
@@ -209,7 +244,7 @@ Deno.serve(async (req) => {
         risultati.push({ master: m.nome, corsoDataId: corso.id, errore: "woo-crea-coupon: " + dettaglio });
         continue;
       }
-      risultati.push({ master: m.nome, corsoDataId: corso.id, codice });
+      risultati.push({ master: m.nome, corsoDataId: corso.id, codice, serie });
     }
 
     return new Response(JSON.stringify({ ok: true, creati: risultati.filter((r) => r.codice).length, risultati }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
