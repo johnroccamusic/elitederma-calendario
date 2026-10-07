@@ -700,6 +700,18 @@ function conCategoriePadre(ids, categorieProdotti) {
   });
   return tutte;
 }
+// Una categoria che e' ANTENATA di un'altra gia' scelta. Non si puo'
+// togliere a mano: al salvataggio torna da sola, perche' un prodotto che
+// sta in una sottocategoria sta per forza anche nel suo reparto.
+//
+// Serve a dirlo in faccia a chi guarda la scheda. Senza, si toglie "Lash
+// Extension" da un prodotto che resta in "Accessori extension", si salva,
+// e la categoria ricompare senza che nessuno spieghi perche'. E' successo
+// davvero, sulla Pietra di Giada.
+function categoriaImplicitaDaAltre(id, ids, categorieProdotti) {
+  return (ids || []).some((altro) =>
+    altro !== id && conCategoriePadre([altro], categorieProdotti).includes(id));
+}
 // le righe prodotto-categoria come se ogni padre fosse scritto: e' quello
 // che leggono POS e magazzino al posto della tabella nuda
 function collegamentiConPadri(prodottiCategorie, categorieProdotti) {
@@ -69723,12 +69735,37 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flex: "1 1 40%", marginBottom: isMobile ? 8 : 0 }}>
                       {extraIds.map((id) => {
                         const c = opzioni.find((o) => o.id === id);
+                        // Un reparto che c'e' solo perche' il prodotto sta
+                        // in una sua sottocategoria: toglierlo non serve a
+                        // niente, al salvataggio torna. Lo si dice qui
+                        // invece di lasciarlo scoprire salvando.
+                        const implicita = categoriaImplicitaDaAltre(id, prodottoForm.categorieIds, categorieProdotti);
+                        const figlie = implicita
+                          ? prodottoForm.categorieIds
+                            .filter((altro) => altro !== id && conCategoriePadre([altro], categorieProdotti).includes(id))
+                            .map((altro) => opzioni.find((o) => o.id === altro)?.nome)
+                            .filter(Boolean)
+                          : [];
                         return (
-                          <span key={id} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 13, color: SP_TESTO, background: SP_GRIGIO, border: `1px solid ${SP_BORDO}`, borderRadius: 10, padding: "7px 8px 7px 12px", height: 24 }}>
+                          <span key={id}
+                            title={implicita
+                              ? `C'è perché il prodotto sta in ${figlie.map((n) => `"${n}"`).join(" e ")}, che sta qui dentro. Per toglierlo da "${c ? c.nome : "questo reparto"}" devi togliere quella.`
+                              : undefined}
+                            style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 13,
+                              color: implicita ? SP_SPENTO : SP_TESTO,
+                              background: implicita ? "transparent" : SP_GRIGIO,
+                              border: `1px ${implicita ? "dashed" : "solid"} ${SP_BORDO}`,
+                              borderRadius: 10, padding: implicita ? "7px 12px" : "7px 8px 7px 12px", height: 24 }}>
                             {c ? c.nome : "—"}
-                            <button onClick={() => rimuoviCategoriaExtra(id)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: SP_SPENTO, display: "flex", padding: 2 }}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                            </button>
+                            {implicita ? (
+                              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: SP_SPENTO }}>
+                                da {figlie[0] || "una sottocategoria"}
+                              </span>
+                            ) : (
+                              <button onClick={() => rimuoviCategoriaExtra(id)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: SP_SPENTO, display: "flex", padding: 2 }}>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                              </button>
+                            )}
                           </span>
                         );
                       })}
