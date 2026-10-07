@@ -23,6 +23,39 @@ import { salvaConsenso } from "./dati";
 
 const TIPI_DOCUMENTO = ["Carta d'identità", "Patente", "Passaporto"];
 
+// LA VIA DEL RITORNO, ma solo per chi lavora.
+//
+// Questa pagina sostituisce l'applicazione: chi arriva col codice QR vede
+// il modulo e nient'altro, ed e' giusto cosi'. Il guaio e' di chi il
+// modulo lo apre DALL'APP per guardarlo: dentro l'app installata sulla
+// schermata principale non c'e' nessuna barra del browser, quindi niente
+// freccia indietro, e si resta chiusi dentro il consenso.
+//
+// Il tasto compare solo se in questa scheda c'e' una sessione di lavoro
+// aperta (la stessa che il gate dell'app scrive entrando). Sul telefono
+// della modella quel segno non c'e', e lei non vede niente.
+function sessioneDiLavoroAperta() {
+  try { return window.sessionStorage.getItem("edc_ok") === "1"; } catch { return false; }
+}
+function TornaAlGestionale() {
+  if (!sessioneDiLavoroAperta()) return null;
+  const casa = `${window.location.origin}${window.location.pathname}`;
+  return (
+    <div style={{ background: NAVY, padding: "8px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <a
+        href={casa}
+        style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 7 }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+        Torna al gestionale
+      </a>
+      <span style={{ ...fontBody, fontSize: 11.5, color: "rgba(255,255,255,0.72)" }}>
+        Questa riga la vedi solo tu: sul telefono della modella non c'è.
+      </span>
+    </div>
+  );
+}
+
 function Sezione({ titolo, nota, children }) {
   return (
     <div style={{ marginBottom: 26 }}>
@@ -221,8 +254,11 @@ export default function PaginaConsenso({ codice }) {
 
   if (!modello) {
     return (
-      <div style={{ ...fontBody, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", color: MUTED }}>
-        Questo codice non corrisponde a nessun consenso. Chiedi alla scuola il codice giusto.
+      <div style={{ ...fontBody, minHeight: "100vh", background: "#FAF8F3" }}>
+        <TornaAlGestionale />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", color: MUTED, minHeight: "60vh" }}>
+          Questo codice non corrisponde a nessun consenso. Chiedi alla scuola il codice giusto.
+        </div>
       </div>
     );
   }
@@ -262,8 +298,9 @@ export default function PaginaConsenso({ codice }) {
 
   if (inviato) {
     return (
-      <div style={{ minHeight: "100vh", background: "#FAF8F3", padding: "48px 20px", ...fontBody }}>
-        <div style={{ maxWidth: 520, margin: "0 auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 26, textAlign: "center" }}>
+      <div style={{ minHeight: "100vh", background: "#FAF8F3", ...fontBody }}>
+        <TornaAlGestionale />
+        <div style={{ maxWidth: 520, margin: "0 auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 26, textAlign: "center", marginTop: 48 }}>
           <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Inviato</div>
           <div style={{ fontSize: 14, color: MUTED, lineHeight: 1.55 }}>
             Grazie {v.nome.trim()}. Il consenso è arrivato alla scuola: non devi fare altro e non serve
@@ -278,6 +315,7 @@ export default function PaginaConsenso({ codice }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#FAF8F3", ...fontBody }}>
+      <TornaAlGestionale />
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "28px 18px 80px" }}>
         <div style={{ ...fontDisplay, fontSize: 21, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>{c.titolo}</div>
         <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>{c.sottotitolo}</div>
