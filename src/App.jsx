@@ -63926,18 +63926,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // prodotto -> id del kit da cui esce. Vale per il carrello in corso e si
   // azzera con la vendita: e' una scelta su questi pezzi, non una regola
   const [dalKitPerProdotto, setDalKitPerProdotto] = useState({});
-  // Il magazzino centrale sta a Roma. In un corso a Roma la domanda non
-  // ha oggetto: il magazzino e' li' a fianco, non c'e' nessuna scelta da
-  // fare fra "prendo dal kit" e "lo spedisco". Si chiede solo fuori sede,
-  // dove il pezzo o ce l'hai in aula o deve viaggiare.
-  const inSedeCentrale = String(locById[corsoPosSel?.location_id]?.nome || "").trim().toUpperCase() === "ROMA";
+  // La domanda nasce dai kit che ci sono, non dalla citta'.
+  //
+  // C'era un'eccezione per Roma: li' c'e' il magazzino, quindi — si
+  // diceva — non c'e' niente da scegliere fra "prendo dal kit" e "lo
+  // spedisco". Ma a Roma i kit di riserva non partono proprio, quindi
+  // l'eccezione non serviva a niente: se un kit c'e' davvero — ne e'
+  // avanzato uno, o ne sono stati mandati in piu' — anche li' il pezzo o
+  // lo prendi da quella scatola o esce dal magazzino, ed e' una
+  // differenza che il magazzino deve sapere. Una regola in meno.
   useEffect(() => {
     let vivo = true;
     setDalKitPerProdotto({});
-    if (inSedeCentrale) { setKitInAula(null); return () => { vivo = false; }; }
     caricaKitInAula(corsoPosSel?.id || null).then((k) => { if (vivo) setKitInAula(k); });
     return () => { vivo = false; };
-  }, [corsoPosSel?.id, inSedeCentrale]);
+  }, [corsoPosSel?.id]);
   const disponibileNeiKit = (prodottoId) => kitInAula?.perProdotto?.[prodottoId] || null;
 
   // omaggio: azzera l'incasso ma scarica comunque il magazzino — la nota
