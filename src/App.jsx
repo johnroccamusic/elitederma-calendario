@@ -27678,6 +27678,35 @@ function PannelloRiepilogoAmministrativo({
   // alloggio e location, che hanno altre chiavi, non si toccano
   const impegniDisposti = (impegni || []).filter((x) => x.origine_id === corsoData.id && String(x.chiave_origine || "").startsWith("cash_") && (x.stato === "aperto" || x.stato === "parzialmente_coperto"));
 
+  // Gli impegni rimasti senza la riga che li aveva generati.
+  //
+  // Si toglie a un'allieva la quota del suo venditore, o si cambia il
+  // tutor: la riga sparisce dal riepilogo, ma nello scadenziario quei
+  // soldi restano scritti e nessuno li vede piu' qui dentro. E' successo
+  // su Reggio Calabria - cento euro a SIMONA, ancora aperti, con la
+  // quota ormai a zero.
+  //
+  // Non si cancellano da soli: un impegno e' un debito, e sparire da
+  // solo e' peggio che restare. Si mostrano, e si tolgono premendo.
+  const chiaviVive = new Set([
+    ...righeSpeseTutte.filter((r) => (r.cash || 0) > 0 || r.cashRinviato || r.cashPagato).map((r) => chiaveCashRiga(r)),
+    ...venditoriDecisi.filter((v) => v.suoCash > 0).map((v) => `cash_venditore_${v.rigaId}`),
+  ]);
+  const impegniOrfani = (impegni || []).filter((x) =>
+    x.origine_id === corsoData.id
+    && String(x.chiave_origine || "").startsWith("cash_")
+    && !chiaviVive.has(x.chiave_origine)
+    && (x.stato === "aperto" || x.stato === "parzialmente_coperto"));
+  const [togliendoOrfano, setTogliendoOrfano] = useState(null);
+  async function togliImpegnoOrfano(x) {
+    setTogliendoOrfano(x.id);
+    const { error } = await supabase.from("impegno").delete().eq("id", x.id);
+    setTogliendoOrfano(null);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(`${x.descrizione}: tolto dallo scadenziario. Su questa classe non c'e' piu' una quota che lo giustifichi.`);
+    ricarica(["impegno"]);
+  }
+
   // "Non dal cash del corso": la quota esce dalla busta e diventa un
   // impegno. Serve quando in aula il contante non basta a coprire quello
   // che era previsto in contanti: senza questo si era costretti a fingere
@@ -28673,6 +28702,34 @@ function PannelloRiepilogoAmministrativo({
                       </Button>
                     )}
                   </div>
+
+                  {/* Gli impegni rimasti senza la riga che li aveva
+                      generati: una quota tolta, un tutor cambiato. Nel
+                      riepilogo quella riga non c'e' piu', nello
+                      scadenziario i soldi sono ancora scritti, e nessuno
+                      li vede piu' da nessuna delle due parti. */}
+                  {impegniOrfani.length > 0 && (
+                    <div style={{ background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "12px 14px", marginTop: 12 }}>
+                      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", marginBottom: 8 }}>
+                        {impegniOrfani.length === 1 ? "Una voce è rimasta" : `${impegniOrfani.length} voci sono rimaste`} nello scadenziario senza una riga che la giustifichi
+                      </div>
+                      {impegniOrfani.map((x) => (
+                        <div key={x.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                          <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 220px", minWidth: 0 }}>
+                            {x.descrizione} — <b>{fmtEuroErp2(x.importo_previsto)}</b>
+                          </span>
+                          <Button variant="ghost" onClick={() => togliImpegnoOrfano(x)} disabled={togliendoOrfano === x.id}>
+                            {togliendoOrfano === x.id ? "Tolgo…" : "Togli dallo scadenziario"}
+                          </Button>
+                        </div>
+                      ))}
+                      <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", lineHeight: 1.45, marginTop: 4 }}>
+                        Succede quando si toglie la quota di un venditore, o si cambia il tutor di un'allieva, dopo averla mandata
+                        nello scadenziario. Non si cancella da sola: un impegno è un debito, e sparire da solo sarebbe peggio
+                        che restare.
+                      </div>
+                    </div>
+                  )}
 
                   {/* La busta entra nella cassa contanti quando
                       l'amministrazione dichiara di averla ricevuta, non
