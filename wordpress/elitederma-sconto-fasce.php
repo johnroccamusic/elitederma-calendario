@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Elitederma — Sconto a fasce
  * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. I prodotti del reparto Needling hanno invece una tabella loro, a scaglioni di spesa e sul prezzo netto. I coupon di acquisto delle master cedono una quota di quello che su ogni pezzo si puo' cedere. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
- * Version: 1.2
+ * Version: 1.3
  * Author: Elitederma
  */
 
