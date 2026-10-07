@@ -11007,7 +11007,7 @@ function PaginaDashboardVenditori({
   const meseClassificaFuturo = (() => { const o = new Date(); return meseClassifica.anno > o.getFullYear() || (meseClassifica.anno === o.getFullYear() && meseClassifica.mese >= o.getMonth()); })();
 
   if (mostraRiepilogoPos && venditoreSel) {
-    return <PaginaRiepilogoVenditeProdotti soggettoTipo="venditore" soggettoId={venditoreSel.id} nomeSoggetto={venditoreSel.nome} venditeShop={venditeShop} onBack={() => setMostraRiepilogoPos(false)} />;
+    return <PaginaRiepilogoVenditeProdotti soggettoTipo="venditore" soggettoId={venditoreSel.id} nomeSoggetto={venditoreSel.nome} venditeShop={venditeShop} prodottiShop={prodottiShop} onBack={() => setMostraRiepilogoPos(false)} />;
   }
 
   return (
@@ -12863,7 +12863,10 @@ function rangeRiepilogoPos(periodo, customDa, customA) {
 // UNA master o UN venditore (mai aggregato — quello è "Statistiche Vendite
 // Prodotti" in ERP, riservata all'admin), con filtro periodo, in ordine
 // cronologico di default
-function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto, venditeShop, onBack }) {
+function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto, venditeShop, prodottiShop = [], onBack }) {
+  // il nome dei prodotti si rilegge dall'anagrafica: quello salvato sulla
+  // riga e' di quando la riga e' nata, e invecchia a ogni rinominata
+  const indiciNomi = useMemo(() => indiciProdotti(prodottiShop), [prodottiShop]);
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("mese");
@@ -12938,7 +12941,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
                 {ordina(righe, {
                   data: (v) => v.data_ordine || "",
                   tipo: (v) => v.tipo_movimento || "",
-                  prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => pr.nome).join(", "),
+                  prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => nomeVivoDellaRiga(pr, indiciNomi)).join(", "),
                   totale: (v) => (v.totale != null ? Number(v.totale) : null),
                 }).map((v) => {
                   const b = badgeTipo[v.tipo_movimento] || { l: v.tipo_movimento, c: MUTED, s: "#EFEFEF" };
@@ -12946,7 +12949,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
                     <tr key={v.id}>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}><span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: b.c, background: b.s, borderRadius: 8, padding: "3px 9px" }}>{b.l}</span></td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${nomeVivoDellaRiga(p, indiciNomi)}`).join(", ")}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                     </tr>
                   );
@@ -52953,7 +52956,10 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
 // "Omaggi": prodotti usciti dal POS senza essere venduti (tipo_movimento
 // "omaggio", totale sempre zero) — qui interessa solo cosa e quanto è
 // stato regalato, non un incasso che non esiste
-function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
+function PaginaOmaggi({ venditeShop, prodottiShop = [], ricarica, onBack, titolo = "Omaggi" }) {
+  // il nome dei prodotti si rilegge dall'anagrafica: quello salvato sulla
+  // riga e' di quando la riga e' nata, e invecchia a ogni rinominata
+  const indiciNomi = useMemo(() => indiciProdotti(prodottiShop), [prodottiShop]);
   const { ordine: ordineOmaggiProd, cambiaOrdine: cambiaOrdineOmaggiProd, ordina: ordinaOmaggiProd } = useOrdinamentoTabella();
   const { ordine: ordineOmaggiReg, cambiaOrdine: cambiaOrdineOmaggiReg, ordina: ordinaOmaggiReg } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
@@ -52969,12 +52975,19 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
 
   const pezziTotali = omaggiFiltrati.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0);
 
+  // si raggruppa per PRODOTTO e si legge il nome di oggi: raggruppando
+  // per il nome scritto sulla riga, un prodotto rinominato compariva due
+  // volte nello stesso elenco, con due conteggi che non si sommavano
   const perProdotto = {};
   omaggiFiltrati.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
-    const nome = (p.nome || "").trim() || "—";
-    perProdotto[nome] = (perProdotto[nome] || 0) + (p.quantita || 0);
+    const vero = prodottoDellaRiga(p, indiciNomi);
+    const chiave = vero?.id || (p.nome || "").trim().toLowerCase() || "—";
+    const nome = vero?.nome || (p.nome || "").trim() || "—";
+    if (!perProdotto[chiave]) perProdotto[chiave] = { nome, quantita: 0 };
+    perProdotto[chiave].nome = nome;
+    perProdotto[chiave].quantita += p.quantita || 0;
   }));
-  const righeProdotti = Object.entries(perProdotto).map(([nome, quantita]) => ({ nome, quantita })).sort((a, b) => b.quantita - a.quantita);
+  const righeProdotti = Object.values(perProdotto).sort((a, b) => b.quantita - a.quantita);
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -53045,14 +53058,14 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
                   {
                     data: (v) => v.data_ordine || "",
                     operatore: (v) => v.operatore_nome || "",
-                    prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => pr.nome).join(", "),
+                    prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => nomeVivoDellaRiga(pr, indiciNomi)).join(", "),
                     nota: (v) => v.note || "",
                   })
                   .map((v) => (
                     <tr key={v.id}>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.nome} ×${p.quantita}`).join(", ")}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${nomeVivoDellaRiga(p, indiciNomi)} ×${p.quantita}`).join(", ")}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{v.note || "—"}</td>
                     </tr>
                   ))}
@@ -64132,6 +64145,9 @@ function IconaInfoTondo({ size = 20, color = MUTED }) {
 function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
+  // il nome dei prodotti nelle righe gia' salvate si rilegge dall'anagrafica:
+  // quello scritto sulla riga e' di quando la riga e' nata
+  const indiciNomi = useMemo(() => indiciProdotti(prodottiShop), [prodottiShop]);
   // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
   // programmatore — chi entra con la propria password di master o
   // venditore ha sempre ruoloUtente "user", anche loggato, quindi resta
@@ -65706,12 +65722,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 tipo: (v) => v.tipo_movimento || "vendita",
                 data: (v) => v.data_ordine || "",
                 operatore: (v) => v.operatore_nome || "",
-                prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => pr.nome).join(", "),
+                prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => nomeVivoDellaRiga(pr, indiciNomi)).join(", "),
                 metodo: (v) => v.metodo_pagamento || "",
                 totale: (v) => v.totale ?? null,
               }).map((v) => {
                 const badgeTipo = { vendita: null, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" }, omaggio: { l: "Omaggio", c: GOLD, s: "#FBF1D9" } }[v.tipo_movimento];
-                const articoli = (Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ");
+                const articoli = (Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${nomeVivoDellaRiga(p, indiciNomi)}`).join(", ");
                 // Chi ha comprato. Il POS non chiede il nome del cliente,
                 // ma chi vende lo scrive quasi sempre nelle note — "ordine
                 // claudia guadagnino", "Martina castagna". Si mostra
@@ -65781,7 +65797,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     tipo: (v) => v.tipo_movimento || "vendita",
                     data: (v) => v.data_ordine || "",
                     operatore: (v) => v.operatore_nome || "",
-                    prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => pr.nome).join(", "),
+                    prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => nomeVivoDellaRiga(pr, indiciNomi)).join(", "),
                     metodo: (v) => v.metodo_pagamento || "",
                     totale: (v) => v.totale ?? null,
                   }).map((v) => {
@@ -65794,7 +65810,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${nomeVivoDellaRiga(p, indiciNomi)}`).join(", ")}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                       </tr>
@@ -72793,7 +72809,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 // coda per Raf: ordini di spedizione a domicilio generati dal POS quando
 // chi vende non ha il prodotto fisicamente con sé al corso (§10) — "Da
 // evadere" e "Evase" sono lo stesso fetch, filtrato solo per stato
-function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack, ricarica }) {
+function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, prodottiShop = [], onBack, ricarica }) {
+  // il nome dei prodotti si rilegge dall'anagrafica: quello salvato sulla
+  // riga e' di quando la riga e' nata, e invecchia a ogni rinominata
+  const indiciNomi = useMemo(() => indiciProdotti(prodottiShop), [prodottiShop]);
   const { ordine: ordineSped, cambiaOrdine: cambiaOrdineSped, ordina: ordinaSped } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("daevadere"); // daevadere | evase
@@ -72846,7 +72865,7 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack
                   corso: (sp) => etichettaCorso(sp) || "",
                   destinatario: (sp) => sp.destinatario_nome || "",
                   indirizzo: (sp) => [sp.indirizzo, sp.cap, sp.citta].filter(Boolean).join(", "),
-                  prodotti: (sp) => (Array.isArray(sp.prodotti) ? sp.prodotti : []).map((pr) => pr.nome).join(", "),
+                  prodotti: (sp) => (Array.isArray(sp.prodotti) ? sp.prodotti : []).map((pr) => nomeVivoDellaRiga(pr, indiciNomi)).join(", "),
                   spedita: (sp) => sp.spedito_il || "",
                 }).map((s) => (
                   <tr key={s.id}>
@@ -72854,7 +72873,7 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{s.destinatario_nome}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{[s.indirizzo, s.cap, s.citta].filter(Boolean).join(", ") || "—"}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                      {(Array.isArray(s.prodotti) ? s.prodotti : []).map((p) => `${p.nome} ×${p.quantita}`).join(", ")}
+                      {(Array.isArray(s.prodotti) ? s.prodotti : []).map((p) => `${nomeVivoDellaRiga(p, indiciNomi)} ×${p.quantita}`).join(", ")}
                     </td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
                       {tab === "daevadere" ? (
@@ -76900,7 +76919,7 @@ export default function App() {
     // nessun altro. Dichiarata lo stesso, per non finire fra le viste che
     // ricevono dati senza averli chiesti.
     stampepackaging: [],
-    omaggi: ["vendite_shop"],
+    omaggi: ["vendite_shop", "prodotti_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop", "impostazioni_iva"],
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
@@ -76929,7 +76948,7 @@ export default function App() {
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti", "sync_shop_esiti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
-    spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location"],
+    spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location", "prodotti_shop"],
     contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
     statisticamaster: ["vendite_shop_storico", "prodotti_shop", "master", "target_vendite_prodotti"],
     gestionemaster: ["master", "venditori", "corsi", "corsi_date", "master_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
@@ -78857,7 +78876,7 @@ export default function App() {
       )}
 
       {view === "omaggi" && (
-        <PaginaOmaggi venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")} titolo={etichettaTasto("magazzinoshop", "omaggi", "Omaggi")} />
+        <PaginaOmaggi venditeShop={venditeShop} prodottiShop={prodottiShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")} titolo={etichettaTasto("magazzinoshop", "omaggi", "Omaggi")} />
       )}
 
       {view === "prodottiusatikit" && (
@@ -79371,7 +79390,7 @@ export default function App() {
 
       {view === "spedizionipos" && (
         <PaginaSpedizioniPos
-          spedizioniPos={spedizioniPos} corsi={corsi} corsiDate={corsiDate} location={location}
+          spedizioniPos={spedizioniPos} corsi={corsi} corsiDate={corsiDate} location={location} prodottiShop={prodottiShop}
           ricarica={fetchDati} onBack={() => setView("spedizionicorsi")}
         />
       )}
