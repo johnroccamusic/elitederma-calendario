@@ -37,7 +37,6 @@ export function soloWinAnsi(testo) {
 }
 
 const euro = (n) => (n == null ? "-" : `${Number(n).toFixed(2).replace(".", ",")}`);
-const pct = (n) => (n == null ? "-" : `${String(Math.round(Number(n) * 10) / 10).replace(".", ",")}%`);
 
 // Il testo che non ci sta si taglia con i puntini, misurando davvero la
 // larghezza con il font che lo disegnera': tagliare a numero di caratteri
@@ -328,8 +327,7 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
       const yTesto = y - 14;
       pagina.drawText(accorcia(p.nome, normale, 9, larghezzaNome), { x: xNome, y: yTesto, size: 9, font: normale, color: colore(NAVY) });
       scriviDestra(euro(p.pubblico_lordo), colonne[0].destra, yTesto, normale, 9.5, GRIGIO);
-      scriviDestra(pct(p.sconto_max_pct), colonne[1].destra, yTesto, normale, 9.5, ORO);
-      scriviDestra(euro(p.prezzo_rivenditore), colonne[2].destra, yTesto, grassetto, 10.5, NAVY);
+      scriviDestra(euro(p.prezzo_rivenditore), colonne[1].destra, yTesto, grassetto, 10.5, NAVY);
 
       y -= ALTEZZA_RIGA;
     }
