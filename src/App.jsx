@@ -38502,6 +38502,199 @@ function SceltaRegolaSconto({ tipo, fasce, onCambiaTipo, onCambiaFasce, prodotti
   );
 }
 
+// Un codice che vale su TUTTO il catalogo, senza restrizioni a certe
+// categorie o a certi prodotti. Serve a due tasti — quello dei codici
+// d'aula e quello dei personali — per non riscrivere la regola di un
+// codice ristretto a mano: la sua percentuale fa parte del motivo per
+// cui qualcuno l'ha ristretto.
+function codiceSuTuttoIlCatalogo(c) {
+  return (c.ambito || "tutto") === "tutto"
+    && !(c.categorie_ids || []).length && !(c.prodotti_ids || []).length;
+}
+
+// Le due tabelle dello sconto che il codice d'aula fa agli allievi.
+//
+// Stavano in Gestione punti e dal 07/10/2026 stanno qui, in Genera
+// coupon → Generazione automatica: e' il posto dove si decide tutto il
+// resto del codice d'aula (validita', cumulabilita', utilizzi), e
+// averle in due pagine diverse voleva dire due schermate che scrivevano
+// sulla stessa impostazione senza vedersi.
+function SchedaFasceCodiceAula({ regoleReferralAutomatico, prodottiShop, coupon, corsiDate, ricarica, isMobile }) {
+  const [fasceCartaSalvate, salvaFasceCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+  const fasceCorso = serieScontoScritta(fasceCartaSalvate)
+    ? fasceCartaSalvate
+    : (regoleReferralAutomatico ? gruppiFasceValidi(regoleReferralAutomatico.fasce_sconto) : null);
+  // la seconda serie, per chi paga in contanti al POS dell'app: si salva
+  // appena la si tocca, come il referral personale. Vuota = come la carta
+  const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const fasceContantiCorso = fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, true);
+  const contantiUgualiACarta = !serieScontoScritta(fasceContantiSalvate);
+  // la percentuale dei contanti quando i codici d'aula sono a secco
+  const [pctContantiCorsi, salvaPctContantiCorsi] = useImpostazioneCondivisa(CHIAVE_SCONTO_CORSI_CONTANTI_PCT, null);
+  const [salvandoFasceCorso, setSalvandoFasceCorso] = useState(false);
+  const [msgFasceCorso, setMsgFasceCorso] = useState("");
+  // ogni numero che cambia si scrive subito, senza aspettare il tasto:
+  // e' il motivo per cui la tabella dei contanti non ha mai perso niente
+  async function cambiaFasceCorso(v) {
+    const tabella = gruppiFasceValidi(v);
+    salvaFasceCarta(tabella);
+    if (!regoleReferralAutomatico?.id) return null;
+    const { error } = await supabase.from("regole_referral_automatico")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasceScontoValide(tabella.gruppi[0]), aggiornato_ts: new Date().toISOString() })
+      .eq("id", regoleReferralAutomatico.id);
+    return error || null;
+  }
+  async function salvaFasceCorso() {
+    if (!regoleReferralAutomatico?.id) return;
+    setSalvandoFasceCorso(true); setMsgFasceCorso("");
+    const error = await cambiaFasceCorso(fasceCorso);
+    setSalvandoFasceCorso(false);
+    if (error) { setMsgFasceCorso("Errore: " + testoErrore(error)); return; }
+    setMsgFasceCorso("Fasce dei codici d'aula salvate: valgono dai prossimi codici generati.");
+    ricarica(["regole_referral_automatico"]);
+  }
+
+  // I codici gia' emessi portano la regola con cui sono nati: quelli
+  // creati prima erano all'8,50% fisso, e salvare le fasce non li tocca.
+  // Questo tasto li riscrive, nell'app e sul sito.
+  //
+  // Solo quelli ANCORA VALIDI: riaprire il coupon di una classe finita
+  // vorrebbe dire rimettere in circolo uno sconto che era scaduto, e su
+  // quelle vendite lo sconto e' gia' stato fatto — cambiarne la regola
+  // adesso non cambierebbe nulla di quello che e' successo.
+  const [applicandoAiCorsi, setApplicandoAiCorsi] = useState(false);
+  const [msgCodiciCorsi, setMsgCodiciCorsi] = useState("");
+  const oggiCodici = dataOggiStr();
+  // Il criterio e' il CORSO, non la scadenza del codice: un codice di una
+  // classe gia' finita non va toccato nemmeno se e' ancora valido per
+  // qualche giorno, perche' li' lo sconto e' gia' stato fatto e la regola
+  // con cui e' nato e' la storia di quelle vendite. Si riscrivono solo i
+  // codici delle classi che devono ancora finire — comprese quelle che
+  // cominciano domani.
+  const fineEdizione = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd.data_fine || cd.data_inizio]));
+  // Il filtro NON esclude chi ha gia' le fasce: il tasto riscrive la
+  // regola di adesso, e ripeterlo non cambia niente.
+  const codiciAulaDaAggiornare = (coupon || []).filter((c) => {
+    if (!c.corsi_date_id) return false;
+    if (!codiceSuTuttoIlCatalogo(c)) return false;
+    if (c.valido_fino_a && c.valido_fino_a < oggiCodici) return false;
+    const fine = fineEdizione[c.corsi_date_id];
+    return !!fine && fine >= oggiCodici;
+  });
+
+  async function applicaFasceAiCodiciAula() {
+    const fasce = fasceScontoValide(gruppiFasceValidi(fasceCorso).gruppi[0]);
+    if (codiciAulaDaAggiornare.length === 0) { setMsgCodiciCorsi("Nessun codice da aggiornare: non ci sono classi ancora da finire."); return; }
+    // UNA pressione sola. C'erano due passaggi — premi, poi conferma — ed
+    // era peggio di window.confirm: chi preme vede lo stesso messaggio e
+    // non sa se la seconda pressione e' arrivata. Riscrivere la regola di
+    // oggi sui codici di oggi e' un'operazione che si puo' ripetere
+    // all'infinito senza cambiare niente, quindi non c'e' niente da
+    // proteggere con una conferma.
+    setApplicandoAiCorsi(true);
+    setMsgCodiciCorsi(`Riscrivo le regole di oggi su ${codiciAulaDaAggiornare.length} codici d'aula…`);
+    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
+    // .select() non e' un vezzo: senza, PostgREST risponde "va bene" anche
+    // quando non ha toccato una riga, e il messaggio direbbe fatto su
+    // diciotto codici mentre nel database non e' cambiato niente. Cosi' il
+    // numero che si legge e' il numero delle righe cambiate davvero.
+    const { data: riscritti, error } = await supabase.from("coupon")
+      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
+      .in("id", codiciAulaDaAggiornare.map((c) => c.id))
+      .select("id");
+    if (error) { setApplicandoAiCorsi(false); setMsgCodiciCorsi("Errore: " + testoErrore(error)); return; }
+    if (!riscritti || riscritti.length === 0) {
+      setApplicandoAiCorsi(false);
+      setMsgCodiciCorsi("Errore: il database non ha cambiato nessuna riga. I codici sono rimasti come prima.");
+      return;
+    }
+    let sito = 0; const falliti = [];
+    const conSito = codiciAulaDaAggiornare.filter((x) => x.woo_coupon_id);
+    for (const c of conSito) {
+      setMsgCodiciCorsi(`Riscritti ${riscritti.length} codici nell'app. Ora il sito: ${sito + falliti.length} di ${conSito.length}…`);
+      const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: c.id, aggiornaRegola: true } });
+      if (erroreSito || data?.errore) falliti.push(c.codice); else sito += 1;
+    }
+    setApplicandoAiCorsi(false);
+    setMsgCodiciCorsi(`Fatto: ${riscritti.length} codici d'aula riscritti nell'app e ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
+    ricarica(["coupon"]);
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 22 }}>
+      <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto ai corsi, con il codice d'aula</div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+        Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine del prodotto: piu' alto il margine, piu' alto lo sconto. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app.
+      </div>
+      {/* Dal 22/09/2026 i codici d'aula possono stare a percentuale
+          fissa invece che a fasce. Questa tabella resta scritta e
+          intatta, ma non la guarda nessuno finche' la regola e'
+          fissa — e toccarla la rimetterebbe a fasce senza dirlo,
+          perche' ogni numero cambiato si salva da solo. Meglio
+          avvisare qui, dove la mano sta per posarsi. */}
+      {regoleReferralAutomatico && regoleReferralAutomatico.tipo_regola_sconto !== "fasce" && (
+        <div style={{ background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 12px", marginBottom: 14, ...fontBody, fontSize: 12.5, color: "#8A6D1D", lineHeight: 1.5 }}>
+          Adesso i codici d'aula fanno una <b style={{ color: NAVY }}>percentuale fissa su tutto</b>, non le fasce.
+          Questa tabella resta com'è, ma non la usa nessuno: <b style={{ color: NAVY }}>cambiando anche un solo numero qui si torna alle fasce</b>.
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+            <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D" }}>Con carta, POS e sito:</span>
+            <b style={{ ...fontDisplay, fontSize: 15, color: NAVY }}>{fmtPctErp(Number(regoleReferralAutomatico.percentuale_sconto) || 0)}</b>
+            <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", marginLeft: 8 }}>In contanti al banco:</span>
+            <input
+              inputMode="decimal"
+              value={pctContantiCorsi == null ? "" : String(pctContantiCorsi)}
+              onChange={(e) => { const v = e.target.value.trim(); salvaPctContantiCorsi(v === "" ? null : parseNum(v)); }}
+              placeholder="uguale"
+              title="Vuoto = in contanti vale la stessa percentuale della carta"
+              style={{ ...inputStyle, width: 78, padding: "6px 8px", fontSize: 13, textAlign: "right" }}
+            />
+            <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D" }}>%</span>
+          </div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", marginTop: 6 }}>
+            Al sito va sempre quella della carta: WooCommerce non sa con che cosa pagherai al banco.
+          </div>
+        </div>
+      )}
+      {fasceCorso == null ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
+      ) : (
+        <>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop online</div>
+          <FasceDiSpesa valore={fasceCorso} onCambia={cambiaFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
+            <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
+            {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
+          </div>
+          {/* salvare le fasce vale dai prossimi codici: questi sono
+              quelli gia' in giro, che portano ancora la regola con cui
+              sono nati */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
+            <Button variant="ghost" onClick={applicaFasceAiCodiciAula} disabled={applicandoAiCorsi || codiciAulaDaAggiornare.length === 0}>
+              {applicandoAiCorsi ? "Riscrivo…" : `Applica ai codici d'aula esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
+            </Button>
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
+              I codici già emessi portano la regola con cui sono nati — i più vecchi uno sconto fisso.
+              Questo tasto riscrive queste fasce sui codici delle <b>classi che devono ancora finire</b>,
+              comprese quelle che cominciano domani, nell'app e sul sito. I codici dei corsi già passati
+              non si toccano: lì lo sconto è già stato fatto, e la regola con cui sono nati è la storia
+              di quelle vendite.
+            </span>
+            {msgCodiciCorsi && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciCorsi.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciCorsi}</span>}
+          </div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
+          <FasceDiSpesa senzaWoo valore={fasceContantiCorso} onCambia={(v) => salvaFasceContanti(v)} prodottiShop={prodottiShop} isMobile={isMobile} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: contantiUgualiACarta ? MUTED : "#2E7D32" }}>
+              {contantiUgualiACarta ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo." : "Serie salvata: il POS la applica quando il pagamento è in contanti o con buono Amazon."}
+            </span>
+            {!contantiUgualiACarta && <Button variant="ghost" onClick={() => salvaFasceContanti([])}>Rimetti uguali a carta e shop</Button>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
   const { ordine: ordineClassifica, cambiaOrdine: cambiaOrdineClassifica, ordina: ordinaClassifica } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
@@ -38769,10 +38962,11 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
 
   // ---------- tab "Generazione automatica" ----------
   const [regoleForm, setRegoleForm] = useState(null);
-  // la tabella e' la stessa di Punti master — stessa impostazione
-  // condivisa, non una copia: la schermata a riga sola che c'era qui
-  // riscriveva la regola e cancellava le fasce di spesa scritte di la'
-  const [fasceCorsiGen, salvaFasceCorsiGen] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+  // le fasce le disegna e le salva SchedaFasceCodiceAula qui sotto. Qui
+  // si leggono soltanto, perche' "Salva regole" scrive anche la riga di
+  // base che leggono il sito e il cron: senza, premerlo riporterebbe
+  // indietro le fasce appena toccate
+  const [fasceCorsiGen] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
   const [salvandoRegole, setSalvandoRegole] = useState(false);
   const [generandoOggi, setGenerandoOggi] = useState(false);
   useEffect(() => {
@@ -38788,8 +38982,12 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       // e' piu' un'opzione, e salvando si scrive "fasce" qualunque cosa ci
       // fosse prima
       tipo_regola_sconto: "fasce",
-      // la sola riga di base, come l'hanno sempre letta il sito e il cron
-      fasce_sconto: fasceScontoValide(regoleForm.fasce_sconto),
+      // la sola riga di base, come l'hanno sempre letta il sito e il cron.
+      // Viene dalla tabella condivisa quando c'e' scritta: la scheda qui
+      // sopra la cambia da sola, e regoleForm e' il modulo di questa
+      // pagina — leggere lui vorrebbe dire riportare indietro le fasce
+      // appena toccate ogni volta che si premono le altre impostazioni.
+      fasce_sconto: fasceScontoValide(serieScontoScritta(fasceCorsiGen) ? gruppiFasceValidi(fasceCorsiGen).gruppi[0] : regoleForm.fasce_sconto),
       giorni_validita_dopo_corso: Number(regoleForm.giorni_validita_dopo_corso) || 0,
       valido_durante_corso: !!regoleForm.valido_durante_corso,
       non_cumulabile: !!regoleForm.non_cumulabile,
@@ -39071,24 +39269,17 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
               Regole usate per generare in automatico un referral code quando inizia un corso: ogni edizione (sede + data + master) riceve il proprio codice dedicato.
             </div>
+            {/* le due tabelle dello sconto, arrivate qui da Gestione punti:
+                si salvano da sole, numero per numero, e non passano dal
+                tasto "Salva regole" qui sotto */}
+            <SchedaFasceCodiceAula
+              regoleReferralAutomatico={regoleReferralAutomatico} prodottiShop={prodottiShop}
+              coupon={coupon} corsiDate={corsiDate} ricarica={ricarica} isMobile={isMobile}
+            />
             {!regoleForm ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
             ) : (
               <div style={{ ...cardStyle }}>
-                {/* solo a fasce, come per il referral personale: la
-                    percentuale unica sul corso non si sceglie piu' */}
-                {/* la stessa tabella di Punti master: scrivono sullo
-                    stesso campo, e quella a riga sola cancellava le
-                    fasce di spesa scritte dall'altra parte */}
-                <FasceDiSpesa
-                  valore={serieScontoScritta(fasceCorsiGen) ? fasceCorsiGen : regoleForm.fasce_sconto}
-                  onCambia={(f) => {
-                    const tabella = gruppiFasceValidi(f);
-                    salvaFasceCorsiGen(tabella);
-                    setRegoleForm({ ...regoleForm, fasce_sconto: fasceScontoValide(tabella.gruppi[0]) });
-                  }}
-                  prodottiShop={prodottiShop} isMobile={isMobile}
-                />
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                   {false && (
                     <>
@@ -50181,7 +50372,7 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
 // punti maturati con la regola di Dettaglio prodotti (dieci per euro
 // cedibile, per ogni pezzo venduto attraverso l'app). Qui si governa il
 // sistema; cosa vede la master nella sua dashboard si decide dopo.
-function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, coupon = [], corsiDate = [], ricarica, onBack, titolo = "Gestione punti" }) {
+function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, coupon = [], ricarica, onBack, titolo = "Gestione punti" }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "punti", direzione: "desc" });
   const [form, setForm] = useState(null);
@@ -50225,117 +50416,15 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // Era quello il "reset": usciti dalla pagina lo stato ripartiva da
   // zero e si rileggeva la regola con fasceScontoValide, che tiene i sei
   // scaglioni e butta via le quattro righe di spesa e le tre soglie.
-  const [fasceCartaSalvate, salvaFasceCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+  // Le fasce dei codici d'aula si REGOLANO in Genera coupon → Generazione
+  // automatica. Qui si leggono soltanto: la classifica dei punti deve
+  // sapere quanto sconto ha fatto il codice su ogni vendita, altrimenti
+  // conterebbe punti su un prezzo che l'allieva non ha mai pagato.
+  const [fasceCartaSalvate] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
   const fasceCorso = serieScontoScritta(fasceCartaSalvate)
     ? fasceCartaSalvate
     : (regoleReferralAutomatico ? gruppiFasceValidi(regoleReferralAutomatico.fasce_sconto) : null);
-  // la seconda serie, per chi paga in contanti al POS dell'app: si salva
-  // appena la si tocca, come il referral personale. Vuota = come la carta
-  const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
-  const fasceContantiCorso = fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, true);
-  const contantiUgualiACarta = !serieScontoScritta(fasceContantiSalvate);
-  // e la seconda serie del referral personale, per contanti e buono Amazon
-  // la percentuale dei contanti quando i codici d'aula sono a secco
-  const [pctContantiCorsi, salvaPctContantiCorsi] = useImpostazioneCondivisa(CHIAVE_SCONTO_CORSI_CONTANTI_PCT, null);
-  const [salvandoFasceCorso, setSalvandoFasceCorso] = useState(false);
-  const [msgFasceCorso, setMsgFasceCorso] = useState("");
-  // ogni numero che cambia si scrive subito, senza aspettare il tasto:
-  // e' il motivo per cui la tabella dei contanti non ha mai perso niente
-  async function cambiaFasceCorso(v) {
-    const tabella = gruppiFasceValidi(v);
-    salvaFasceCarta(tabella);
-    if (!regoleReferralAutomatico?.id) return null;
-    const { error } = await supabase.from("regole_referral_automatico")
-      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasceScontoValide(tabella.gruppi[0]), aggiornato_ts: new Date().toISOString() })
-      .eq("id", regoleReferralAutomatico.id);
-    return error || null;
-  }
-  async function salvaFasceCorso() {
-    if (!regoleReferralAutomatico?.id) return;
-    setSalvandoFasceCorso(true); setMsgFasceCorso("");
-    const error = await cambiaFasceCorso(fasceCorso);
-    setSalvandoFasceCorso(false);
-    if (error) { setMsgFasceCorso("Errore: " + testoErrore(error)); return; }
-    setMsgFasceCorso("Fasce dei codici d'aula salvate: valgono dai prossimi codici generati.");
-    ricarica(["regole_referral_automatico"]);
-  }
-
-  // I codici gia' emessi portano la regola con cui sono nati: quelli
-  // creati prima erano all'8,50% fisso, e salvare le fasce non li tocca.
-  // Questo tasto li riscrive, nell'app e sul sito.
-  //
-  // Solo quelli ANCORA VALIDI: riaprire il coupon di una classe finita
-  // vorrebbe dire rimettere in circolo uno sconto che era scaduto, e su
-  // quelle vendite lo sconto e' gia' stato fatto — cambiarne la regola
-  // adesso non cambierebbe nulla di quello che e' successo.
-  const [applicandoAiCorsi, setApplicandoAiCorsi] = useState(false);
-  const [msgCodiciCorsi, setMsgCodiciCorsi] = useState("");
-  // Si riscrivono solo i codici che valgono su TUTTO il catalogo. Un
-  // codice ristretto a certe categorie o a certi prodotti e' stato fatto
-  // a mano per un motivo, e la sua percentuale fa parte di quel motivo:
-  // need30 e' il 30% sui prodotti needling, in aula e sullo shop, e le
-  // fasce di margine glielo porterebbero a circa il 4% sul sito.
-  const valeSuTuttoIlCatalogo = (c) =>
-    (c.ambito || "tutto") === "tutto"
-    && !(c.categorie_ids || []).length && !(c.prodotti_ids || []).length;
-  const oggiCodici = dataOggiStr();
-  // Il criterio e' il CORSO, non la scadenza del codice: un codice di una
-  // classe gia' finita non va toccato nemmeno se e' ancora valido per
-  // qualche giorno, perche' li' lo sconto e' gia' stato fatto e la regola
-  // con cui e' nato e' la storia di quelle vendite. Si riscrivono solo i
-  // codici delle classi che devono ancora finire — comprese quelle che
-  // cominciano domani.
-  const fineEdizione = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd.data_fine || cd.data_inizio]));
-  // Il filtro NON esclude piu' chi ha gia' le fasce. Lo faceva, e il
-  // tasto si spegneva da solo: con il needling la regola di oggi e' due
-  // cose — le fasce E la tabella del needling — e un codice nato con le
-  // fasce vecchie risulta "a posto" pur non avendo mai sentito nominare
-  // il needling. Il tasto riscrive la regola di adesso, punto.
-  const codiciAulaDaAggiornare = (coupon || []).filter((c) => {
-    if (!c.corsi_date_id) return false;
-    if (!valeSuTuttoIlCatalogo(c)) return false;
-    if (c.valido_fino_a && c.valido_fino_a < oggiCodici) return false;
-    const fine = fineEdizione[c.corsi_date_id];
-    return !!fine && fine >= oggiCodici;
-  });
-
-  async function applicaFasceAiCodiciAula() {
-    const fasce = fasceScontoValide(gruppiFasceValidi(fasceCorso).gruppi[0]);
-    if (codiciAulaDaAggiornare.length === 0) { setMsgCodiciCorsi("Nessun codice da aggiornare: non ci sono classi ancora da finire."); return; }
-    // UNA pressione sola. C'erano due passaggi — premi, poi conferma — ed
-    // era peggio di window.confirm: chi preme vede lo stesso messaggio e
-    // non sa se la seconda pressione e' arrivata. Riscrivere la regola di
-    // oggi sui codici di oggi e' un'operazione che si puo' ripetere
-    // all'infinito senza cambiare niente, quindi non c'e' niente da
-    // proteggere con una conferma.
-    setApplicandoAiCorsi(true);
-    setMsgCodiciCorsi(`Riscrivo le regole di oggi su ${codiciAulaDaAggiornare.length} codici d'aula…`);
-    const percentualeSito = percentualeWooDaFasce(prodottiShop, fasce);
-    // .select() non e' un vezzo: senza, PostgREST risponde "va bene" anche
-    // quando non ha toccato una riga, e il messaggio direbbe fatto su
-    // diciotto codici mentre nel database non e' cambiato niente. Cosi' il
-    // numero che si legge e' il numero delle righe cambiate davvero.
-    const { data: riscritti, error } = await supabase.from("coupon")
-      .update({ tipo_regola_sconto: "fasce", fasce_sconto: fasce, valore: percentualeSito, base_sconto: "lordo" })
-      .in("id", codiciAulaDaAggiornare.map((c) => c.id))
-      .select("id");
-    if (error) { setApplicandoAiCorsi(false); setMsgCodiciCorsi("Errore: " + testoErrore(error)); return; }
-    if (!riscritti || riscritti.length === 0) {
-      setApplicandoAiCorsi(false);
-      setMsgCodiciCorsi("Errore: il database non ha cambiato nessuna riga. I codici sono rimasti come prima.");
-      return;
-    }
-    let sito = 0; const falliti = [];
-    const conSito = codiciAulaDaAggiornare.filter((x) => x.woo_coupon_id);
-    for (const c of conSito) {
-      setMsgCodiciCorsi(`Riscritti ${riscritti.length} codici nell'app. Ora il sito: ${sito + falliti.length} di ${conSito.length}…`);
-      const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: c.id, aggiornaRegola: true } });
-      if (erroreSito || data?.errore) falliti.push(c.codice); else sito += 1;
-    }
-    setApplicandoAiCorsi(false);
-    setMsgCodiciCorsi(`Fatto: ${riscritti.length} codici d'aula riscritti nell'app e ${sito} sul sito${falliti.length ? ` (non riusciti sul sito: ${falliti.join(", ")})` : ""}.`);
-    ricarica(["coupon"]);
-  }
+  const [fasceContantiSalvate] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
   const [regolaReferralMaster, setRegolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
   // gli scaglioni dei punti needling: si salvano appena si tocca un numero,
   // come le fasce dei contanti. Nessun tasto da premere, nessun numero perso
@@ -50369,7 +50458,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     // la riga di base: sul coupon e sul sito viaggia quella, le fasce di
     // spesa le applica il POS che il carrello ce l'ha
     const fasce = fasceScontoValide(gruppiFasceValidi(regolaReferralMaster?.fasce).gruppi[0]);
-    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && valeSuTuttoIlCatalogo(c));
+    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && codiceSuTuttoIlCatalogo(c));
     if (personali.length === 0) { setMsgCodiciPersonali("Nessun codice personale da aggiornare."); return; }
     // una pressione sola, e il conto vero: vedi la gemella qui sopra
     setApplicandoAiCodici(true);
@@ -50568,81 +50657,9 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto ai corsi, con il codice d'aula</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine del prodotto: piu' alto il margine, piu' alto lo sconto. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app. La prima è la stessa di Generazione automatica in Genera coupon: cambiarla qui o là è lo stesso.
-          </div>
-          {/* Dal 22/09/2026 i codici d'aula possono stare a percentuale
-              fissa invece che a fasce. Questa tabella resta scritta e
-              intatta, ma non la guarda nessuno finche' la regola e'
-              fissa — e toccarla la rimetterebbe a fasce senza dirlo,
-              perche' ogni numero cambiato si salva da solo. Meglio
-              avvisare qui, dove la mano sta per posarsi. */}
-          {regoleReferralAutomatico && regoleReferralAutomatico.tipo_regola_sconto !== "fasce" && (
-            <div style={{ background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 12px", marginBottom: 14, ...fontBody, fontSize: 12.5, color: "#8A6D1D", lineHeight: 1.5 }}>
-              Adesso i codici d'aula fanno una <b style={{ color: NAVY }}>percentuale fissa su tutto</b>, non le fasce.
-              Questa tabella resta com'è, ma non la usa nessuno: <b style={{ color: NAVY }}>cambiando anche un solo numero qui si torna alle fasce</b>.
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D" }}>Con carta, POS e sito:</span>
-                <b style={{ ...fontDisplay, fontSize: 15, color: NAVY }}>{fmtPctErp(Number(regoleReferralAutomatico.percentuale_sconto) || 0)}</b>
-                <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", marginLeft: 8 }}>In contanti al banco:</span>
-                <input
-                  inputMode="decimal"
-                  value={pctContantiCorsi == null ? "" : String(pctContantiCorsi)}
-                  onChange={(e) => { const v = e.target.value.trim(); salvaPctContantiCorsi(v === "" ? null : parseNum(v)); }}
-                  placeholder="uguale"
-                  title="Vuoto = in contanti vale la stessa percentuale della carta"
-                  style={{ ...inputStyle, width: 78, padding: "6px 8px", fontSize: 13, textAlign: "right" }}
-                />
-                <span style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D" }}>%</span>
-              </div>
-              <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", marginTop: 6 }}>
-                Al sito va sempre quella della carta: WooCommerce non sa con che cosa pagherai al banco.
-              </div>
-            </div>
-          )}
-          {fasceCorso == null ? (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
-          ) : (
-            <>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop online</div>
-              <FasceDiSpesa valore={fasceCorso} onCambia={cambiaFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
-                <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
-                {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
-              </div>
-              {/* salvare le fasce vale dai prossimi codici: questi sono
-                  quelli gia' in giro, che portano ancora la regola con cui
-                  sono nati */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
-                <Button variant="ghost" onClick={applicaFasceAiCodiciAula} disabled={applicandoAiCorsi || codiciAulaDaAggiornare.length === 0}>
-                  {applicandoAiCorsi ? "Riscrivo…" : `Applica ai codici d'aula esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
-                </Button>
-                <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "1 1 240px", lineHeight: 1.4 }}>
-                  I codici già emessi portano la regola con cui sono nati — i più vecchi uno sconto fisso.
-                  Questo tasto riscrive queste fasce sui codici delle <b>classi che devono ancora finire</b>,
-                  comprese quelle che cominciano domani, nell'app e sul sito. I codici dei corsi già passati
-                  non si toccano: lì lo sconto è già stato fatto, e la regola con cui sono nati è la storia
-                  di quelle vendite.
-                </span>
-                {msgCodiciCorsi && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciCorsi.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciCorsi}</span>}
-              </div>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Contanti o buono Amazon dal POS dell'app</div>
-              <FasceDiSpesa senzaWoo valore={fasceContantiCorso} onCambia={(v) => salvaFasceContanti(v)} prodottiShop={prodottiShop} isMobile={isMobile} />
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: contantiUgualiACarta ? MUTED : "#2E7D32" }}>
-                  {contantiUgualiACarta ? "Per ora uguali a carta e shop: cambia un numero e si salva da solo." : "Serie salvata: il POS la applica quando il pagamento è in contanti o con buono Amazon."}
-                </span>
-                {!contantiUgualiACarta && <Button variant="ghost" onClick={() => salvaFasceContanti([])}>Rimetti uguali a carta e shop</Button>}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Sconto con il referral personale</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Stesse quattro fasce di spesa del codice d'aula, e <b style={{ color: NAVY }}>due serie</b> come lì: una per carta e shop, una per i contanti e il buono Amazon incassati al banco. Si salva appena la cambi.
+            Le percentuali del codice personale di ogni master, quello che i clienti usano sul sito o fuori dal corso. Stesse quattro fasce di spesa del codice d'aula — che ora si regolano in Genera coupon → Generazione automatica — e <b style={{ color: NAVY }}>due serie</b> come lì: una per carta e shop, una per i contanti e il buono Amazon incassati al banco. Si salva appena la cambi.
           </div>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Carta e shop</div>
           <FasceDiSpesa
@@ -76263,7 +76280,7 @@ export default function App() {
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
-    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon", "corsi_date"],
+    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti", "sync_shop_esiti"],
@@ -78661,7 +78678,7 @@ export default function App() {
       {view === "gestionepunti" && (
         <PaginaGestionePunti
           master={master} venditeShop={venditeShop} prodottiShop={prodottiShop} puntiMasterImpostazioni={puntiMasterImpostazioni}
-          regoleReferralAutomatico={regoleReferralAutomatico} coupon={coupon} corsiDate={corsiDate}
+          regoleReferralAutomatico={regoleReferralAutomatico} coupon={coupon}
           ricarica={fetchDati} onBack={() => setView("compensipremi")}
           titolo={etichettaTasto("compensipremi", "gestionepunti", "Gestione punti")}
         />
