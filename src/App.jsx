@@ -5005,6 +5005,36 @@ function registraProdottiNeedling(prodottiCategorie, categorieProdotti) {
   });
   PRODOTTI_NEEDLING = trovati;
 }
+
+// Le categorie di ogni prodotto, categorie madri comprese. Servono alle
+// eccezioni di un codice: "sui needling 30%" deve valere anche per un
+// prodotto messo in una sottocategoria del needling, altrimenti la regola
+// la si scrive una volta e la si deve ricordare a ogni prodotto nuovo.
+let CATEGORIE_DI_PRODOTTO = new Map();
+function registraCategorieProdotti(prodottiCategorie, categorieProdotti) {
+  const mappa = new Map();
+  collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => {
+    if (!mappa.has(pc.prodotto_id)) mappa.set(pc.prodotto_id, new Set());
+    mappa.get(pc.prodotto_id).add(pc.categoria_id);
+  });
+  CATEGORIE_DI_PRODOTTO = mappa;
+}
+// L'eccezione che tocca questo prodotto, se c'e'. Fra due eccezioni che
+// lo prendono tutte e due vince la piu' alta: e' l'unica regola che si
+// puo' spiegare senza guardare in che ordine sono state scritte.
+function percentualeEccezioneDi(prodotto, eccezioni) {
+  if (!prodotto?.id || !Array.isArray(eccezioni) || eccezioni.length === 0) return null;
+  const sue = CATEGORIE_DI_PRODOTTO.get(prodotto.id);
+  if (!sue || sue.size === 0) return null;
+  let migliore = null;
+  eccezioni.forEach((e) => {
+    if (!e || !sue.has(e.categoria_id)) return;
+    const pct = Number(e.percentuale);
+    if (!Number.isFinite(pct) || pct <= 0) return;
+    if (migliore == null || pct > migliore) migliore = pct;
+  });
+  return migliore;
+}
 function registraScontoNeedling(regola) {
   const ok = regola && Array.isArray(regola.soglie) && regola.soglie.length === 2
     && Array.isArray(regola.sconti) && regola.sconti.length === 3
@@ -5025,7 +5055,18 @@ function percentualeNeedlingDi(spesa) {
   return Number.isFinite(pct) ? pct : null;
 }
 
-function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false) {
+function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false, eccezioni = null) {
+  // PRIMA DI TUTTO le eccezioni del codice, se ne ha. Un codice con
+  // regole proprie dice "su questa categoria vale questa percentuale", e
+  // vince su ogni altra cosa — fasce e tabella needling comprese: e' la
+  // regola piu' specifica che esista, scritta su quel codice per quella
+  // categoria. Si legge sul NETTO come lo sconto needling, cosi' il 30%
+  // scritto qui e il 30% scritto li' sono lo stesso 30%.
+  const pctEccezione = percentualeEccezioneDi(prodotto, eccezioni);
+  if (pctEccezione != null) {
+    const iva = Number(prodotto?.aliquota_iva_vendita ?? ALIQUOTA_IVA_STANDARD) || 0;
+    return pctEccezione / (1 + iva / 100);
+  }
   // I prodotti needling hanno una tabella loro e non guardano le fasce:
   // vale quella e basta, mai la somma delle due.
   //
@@ -5056,12 +5097,12 @@ function percentualeFasciaDi(prodotto, fasce, spesa = 0, contanti = false) {
   const i = FASCE_MARGINE.findIndex((f) => m <= f.a);
   return elenco[i === -1 ? elenco.length - 1 : i].percentuale;
 }
-function scontoAFasceCarrello(righe, prodottoPerId, fasce, contanti = false) {
+function scontoAFasceCarrello(righe, prodottoPerId, fasce, contanti = false, eccezioni = null) {
   // prima si somma quanto si spende, poi si sceglie la serie: la fascia
   // di spesa la decide il carrello intero, non la singola riga
   const spesa = round2((righe || []).reduce((s, r) => s + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
   return round2((righe || []).reduce((s, r) => {
-    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce, spesa, contanti);
+    const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce, spesa, contanti, eccezioni);
     return s + (pct > 0 ? (r.prezzo * r.quantita * pct) / 100 : 0);
   }, 0));
 }
@@ -50239,7 +50280,7 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
 // punti maturati con la regola di Dettaglio prodotti (dieci per euro
 // cedibile, per ogni pezzo venduto attraverso l'app). Qui si governa il
 // sistema; cosa vede la master nella sua dashboard si decide dopo.
-function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, coupon = [], corsiDate = [], ricarica, onBack, titolo = "Gestione punti" }) {
+function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImpostazioni, regoleReferralAutomatico, coupon = [], corsiDate = [], categorieProdotti = [], corsi = [], location = [], ricarica, onBack, titolo = "Gestione punti" }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "punti", direzione: "desc" });
   const [form, setForm] = useState(null);
@@ -50266,6 +50307,81 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     const n = Math.max(0, Math.min(100, Math.round(Number(valore) || 0)));
     salvaQuote({ ...quote, [canale]: n });
   };
+  // ---- Regole di un codice -------------------------------------------
+  // Un codice che fa storia a se'. Si sceglie fra quelli gia' emessi, si
+  // accende l'interruttore e da quel momento al banco valgono le sue due
+  // tabelle e le sue eccezioni, non quelle generali. Spento, torna a
+  // seguire le regole di tutti: niente si perde, e si puo' tornare
+  // indietro in un secondo.
+  const [codiceSceltoId, setCodiceSceltoId] = useState("");
+  const [bozzaCodice, setBozzaCodice] = useState(null);
+  const [salvandoCodice, setSalvandoCodice] = useState(false);
+  const [msgCodice, setMsgCodice] = useState("");
+  const codiciModificabili = useMemo(
+    () => (coupon || []).filter((c) => c.codice).sort((a, b) => String(a.codice).localeCompare(String(b.codice))),
+    [coupon],
+  );
+  const codiceScelto = codiciModificabili.find((c) => c.id === codiceSceltoId) || null;
+  const edizionePerId = useMemo(() => Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd])), [corsiDate]);
+  const nomeCorsoPerId = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c.nome])), [corsi]);
+  const nomeCittaPerId = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l.nome])), [location]);
+  const masterPerId = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m.nome])), [master]);
+  function descriviCodice(c) {
+    if (c.corsi_date_id) {
+      const cd = edizionePerId[c.corsi_date_id];
+      const dove = cd ? `${nomeCorsoPerId[cd.corso_id] || "?"} · ${toTitleCase(nomeCittaPerId[cd.location_id] || "?")} · ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}` : "classe";
+      return `${c.codice} — ${dove}`;
+    }
+    if (c.master_id) return `${c.codice} — personale di ${toTitleCase(masterPerId[c.master_id] || "?")}`;
+    return `${c.codice}`;
+  }
+  // la bozza nasce da quello che il codice ha gia' scritto addosso
+  useEffect(() => {
+    setMsgCodice("");
+    if (!codiceScelto) { setBozzaCodice(null); return; }
+    setBozzaCodice({
+      regoleProprie: !!codiceScelto.regole_proprie,
+      carta: gruppiFasceValidi(codiceScelto.fasce_sconto),
+      contanti: serieScontoScritta(codiceScelto.fasce_sconto_contanti) ? gruppiFasceValidi(codiceScelto.fasce_sconto_contanti) : null,
+      eccezioni: Array.isArray(codiceScelto.eccezioni_categoria) ? codiceScelto.eccezioni_categoria : [],
+    });
+  }, [codiceSceltoId]);
+  // le categorie della tendina: tutte quelle dello shop, in ordine
+  const categorieOrdinate = useMemo(
+    () => [...(categorieProdotti || [])].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "it")),
+    [categorieProdotti],
+  );
+  async function salvaRegoleCodice() {
+    if (!codiceScelto || !bozzaCodice) return;
+    setSalvandoCodice(true); setMsgCodice("");
+    // sul sito viaggia una percentuale sola: si ricava dalle fasce della
+    // carta, come per ogni altro codice a fasce. Le eccezioni e la serie
+    // dei contanti vivono solo al banco — WooCommerce non sa con che cosa
+    // pagherai, e una categoria scontata diversamente non la sa dire.
+    const campi = {
+      regole_proprie: bozzaCodice.regoleProprie,
+      tipo_regola_sconto: bozzaCodice.regoleProprie ? "fasce" : codiceScelto.tipo_regola_sconto,
+      fasce_sconto: bozzaCodice.carta,
+      fasce_sconto_contanti: bozzaCodice.contanti,
+      eccezioni_categoria: (bozzaCodice.eccezioni || []).filter((e) => e.categoria_id && Number(e.percentuale) > 0),
+      ...(bozzaCodice.regoleProprie ? { valore: percentualeWooDaFasce(prodottiShop, fasceScontoValide(bozzaCodice.carta.gruppi[0])), base_sconto: "lordo" } : {}),
+    };
+    const { data: scritte, error } = await supabase.from("coupon").update(campi).eq("id", codiceScelto.id).select("id");
+    if (error || !(scritte || []).length) {
+      setSalvandoCodice(false);
+      setMsgCodice("Errore: " + (error ? testoErrore(error) : "nessuna riga cambiata"));
+      return;
+    }
+    let sito = "";
+    if (codiceScelto.woo_coupon_id) {
+      const { data, error: erroreSito } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: codiceScelto.id, aggiornaRegola: true } });
+      sito = (erroreSito || data?.errore) ? " Sul sito però non è arrivato: riprova dal tasto dei codici." : " Aggiornato anche sul sito.";
+    }
+    setSalvandoCodice(false);
+    setMsgCodice(`Regole salvate per ${codiceScelto.codice}.${sito}`);
+    ricarica(["coupon"]);
+  }
+
   // le due percentuali che trasformano i punti in euro
   const [percEuroSalvate, salvaPercEuro] = useImpostazioneCondivisa(CHIAVE_PERCENTUALI_EURO_PUNTI, PERCENTUALI_EURO_PUNTI_DEFAULT);
   const percEuro = { ...PERCENTUALI_EURO_PUNTI_DEFAULT, ...(percEuroSalvate || {}) };
@@ -50604,6 +50720,104 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               </div>
             ))}
           </div>
+        </div>
+
+        {/* REGOLE DI UN CODICE.
+            Qui un codice smette di seguire le tabelle generali e prende
+            le sue. Si sceglie dalla tendina, si accende l'interruttore, si
+            scrivono le due tabelle e le eccezioni. */}
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Regole di un codice</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            Un codice che fa storia a sé: le sue fasce per carta e shop, le sue fasce per contanti e buono Amazon, e le eccezioni per categoria.
+            {" "}Finché l’interruttore è spento il codice segue le tabelle generali qui sopra, come tutti gli altri — e si può tornare indietro in un secondo.
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+            <select
+              value={codiceSceltoId}
+              onChange={(e) => setCodiceSceltoId(e.target.value)}
+              style={{ ...inputStyle, flex: "1 1 320px", minWidth: 220, fontSize: 14, cursor: "pointer" }}
+            >
+              <option value="">Scegli un codice…</option>
+              {codiciModificabili.map((c) => (
+                <option key={c.id} value={c.id}>{descriviCodice(c)}{c.regole_proprie ? "  ·  ha regole sue" : ""}</option>
+              ))}
+            </select>
+            {codiceScelto && bozzaCodice && (
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer",
+                background: bozzaCodice.regoleProprie ? "#EDF7EE" : BG, border: `1px solid ${bozzaCodice.regoleProprie ? "#C7E3CB" : CREAM_BORDER}`,
+                borderRadius: 20, padding: "8px 14px" }}>
+                <input type="checkbox" checked={bozzaCodice.regoleProprie}
+                  onChange={(e) => setBozzaCodice((b) => ({ ...b, regoleProprie: e.target.checked }))}
+                  style={{ width: 16, height: 16, cursor: "pointer" }} />
+                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: bozzaCodice.regoleProprie ? "#2E7D32" : MUTED }}>
+                  {bozzaCodice.regoleProprie ? "ha regole sue" : "segue le regole generali"}
+                </span>
+              </label>
+            )}
+          </div>
+
+          {codiceScelto && bozzaCodice && bozzaCodice.regoleProprie && (
+            <>
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Carta e shop</div>
+                <FasceDiSpesa valore={bozzaCodice.carta} onCambia={(v) => setBozzaCodice((b) => ({ ...b, carta: v }))} prodottiShop={prodottiShop} isMobile={isMobile} />
+              </div>
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>Contanti e buono Amazon</span>
+                  {bozzaCodice.contanti
+                    ? <AzioneTesto onClick={() => setBozzaCodice((b) => ({ ...b, contanti: null }))} colore={MUTED}>rimetti uguali a carta e shop</AzioneTesto>
+                    : <AzioneTesto onClick={() => setBozzaCodice((b) => ({ ...b, contanti: gruppiFasceValidi(b.carta) }))} colore={GOLD}>scrivi una serie a parte</AzioneTesto>}
+                </div>
+                {bozzaCodice.contanti
+                  ? <FasceDiSpesa valore={bozzaCodice.contanti} onCambia={(v) => setBozzaCodice((b) => ({ ...b, contanti: v }))} prodottiShop={prodottiShop} isMobile={isMobile} senzaWoo />
+                  : <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Per ora i contanti prendono la stessa tabella della carta.</div>}
+              </div>
+
+              {/* LE ECCEZIONI. Sui prodotti di quella categoria vale quella
+                  percentuale e le fasce non si guardano: e' la stessa cosa
+                  che fa oggi lo sconto needling, ma scritta su un codice
+                  solo invece che su tutti. */}
+              <div style={{ background: BG, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Eccezioni per categoria</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45, marginBottom: 10 }}>
+                  Sui prodotti di quella categoria vale questa percentuale e le fasce non si guardano. Si legge sul netto, come lo sconto needling, così un 30% scritto qui è lo stesso 30% di là.
+                  {" "}Vale anche per le sottocategorie. Se un prodotto cade in due eccezioni vince la più alta. Sul sito le eccezioni non arrivano: lì il codice ha una percentuale sola.
+                </div>
+                {(bozzaCodice.eccezioni || []).map((e, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                    <select
+                      value={e.categoria_id || ""}
+                      onChange={(ev) => setBozzaCodice((b) => ({ ...b, eccezioni: b.eccezioni.map((x, k) => (k === i ? { ...x, categoria_id: ev.target.value } : x)) }))}
+                      style={{ ...inputStyle, flex: "1 1 240px", minWidth: 180, fontSize: 13.5, cursor: "pointer" }}
+                    >
+                      <option value="">Scegli la categoria…</option>
+                      {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    </select>
+                    <CampoNumero
+                      valore={e.percentuale ?? 0}
+                      onCambia={(n) => setBozzaCodice((b) => ({ ...b, eccezioni: b.eccezioni.map((x, k) => (k === i ? { ...x, percentuale: n } : x)) }))}
+                      min={0} max={100}
+                      style={{ ...inputStyle, width: 72, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
+                    />
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
+                    <AzioneTesto onClick={() => setBozzaCodice((b) => ({ ...b, eccezioni: b.eccezioni.filter((_, k) => k !== i) }))} colore="#C0392B">togli</AzioneTesto>
+                  </div>
+                ))}
+                <AzioneTesto onClick={() => setBozzaCodice((b) => ({ ...b, eccezioni: [...(b.eccezioni || []), { categoria_id: "", percentuale: 0 }] }))} colore={GOLD}>
+                  + aggiungi un'eccezione
+                </AzioneTesto>
+              </div>
+            </>
+          )}
+
+          {codiceScelto && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <Button onClick={salvaRegoleCodice} disabled={salvandoCodice}>{salvandoCodice ? "Salvo…" : `Salva le regole di ${codiceScelto.codice}`}</Button>
+              {msgCodice && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodice.startsWith("Errore") ? "#C0392B" : "#2E7D32", flex: "1 1 240px" }}>{msgCodice}</span>}
+            </div>
+          )}
         </div>
 
         {/* QUANTO LE VENGONO PAGATI.
@@ -64632,8 +64846,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // un codice personale (della master, senza classe) pagato in contanti o
   // con buono Amazon prende invece la seconda serie del referral
   const couponPersonaleAttivo = !!couponAttivo?.master_id && !couponAttivo?.corsi_date_id;
+  // UN CODICE CON REGOLE PROPRIE non guarda le tabelle generali: le sue
+  // due serie — carta/shop e contanti — sono scritte addosso a lui, e le
+  // sue eccezioni per categoria vincono su tutto, needling compreso.
+  // Senza l'interruttore acceso non cambia niente per nessuno.
+  const codiceConRegoleProprie = !!couponAttivo?.regole_proprie;
+  const eccezioniCodice = codiceConRegoleProprie ? (couponAttivo?.eccezioni_categoria || null) : null;
   const fasceCouponAttive = couponAFasce
-    ? (couponPersonaleAttivo
+    ? (codiceConRegoleProprie
+      ? fasceCorsiPerPagamento(couponAttivo.fasce_sconto, couponAttivo.fasce_sconto_contanti, pagamentoContaComeContanti(metodoPagamento))
+      : couponPersonaleAttivo
       ? fasceCorsiPerPagamento(
           serieScontoScritta(regolaReferralPos?.fasce) ? regolaReferralPos.fasce : couponAttivo.fasce_sconto,
           fasceReferralContantiPos, pagamentoContaComeContanti(metodoPagamento))
@@ -64644,17 +64866,19 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     : null;
   // "sta valendo la serie dei contanti": vale per tutti e due i codici,
   // ognuno con la sua serie
-  const fasceContantiInUso = couponAFasce && pagamentoContaComeContanti(metodoPagamento) && (couponPersonaleAttivo
-    ? serieScontoScritta(fasceReferralContantiPos)
-    : serieScontoScritta(fasceContantiCorsiPos));
+  const fasceContantiInUso = couponAFasce && pagamentoContaComeContanti(metodoPagamento) && (codiceConRegoleProprie
+    ? serieScontoScritta(couponAttivo.fasce_sconto_contanti)
+    : couponPersonaleAttivo
+      ? serieScontoScritta(fasceReferralContantiPos)
+      : serieScontoScritta(fasceContantiCorsiPos));
   const scontoCoupon = couponAFasce
-    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento))
+    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento), eccezioniCodice)
     : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
   const righeSenzaMargine = couponAFasce
-    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento)) <= 0)
+    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioniCodice) <= 0)
     : couponNum > 0 && couponSulMargine
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
@@ -64721,7 +64945,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const lordoRiga = round2(r.prezzo * r.quantita);
     if (omaggioAttivo || lordoRiga <= 0) return 0;
     if (couponAFasce) {
-      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento))) / 100);
+      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioniCodice)) / 100);
     }
     if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
     if (scontoNum > 0) {
@@ -64954,7 +65178,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     let scontiRiga = carrello.map((r, i) => {
       const lordoRiga = lordiRiga[i];
       if (omaggioAttivo || lordoRiga <= 0) return 0;
-      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento))) / 100);
+      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioniCodice)) / 100);
       if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
       if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
       return 0;
@@ -75951,7 +76175,12 @@ export default function App() {
   // Senza questo, percentualeFasciaDi non saprebbe quali prodotti sono
   // needling e tutto si comporterebbe come prima — in silenzio.
   const [scontoNeedlingRegola] = useImpostazioneCondivisa(CHIAVE_SCONTO_NEEDLING, SCONTO_NEEDLING_DEFAULT);
-  useEffect(() => { registraProdottiNeedling(prodottiCategorie, categorieProdotti); }, [prodottiCategorie, categorieProdotti]);
+  useEffect(() => {
+    registraProdottiNeedling(prodottiCategorie, categorieProdotti);
+    // lo stesso giro serve alle eccezioni per categoria dei codici con
+    // regole proprie: si fa una volta sola, qui
+    registraCategorieProdotti(prodottiCategorie, categorieProdotti);
+  }, [prodottiCategorie, categorieProdotti]);
   useEffect(() => { registraScontoNeedling(scontoNeedlingRegola); }, [scontoNeedlingRegola]);
   const [bundleComponenti, setBundleComponenti] = useState([]);
   // Da qui in poi "prodottiShop" sono i prodotti col costo dei bundle gia'
@@ -76420,7 +76649,7 @@ export default function App() {
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
-    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon", "corsi_date"],
+    gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon", "corsi_date", "categorie_prodotti"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti", "sync_shop_esiti"],
@@ -78819,6 +79048,7 @@ export default function App() {
         <PaginaGestionePunti
           master={master} venditeShop={venditeShop} prodottiShop={prodottiShop} puntiMasterImpostazioni={puntiMasterImpostazioni}
           regoleReferralAutomatico={regoleReferralAutomatico} coupon={coupon} corsiDate={corsiDate}
+          categorieProdotti={categorieProdotti} corsi={corsi} location={location}
           ricarica={fetchDati} onBack={() => setView("compensipremi")}
           titolo={etichettaTasto("compensipremi", "gestionepunti", "Gestione punti")}
         />
