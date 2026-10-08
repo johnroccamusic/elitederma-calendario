@@ -2572,6 +2572,16 @@ function spicchioTorta(cx, cy, r, gradoIniziale, gradoFinale, punti = 40) {
 }
 const PERCORSO_TORTA_CORPO = spicchioTorta(10, 13, 6.5, -25, 270);
 const PERCORSO_TORTA_FETTA = spicchioTorta(14.5, 7.8, 3.2, -90, -25);
+// La tessera dei punti: una stella piena dentro un cerchio aperto, col
+// dettaglio oro come le altre della famiglia.
+function IconaTilePuntiMaster({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2.6a9.4 9.4 0 1 1-6.6 2.75" />
+      <path d="m12 7.1 1.55 3.14 3.47.5-2.51 2.45.59 3.45L12 15.01l-3.1 1.63.59-3.45-2.51-2.45 3.47-.5z" stroke={GOLD} />
+    </svg>
+  );
+}
 function IconaTileStatistiche({ size = 44, color = NAVY }) {
   // tre barre che salgono, senza base, e la freccia che parte sopra la
   // prima e punta in alto a destra
@@ -13154,6 +13164,170 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // cancello — passa da master_vista, che conosce solo la classe di quel
   // token e restituisce i soli campi che la pagina disegna
   const [contabilitaClasse, setContabilitaClasse] = useState(null);
+  // la sottopagina dei punti: si apre dalla tessera "Gestione punti"
+  const [vistaPunti, setVistaPunti] = useState(false);
+
+  // Le schede dei punti. Vivono in una funzione e non dentro il return
+  // perche' la pagina che le disegna e' una sottopagina sua: nella
+  // dashboard resta solo la tessera che la apre. Non e' un hook, quindi
+  // puo' stare dove serve.
+  function schedePuntiMaster() {
+              // le 4 card stanno su una riga sola a qualunque larghezza: sul
+    // telefono con font e imbottitura ridotti, su desktop larghe
+    // da telefono quadrate, come tutti gli altri riquadri di
+    // riepilogo dell'app: quattro colonne su uno schermo stretto
+    // facevano quattro strisce alte e magre, e il numero — che e'
+    // l'unica cosa che si guarda — finiva perso a meta' altezza
+    // Etichetta e numero stanno in mezzo, sempre. Erano centrati
+    // solo sul telefono, dove la scheda e' un quadrato: su
+    // schermo largo restavano appoggiati a sinistra, e quattro
+    // numeri di lunghezza diversa — 4, 0, 194,07, 219,21 —
+    // appoggiati a sinistra sembrano una colonna storta.
+    // Da telefono il numero sta nel centro ESATTO del quadrato,
+    // con l'etichetta appoggiata sopra.
+    //
+    // Prima si centrava la coppia etichetta + numero, e il
+    // risultato e' che nessuno dei due sta in mezzo: il numero
+    // finisce sotto la meta', e di quattro quadrati affiancati
+    // si legge una fila di numeri che non e' allineata a
+    // niente. Tre fasce — vuoto, numero, vuoto — mettono il
+    // numero sulla mezzeria e basta, qualunque sia la lunghezza
+    // dell'etichetta sopra: una riga o tre, il numero non si
+    // sposta.
+    // le sei schede dei punti: shop/POS, cash, eventi carta,
+    // eventi contanti, personali, carriera. Quattro per riga, su
+    // due righe, e la misura della scheda si regola su quello
+    const schedePunti = 4;
+    const cardPunti = {
+      ...cardStyle, minWidth: 0, boxSizing: "border-box",
+      padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
+      textAlign: "center",
+      ...(isMobile
+        ? {
+          // il quadrato regge con due schede per riga; con tre o
+          // quattro in fila si stringe troppo e il numero non ci
+          // sta piu'. Allora l'altezza la decide il contenuto.
+          ...(schedePunti > 2 ? { minHeight: 92 } : { aspectRatio: "1 / 1" }),
+          overflow: "hidden",
+          display: "grid", gridTemplateRows: "1fr auto 1fr",
+          alignItems: "center", justifyItems: "center",
+        }
+        : {
+          height: "100%",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 6,
+        }),
+    };
+    // su mobile l'etichetta occupa un'altezza fissa (fino a 3 righe),
+    // così i numeri delle 4 card partono tutti dalla stessa riga
+    // dentro un quadrato lo spazio e' quello che e': etichetta,
+    // numero e riga sotto si stringono invece di sfondare
+    // il margine sotto l'etichetta lo fa adesso il "gap" della
+    // scheda: tenerlo anche qui lo raddoppiava
+    // l'etichetta vive nella prima fascia e si appoggia in
+    // basso, cioe' appena sopra il numero: cosi' gli sta vicina
+    // invece di galleggiare in cima al quadrato
+    const lblPunti = { ...fontBody, fontSize: isMobile ? (schedePunti > 2 ? 9.5 : 11.5) : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, overflowWrap: "anywhere", textAlign: "center", ...(isMobile ? { alignSelf: "end", paddingBottom: 3 } : {}) };
+    const numPunti = { ...fontDisplay, fontSize: isMobile ? (schedePunti > 2 ? 15 : 18) : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", textAlign: "center" };
+    const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
+    // Quattro colonne fisse, su due righe. Erano tutte in fila,
+    // e finche' erano tre o quattro andava; con sei schede di
+    // punti sei colonne su uno schermo stretto fanno sei
+    // francobolli, e su schermo largo una striscia che non si
+    // legge. "start" le tiene attaccate in alto, cosi' le
+    // etichette partono dalla stessa riga anche quando una va a
+    // capo e le altre no. Il quadrato lascia il posto a una
+    // scheda piu' bassa per lo stesso motivo.
+    //
+    // Due blocchi uno sotto l'altro — i punti e le vendite —
+    // quindi serve un frammento: il return non puo' restituirne
+    // due sciolti.
+    return (
+    <>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+    {/* I punti, divisi per come si e' pagato. Stanno in questa
+        griglia e non in una loro: due file di schede che dicono
+        cose dello stesso ordine si leggono peggio di una */}
+    {/* Sotto il numero dei punti, quanto fanno in euro: punti per
+        la percentuale del canale, decisa in Gestione punti. Solo
+        questi due pagano - i personali sono roba comprata da lei
+        e la carriera e' una somma, non un compenso. */}
+    <div style={cardPunti} title={`${percEuroDash.posShop}% di quello che vale un punto: si decide in Gestione punti`}>
+      <div style={lblPunti}>Punti<br />shop/POS</div>
+      <div style={{ ...numPunti, color: NAVY }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_shop_pos || 0) : "…"}</div>
+      <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_shop_pos || 0) * percEuroDash.posShop) / 100)) : "—"}</div>
+    </div>
+    <div style={cardPunti} title={`${percEuroDash.cash}% di quello che vale un punto: si decide in Gestione punti`}>
+      <div style={lblPunti}>Punti<br />cash</div>
+      <div style={{ ...numPunti, color: "#8A6D1D" }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_cash || 0) : "…"}</div>
+      <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_cash || 0) * percEuroDash.cash) / 100)) : "—"}</div>
+    </div>
+    {/* Quello che si vende a una fiera sta per conto suo: vale
+        meno, perche' li' si usa il proprio POS e non si sta
+        portando la propria classe. Se finisse nelle due schede
+        qui sopra prenderebbe la percentuale sbagliata. */}
+    <div style={cardPunti} title={`Vendite a un evento incassate con la carta: ${percEuroDash.eventoPosShop}% di quello che vale un punto`}>
+      <div style={lblPunti}>Punti shop/POS<br />eventi</div>
+      <div style={{ ...numPunti, color: NAVY }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_evento_pos || 0) : "…"}</div>
+      <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_evento_pos || 0) * percEuroDash.eventoPosShop) / 100)) : "—"}</div>
+    </div>
+    <div style={cardPunti} title={`Vendite a un evento incassate in contanti o con buono Amazon: ${percEuroDash.eventoCash}% di quello che vale un punto`}>
+      <div style={lblPunti}>Punti cash<br />eventi</div>
+      <div style={{ ...numPunti, color: "#8A6D1D" }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_evento_cash || 0) : "…"}</div>
+      <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_evento_cash || 0) * percEuroDash.eventoCash) / 100)) : "—"}</div>
+    </div>
+    {/* Quello che la master ha comprato per se', col suo codice.
+        Non e' una vendita e non matura soldi: conta solo nella
+        carriera. Il suo codice porta il suo nome, quindi senza
+        separarli questi punti sarebbero finiti nei due qui
+        accanto, che invece pagano. */}
+    <div style={cardPunti} title="Quello che hai comprato tu con il tuo codice: conta nella carriera, non matura compensi">
+      <div style={lblPunti}>Punti<br />personali</div>
+      <div style={{ ...numPunti, color: MUTED }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_personali || 0) : "…"}</div>
+      <div style={ptPunti}>non maturano</div>
+    </div>
+    {/* La somma dei tre: quanto ha mosso in tutto, venduto e
+        comprato. Un numero che cresce e basta. */}
+    <div style={cardPunti} title="Punti shop/POS + punti cash + punti personali: tutto quello che hai mosso">
+      <div style={lblPunti}>Punti<br />carriera</div>
+      <div style={{ ...numPunti, color: GOLD }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_carriera || 0) : "…"}</div>
+      <div style={ptPunti}>somma dei tre</div>
+    </div>
+    {/* Qui c'era "Punti accumulati", un settimo numero di punti
+        contato in JavaScript su questa pagina. Diceva una cifra
+        diversa dalle sei schede qui sopra, che vengono dalla
+        vista: tolto l'08/10/2026. */}
+    </div>
+
+    {/* Le vendite non sono punti: seconda fila, sotto una riga di
+      separazione. Mischiate alle altre facevano sei schede di
+      punti e due di conteggi tutte uguali, e per leggerne una
+      bisognava leggere l'etichetta di tutte. */}
+    <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12 }}>
+    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Vendite</div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12 }}>
+      <div style={cardPunti}>
+        <div style={lblPunti}>Vendite<br />al corso</div>
+        <div style={numPunti}>{provvigioniMaster.venditeCorso}</div>
+      </div>
+      <div style={cardPunti}>
+        <div style={lblPunti}>Vendite con<br />referral</div>
+        <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
+      </div>
+      {/* il totale in euro dei carrelli venduti: solo programmatore
+          e Chiara Colonnelli lo vedono, mai le master */}
+      {mostraEuroCarrelli && mostraTotaleCarrelli && (
+      <div style={cardPunti}>
+        <div style={lblPunti}>Totale<br />carrelli</div>
+        <div style={{ ...numPunti, color: "#2E7D32" }}>{fmtEuroErp2(provvigioniMaster.valoreCarrelli)}</div>
+      </div>
+      )}
+    </div>
+    </div>
+    </>
+    );
+  }
+
 
   if (contabilitaClasse) {
     // Il file della contabilita' copre tutto, dock compreso: da qui la
@@ -13162,6 +13336,25 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 6000, overflowY: "auto", background: BG, WebkitOverflowScrolling: "touch", paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <VistaMaster param={contabilitaClasse.token} onEsci={() => { setContabilitaClasse(null); window.scrollTo(0, 0); }} />
+      </div>
+    );
+  }
+
+  if (vistaPunti && masterSel) {
+    return (
+      <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+            <TastoLivelloPrecedente titolo={`Dashboard ${toTitleCase(masterSel.nome)}`} onClick={() => { setVistaPunti(false); window.scrollTo(0, 0); }} />
+            <div style={{ ...stileTitoloPagina, color: NAVY }}>Gestione punti</div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
+            Quanti punti hai fatto e quanto valgono. Sotto ogni numero c'è la cifra in euro, dove matura.
+          </div>
+          {puntiMasterImpostazioni ? schedePuntiMaster() : (
+            <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>La raccolta punti non è ancora stata impostata.</div>
+          )}
+        </div>
       </div>
     );
   }
@@ -13196,19 +13389,27 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         </div>
         {masterSel && <LoghiMasterPubblicati masterId={masterSel.id} />}
 
-        {/* Il referral code personale, subito sotto il nome: e' la prima
-            cosa che una master cerca quando entra qui, e finora doveva
-            chiederlo. E' lo stesso codice creato in "Genera referral
-            code" — quello legato a lei e non a una singola edizione */}
+        {/* I due codici che una master cerca appena entra, uno accanto
+            all'altro: quello che danno ai clienti e quello con cui
+            comprano per se'. Finora doveva chiederli tutti e due.
+            ATTENZIONE: vivono nella stessa tabella e tutti e due sono
+            "suoi e senza edizione". A distinguerli e' solo la serie —
+            senza il filtro, la riga del referral mostrava il codice
+            d'acquisto a seconda di quale arrivava prima. */}
         {masterSel && (() => {
-          const suo = (coupon || []).find((c) => c.master_id === masterSel.id && !c.corsi_date_id);
-          if (!suo) return null;
-          return (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 18, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 14px", width: "fit-content", maxWidth: "100%" }}>
-              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Il tuo referral code personale è:</span>
-              <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1 }}>{suo.codice}</span>
+          const suoi = (coupon || []).filter((c) => c.master_id === masterSel.id && !c.corsi_date_id);
+          const referral = suoi.find((c) => c.serie_regole !== "acquisto_master");
+          const acquisti = suoi.find((c) => c.serie_regole === "acquisto_master");
+          if (!referral && !acquisti) return null;
+          const pillola = (testo, codice, sotto) => (
+            <div key={codice} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 14px", maxWidth: "100%" }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+                {testo}
+                {sotto && <span style={{ display: "block", ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{sotto}</span>}
+              </span>
+              <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1 }}>{codice}</span>
               <button
-                onClick={() => { try { navigator.clipboard.writeText(String(suo.codice || "").toUpperCase()); } catch (e) { /* niente appunti: si legge e si copia a mano */ } }}
+                onClick={() => { try { navigator.clipboard.writeText(String(codice || "").toUpperCase()); } catch (e) { /* niente appunti: si legge e si copia a mano */ } }}
                 title="Copia il codice"
                 style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
               >
@@ -13216,176 +13417,29 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               </button>
             </div>
           );
+          return (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "stretch", marginBottom: 18 }}>
+              {referral && pillola("Il tuo referral code personale è:", referral.codice, "Quello che dai ai clienti")}
+              {acquisti && pillola("Il coupon code per i tuoi acquisti personali è:", acquisti.codice, "Quello con cui compri tu, al listino master")}
+            </div>
+          );
         })()}
 
         {masterSel && puntiMasterImpostazioni && (
-          /* GESTIONE PUNTI: area sua, staccata dai corsi.
-             Stava senza titolo in mezzo alla pagina, e finche' erano tre
-             riquadri si capiva da se'. Con sei schede di punti attaccate
-             all'elenco dei corsi non si capiva piu' dove finiva una cosa
-             e cominciava l'altra: un riquadro col suo nome e il suo
-             fondo, e il confine c'e'. */
-          <div style={{ ...cardStyle, marginBottom: 20, padding: isMobile ? 12 : 18 }}>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Gestione punti</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>
-              Quanti punti hai fatto e quanto valgono. Sotto ogni numero c'è la cifra in euro, dove matura.
-            </div>
-            {(() => {
-              // le 4 card stanno su una riga sola a qualunque larghezza: sul
-              // telefono con font e imbottitura ridotti, su desktop larghe
-              // da telefono quadrate, come tutti gli altri riquadri di
-              // riepilogo dell'app: quattro colonne su uno schermo stretto
-              // facevano quattro strisce alte e magre, e il numero — che e'
-              // l'unica cosa che si guarda — finiva perso a meta' altezza
-              // Etichetta e numero stanno in mezzo, sempre. Erano centrati
-              // solo sul telefono, dove la scheda e' un quadrato: su
-              // schermo largo restavano appoggiati a sinistra, e quattro
-              // numeri di lunghezza diversa — 4, 0, 194,07, 219,21 —
-              // appoggiati a sinistra sembrano una colonna storta.
-              // Da telefono il numero sta nel centro ESATTO del quadrato,
-              // con l'etichetta appoggiata sopra.
-              //
-              // Prima si centrava la coppia etichetta + numero, e il
-              // risultato e' che nessuno dei due sta in mezzo: il numero
-              // finisce sotto la meta', e di quattro quadrati affiancati
-              // si legge una fila di numeri che non e' allineata a
-              // niente. Tre fasce — vuoto, numero, vuoto — mettono il
-              // numero sulla mezzeria e basta, qualunque sia la lunghezza
-              // dell'etichetta sopra: una riga o tre, il numero non si
-              // sposta.
-              // le sei schede dei punti: shop/POS, cash, eventi carta,
-              // eventi contanti, personali, carriera. Quattro per riga, su
-              // due righe, e la misura della scheda si regola su quello
-              const schedePunti = 4;
-              const cardPunti = {
-                ...cardStyle, minWidth: 0, boxSizing: "border-box",
-                padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
-                textAlign: "center",
-                ...(isMobile
-                  ? {
-                    // il quadrato regge con due schede per riga; con tre o
-                    // quattro in fila si stringe troppo e il numero non ci
-                    // sta piu'. Allora l'altezza la decide il contenuto.
-                    ...(schedePunti > 2 ? { minHeight: 92 } : { aspectRatio: "1 / 1" }),
-                    overflow: "hidden",
-                    display: "grid", gridTemplateRows: "1fr auto 1fr",
-                    alignItems: "center", justifyItems: "center",
-                  }
-                  : {
-                    height: "100%",
-                    display: "flex", flexDirection: "column",
-                    alignItems: "center", justifyContent: "center", gap: 6,
-                  }),
-              };
-              // su mobile l'etichetta occupa un'altezza fissa (fino a 3 righe),
-              // così i numeri delle 4 card partono tutti dalla stessa riga
-              // dentro un quadrato lo spazio e' quello che e': etichetta,
-              // numero e riga sotto si stringono invece di sfondare
-              // il margine sotto l'etichetta lo fa adesso il "gap" della
-              // scheda: tenerlo anche qui lo raddoppiava
-              // l'etichetta vive nella prima fascia e si appoggia in
-              // basso, cioe' appena sopra il numero: cosi' gli sta vicina
-              // invece di galleggiare in cima al quadrato
-              const lblPunti = { ...fontBody, fontSize: isMobile ? (schedePunti > 2 ? 9.5 : 11.5) : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, overflowWrap: "anywhere", textAlign: "center", ...(isMobile ? { alignSelf: "end", paddingBottom: 3 } : {}) };
-              const numPunti = { ...fontDisplay, fontSize: isMobile ? (schedePunti > 2 ? 15 : 18) : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", textAlign: "center" };
-              const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
-              // Quattro colonne fisse, su due righe. Erano tutte in fila,
-              // e finche' erano tre o quattro andava; con sei schede di
-              // punti sei colonne su uno schermo stretto fanno sei
-              // francobolli, e su schermo largo una striscia che non si
-              // legge. "start" le tiene attaccate in alto, cosi' le
-              // etichette partono dalla stessa riga anche quando una va a
-              // capo e le altre no. Il quadrato lascia il posto a una
-              // scheda piu' bassa per lo stesso motivo.
-              //
-              // Due blocchi uno sotto l'altro — i punti e le vendite —
-              // quindi serve un frammento: il return non puo' restituirne
-              // due sciolti.
-              return (
-            <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
-              {/* I punti, divisi per come si e' pagato. Stanno in questa
-                  griglia e non in una loro: due file di schede che dicono
-                  cose dello stesso ordine si leggono peggio di una */}
-              {/* Sotto il numero dei punti, quanto fanno in euro: punti per
-                  la percentuale del canale, decisa in Gestione punti. Solo
-                  questi due pagano - i personali sono roba comprata da lei
-                  e la carriera e' una somma, non un compenso. */}
-              <div style={cardPunti} title={`${percEuroDash.posShop}% di quello che vale un punto: si decide in Gestione punti`}>
-                <div style={lblPunti}>Punti<br />shop/POS</div>
-                <div style={{ ...numPunti, color: NAVY }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_shop_pos || 0) : "…"}</div>
-                <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_shop_pos || 0) * percEuroDash.posShop) / 100)) : "—"}</div>
-              </div>
-              <div style={cardPunti} title={`${percEuroDash.cash}% di quello che vale un punto: si decide in Gestione punti`}>
-                <div style={lblPunti}>Punti<br />cash</div>
-                <div style={{ ...numPunti, color: "#8A6D1D" }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_cash || 0) : "…"}</div>
-                <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_cash || 0) * percEuroDash.cash) / 100)) : "—"}</div>
-              </div>
-              {/* Quello che si vende a una fiera sta per conto suo: vale
-                  meno, perche' li' si usa il proprio POS e non si sta
-                  portando la propria classe. Se finisse nelle due schede
-                  qui sopra prenderebbe la percentuale sbagliata. */}
-              <div style={cardPunti} title={`Vendite a un evento incassate con la carta: ${percEuroDash.eventoPosShop}% di quello che vale un punto`}>
-                <div style={lblPunti}>Punti shop/POS<br />eventi</div>
-                <div style={{ ...numPunti, color: NAVY }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_evento_pos || 0) : "…"}</div>
-                <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_evento_pos || 0) * percEuroDash.eventoPosShop) / 100)) : "—"}</div>
-              </div>
-              <div style={cardPunti} title={`Vendite a un evento incassate in contanti o con buono Amazon: ${percEuroDash.eventoCash}% di quello che vale un punto`}>
-                <div style={lblPunti}>Punti cash<br />eventi</div>
-                <div style={{ ...numPunti, color: "#8A6D1D" }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_evento_cash || 0) : "…"}</div>
-                <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_evento_cash || 0) * percEuroDash.eventoCash) / 100)) : "—"}</div>
-              </div>
-              {/* Quello che la master ha comprato per se', col suo codice.
-                  Non e' una vendita e non matura soldi: conta solo nella
-                  carriera. Il suo codice porta il suo nome, quindi senza
-                  separarli questi punti sarebbero finiti nei due qui
-                  accanto, che invece pagano. */}
-              <div style={cardPunti} title="Quello che hai comprato tu con il tuo codice: conta nella carriera, non matura compensi">
-                <div style={lblPunti}>Punti<br />personali</div>
-                <div style={{ ...numPunti, color: MUTED }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_personali || 0) : "…"}</div>
-                <div style={ptPunti}>non maturano</div>
-              </div>
-              {/* La somma dei tre: quanto ha mosso in tutto, venduto e
-                  comprato. Un numero che cresce e basta. */}
-              <div style={cardPunti} title="Punti shop/POS + punti cash + punti personali: tutto quello che hai mosso">
-                <div style={lblPunti}>Punti<br />carriera</div>
-                <div style={{ ...numPunti, color: GOLD }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_carriera || 0) : "…"}</div>
-                <div style={ptPunti}>somma dei tre</div>
-              </div>
-              {/* Qui c'era "Punti accumulati", un settimo numero di punti
-                  contato in JavaScript su questa pagina. Diceva una cifra
-                  diversa dalle sei schede qui sopra, che vengono dalla
-                  vista: tolto l'08/10/2026. */}
-            </div>
-
-            {/* Le vendite non sono punti: seconda fila, sotto una riga di
-                separazione. Mischiate alle altre facevano sei schede di
-                punti e due di conteggi tutte uguali, e per leggerne una
-                bisognava leggere l'etichetta di tutte. */}
-            <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Vendite</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12 }}>
-                <div style={cardPunti}>
-                  <div style={lblPunti}>Vendite<br />al corso</div>
-                  <div style={numPunti}>{provvigioniMaster.venditeCorso}</div>
-                </div>
-                <div style={cardPunti}>
-                  <div style={lblPunti}>Vendite con<br />referral</div>
-                  <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
-                </div>
-                {/* il totale in euro dei carrelli venduti: solo programmatore
-                    e Chiara Colonnelli lo vedono, mai le master */}
-                {mostraEuroCarrelli && mostraTotaleCarrelli && (
-                <div style={cardPunti}>
-                  <div style={lblPunti}>Totale<br />carrelli</div>
-                  <div style={{ ...numPunti, color: "#2E7D32" }}>{fmtEuroErp2(provvigioniMaster.valoreCarrelli)}</div>
-                </div>
-                )}
-              </div>
-            </div>
-            </>
-              );
-            })()}
+          /* GESTIONE PUNTI: una sottopagina, non un blocco qui dentro.
+             Le sei schede dei punti piu' i conteggi delle vendite
+             attaccati all'elenco dei corsi facevano una pagina in cui non
+             si capiva dove finiva una cosa e cominciava l'altra. Qui
+             resta la tessera; i numeri stanno a casa loro. */
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: 14, maxWidth: isMobile ? "none" : 820, margin: `0 auto ${isMobile ? 14 : 20}px` }}>
+            <TileHome
+              title="Gestione punti"
+              Icona={IconaTilePuntiMaster}
+              chiaveStile="dashboardmaster|gestionepunti"
+              onClick={() => { setVistaPunti(true); window.scrollTo(0, 0); }}
+              badge={puntiDaVendite ? `${fmtPunti(puntiDaVendite.punti_carriera || 0)} pt` : undefined}
+              etichettaDueRighe
+            />
           </div>
         )}
 
