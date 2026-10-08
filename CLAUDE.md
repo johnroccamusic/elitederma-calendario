@@ -81,27 +81,24 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   **ma l'app non è ancora stata collegata** — le due pagine leggono ancora le
   tabelle. Lo slug SQL è stato confrontato con `slugify` di App.jsx su tutti
   i 44 nomi di corsi e città: identico.
-- **`Accesso.jsx` NON è collegato. Verificato il 17/09/2026.** Il file esiste,
-  è completo e funzionante (213 righe: form di login, e `<App />` dentro una
-  volta ottenuta la sessione), ma **nessuno lo importa**: `main.jsx` rende
-  `<App />` direttamente. Nel bundle pubblicato la stringa "Area riservata
-  allo staff" non compare proprio.
+- **`Accesso.jsx` ORA è collegato. Verificato il 08/10/2026.** In
+  `main.jsx` la costante `CANCELLO_ACCESO` è `true`, e l'app rende
+  `<Accesso />` con `<App />` dentro: chi entra fa un vero accesso
+  Supabase e **ha una sessione**. La versione precedente di questo file
+  diceva il contrario — era vero fino a metà settembre, non più.
 
-  Conseguenza: **nessun utente ha mai una sessione Supabase. Tutti sono
-  `anon`, sempre.** L'unico cancello è la password interna del Gate dentro
-  `App.jsx`, confrontata lato client con `venditori`/`utenti_app`/
-  `password_menu` — tabelle che, con le policy attuali, chiunque legge con la
-  chiave pubblicabile. Le password lì dentro sono in chiaro.
+  Due cose restano però come prima, e sono quelle che contano:
+  **le policy non sono state chiuse** (vedi il punto qui sopra: 132 delle
+  136 policy di `public` valgono ancora per `anon`), quindi la sessione
+  c'è ma non protegge niente; e **il ruolo e l'identità dentro l'app li
+  decide ancora il Gate interno** di `App.jsx`, con la password
+  confrontata lato client su `venditori`/`utenti_app`/`password_menu` —
+  è da lì che esce `utenteLoggato.masterId`, non dal JWT.
 
-  È anche la spiegazione del rollback del 15/08: la migrazione portò le
-  policy a `to authenticated` mentre **nessuno** era autenticato, e l'app
-  morì all'istante. Chiudere le policy PRIMA di collegare `Accesso.jsx`
-  rifarebbe lo stesso danno.
-
-  Ordine corretto: collegare il gate → dare un account a chi deve entrare →
-  poi chiudere le policy. Le tre rotte pubbliche (`master`, `modelle`,
-  `biglietti`) restano la deroga, e dal 17/09/2026 passano tutte da funzioni
-  `security definer` (vedi sotto).
+  Ordine di quello che manca: dare un account a chiunque debba entrare →
+  verificare che nessuno resti fuori → chiudere le policy a
+  `authenticated`. Le tre rotte pubbliche (`master`, `modelle`,
+  `biglietti`) restano la deroga.
 - **`VITE_ACCESS_CODE` e `VITE_ADMIN_CODE` finiscono nel bundle pubblico.** In
   Vite tutto ciò che inizia con `VITE_` è visibile. `ADMIN_CODE` ha anche un
   fallback in chiaro nel sorgente (`"ED26"`). Da eliminare quando i ruoli

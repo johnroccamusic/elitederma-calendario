@@ -41,6 +41,7 @@ import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi,
 import { muoviStock, allineaShop, pubblicatoSuShop } from "./magazzino/stock.js";
 import { usePuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
+import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -13455,6 +13456,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             ))}
           </div>
         )}
+
+        {/* Le notifiche di QUESTO telefono. Sta qui, in alto e sotto le
+            tessere, perche' e' la cosa che vogliamo che venga premuta:
+            in fondo alla pagina non l'avrebbe trovata nessuno. */}
+        {masterSel && <PannelloNotifiche masterId={masterSel.id} utente={masterSel.nome} />}
 
         {/* il nome della sezione aperta, come nella dashboard venditori:
             i corsi il titolo ce l'hanno gia' loro */}

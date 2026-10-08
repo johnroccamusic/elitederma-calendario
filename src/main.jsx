@@ -36,6 +36,20 @@ const Accesso = lazy(() => import("./Accesso.jsx"));
 // esce una versione nuova: vedi aggiornamento.js
 avviaAggiornamentoAutomatico();
 
+// Il service worker delle notifiche (public/sw.js). Si registra sempre,
+// anche prima del cancello: registrarlo costa niente e senza di lui il
+// telefono non ha dove ricevere le notifiche quando l'app e' chiusa.
+//
+// NON fa cache di niente, e non intercetta nessuna richiesta: un
+// service worker che fa cache servirebbe una versione vecchia dell'app
+// per giorni, e l'aggiornamento automatico qui sopra smetterebbe di
+// avere senso. Vedi la nota in testa a public/sw.js.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => { /* niente notifiche, l'app funziona lo stesso */ });
+  });
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     {CANCELLO_ACCESO ? (
