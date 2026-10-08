@@ -102,6 +102,19 @@ export default function PannelloNotifiche({ masterId = null, utente = null, comp
       {msg && (
         <div style={{ ...fontBody, fontSize: 12, color: msg.tipo === "errore" ? "#C0392B" : "#2E7D32", marginTop: 8, lineHeight: 1.45 }}>{msg.testo}</div>
       )}
+
+      {/* Cosa vede il browser, detto in chiaro. Senza, quando una
+          notifica non arriva non c'e' modo di sapere quale dei tre
+          pezzi manca, e si finisce a tenere premuta l'icona sperando
+          che esca un menu che non esiste: su iPhone il tasto delle
+          notifiche sta DENTRO l'app, e la voce GENYON compare nelle
+          impostazioni di sistema solo dopo che l'app l'ha chiesto una
+          volta. */}
+      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 8, letterSpacing: 0.2 }}>
+        aperta dall'icona: <b style={{ color: stato.installata ? "#2E7D32" : "#C0392B" }}>{stato.installata ? "sì" : "no, sei nel browser"}</b>
+        {" · "}permesso: <b style={{ color: stato.permesso === "granted" ? "#2E7D32" : NAVY }}>{stato.permesso === "granted" ? "dato" : stato.permesso === "denied" ? "negato" : "mai chiesto"}</b>
+        {" · "}iscritta: <b style={{ color: stato.iscritta ? "#2E7D32" : NAVY }}>{stato.iscritta ? "sì" : "no"}</b>
+      </div>
     </div>
   );
 }
