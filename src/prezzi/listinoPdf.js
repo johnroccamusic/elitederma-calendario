@@ -106,10 +106,16 @@ async function aJpegRidotto(blob) {
 }
 
 // Le righe del listino, raggruppate per reparto nell'ordine del menu del
-// sito. Fuori restano i prodotti senza prezzo rivenditore: su un listino
-// una riga con un trattino al posto del prezzo non serve a nessuno.
+// sito.
+//
+// Fuori restano due cose. I prodotti senza prezzo rivenditore: su un
+// listino una riga con un trattino al posto del prezzo non serve a
+// nessuno. E quelli che si vendono SOLO AL BANCO — i "solo POS" — che
+// sullo shop non ci sono: offrirli a un rivenditore vorrebbe dire
+// promettere una merce che poi non si sa come fargli avere.
 export function raggruppaPerReparto(righe) {
-  const dentro = (righe || []).filter((r) => r.prezzo_rivenditore != null && r.pubblico_lordo != null);
+  const dentro = (righe || []).filter((r) =>
+    r.prezzo_rivenditore != null && r.pubblico_lordo != null && r.sullo_shop !== false);
   const perBlocco = new Map();
   dentro.forEach((r) => {
     const n = r.blocco_ordine ?? 99;

@@ -172,8 +172,14 @@ export default function PrezziListini({ privato = false, getPdfLib, onApriProdot
   // Quello che finisce nel PDF: le righe che si vedono, meno i reparti
   // spenti. Il filtro della pagina vale ancora — se stai guardando un
   // reparto solo, il listino e' di quello — e la spunta toglie altro.
+  // Quello che finisce davvero nel PDF, e che il tasto conta: stesso
+  // filtro di raggruppaPerReparto, altrimenti il numero sul tasto
+  // promette righe che poi nel foglio non ci sono.
   const perIlPdf = useMemo(
-    () => visibili.filter((r) => !repartiEsclusi.includes(r.blocco_ordine)),
+    () => visibili.filter((r) =>
+      !repartiEsclusi.includes(r.blocco_ordine)
+      && r.prezzo_rivenditore != null && r.pubblico_lordo != null
+      && r.sullo_shop !== false),
     [visibili, repartiEsclusi]);
   const repartiNelPdf = useMemo(
     () => new Set(perIlPdf.map((r) => r.blocco_ordine)).size,
