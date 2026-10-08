@@ -12,6 +12,7 @@ import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
   periodoEvento, quantiGiorni, usciteAllEvento,
+  impegniMagazzino, segnaPartito, segnaRientro, tieneGiacenza,
 } from "./dati.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
@@ -303,15 +304,25 @@ function SchedaTeam({ eventoId, persone }) {
 
 // ----------------------------------------------------------- 2. i materiali
 
-function SchedaMateriali({ eventoId, prodotti }) {
+function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
   const [righe, setRighe] = useState(null);
   const [uscite, setUscite] = useState({ venduto: {}, omaggiato: {} });
+  const [impegni, setImpegni] = useState({ carrelli: {}, perEvento: {} });
   const [cerca, setCerca] = useState("");
   const [nomeLibero, setNomeLibero] = useState("");
+  const [inCorso, setInCorso] = useState("");
+  const [avanzamento, setAvanzamento] = useState(null);   // [fatte, totali]
+
+  // Gli errori si leggono se sono pochi. Con ottanta righe sotto scorta
+  // diventerebbe un muro di testo in cui non si trova niente: se ne
+  // mostrano tre e si dice quanti sono gli altri.
+  const primiErrori = (errori) => errori.slice(0, 3).join(" · ") + (errori.length > 3 ? ` · e altri ${errori.length - 3}` : "");
+  const [msg, setMsg] = useState(null);   // { tipo: "ok" | "errore", testo }
 
   const ricarica = () => {
     leggiRighe("eventi_materiali", eventoId).then(setRighe).catch(() => setRighe([]));
     usciteAllEvento(eventoId).then(setUscite).catch(() => setUscite({ venduto: {}, omaggiato: {} }));
+    impegniMagazzino().then(setImpegni).catch(() => setImpegni({ carrelli: {}, perEvento: {} }));
   };
   useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
 
@@ -328,6 +339,29 @@ function SchedaMateriali({ eventoId, prodotti }) {
   const perId = useMemo(() => new Map((prodotti || []).map((p) => [p.id, p])), [prodotti]);
   const nomeVivo = (r) => (r.prodotto_id && perId.get(r.prodotto_id)?.nome) || r.nome;
 
+  // Quanti pezzi si possono ancora promettere a questo evento: la
+  // giacenza vera meno i pezzi di qualcun altro. Non e' un limite che
+  // blocca — in elenco si puo' scrivere anche di piu', perche' fra oggi
+  // e la fiera puo' arrivare un ordine — ma si vede prima di scrivere,
+  // che era tutto il punto.
+  function impegnatoAltrove(prodottoId) {
+    const daiCarrelli = impegni.carrelli[prodottoId] || 0;
+    const daAltriEventi = Object.entries(impegni.perEvento)
+      .reduce((s, [id, mappa]) => (id === eventoId ? s : s + (mappa[prodottoId] || 0)), 0);
+    return { daiCarrelli, daAltriEventi, totale: daiCarrelli + daAltriEventi };
+  }
+  function disponibile(prodottoId) {
+    const p = perId.get(prodottoId);
+    if (!tieneGiacenza(p)) return null;
+    const impegnato = impegnatoAltrove(prodottoId);
+    return {
+      ...impegnato,
+      giacenza: Number(p.quantita) || 0,
+      soglia: p.soglia_riordino == null ? null : Number(p.soglia_riordino) || 0,
+      libera: Math.max(0, (Number(p.quantita) || 0) - impegnato.totale),
+    };
+  }
+
   async function aggiungiProdotto(p) {
     await aggiungiRiga("eventi_materiali", { evento_id: eventoId, prodotto_id: p.id, nome: p.nome, quantita: 1, ordine: (righe || []).length });
     // il nome si scrive lo stesso, ma come rete: se un domani il prodotto
@@ -341,30 +375,99 @@ function SchedaMateriali({ eventoId, prodotti }) {
     setNomeLibero(""); ricarica();
   }
 
+  // quanti pezzi stanno ancora fuori: usciti dal magazzino per questo
+  // evento e non ancora rimessi dentro
+  const fuoriAdesso = (righe || []).reduce((s, r) => s + Math.max(0, (Number(r.quantita_scaricata) || 0) - (Number(r.quantita_ricaricata) || 0)), 0);
+  const giaPartito = (righe || []).some((r) => (Number(r.quantita_scaricata) || 0) > 0);
+  const daRimettere = (righe || []).some((r) => r.quantita_rientrata != null && (Number(r.quantita_rientrata) || 0) !== (Number(r.quantita_ricaricata) || 0));
+
+  async function premiPartito() {
+    const conto = (righe || []).filter((r) => {
+      const obiettivo = r.quantita_portata == null ? (Number(r.quantita) || 0) : (Number(r.quantita_portata) || 0);
+      return obiettivo !== (Number(r.quantita_scaricata) || 0);
+    }).length;
+    if (conto === 0) { setMsg({ tipo: "ok", testo: "Il magazzino è già allineato a quello che è partito: non c'è niente da muovere." }); return; }
+    if (!window.confirm(`Segnare partito il materiale di questo evento?\n\n${conto} rig${conto === 1 ? "a" : "he"} da allineare: quello che è da portare diventa partito ed esce dalle giacenze. Le righe dove hai già scritto a mano un numero in "Partito" lo tengono.`)) return;
+    setInCorso("partito"); setMsg(null); setAvanzamento([0, righe.length]);
+    try {
+      const esito = await segnaPartito({ righe, prodottiPerId: perId, nomeEvento: evento?.nome, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
+      ricarica(); onStockCambiato?.();
+      setMsg(esito.errori.length
+        ? { tipo: "errore", testo: `${esito.mosse} prodott${esito.mosse === 1 ? "o" : "i"} scaricat${esito.mosse === 1 ? "o" : "i"}. Non è riuscito: ${primiErrori(esito.errori)}` }
+        : { tipo: "ok", testo: `Partito. ${esito.mosse} prodott${esito.mosse === 1 ? "o è uscito" : "i sono usciti"} dal magazzino.` });
+    } catch (e) { setMsg({ tipo: "errore", testo: e?.message || String(e) }); }
+    setInCorso(""); setAvanzamento(null);
+  }
+
+  async function premiRientro() {
+    if (!daRimettere) { setMsg({ tipo: "ok", testo: "Non c'è niente da rimettere dentro: compila prima la colonna «Rientrato»." }); return; }
+    if (!window.confirm("Rimettere in magazzino quello che è scritto nella colonna «Rientrato»?\n\nI pezzi tornano nelle giacenze e tornano vendibili.")) return;
+    setInCorso("rientro"); setMsg(null); setAvanzamento([0, 0]);
+    try {
+      const esito = await segnaRientro({ righe, prodottiPerId: perId, nomeEvento: evento?.nome, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
+      ricarica(); onStockCambiato?.();
+      setMsg(esito.errori.length
+        ? { tipo: "errore", testo: `${esito.mosse} prodott${esito.mosse === 1 ? "o" : "i"} rimess${esito.mosse === 1 ? "o" : "i"} dentro. Non è riuscito: ${primiErrori(esito.errori)}` }
+        : { tipo: "ok", testo: `Rientrati. ${esito.mosse} prodott${esito.mosse === 1 ? "o è tornato" : "i sono tornati"} in magazzino.` });
+    } catch (e) { setMsg({ tipo: "errore", testo: e?.message || String(e) }); }
+    setInCorso(""); setAvanzamento(null);
+  }
+
   if (righe === null) return <Vuoto>Carico…</Vuoto>;
 
   return (
     <>
-      {/* La regola, scritta dove si lavora: il materiale di un evento non
-          esce dal magazzino come quello di un corso. E' in consegna
-          all'evento — roba nostra, in un altro posto — e scende solo
-          quando lo si vende col POS sul posto. */}
-      <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 14, lineHeight: 1.55 }}>
-        Quello che parte per l'evento <b>non esce dal magazzino</b>: resta nostro, solo in un altro posto. Scende dalle giacenze solo quando lo vendi col POS all'evento.
+      {/* La regola, scritta dove si lavora. Fino al 08/10/2026 diceva
+          l'opposto — "non esce dal magazzino, resta nostro solo in un
+          altro posto" — ed era comodo da dire e falso da usare: quei
+          pezzi al banco non c'erano, ma il magazzino continuava a
+          prometterli ai corsi e allo shop. */}
+      <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 12, lineHeight: 1.55 }}>
+        Quello che metti in elenco è <b>impegnato</b>: resta in giacenza ma non lo promette più nessun altro, e l'Advisor lo conta.
+        Con <b>Partito</b> esce davvero dal magazzino; con <b>Rimetti in magazzino</b> torna dentro quello che è scritto in «Rientrato».
       </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+        <Button onClick={premiPartito} disabled={!!inCorso || righe.length === 0}>
+          {inCorso === "partito" ? `Esco dal magazzino… ${avanzamento ? `${avanzamento[0]}/${avanzamento[1]}` : ""}` : "Partito"}
+        </Button>
+        <Button variant="ghost" onClick={premiRientro} disabled={!!inCorso || !giaPartito}>
+          {inCorso === "rientro" ? `Rimetto dentro… ${avanzamento && avanzamento[1] ? `${avanzamento[0]}/${avanzamento[1]}` : ""}` : "Rimetti in magazzino"}
+        </Button>
+        {fuoriAdesso > 0 && (
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#8A6D1D" }}>
+            {fuoriAdesso} pz fuori dal magazzino per questo evento
+          </span>
+        )}
+      </div>
+      {msg && (
+        <div style={{
+          ...fontBody, fontSize: 12.5, lineHeight: 1.55, borderRadius: 10, padding: "9px 11px", marginBottom: 14,
+          color: msg.tipo === "errore" ? "#C0392B" : "#2E7D32",
+          background: msg.tipo === "errore" ? "#FBEBE9" : "#EAF5EA",
+          border: `1px solid ${msg.tipo === "errore" ? "#F0C8C2" : "#C7E3C7"}`,
+        }}>{msg.testo}</div>
+      )}
 
       <Field label="Cerca un prodotto a catalogo">
         <input style={inputStyle} value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="scrivi almeno due lettere…" />
       </Field>
       {trovati.length > 0 && (
         <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, marginBottom: 14, overflow: "hidden" }}>
-          {trovati.map((p) => (
-            <button key={p.id} onClick={() => aggiungiProdotto(p)} style={{
-              display: "block", width: "100%", textAlign: "left", minHeight: 44, padding: "10px 12px",
-              background: "#fff", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer",
-              ...fontBody, fontSize: 13, color: NAVY,
-            }}>{p.nome}</button>
-          ))}
+          {trovati.map((p) => {
+            const d = disponibile(p.id);
+            return (
+              <button key={p.id} onClick={() => aggiungiProdotto(p)} style={{
+                display: "flex", width: "100%", textAlign: "left", minHeight: 44, padding: "10px 12px", gap: 10,
+                alignItems: "center", justifyContent: "space-between",
+                background: "#fff", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer",
+                ...fontBody, fontSize: 13, color: NAVY,
+              }}>
+                <span style={{ minWidth: 0 }}>{p.nome}</span>
+                {d && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: d.libera > 0 ? MUTED : "#C0392B", whiteSpace: "nowrap" }}>{d.libera} disp.</span>}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -388,12 +491,20 @@ function SchedaMateriali({ eventoId, prodotti }) {
         // e' tornato deve fare quello che e' uscito — venduto PIU'
         // omaggiato, perche' anche un pezzo regalato non e' tornato
         const mancante = portata != null && rientrata != null ? Math.round((portata - rientrata - vendutoQui - omaggiatoQui) * 100) / 100 : null;
+        const d = r.prodotto_id ? disponibile(r.prodotto_id) : null;
+        const scaricata = Number(r.quantita_scaricata) || 0;
+        // i pezzi che questa riga impegna sono gia' dentro "impegnato
+        // altrove"? No: impegniMagazzino salta l'evento aperto. Quindi
+        // il confronto e' fra quello che si chiede e quello che resta
+        const chiesti = Number(r.quantita) || 0;
+        const scoperti = d ? Math.max(0, chiesti - scaricata - d.libera) : 0;
         return (
           <div key={r.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
                 {nomeVivo(r)}
                 {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginLeft: 8 }}>a catalogo</span>}
+                {scaricata > 0 && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#2E7D32", marginLeft: 8 }}>{scaricata} usciti dal magazzino</span>}
               </span>
               <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
             </div>
@@ -413,6 +524,16 @@ function SchedaMateriali({ eventoId, prodotti }) {
                       if (v !== (valore == null ? null : Number(valore))) salvaRiga("eventi_materiali", r.id, { [campo]: v }).then(ricarica);
                     }}
                   />
+                  {/* sotto "Da portare" si legge quanti ce ne sono davvero
+                      liberi: la giacenza meno i carrelli sospesi e meno
+                      quello che un altro evento ha gia' prenotato */}
+                  {campo === "quantita" && d && (
+                    <span style={{ display: "block", ...fontBody, fontSize: 10.5, color: scoperti > 0 ? "#C0392B" : MUTED, marginTop: 3, lineHeight: 1.4 }}>
+                      {d.libera} liberi in magazzino
+                      {d.totale > 0 && <span style={{ display: "block", color: MUTED }}>({d.giacenza} in casa, −{d.totale} impegnati{d.daiCarrelli > 0 ? ` · ${d.daiCarrelli} nei carrelli sospesi` : ""}{d.daAltriEventi > 0 ? ` · ${d.daAltriEventi} ad altri eventi` : ""})</span>}
+                      {scoperti > 0 && <span style={{ display: "block", fontWeight: 700 }}>ne mancano {scoperti}</span>}
+                    </span>
+                  )}
                 </label>
               ))}
               <span style={{ flex: "1 1 92px", minWidth: 0 }}>
@@ -980,7 +1101,7 @@ const SEZIONI = [
   { v: "conto", l: "Conto" },
 ];
 
-function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onNuovaSpesa, onIndietro, onCambiato }) {
+function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onNuovaSpesa, onIndietro, onCambiato, onStockCambiato }) {
   const [sezione, setSezione] = useState("team");
   const [inModifica, setInModifica] = useState(false);
   const [team, setTeam] = useState([]);
@@ -1040,7 +1161,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
 
       <div style={{ background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16 }}>
         {sezione === "team" && <SchedaTeam eventoId={evento.id} persone={persone} />}
-        {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} prodotti={prodotti} />}
+        {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} evento={evento} prodotti={prodotti} onStockCambiato={onStockCambiato} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
         {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} onCambiato={onCambiato} />}
@@ -1051,7 +1172,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
 
 // --------------------------------------------------------------- la pagina
 
-export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa }) {
+export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa, onStockCambiato }) {
   const [eventi, setEventi] = useState(null);
   // `eventoIniziale` arriva da chi ci ha portati qui — oggi la barra
   // dell'evento nel calendario. Non e' uno stato che cambia da solo:
@@ -1109,6 +1230,7 @@ export default function GestioneEventi({ location = [], master = [], assistente 
             bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa}
             onIndietro={() => setApertoId(null)}
             onCambiato={ricarica}
+            onStockCambiato={onStockCambiato}
           />
         )}
 

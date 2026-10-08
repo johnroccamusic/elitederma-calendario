@@ -38,6 +38,7 @@ import PrezziListini from "./prezzi/PrezziListini.jsx";
 // il listino delle master: la quota e il conto del prezzo stanno li', in
 // un posto solo, e di qui si leggono per i codici con cui le master comprano
 import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
+import { muoviStock, allineaShop, pubblicatoSuShop } from "./magazzino/stock.js";
 import { usePuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
@@ -51238,17 +51239,17 @@ function TabellaStoricoSpedizioni({ voci, onApriOrdine, isMobile }) {
 // avvisi che si vede là — qui però si agisce solo su quello che è
 // mestiere di chi prepara: aprire un pacco sigillato. Riordinare dal
 // fornitore resta un lavoro d'ufficio, e la riga lo dice e basta.
-function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, ricarica, onBack, onApriAdvisor, titolo = "Advisor" }) {
+function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], ricarica, onBack, onApriAdvisor, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const [apriConfezioneBoxId, setApriConfezioneBoxId] = useState(null);
   const avvisi = useMemo(() => calcolaAvvisiMagazzino(prodottiShop), [prodottiShop]);
   const sintesi = useMemo(() => {
     const oggi = dataOggiStr();
-    const risultato = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi });
+    const risultato = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi, eventi, eventiMateriali });
     const piano = pianoRiordino({ prodottiShop, risultato, oggi });
     const ritardi = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo").length;
     return { risultato, daOrdinare: piano.daOrdinare.length, ritardi };
-  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop]);
+  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, eventi, eventiMateriali]);
 
   // Togliere un prodotto dagli avvisi e' una scrittura sola, e si vede
   // subito: il prodotto sparisce dall'elenco appena i dati tornano.
@@ -54699,7 +54700,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   // la percentuale di sicurezza della regola dei punti, decisa in
   // Gestione punti: le colonne dei punti la seguono
   const [schemaPuntiSalvato, salvaSchemaPunti] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
@@ -55383,12 +55384,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // pagina dedicata, qui ridotta al titolo e al conteggio di cosa ordinare
   const sintesiAdvisor = useMemo(() => {
     const oggi = dataOggiStr();
-    const risultato = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi });
+    const risultato = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi, eventi, eventiMateriali });
     const piano = pianoRiordino({ prodottiShop, risultato, oggi });
     const ritardi = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo").length;
     const urgenti = piano.daOrdinare.filter((r) => r.perData?.stato === "urgente").length;
     return { risultato, piano, daOrdinare: piano.daOrdinare.length, ritardi, urgenti };
-  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop]);
+  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, eventi, eventiMateriali]);
 
   let prodottiVisti = prodottiConStato;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
@@ -57151,7 +57152,7 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
                         : `Ordina entro il ${fmtData(r.perData.dataLimite)} • fra ${r.perData.giorni} giorni`}
                     </RigaData>
                     {etichettaEdizione && (
-                      <RigaData colore={inRitardo ? "#C0392B" : MUTED}>Serve per {etichettaEdizione(r.perData.edizioneCriticaId)}</RigaData>
+                      <RigaData colore={inRitardo ? "#C0392B" : MUTED}>Serve per {r.perData.eventoCritico || etichettaEdizione(r.perData.edizioneCriticaId)}</RigaData>
                     )}
                   </span>
                   {/* stock e soglia, non la quantita' da ordinare: quella
@@ -57527,61 +57528,10 @@ function pianoScarico(prodotto, quantita, { sogliaInvalicabile = false } = {}) {
 // "è in vendita online?" non è un campo suo: sono tre segnali che devono
 // dire tutti sì (ha un id WooCommerce, non è una bozza, non è marcato solo
 // offline). Tenerlo derivato evita una quarta verità che si disallinea
-// Rimette in pari WooCommerce su alcuni prodotti: quello che il sito puo'
-// vendere non e' la giacenza, e' la giacenza MENO i pezzi gia' promessi in
-// un carrello sospeso. Il banco quei pezzi non li rivende da sempre; il
-// sito non ne sapeva niente e continuava a venderli.
-//
-// Si chiama dopo ogni cosa che cambia l'una o gli altri: una vendita, un
-// carrello messo da parte, uno ripreso o buttato. Non blocca chi la
-// chiama e non fa fallire niente — se il sito non risponde, il tasto
-// "Aggiorna lo shop" in Gestione magazzino rimette tutto in pari.
-async function allineaShop(prodottiIds) {
-  const ids = [...new Set((prodottiIds || []).filter(Boolean))];
-  if (ids.length === 0) return;
-  try {
-    const { data, error } = await supabase.functions.invoke("woo-riallinea-shop", { body: { prodottiIds: ids } });
-    if (error || data?.errore) console.error("Riallineamento shop non riuscito:", data?.errore || error?.message);
-  } catch (e) {
-    console.error("Riallineamento shop non riuscito:", e?.message || e);
-  }
-}
-function pubblicatoSuShop(p) {
-  // "privato" su WooCommerce vuol dire che il prodotto esiste sul sito ma
-  // lo vede solo chi è dentro come amministratore: per il cliente non è in
-  // vendita, esattamente come una bozza
-  return !!p?.woo_product_id && p?.stato === "publish" && !p?.solo_offline;
-}
-// UNICO punto dell'app che scrive lo stock. Rilegge il valore vero prima
-// di applicare il delta (non si fida di quello in memoria, che può essere
-// vecchio di minuti), non scende mai sotto zero — il controllo sta qui,
-// non nella validazione di un form, così vale per tutti i chiamanti —
-// registra il movimento nello storico e riallinea WooCommerce quando il
-// prodotto è pubblicato
-async function muoviStock(prodotto, delta, { origine, nota = null, riferimento = null, utente = null, collegatoProdottoId = null } = {}) {
-  if (!prodotto?.id || !delta) return null;
-  const { data: attuale, error: erroreLettura } = await supabase
-    .from("prodotti_shop").select("id, nome, quantita, woo_product_id, stato, solo_offline").eq("id", prodotto.id).maybeSingle();
-  if (erroreLettura || !attuale) return `"${prodotto.nome}": non riesco a leggere la giacenza — ${erroreLettura?.message || "prodotto non trovato"}`;
-  const disponibile = attuale.quantita || 0;
-  if (delta < 0 && disponibile + delta < 0) {
-    return `"${attuale.nome}": ci sono ${disponibile} pezzi, non posso scaricarne ${-delta}.`;
-  }
-  const nuova = disponibile + delta;
-  if (pubblicatoSuShop(attuale)) {
-    // WooCommerce è lo specchio, non la fonte: si scrive prima lì e solo
-    // se accetta si aggiorna il dato locale (dentro la stessa chiamata)
-    const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: prodotto.id, quantita: nuova } });
-    if (error || data?.errore) return `"${attuale.nome}": aggiornamento su WooCommerce non riuscito — ${data?.errore || error.message}`;
-  } else {
-    const { error } = await supabase.from("prodotti_shop").update({ quantita: nuova }).eq("id", prodotto.id);
-    if (error) return `"${attuale.nome}": errore nello scarico — ${error.message}`;
-  }
-  await supabase.from("movimenti_magazzino").insert({
-    prodotto_id: prodotto.id, delta, origine, nota, riferimento, utente, collegato_prodotto_id: collegatoProdottoId,
-  });
-  return null;
-}
+// allineaShop / pubblicatoSuShop / muoviStock stanno in
+// src/magazzino/stock.js (importati in cima): li usa anche il materiale
+// degli eventi, che da oggi esce e rientra dal magazzino come tutto il
+// resto. Vedi la nota in testa a quel file sul perche' non si duplicano.
 // La provvigione della master, calcolata e CONGELATA al momento della
 // vendita. Le fasce si rileggono adesso dal database e non da quello che
 // la pagina ha in memoria: una provvigione e' un compenso, e va decisa
@@ -57845,7 +57795,7 @@ function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdott
 // fabbisogno da uno stock in memoria. I prodotti condivisi (guanti, aghi)
 // escono da un pool SOLO, mai da simulazioni separate per kit: è la
 // differenza fra un'autonomia vera e una tre volte più ottimista.
-function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi }) {
+function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi, eventi = [], eventiMateriali = [] }) {
   const prodottiPerId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
   const boxPerSfusoId = mappaBoxPerSfuso(prodottiShop);
   const statoPerEdizione = Object.fromEntries((logisticaKitEdizioni || []).map((e) => [e.corso_data_id, e]));
@@ -57879,6 +57829,31 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
     .filter((cd) => cd.data_inizio && cd.data_inizio >= oggi)
     .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
 
+  // Anche un evento impegna magazzino. Quello che e' in elenco per una
+  // fiera e non e' ancora uscito verra' preso il giorno della partenza,
+  // esattamente come il kit di un corso: se non si conta, l'Advisor
+  // promette ai corsi pezzi che quel giorno saranno dentro uno scatolone
+  // diretto a Napoli. Quello gia' scaricato non si conta di nuovo —
+  // dalle giacenze da cui parte questa simulazione e' gia' uscito.
+  const materialiPerEvento = {};
+  (eventiMateriali || []).forEach((r) => {
+    if (!r.prodotto_id) return;
+    const resta = Math.max(0, (Number(r.quantita) || 0) - (Number(r.quantita_scaricata) || 0));
+    if (resta <= 0) return;
+    const dentro = (materialiPerEvento[r.evento_id] = materialiPerEvento[r.evento_id] || {});
+    dentro[r.prodotto_id] = (dentro[r.prodotto_id] || 0) + resta;
+  });
+  const eventiFuturi = (eventi || []).filter((e) =>
+    e.stato === "programmato" && e.data_inizio && e.data_inizio >= oggi && materialiPerEvento[e.id]);
+
+  // una fila sola, in ordine di data: chi viene prima prende per primo.
+  // E' tutto il senso della simulazione cronologica, e tenere gli eventi
+  // in una lista a parte l'avrebbe rotto
+  const tappe = [
+    ...edizioni.map((cd) => ({ data: cd.data_inizio, corso: cd })),
+    ...eventiFuturi.map((ev) => ({ data: ev.data_inizio, evento: ev })),
+  ].sort((x, y) => x.data.localeCompare(y.data));
+
   const perProdotto = {};   // prodotto_id -> { fabbisogno, mancante, dataCritica, edizioneCriticaId, richieste[] }
   const perEdizione = [];   // una riga per corso futuro
   const perKit = {};        // kit_id -> { richiestiTotali, dataAutonomia, edizioneCriticaId }
@@ -57891,7 +57866,27 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
   // anagrafica: vanno detti, non stimati
   const dermografiSenzaProdottoTotali = [];
 
-  edizioni.forEach((cd) => {
+  tappe.forEach((tappa) => {
+    if (tappa.evento) {
+      const ev = tappa.evento;
+      Object.entries(materialiPerEvento[ev.id] || {}).forEach(([prodottoId, quantita]) => {
+        const p = prodottiPerId[prodottoId];
+        if (!p || p.giacenza_propria === false || p.conta_magazzino === false) return;
+        const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, mancante: 0, allievi: 0, dataCritica: null, edizioneCriticaId: null, eventoCritico: null, richieste: [] });
+        riga.fabbisogno += quantita;
+        riga.richieste.push({ data: ev.data_inizio, quantita });
+        const manca = preleva(prodottoId, quantita);
+        if (manca > 0) {
+          riga.mancante += manca;
+          // un evento non e' un'edizione: non ha un id da cui ricavare
+          // "corso + citta + data". Si scrive il suo nome, e chi disegna
+          // lo preferisce all'etichetta dell'edizione quando c'e'
+          if (!riga.dataCritica) { riga.dataCritica = ev.data_inizio; riga.eventoCritico = ev.nome || "un evento"; }
+        }
+      });
+      return;
+    }
+    const cd = tappa.corso;
     const { perProdotto: richiesto, nonRisolti, senzaKit, conteggioKit, dermografiSenzaProdotto, allieviPerProdotto } =
       fabbisognoEdizione(cd, iscritti, kitDefinizioni, corsiKitProdotti, statoPerEdizione[cd.id], prodottiShop);
     (dermografiSenzaProdotto || []).forEach((d) => dermografiSenzaProdottoTotali.push({ ...d, corsoDataId: cd.id, data: cd.data_inizio }));
@@ -57906,7 +57901,7 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
       // un prodotto senza giacenza propria (bundle virtuale, vetrina) non
       // ha uno stock da esaurire: si scarica dai suoi componenti altrove
       if (!p || p.giacenza_propria === false || p.conta_magazzino === false) return;
-      const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, mancante: 0, allievi: 0, dataCritica: null, edizioneCriticaId: null, richieste: [] });
+      const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, mancante: 0, allievi: 0, dataCritica: null, edizioneCriticaId: null, eventoCritico: null, richieste: [] });
       riga.fabbisogno += quantita;
       riga.allievi += (allieviPerProdotto || {})[prodottoId] || 0;
       riga.richieste.push({ data: cd.data_inizio, quantita });
@@ -57936,8 +57931,9 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
   });
 
   return {
-    modalita: edizioni.length ? "cronologica" : "senza_date",
+    modalita: (edizioni.length || eventiFuturi.length) ? "cronologica" : "senza_date",
     edizioniConsiderate: edizioni.length,
+    eventiConsiderati: eventiFuturi.length,
     perProdotto, perEdizione, perKit,
     dataCriticaComplessiva, edizioneCriticaComplessiva,
     nonRisolti: nonRisoltiTotali, senzaKit: senzaKitTotali, edizioniSenzaIscritti,
@@ -58006,6 +58002,7 @@ function pianoRiordino({ prodottiShop, risultato, oggi }) {
         dataLimite, giorni,
         stato: giorni < 0 ? "ritardo" : giorni <= 7 ? "urgente" : "ok",
         dataCritica: previsione.dataCritica, edizioneCriticaId: previsione.edizioneCriticaId,
+        eventoCritico: previsione.eventoCritico || null,
       };
     }
     // criterio 2 — soglia di quantità: rete di sicurezza sempre attiva,
@@ -58095,7 +58092,7 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
-function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, riordiniInCorso = [], ricarica, onApriIscritto, onApriProdotto, onBack, titolo = "Advisor" }) {
+function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, eventi = [], eventiMateriali = [], riordiniInCorso = [], ricarica, onApriIscritto, onApriProdotto, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
@@ -58260,8 +58257,8 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
   const [salvandoLead, setSalvandoLead] = useState(null);
 
   const risultato = useMemo(
-    () => simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi }),
-    [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi]
+    () => simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi, eventi, eventiMateriali }),
+    [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi, eventi, eventiMateriali]
   );
   const piano = useMemo(
     () => pianoRiordino({ prodottiShop, risultato, oggi }),
@@ -58887,7 +58884,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               const inRitardo = perData?.stato === "ritardo";
               const giorni = perData ? Math.abs(perData.giorni) : null;
               const [annoL, meseL, giornoL] = String(perData?.dataLimite || "").split("-");
-              const edizione = perData?.edizioneCriticaId ? etichettaEdizione(perData.edizioneCriticaId) : null;
+              const edizione = perData?.eventoCritico || (perData?.edizioneCriticaId ? etichettaEdizione(perData.edizioneCriticaId) : null);
               const disponibile = r.perSoglia?.disponibile ?? r.prodotto.quantita ?? 0;
               const soglia = r.perSoglia?.soglia ?? r.prodotto.soglia_riordino ?? null;
               const sottoSoglia = soglia != null && Number(disponibile) < Number(soglia);
@@ -76715,6 +76712,7 @@ export default function App() {
   const [costiCategorie, setCostiCategorie] = useState([]);
   const [costiSottocategorie, setCostiSottocategorie] = useState([]);
   const [eventi, setEventi] = useState([]);
+  const [eventiMateriali, setEventiMateriali] = useState([]);
   // Da dove si e' arrivati alla scheda di un evento, e quale evento.
   // Cliccando la barra nel calendario si entra in Gestione eventi gia'
   // aperti su quello, e "Indietro" riporta al calendario invece che alla
@@ -76942,6 +76940,10 @@ export default function App() {
     costi_categorie: async () => setCostiCategorie((await supabase.from("costi_categorie").select("*").order("ordine")).data || []),
     costi_sottocategorie: async () => setCostiSottocategorie((await supabase.from("costi_sottocategorie").select("*").order("ordine")).data || []),
     eventi: async () => setEventi((await supabase.from("eventi").select("*").order("data_inizio", { ascending: false })).data || []),
+    // il materiale impegnato dagli eventi: serve all'Advisor, che deve
+    // contarlo come conta i kit dei corsi. Solo le righe a catalogo —
+    // un roll-up non ha giacenza
+    eventi_materiali: async () => setEventiMateriali((await supabase.from("eventi_materiali").select("evento_id, prodotto_id, quantita, quantita_scaricata").not("prodotto_id", "is", null)).data || []),
     fornitori: async () => setFornitori((await supabase.from("fornitori").select("*").order("nome")).data || []),
     // "data_documento" da sola non basta a decidere l'ordine: le spese di
     // una classe nascono tutte nello stesso giorno (o senza data), e a
@@ -77232,8 +77234,8 @@ export default function App() {
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
     // senza, entrando da qui le immagini risultavano sparite pur essendoci
-    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "location", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
-    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "prodotti_immagini", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "location", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso", "eventi", "eventi_materiali"],
+    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "prodotti_immagini", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso", "eventi", "eventi_materiali"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti", "master"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -77252,7 +77254,7 @@ export default function App() {
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
     gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
-    avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "eventi", "eventi_materiali"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti", "sync_shop_esiti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
@@ -79201,6 +79203,7 @@ export default function App() {
           prodottiShop={prodottiShop} categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
+          eventi={eventi} eventiMateriali={eventiMateriali}
           fornitori={fornitori}
           riordiniInCorso={riordiniInCorso}
           onApriIscritto={apriIscrittoDaAdvisor}
@@ -79220,6 +79223,7 @@ export default function App() {
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
+          eventi={eventi} eventiMateriali={eventiMateriali}
           riordiniInCorso={riordiniInCorso}
           onApriAdvisor={() => apriAdvisorDa("magazzino")} assicuraTabelle={assicuraTabelle}
           registraInterceptaIndietro={registraInterceptaIndietro}
@@ -79555,6 +79559,9 @@ export default function App() {
           costiCategorie={costiCategorie}
           eventoIniziale={eventoDaAprire}
           onNuovaSpesa={apriNuovaSpesaEvento}
+          // il materiale di un evento esce e rientra dal magazzino: le
+          // giacenze in memoria vanno rilette, o la pagina resta indietro
+          onStockCambiato={() => fetchDati(["prodotti_shop", "eventi"])}
           // si torna da dove si e' entrati: dal calendario, dalle pagine
           // figlie di Gestione corsi, o da Gestione corsi stessa. "home"
           // resta solo come rete di sicurezza, da quando il tasto in home
@@ -79659,6 +79666,7 @@ export default function App() {
         <PaginaAvvisiLogistica
           prodottiShop={prodottiShop} corsiDate={corsiDate} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
+          eventi={eventi} eventiMateriali={eventiMateriali}
           ricarica={fetchDati} onBack={() => setView("logisticaprodotti")} onApriAdvisor={() => apriAdvisorDa("avvisilogistica")}
           titolo={etichettaTasto("logisticaprodotti", "avvisilogistica", "Advisor")}
         />
