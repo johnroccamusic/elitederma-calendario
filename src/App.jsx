@@ -42,6 +42,7 @@ import { muoviStock, allineaShop, pubblicatoSuShop } from "./magazzino/stock.js"
 import { usePuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
 import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
+import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -18133,7 +18134,7 @@ function DefinizioneProvvigioni() {
   );
 }
 
-function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
+function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -18171,6 +18172,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
   const [showMagazziniModal, setShowMagazziniModal] = useState(false);
   const [showIntestazioneModal, setShowIntestazioneModal] = useState(false);
+  const [showNotificheModal, setShowNotificheModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
   const [showProvvigioniModal, setShowProvvigioniModal] = useState(false);
@@ -18186,6 +18188,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     const modaliAperti = [
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showMagazziniModal, setShowMagazziniModal], [showIntestazioneModal, setShowIntestazioneModal],
+      [showNotificheModal, setShowNotificheModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
       [showProvvigioniModal, setShowProvvigioniModal],
     ];
@@ -18194,7 +18197,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     registraInterceptaIndietro(null);
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
-    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal,
+    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal, showNotificheModal,
     showTargetMasterModal, showTargetVenditoriModal, showProvvigioniModal,
   ]);
 
@@ -18402,6 +18405,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
         { chiave: "diplomi", etichetta: "Setting diplomi", Icona: IconaDiplomaRiga, onClick: onApriFontDiplomi },
         { chiave: "loghi", etichetta: "Setting loghi", Icona: IconaFormeRiga, onClick: onApriSettingLoghi },
         { chiave: "intestazione", etichetta: "Intestazione società", Icona: IconaIntestazioneRiga, onClick: () => setShowIntestazioneModal(true) },
+        { chiave: "notifiche", etichetta: "Notifiche push", Icona: IconaCampanellaErp, onClick: () => setShowNotificheModal(true) },
         { chiave: "kit", etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
       ],
     },
@@ -18736,6 +18740,12 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
               <span style={{ ...fontBody, fontSize: 13.5, color: NAVY }}>{toTitleCase(l.nome)}</span>
             </label>
           ))}
+        </Modal>
+      )}
+
+      {showNotificheModal && (
+        <Modal title="Notifiche push" onClose={() => setShowNotificheModal(false)} maxWidth={760}>
+          <PaginaNotifichePush master={master} utenteLoggato={utenteLoggato} />
         </Modal>
       )}
 
@@ -78923,7 +78933,7 @@ export default function App() {
           onBack={() => setView("home")}
           propsUtenti={{ passwordMenu, utentiApp, master, venditori, ricarica: fetchDati, onBack: () => setView("home") }}
           propsSetting={{
-            ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
+            ruoloUtente, utenteLoggato, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
             venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi,
             impostazioniIva, intestazioneSocieta, registraInterceptaIndietro,
             ricarica: fetchDati,
