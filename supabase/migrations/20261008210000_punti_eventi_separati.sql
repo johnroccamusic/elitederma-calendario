@@ -1,0 +1,27 @@
+-- I punti fatti a un evento valgono meno.
+--
+-- Una fiera non e' il banco di un corso: chi vende usa il suo POS, e
+-- quello che gli si riconosce e' meno di quello che prende una master
+-- che vende alla sua classe. Le percentuali (8% con carta, 10% in
+-- contanti, contro 15% e 20%) si scrivono in Gestione punti; qui si fa
+-- l'unica cosa che il database deve fare: tenere separati i punti nati
+-- a un evento da tutti gli altri, o non ci sarebbe modo di applicargli
+-- una percentuale diversa.
+--
+-- v_punti_master_righe prende una colonna nuova, e_evento, IN FONDO:
+-- "create or replace view" sa solo aggiungere, e spostare una colonna
+-- gia' esistente lo fa rifiutare. Il corpo intero e' stato riscritto
+-- dal dump della vista viva, non da questa cartella: lo storico locale
+-- delle migrazioni e' indietro rispetto al database.
+--
+-- In v_punti_master i punti di evento escono dalle due caselle di
+-- sempre. Se restassero dentro, la stessa cifra prenderebbe due
+-- percentuali diverse a seconda di chi la guarda. L'ordine conta: un
+-- acquisto fatto con un codice master resta "personale" anche se
+-- battuto a una fiera — quei punti non maturano soldi in nessun caso.
+-- punti_totali e punti_carriera non cambiano: erano e restano la somma
+-- di tutto.
+--
+-- APPLICATA IL 08/10/2026 VIA MCP. Il testo completo delle due viste
+-- sta nella cronologia delle migrazioni del progetto Supabase; qui
+-- resta la traccia del perche'.

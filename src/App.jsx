@@ -524,7 +524,11 @@ const QUOTE_PUNTI_MASTER_DEFAULT = { corso: 100, fuoriCorso: 100 };
 // le vanno (al corso / fuori corso), queste dicono quanto le vengono
 // pagati. Le due si moltiplicano.
 const CHIAVE_PERCENTUALI_EURO_PUNTI = "puntiMaster_percentualiEuro";
-const PERCENTUALI_EURO_PUNTI_DEFAULT = { posShop: 15, cash: 20 };
+// Agli eventi si riconosce meno: chi vende a una fiera usa il suo POS e
+// non sta portando la sua classe. Due percentuali a parte, non uno
+// sconto su quelle di sopra, perche' la differenza fra carta e contanti
+// resta anche li'.
+const PERCENTUALI_EURO_PUNTI_DEFAULT = { posShop: 15, cash: 20, eventoPosShop: 8, eventoCash: 10 };
 // Le tre colonne "Quota" di Dettaglio prodotti (16/09/2026): una
 // percentuale dei punti totali prodotto, in euro (un punto e' un euro).
 // Le percentuali si scrivono in cima alle colonne e restano per tutti
@@ -13307,7 +13311,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // sposta.
               // sei fisse: shop/POS, cash, personali, carriera, vendite al
               // corso, vendite con referral
-              const schedePunti = 6 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli && mostraTotaleCarrelli ? 1 : 0);
+              const schedePunti = 8 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli && mostraTotaleCarrelli ? 1 : 0);
               const cardPunti = {
                 ...cardStyle, minWidth: 0, boxSizing: "border-box",
                 padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
@@ -13347,12 +13351,12 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             // le etichette partono dalla stessa riga anche quando una va a capo
             // e le altre no
             //
-            // Su telefono stavano su due colonne: con tre schede la terza
-            // finiva da sola sulla riga sotto, accanto a un buco. Ora
-            // stanno tutte in fila — e il quadrato lascia il posto a una
-            // scheda piu' bassa, altrimenti tre quadrati affiancati su uno
-            // schermo stretto diventano tre francobolli.
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${schedePunti}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+            // Su telefono al massimo quattro per riga. Erano tutte in
+            // fila, e finche' erano tre o quattro andava; dall'08/10/2026
+            // sono otto, e otto colonne su uno schermo da 375 punti fanno
+            // otto francobolli da quaranta punti l'uno. Il quadrato lascia
+            // il posto a una scheda piu' bassa per lo stesso motivo.
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? Math.min(schedePunti, 4) : schedePunti}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               {/* I punti, divisi per come si e' pagato. Stanno in questa
                   griglia e non in una loro: due file di schede che dicono
                   cose dello stesso ordine si leggono peggio di una */}
@@ -13369,6 +13373,20 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 <div style={lblPunti}>Punti<br />cash</div>
                 <div style={{ ...numPunti, color: "#8A6D1D" }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_cash || 0) : "…"}</div>
                 <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_cash || 0) * percEuroDash.cash) / 100)) : "—"}</div>
+              </div>
+              {/* Quello che si vende a una fiera sta per conto suo: vale
+                  meno, perche' li' si usa il proprio POS e non si sta
+                  portando la propria classe. Se finisse nelle due schede
+                  qui sopra prenderebbe la percentuale sbagliata. */}
+              <div style={cardPunti} title={`Vendite a un evento incassate con la carta: ${percEuroDash.eventoPosShop}% di quello che vale un punto`}>
+                <div style={lblPunti}>Punti shop/POS<br />eventi</div>
+                <div style={{ ...numPunti, color: NAVY }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_evento_pos || 0) : "…"}</div>
+                <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_evento_pos || 0) * percEuroDash.eventoPosShop) / 100)) : "—"}</div>
+              </div>
+              <div style={cardPunti} title={`Vendite a un evento incassate in contanti o con buono Amazon: ${percEuroDash.eventoCash}% di quello che vale un punto`}>
+                <div style={lblPunti}>Punti cash<br />eventi</div>
+                <div style={{ ...numPunti, color: "#8A6D1D" }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_evento_cash || 0) : "…"}</div>
+                <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_evento_cash || 0) * percEuroDash.eventoCash) / 100)) : "—"}</div>
               </div>
               {/* Quello che la master ha comprato per se', col suo codice.
                   Non e' una vendita e non matura soldi: conta solo nella
@@ -51392,6 +51410,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
       // una parte, contanti e buono Amazon dall'altra. Servono alle due
       // percentuali che li trasformano in euro
       let puntiPosShop = 0, puntiCash = 0;
+      let puntiEventoPos = 0, puntiEventoCash = 0;
       righe.forEach((v) => {
         euro += Number(v.totale) || 0;
         if ((v.totale || 0) > 0) vendite += 1;
@@ -51399,6 +51418,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         // codice; il resto e' fuori dal corso (referral sul sito, vendita
         // da casa). Le fasce del canale danno il valore per la riduzione
         const alCorso = !!v.corso_data_id;
+        const aEvento = !!v.evento_id;
         // al corso: la serie della carta o quella dei contanti, a seconda
         // di come l'allievo ha pagato
         // La stessa regola per tutti e due i canali: la serie della
@@ -51429,7 +51449,11 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           // punti gia' ridotti dal "quanti", poi il "quanto le vengono
           // pagati" lavora su quelli
           const suoi = teorici * ((alCorso ? quote.corso : quote.fuoriCorso) / 100);
-          if (contantiVendita) puntiCash += suoi; else puntiPosShop += suoi;
+          // una vendita fatta a un evento va nei suoi due secchi: li' il
+          // punto vale meno, e tenerla insieme alle altre le darebbe la
+          // percentuale sbagliata
+          if (aEvento) { if (contantiVendita) puntiEventoCash += suoi; else puntiEventoPos += suoi; }
+          else if (contantiVendita) puntiCash += suoi; else puntiPosShop += suoi;
         });
       });
       const puntiMaster = round2((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
@@ -51437,11 +51461,15 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
       // risultato e' gia' in euro
       const euroPosShop = round2((puntiPosShop * percEuro.posShop) / 100);
       const euroCash = round2((puntiCash * percEuro.cash) / 100);
+      const euroEventoPos = round2((puntiEventoPos * percEuro.eventoPosShop) / 100);
+      const euroEventoCash = round2((puntiEventoCash * percEuro.eventoCash) / 100);
       return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici: round2(puntiTeorici), puntiCorso: round2(puntiCorso), puntiFuori: round2(puntiFuori), punti: round2(puntiCorso + puntiFuori), puntiMaster,
-        puntiPosShop: round2(puntiPosShop), puntiCash: round2(puntiCash), euroPosShop, euroCash, euroTotale: round2(euroPosShop + euroCash),
+        puntiPosShop: round2(puntiPosShop), puntiCash: round2(puntiCash), euroPosShop, euroCash,
+        puntiEventoPos: round2(puntiEventoPos), puntiEventoCash: round2(puntiEventoCash), euroEventoPos, euroEventoCash,
+        euroTotale: round2(euroPosShop + euroCash + euroEventoPos + euroEventoCash),
         euro: round2(euro) };
     }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, percEuro.posShop, percEuro.cash, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster, incidenzaCostiSalvata]);
+  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, percEuro.posShop, percEuro.cash, percEuro.eventoPosShop, percEuro.eventoCash, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster, incidenzaCostiSalvata]);
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
@@ -51510,13 +51538,15 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Quanto vale un punto, in euro</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Un punto è un euro, ma alla master ne va una percentuale. Dipende da come è stato incassato: con la carta al banco o sullo shop, oppure in contanti o con buono Amazon.
+            Un punto è un euro, ma a chi vende ne va una percentuale. Dipende da come è stato incassato — con la carta al banco o sullo shop, oppure in contanti o con buono Amazon — e da dove: a un evento si riconosce meno, perché chi vende usa il suo POS e non sta portando la sua classe.
             {" "}Si applicano ai punti che le spettano — cioè dopo le quote qui sopra — e il risultato è l’euro che matura, nelle due colonne della classifica.
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             {[
               { canale: "posShop", etichetta: "POS e shop", spiega: "Carta al banco, e tutto quello che arriva dallo shop online." },
               { canale: "cash", etichetta: "Contanti e buono Amazon", spiega: "Incassi che non pagano commissioni: alla master se ne riconosce di più." },
+              { canale: "eventoPosShop", etichetta: "Eventi, con la carta", spiega: "Vendite fatte a una fiera o a un evento, incassate con la carta." },
+              { canale: "eventoCash", etichetta: "Eventi, in contanti", spiega: "Le stesse, incassate in contanti o con buono Amazon." },
             ].map((q) => (
               <div key={q.canale} style={{ flex: "1 1 260px", background: BG, borderRadius: 12, padding: "12px 14px" }}>
                 <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{q.etichetta}</div>
@@ -51554,13 +51584,13 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
                 <thead>
                   <tr>
-                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiTeorici", l: "Punti teorici" }, { c: "puntiCorso", l: "Al corso" }, { c: "puntiFuori", l: "Fuori corso" }, { c: "puntiMaster", l: "Alla master" }, { c: "euroPosShop", l: `€ POS e shop (${percEuro.posShop}%)` }, { c: "euroCash", l: `€ contanti (${percEuro.cash}%)` }, { c: "euroTotale", l: "€ maturati" }, { c: "euro", l: "Valore venduto" }].map((h) => (
+                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiTeorici", l: "Punti teorici" }, { c: "puntiCorso", l: "Al corso" }, { c: "puntiFuori", l: "Fuori corso" }, { c: "puntiMaster", l: "Alla master" }, { c: "euroPosShop", l: `€ POS e shop (${percEuro.posShop}%)` }, { c: "euroCash", l: `€ contanti (${percEuro.cash}%)` }, { c: "euroEventoPos", l: `€ eventi carta (${percEuro.eventoPosShop}%)` }, { c: "euroEventoCash", l: `€ eventi contanti (${percEuro.eventoCash}%)` }, { c: "euroTotale", l: "€ maturati" }, { c: "euro", l: "Valore venduto" }].map((h) => (
                       <ThOrdina key={h.c} campo={h.c} ordine={ordine} onOrdina={cambiaOrdine} style={th}>{h.l}</ThOrdina>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiTeorici: (r) => r.puntiTeorici, puntiCorso: (r) => r.puntiCorso, puntiFuori: (r) => r.puntiFuori, puntiMaster: (r) => r.puntiMaster, euroPosShop: (r) => r.euroPosShop, euroCash: (r) => r.euroCash, euroTotale: (r) => r.euroTotale, euro: (r) => r.euro }).map((r) => (
+                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiTeorici: (r) => r.puntiTeorici, puntiCorso: (r) => r.puntiCorso, puntiFuori: (r) => r.puntiFuori, puntiMaster: (r) => r.puntiMaster, euroPosShop: (r) => r.euroPosShop, euroCash: (r) => r.euroCash, euroEventoPos: (r) => r.euroEventoPos, euroEventoCash: (r) => r.euroEventoCash, euroTotale: (r) => r.euroTotale, euro: (r) => r.euro }).map((r) => (
                     <tr key={r.master.id}>
                       <td style={{ ...td, fontWeight: 700 }}>{toTitleCase(r.master.nome)}</td>
                       <td style={td}>{r.vendite}</td>
@@ -51573,6 +51603,8 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
                           applicata ai punti che le spettano */}
                       <td style={td} title={`${fmtPunti(r.puntiPosShop)} punti incassati con carta o sullo shop, al ${percEuro.posShop}%`}>{fmtEuroErp2(r.euroPosShop)}</td>
                       <td style={td} title={`${fmtPunti(r.puntiCash)} punti incassati in contanti o con buono Amazon, al ${percEuro.cash}%`}>{fmtEuroErp2(r.euroCash)}</td>
+                      <td style={td} title={`${fmtPunti(r.puntiEventoPos)} punti fatti a un evento e incassati con la carta, al ${percEuro.eventoPosShop}%`}>{fmtEuroErp2(r.euroEventoPos)}</td>
+                      <td style={td} title={`${fmtPunti(r.puntiEventoCash)} punti fatti a un evento e incassati in contanti, al ${percEuro.eventoCash}%`}>{fmtEuroErp2(r.euroEventoCash)}</td>
                       <td style={{ ...td, fontWeight: 800, color: "#2E7D32", fontSize: 14 }}>{fmtEuroErp2(r.euroTotale)}</td>
                       <td style={td}>{fmtEuroErp2(r.euro)}</td>
                     </tr>
