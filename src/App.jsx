@@ -44,10 +44,6 @@ import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
-import {
-  CANALI_PROVVIGIONE, FASCE_PROVVIGIONI_DEFAULT, SOGLIA_PROVVIGIONE_EURO,
-  PREMI_VOLUME_PROVVIGIONI, provvigioneVendita, premiVolumeRaggiunti,
-} from "../supabase/functions/_shared/provvigioni-master.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
@@ -549,21 +545,11 @@ const MARGINE_OPERATIVO_DEFAULT = 25;
 // deploy, e in una settimana e' gia' passato da 4,3 a 4,5.
 const CHIAVE_MOLT_CONSIGLIATO = "dettaglioProdotti_moltiplicatoreConsigliato";
 const MOLT_CONSIGLIATO_DEFAULT = 4.5;
-// Lo schema dei punti: dal cedibile (il 100%) si accantona subito una
-// parte di sicurezza, quel che resta e' il massimo cedibile, e i punti
-// sono dieci per ogni euro di massimo cedibile — cosi' la conversione e'
-// immediata: 10 punti, 1 euro. La percentuale accantonata si decide in
-// Gestione punti
-// I punti nella dashboard della master: SPENTI dal 20/09/2026.
-//
-// Il numero nasce dalla tabella del cedibile per margine, e in questo
-// momento non e' una sola: quella salvata nel database (da 2% a 35%) e
-// quella rimasta su un telefono (tetto ~37%) danno alla stessa master due
-// totali diversi — 205,16 e 215,06. Finche' la tabella non e' una per
-// tutti, un numero che cambia col dispositivo e' peggio di nessun numero.
-//
-// Per riaccenderli: rimettere true qui. Non c'e' altro da toccare.
-const PUNTI_MASTER_VISIBILI = false;
+// Il flag PUNTI_MASTER_VISIBILI stava qui: nascondeva alla master il
+// numero di punti che questa pagina si contava da sola, perche' quel
+// numero cambiava col dispositivo. Dall'08/10/2026 i punti arrivano
+// tutti da v_punti_master — una definizione sola, uguale per tutti — e
+// le quattro schede della dashboard si vedono sempre.
 const CHIAVE_SCHEMA_PUNTI_MASTER = "puntiMaster_schema";
 const SCHEMA_PUNTI_MASTER_DEFAULT = { accantonamentoPct: 10 };
 // Le fasce dello sconto d'aula per chi paga in CONTANTI al POS dell'app
@@ -667,12 +653,17 @@ function fasceCorsiPerPagamento(fasceCarta, fasceContantiSalvate, contanti) {
 // scrive e' Gestione punti. Vuota vuol dire "uguale a quella della
 // carta", esattamente come per i corsi.
 const CHIAVE_FASCE_REFERRAL_CONTANTI = "fasceSconto_referral_contanti";
-// Regola dei punti, riscritta il 13/09/2026 e valida in tutta l'app:
-//   punti = cedibile - percentuale di sicurezza, con due decimali.
-// Un punto e' un euro di massimo cedibile: nessun moltiplicatore, la
-// conversione non serve piu'. Erano stati provati il venti e il dieci per
-// euro, e ogni volta il conto a mente diventava un rompicapo.
-const PUNTI_PER_EURO_MASSIMO_CEDIBILE = 1;
+// Regola dei punti, valida in tutta l'app: due punti per ogni euro di
+// massimo cedibile, con due decimali.
+//
+// Fino al 08/10/2026 qui c'era 1, e la colonna "Punti totali prodotto"
+// di Dettaglio prodotti raddoppiava per conto suo. Risultato: lo stesso
+// pezzo valeva un numero in quella colonna e la meta' al POS e in
+// Gestione punti — e la vista v_punti_master, che e' quella che le
+// master leggono davvero nella loro dashboard, usava il numero alto. Il
+// moltiplicatore sta qui e vale per tutti: chi lo voleva singolo aveva
+// smesso di essere l'unico a contare.
+const PUNTI_PER_EURO_MASSIMO_CEDIBILE = 2;
 // i punti si scrivono sempre con due decimali, come gli euro che sono
 function fmtPunti(n) {
   return (Number(n) || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -4764,21 +4755,56 @@ function prodottoDellaRiga(riga, indici) {
 function nomeVivoDellaRiga(riga, indici) {
   return prodottoDellaRiga(riga, indici)?.nome || riga?.nome || "—";
 }
-function puntiProdotto(p, sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, contanti = false) {
-  if (!p) return null;
-  const sicurezzaPct = sicurezzaDelProdotto(p, sicurezzaGenerale);
+// I punti di UN pezzo, a prezzo di listino. Non si calcolano qui: si
+// leggono da v_prezzi_listini, la stessa vista da cui li prende
+// v_punti_master — che e' quella che la master legge nella sua
+// dashboard e chi amministra in Gestione punti.
+//
+// Fino all'08/10/2026 questa funzione aveva una formula sua (prezzo
+// netto meno costo, margine operativo e incidenza dei costi) e la vista
+// ne aveva un'altra (quella del listino rivenditore). Su Nairobi
+// facevano 21,94 e 23,19; su Colla Laminazione 1,76 e 6,81. Due
+// definizioni di punto nella stessa app, e il POS prometteva un numero
+// che la dashboard poi smentiva. Adesso la definizione e' una: quella
+// della vista.
+const PUNTI_LISTINO = {};
+let PUNTI_LISTINO_CARICATI = null;
+function caricaPuntiListino() {
+  if (PUNTI_LISTINO_CARICATI) return PUNTI_LISTINO_CARICATI;
+  PUNTI_LISTINO_CARICATI = supabase.from("v_prezzi_listini").select("id, punti_calcolati, punti_cash").limit(5000)
+    .then(({ data }) => {
+      (data || []).forEach((r) => {
+        PUNTI_LISTINO[r.id] = {
+          carta: r.punti_calcolati == null ? null : Number(r.punti_calcolati),
+          contanti: r.punti_cash == null ? null : Number(r.punti_cash),
+        };
+      });
+      return PUNTI_LISTINO;
+    })
+    .catch(() => PUNTI_LISTINO);
+  return PUNTI_LISTINO_CARICATI;
+}
+// Finche' la tabella dei punti non e' arrivata, chi la legge vede
+// "nessun punto". Questo hook fa ridisegnare appena c'e': si chiama una
+// volta sola, in cima ad App, e vale per tutto l'albero.
+function usePuntiListino() {
+  const [, setGiro] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    caricaPuntiListino().then(() => { if (vivo) setGiro((n) => n + 1); });
+    return () => { vivo = false; };
+  }, []);
+}
+function puntiProdotto(p, _sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, contanti = false) {
+  if (!p?.id) return null;
+  // un prodotto che dall'app non si vende non fa punti, e questo la
+  // vista non lo sa: lo dicono due campi dell'anagrafica
   const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
   if (!inVenditaViaApp) return null;
-  if (contanti) {
-    const { euro } = cedibileContantiDi(p);
-    return euro == null ? null : puntiDaCedibile(euro);
-  }
-  // dal 21/09/2026 il cedibile e' la somma massima cedibile: prezzo netto
-  // meno costo, margine operativo e costi aziendali. Sotto zero non ci
-  // sono punti negativi, ci sono zero punti
-  const { euro } = sommaMassimaCedibileDi(p);
-  if (euro == null) return null;
-  return puntiDaCedibile(Math.max(0, euro));
+  const riga = PUNTI_LISTINO[p.id];
+  if (!riga) return null;
+  const v = contanti ? riga.contanti : riga.carta;
+  return v == null ? null : round2(v);
 }
 // Dal 21/09/2026 lo sconto dell'allievo NON decurta piu' i punti della
 // master: un pezzo vale i suoi punti interi (puntiProdotto) che sia venduto
@@ -5627,7 +5653,7 @@ function quotaVenditoreDi(totalePattuito) {
 // Una percentuale secca del totale pattuito: nessun minimo e nessun
 // arrotondamento ai 5 euro, al contrario della quota venditore — quella
 // e' un compenso che si contratta e si dice al telefono, questa e' una
-// frazione. La si cambia in Impostazioni → Definizione provvigioni.
+// frazione. La si cambia in Impostazioni → Commissioni sui corsi.
 //
 // Nata all'1% il 01/10/2026 e portata a 0,25% lo stesso giorno: sul
 // calendario di ottobre l'1% faceva 1.262 euro, troppo.
@@ -7896,8 +7922,11 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
   // cambiano. Si accende e si spegne con la pillola in alto
   const [testCedibilePieno, setTestCedibilePieno] = useState(true);
   const sicurezzaPunti = testCedibilePieno ? 0 : sicurezzaPuntiReale;
-  const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
-  const quotaCorso = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiSalvate || {}) }.corso;
+  // la quota per canale non c'e' piu' (08/10/2026): i punti sono
+  // interi, e quello che spetta a chi vende lo decidono le percentuali
+  // in euro di Gestione punti, che qui non si applicano — questa pagina
+  // simula i punti, non i compensi
+  const quotaCorso = 100;
   const fasceCorso = fasceScontoValide(regoleReferralAutomatico?.fasce_sconto);
   const [tabellaCedibileSalvata] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
   // l'incidenza dei costi entra fra le dipendenze del conto: senza, i
@@ -8072,7 +8101,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 6 }}>I codici sconto usati negli ordini del sito, raggruppati per codice e per periodo d'uso: ogni periodo è, quasi sempre, il corso di una master.</div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>
-          I punti sono una simulazione con le regole di oggi, sui prodotti che esistono ancora in anagrafica: "teorici" è quello che i prodotti venduti valgono ({testCedibilePieno ? "TEST: cedibile pieno, senza togliere la sicurezza" : `cedibile meno sicurezza ${sicurezzaPunti}%`}); "alla master" è lo stesso valore pieno — lo sconto dell'allievo non decurta più i punti — ridotto solo dalla quota al corso ({quotaCorso}%). Restano in questa pagina: non si sommano da nessun'altra parte.
+          I punti sono una simulazione con le regole di oggi, sui prodotti che esistono ancora in anagrafica: "teorici" è quello che i prodotti venduti valgono ({testCedibilePieno ? "TEST: cedibile pieno, senza togliere la sicurezza" : `cedibile meno sicurezza ${sicurezzaPunti}%`}); "alla master" è lo stesso valore, intero: lo sconto dell'allievo non decurta i punti e non c'è più nessuna quota che li riduca. Restano in questa pagina: non si sommano da nessun'altra parte.
           {totRigheSenzaProdotto > 0 ? ` Righe senza punti (prodotto sparito, o oggi senza costo o prezzo), non contate: ${totRigheSenzaProdotto}.` : ""}
         </div>
 
@@ -8172,7 +8201,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
                 </div>
                 {/* i punti simulati di tutto il codice: quelli alla master,
                     e sotto i teorici prima dello sconto dell'allievo */}
-                <div style={{ textAlign: "right" }} title={`Teorici ${fmtPunti(c.punti.teorici)} · alla master (quota ${quotaCorso}%) ${fmtPunti(c.punti.maturati)}${c.punti.righeSenzaProdotto ? ` · ${c.punti.righeSenzaProdotto} righe senza prodotto oggi` : ""}`}>
+                <div style={{ textAlign: "right" }} title={`Teorici ${fmtPunti(c.punti.teorici)} · alla master ${fmtPunti(c.punti.maturati)}${c.punti.righeSenzaProdotto ? ` · ${c.punti.righeSenzaProdotto} righe senza prodotto oggi` : ""}`}>
                   <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Punti teorici</div>
                   <div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: "#2E7D32" }}>{fmtPunti(c.punti.teorici)}</div>
                   <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>alla master {fmtPunti(c.punti.maturati)}{c.periodi.length ? ` · ${fmtPunti(round2(c.punti.teorici / c.periodi.length))} teorici per periodo` : ""}</div>
@@ -10562,7 +10591,7 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
 // mostrava un decimo del vero.
 //
 // Si calcola sul totale pattuito, con la percentuale del corso (deroga sul
-// corso, altrimenti quella generale di Definizione provvigioni). Sempre
+// corso, altrimenti quella generale di Commissioni sui corsi). Sempre
 // viva: non c'e' niente di congelato, quindi cambiare la percentuale in
 // Impostazioni cambia questa pagina all'istante.
 //
@@ -10578,7 +10607,7 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
 // mostrava un decimo del vero.
 //
 // Si calcola sul totale pattuito, con la percentuale del corso (deroga sul
-// corso, altrimenti quella generale di Definizione provvigioni), e si
+// corso, altrimenti quella generale di Commissioni sui corsi), e si
 // calcola VIVA: cambiare la percentuale in Impostazioni cambia tutti i
 // mesi all'istante.
 //
@@ -13042,17 +13071,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // i punti dalle vendite: shop/POS sul netto, cash sul lordo. Il conto sta
   // nella view v_punti_master, qui si legge e basta
   const puntiDaVendite = usePuntiMaster(masterSelId);
-  // I punti nella dashboard restano nascosti per TUTTE le master, senza
-  // eccezioni. Andrea Paura ne aveva una, aperta il 21/09/2026 e richiusa
-  // il giorno dopo: finche' la tabella del cedibile non e' una sola per
-  // tutti, un totale che cambia col dispositivo e' peggio di nessun
-  // totale — e vale per lei come per le altre.
-  //
-  // Per riaccenderli a tutte: PUNTI_MASTER_VISIBILI a true, in cima al
-  // file. Non c'e' altro da toccare, e non si riapre una porta per una
-  // sola persona: due master che leggono due regole diverse sono la cosa
-  // che poi nessuno sa piu' spiegare.
-  const puntiVisibiliMaster = PUNTI_MASTER_VISIBILI;
   // target vendite prodotti in corso per la master selezionata (mai per
   // il team vendite corsi: i due silos restano separati, vedi Target
   // Master in Impostazioni)
@@ -13103,91 +13121,34 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // solo le righe con totale positivo (un reso/annullamento non è un
   // "acquisto effettuato"); i punti invece riflettono anche i resi
   // (negativi), perché sono la sostanza vera della raccolta punti
+  // Quante vendite e quanto valgono i carrelli. I PUNTI NON SI CONTANO
+  // QUI: arrivano da v_punti_master (le quattro schede qui sotto), che
+  // e' l'unica definizione di punti che l'app ha.
+  //
+  // Fino all'08/10/2026 questo blocco ne calcolava di suoi, con la
+  // regola vecchia — punti per canale, ridotti dalle quote Al corso /
+  // Fuori corso — e sommava le provvigioni congelate sulle vendite
+  // (provvigione_master), che erano il meccanismo di prima ancora. Tre
+  // conti sovrapposti sulla stessa schermata. Resta quello che
+  // v_punti_master non sa dire: quante vendite sono arrivate da una
+  // classe e quante da un referral, e quanto hanno pagato i clienti.
   const provvigioniMaster = useMemo(() => {
-    const vuoto = { venditeTotale: 0, venditeCorso: 0, venditeReferral: 0, puntiAccumulati: 0, puntiMaturati: 0, euroCorso: 0, euroReferral: 0, euroTotale: 0, valoreCarrelli: 0, pezzi: 0, premi: premiVolumeRaggiunti(0), gruppi: [] };
+    const vuoto = { venditeTotale: 0, venditeCorso: 0, venditeReferral: 0, valoreCarrelli: 0 };
     if (!masterSelId || !puntiMasterImpostazioni) return vuoto;
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
-    let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, euroCorso = 0, euroReferral = 0, pezzi = 0, puntiAccumulati = 0, valoreCarrelli = 0;
-    const perGruppo = {};
-    // i punti BONUS: per ogni riga venduta, i punti pieni del prodotto
-    // per i pezzi, senza detrazioni per lo sconto usato ne' quote per
-    // canale. Si leggono dall'anagrafica di oggi, non dal prezzo pagato:
-    // un prodotto vale i suoi punti anche se e' stato scontato. Un reso
-    // ha pezzi negativi e li toglie da solo
-    const indiciPunti = indiciProdotti(prodottiShop);
-    // i punti ACCUMULATI: gli stessi punti divisi per canale — al corso se
-    // la vendita e' legata a una classe, fuori altrimenti — e poi ridotti
-    // con le quote decise in Gestione punti. Quando arrivera' la
-    // detrazione per lo sconto usato dagli allievi, si togliera' qui
-    let puntiCorsoLordi = 0, puntiFuoriLordi = 0;
-    // "Al corso" e' tutto quello che e' legato a una classe, con o senza
-    // codice: anche se la master si e' scordata di associare il codice, la
-    // vendita in aula resta una vendita al corso. "Con referral" e' solo
-    // quello che i clienti comprano FUORI dal corso con il suo codice
-    // personale (quello senza edizione, tipo AP47U9): di solito dal sito,
-    // che il webhook attribuisce a lei come operatore. I codici delle
-    // singole edizioni non contano qui: sono sconti d'aula, non referral.
-    const codiciPersonali = new Set((coupon || []).filter((c) => c.master_id === masterSelId && !c.corsi_date_id && c.codice).map((c) => String(c.codice).toLowerCase()));
+    let venditeTotale = 0, venditeCorso = 0, venditeReferral = 0, valoreCarrelli = 0;
     righe.forEach((v) => {
-      const conta = (v.totale || 0) > 0;
-      if (conta && v.corso_data_id) venditeCorso += 1;
-      if (conta && !v.corso_data_id && v.codice_coupon && codiciPersonali.has(String(v.codice_coupon).toLowerCase())) venditeReferral += 1;
-      const alCorso = !!v.corso_data_id;
-      const fasceCanale = alCorso
-        ? fasceCorsiPerPagamento(fasceCorsoDash, fasceContantiDash, pagamentoContaComeContanti(v.metodo_pagamento))
-        : fasceReferralDash;
-      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
-        if (r.spedizione) return;
-        const prodotto = prodottoDellaRiga(r, indiciPunti);
-        // pagata in contanti o con buono Amazon -> la riga dei contanti;
-        // carta o sito -> l'altra
-        const puntiPezzo = puntiProdotto(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento));
-        if (puntiPezzo == null) return;
-        // i punti teorici della riga, a prezzo pieno: sono i bonus
-        const quantita = Number(r.quantita) || 0;
-        const teorici = puntiPezzo * quantita;
-        puntiAccumulati += teorici;
-        // i punti non si decurtano piu' per lo sconto dell'allieva: valgono
-        // pieni, divisi solo per canale. La leva su quanto ne prende la
-        // master sono le quote al corso / fuori corso in Gestione punti
-        if (alCorso) puntiCorsoLordi += teorici; else puntiFuoriLordi += teorici;
-      });
-      // l'importo non si ricalcola: e' quello congelato sulla vendita il
-      // giorno in cui e' stata fatta. Un reso ha totale negativo e porta
-      // con se' una provvigione negativa, quindi si sottrae da sola
-      const euro = Number(v.provvigione_master) || 0;
-      if ((v.totale || 0) > 0) venditeTotale += 1;
-      // il valore vero dei carrelli di questa dashboard: la somma dei totali
-      // incassati (un reso col totale negativo si sottrae da solo). Non e' la
-      // provvigione: e' quanto hanno pagato i clienti
+      // un reso ha totale negativo: non e' un acquisto in piu', ma si
+      // sottrae da solo dal valore dei carrelli
+      if ((v.totale || 0) > 0) {
+        venditeTotale += 1;
+        if (v.corso_data_id) venditeCorso += 1; else venditeReferral += 1;
+      }
       valoreCarrelli += Number(v.totale) || 0;
-      if (v.provvigione_canale === "corso") euroCorso += euro; else euroReferral += euro;
-      pezzi += Number(v.provvigione_pezzi) || 0;
-      const chiave = v.codice_coupon ? v.codice_coupon.toUpperCase() : "__pos_senza_referral__";
-      if (!perGruppo[chiave]) perGruppo[chiave] = { etichetta: v.codice_coupon ? v.codice_coupon.toUpperCase() : "Vendite al corso, senza referral", vendite: 0, euro: 0, pezzi: 0 };
-      if ((v.totale || 0) > 0) perGruppo[chiave].vendite += 1;
-      perGruppo[chiave].euro += euro;
-      perGruppo[chiave].pezzi += Number(v.provvigione_pezzi) || 0;
     });
-    const premi = premiVolumeRaggiunti(pezzi);
-    const gruppi = Object.values(perGruppo).map((g) => ({ ...g, euro: round2(g.euro) })).sort((a, b) => b.euro - a.euro);
-    // I punti accumulati della master sono la sua fetta: i punti pieni
-    // generati dai carrelli, ridotti dalla quota per canale (Al corso /
-    // Fuori corso) decisa in Gestione punti. Dal 21/09/2026 la quota e'
-    // l'unica leva sui punti della master, quindi qui va applicata: cambiare
-    // "Al corso" da 100 a 70 deve far scendere subito questo numero.
-    const puntiMaturati = round2((puntiCorsoLordi * quotePunti.corso) / 100 + (puntiFuoriLordi * quotePunti.fuoriCorso) / 100);
-    return {
-      venditeTotale, venditeCorso, venditeReferral, puntiAccumulati, puntiMaturati,
-      euroCorso: round2(euroCorso), euroReferral: round2(euroReferral),
-      // il premio a volume e' maturato quanto le provvigioni: sta nel
-      // totale, non in una riga a parte che nessuno somma
-      euroTotale: round2(euroCorso + euroReferral + premi.euro),
-      valoreCarrelli: round2(valoreCarrelli),
-      pezzi, premi, gruppi,
-    };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, coupon, prodottiShop, sicurezzaPunti, quotePunti.corso, quotePunti.fuoriCorso, regoleReferralAutomatico, regolaReferralMasterDash, fasceContantiDash, tabellaCedibileDash, incidenzaCostiDash]);
-  const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
+    return { venditeTotale, venditeCorso, venditeReferral, valoreCarrelli: round2(valoreCarrelli) };
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni]);
+
   // la contabilita' di una classe, aperta dal tasto sulla card: e' la
   // stessa pagina del link che si manda alla master, con lo stesso
   // cancello — passa da master_vista, che conosce solo la classe di quel
@@ -13205,33 +13166,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     );
   }
 
-  if (mostraDettaglioPunti && masterSel) {
-    return (
-      <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-        <div style={{ maxWidth: 720, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
-            <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraDettaglioPunti(false)} />
-            <div style={{ ...stileTitoloPagina, color: NAVY }}>Provvigioni — dettaglio</div>
-          </div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Per codice referral usato dai tuoi clienti (online e al banco); i resi e gli annullamenti riducono l'importo.</div>
-          {provvigioniMaster.gruppi.length === 0 ? (
-            <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessuna vendita in questo anno di raccolta.</div>
-          ) : provvigioniMaster.gruppi.map((g) => (
-            <div key={g.etichetta} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: g.etichetta.startsWith("Vendite al corso") ? "none" : "uppercase" }}>{g.etichetta}</div>
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>
-                  {g.vendite} vendit{g.vendite === 1 ? "a" : "e"}
-                  {g.pezzi > 0 && ` · ${g.pezzi} pezz${g.pezzi === 1 ? "o" : "i"} da premio`}
-                </div>
-              </div>
-              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: g.euro < 0 ? "#C0392B" : GOLD }}>{fmtEuroErp2(g.euro)}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Qui c'era la schermata "Provvigioni — dettaglio", per codice
+  // referral. Non la apriva piu' nessuno — nessuno chiamava
+  // setMostraDettaglioPunti(true) — e viveva sulle provvigioni congelate
+  // sulle vendite, cioe' sul meccanismo di prima ancora dei punti.
+  // Tolta l'08/10/2026 insieme al resto.
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -13311,7 +13250,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // sposta.
               // sei fisse: shop/POS, cash, personali, carriera, vendite al
               // corso, vendite con referral
-              const schedePunti = 8 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli && mostraTotaleCarrelli ? 1 : 0);
+              const schedePunti = 8 + (mostraEuroCarrelli && mostraTotaleCarrelli ? 1 : 0);
               const cardPunti = {
                 ...cardStyle, minWidth: 0, boxSizing: "border-box",
                 padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
@@ -13418,16 +13357,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 <div style={lblPunti}>Vendite con<br />referral</div>
                 <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
               </div>
-              {puntiVisibiliMaster && (
-              <div style={cardPunti}>
-                <div style={lblPunti}>Punti<br />accumulati</div>
-                {/* i punti INTERI generati dai carrelli: il cedibile dei
-                    prodotti venduti meno la sicurezza. Dal 21/09/2026 lo
-                    sconto dell'allieva non li riduce piu'. Non e' la fetta
-                    che spetta a lei — quella la decide la quota per canale */}
-                <div style={{ ...numPunti, color: NAVY }}>{fmtPunti(provvigioniMaster.puntiMaturati)}</div>
-              </div>
-              )}
+              {/* Qui c'era "Punti accumulati", un quinto numero di punti
+                  contato in JavaScript su questa pagina. Diceva una cifra
+                  diversa dalle quattro schede qui sopra, che vengono dalla
+                  vista: tolto l'08/10/2026. */}
               {/* il totale in euro dei carrelli venduti: solo programmatore e
                   Chiara Colonnelli lo vedono, mai le master */}
               {mostraEuroCarrelli && mostraTotaleCarrelli && (
@@ -17964,18 +17897,12 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
   );
 }
 
-// "Definizione provvigioni": le fasce con cui una vendita diventa un
-// compenso per la master. Sta in Setting perche' e' una regola
-// dell'azienda, non un dato di una vendita.
-//
-// Due sezioni separate — referral e corso — perche' sono due lavori
-// diversi: al corso la classe e' gia' li', con il referral la master
-// porta gente da fuori. Le fasce si leggono in percentuale di MARGINE:
-// "da 35% a 50% di margine, alla master ne va il 20%". Mai sul prezzo di
-// vendita — su un prodotto rivenduto a poco piu' di quanto costa non c'e'
-// niente da dividere.
+// "Commissioni sui corsi": la percentuale sul totale pattuito di
+// un'iscrizione che spetta a chi l'ha venduta, generale e con le deroghe
+// per corso. Si chiamava "Definizione provvigioni" e conteneva anche le
+// fasce di provvigione sulle vendite di prodotti: quelle sono sparite
+// l'08/10/2026 con tutto il vecchio meccanismo dei compensi.
 function DefinizioneProvvigioni() {
-  const [fasce, setFasce] = useState(null);
   const [msg, setMsg] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [pctCoordinatore, setPctCoordinatore] = useImpostazioneCondivisa(CHIAVE_PERCENTUALE_COORDINATORE, PERCENTUALE_COORDINATORE_DEFAULT);
@@ -18007,120 +17934,25 @@ function DefinizioneProvvigioni() {
   // congelata sulla scheda dell'allievo: l'RPC aggiorna_quote_coordinatore
   // resta sul database, inoffensiva, ma non la chiama piu' nessuno.
 
-  async function carica() {
-    const { data, error } = await supabase.from("provvigioni_fasce").select("*").order("canale").order("margine_da");
-    if (error) { setMsg("Non riesco a leggere le fasce: " + testoErrore(error)); setFasce([]); return; }
-    setFasce(data || []);
-  }
-  useEffect(() => { carica(); }, []);
-
-  // Al primo accesso l'elenco e' vuoto solo se qualcuno ha cancellato
-  // tutto: le fasce proposte le mette la migrazione. Qui si possono
-  // rimettere, ed e' l'unico modo di tornare indietro dopo aver fatto
-  // pulizia per sbaglio.
-  async function riproponiDefault() {
-    if (!window.confirm("Rimettere le fasce proposte dal sistema? Quelle attuali restano dove sono: queste si aggiungono.")) return;
-    setSalvando(true);
-    const { error } = await supabase.from("provvigioni_fasce").insert(FASCE_PROVVIGIONI_DEFAULT);
-    setSalvando(false);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    setMsg("Fasce proposte aggiunte.");
-    carica();
-  }
-
-  async function aggiungi(canale) {
-    const delCanale = (fasce || []).filter((f) => f.canale === canale);
-    // la nuova nasce dove finisce l'ultima: cosi' non si sovrappone a
-    // quelle che ci sono gia' e non lascia un buco in mezzo
-    const ultima = delCanale.slice().sort((a, b) => Number(a.margine_da) - Number(b.margine_da)).pop();
-    const da = ultima ? Number(ultima.margine_a ?? ultima.margine_da) + 5 : 0;
-    const { error } = await supabase.from("provvigioni_fasce").insert({ canale, margine_da: da, margine_a: null, percentuale: 10 });
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    setMsg("");
-    carica();
-  }
-  async function salvaCampo(riga, campo, valore) {
-    // ottimistico: si scrive un numero per volta, e aspettare il giro
-    // completo a ogni tasto renderebbe la tabella lenta proprio mentre la
-    // si compila
-    setFasce((prec) => (prec || []).map((f) => (f.id === riga.id ? { ...f, [campo]: valore } : f)));
-    const { error } = await supabase.from("provvigioni_fasce").update({ [campo]: valore }).eq("id", riga.id);
-    if (error) { setMsg("Non salvato: " + testoErrore(error)); carica(); return; }
-    setMsg("");
-  }
-  async function elimina(riga) {
-    if (!window.confirm(`Eliminare la fascia da ${riga.margine_da}% ${riga.margine_a == null ? "in su" : `a ${riga.margine_a}%`}?`)) return;
-    const { error } = await supabase.from("provvigioni_fasce").delete().eq("id", riga.id);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    carica();
-  }
-
   const campoNumero = { ...inputStyle, width: 78, padding: "7px 8px", textAlign: "right" };
 
-  function sezione(canale, etichetta) {
-    const righe = (fasce || [])
-      .filter((f) => f.canale === canale)
-      .sort((a, b) => Number(a.margine_da) - Number(b.margine_da));
-    return (
-      <div key={canale} style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={hStyle}>{etichetta}</div>
-        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>
-          Si legge così: da un certo margine in su, alla master va quella percentuale <b style={{ color: NAVY }}>del margine</b>. L’ultima fascia può restare senza tetto — vale da lì in avanti.
-        </div>
-        {righe.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 0" }}>Nessuna fascia: senza, su questo canale non matura niente.</div>
-        ) : (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 28px", gap: 8, marginBottom: 4 }}>
-              {["Margine da", "Margine fino a", "Alla master", ""].map((t, i) => (
-                <div key={i} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{t}</div>
-              ))}
-            </div>
-            {righe.map((f) => (
-              <div key={f.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 28px", gap: 8, alignItems: "center", padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <input style={campoNumero} inputMode="decimal" defaultValue={f.margine_da}
-                    onBlur={(e) => { const v = parseNum(e.target.value); if (v !== Number(f.margine_da)) salvaCampo(f, "margine_da", v); }} />
-                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  {/* vuoto = senza tetto: e' l'ultima fascia, quella che
-                      prende tutto quello che sta piu' in alto */}
-                  <input style={campoNumero} inputMode="decimal" placeholder="in su" defaultValue={f.margine_a ?? ""}
-                    onBlur={(e) => { const t = e.target.value.trim(); const v = t === "" ? null : parseNum(t); if (v !== (f.margine_a == null ? null : Number(f.margine_a))) salvaCampo(f, "margine_a", v); }} />
-                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <input style={campoNumero} inputMode="decimal" defaultValue={f.percentuale}
-                    onBlur={(e) => { const v = parseNum(e.target.value); if (v !== Number(f.percentuale)) salvaCampo(f, "percentuale", v); }} />
-                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
-                </div>
-                <button onClick={() => elimina(f)} title="Elimina questa fascia"
-                  style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <IconaCestino size={13} />
-                </button>
-              </div>
-            ))}
-          </>
-        )}
-        <Button variant="ghost" onClick={() => aggiungi(canale)} style={{ marginTop: 12 }}>+ Aggiungi fascia</Button>
-      </div>
-    );
-  }
-
-  if (fasce == null) return <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>;
+  // Qui c'erano le fasce di provvigione per canale (tabella
+  // provvigioni_fasce) e i premi a volume: il meccanismo con cui prima
+  // dei punti si pagava chi vendeva. Tolti l'08/10/2026 — quello che si
+  // riconosce lo decidono i punti e le percentuali di Gestione punti, e
+  // due sistemi di compenso aperti insieme erano il modo piu' sicuro di
+  // pagare due volte o nessuna. La tabella resta sul database: nessuno
+  // la legge, e le 38 vendite che portano una provvigione congelata la
+  // tengono come storia.
+  // Di questa scheda restano le commissioni sui corsi, che non sono una
+  // provvigione su un margine ma una percentuale sul pattuito di
+  // un'iscrizione, e sono vive.
 
   return (
     <div>
       <div style={{ ...subStyle, marginTop: -4 }}>
-        La provvigione si calcola sul <b>margine</b> — il ricavo senza IVA e senza spedizione, meno il costo d’acquisto — e mai sul prezzo di vendita.
-        Ogni vendita congela l’importo maturato: cambiando queste fasce, le vendite già fatte non si ricalcolano.
+        Una percentuale sul <b>totale pattuito</b> di un’iscrizione, per chi l’ha venduta. Si calcola viva ogni volta che la si guarda: cambiando il numero qui sotto, cambiano anche le iscrizioni già inserite.
       </div>
-      {CANALI_PROVVIGIONE.map((c) => sezione(c.chiave, c.etichetta))}
-
-      {/* La commissione sui corsi non e' una fascia: e' una percentuale sul
-          totale pattuito di un'iscrizione, non sul margine di una vendita.
-          Scheda sua, per non farla sembrare un quarto canale. */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
         <div style={hStyle}>Commissioni sui corsi</div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
@@ -18178,26 +18010,7 @@ function DefinizioneProvvigioni() {
         )}
       </div>
 
-      {/* La soglia e i premi non sono regolabili da qui: sono la stessa
-          regola per tutti i canali, e metterli fra le fasce farebbe
-          credere che cambino da un canale all'altro */}
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={hStyle}>Sotto un euro: i premi a volume</div>
-        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>
-          Quando la provvigione di un pezzo non arriva a € {SOGLIA_PROVVIGIONE_EURO.toFixed(2)} non diventa punti: quel pezzo conta a numero, e i pezzi sbloccano i premi qui sotto. Sono cumulativi e si azzerano ogni anno di raccolta.
-        </div>
-        {PREMI_VOLUME_PROVVIGIONI.map((p) => (
-          <div key={p.pezzi} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 70 }}>{p.pezzi} pezzi</span>
-            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>€ {p.euro}</span>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <Button variant="ghost" onClick={riproponiDefault} disabled={salvando}>Rimetti le fasce proposte</Button>
-        {msg && <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>{msg}</span>}
-      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>{msg}</div>}
     </div>
   );
 }
@@ -18458,7 +18271,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
       voci: [
         { chiave: "corsi", etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
-        { chiave: "provvigioni", etichetta: "Definizione provvigioni", Icona: IconaTargetRiga, onClick: () => setShowProvvigioniModal(true) },
+        { chiave: "provvigioni", etichetta: "Commissioni sui corsi", Icona: IconaTargetRiga, onClick: () => setShowProvvigioniModal(true) },
         { chiave: "tipimodelle", etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
         { chiave: "hotel", etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
         { chiave: "location", etichetta: "Definisci Location", Icona: IconaPin, onClick: onApriGestioneLocation },
@@ -18816,7 +18629,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       )}
 
       {showProvvigioniModal && (
-        <Modal title="Definizione provvigioni" onClose={() => setShowProvvigioniModal(false)} maxWidth={760}>
+        <Modal title="Commissioni sui corsi" onClose={() => setShowProvvigioniModal(false)} maxWidth={760}>
           <DefinizioneProvvigioni />
         </Modal>
       )}
@@ -39897,23 +39710,9 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     ricarica(["punti_master_impostazioni"]);
   }
 
-  // classifica: solo le vendite già attribuite a una master (stesso
-  // operatore_tipo/operatore_id usato ovunque nell'app), dentro la
-  // finestra della raccolta — punti calcolati al volo, mai salvati
-  const classificaPunti = useMemo(() => {
-    if (!puntiMasterImpostazioni) return [];
-    return (master || []).map((m) => {
-      const venditeMaster = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
-      // le provvigioni non si ricalcolano: si sommano quelle congelate
-      // sulle vendite, piu' i premi maturati dai pezzi sotto soglia — sono
-      // gli stessi euro che la master vede nella sua dashboard, e due
-      // classifiche che non coincidono non servirebbero a niente
-      const pezzi = venditeMaster.reduce((somma, v) => somma + (Number(v.provvigione_pezzi) || 0), 0);
-      const punti = round2(venditeMaster.reduce((somma, v) => somma + (Number(v.provvigione_master) || 0), 0) + premiVolumeRaggiunti(pezzi).euro);
-      const euro = round2(venditeMaster.reduce((s, v) => s + (v.totale || 0), 0));
-      return { master: m, punti, euro };
-    }).filter((r) => r.punti !== 0 || r.euro !== 0).sort((a, b) => b.punti - a.punti);
-  }, [master, venditeShop, puntiMasterImpostazioni]);
+  // Qui c'era "classificaPunti": sommava le provvigioni congelate sulle
+  // vendite e le chiamava punti. Non la disegnava nessuno, ed era il
+  // meccanismo di prima. Tolta l'08/10/2026.
 
   // ---------- tab "Generazione automatica" ----------
   const [regoleForm, setRegoleForm] = useState(null);
@@ -50498,10 +50297,6 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
       const totale = round2(Number(r.importo) || 0);
       imponibile = round2(imponibile);
       const cliente = r.cliente || {};
-      let provvigione = null;
-      if (r.operatore_tipo === "master" && r.corso_data_id) {
-        provvigione = await congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale: "corso" });
-      }
       const vendita = {
         woo_order_id: null,
         // il codice della richiesta nel numero: rilanciare due volte non
@@ -50534,7 +50329,7 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
       const spedizionePagata = prodottiRiga.some((x) => x.spedizione);
 
       const { data: esito, error } = await supabase.rpc("registra_vendita_pos", {
-        p_vendita: { ...vendita, ...(provvigione || {}) }, p_spedizione: null,
+        p_vendita: vendita, p_spedizione: null,
       });
       if (error) { setMsg("La vendita non e' stata registrata: " + testoErrore(error)); setInCorso(""); return; }
 
@@ -51346,14 +51141,6 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
   // Dettaglio prodotti, qui serve perche' la classifica qui sotto si
   // ridisegni quando cambia
   const [incidenzaCostiSalvata] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
-  // le due quote: si salvano come impostazione condivisa, valgono per
-  // tutte le master, e la dashboard le leggera' da qui
-  const [quoteSalvate, salvaQuote] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
-  const quote = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quoteSalvate || {}) };
-  const cambiaQuota = (canale, valore) => {
-    const n = Math.max(0, Math.min(100, Math.round(Number(valore) || 0)));
-    salvaQuote({ ...quote, [canale]: n });
-  };
   // le due percentuali che trasformano i punti in euro
   const [percEuroSalvate, salvaPercEuro] = useImpostazioneCondivisa(CHIAVE_PERCENTUALI_EURO_PUNTI, PERCENTUALI_EURO_PUNTI_DEFAULT);
   const percEuro = { ...PERCENTUALI_EURO_PUNTI_DEFAULT, ...(percEuroSalvate || {}) };
@@ -51396,80 +51183,59 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
     setMsg("Finestra della raccolta aggiornata.");
     ricarica(["punti_master_impostazioni"]);
   }
-  // la classifica: per ogni master, le vendite che le contano (stessa
-  // regola della dashboard), e per ogni riga i punti del prodotto per i
-  // pezzi. Un reso ha pezzi negativi e si toglie da solo
+  // LA CLASSIFICA VIENE DALLA VISTA, non da un conto rifatto qui.
+  //
+  // Fino al 08/10/2026 questa pagina si ricalcolava i punti in
+  // JavaScript, con una formula sua: su ANDREA PAURA diceva 557,31
+  // punti mentre la dashboard della master — che legge v_punti_master —
+  // ne diceva 1009,86. Due numeri per la stessa cosa, e nessuno dei due
+  // sbagliato di suo: erano due meccanismi diversi. Adesso ce n'e' uno,
+  // ed e' la vista — la stessa che leggono la dashboard della master e
+  // la pagina "Punti master" dell'amministrazione.
+  //
+  // Vuol dire anche che il taglio e' quello degli scarichi (contano le
+  // vendite fatte dopo l'ultimo pagamento) e non la finestra della
+  // raccolta qui sopra: era l'altra delle due regole che convivevano.
+  const [classificaVista, setClassificaVista] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const { data, error } = await supabase.from("v_punti_master").select("*");
+      if (!vivo) return;
+      setClassificaVista(error ? [] : (data || []));
+    })();
+    return () => { vivo = false; };
+  }, []);
+
   const classifica = useMemo(() => {
-    if (!puntiMasterImpostazioni) return [];
-    const indici = indiciProdotti(prodottiShop);
-    return (master || []).map((m) => {
-      const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, m.id, puntiMasterImpostazioni));
-      let puntiCorso = 0, puntiFuori = 0, pezzi = 0, pezziSenzaPunti = 0, euro = 0, vendite = 0;
-      let puntiTeorici = 0;
-      // gli stessi punti, divisi per come li ha incassati: carta/shop da
-      // una parte, contanti e buono Amazon dall'altra. Servono alle due
-      // percentuali che li trasformano in euro
-      let puntiPosShop = 0, puntiCash = 0;
-      let puntiEventoPos = 0, puntiEventoCash = 0;
-      righe.forEach((v) => {
-        euro += Number(v.totale) || 0;
-        if ((v.totale || 0) > 0) vendite += 1;
-        // al corso e' tutto quello che e' legato a una classe, con o senza
-        // codice; il resto e' fuori dal corso (referral sul sito, vendita
-        // da casa). Le fasce del canale danno il valore per la riduzione
-        const alCorso = !!v.corso_data_id;
-        const aEvento = !!v.evento_id;
-        // al corso: la serie della carta o quella dei contanti, a seconda
-        // di come l'allievo ha pagato
-        // La stessa regola per tutti e due i canali: la serie della
-        // carta, o quella dei contanti se e' stato pagato in contanti o
-        // con buono Amazon. Il referral usava sempre quella della carta,
-        // e dal 19/09/2026 ha la sua serie contanti come i corsi: se qui
-        // restasse la vecchia regola, la classifica direbbe punti diversi
-        // da quelli che il POS ha mostrato mentre incassava.
-        const contantiVendita = pagamentoContaComeContanti(v.metodo_pagamento);
-        const fasceCanale = alCorso
-          ? fasceCorsiPerPagamento(fasceCorso, fasceContantiSalvate, contantiVendita)
-          : fasceCorsiPerPagamento(regolaReferralMaster?.fasce, fasceReferralContanti, contantiVendita);
-        (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
-          if (r.spedizione) return;
-        if (r.spedizione) return;
-          const q = Number(r.quantita) || 0;
-          const prodotto = prodottoDellaRiga(r, indici);
-          const pp = puntiProdotto(prodotto, sicurezzaPunti, pagamentoContaComeContanti(v.metodo_pagamento));
-          pezzi += q;
-          if (pp == null) { pezziSenzaPunti += q; return; }
-          const teorici = pp * q;
-          puntiTeorici += teorici;
-          // i punti non si decurtano piu' per lo sconto dell'allievo: pieni,
-          // divisi per canale. Le quote al corso / fuori corso, piu' sotto,
-          // sono l'unica leva su quanto ne prende la master
-          if (alCorso) puntiCorso += teorici; else puntiFuori += teorici;
-          // la quota del canale vale anche qui: alla master arrivano i
-          // punti gia' ridotti dal "quanti", poi il "quanto le vengono
-          // pagati" lavora su quelli
-          const suoi = teorici * ((alCorso ? quote.corso : quote.fuoriCorso) / 100);
-          // una vendita fatta a un evento va nei suoi due secchi: li' il
-          // punto vale meno, e tenerla insieme alle altre le darebbe la
-          // percentuale sbagliata
-          if (aEvento) { if (contantiVendita) puntiEventoCash += suoi; else puntiEventoPos += suoi; }
-          else if (contantiVendita) puntiCash += suoi; else puntiPosShop += suoi;
-        });
-      });
-      const puntiMaster = round2((puntiCorso * quote.corso) / 100 + (puntiFuori * quote.fuoriCorso) / 100);
+    const perId = new Map((master || []).map((m) => [m.id, m]));
+    return (classificaVista || []).map((r) => {
+      const puntiPosShop = Number(r.punti_shop_pos) || 0;
+      const puntiCash = Number(r.punti_cash) || 0;
+      const puntiEventoPos = Number(r.punti_evento_pos) || 0;
+      const puntiEventoCash = Number(r.punti_evento_cash) || 0;
       // un punto e' un euro: la percentuale si applica ai punti e il
       // risultato e' gia' in euro
       const euroPosShop = round2((puntiPosShop * percEuro.posShop) / 100);
       const euroCash = round2((puntiCash * percEuro.cash) / 100);
       const euroEventoPos = round2((puntiEventoPos * percEuro.eventoPosShop) / 100);
       const euroEventoCash = round2((puntiEventoCash * percEuro.eventoCash) / 100);
-      return { master: m, vendite, pezzi, pezziSenzaPunti, puntiTeorici: round2(puntiTeorici), puntiCorso: round2(puntiCorso), puntiFuori: round2(puntiFuori), punti: round2(puntiCorso + puntiFuori), puntiMaster,
-        puntiPosShop: round2(puntiPosShop), puntiCash: round2(puntiCash), euroPosShop, euroCash,
-        puntiEventoPos: round2(puntiEventoPos), puntiEventoCash: round2(puntiEventoCash), euroEventoPos, euroEventoCash,
+      return {
+        master: perId.get(r.master_id) || { id: r.master_id, nome: r.master },
+        vendite: Number(r.vendite) || 0,
+        pezzi: Number(r.pezzi) || 0,
+        puntiPosShop, puntiCash, puntiEventoPos, puntiEventoCash,
+        // i punti comprati col proprio codice non maturano soldi: stanno
+        // in colonna perche' contano nella carriera, non perche' paghino
+        puntiPersonali: Number(r.punti_personali) || 0,
+        puntiCarriera: Number(r.punti_carriera) || 0,
+        euroPosShop, euroCash, euroEventoPos, euroEventoCash,
         euroTotale: round2(euroPosShop + euroCash + euroEventoPos + euroEventoCash),
-        euro: round2(euro) };
-    }).filter((r) => r.vendite > 0 || r.pezzi !== 0);
-  }, [master, venditeShop, prodottiShop, puntiMasterImpostazioni, quote.corso, quote.fuoriCorso, percEuro.posShop, percEuro.cash, percEuro.eventoPosShop, percEuro.eventoCash, sicurezzaPunti, fasceCorso, fasceContantiSalvate, regolaReferralMaster, incidenzaCostiSalvata]);
+        euro: Number(r.valore_venduto) || 0,
+      };
+    }).filter((r) => r.puntiCarriera !== 0 || r.euro !== 0);
+  }, [classificaVista, master, percEuro.posShop, percEuro.cash, percEuro.eventoPosShop, percEuro.eventoCash]);
+
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
   return (
@@ -51501,34 +51267,14 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           )}
         </div>
 
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Quota dei punti alla master</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-            Di tutti i punti che una vendita genera, quanti vanno alla master. Dipende da dove li ha fatti.
-          </div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {[
-              { canale: "corso", etichetta: "Al corso", spiega: "La master è collegata a una classe: gli allievi usano il codice d'aula per lo sconto, oppure comprano senza codice." },
-              { canale: "fuoriCorso", etichetta: "Fuori dal corso", spiega: "A casa: i clienti usano il suo referral personale su WooCommerce, o lei vende senza una classe collegata." },
-            ].map((q) => (
-              <div key={q.canale} style={{ flex: "1 1 260px", background: BG, borderRadius: 12, padding: "12px 14px" }}>
-                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{q.etichetta}</div>
-                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45, marginBottom: 10 }}>{q.spiega}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => cambiaQuota(q.canale, quote[q.canale] - 5)} title="Cinque punti in meno"
-                    style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>−</button>
-                  <CampoNumero
-                    valore={quote[q.canale]} onCambia={(n) => cambiaQuota(q.canale, n)} min={0} max={100}
-                    style={{ ...inputStyle, width: 70, textAlign: "center", padding: "6px 8px", fontWeight: 700 }}
-                  />
-                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>%</span>
-                  <button onClick={() => cambiaQuota(q.canale, quote[q.canale] + 5)} title="Cinque punti in più"
-                    style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 17, lineHeight: 1 }}>+</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Qui c'era "Quota dei punti alla master", due percentuali
+            (Al corso / Fuori dal corso) che riducevano i punti prima di
+            trasformarli in euro. Tolta l'08/10/2026 con tutto il resto
+            del vecchio conto: la fetta che spetta a chi vende la
+            decidono le quattro percentuali qui sotto, e due leve sulla
+            stessa cosa erano il modo migliore per ritrovarsi con due
+            numeri diversi. Stavano tutte e due al 100%, quindi non
+            cambia una cifra. */}
 
         {/* QUANTO LE VENGONO PAGATI.
             Le quote qui sopra dicono quanti punti vanno alla master; queste
@@ -51539,7 +51285,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
           <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>Quanto vale un punto, in euro</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
             Un punto è un euro, ma a chi vende ne va una percentuale. Dipende da come è stato incassato — con la carta al banco o sullo shop, oppure in contanti o con buono Amazon — e da dove: a un evento si riconosce meno, perché chi vende usa il suo POS e non sta portando la sua classe.
-            {" "}Si applicano ai punti che le spettano — cioè dopo le quote qui sopra — e il risultato è l’euro che matura, nelle due colonne della classifica.
+            {" "}Si applicano ai punti di ciascuna cassa e il risultato è l’euro che matura, nelle quattro colonne della classifica.
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             {[
@@ -51584,21 +51330,25 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
                 <thead>
                   <tr>
-                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiTeorici", l: "Punti teorici" }, { c: "puntiCorso", l: "Al corso" }, { c: "puntiFuori", l: "Fuori corso" }, { c: "puntiMaster", l: "Alla master" }, { c: "euroPosShop", l: `€ POS e shop (${percEuro.posShop}%)` }, { c: "euroCash", l: `€ contanti (${percEuro.cash}%)` }, { c: "euroEventoPos", l: `€ eventi carta (${percEuro.eventoPosShop}%)` }, { c: "euroEventoCash", l: `€ eventi contanti (${percEuro.eventoCash}%)` }, { c: "euroTotale", l: "€ maturati" }, { c: "euro", l: "Valore venduto" }].map((h) => (
+                    {[{ c: "master", l: "Master" }, { c: "vendite", l: "Vendite" }, { c: "pezzi", l: "Pezzi" }, { c: "puntiPosShop", l: "Punti POS e shop" }, { c: "puntiCash", l: "Punti contanti" }, { c: "puntiEventoPos", l: "Punti eventi carta" }, { c: "puntiEventoCash", l: "Punti eventi contanti" }, { c: "puntiPersonali", l: "Punti personali" }, { c: "puntiCarriera", l: "Punti carriera" }, { c: "euroPosShop", l: `€ POS e shop (${percEuro.posShop}%)` }, { c: "euroCash", l: `€ contanti (${percEuro.cash}%)` }, { c: "euroEventoPos", l: `€ eventi carta (${percEuro.eventoPosShop}%)` }, { c: "euroEventoCash", l: `€ eventi contanti (${percEuro.eventoCash}%)` }, { c: "euroTotale", l: "€ maturati" }, { c: "euro", l: "Valore venduto" }].map((h) => (
                       <ThOrdina key={h.c} campo={h.c} ordine={ordine} onOrdina={cambiaOrdine} style={th}>{h.l}</ThOrdina>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiTeorici: (r) => r.puntiTeorici, puntiCorso: (r) => r.puntiCorso, puntiFuori: (r) => r.puntiFuori, puntiMaster: (r) => r.puntiMaster, euroPosShop: (r) => r.euroPosShop, euroCash: (r) => r.euroCash, euroEventoPos: (r) => r.euroEventoPos, euroEventoCash: (r) => r.euroEventoCash, euroTotale: (r) => r.euroTotale, euro: (r) => r.euro }).map((r) => (
+                  {ordina(classifica, { master: (r) => r.master?.nome || "", vendite: (r) => r.vendite, pezzi: (r) => r.pezzi, puntiPosShop: (r) => r.puntiPosShop, puntiCash: (r) => r.puntiCash, puntiEventoPos: (r) => r.puntiEventoPos, puntiEventoCash: (r) => r.puntiEventoCash, puntiPersonali: (r) => r.puntiPersonali, puntiCarriera: (r) => r.puntiCarriera, euroPosShop: (r) => r.euroPosShop, euroCash: (r) => r.euroCash, euroEventoPos: (r) => r.euroEventoPos, euroEventoCash: (r) => r.euroEventoCash, euroTotale: (r) => r.euroTotale, euro: (r) => r.euro }).map((r) => (
                     <tr key={r.master.id}>
                       <td style={{ ...td, fontWeight: 700 }}>{toTitleCase(r.master.nome)}</td>
                       <td style={td}>{r.vendite}</td>
-                      <td style={td}>{r.pezzi}{r.pezziSenzaPunti > 0 && <span style={{ ...fontBody, fontSize: 11, color: GOLD, marginLeft: 6 }} title="Pezzi di prodotti senza costo di acquisto o non in vendita dall'app: non generano punti">{r.pezziSenzaPunti} senza punti</span>}</td>
-                      <td style={td} title="I punti pieni dei prodotti venduti, prima di ogni riduzione: sono i Punti bonus della dashboard">{fmtPunti(r.puntiTeorici)}</td>
-                      <td style={td} title={`${quote.corso}% alla master`}>{fmtPunti(r.puntiCorso)}</td>
-                      <td style={td} title={`${quote.fuoriCorso}% alla master`}>{fmtPunti(r.puntiFuori)}</td>
-                      <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }}>{fmtPunti(r.puntiMaster)}</td>
+                      <td style={td}>{r.pezzi}</td>
+                      {/* i quattro secchi dei punti, gli stessi che la
+                          master vede nelle sue quattro schede */}
+                      <td style={td}>{fmtPunti(r.puntiPosShop)}</td>
+                      <td style={td}>{fmtPunti(r.puntiCash)}</td>
+                      <td style={td}>{fmtPunti(r.puntiEventoPos)}</td>
+                      <td style={td}>{fmtPunti(r.puntiEventoCash)}</td>
+                      <td style={td} title="Comprati da lei col suo codice: contano nella carriera, non maturano soldi">{fmtPunti(r.puntiPersonali)}</td>
+                      <td style={{ ...td, fontWeight: 700, color: GOLD, fontSize: 14 }} title="La somma di tutto: e' il numero che cresce e basta">{fmtPunti(r.puntiCarriera)}</td>
                       {/* i punti diventano euro: la percentuale del canale
                           applicata ai punti che le spettano */}
                       <td style={td} title={`${fmtPunti(r.puntiPosShop)} punti incassati con carta o sullo shop, al ${percEuro.posShop}%`}>{fmtEuroErp2(r.euroPosShop)}</td>
@@ -55296,18 +55046,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     // registrati e' un'altra cosa e non viene toccato: qui si legge, non
     // si scrive nulla sul sito
     const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
-    // "Punti totali prodotto" (16/09/2026): il DOPPIO dei punti del pezzo
-    // (cedibile meno sicurezza, per due). Vale solo per questa colonna e
-    // per la sua riga dei contanti: dashboard, POS e Gestione punti
-    // continuano a leggere puntiProdotto, che non raddoppia
+    // "Punti totali prodotto": gli stessi punti che vede il POS mentre
+    // vende e la master nella sua dashboard. Dall'08/10/2026 vengono
+    // tutti da puntiProdotto, che li legge dalla vista: questa colonna
+    // aveva una formula sua e diceva un altro numero
     const sicurezzaProdotto = sicurezzaDelProdotto(p, sicurezzaPunti);
-    const puntiPezzo = inVenditaViaApp && sommaMassimaCedibileEuro != null ? puntiDaCedibile(Math.max(0, sommaMassimaCedibileEuro)) : null;
-    const punti = puntiPezzo != null ? round2(puntiPezzo * 2) : null;
-    // la seconda riga di conto, per chi paga in contanti: stesso costo
-    // (per i bundle quello ricavato dai componenti), ma sul prezzo lordo
+    const punti = puntiProdotto(p, sicurezzaPunti, false);
+    // la seconda riga di conto, per chi paga in contanti: stesso cedibile
+    // in percentuale, applicato al prezzo lordo
     const contanti = cedibileContantiDi(p, costoEffettivo);
-    const puntiContantiPezzo = inVenditaViaApp && contanti.euro != null ? puntiDaCedibile(contanti.euro) : null;
-    const puntiContanti = puntiContantiPezzo != null ? round2(puntiContantiPezzo * 2) : null;
+    const puntiContanti = puntiProdotto(p, sicurezzaPunti, true);
     // le tre quote in euro dei punti totali, per ordinare e mostrare
     const quota1 = euroQuota(punti, 0), quota2 = euroQuota(punti, 1), quota3 = euroQuota(punti, 2);
     // il margine operativo in euro: la sua percentuale del prezzo netto
@@ -57557,51 +57305,15 @@ function pianoScarico(prodotto, quantita, { sogliaInvalicabile = false } = {}) {
     restano: disponibile - daScaricare,
   };
 }
-// "è in vendita online?" non è un campo suo: sono tre segnali che devono
-// dire tutti sì (ha un id WooCommerce, non è una bozza, non è marcato solo
-// offline). Tenerlo derivato evita una quarta verità che si disallinea
-// allineaShop / pubblicatoSuShop / muoviStock stanno in
-// src/magazzino/stock.js (importati in cima): li usa anche il materiale
-// degli eventi, che da oggi esce e rientra dal magazzino come tutto il
-// resto. Vedi la nota in testa a quel file sul perche' non si duplicano.
-// La provvigione della master, calcolata e CONGELATA al momento della
-// vendita. Le fasce si rileggono adesso dal database e non da quello che
-// la pagina ha in memoria: una provvigione e' un compenso, e va decisa
-// con la regola in vigore in questo istante — poi non si ricalcola piu',
-// nemmeno se domani le fasce cambiano.
-//
-// Il canale lo dice la vendita: se e' legata a un corso e' una vendita al
-// corso; se non lo e' ma porta un referral code, e' una vendita portata
-// da fuori. Una vendita al banco senza ne' l'uno ne' l'altro non e' ne'
-// una cosa ne' l'altra, e non matura niente.
-async function congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale, aliquotaDefault = 22 }) {
-  if (!canale) return null;
-  const { data: fasce, error } = await supabase.from("provvigioni_fasce").select("*");
-  if (error || !fasce?.length) return null;
-  const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
-  const righe = (prodottiRiga || []).map((r) => {
-    const p = r.prodotto_id ? perId[r.prodotto_id] : null;
-    // il ricavo va netto: dentro totale_riga l'IVA c'e', e non e' mai
-    // stata nostra. La spedizione qui non entra proprio — sta su
-    // spedizioni_pos, non fra i prodotti
-    const aliquota = Number(p?.aliquota_iva_vendita ?? aliquotaDefault) || 0;
-    return {
-      ricavoNetto: round2((Number(r.totale_riga) || 0) / (1 + aliquota / 100)),
-      costoUnitario: Number(p?.costo_acquisto) || 0,
-      quantita: Number(r.quantita) || 0,
-    };
-  });
-  const esito = provvigioneVendita({ righe, canale, fasce });
-  if (!esito.provvigione && !esito.pezziSottoSoglia) return null;
-  return {
-    provvigione_master: esito.provvigione,
-    provvigione_canale: canale,
-    provvigione_pezzi: esito.pezziSottoSoglia,
-    // il conto riga per riga com'era oggi: serve a spiegare un importo fra
-    // sei mesi, quando le fasce non saranno piu' queste
-    provvigione_dettaglio: esito.dettaglio,
-  };
-}
+// Qui stava congelaProvvigioneMaster: calcolava e scriveva sulla vendita
+// provvigione_master / _canale / _pezzi / _dettaglio, la provvigione a
+// fasce di margine. Era il meccanismo di prima dei punti, e a settembre
+// e ottobre 2026 i due hanno convissuto: 38 vendite portano ancora quei
+// valori, 524,02 euro in tutto. Le colonne restano sul database con
+// dentro quello che c'era — e' storia, e cancellarla non serviva a
+// niente — ma dall'08/10/2026 non le scrive e non le legge piu' nessuno.
+// Quello che si riconosce a chi vende sono i punti e le percentuali di
+// Gestione punti, e basta quelli.
 
 // espande una riga da scaricare: un bundle virtuale non ha giacenza
 // propria e scarica i suoi componenti, tutto il resto scarica se stesso
@@ -65629,7 +65341,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const puntiCarrello = (() => {
     if (operatore?.tipo !== "master" || omaggioAttivo || carrello.length === 0) return null;
     const sicurezza = sicurezzaPuntiDi(schemaPuntiPos);
-    const quote = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiPos || {}) };
     const contantiPerPunti = pagamentoContaComeContanti(metodoPagamento);
     let teorici = 0, effettivi = 0;
     carrello.forEach((r) => {
@@ -65641,9 +65352,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // i punti non si decurtano piu' per lo sconto dell'allievo: pieni
       effettivi += pp * quantita;
     });
-    // interi, non la quota della master: vedi la dashboard
-    const quota = corsoPosSel ? quote.corso : quote.fuoriCorso;
-    return { teorici: round2(teorici), maturati: round2(effettivi), quota };
+    // Interi. Dall'08/10/2026 non c'e' piu' nessuna quota che li
+    // riduce: quello che la master prende lo decidono le percentuali in
+    // euro di Gestione punti, applicate dopo, e questo numero e' lo
+    // stesso che finira' nelle sue schede
+    return { teorici: round2(teorici), maturati: round2(effettivi), quota: 100 };
   })();
 
   async function confermaVendita() {
@@ -65891,14 +65604,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         allineaShop(pianiVendita.map((x) => x.prodotto?.id));
       }
 
-      // La provvigione della master si congela qui, insieme alla vendita:
-      // sulle prove non matura niente, e un omaggio ha righe a zero quindi
-      // non produce margine da dividere.
-      let provvigione = null;
-      if (datiVendita.operatore_tipo === "master" && !omaggioAttivo) {
-        const canaleProvvigione = corsoPosSel ? "corso" : (couponAttivo ? "referral" : null);
-        provvigione = await congelaProvvigioneMaster({ prodottiRiga, prodottiShop, canale: canaleProvvigione });
-      }
       // UN INVIO SOLO, E INDIVISIBILE.
       //
       // Vendita e ordine di spedizione partono insieme e il database li
@@ -65912,7 +65617,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // banco spedisce, e una spedizione ha una vita sua. A diventare una
       // cosa sola non sono i dati, e' la scrittura.
       const { data: esito, error: erroreVendita } = await supabase.rpc("registra_vendita_pos", {
-        p_vendita: { ...datiVendita, ...(provvigione || {}) },
+        p_vendita: datiVendita,
         p_spedizione: datiSpedizione || null,
       });
       if (erroreVendita) {
@@ -65922,7 +65627,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         // persa davvero. Si riprende dall'Advisor con un clic.
         await supabase.from("spedizioni_pos_non_riuscite").insert({
           numero_ordine: datiVendita.numero_ordine || null,
-          vendita_dati: { ...datiVendita, ...(provvigione || {}) },
+          vendita_dati: datiVendita,
           dati: datiSpedizione || {},
           errore: erroreVendita.message || String(erroreVendita),
           operatore: nomeOperatore || null,
@@ -76745,6 +76450,10 @@ export default function App() {
   const [costiSottocategorie, setCostiSottocategorie] = useState([]);
   const [eventi, setEventi] = useState([]);
   const [eventiMateriali, setEventiMateriali] = useState([]);
+  // i punti di ogni prodotto, letti da v_prezzi_listini una volta sola:
+  // li usano il POS, il magazzino e Gestione punti, e devono essere gli
+  // stessi che la master vede nella sua dashboard
+  usePuntiListino();
   // Da dove si e' arrivati alla scheda di un evento, e quale evento.
   // Cliccando la barra nel calendario si entra in Gestione eventi gia'
   // aperti su quello, e "Indietro" riporta al calendario invece che alla
@@ -77007,8 +76716,7 @@ export default function App() {
     // le vendite di prova (modalità simulazione, solo programmatore) non
     // entrano qui: escludendole alla fonte non c'è nessun totale, nessuna
     // statistica e nessun target che debba ricordarsi di saltarle
-    // le colonne della provvigione e del coupon viaggiano con la vendita:
-    // la Dashboard master somma provvigione_master e raggruppa per
+    // il coupon viaggia con la vendita: la Dashboard master raggruppa per
     // codice_coupon, e senza queste colonne vedeva zero euro e "senza
     // referral" su tutto — le vendite c'erano, i soldi no
     // oltre 4000 righe: senza leggiTutte ne arriverebbero mille, e le
@@ -77022,7 +76730,7 @@ export default function App() {
     // corto a meta' lavoro.
     vendite_shop: async () => {
       const query = () => {
-        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, provvigione_master, provvigione_canale, provvigione_pezzi, busta_numero").eq("simulazione", false);
+        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, busta_numero").eq("simulazione", false);
         return (venditeStoricoIntero.current ? q : q.gte("data_ordine", DA_QUANDO_VENDITE_IN_MEMORIA)).order("data_ordine", { ascending: false }).order("id");
       };
       setVenditeShop(await leggiTutte(query));
