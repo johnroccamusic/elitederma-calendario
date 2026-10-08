@@ -13413,7 +13413,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         {/* la foto si appoggia in fondo al blocco del testo, non in cima:
             il suo bordo basso finisce sulla stessa riga di "Area master",
             appena sopra il filo che chiude l'intestazione */}
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 10, flexWrap: "wrap" }}>
+        {/* fra la testata (nome e foto) e la fila delle tessere ci vuole
+            aria: con dieci pixel la foto sembrava appoggiata sul primo
+            tasto. Triplicati. */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: isMobile ? 22 : 34, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 240px", minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
               <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
