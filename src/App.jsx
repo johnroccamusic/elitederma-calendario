@@ -4537,7 +4537,13 @@ function useOrdinamentoTabella(iniziale = null) {
 function RiquadroKpi({ etichetta, valore, nota, compatto, children, aSinistra, icona }) {
   return (
     <div style={{
-      ...cardStyle, marginBottom: 0, aspectRatio: "1 / 1", padding: compatto ? "10px 8px" : 16, position: "relative", overflow: "hidden",
+      // Quadrato solo da telefono, dove le schede sono due o tre per
+      // riga e il quadrato le tiene leggibili. Su desktop quattro
+      // quadrati larghi 250 pixel sono quattro francobolli di numero in
+      // mezzo a 200 pixel di bianco: li' comanda il contenuto, con
+      // un'altezza minima perche' restino una fila.
+      ...cardStyle, marginBottom: 0, ...(compatto ? { aspectRatio: "1 / 1" } : { minHeight: 112 }),
+      padding: compatto ? "10px 8px" : 16, position: "relative", overflow: "hidden",
       display: "flex", flexDirection: "column", gap: 5,
       alignItems: aSinistra ? "flex-start" : "center",
       justifyContent: "center",
@@ -41304,7 +41310,20 @@ async function caricaRicevutaSpesa(file) {
 // la usano due barre: quella di Contabilita' e quella delle statistiche
 // vendite. Ingrandire l'icona per la prima non deve cambiare la seconda,
 // che non me l'ha chiesto nessuno.
-function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, coloreIcona, children, aiuto, compatto = false, dimensioneIcona = 16 }) {
+function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, coloreIcona, children, aiuto, compatto = false, dimensioneIcona = 16, discoBlu = false }) {
+  // "discoBlu": il vestito standard dell'app — scheda bianca e icona
+  // bianca dentro un tondo blu — al posto della coppia di colori propri
+  // della scheda. Chi non lo chiede resta identico a prima.
+  if (discoBlu) {
+    sfondo = "#fff";
+    bordo = CREAM_BORDER;
+    coloreIcona = "#fff";
+  }
+  const disco = (lato) => (
+    <span style={{ width: lato, height: lato, borderRadius: "50%", background: attivo ? "#fff" : NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 1px 3px rgba(14,27,51,0.18)" }}>
+      <Icona size={Math.round(lato * 0.52)} color={attivo ? NAVY : "#fff"} />
+    </span>
+  );
   if (compatto) {
     // variante quadrata per quando serve stare in N per riga anche su
     // mobile (vedi TabsStatisticheVenditeProdotti): icona sopra, testo
@@ -41319,7 +41338,7 @@ function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, color
           border: `1px solid ${attivo ? NAVY : bordo}`, background: attivo ? NAVY : sfondo, cursor: "pointer", textAlign: "center",
         }}
       >
-        <Icona size={dimensioneIcona} color={attivo ? "#fff" : coloreIcona} />
+        {discoBlu ? disco(26) : <Icona size={dimensioneIcona} color={attivo ? "#fff" : coloreIcona} />}
         {/* due righe al massimo: con il corpo cresciuto una terza riga non
             ci starebbe nel quadrato, e un testo che sfora si taglia da solo
             invece di uscire dal tasto */}
@@ -41336,9 +41355,11 @@ function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, color
         border: `1px solid ${attivo ? NAVY : bordo}`, background: attivo ? NAVY : sfondo, cursor: "pointer", textAlign: "left",
       }}
     >
-      <span style={{ width: 30, height: 30, borderRadius: 8, background: attivo ? "rgba(255,255,255,0.18)" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <Icona size={16} color={attivo ? "#fff" : coloreIcona} />
-      </span>
+      {discoBlu ? disco(32) : (
+        <span style={{ width: 30, height: 30, borderRadius: 8, background: attivo ? "rgba(255,255,255,0.18)" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icona size={16} color={attivo ? "#fff" : coloreIcona} />
+        </span>
+      )}
       <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: attivo ? "#fff" : NAVY }}>{children}</span>
       {aiuto && <AiutoInfo chiave={aiuto.chiave} predefinito={aiuto.testo} ruoloUtente={aiuto.ruoloUtente} />}
     </button>
@@ -52642,17 +52663,33 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
 // cima a tutte e tre, con quella della pagina in cui ci si trova più
 // scura — stesso componente/stile già usato per le schede di
 // Amministrazione (Prima nota cassa/Quadro impegni/...)
+// Le quattro pagine della famiglia. Su desktop pastiglie rettangolari —
+// i titoli sono lunghi e dentro un quadrato si spezzano in tre righe —
+// su telefono quadrate, quattro per riga. In tutti e due i casi l'icona
+// sta nel disco blu, come in tutto il resto dell'app: erano quattro
+// pastiglie colorate una per una (verde, arancio, oro, azzurro) e in
+// mezzo alle altre pagine sembravano venire da un'altra applicazione.
 function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
   const isMobile = useIsMobile();
   return (
-    <div style={isMobile ? { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 20 } : { display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+    <div style={isMobile
+      ? { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, marginBottom: 20 }
+      : { display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
       {/* prima lo shop, poi il banco, poi i totali: si entra per guardare
           quello che si e' venduto online, il totale e' la somma e viene
           dopo */}
-      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "shop"} onClick={onApriShop} Icona={IconaTileVenditeShop} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Statistiche Vendite Shop Online</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "banco"} onClick={onApriBanco} Icona={IconaTilePos} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Statistiche Vendite al Banco</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "totale"} onClick={onApriTotale} Icona={IconaGruppoVenditeProdotti} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Statistiche Totali Vendite Prodotti</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "analisi"} onClick={onApriAnalisi} Icona={IconaTileDashboardAnalisi} sfondo="#E7EEF5" bordo="#C7D9E8" coloreIcona="#3B6FA0">Analisi Vendita Prodotti</SchedaTabAmministrazione>
+      {[
+        { chiave: "shop", testo: "Statistiche Vendite Shop Online", corto: "Shop online", Icona: IconaTileVenditeShop, apri: onApriShop },
+        { chiave: "banco", testo: "Statistiche Vendite al Banco", corto: "Al banco", Icona: IconaTilePos, apri: onApriBanco },
+        { chiave: "totale", testo: "Statistiche Totali Vendite Prodotti", corto: "Totali", Icona: IconaGruppoVenditeProdotti, apri: onApriTotale },
+        { chiave: "analisi", testo: "Analisi Vendita Prodotti", corto: "Analisi", Icona: IconaTileDashboardAnalisi, apri: onApriAnalisi },
+      ].map((t) => (
+        <SchedaTabAmministrazione
+          key={t.chiave}
+          compatto={isMobile} discoBlu
+          attivo={attivo === t.chiave} onClick={t.apri} Icona={t.Icona}
+        >{isMobile ? t.corto : t.testo}</SchedaTabAmministrazione>
+      ))}
     </div>
   );
 }
@@ -52660,7 +52697,7 @@ function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onAp
 // non stanno più una sopra l'altra, si guarda una vista alla volta —
 // stesso stile/componente della barra di sopra, colore neutro perché qui
 // non sono pagine diverse, solo due modi di guardare la stessa pagina
-function TogglePerOperatoreProdotto({ vista, onCronologico, onOperatore, onProdotto, onCoupon }) {
+function TogglePerOperatoreProdotto({ vista, onCronologico, onOperatore, onProdotto, onCategoria, onCoupon }) {
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
       {/* il cronologico viene per primo: la domanda che ci si fa aprendo
@@ -52671,6 +52708,9 @@ function TogglePerOperatoreProdotto({ vista, onCronologico, onOperatore, onProdo
       )}
       <SchedaTabAmministrazione attivo={vista === "prodotto"} onClick={onProdotto} Icona={IconaScatolaErp} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per prodotto</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={vista === "operatore"} onClick={onOperatore} Icona={IconaPersonaSemplice} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per operatore</SchedaTabAmministrazione>
+      {onCategoria && (
+        <SchedaTabAmministrazione attivo={vista === "categoria"} onClick={onCategoria} Icona={IconaTileCatalogo} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per categoria</SchedaTabAmministrazione>
+      )}
       {onCoupon && (
         <SchedaTabAmministrazione attivo={vista === "coupon"} onClick={onCoupon} Icona={IconaTileCoupon} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per codice promozionale</SchedaTabAmministrazione>
       )}
@@ -53025,10 +53065,62 @@ function TabellaProdottiVenditeProdotti({ righe, isMobile, messaggioVuoto, piePa
 // pagina madre (Prodotto/Pezzi netti/Ricavo netto): niente elenco ordini,
 // niente incasso/IVA, niente "Recupera ordini mancanti" — quel dettaglio
 // vive già, per intero, nella sezione Magazzino/Shop
+// La barra del periodo delle pagine "Statistiche vendite prodotti".
+//
+// Quattro finestre fisse non bastavano: dall'08/10/2026 ci sono anche un
+// MESE di calendario — "30 giorni" non e' settembre, e per sapere com'e'
+// andato un mese preciso non c'era modo — e un intervallo DA-A
+// qualunque. Sta in un hook e non copiata in ogni pagina: tre pagine con
+// tre barre diverse sono tre pagine che rispondono a domande diverse
+// mentre sembrano rispondere alla stessa.
+function useFiltroPeriodoStatistiche(venditeShop, iniziale = "30giorni") {
+  const [periodo, setPeriodo] = useState(iniziale);
+  const adesso = new Date();
+  const [mese, setMese] = useState(adesso.getMonth());
+  const [annoMese, setAnnoMese] = useState(adesso.getFullYear());
+  const [da, setDa] = useState(null);
+  const [a, setA] = useState(null);
+  const anni = useMemo(() => {
+    const trovati = new Set([new Date().getFullYear()]);
+    (venditeShop || []).forEach((v) => { if (v.data_ordine) trovati.add(Number(v.data_ordine.slice(0, 4))); });
+    return [...trovati].filter((n) => Number.isFinite(n)).sort((x, y) => y - x);
+  }, [venditeShop]);
+
+  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" }
+    : periodo === "mese" ? { inizio: `${annoMese}-${String(mese + 1).padStart(2, "0")}-01`, fine: fmtDataIso(new Date(annoMese, mese + 1, 0)) }
+    // finche' mancano tutte e due le date la finestra resta aperta da
+    // quel lato: un "dal" senza "al" non deve svuotare la pagina
+    : periodo === "date" ? { inizio: da || "0000-01-01", fine: a || "9999-12-31" }
+    : rangePeriodoErp(periodo);
+
+  const barra = (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+      <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, width: "fit-content", flexWrap: "wrap" }}>
+        {[{ v: "30giorni", l: "30 giorni" }, { v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "date", l: "Da – a" }, { v: "tutto", l: "Tutto" }].map((p) => (
+          <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
+        ))}
+      </div>
+      {periodo === "mese" && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select style={{ ...inputStyle, width: "auto" }} value={mese} onChange={(e) => setMese(Number(e.target.value))}>
+            {MESI.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          </select>
+          <select style={{ ...inputStyle, width: "auto" }} value={annoMese} onChange={(e) => setAnnoMese(Number(e.target.value))}>
+            {anni.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      )}
+      {periodo === "date" && (
+        <SelettorePeriodo da={da} a={a} vuoto="Tocca e scegli i giorni" onCambia={(sc) => { setDa(sc.da); setA(sc.a); }} />
+      )}
+    </div>
+  );
+  return { range, barra, periodo };
+}
+
 function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, origine, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
   const isMobile = useIsMobile();
-  const [periodo, setPeriodo] = useState("30giorni");
-  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
+  const { range, barra: barraPeriodo } = useFiltroPeriodoStatistiche(venditeShop);
 
   const righeCanale = (venditeShop || []).filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio").filter((v) => {
     const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
@@ -53098,11 +53190,7 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
 
         <TabsStatisticheVenditeProdotti attivo={origine === "pos" ? "banco" : "shop"} onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
 
-        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
-          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
-            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
-          ))}
-        </div>
+        {barraPeriodo}
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 28 }}>
           <RiquadroKpi compatto={isMobile} etichetta="Incasso netto" valore={fmtEuroErp2(kpi.incasso)} />
@@ -53201,9 +53289,9 @@ function PaginaOmaggi({ venditeShop, prodottiShop = [], ricarica, onBack, titolo
   const { ordine: ordineOmaggiProd, cambiaOrdine: cambiaOrdineOmaggiProd, ordina: ordinaOmaggiProd } = useOrdinamentoTabella();
   const { ordine: ordineOmaggiReg, cambiaOrdine: cambiaOrdineOmaggiReg, ordina: ordinaOmaggiReg } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
-  const [periodo, setPeriodo] = useState("tutto");
-
-  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
+  // gli omaggi si guardano quasi sempre tutti: qui la finestra parte da
+  // "Tutto", il resto della barra e' lo stesso delle altre statistiche
+  const { range, barra: barraPeriodo } = useFiltroPeriodoStatistiche(venditeShop, "tutto");
   const omaggiFiltrati = (venditeShop || [])
     .filter((v) => v.tipo_movimento === "omaggio")
     .filter((v) => {
@@ -53236,11 +53324,7 @@ function PaginaOmaggi({ venditeShop, prodottiShop = [], ricarica, onBack, titolo
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti usciti dal POS senza essere venduti — regalati, con nota obbligatoria sul motivo.</div>
 
-        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
-          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
-            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
-          ))}
-        </div>
+        {barraPeriodo}
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(2, minmax(0,1fr))", gap: 14, marginBottom: 22, maxWidth: 500 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
@@ -59693,7 +59777,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
 // periodo/operatore/prodotto, con l'avanzamento dei target in corso — mai
 // una cifra di "Vendite Corsi" qui dentro (tutt'altra pagina, con le sue
 // statistiche separate)
-function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi, titolo = "Statistiche Totali Vendite Prodotti" }) {
+function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, categorieProdotti = [], prodottiCategorie = [], master, venditori, targetVenditeProdotti, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi, titolo = "Statistiche Totali Vendite Prodotti" }) {
   // valore della merce a scaffale: solo i prodotti che un magazzino ce
   // l'hanno davvero (un bundle virtuale non è un pezzo in più, è un modo
   // di venderne altri) e solo quelli con un costo d'acquisto inserito —
@@ -59705,8 +59789,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
     return { valore, costoMedio: unita > 0 ? round2(valore / unita) : null };
   }, [prodottiShop]);
   const isMobile = useIsMobile();
-  const [periodo, setPeriodo] = useState("30giorni");
-  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
+  const { range, barra: barraPeriodo } = useFiltroPeriodoStatistiche(venditeShop);
 
   // qui la vista è globale, somma di entrambe le origini (shop online +
   // banco): "Vendite Shop Online" e "Vendite al banco" sono le due viste
@@ -59752,6 +59835,55 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
     : righeProdotti.slice(0, 30);
   const [vista, setVista] = useState("prodotto");
 
+  // PER CATEGORIA.
+  //
+  // La riga venduta si riporta al prodotto con prodottoDellaRiga — mai
+  // per nome: un prodotto rinominato spezzerebbe la storia in due, e gli
+  // ordini dallo shop portano woo_product_id e non il nostro id.
+  //
+  // Un prodotto puo' stare in piu' categorie, e con collegamentiConPadri
+  // sta anche in quelle che le contengono: il suo ricavo si conta in
+  // TUTTE, perche' la domanda e' "quanto ha fatto la categoria X" e non
+  // "come si divide il fatturato". Per questo la somma delle righe non
+  // fa il totale, ed e' scritto sotto la tabella.
+  const indiciStat = useMemo(() => indiciProdotti(prodottiShop), [prodottiShop]);
+  const categorieDelProdotto = useMemo(() => {
+    const per = {};
+    collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => {
+      (per[pc.prodotto_id] = per[pc.prodotto_id] || []).push(pc.categoria_id);
+    });
+    return per;
+  }, [prodottiCategorie, categorieProdotti]);
+  const righeCategorie = useMemo(() => {
+    const nomePerId = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
+    const per = {};
+    // Le righe che un prodotto a catalogo non ce l'hanno: al banco si
+    // battono anche gli acconti e i saldi dei corsi, scritti a mano come
+    // righe libere ("saldo corso pmu", "acconto formazione"). Sono la
+    // maggior parte del valore storico di questa tabella — 1,14 milioni
+    // su 1,31 — e in cima schiaccerebbero ogni categoria vera. Stanno in
+    // fondo, con il loro nome.
+    const senza = { nome: "Righe non a catalogo (acconti e saldi corsi)", pezzi: 0, ricavo: 0 };
+    righeGlobali.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+      if (r.spedizione) return;
+      const prodotto = prodottoDellaRiga(r, indiciStat);
+      const pezzi = Number(r.quantita) || 0;
+      const ricavo = Number(r.totale_riga) || 0;
+      const ids = prodotto ? (categorieDelProdotto[prodotto.id] || []) : [];
+      if (ids.length === 0) { senza.pezzi += pezzi; senza.ricavo += ricavo; return; }
+      ids.forEach((id) => {
+        if (!per[id]) per[id] = { id, nome: nomePerId[id] || "(categoria eliminata)", pezzi: 0, ricavo: 0 };
+        per[id].pezzi += pezzi;
+        per[id].ricavo += ricavo;
+      });
+    }));
+    const righe = Object.values(per).map((c) => ({ ...c, ricavo: round2(c.ricavo) }))
+      .filter((c) => c.pezzi !== 0 || c.ricavo !== 0).sort((x, y) => y.ricavo - x.ricavo);
+    if (senza.pezzi !== 0 || senza.ricavo !== 0) righe.push({ ...senza, id: "__senza", ricavo: round2(senza.ricavo) });
+    return righe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [righeGlobali, indiciStat, categorieDelProdotto, categorieProdotti]);
+
   const oggiStr = dataOggiStr();
   // solo target vendita prodotti: quelli sui corsi venduti sono un silo
   // diverso (vedi PaginaDashboardVenditori), non c'entrano con le
@@ -59775,11 +59907,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
 
         <TabsStatisticheVenditeProdotti attivo="totale" onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
 
-        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
-          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
-            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
-          ))}
-        </div>
+        {barraPeriodo}
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 28 }}>
           <RiquadroKpi compatto={isMobile} etichetta="Incasso netto" valore={fmtEuroErp2(kpi.incasso)} />
@@ -59810,13 +59938,48 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
           </div>
         )}
 
-        <TogglePerOperatoreProdotto vista={vista} onOperatore={() => setVista("operatore")} onProdotto={() => setVista("prodotto")} />
+        <TogglePerOperatoreProdotto vista={vista} onOperatore={() => setVista("operatore")} onProdotto={() => setVista("prodotto")} onCategoria={() => setVista("categoria")} />
 
         {vista === "operatore" && (
           <TabellaOperatoriVenditeProdotti
             righe={righeOperatori} isMobile={isMobile}
             messaggioVuoto="Nessuna vendita con operatore assegnato nel periodo selezionato (le vendite shop online non hanno un operatore, salvo quelle col referral code di una master)."
           />
+        )}
+
+        {vista === "categoria" && (
+          righeCategorie.length === 0 ? (
+            <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessuna vendita nel periodo selezionato.</div>
+          ) : (
+            <>
+              <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 420 }}>
+                    <thead>
+                      <tr>
+                        {["Categoria", "Pezzi", "Ricavo"].map((h, i2) => (
+                          <th key={h} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i2 === 0 ? "left" : "right", padding: "10px 14px", background: BG, whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {righeCategorie.map((c) => (
+                        <tr key={c.id}>
+                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{c.nome}</td>
+                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, textAlign: "right" }}>{c.pezzi}</td>
+                          <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textAlign: "right" }}>{fmtEuroErp2(c.ricavo)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+                Un prodotto che sta in più categorie conta in tutte, e in quelle che le contengono: la somma delle righe è quindi maggiore dell'incasso del periodo. Serve a leggere quanto ha fatto una categoria, non a dividere il fatturato.
+                {" "}L'ultima riga sono le vendite battute senza un prodotto a catalogo — acconti e saldi dei corsi scritti a mano al banco: non hanno una categoria perché non sono un prodotto.
+              </div>
+            </>
+          )
         )}
 
         {vista === "prodotto" && (
@@ -77125,7 +77288,7 @@ export default function App() {
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm", "prodotti_shop"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
-    statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
+    statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti", "categorie_prodotti", "prodotti_categorie"],
     statvenditeshop: ["vendite_shop_storico", "woo_coupon"],
     // gli ordini con codice li legge la pagina da sola (vista); anagrafica
     // e regole del coupon d'aula servono per simulare i punti
@@ -79024,6 +79187,7 @@ export default function App() {
       {view === "statistichevenditeprodotti" && (
         <PaginaStatisticheVenditeProdotti
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} venditori={venditori}
+          categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
           targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("statistiche")}
           onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
           titolo={etichettaTasto("statistiche", "venditeprodotti", "Statistiche Totali Vendite Prodotti")}
