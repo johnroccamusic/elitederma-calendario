@@ -13219,12 +13219,17 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         })()}
 
         {masterSel && puntiMasterImpostazioni && (
-          <div style={{ marginBottom: 20 }}>
-            {/* Niente titolo, niente periodo e niente "Dettaglio per
-                codice": i tre riquadri si spiegano da soli, e il dettaglio
-                per codice e' roba da amministrazione — la master ci
-                trovava dentro gli euro, che dal 12/09/2026 non le si
-                mostrano piu'. */}
+          /* GESTIONE PUNTI: area sua, staccata dai corsi.
+             Stava senza titolo in mezzo alla pagina, e finche' erano tre
+             riquadri si capiva da se'. Con sei schede di punti attaccate
+             all'elenco dei corsi non si capiva piu' dove finiva una cosa
+             e cominciava l'altra: un riquadro col suo nome e il suo
+             fondo, e il confine c'e'. */
+          <div style={{ ...cardStyle, marginBottom: 20, padding: isMobile ? 12 : 18 }}>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 16 : 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Gestione punti</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>
+              Quanti punti hai fatto e quanto valgono. Sotto ogni numero c'è la cifra in euro, dove matura.
+            </div>
             {(() => {
               // le 4 card stanno su una riga sola a qualunque larghezza: sul
               // telefono con font e imbottitura ridotti, su desktop larghe
@@ -13248,9 +13253,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // numero sulla mezzeria e basta, qualunque sia la lunghezza
               // dell'etichetta sopra: una riga o tre, il numero non si
               // sposta.
-              // sei fisse: shop/POS, cash, personali, carriera, vendite al
-              // corso, vendite con referral
-              const schedePunti = 8 + (mostraEuroCarrelli && mostraTotaleCarrelli ? 1 : 0);
+              // le sei schede dei punti: shop/POS, cash, eventi carta,
+              // eventi contanti, personali, carriera. Quattro per riga, su
+              // due righe, e la misura della scheda si regola su quello
+              const schedePunti = 4;
               const cardPunti = {
                 ...cardStyle, minWidth: 0, boxSizing: "border-box",
                 padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
@@ -13283,19 +13289,21 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               const lblPunti = { ...fontBody, fontSize: isMobile ? (schedePunti > 2 ? 9.5 : 11.5) : 14, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, overflowWrap: "anywhere", textAlign: "center", ...(isMobile ? { alignSelf: "end", paddingBottom: 3 } : {}) };
               const numPunti = { ...fontDisplay, fontSize: isMobile ? (schedePunti > 2 ? 15 : 18) : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap", textAlign: "center" };
               const ptPunti = { ...fontBody, fontSize: isMobile ? 8 : 12, color: MUTED, marginTop: isMobile ? 0 : 2, lineHeight: 1.15, overflowWrap: "anywhere", ...(isMobile ? { textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) };
+              // Quattro colonne fisse, su due righe. Erano tutte in fila,
+              // e finche' erano tre o quattro andava; con sei schede di
+              // punti sei colonne su uno schermo stretto fanno sei
+              // francobolli, e su schermo largo una striscia che non si
+              // legge. "start" le tiene attaccate in alto, cosi' le
+              // etichette partono dalla stessa riga anche quando una va a
+              // capo e le altre no. Il quadrato lascia il posto a una
+              // scheda piu' bassa per lo stesso motivo.
+              //
+              // Due blocchi uno sotto l'altro — i punti e le vendite —
+              // quindi serve un frammento: il return non puo' restituirne
+              // due sciolti.
               return (
-            // tre colonne uguali, non tre flex che possono andare a capo:
-            // su desktop l'ultima card finiva sotto le altre appena la
-            // finestra si stringeva. "start" le tiene attaccate in alto, cosi'
-            // le etichette partono dalla stessa riga anche quando una va a capo
-            // e le altre no
-            //
-            // Su telefono al massimo quattro per riga. Erano tutte in
-            // fila, e finche' erano tre o quattro andava; dall'08/10/2026
-            // sono otto, e otto colonne su uno schermo da 375 punti fanno
-            // otto francobolli da quaranta punti l'uno. Il quadrato lascia
-            // il posto a una scheda piu' bassa per lo stesso motivo.
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? Math.min(schedePunti, 4) : schedePunti}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
+            <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
               {/* I punti, divisi per come si e' pagato. Stanno in questa
                   griglia e non in una loro: due file di schede che dicono
                   cose dello stesso ordine si leggono peggio di una */}
@@ -13344,32 +13352,38 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 <div style={{ ...numPunti, color: GOLD }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_carriera || 0) : "…"}</div>
                 <div style={ptPunti}>somma dei tre</div>
               </div>
-              {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
-                  qui contano le vendite, i punti arriveranno con una regola
-                  loro (da definire), e la quarta scheda resta vuota in
-                  attesa. Gli importi restano calcolati e nel dettaglio per
-                  codice, per chi amministra */}
-              <div style={cardPunti}>
-                <div style={lblPunti}>Vendite<br />al corso</div>
-                <div style={numPunti}>{provvigioniMaster.venditeCorso}</div>
-              </div>
-              <div style={cardPunti}>
-                <div style={lblPunti}>Vendite con<br />referral</div>
-                <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
-              </div>
-              {/* Qui c'era "Punti accumulati", un quinto numero di punti
+              {/* Qui c'era "Punti accumulati", un settimo numero di punti
                   contato in JavaScript su questa pagina. Diceva una cifra
-                  diversa dalle quattro schede qui sopra, che vengono dalla
+                  diversa dalle sei schede qui sopra, che vengono dalla
                   vista: tolto l'08/10/2026. */}
-              {/* il totale in euro dei carrelli venduti: solo programmatore e
-                  Chiara Colonnelli lo vedono, mai le master */}
-              {mostraEuroCarrelli && mostraTotaleCarrelli && (
-              <div style={cardPunti}>
-                <div style={lblPunti}>Totale<br />carrelli</div>
-                <div style={{ ...numPunti, color: "#2E7D32" }}>{fmtEuroErp2(provvigioniMaster.valoreCarrelli)}</div>
-              </div>
-              )}
             </div>
+
+            {/* Le vendite non sono punti: seconda fila, sotto una riga di
+                separazione. Mischiate alle altre facevano sei schede di
+                punti e due di conteggi tutte uguali, e per leggerne una
+                bisognava leggere l'etichetta di tutte. */}
+            <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Vendite</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12 }}>
+                <div style={cardPunti}>
+                  <div style={lblPunti}>Vendite<br />al corso</div>
+                  <div style={numPunti}>{provvigioniMaster.venditeCorso}</div>
+                </div>
+                <div style={cardPunti}>
+                  <div style={lblPunti}>Vendite con<br />referral</div>
+                  <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
+                </div>
+                {/* il totale in euro dei carrelli venduti: solo programmatore
+                    e Chiara Colonnelli lo vedono, mai le master */}
+                {mostraEuroCarrelli && mostraTotaleCarrelli && (
+                <div style={cardPunti}>
+                  <div style={lblPunti}>Totale<br />carrelli</div>
+                  <div style={{ ...numPunti, color: "#2E7D32" }}>{fmtEuroErp2(provvigioniMaster.valoreCarrelli)}</div>
+                </div>
+                )}
+              </div>
+            </div>
+            </>
               );
             })()}
           </div>
