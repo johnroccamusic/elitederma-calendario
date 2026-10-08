@@ -13046,7 +13046,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
   // il totale in euro dei carrelli lo vedono solo programmatore e Chiara
   // Colonnelli; le master vedono vendite e punti, mai l'importo
   const mostraEuroCarrelli = vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato);
@@ -13164,8 +13164,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // cancello — passa da master_vista, che conosce solo la classe di quel
   // token e restituisce i soli campi che la pagina disegna
   const [contabilitaClasse, setContabilitaClasse] = useState(null);
-  // la sottopagina dei punti: si apre dalla tessera "Gestione punti"
-  const [vistaPunti, setVistaPunti] = useState(false);
+  // Le tre sezioni della dashboard, come nella dashboard venditori: una
+  // fila di tessere in cima e sotto quella aperta. "corsi" e' la prima e
+  // si apre da sola — e' quello che una master viene a cercare.
+  const [tabMaster, setTabMaster] = useState("corsi");
 
   // Le schede dei punti. Vivono in una funzione e non dentro il return
   // perche' la pagina che le disegna e' una sottopagina sua: nella
@@ -13299,32 +13301,39 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         vista: tolto l'08/10/2026. */}
     </div>
 
-    {/* Le vendite non sono punti: seconda fila, sotto una riga di
-      separazione. Mischiate alle altre facevano sei schede di
-      punti e due di conteggi tutte uguali, e per leggerne una
-      bisognava leggere l'etichetta di tutte. */}
-    <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12 }}>
-    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Vendite</div>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12 }}>
-      <div style={cardPunti}>
-        <div style={lblPunti}>Vendite<br />al corso</div>
-        <div style={numPunti}>{provvigioniMaster.venditeCorso}</div>
-      </div>
-      <div style={cardPunti}>
-        <div style={lblPunti}>Vendite con<br />referral</div>
-        <div style={numPunti}>{provvigioniMaster.venditeReferral}</div>
-      </div>
-      {/* il totale in euro dei carrelli venduti: solo programmatore
-          e Chiara Colonnelli lo vedono, mai le master */}
-      {mostraEuroCarrelli && mostraTotaleCarrelli && (
-      <div style={cardPunti}>
-        <div style={lblPunti}>Totale<br />carrelli</div>
-        <div style={{ ...numPunti, color: "#2E7D32" }}>{fmtEuroErp2(provvigioniMaster.valoreCarrelli)}</div>
-      </div>
-      )}
-    </div>
-    </div>
+    {/* I conteggi delle vendite non stanno piu' qui: "Gestione punti"
+      mostra i punti e basta. Sono passati in cima alla sezione Corsi,
+      che e' il posto dove si guarda quanto si e' venduto. */}
     </>
+    );
+  }
+
+  // quante vendite e quanto valgono: tre riquadri in cima alla sezione
+  // Corsi. Erano in mezzo alle schede dei punti, e otto riquadri tutti
+  // uguali di cui sei punti e due conteggi non si leggevano.
+  function contatoriVenditeMaster() {
+    const card = { ...cardStyle, minWidth: 0, boxSizing: "border-box", padding: isMobile ? "8px 4px" : 14, marginBottom: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, minHeight: isMobile ? 80 : 92 };
+    const lbl = { ...fontBody, fontSize: isMobile ? 9.5 : 13, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, textAlign: "center" };
+    const num = { ...fontDisplay, fontSize: isMobile ? 16 : 24, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap" };
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${mostraEuroCarrelli && mostraTotaleCarrelli ? 3 : 2}, minmax(0, 1fr))`, alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 16 }}>
+        <div style={card}>
+          <div style={lbl}>Vendite<br />al corso</div>
+          <div style={num}>{provvigioniMaster.venditeCorso}</div>
+        </div>
+        <div style={card}>
+          <div style={lbl}>Vendite con<br />referral</div>
+          <div style={num}>{provvigioniMaster.venditeReferral}</div>
+        </div>
+        {/* il totale in euro dei carrelli venduti: solo programmatore e
+            Chiara Colonnelli lo vedono, mai le master */}
+        {mostraEuroCarrelli && mostraTotaleCarrelli && (
+          <div style={card}>
+            <div style={lbl}>Totale<br />carrelli</div>
+            <div style={{ ...num, color: "#2E7D32" }}>{fmtEuroErp2(provvigioniMaster.valoreCarrelli)}</div>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -13336,25 +13345,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 6000, overflowY: "auto", background: BG, WebkitOverflowScrolling: "touch", paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <VistaMaster param={contabilitaClasse.token} onEsci={() => { setContabilitaClasse(null); window.scrollTo(0, 0); }} />
-      </div>
-    );
-  }
-
-  if (vistaPunti && masterSel) {
-    return (
-      <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
-            <TastoLivelloPrecedente titolo={`Dashboard ${toTitleCase(masterSel.nome)}`} onClick={() => { setVistaPunti(false); window.scrollTo(0, 0); }} />
-            <div style={{ ...stileTitoloPagina, color: NAVY }}>Gestione punti</div>
-          </div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
-            Quanti punti hai fatto e quanto valgono. Sotto ogni numero c'è la cifra in euro, dove matura.
-          </div>
-          {puntiMasterImpostazioni ? schedePuntiMaster() : (
-            <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>La raccolta punti non è ancora stata impostata.</div>
-          )}
-        </div>
       </div>
     );
   }
@@ -13387,7 +13377,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           </div>
           {masterSel && <FotoMaster url={masterSel.foto_url} lato={isMobile ? 84 : 118} titolo={toTitleCase(masterSel.nome)} />}
         </div>
-        {masterSel && <LoghiMasterPubblicati masterId={masterSel.id} />}
 
         {/* I due codici che una master cerca appena entra, uno accanto
             all'altro: quello che danno ai clienti e quello con cui
@@ -13402,12 +13391,12 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           const acquisti = suoi.find((c) => c.serie_regole === "acquisto_master");
           if (!referral && !acquisti) return null;
           const pillola = (testo, codice, sotto) => (
-            <div key={codice} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 14px", maxWidth: "100%" }}>
-              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+            <div key={codice} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "8px 10px" : "10px 14px", minWidth: 0 }}>
+              <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, color: NAVY, flex: "1 1 120px", minWidth: 0 }}>
                 {testo}
                 {sotto && <span style={{ display: "block", ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{sotto}</span>}
               </span>
-              <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1 }}>{codice}</span>
+              <span style={{ ...fontDisplay, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1 }}>{codice}</span>
               <button
                 onClick={() => { try { navigator.clipboard.writeText(String(codice || "").toUpperCase()); } catch (e) { /* niente appunti: si legge e si copia a mano */ } }}
                 title="Copia il codice"
@@ -13418,32 +13407,69 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             </div>
           );
           return (
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "stretch", marginBottom: 18 }}>
+            /* due colonne, non due blocchi che vanno a capo: affiancati
+               si leggono come la coppia che sono. Il testo dentro si
+               stringe (minmax 0) invece di spingere la riga */
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, alignItems: "stretch", marginBottom: 18 }}>
               {referral && pillola("Il tuo referral code personale è:", referral.codice, "Quello che dai ai clienti")}
               {acquisti && pillola("Il coupon code per i tuoi acquisti personali è:", acquisti.codice, "Quello con cui compri tu, al listino master")}
             </div>
           );
         })()}
 
-        {masterSel && puntiMasterImpostazioni && (
-          /* GESTIONE PUNTI: una sottopagina, non un blocco qui dentro.
-             Le sei schede dei punti piu' i conteggi delle vendite
-             attaccati all'elenco dei corsi facevano una pagina in cui non
-             si capiva dove finiva una cosa e cominciava l'altra. Qui
-             resta la tessera; i numeri stanno a casa loro. */
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: 14, maxWidth: isMobile ? "none" : 820, margin: `0 auto ${isMobile ? 14 : 20}px` }}>
-            <TileHome
-              title="Gestione punti"
-              Icona={IconaTilePuntiMaster}
-              chiaveStile="dashboardmaster|gestionepunti"
-              onClick={() => { setVistaPunti(true); window.scrollTo(0, 0); }}
-              badge={puntiDaVendite ? `${fmtPunti(puntiDaVendite.punti_carriera || 0)} pt` : undefined}
-              etichettaDueRighe
-            />
+        {/* LE TRE SEZIONI, come nella dashboard venditori: tessere in
+            cima, sotto quella aperta. Tre colonne anche da telefono —
+            sono tre, ci stanno, e mandarne una a capo da sola e' il modo
+            di farla sembrare un'altra cosa. */}
+        {masterSel && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isMobile ? 8 : 14, maxWidth: isMobile ? "none" : 640, margin: `0 auto ${isMobile ? 12 : 18}px` }}>
+            {[
+              { chiave: "corsi", testo: "Corsi", Icona: IconaTileCorsi },
+              { chiave: "punti", testo: "Gestione punti", Icona: IconaTilePuntiMaster, badge: puntiDaVendite ? `${fmtPunti(puntiDaVendite.punti_carriera || 0)} pt` : undefined },
+              { chiave: "loghi", testo: "Loghi", Icona: IconaTileLoghi },
+            ].map((t) => (
+              <TileHome
+                key={t.chiave}
+                title={t.testo}
+                Icona={t.Icona}
+                chiaveStile={`dashboardmaster|${t.chiave}`}
+                badge={t.badge}
+                evidenziato={tabMaster === t.chiave}
+                onClick={() => { setTabMaster(t.chiave); window.scrollTo(0, 0); }}
+                etichettaDueRighe
+              />
+            ))}
           </div>
         )}
 
-        {masterSel && targetAttiviMaster.length > 0 && (
+        {/* il nome della sezione aperta, come nella dashboard venditori:
+            i corsi il titolo ce l'hanno gia' loro */}
+        {masterSel && tabMaster !== "corsi" && (
+          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 14, textAlign: "center", textTransform: "uppercase" }}>
+            {tabMaster === "punti" ? "Gestione punti" : "Loghi"}
+          </div>
+        )}
+
+        {/* GESTIONE PUNTI: per ora solo i punti totalizzati. */}
+        {masterSel && tabMaster === "punti" && (
+          puntiMasterImpostazioni ? (
+            <div style={{ marginBottom: 20 }}>{schedePuntiMaster()}</div>
+          ) : (
+            <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13, marginBottom: 20 }}>La raccolta punti non è ancora stata impostata.</div>
+          )
+        )}
+
+        {/* LOGHI: i suoi e lo Student work, piu' quelli fatti per le sue
+            allieve. Di questi il file non si conserva — si rifa' uguale
+            dal codice, senza consumare un numero nuovo. */}
+        {masterSel && tabMaster === "loghi" && (
+          <div style={{ marginBottom: 20 }}>
+            <LoghiMasterPubblicati masterId={masterSel.id} />
+            <LoghiDelleAllieve masterNome={masterSel.nome} loghiCategorie={loghiCategorie} loghiImpostazioni={loghiImpostazioni} />
+          </div>
+        )}
+
+        {masterSel && tabMaster === "corsi" && targetAttiviMaster.length > 0 && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Target vendite prodotti</div>
             <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Vendite al POS, separate dall'incasso corsi qui sopra.</div>
@@ -13466,8 +13492,9 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
 
         {!masterSel ? (
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli una master per vedere i suoi prossimi corsi.</div>
-        ) : (
+        ) : tabMaster !== "corsi" ? null : (
           <>
+            {puntiMasterImpostazioni && contatoriVenditeMaster()}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
               <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{vistaCorsiMaster === "storico" ? "Storico corsi" : "Prossimi corsi"}</div>
               <PillolaSegmentata
@@ -22348,6 +22375,75 @@ function CardStudentWork() {
     </div>
   );
 }
+// I loghi fatti per le sue allieve, dal piu' recente. Il file non si
+// conserva da nessuna parte — si rifa' uguale dal codice, con
+// riscaricaLogoGenerato, che non consuma un numero nuovo e non scrive
+// nello storico: e' una ristampa.
+//
+// Si cercano per NOME della master, perche' loghi_generati tiene quello
+// e non un id. Confronto senza maiuscole e senza spazi ai bordi: i nomi
+// li scrive una persona.
+function LoghiDelleAllieve({ masterNome, loghiCategorie = [], loghiImpostazioni = null }) {
+  const isMobile = useIsMobile();
+  const [righe, setRighe] = useState(null);
+  const [inCorso, setInCorso] = useState(null);
+  const [msg, setMsg] = useState("");
+  const nome = String(masterNome || "").trim().toLowerCase();
+  useEffect(() => {
+    let vivo = true;
+    if (!nome) { setRighe([]); return undefined; }
+    (async () => {
+      const { data } = await supabase.from("loghi_generati")
+        .select("*").order("creato_il", { ascending: false }).limit(500);
+      if (!vivo) return;
+      setRighe((data || []).filter((r) => String(r.master_nome || "").trim().toLowerCase() === nome));
+    })();
+    return () => { vivo = false; };
+  }, [nome]);
+
+  async function ristampa(r) {
+    setInCorso(r.id); setMsg("");
+    try {
+      await riscaricaLogoGenerato(r, loghiCategorie, loghiImpostazioni);
+      setMsg(`Logo ${r.codice || r.allieva_nome} scaricato di nuovo: nessun numero consumato.`);
+    } catch (e) { setMsg("Non riesco a rifare il logo: " + (e?.message || e)); }
+    setInCorso(null);
+  }
+
+  if (righe === null) return <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 14 }}>Carico i loghi…</div>;
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>Loghi fatti per le tue allieve</div>
+      {righe.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Ancora nessuno. Compariranno qui man mano che li facciamo.</div>
+      ) : (
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, overflow: "hidden", background: "#fff" }}>
+          {righe.map((r) => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: isMobile ? "9px 10px" : "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ flex: "1 1 160px", minWidth: 0 }}>
+                <span style={{ display: "block", ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{toTitleCase(r.allieva_nome || "—")}</span>
+                <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                  {r.categoria_etichetta || r.categoria_chiave}
+                  {r.codice ? ` · ${String(r.codice).toUpperCase()}` : ""}
+                  {r.creato_il ? ` · ${new Date(r.creato_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}` : ""}
+                </span>
+              </span>
+              <button
+                type="button" onClick={() => ristampa(r)} disabled={inCorso === r.id}
+                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "6px 12px", cursor: "pointer", opacity: inCorso === r.id ? 0.6 : 1 }}
+              >
+                {inCorso === r.id ? "Preparo…" : "Scarica"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Non riesco") ? "#C0392B" : "#2E7D32", marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
 function LoghiMasterPubblicati({ masterId }) {
   // tutto su una riga come da desktop: da telefono i tasti si stringono e
   // le etichette diventano "Nero"/"Bianco" (il titolo del riquadro dice gia' quale logo e')
@@ -77056,7 +77152,7 @@ export default function App() {
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
-    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico"],
+    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico", "loghi_categorie", "loghi_impostazioni"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
@@ -79171,6 +79267,7 @@ export default function App() {
           sceltaLibera={!!utenteLoggato?.masterId && (utenteLoggato.permessi || []).includes("impostazioni")}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           puntiMasterImpostazioni={puntiMasterImpostazioni} regoleReferralAutomatico={regoleReferralAutomatico}
+          loghiCategorie={loghiCategorie} loghiImpostazioni={loghiImpostazioni}
           ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato}
           onApriInventarioSede={apriInventarioSede}
           onApriCambi={apriCambiIntegrazioni}
