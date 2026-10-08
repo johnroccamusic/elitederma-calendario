@@ -35,6 +35,9 @@ import GestioneEventi from "./eventi/GestioneEventi.jsx";
 import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
 import SelettorePeriodo from "./ui/SelettorePeriodo.jsx";
 import PrezziListini from "./prezzi/PrezziListini.jsx";
+// il listino delle master: la quota e il conto del prezzo stanno li', in
+// un posto solo, e di qui si leggono per i codici con cui le master comprano
+import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
 import { usePuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
@@ -5081,6 +5084,34 @@ function scontoAFasceCarrello(righe, prodottoPerId, fasce, contanti = false, ecc
   return round2((righe || []).reduce((s, r) => {
     const pct = percentualeFasciaDi(prodottoPerId[r.prodottoId], fasce, spesa, contanti, eccezioneNeedling);
     return s + (pct > 0 ? (r.prezzo * r.quantita * pct) / 100 : 0);
+  }, 0));
+}
+// Lo sconto di un carrello col codice di acquisto di una master.
+//
+// Non e' una percentuale: sono EURO, la quota di quello che su ogni pezzo
+// si puo' cedere, gli stessi che il listino master mostra e che il sito
+// legge da `_ed_cedibile_eur`.
+//
+// Un passaggio che non si vede e senza il quale i due prezzi non
+// combaciano: il cedibile e' sul NETTO — il listino dice "paga 31,00" e
+// quello e' un prezzo netto — mentre al banco il carrello e' a prezzi al
+// pubblico, IVA compresa. Lo sconto va quindi riportato sul lordo
+// moltiplicandolo per l'aliquota del prodotto: togliendo gli euro netti
+// da un prezzo lordo, la master pagherebbe un netto piu' alto di quello
+// che il suo listino le promette.
+function scontoAcquistoMasterCarrello(righe, prodottoPerId, cedibilePerProdotto, quota) {
+  return round2((righe || []).reduce((somma, r) => {
+    const p = prodottoPerId[r.prodottoId];
+    const dati = p && cedibilePerProdotto ? cedibilePerProdotto.get(p.id) : null;
+    if (!dati || !(dati.cedibile > 0)) return somma;
+    const pct = quotaMasterDi(quota, dati.blocco);
+    if (!(pct > 0)) return somma;
+    const scontoNetto = Math.round(dati.cedibile * pct) / 100;
+    const iva = Number(p.aliquota_iva_vendita ?? ALIQUOTA_IVA_STANDARD) || 0;
+    const pezzi = Number(r.quantita) || 0;
+    const scontoRiga = round2(scontoNetto * (1 + iva / 100) * pezzi);
+    const lordoRiga = round2((Number(r.prezzo) || 0) * pezzi);
+    return somma + Math.min(lordoRiga, scontoRiga);
   }, 0));
 }
 // La percentuale unica da scrivere su WooCommerce quando lo sconto e' a
@@ -39353,6 +39384,211 @@ function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, c
   );
 }
 
+// La linguetta "Genera codice sconto master".
+//
+// Il codice con cui una master COMPRA per se'. E' il contrario del
+// referral, che sconta ai suoi clienti: qui lo sconto se lo fa lei, e i
+// prezzi sono quelli del listino master — una fetta di quello che su
+// ogni pezzo si puo' cedere, non il massimo, che e' il prezzo del
+// rivenditore.
+//
+// La quota e' una sola per tutte e si decide in Prezzi e listini: qui si
+// legge e basta. I codici invece sono uno per master, perche' servono a
+// sapere chi ha comprato.
+function PannelloCodiciAcquistoMaster({ master, coupon, couponAcquistoPerMasterId, prodottiShop, ricarica, isMobile, onElimina, eliminandoId }) {
+  const [quota] = useImpostazioneCondivisa(CHIAVE_QUOTA_MASTER, { generale: QUOTA_MASTER_DEFAULT, reparti: {} });
+  const [listino, setListino] = useState(null);
+  const [cerca, setCerca] = useState("");
+  const [creandoId, setCreandoId] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [msgTipo, setMsgTipo] = useState("successo");
+  useEffect(() => { leggiListino().then(setListino).catch(() => setListino([])); }, []);
+
+  const masterOrdinate = useMemo(() => [...(master || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "")), [master]);
+
+  // Le righe del listino come le vedra' la master. Fuori quelle senza un
+  // prezzo: un listino con un trattino al posto della cifra non serve.
+  const righeListino = useMemo(() => {
+    const dentro = (listino || []).filter((r) => r.sconto_max_pct != null && r.pubblico_netto > 0);
+    return dentro.map((r) => {
+      const q = quotaMasterDi(quota, r.blocco_ordine);
+      return { ...r, quotaReparto: q, ...prezzoMasterDi(r, q) };
+    });
+  }, [listino, quota]);
+  const righeViste = useMemo(() => {
+    const t = cerca.trim().toLowerCase();
+    const filtrate = t ? righeListino.filter((r) => String(r.nome || "").toLowerCase().includes(t)) : righeListino;
+    return [...filtrate].sort((a, b) => (a.blocco_ordine ?? 99) - (b.blocco_ordine ?? 99) || String(a.nome).localeCompare(String(b.nome), "it"));
+  }, [righeListino, cerca]);
+
+  // Quanto vale in media lo sconto, sul prezzo al pubblico. E' il numero
+  // che finisce sul coupon come "amount": se il frammento sul sito venisse
+  // spento, il codice continuerebbe a funzionare applicando questa media a
+  // tutto invece del prezzo giusto riga per riga. Meglio approssimato che
+  // un carrello rotto.
+  const mediaSulPubblico = useMemo(() => {
+    let lordo = 0, sconto = 0;
+    righeListino.forEach((r) => {
+      const l = Number(r.pubblico_lordo) || 0;
+      if (!(l > 0) || r.risparmio == null) return;
+      lordo += l; sconto += Number(r.risparmio) || 0;
+    });
+    return lordo > 0 ? round2((sconto / lordo) * 100) : 0;
+  }, [righeListino]);
+
+  async function creaCodice(m) {
+    if (!(mediaSulPubblico > 0)) { setMsgTipo("errore"); setMsg("La quota del listino master e' a zero: non c'e' nessuno sconto da dare."); return; }
+    setCreandoId(m.id); setMsg("");
+    const codice = (await generaCodiceReferralUnivoco(m.nome)).toLowerCase();
+    // nel registro PRIMA del coupon: se qualcosa fallisce dopo, il codice
+    // resta bruciato per sempre e non si riassegna mai
+    const { error: erroreRegistro } = await supabase.from("codici_emessi")
+      .insert({ codice, origine: "manuale", master_id: m.id, corsi_date_id: null });
+    if (erroreRegistro) { setCreandoId(null); setMsgTipo("errore"); setMsg("Errore registro codici: " + erroreRegistro.message); return; }
+    const { data: riga, error } = await supabase.from("coupon").insert({
+      codice,
+      descrizione: `Acquisti master — ${m.nome}`,
+      tipo_sconto: "percent",
+      base_sconto: "lordo",
+      // la media serve solo da rete: il prezzo vero lo fanno il POS e il
+      // frammento, prodotto per prodotto, dalla quota sul cedibile
+      valore: mediaSulPubblico,
+      valore_woo: mediaSulPubblico,
+      tipo_regola_sconto: "semplice",
+      fasce_sconto: null,
+      valido_da: null, valido_fino_a: null,
+      ambito: "tutto",
+      utilizzi_max: null, utilizzi_max_per_utente: null, spesa_minima: null,
+      non_cumulabile: true,
+      stato: "bozza",
+      master_id: m.id,
+      serie_regole: "acquisto_master",
+      generato_da_cron: false,
+      creato_da: "manuale",
+    }).select().single();
+    if (error || !riga) { setCreandoId(null); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(error)); return; }
+    const { data, error: erroreWoo } = await supabase.functions.invoke("woo-crea-coupon", { body: { couponId: riga.id } });
+    setCreandoId(null);
+    if (erroreWoo || data?.errore) {
+      setMsgTipo("errore");
+      setMsg("Codice salvato nell'app ma non creato sul sito: " + (data?.errore || erroreWoo.message));
+      ricarica(["coupon"]); return;
+    }
+    setMsgTipo("successo");
+    setMsg(`Codice "${codice.toUpperCase()}" creato per ${toTitleCase(m.nome)}: con quello paga i prezzi del listino master, al banco e sul sito.`);
+    ricarica(["coupon"]);
+  }
+
+  const quotaGenerale = Number(quota?.generale);
+  const repartiConQuotaPropria = Object.keys(quota?.reparti || {}).length;
+
+  return (
+    <div>
+      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16, lineHeight: 1.55 }}>
+        Il codice con cui una master <b style={{ color: NAVY }}>compra per sé</b>, al banco e sullo shop. È il contrario
+        del referral, che sconta ai suoi clienti: qui lo sconto se lo fa lei, e i prezzi sono quelli del
+        <b style={{ color: NAVY }}> listino master</b> — una parte di quello che su ogni pezzo si può cedere, non tutto.
+      </div>
+
+      <div style={{ background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 14, padding: "12px 16px", marginBottom: 18,
+        display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ ...fontBody, fontSize: 13, color: "#8A6D1D", flex: "1 1 260px", minWidth: 0, lineHeight: 1.5 }}>
+          Le master prendono il <b style={{ color: NAVY }}>{String(Number.isFinite(quotaGenerale) ? quotaGenerale : QUOTA_MASTER_DEFAULT).replace(".", ",")}%</b> dello
+          sconto massimo{repartiConQuotaPropria > 0 ? `, con ${repartiConQuotaPropria} repart${repartiConQuotaPropria === 1 ? "o" : "i"} a quota propria` : ""}.
+          Si cambia in <b style={{ color: NAVY }}>Prezzi e listini → Master</b>: è una sola per tutte, e vale da subito su ogni codice già emesso.
+        </span>
+        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+          in media {fmtPctErp(mediaSulPubblico)} sul prezzo al pubblico
+        </span>
+      </div>
+
+      {msg && (
+        <div style={{ ...fontBody, fontSize: 13, borderRadius: 12, padding: "10px 14px", marginBottom: 14,
+          color: msgTipo === "errore" ? "#C0392B" : "#2E7D32",
+          background: msgTipo === "errore" ? "#FBEBE9" : "#EDF7EE",
+          border: `1px solid ${msgTipo === "errore" ? "#F0C8C2" : "#C7E3CB"}` }}>{msg}</div>
+      )}
+
+      {masterOrdinate.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master trovata.</div>
+      ) : masterOrdinate.map((m) => {
+        const esistente = couponAcquistoPerMasterId[m.id];
+        return (
+          <div key={m.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "14px 18px" }}>
+            <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, minWidth: 150 }}>{toTitleCase(m.nome)}</div>
+            {esistente ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{esistente.codice}</span>
+                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: (ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).colore, borderRadius: 20, padding: "2px 9px" }}>
+                  {(ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).testo}
+                </span>
+                <button onClick={() => onElimina(esistente)} disabled={eliminandoId === esistente.id} title="Elimina il codice"
+                  style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+                </button>
+              </div>
+            ) : (
+              <Button variant="ghost" onClick={() => creaCodice(m)} disabled={creandoId === m.id}>
+                {creandoId === m.id ? "Creo…" : "Genera codice"}
+              </Button>
+            )}
+          </div>
+        );
+      })}
+
+      <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, margin: "26px 0 4px" }}>
+        Che prezzi fa questo codice
+      </div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+        Gli stessi del listino master, prodotto per prodotto. Non è una copia: è lo stesso conto, letto adesso.
+      </div>
+      <input value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="Cerca un prodotto…"
+        style={{ ...inputStyle, maxWidth: 320, marginBottom: 12, fontSize: 13.5 }} />
+      {listino === null ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Sto leggendo il listino…</div>
+      ) : (
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
+              <thead>
+                <tr>
+                  {["Prodotto", "Reparto", "Al pubblico", "Sconto", "Paga"].map((t, i) => (
+                    <th key={t} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5,
+                      textAlign: i >= 2 ? "right" : "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{t}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {righeViste.slice(0, 400).map((r) => (
+                  <tr key={r.id}>
+                    <td style={{ padding: "10px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{r.nome}</td>
+                    <td style={{ padding: "10px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>{bloccoDi(r.blocco_ordine).nome}</td>
+                    <td style={{ padding: "10px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(r.pubblico_netto)}</td>
+                    <td style={{ padding: "10px 14px", borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "right", whiteSpace: "nowrap" }}>
+                      <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#2E7D32", background: "#EDF7EE", borderRadius: 999, padding: "3px 9px" }}>
+                        {String(Math.round((r.pct ?? 0) * 100) / 100).replace(".", ",")}%
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(r.prezzo)}</td>
+                  </tr>
+                ))}
+                {righeViste.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: "18px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde alla ricerca.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {righeViste.length > 400 && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, padding: "10px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              Mostrati i primi 400 di {righeViste.length}: cerca per nome per restringere.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, regoleReferralNeedling, venditeShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
   const { ordine: ordineClassifica, cambiaOrdine: cambiaOrdineClassifica, ordina: ordinaClassifica } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
@@ -39513,7 +39749,17 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     // tab "Generazione automatica"/storico) — altrimenti una master con
     // già un coupon automatico per-corso risulterebbe erroneamente "già
     // servita" anche qui, nascondendo il tasto "Genera codice"
-    (coupon || []).filter((c) => c.master_id && !c.corsi_date_id).forEach((c) => { mappa[c.master_id] = c; });
+    // e nemmeno i codici con cui la master COMPRA: hanno master_id e
+    // nessuna edizione come il referral, ma servono all'opposto - uno
+    // sconta ai suoi clienti, l'altro sconta a lei. Senza questa riga
+    // generare l'uno faceva sparire il tasto dell'altro.
+    (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && c.serie_regole !== "acquisto_master")
+      .forEach((c) => { mappa[c.master_id] = c; });
+    return mappa;
+  }, [coupon]);
+  const couponAcquistoPerMasterId = useMemo(() => {
+    const mappa = {};
+    (coupon || []).filter((c) => c.master_id && c.serie_regole === "acquisto_master").forEach((c) => { mappa[c.master_id] = c; });
     return mappa;
   }, [coupon]);
   const [codiceProposto, setCodiceProposto] = useState({});
@@ -39748,7 +39994,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "needling", l: "Generazione automatica codici needling" }, { v: "referral", l: "Genera referral code" }].map((t) => (
+          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "needling", l: "Generazione automatica codici needling" }, { v: "referral", l: "Genera referral code" }, { v: "acquistomaster", l: "Genera codice sconto master" }].map((t) => (
             <button key={t.v} onClick={() => { setTab(t.v); setMsg(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 18, border: "none", background: tab === t.v ? NAVY : BG, color: tab === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
               {t.l}
             </button>
@@ -39880,6 +40126,14 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
             coupon={coupon} corsi={corsi} corsiDate={corsiDate} location={location} master={master}
             codiciGenerati={couponAutomaticiNeedling} onElimina={eliminaCoupon} eliminandoId={eliminandoId}
             ricarica={ricarica} isMobile={isMobile}
+          />
+        )}
+
+        {tab === "acquistomaster" && (
+          <PannelloCodiciAcquistoMaster
+            master={master} coupon={coupon} couponAcquistoPerMasterId={couponAcquistoPerMasterId}
+            prodottiShop={prodottiShop} ricarica={ricarica} isMobile={isMobile}
+            onElimina={eliminaCoupon} eliminandoId={eliminandoId}
           />
         )}
 
@@ -64580,6 +64834,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [fasceNeedlingCartaPos] = useImpostazioneCondivisa(CHIAVE_FASCE_NEEDLING_CARTA, null);
   const [fasceNeedlingContantiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_NEEDLING_CONTANTI, []);
   const [scontoNeedlingPos] = useImpostazioneCondivisa(CHIAVE_SCONTO_NEEDLING, SCONTO_NEEDLING_DEFAULT);
+  // Il listino delle master: la quota sta fra le impostazioni, il cedibile
+  // di ogni pezzo nella view del listino. Si legge una volta sola, quando
+  // al banco compare un codice di acquisto: a chi vende normalmente non
+  // serve, e sono trecento righe.
+  const [quotaMasterPos] = useImpostazioneCondivisa(CHIAVE_QUOTA_MASTER, { generale: QUOTA_MASTER_DEFAULT, reparti: {} });
+  const [cedibilePerProdotto, setCedibilePerProdotto] = useState(null);
   const [note, setNote] = useState("");
   // Il nome di chi compra, facoltativo. Finora non lo chiedeva nessuno e
   // chi vendeva lo infilava nelle note: adesso ha un campo suo, e la nota
@@ -65052,6 +65312,23 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // il codice di un corso di NEEDLING ha la sua serie di fasce, scritta
   // in Genera coupon → Generazione automatica codici needling
   const couponNeedlingAttivo = couponAttivo?.serie_regole === "needling";
+  // il codice con cui la master compra per se': i prezzi sono quelli del
+  // listino master, non le fasce
+  const couponAcquistoMaster = couponAttivo?.serie_regole === "acquisto_master";
+  useEffect(() => {
+    if (!couponAcquistoMaster || cedibilePerProdotto) return;
+    let vivo = true;
+    leggiListino().then((righe) => {
+      if (!vivo) return;
+      const mappa = new Map();
+      (righe || []).forEach((r) => {
+        if (r.sconto_max_pct == null || !(r.pubblico_netto > 0)) return;
+        mappa.set(r.id, { cedibile: Math.round(Number(r.pubblico_netto) * Number(r.sconto_max_pct)) / 100, blocco: r.blocco_ordine });
+      });
+      setCedibilePerProdotto(mappa);
+    }).catch(() => { if (vivo) setCedibilePerProdotto(new Map()); });
+    return () => { vivo = false; };
+  }, [couponAcquistoMaster, cedibilePerProdotto]);
   const cartaDiClasse = couponNeedlingAttivo ? fasceNeedlingCartaPos : fasceCorsiCartaPos;
   const contantiDiClasse = couponNeedlingAttivo ? fasceNeedlingContantiPos : fasceContantiCorsiPos;
   const fasceCouponAttive = couponAFasce
@@ -65075,9 +65352,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const fasceContantiInUso = couponAFasce && pagamentoContaComeContanti(metodoPagamento) && (couponPersonaleAttivo
     ? serieScontoScritta(fasceReferralContantiPos)
     : serieScontoScritta(fasceContantiCorsiPos));
-  const scontoCoupon = couponAFasce
-    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)
-    : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
+  const scontoCoupon = couponAcquistoMaster
+    ? scontoAcquistoMasterCarrello(carrello, prodottiPerId, cedibilePerProdotto, quotaMasterPos)
+    : couponAFasce
+      ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)
+      : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
@@ -65086,7 +65365,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     : couponNum > 0 && couponSulMargine
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
-  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, (couponNum > 0 || couponAFasce) ? scontoCoupon : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
+  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, (couponNum > 0 || couponAFasce || couponAcquistoMaster) ? scontoCoupon : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
   // La percentuale che si mostra e' quella DAVVERO erogata su questo
   // carrello: sconto diviso subtotale. Il numero scritto sul coupon non
   // dice la verita' quando lo sconto va a fasce — ogni prodotto ha la sua

@@ -124,8 +124,22 @@ Deno.serve(async (req) => {
   const needlingAttivo = needling && Array.isArray(needling.sconti) && needling.sconti.some((x: unknown) => Number(x) > 0);
   const metaNeedling = needlingAttivo ? [{ key: "_ed_needling", value: JSON.stringify(needling) }] : [];
 
+  // Il listino delle master: sul coupon viaggia solo la QUOTA, una
+  // generale e se c'e' una per reparto. Gli euro cedibili di ogni pezzo
+  // stanno gia' sul prodotto (_ed_cedibile_eur, scritti dall'allineamento
+  // dei margini), quindi cambiare la quota non obbliga a riscrivere
+  // trecento prodotti.
+  const diAcquistoMaster = riga.serie_regole === "acquisto_master";
+  let quotaMaster: any = null;
+  if (diAcquistoMaster) {
+    const { data: rigaQuota } = await supabase
+      .from("impostazioni_layout_tabelle").select("valore").eq("chiave", "listino_master_quota").maybeSingle();
+    quotaMaster = rigaQuota?.valore ?? null;
+  }
+  const metaMaster = quotaMaster ? [{ key: "_ed_quota_master", value: JSON.stringify(quotaMaster) }] : [];
+
   if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
-    payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, ...metaNeedling];
+    payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, ...metaNeedling, ...metaMaster];
   } else if (riga.base_sconto === "margine") {
     // Anche la percentuale unica "sul margine" va detta al sito per
     // quello che e': il 15% di quei dieci euro di guadagno, non il 15%
@@ -133,7 +147,13 @@ Deno.serve(async (req) => {
     // giusta sul totale degli ordini e sbagliata su ogni singolo
     // carrello. Il frammento legge questo e il margine in euro scritto
     // sul prodotto, e fa il conto esatto riga per riga.
-    payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, ...metaNeedling];
+    payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, ...metaNeedling, ...metaMaster];
+  } else if (metaNeedling.length || metaMaster.length) {
+    // Un coupon a percentuale secca non entra in nessuno dei due rami
+    // qui sopra, e i suoi contrassegni non partivano: il codice di
+    // acquisto di una master e' esattamente cosi'. Senza questa riga il
+    // sito gli avrebbe applicato la percentuale media e basta.
+    payloadWoo.meta_data = [...metaNeedling, ...metaMaster];
   }
 
   try {

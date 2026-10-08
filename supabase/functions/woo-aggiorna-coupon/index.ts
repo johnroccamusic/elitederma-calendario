@@ -103,6 +103,16 @@ Deno.serve(async (req) => {
   }
   const needlingAttivo = needling && Array.isArray(needling.sconti) && needling.sconti.some((x: unknown) => Number(x) > 0);
   const metaNeedling = { key: "_ed_needling", value: needlingAttivo ? JSON.stringify(needling) : "" };
+  // la quota del listino master, con la stessa regola: vuota sui coupon
+  // che non sono di acquisto, cosi' si cancella da quelli che l'avevano
+  const diAcquistoMaster = riga.serie_regole === "acquisto_master";
+  let quotaMaster: any = null;
+  if (diAcquistoMaster) {
+    const { data: rigaQuota } = await supabase
+      .from("impostazioni_layout_tabelle").select("valore").eq("chiave", "listino_master_quota").maybeSingle();
+    quotaMaster = rigaQuota?.valore ?? null;
+  }
+  const metaMaster = { key: "_ed_quota_master", value: quotaMaster ? JSON.stringify(quotaMaster) : "" };
 
   const payloadWoo: Record<string, unknown> = {};
   if (haValidoFinoA) payloadWoo.date_expires = validoFinoA === null ? "" : validoFinoA;
@@ -110,11 +120,11 @@ Deno.serve(async (req) => {
     payloadWoo.discount_type = "percent";
     payloadWoo.amount = String(riga.valore ?? 0);
     if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
-      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling];
+      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling, metaMaster];
     } else if (riga.base_sconto === "margine") {
-      payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, { key: "_ed_fasce_sconto", value: "" }, metaNeedling];
+      payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, { key: "_ed_fasce_sconto", value: "" }, metaNeedling, metaMaster];
     } else {
-      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: "" }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling];
+      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: "" }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling, metaMaster];
     }
   }
 
