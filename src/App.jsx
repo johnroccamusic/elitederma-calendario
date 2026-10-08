@@ -13301,16 +13301,60 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         vista: tolto l'08/10/2026. */}
     </div>
 
-    {/* I conteggi delle vendite non stanno piu' qui: "Gestione punti"
-      mostra i punti e basta. Sono passati in cima alla sezione Corsi,
-      che e' il posto dove si guarda quanto si e' venduto. */}
+    {/* I conteggi delle vendite stanno subito sotto, fuori da questa
+      griglia: sono numeri di un altro ordine — quante volte, non
+      quanto vale — e in mezzo alle schede dei punti si leggevano come
+      se fossero punti anche loro. */}
     </>
     );
   }
 
-  // quante vendite e quanto valgono: tre riquadri in cima alla sezione
-  // Corsi. Erano in mezzo alle schede dei punti, e otto riquadri tutti
-  // uguali di cui sei punti e due conteggi non si leggevano.
+  // I due codici: quello che la master da' ai clienti e quello con cui
+  // compra per se'. Stavano sotto il nome, in cima alla dashboard;
+  // dall'08/10/2026 stanno dentro Gestione punti, che e' il posto dove
+  // si parla di quello che produce punti.
+  //
+  // ATTENZIONE: vivono nella stessa tabella e sono tutti e due "suoi e
+  // senza edizione". A distinguerli e' solo la serie — senza il filtro,
+  // la riga del referral mostrava il codice d'acquisto a seconda di
+  // quale arrivava prima.
+  function codiciMaster() {
+    if (!masterSel) return null;
+    const suoi = (coupon || []).filter((c) => c.master_id === masterSel.id && !c.corsi_date_id);
+    const referral = suoi.find((c) => c.serie_regole !== "acquisto_master");
+    const acquisti = suoi.find((c) => c.serie_regole === "acquisto_master");
+    if (!referral && !acquisti) return null;
+    const pillola = (testo, codice, sotto) => (
+      <div key={codice} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "8px 10px" : "10px 14px", minWidth: 0 }}>
+        <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, color: NAVY, flex: "1 1 120px", minWidth: 0 }}>
+          {testo}
+          {sotto && <span style={{ display: "block", ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{sotto}</span>}
+        </span>
+        <span style={{ ...fontDisplay, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1 }}>{codice}</span>
+        <button
+          onClick={() => { try { navigator.clipboard.writeText(String(codice || "").toUpperCase()); } catch (e) { /* niente appunti: si legge e si copia a mano */ } }}
+          title="Copia il codice"
+          style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
+        >
+          copia
+        </button>
+      </div>
+    );
+    return (
+      /* due colonne, non due blocchi che vanno a capo: affiancati si
+         leggono come la coppia che sono. Il testo dentro si stringe
+         (minmax 0) invece di spingere la riga */
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, alignItems: "stretch", marginBottom: 16 }}>
+        {referral && pillola("Il tuo referral code personale è:", referral.codice, "Quello che dai ai clienti")}
+        {acquisti && pillola("Il coupon code per i tuoi acquisti personali è:", acquisti.codice, "Quello con cui compri tu, al listino master")}
+      </div>
+    );
+  }
+
+  // Quante vendite e quanto valgono: in fondo a Gestione punti, sotto
+  // le schede dei punti ma staccati da loro. Dentro la stessa griglia
+  // erano due conteggi in mezzo a sei importi, e si leggevano come se
+  // fossero punti anche loro.
   function contatoriVenditeMaster() {
     const card = { ...cardStyle, minWidth: 0, boxSizing: "border-box", padding: isMobile ? "8px 4px" : 14, marginBottom: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, minHeight: isMobile ? 80 : 92 };
     const lbl = { ...fontBody, fontSize: isMobile ? 9.5 : 13, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0 : 0.5, lineHeight: 1.15, textAlign: "center" };
@@ -13378,45 +13422,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           {masterSel && <FotoMaster url={masterSel.foto_url} lato={isMobile ? 84 : 118} titolo={toTitleCase(masterSel.nome)} />}
         </div>
 
-        {/* I due codici che una master cerca appena entra, uno accanto
-            all'altro: quello che danno ai clienti e quello con cui
-            comprano per se'. Finora doveva chiederli tutti e due.
-            ATTENZIONE: vivono nella stessa tabella e tutti e due sono
-            "suoi e senza edizione". A distinguerli e' solo la serie —
-            senza il filtro, la riga del referral mostrava il codice
-            d'acquisto a seconda di quale arrivava prima. */}
-        {masterSel && (() => {
-          const suoi = (coupon || []).filter((c) => c.master_id === masterSel.id && !c.corsi_date_id);
-          const referral = suoi.find((c) => c.serie_regole !== "acquisto_master");
-          const acquisti = suoi.find((c) => c.serie_regole === "acquisto_master");
-          if (!referral && !acquisti) return null;
-          const pillola = (testo, codice, sotto) => (
-            <div key={codice} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "8px 10px" : "10px 14px", minWidth: 0 }}>
-              <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, color: NAVY, flex: "1 1 120px", minWidth: 0 }}>
-                {testo}
-                {sotto && <span style={{ display: "block", ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{sotto}</span>}
-              </span>
-              <span style={{ ...fontDisplay, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1 }}>{codice}</span>
-              <button
-                onClick={() => { try { navigator.clipboard.writeText(String(codice || "").toUpperCase()); } catch (e) { /* niente appunti: si legge e si copia a mano */ } }}
-                title="Copia il codice"
-                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
-              >
-                copia
-              </button>
-            </div>
-          );
-          return (
-            /* due colonne, non due blocchi che vanno a capo: affiancati
-               si leggono come la coppia che sono. Il testo dentro si
-               stringe (minmax 0) invece di spingere la riga */
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, alignItems: "stretch", marginBottom: 18 }}>
-              {referral && pillola("Il tuo referral code personale è:", referral.codice, "Quello che dai ai clienti")}
-              {acquisti && pillola("Il coupon code per i tuoi acquisti personali è:", acquisti.codice, "Quello con cui compri tu, al listino master")}
-            </div>
-          );
-        })()}
-
         {/* LE TRE SEZIONI, come nella dashboard venditori: tessere in
             cima, sotto quella aperta. Tre colonne anche da telefono —
             sono tre, ci stanno, e mandarne una a capo da sola e' il modo
@@ -13453,7 +13458,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         {/* GESTIONE PUNTI: per ora solo i punti totalizzati. */}
         {masterSel && tabMaster === "punti" && (
           puntiMasterImpostazioni ? (
-            <div style={{ marginBottom: 20 }}>{schedePuntiMaster()}</div>
+            <div style={{ marginBottom: 20 }}>
+              {codiciMaster()}
+              {schedePuntiMaster()}
+              {contatoriVenditeMaster()}
+            </div>
           ) : (
             <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13, marginBottom: 20 }}>La raccolta punti non è ancora stata impostata.</div>
           )
@@ -13494,7 +13503,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli una master per vedere i suoi prossimi corsi.</div>
         ) : tabMaster !== "corsi" ? null : (
           <>
-            {puntiMasterImpostazioni && contatoriVenditeMaster()}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
               <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{vistaCorsiMaster === "storico" ? "Storico corsi" : "Prossimi corsi"}</div>
               <PillolaSegmentata
