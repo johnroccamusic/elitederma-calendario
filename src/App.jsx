@@ -13018,6 +13018,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
   const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
   const quotePunti = { ...QUOTE_PUNTI_MASTER_DEFAULT, ...(quotePuntiSalvate || {}) };
+  // quanto vale un punto in euro, per canale: la stessa impostazione che
+  // si regola in Gestione punti, letta qui invece che ricopiata
+  const [percEuroSalvateDash] = useImpostazioneCondivisa(CHIAVE_PERCENTUALI_EURO_PUNTI, PERCENTUALI_EURO_PUNTI_DEFAULT);
+  const percEuroDash = { ...PERCENTUALI_EURO_PUNTI_DEFAULT, ...(percEuroSalvateDash || {}) };
   // le fasce di sconto dei due canali: servono per la riduzione dei punti
   // quando l'allievo ha usato un codice
   const [regolaReferralMasterDash] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
@@ -13300,7 +13304,9 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               // numero sulla mezzeria e basta, qualunque sia la lunghezza
               // dell'etichetta sopra: una riga o tre, il numero non si
               // sposta.
-              const schedePunti = 4 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli && mostraTotaleCarrelli ? 1 : 0);
+              // sei fisse: shop/POS, cash, personali, carriera, vendite al
+              // corso, vendite con referral
+              const schedePunti = 6 + (puntiVisibiliMaster ? 1 : 0) + (mostraEuroCarrelli && mostraTotaleCarrelli ? 1 : 0);
               const cardPunti = {
                 ...cardStyle, minWidth: 0, boxSizing: "border-box",
                 padding: isMobile ? "8px 4px" : 16, marginBottom: 0,
@@ -13349,13 +13355,36 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               {/* I punti, divisi per come si e' pagato. Stanno in questa
                   griglia e non in una loro: due file di schede che dicono
                   cose dello stesso ordine si leggono peggio di una */}
-              <div style={cardPunti}>
+              {/* Sotto il numero dei punti, quanto fanno in euro: punti per
+                  la percentuale del canale, decisa in Gestione punti. Solo
+                  questi due pagano - i personali sono roba comprata da lei
+                  e la carriera e' una somma, non un compenso. */}
+              <div style={cardPunti} title={`${percEuroDash.posShop}% di quello che vale un punto: si decide in Gestione punti`}>
                 <div style={lblPunti}>Punti<br />shop/POS</div>
                 <div style={{ ...numPunti, color: NAVY }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_shop_pos || 0) : "…"}</div>
+                <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_shop_pos || 0) * percEuroDash.posShop) / 100)) : "—"}</div>
               </div>
-              <div style={cardPunti}>
+              <div style={cardPunti} title={`${percEuroDash.cash}% di quello che vale un punto: si decide in Gestione punti`}>
                 <div style={lblPunti}>Punti<br />cash</div>
                 <div style={{ ...numPunti, color: "#8A6D1D" }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_cash || 0) : "…"}</div>
+                <div style={ptPunti}>{puntiDaVendite ? fmtEuroErp2(round2(((puntiDaVendite.punti_cash || 0) * percEuroDash.cash) / 100)) : "—"}</div>
+              </div>
+              {/* Quello che la master ha comprato per se', col suo codice.
+                  Non e' una vendita e non matura soldi: conta solo nella
+                  carriera. Il suo codice porta il suo nome, quindi senza
+                  separarli questi punti sarebbero finiti nei due qui
+                  accanto, che invece pagano. */}
+              <div style={cardPunti} title="Quello che hai comprato tu con il tuo codice: conta nella carriera, non matura compensi">
+                <div style={lblPunti}>Punti<br />personali</div>
+                <div style={{ ...numPunti, color: MUTED }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_personali || 0) : "…"}</div>
+                <div style={ptPunti}>non maturano</div>
+              </div>
+              {/* La somma dei tre: quanto ha mosso in tutto, venduto e
+                  comprato. Un numero che cresce e basta. */}
+              <div style={cardPunti} title="Punti shop/POS + punti cash + punti personali: tutto quello che hai mosso">
+                <div style={lblPunti}>Punti<br />carriera</div>
+                <div style={{ ...numPunti, color: GOLD }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_carriera || 0) : "…"}</div>
+                <div style={ptPunti}>somma dei tre</div>
               </div>
               {/* Dal 12/09/2026 gli euro non si mostrano piu' alla master:
                   qui contano le vendite, i punti arriveranno con una regola

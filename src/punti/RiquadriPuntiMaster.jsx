@@ -7,6 +7,10 @@
 //   PUNTI CASH      contanti e buono Amazon dal POS
 //                   base: il prezzo LORDO, perche' senza fattura l'IVA
 //                   non si scorpora e quello che entra e' il prezzo intero
+//   PUNTI PERSONALI quello che la master ha comprato per se' col suo
+//                   codice di acquisto. Non e' una vendita: non matura
+//                   compensi, conta solo nella carriera
+//   PUNTI CARRIERA  la somma dei tre: quanto ha mosso in tutto
 //
 // La formula e' quella del listino privato: prezzo x sconto massimo x 2,
 // col prezzo del giorno della vendita letto dalla riga dell'ordine. Il
@@ -19,7 +23,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 
-const VUOTO = { punti_shop_pos: 0, punti_cash: 0, punti_totali: 0, vendite: 0, pezzi: 0 };
+const VUOTO = { punti_shop_pos: 0, punti_cash: 0, punti_personali: 0, punti_carriera: 0, punti_totali: 0, vendite: 0, pezzi: 0 };
 
 export function usePuntiMaster(masterId) {
   const [dati, setDati] = useState(null);
@@ -30,7 +34,7 @@ export function usePuntiMaster(masterId) {
     (async () => {
       const { data, error } = await supabase
         .from("v_punti_master")
-        .select("punti_shop_pos, punti_cash, punti_totali, vendite, pezzi")
+        .select("punti_shop_pos, punti_cash, punti_personali, punti_carriera, punti_totali, vendite, pezzi")
         .eq("master_id", masterId)
         .maybeSingle();
       if (!vivo) return;
