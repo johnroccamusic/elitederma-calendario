@@ -43,6 +43,7 @@ import { usePuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
 import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
 import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
+import { creaZip, siPuoCondividere } from "./file/zip.js";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -13438,11 +13439,12 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             sono tre, ci stanno, e mandarne una a capo da sola e' il modo
             di farla sembrare un'altra cosa. */}
         {masterSel && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isMobile ? 8 : 14, maxWidth: isMobile ? "none" : 640, margin: `0 auto ${isMobile ? 12 : 18}px` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: isMobile ? 8 : 14, maxWidth: isMobile ? "none" : 820, margin: `0 auto ${isMobile ? 12 : 18}px` }}>
             {[
               { chiave: "corsi", testo: "Corsi", Icona: IconaTileCorsi },
               { chiave: "punti", testo: "Gestione punti", Icona: IconaTilePuntiMaster, badge: puntiDaVendite ? `${fmtPunti(puntiDaVendite.punti_carriera || 0)} pt` : undefined },
               { chiave: "loghi", testo: "Loghi", Icona: IconaTileLoghi },
+              { chiave: "notifiche", testo: "Notifiche", Icona: IconaCampanellaErp },
             ].map((t) => (
               <TileHome
                 key={t.chiave}
@@ -13458,16 +13460,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           </div>
         )}
 
-        {/* Le notifiche di QUESTO telefono. Sta qui, in alto e sotto le
-            tessere, perche' e' la cosa che vogliamo che venga premuta:
-            in fondo alla pagina non l'avrebbe trovata nessuno. */}
-        {masterSel && <PannelloNotifiche masterId={masterSel.id} utente={masterSel.nome} />}
-
         {/* il nome della sezione aperta, come nella dashboard venditori:
             i corsi il titolo ce l'hanno gia' loro */}
         {masterSel && tabMaster !== "corsi" && (
           <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 14, textAlign: "center", textTransform: "uppercase" }}>
-            {tabMaster === "punti" ? "Gestione punti" : "Loghi"}
+            {tabMaster === "punti" ? "Gestione punti" : tabMaster === "loghi" ? "Loghi" : "Notifiche"}
           </div>
         )}
 
@@ -13482,6 +13479,20 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           ) : (
             <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13, marginBottom: 20 }}>La raccolta punti non è ancora stata impostata.</div>
           )
+        )}
+
+        {/* NOTIFICHE: si accendono per dispositivo, non per persona. La
+            stessa master sul telefono e sul tablet sono due iscrizioni
+            diverse, e questa pagina parla sempre e solo di quello da cui
+            la si sta guardando. */}
+        {masterSel && tabMaster === "notifiche" && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+              Gli avvisi arrivano su questo dispositivo, non sul tuo nome: se usi anche il tablet, vanno accese anche lì.
+              {" "}Su iPhone funzionano solo se apri GENYON dall'icona sulla schermata Home.
+            </div>
+            <PannelloNotifiche masterId={masterSel.id} utente={masterSel.nome} />
+          </div>
         )}
 
         {/* LOGHI: i suoi e lo Student work, piu' quelli fatti per le sue
@@ -22434,12 +22445,54 @@ function LoghiDelleAllieve({ masterNome, loghiCategorie = [], loghiImpostazioni 
     return () => { vivo = false; };
   }, [nome]);
 
-  async function ristampa(r) {
-    setInCorso(r.id); setMsg("");
+  // IL FILE NON ESISTE FINCHE' NON SI PREME. Di un logo assegnato
+  // restano il numero e il nome, non il PNG: ogni tasto qui sotto lo
+  // ricompone sul momento, uguale a com'era. Non consuma numeri.
+  async function scarica(r, quale) {
+    setInCorso(`${r.id}:${quale}`); setMsg("");
     try {
-      await riscaricaLogoGenerato(r, loghiCategorie, loghiImpostazioni);
-      setMsg(`Logo ${r.codice || r.allieva_nome} scaricato di nuovo: nessun numero consumato.`);
+      const { nero, bianco } = await componiLoghiGenerati(r, loghiCategorie, loghiImpostazioni);
+      const scelto = quale === "bianco" ? bianco : nero;
+      if (!scelto) throw new Error("Questa categoria non ha la versione bianca.");
+      scaricaBlob(scelto.blob, scelto.nome);
+      setMsg(`${scelto.nome} scaricato.`);
     } catch (e) { setMsg("Non riesco a rifare il logo: " + (e?.message || e)); }
+    setInCorso(null);
+  }
+
+  // SU WHATSAPP DEVONO ARRIVARE COME FILE, NON COME FOTO.
+  //
+  // I loghi sono PNG trasparenti: mandati come immagine WhatsApp li
+  // ricomprime e la trasparenza diventa un rettangolo bianco o nero.
+  // Intatto arriva solo quello che tratta da documento, e uno zip lo e'
+  // sempre: dentro ci vanno tutti e due, nero e bianco, in un colpo
+  // solo. L'allieva lo apre con un tocco e trova i due file come sono
+  // usciti.
+  async function condividi(r) {
+    setInCorso(`${r.id}:invia`); setMsg("");
+    try {
+      const { nero, bianco, base } = await componiLoghiGenerati(r, loghiCategorie, loghiImpostazioni);
+      const dentro = [{ nome: nero.nome, dati: await nero.blob.arrayBuffer() }];
+      if (bianco) dentro.push({ nome: bianco.nome, dati: await bianco.blob.arrayBuffer() });
+      const zip = creaZip(dentro, { nomeZip: `${base}.zip` });
+      if (!siPuoCondividere([zip])) {
+        // niente foglio di condivisione (di solito: siamo su un
+        // computer). Si scarica lo zip, che e' la stessa cosa a mano
+        scaricaBlob(zip, `${base}.zip`);
+        setMsg("Questo dispositivo non ha il tasto condividi: ho scaricato lo zip con tutti e due i loghi.");
+        setInCorso(null);
+        return;
+      }
+      await navigator.share({
+        files: [zip],
+        title: `Logo ${toTitleCase(r.allieva_nome || "")}`,
+        text: `Il tuo logo Elitederma — ${r.categoria_etichetta || r.categoria_chiave}${r.codice ? ` · ${String(r.codice).toUpperCase()}` : ""}`,
+      });
+      setMsg("Mandato.");
+    } catch (e) {
+      // chiudere il foglio di condivisione non e' un errore da mostrare
+      if (e?.name !== "AbortError") setMsg("Non riesco a condividere: " + (e?.message || e));
+    }
     setInCorso(null);
   }
 
@@ -22448,6 +22501,9 @@ function LoghiDelleAllieve({ masterNome, loghiCategorie = [], loghiImpostazioni 
   return (
     <div style={{ marginTop: 18 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>Loghi fatti per le tue allieve</div>
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
+        <b>Invia</b> manda tutti e due i loghi — nero e bianco — in un colpo solo su WhatsApp, dentro uno zip: così arrivano come file e non come foto, e lo sfondo resta trasparente. Mandati come immagine, WhatsApp li ricomprime e la trasparenza diventa un rettangolo.
+      </div>
       {righe.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Ancora nessuno. Compariranno qui man mano che li facciamo.</div>
       ) : (
@@ -22462,12 +22518,26 @@ function LoghiDelleAllieve({ masterNome, loghiCategorie = [], loghiImpostazioni 
                   {r.creato_il ? ` · ${new Date(r.creato_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}` : ""}
                 </span>
               </span>
-              <button
-                type="button" onClick={() => ristampa(r)} disabled={inCorso === r.id}
-                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "6px 12px", cursor: "pointer", opacity: inCorso === r.id ? 0.6 : 1 }}
-              >
-                {inCorso === r.id ? "Preparo…" : "Scarica"}
-              </button>
+              <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[
+                  { k: "nero", testo: "Nero", onClick: () => scarica(r, "nero") },
+                  { k: "bianco", testo: "Bianco", onClick: () => scarica(r, "bianco") },
+                  { k: "invia", testo: "Invia", onClick: () => condividi(r), scuro: true },
+                ].map((b) => (
+                  <button
+                    key={b.k} type="button" onClick={b.onClick} disabled={!!inCorso}
+                    title={b.k === "invia" ? "Manda tutti e due i loghi su WhatsApp come file, non come foto" : `Scarica il logo ${b.testo.toLowerCase()}`}
+                    style={{
+                      ...fontBody, fontSize: 12, fontWeight: 700,
+                      color: b.scuro ? "#fff" : NAVY, background: b.scuro ? NAVY : "#fff",
+                      border: `1px solid ${b.scuro ? NAVY : CREAM_BORDER}`, borderRadius: 14, padding: "6px 12px",
+                      cursor: inCorso ? "default" : "pointer", opacity: inCorso ? 0.6 : 1, whiteSpace: "nowrap",
+                    }}
+                  >
+                    {inCorso === `${r.id}:${b.k}` ? "…" : b.testo}
+                  </button>
+                ))}
+              </span>
             </div>
           ))}
         </div>
@@ -22554,7 +22624,15 @@ function LoghiMasterPubblicati({ masterId }) {
 // Rifa' e scarica un logo gia' assegnato, tale e quale: stessa categoria,
 // stesso nome, stesso codice. Non consuma nessun numero e non scrive
 // nello storico: e' una ristampa. Il file si perde, il codice no.
-async function riscaricaLogoGenerato(riga, loghiCategorie, loghiImpostazioni) {
+// Rifa' un logo gia' assegnato, tale e quale, e torna i file invece di
+// scaricarli: stessa categoria, stesso nome, stesso codice. Non consuma
+// nessun numero e non scrive nello storico — e' una ristampa. Il file
+// non si conserva da nessuna parte, il codice si'.
+//
+// Torna i blob e non li scarica perche' chi chiama ne fa cose diverse:
+// lo storico li salva, la dashboard della master li mette in uno zip da
+// mandare su WhatsApp.
+async function componiLoghiGenerati(riga, loghiCategorie, loghiImpostazioni) {
   const categoria = (loghiCategorie || []).find((c) => c.chiave === riga.categoria_chiave);
   if (!categoria) throw new Error(`La categoria "${riga.categoria_etichetta || riga.categoria_chiave}" non esiste più in Setting loghi.`);
   if (!categoria.logo_nero_path) throw new Error("Manca il logo nero di questa categoria in Setting loghi.");
@@ -22564,11 +22642,18 @@ async function riscaricaLogoGenerato(riga, loghiCategorie, loghiImpostazioni) {
   const suffisso = codice ? `-${codice}` : `-${nomeFileSicuro(nome).baseSicura}`;
   const comuni = { nomeTesto: nome, codiceTesto: codice, categoria, famigliaNome: "loghiFontNomeGen", famigliaNumero: "loghiFontNumeroGen", ombraNome: ombraLogoDi(loghiImpostazioni, "nome"), ombraNumero: ombraLogoDi(loghiImpostazioni, "numero") };
   const nero = await componiLogoPng({ ...comuni, percorsoLogo: categoria.logo_nero_path, variante: "nero" });
-  scaricaBlob(nero.blob, `${categoria.chiave}-nero${suffisso}.png`);
+  const fuori = { nero: { blob: nero.blob, nome: `${categoria.chiave}-nero${suffisso}.png` }, bianco: null, base: `${categoria.chiave}${suffisso}` };
   if (categoria.richiede_bianco && categoria.logo_bianco_path) {
     const bianco = await componiLogoPng({ ...comuni, percorsoLogo: categoria.logo_bianco_path, variante: "bianco", larghezzaRiferimento: nero.larghezza });
-    scaricaBlob(bianco.blob, `${categoria.chiave}-bianco${suffisso}.png`);
+    fuori.bianco = { blob: bianco.blob, nome: `${categoria.chiave}-bianco${suffisso}.png` };
   }
+  return fuori;
+}
+
+async function riscaricaLogoGenerato(riga, loghiCategorie, loghiImpostazioni) {
+  const { nero, bianco } = await componiLoghiGenerati(riga, loghiCategorie, loghiImpostazioni);
+  scaricaBlob(nero.blob, nero.nome);
+  if (bianco) scaricaBlob(bianco.blob, bianco.nome);
 }
 
 async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, categoria, famigliaNome, famigliaNumero, larghezzaRiferimento, ombraNome, ombraNumero }) {
