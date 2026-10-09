@@ -339,10 +339,18 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
     leggiImmaginiProdotti().then(setImmagini).catch(() => setImmagini({}));
   }, []);
 
+  // TUTTI quelli che corrispondono, non i primi otto.
+  //
+  // Il taglio a otto era comodo finche' si cercava un nome preciso: con
+  // "extension box" i risultati sono decine, tutti uguali tranne la
+  // misura, e quello che serviva poteva stare al nono posto senza che
+  // nulla lo dicesse. Ora ci sono tutti e l'elenco scorre dentro di se'
+  // invece di allungare la pagina.
   const trovati = useMemo(() => {
     const q = cerca.trim().toLowerCase();
     if (q.length < 2) return [];
-    return (prodotti || []).filter((p) => String(p.nome || "").toLowerCase().includes(q)).slice(0, 8);
+    return (prodotti || []).filter((p) => String(p.nome || "").toLowerCase().includes(q))
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "it", { numeric: true }));
   }, [cerca, prodotti]);
 
   // Il nome come si chiama OGGI. Sulla riga ne resta scritto uno, da
@@ -509,11 +517,24 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
         }}>{msg.testo}</div>
       )}
 
+      {/* AGGIUNGERE e CERCARE sono due gesti diversi e avevano tre
+          caselle identiche una sotto l'altra: chi guardava non poteva
+          sapere quale faceva cosa. Questi due stanno in un riquadro col
+          suo titolo; la ricerca dentro l'elenco sta sotto, staccata e
+          vestita da ricerca. */}
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "12px 14px 4px", marginBottom: 18 }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Aggiungi materiale</div>
       <Field label="Cerca un prodotto a catalogo">
         <input style={inputStyle} value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="scrivi almeno due lettere…" />
       </Field>
       {trovati.length > 0 && (
         <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, marginBottom: 14, overflow: "hidden" }}>
+          {/* quanti sono, prima di scorrere: con decine di misure quasi
+              uguali sapere che sono quarantadue cambia come si cerca */}
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, padding: "7px 12px", background: BG, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            {trovati.length} trovat{trovati.length === 1 ? "o" : "i"}
+          </div>
+          <div style={{ maxHeight: 320, overflowY: "auto" }}>
           {trovati.map((p) => {
             const d = disponibile(p.id);
             return (
@@ -528,6 +549,7 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
               </button>
             );
           })}
+          </div>
         </div>
       )}
 
@@ -539,17 +561,29 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
         </div>
         <div style={{ marginBottom: 14 }}><Button variant="ghost" onClick={aggiungiVoce} disabled={!nomeLibero.trim()}>Aggiungi</Button></div>
       </div>
+      </div>
 
       {righe.length === 0 && <Vuoto>Non c'è ancora niente da portare.</Vuoto>}
 
       {righe.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-          <input
-            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 0 }}
-            value={filtroElenco} onChange={(e) => setFiltroElenco(e.target.value)}
-            placeholder="Cerca fra quelli già in elenco…"
-          />
-          <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 1, whiteSpace: "nowrap" }}>Nell'elenco</span>
+          <span style={{ position: "relative", flex: "1 1 200px", minWidth: 0, display: "flex", alignItems: "center" }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round"
+              style={{ position: "absolute", left: 11, pointerEvents: "none" }}>
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box", paddingLeft: 33, background: BG_CHIARO, borderRadius: 999 }}
+              value={filtroElenco} onChange={(e) => setFiltroElenco(e.target.value)}
+              placeholder="filtra per nome…"
+            />
+            {filtroElenco.trim() && (
+              <button type="button" onClick={() => setFiltroElenco("")} title="Togli il filtro"
+                style={{ position: "absolute", right: 8, width: 22, height: 22, borderRadius: "50%", border: "none", background: "transparent", color: MUTED, cursor: "pointer", ...fontBody, fontSize: 15, lineHeight: 1 }}>×</button>
+            )}
+          </span>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: filtroElenco.trim() ? NAVY : MUTED, whiteSpace: "nowrap" }}>
             {filtroElenco.trim()
               ? `${gruppi.reduce((n, g) => n + g.righe.length, 0)} di ${righe.length}`
               : `${righe.length} prodott${righe.length === 1 ? "o" : "i"}`}
