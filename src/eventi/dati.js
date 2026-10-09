@@ -261,3 +261,44 @@ export async function segnaRientro({ righe, prodottiPerId, utente = null, nomeEv
   }
   return { mosse, errori };
 }
+
+// --- le categorie dei prodotti, per raggruppare l'elenco --------------------
+
+// Un prodotto puo' stare in piu' categorie; per metterlo in UNA riga di
+// elenco ne serve una sola. Si prende la piu' specifica — quella con un
+// padre — e a parita' la prima per `ordine` e poi per nome: una regola
+// qualunque va bene purche' sia sempre la stessa, o lo stesso prodotto
+// salterebbe di gruppo a ogni apertura.
+export async function leggiCategoriePrincipali() {
+  const [cat, coll] = await Promise.all([
+    supabase.from("categorie_prodotti").select("id, nome, ordine, categoria_padre_id"),
+    supabase.from("prodotti_categorie").select("prodotto_id, categoria_id"),
+  ]);
+  const categorie = cat.data || [];
+  const perId = new Map(categorie.map((c) => [c.id, c]));
+  const peso = (c) => [c.categoria_padre_id ? 0 : 1, c.ordine ?? 9999, String(c.nome || "")];
+  const principale = {};
+  (coll.data || []).forEach((r) => {
+    const c = perId.get(r.categoria_id);
+    if (!c) return;
+    const gia = principale[r.prodotto_id];
+    if (!gia) { principale[r.prodotto_id] = c; return; }
+    const a = peso(c), b = peso(gia);
+    if (a[0] !== b[0] ? a[0] < b[0] : a[1] !== b[1] ? a[1] < b[1] : a[2].localeCompare(b[2]) < 0) {
+      principale[r.prodotto_id] = c;
+    }
+  });
+  return { categorie, principale };
+}
+
+// La prima foto di ogni prodotto, per metterla in testa alla riga come
+// nei listini. Si prende quella con l'ordine piu' basso — la stessa che
+// il magazzino mostra in miniatura — e se non ce n'e' nessuna resta il
+// foto_url scritto sull'anagrafica.
+export async function leggiImmaginiProdotti() {
+  const { data } = await supabase.from("prodotti_immagini").select("prodotto_id, url, ordine");
+  const per = {};
+  [...(data || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0))
+    .forEach((im) => { if (!per[im.prodotto_id]) per[im.prodotto_id] = im.url; });
+  return per;
+}

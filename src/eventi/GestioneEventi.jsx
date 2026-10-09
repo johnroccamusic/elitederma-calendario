@@ -13,6 +13,7 @@ import {
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
   periodoEvento, quantiGiorni, usciteAllEvento,
   impegniMagazzino, segnaPartito, segnaRientro, tieneGiacenza,
+  leggiCategoriePrincipali, leggiImmaginiProdotti,
 } from "./dati.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
@@ -308,6 +309,9 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
   const [righe, setRighe] = useState(null);
   const [uscite, setUscite] = useState({ venduto: {}, omaggiato: {} });
   const [impegni, setImpegni] = useState({ carrelli: {}, perEvento: {} });
+  // la categoria con cui ogni prodotto si raggruppa, e la sua foto
+  const [categorie, setCategorie] = useState({ principale: {} });
+  const [immagini, setImmagini] = useState({});
   const [cerca, setCerca] = useState("");
   const [nomeLibero, setNomeLibero] = useState("");
   const [inCorso, setInCorso] = useState("");
@@ -325,6 +329,10 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
     impegniMagazzino().then(setImpegni).catch(() => setImpegni({ carrelli: {}, perEvento: {} }));
   };
   useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
+  useEffect(() => {
+    leggiCategoriePrincipali().then(setCategorie).catch(() => setCategorie({ principale: {} }));
+    leggiImmaginiProdotti().then(setImmagini).catch(() => setImmagini({}));
+  }, []);
 
   const trovati = useMemo(() => {
     const q = cerca.trim().toLowerCase();
@@ -413,6 +421,50 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
     setInCorso(""); setAvanzamento(null);
   }
 
+  // L'ELENCO RAGGRUPPATO PER CATEGORIA.
+  //
+  // Ottantaquattro righe di fila sono un muro: per reparto si cerca con
+  // l'occhio invece che scorrendo. Dentro ogni gruppo l'ordine resta
+  // quello in cui le righe sono state aggiunte, che e' l'ordine con cui
+  // si prepara lo scatolone.
+  //
+  // Due gruppi non vengono da una categoria: le voci scritte a mano, che
+  // a catalogo non ci sono proprio, e i prodotti che una categoria non
+  // ce l'hanno. Stanno in fondo col loro nome — in mezzo agli altri
+  // confonderebbero chi cerca un reparto.
+  const gruppi = useMemo(() => {
+    const per = new Map();
+    const gruppoDi = (r) => {
+      if (!r.prodotto_id) return { chiave: "__libere", nome: "Voci libere", coda: 3 };
+      const c = categorie.principale?.[r.prodotto_id];
+      if (!c) return { chiave: "__senza", nome: "Senza categoria", coda: 2 };
+      return { chiave: c.id, nome: c.nome, coda: 0, dentro: c.ordine ?? 9999 };
+    };
+    (righe || []).forEach((r) => {
+      const g = gruppoDi(r);
+      if (!per.has(g.chiave)) per.set(g.chiave, { ...g, righe: [] });
+      per.get(g.chiave).righe.push(r);
+    });
+    return [...per.values()].sort((a, b) => (a.coda !== b.coda ? a.coda - b.coda
+      : (a.dentro ?? 0) !== (b.dentro ?? 0) ? (a.dentro ?? 0) - (b.dentro ?? 0)
+      : String(a.nome).localeCompare(String(b.nome))));
+  }, [righe, categorie]);
+
+  // la foto in testa alla riga, come nei listini: dentro per intero su
+  // fondo bianco, perche' quasi tutte sono verticali e ritagliate al
+  // quadrato mostrerebbero solo il manico
+  const foto = (r) => {
+    const p = r.prodotto_id ? perId.get(r.prodotto_id) : null;
+    const url = (r.prodotto_id && immagini[r.prodotto_id]) || p?.foto_url || null;
+    return (
+      <span style={{ width: 34, height: 34, borderRadius: 9, background: url ? "#fff" : BG, border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, padding: url ? 2 : 0 }}>
+        {url
+          ? <img src={url} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+          : <span style={{ ...fontBody, fontSize: 14, color: MUTED }}>·</span>}
+      </span>
+    );
+  };
+
   if (righe === null) return <Vuoto>Carico…</Vuoto>;
 
   return (
@@ -482,7 +534,21 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
 
       {righe.length === 0 && <Vuoto>Non c'è ancora niente da portare.</Vuoto>}
 
-      {righe.map((r) => {
+      {gruppi.map((g) => (
+        <div key={g.chiave} style={{ marginBottom: 14 }}>
+          {/* la barra del reparto: sta attaccata alle sue righe e si
+              riconosce da lontano, senza doverla leggere */}
+          <div style={{
+            ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1,
+            background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10,
+            padding: "7px 12px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+          }}>
+            <span style={{ flex: 1, minWidth: 0 }}>{g.nome}</span>
+            <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, letterSpacing: 0 }}>
+              {g.righe.length} prodott{g.righe.length === 1 ? "o" : "i"}
+            </span>
+          </div>
+          {g.righe.map((r) => {
         const portata = r.quantita_portata == null ? null : Number(r.quantita_portata);
         const rientrata = r.quantita_rientrata == null ? null : Number(r.quantita_rientrata);
         const vendutoQui = r.prodotto_id ? (uscite.venduto[r.prodotto_id] || 0) : 0;
@@ -508,7 +574,8 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
              sotto al nome, che e' l'unico modo di tenerle leggibili. */
           <div key={r.id} style={{ padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ flex: "1 1 170px", minWidth: 0 }}>
+              <span style={{ alignSelf: "center", display: "inline-flex" }}>{foto(r)}</span>
+              <span style={{ flex: "1 1 150px", minWidth: 0 }}>
                 <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
                   {nomeVivo(r)}
                   {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, marginLeft: 7 }}>a catalogo</span>}
@@ -561,7 +628,9 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
             )}
           </div>
         );
-      })}
+          })}
+        </div>
+      ))}
     </>
   );
 }
