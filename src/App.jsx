@@ -57334,9 +57334,12 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
                       allievi e quanti pezzi si portano via. 5 aghi a testa
                       per 5 allievi fanno 25 impegnati, e allora uno stock
                       di 20 si legge da solo */}
-                  {r.allieviConsiderati > 0 && (
+                  {/* il blocco si apre anche quando gli allievi sono zero:
+                      un prodotto puo' servire solo a un evento, e prima in
+                      quel caso non compariva nessun fabbisogno */}
+                  {(r.allieviConsiderati > 0 || r.fabbisognoTotale > 0) && (
                     <span
-                      title="Gli allievi dei corsi futuri che concorrono a questo fabbisogno, e i pezzi che serviranno in tutto"
+                      title="Quanti pezzi servono in tutto, e a chi: i kit degli iscritti ai corsi futuri e il materiale degli eventi in programma"
                       style={{ ...fontBody, fontSize: 12.5, whiteSpace: "nowrap", flexShrink: 0, textAlign: "center", minWidth: 118 }}
                     >
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
@@ -57344,6 +57347,14 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
                         {r.allieviConsiderati} alliev{r.allieviConsiderati === 1 ? "o" : "i"}
                       </span>
                       <span style={{ display: "block", color: MUTED, marginTop: 2 }}>quantità impegnata {r.fabbisognoTotale || 0}</span>
+                      {/* da dove viene: i kit dei corsi o il materiale di
+                          un evento. Sono due conti diversi e si leggono
+                          separati */}
+                      {r.fabbisognoEventi > 0 && (
+                        <span style={{ display: "block", color: "#8A6D1D", marginTop: 1, fontSize: 11 }}>
+                          di cui {r.fabbisognoCorsi} corsi · {r.fabbisognoEventi} eventi
+                        </span>
+                      )}
                     </span>
                   )}
                   <span style={{ ...fontBody, fontSize: 12.5, whiteSpace: "nowrap", flexShrink: 0, textAlign: "center", minWidth: 96 }}>
@@ -58005,8 +58016,10 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
       Object.entries(materialiPerEvento[ev.id] || {}).forEach(([prodottoId, quantita]) => {
         const p = prodottiPerId[prodottoId];
         if (!p || p.giacenza_propria === false || p.conta_magazzino === false) return;
-        const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, mancante: 0, allievi: 0, dataCritica: null, edizioneCriticaId: null, eventoCritico: null, richieste: [] });
+        const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, fabbisognoCorsi: 0, fabbisognoEventi: 0, eventi: [], mancante: 0, allievi: 0, dataCritica: null, edizioneCriticaId: null, eventoCritico: null, richieste: [] });
         riga.fabbisogno += quantita;
+        riga.fabbisognoEventi += quantita;
+        riga.eventi.push({ nome: ev.nome || "un evento", data: ev.data_inizio, quantita });
         riga.richieste.push({ data: ev.data_inizio, quantita });
         const manca = preleva(prodottoId, quantita);
         if (manca > 0) {
@@ -58034,8 +58047,9 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
       // un prodotto senza giacenza propria (bundle virtuale, vetrina) non
       // ha uno stock da esaurire: si scarica dai suoi componenti altrove
       if (!p || p.giacenza_propria === false || p.conta_magazzino === false) return;
-      const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, mancante: 0, allievi: 0, dataCritica: null, edizioneCriticaId: null, eventoCritico: null, richieste: [] });
+      const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, fabbisognoCorsi: 0, fabbisognoEventi: 0, eventi: [], mancante: 0, allievi: 0, dataCritica: null, edizioneCriticaId: null, eventoCritico: null, richieste: [] });
       riga.fabbisogno += quantita;
+      riga.fabbisognoCorsi += quantita;
       riga.allievi += (allieviPerProdotto || {})[prodottoId] || 0;
       riga.richieste.push({ data: cd.data_inizio, quantita });
       const manca = preleva(prodottoId, quantita);
@@ -58184,6 +58198,14 @@ function pianoRiordino({ prodottiShop, risultato, oggi }) {
     daOrdinare.push({
       prodotto: p, criterio, perData, perSoglia, disponibile,
       fabbisognoTotale: previsione?.fabbisogno || 0,
+      // la stessa cifra divisa in due: quanto lo chiedono i kit degli
+      // iscritti e quanto gli eventi in programma. Senza, chi legge
+      // "servono 45" non puo' sapere da dove vengono, e il numero non
+      // torna mai con quello scritto nella scheda di un evento — che
+      // parla solo di se stesso
+      fabbisognoCorsi: previsione?.fabbisognoCorsi || 0,
+      fabbisognoEventi: previsione?.fabbisognoEventi || 0,
+      eventiRichiedenti: previsione?.eventi || [],
       // quanti ne mancano DAVVERO: il fabbisogno dei kit degli iscritti
       // alle edizioni future, meno quello che c'e' gia' in magazzino.
       // E' il numero che serve a chi ordina, e fino al 03/10/2026 non
@@ -58529,6 +58551,16 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
   const inRitardo = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo");
   const urgenti = piano.daOrdinare.filter((r) => r.perData?.stato === "urgente");
   const soloSoglia = piano.daOrdinare.filter((r) => !r.perData && r.perSoglia);
+  // LE RIGHE CHE MANCAVANO.
+  //
+  // Un prodotto la cui data limite d'ordine e' oltre i sette giorni ha
+  // stato "ok": finiva in piano.daOrdinare e la pagina non lo disegnava
+  // da nessuna parte. Con la Fiera di Napoli in calendario erano 27
+  // righe su 59 — "vado sotto di molti pezzi e ne vedo solo alcuni", ed
+  // era esattamente cosi'. Un prodotto che manchera' e' da ordinare
+  // anche se c'e' tempo: su ogni riga c'e' gia' scritto entro quando, e
+  // i conti in cima continuano a separare i ritardi dagli urgenti.
+  const piuAvanti = piano.daOrdinare.filter((r) => r.perData?.stato === "ok");
   const coloreSemaforo = inRitardo.length ? "#C0392B" : (urgenti.length || risultato.dataCriticaComplessiva) ? "#B8860B" : "#2E7D32";
   const sfondoSemaforo = inRitardo.length ? "#FBE4E1" : (urgenti.length || risultato.dataCriticaComplessiva) ? "#FBF1D9" : "#E3F3E5";
 
@@ -58564,7 +58596,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
   // stesso fornitore sono un ordine solo, non cinque
   const perFornitore = useMemo(() => {
     const gruppi = new Map();
-    [...inRitardo, ...urgenti, ...soloSoglia]
+    [...inRitardo, ...urgenti, ...soloSoglia, ...piuAvanti]
       // quello che e' gia' stato ordinato non e' piu' "da ordinare": e'
       // sceso nella lista di sotto, in attesa che arrivi
       .filter((r) => !ordineApertoPerProdotto[r.prodotto.id])
@@ -58574,6 +58606,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
         gruppi.get(chiave).push(r);
       });
     return [...gruppi.entries()];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [piano, ordineApertoPerProdotto]);
 
   // In attesa di ricezione: gli ordini dichiarati e non ancora arrivati,
@@ -59097,6 +59130,33 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                     <div style={{ ...fontBody, fontSize: 10, color: NAVY, marginTop: 4, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
                       <IconaCalendarioCard size={11} /> {fmtData(perData.dataLimite)}
                     </div>
+                  </div>
+                )}
+
+                {/* SERVONO PER: da dove viene il fabbisogno.
+                    Senza questa colonna il numero dell'Advisor non torna
+                    mai con quello scritto nella scheda di un evento — e
+                    non torna per un motivo giusto: li' si guarda solo
+                    quell'evento, qui tutto il calendario insieme, scorta
+                    minima compresa. Scritto in due pezzi si capisce. */}
+                {(r.fabbisognoCorsi > 0 || r.fabbisognoEventi > 0) && sep}
+                {(r.fabbisognoCorsi > 0 || r.fabbisognoEventi > 0) && (
+                  <div style={{ flex: "0 0 auto", textAlign: "center", minWidth: 104 }}
+                    title={[
+                      r.fabbisognoCorsi > 0 ? `${r.fabbisognoCorsi} pz per i kit degli iscritti ai corsi futuri` : null,
+                      ...(r.eventiRichiedenti || []).map((e) => `${e.quantita} pz per ${e.nome}`),
+                    ].filter(Boolean).join("\n")}>
+                    <div style={eti}>servono per</div>
+                    {r.fabbisognoCorsi > 0 && (
+                      <div style={{ ...fontBody, fontSize: 11.5, color: NAVY, lineHeight: 1.35 }}>
+                        <b style={{ ...fontDisplay, fontSize: 14, fontWeight: 800 }}>{r.fabbisognoCorsi}</b> corsi
+                      </div>
+                    )}
+                    {r.fabbisognoEventi > 0 && (
+                      <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", lineHeight: 1.35 }}>
+                        <b style={{ ...fontDisplay, fontSize: 14, fontWeight: 800 }}>{r.fabbisognoEventi}</b> eventi
+                      </div>
+                    )}
                   </div>
                 )}
 
