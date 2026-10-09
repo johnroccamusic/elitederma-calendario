@@ -499,53 +499,61 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
         const chiesti = Number(r.quantita) || 0;
         const scoperti = d ? Math.max(0, chiesti - scaricata - d.libera) : 0;
         return (
-          <div key={r.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
-                {nomeVivo(r)}
-                {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginLeft: 8 }}>a catalogo</span>}
-                {scaricata > 0 && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#2E7D32", marginLeft: 8 }}>{scaricata} usciti dal magazzino</span>}
+          /* TUTTO SU UNA RIGA.
+             Il nome prende lo spazio che resta, le quantita' ne
+             occupano tre cifre e basta. Prima il nome stava su una riga
+             sua e sotto quattro caselle larghe un quarto di schermo:
+             dieci prodotti erano trenta righe, e per leggerne uno
+             bisognava scorrere. Da telefono le caselle vanno a capo
+             sotto al nome, che e' l'unico modo di tenerle leggibili. */
+          <div key={r.id} style={{ padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ flex: "1 1 170px", minWidth: 0 }}>
+                <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                  {nomeVivo(r)}
+                  {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, marginLeft: 7 }}>a catalogo</span>}
+                  {scaricata > 0 && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", marginLeft: 7 }}>{scaricata} fuori</span>}
+                </span>
+                {/* quanto se ne puo' ancora prendere, sulla stessa riga
+                    del nome: era un blocco di tre righe sotto */}
+                {d && (
+                  <span style={{ display: "block", ...fontBody, fontSize: 10.5, color: scoperti > 0 ? "#C0392B" : MUTED, marginTop: 2, lineHeight: 1.35 }}>
+                    {d.libera} liberi
+                    {d.totale > 0 && ` (${d.giacenza} in casa, −${d.totale} impegnati)`}
+                    {scoperti > 0 && <b> · ne mancano {scoperti}</b>}
+                  </span>
+                )}
               </span>
-              <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
               {[
                 ["Da portare", "quantita", r.quantita],
                 ["Partito", "quantita_portata", r.quantita_portata],
                 ["Rientrato", "quantita_rientrata", r.quantita_rientrata],
               ].map(([etichetta, campo, valore]) => (
-                <label key={campo} style={{ flex: "1 1 92px", minWidth: 0 }}>
-                  <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>{etichetta}</span>
+                <label key={campo} style={{ flex: "0 0 auto", width: 78 }}>
+                  <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{etichetta}</span>
                   <input
-                    type="number" min="0" step="1" style={{ ...campoRiga, width: "100%", boxSizing: "border-box", textAlign: "right" }}
+                    type="number" min="0" step="1"
+                    style={{ ...campoRiga, width: "100%", boxSizing: "border-box", textAlign: "right", padding: "6px 6px", fontSize: 13 }}
                     defaultValue={valore ?? ""}
                     onBlur={(e) => {
                       const v = e.target.value === "" ? null : Number(e.target.value);
                       if (v !== (valore == null ? null : Number(valore))) salvaRiga("eventi_materiali", r.id, { [campo]: v }).then(ricarica);
                     }}
                   />
-                  {/* sotto "Da portare" si legge quanti ce ne sono davvero
-                      liberi: la giacenza meno i carrelli sospesi e meno
-                      quello che un altro evento ha gia' prenotato */}
-                  {campo === "quantita" && d && (
-                    <span style={{ display: "block", ...fontBody, fontSize: 10.5, color: scoperti > 0 ? "#C0392B" : MUTED, marginTop: 3, lineHeight: 1.4 }}>
-                      {d.libera} liberi in magazzino
-                      {d.totale > 0 && <span style={{ display: "block", color: MUTED }}>({d.giacenza} in casa, −{d.totale} impegnati{d.daiCarrelli > 0 ? ` · ${d.daiCarrelli} nei carrelli sospesi` : ""}{d.daAltriEventi > 0 ? ` · ${d.daAltriEventi} ad altri eventi` : ""})</span>}
-                      {scoperti > 0 && <span style={{ display: "block", fontWeight: 700 }}>ne mancano {scoperti}</span>}
-                    </span>
-                  )}
                 </label>
               ))}
-              <span style={{ flex: "1 1 92px", minWidth: 0 }}>
-                <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Uscito al POS</span>
-                <span style={{ display: "block", ...fontBody, fontSize: 14, fontWeight: 700, color: (vendutoQui + omaggiatoQui) > 0 ? "#2E7D32" : MUTED, textAlign: "right", padding: "8px 10px" }}>
+              <span style={{ flex: "0 0 auto", width: 54, textAlign: "right" }} title={omaggiatoQui > 0 ? `${vendutoQui} venduti e ${omaggiatoQui} in omaggio` : "Venduto al POS all'evento"}>
+                <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap" }}>Al POS</span>
+                <span style={{ display: "block", ...fontBody, fontSize: 13.5, fontWeight: 700, color: (vendutoQui + omaggiatoQui) > 0 ? "#2E7D32" : MUTED, padding: "6px 0" }}>
                   {vendutoQui + omaggiatoQui}
-                  {omaggiatoQui > 0 && <span style={{ display: "block", ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#8A6D1D" }}>di cui {omaggiatoQui} in omaggio</span>}
                 </span>
+              </span>
+              <span style={{ flex: "0 0 auto", paddingBottom: 4 }}>
+                <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
               </span>
             </div>
             {mancante != null && mancante !== 0 && (
-              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 5 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>
                 {mancante > 0
                   ? `Non torna: ${mancante} pz partiti che non sono né rientrati né usciti al POS.`
                   : `Non torna: sono rientrati ${-mancante} pz più di quanti ne fossero partiti.`}
