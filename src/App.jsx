@@ -54294,7 +54294,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
 
 // sicurezzaPunti, pctQuotaColonna ed euroQuota arrivano dalla pagina: sono
 // le percentuali scritte nei titoli delle colonne "Sicurezza" e "Quota"
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, margineOperativoPct = MARGINE_OPERATIVO_DEFAULT, moltiplicatoreConsigliato = MOLT_CONSIGLIATO_DEFAULT, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
+function RigaProdottoMagazzino({ prodotto: p, fotoUrl = null, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina, onOrdina, ordineAperto, colonne, mostraContanti = false, evidenziata = false, incidenzaCostiPct = INCIDENZA_COSTI_DEFAULT, onIncidenzaCosti = null, sicurezzaPunti = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, margineOperativoPct = MARGINE_OPERATIVO_DEFAULT, moltiplicatoreConsigliato = MOLT_CONSIGLIATO_DEFAULT, pctQuotaColonna = (i) => QUOTE_COLONNE_PUNTI_DEFAULT[i], euroQuota = (punti, i) => (punti != null ? round2((punti * QUOTE_COLONNE_PUNTI_DEFAULT[i]) / 100) : null) }) {
   // la percentuale di sicurezza di QUESTO prodotto: si scrive nella cella
   // "Sicurezza" e si salva quando si esce dal campo (o con Invio). Vuota
   // = torna a quella generale
@@ -54445,14 +54445,25 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   const celle = {
     "Prodotto": (
         <td onClick={(e) => onApriModifica(p.id, e.currentTarget.getBoundingClientRect())} title="Clicca per modificare il prodotto" style={{ ...tdTesto, ...fontBody, fontSize: 14.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
-          <span
-            title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
-            style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
-          />
-          <span
-            title={eSfuso(p) ? `Pezzo singolo${p.boxCollegato ? `: esce da "${p.boxCollegato.nome}"` : ""}` : undefined}
-            style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis", color: eSfuso(p) ? ARANCIO_SFUSI : undefined }}
-          >{p.nome}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            {/* la foto, come nei listini: dentro per intero su fondo
+                bianco, perche' quasi tutte sono verticali e ritagliate
+                al quadrato mostrerebbero solo il manico. Il riquadro
+                c'e' anche quando la foto manca, o le righe ballano */}
+            <span style={{ width: 30, height: 30, borderRadius: 8, background: fotoUrl ? "#fff" : BG, border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, padding: fotoUrl ? 2 : 0 }}>
+              {fotoUrl
+                ? <img src={fotoUrl} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                : <IconaScatolaErp size={13} color={MUTED} />}
+            </span>
+            <span
+              title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
+              style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
+            />
+            <span
+              title={eSfuso(p) ? `Pezzo singolo${p.boxCollegato ? `: esce da "${p.boxCollegato.nome}"` : ""}` : undefined}
+              style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis", color: eSfuso(p) ? ARANCIO_SFUSI : undefined }}
+            >{p.nome}</span>
+          </span>
         </td>
     ),
     "Fornitore": (
@@ -56266,7 +56277,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} margineOperativoPct={margineOperativoPct} moltiplicatoreConsigliato={moltiplicatoreConsigliato} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} fotoUrl={immaginePerProdottoMagazzino[p.id] || p.foto_url || null} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} margineOperativoPct={margineOperativoPct} moltiplicatoreConsigliato={moltiplicatoreConsigliato} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={colonneMagazzino.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 15, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>

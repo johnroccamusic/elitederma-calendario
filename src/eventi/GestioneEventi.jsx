@@ -314,6 +314,11 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
   const [immagini, setImmagini] = useState({});
   const [cerca, setCerca] = useState("");
   const [nomeLibero, setNomeLibero] = useState("");
+  // la ricerca DENTRO l'elenco gia' composto: con ottanta righe su
+  // diciassette gruppi, trovare se un prodotto c'e' gia' richiedeva di
+  // scorrere tutto. E' un'altra cosa dalla ricerca a catalogo qui
+  // sopra, che serve ad aggiungerne di nuovi
+  const [filtroElenco, setFiltroElenco] = useState("");
   const [inCorso, setInCorso] = useState("");
   const [avanzamento, setAvanzamento] = useState(null);   // [fatte, totali]
 
@@ -440,7 +445,9 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
       if (!c) return { chiave: "__senza", nome: "Senza categoria", coda: 2 };
       return { chiave: c.id, nome: c.nome, coda: 0, dentro: c.ordine ?? 9999 };
     };
-    (righe || []).forEach((r) => {
+    const q = filtroElenco.trim().toLowerCase();
+    const viste = q ? (righe || []).filter((r) => String(nomeVivo(r) || "").toLowerCase().includes(q)) : (righe || []);
+    viste.forEach((r) => {
       const g = gruppoDi(r);
       if (!per.has(g.chiave)) per.set(g.chiave, { ...g, righe: [] });
       per.get(g.chiave).righe.push(r);
@@ -448,7 +455,8 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
     return [...per.values()].sort((a, b) => (a.coda !== b.coda ? a.coda - b.coda
       : (a.dentro ?? 0) !== (b.dentro ?? 0) ? (a.dentro ?? 0) - (b.dentro ?? 0)
       : String(a.nome).localeCompare(String(b.nome))));
-  }, [righe, categorie]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [righe, categorie, filtroElenco, perId]);
 
   // la foto in testa alla riga, come nei listini: dentro per intero su
   // fondo bianco, perche' quasi tutte sono verticali e ritagliate al
@@ -533,6 +541,24 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
       </div>
 
       {righe.length === 0 && <Vuoto>Non c'è ancora niente da portare.</Vuoto>}
+
+      {righe.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <input
+            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 0 }}
+            value={filtroElenco} onChange={(e) => setFiltroElenco(e.target.value)}
+            placeholder="Cerca fra quelli già in elenco…"
+          />
+          <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>
+            {filtroElenco.trim()
+              ? `${gruppi.reduce((n, g) => n + g.righe.length, 0)} di ${righe.length}`
+              : `${righe.length} prodott${righe.length === 1 ? "o" : "i"}`}
+          </span>
+        </div>
+      )}
+      {righe.length > 0 && gruppi.length === 0 && (
+        <Vuoto>Nessun prodotto in elenco con queste parole.</Vuoto>
+      )}
 
       {gruppi.map((g) => (
         <div key={g.chiave} style={{ marginBottom: 14 }}>

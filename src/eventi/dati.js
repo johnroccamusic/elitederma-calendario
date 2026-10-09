@@ -265,10 +265,20 @@ export async function segnaRientro({ righe, prodottiPerId, utente = null, nomeEv
 // --- le categorie dei prodotti, per raggruppare l'elenco --------------------
 
 // Un prodotto puo' stare in piu' categorie; per metterlo in UNA riga di
-// elenco ne serve una sola. Si prende la piu' specifica — quella con un
-// padre — e a parita' la prima per `ordine` e poi per nome: una regola
-// qualunque va bene purche' sia sempre la stessa, o lo stesso prodotto
-// salterebbe di gruppo a ogni apertura.
+// elenco ne serve una sola, e dev'essere la CATEGORIA MADRE.
+//
+// I colori stanno nelle loro sottocategorie — Corrective, Eyebrows,
+// Lips, Eyeliner, Trico, Kit pigmenti — che sono tutte figlie di "TUTTI
+// I PIGMENTI". Raggruppando per la piu' specifica finivano sparsi in sei
+// gruppi da quattro righe l'uno invece di stare insieme, che e' il modo
+// in cui si prepara uno scatolone: i pigmenti con i pigmenti. Stesso
+// discorso per Aghi Universali sotto Aghi e per le quattro figlie di
+// Lash Extension.
+//
+// Si risale fino alla radice. Quando un prodotto ha due radici diverse
+// si sceglie la prima per `ordine` e poi per nome: una regola qualunque
+// va bene purche' sia sempre la stessa, o lo stesso prodotto salterebbe
+// di gruppo a ogni apertura.
 export async function leggiCategoriePrincipali() {
   const [cat, coll] = await Promise.all([
     supabase.from("categorie_prodotti").select("id, nome, ordine, categoria_padre_id"),
@@ -276,17 +286,27 @@ export async function leggiCategoriePrincipali() {
   ]);
   const categorie = cat.data || [];
   const perId = new Map(categorie.map((c) => [c.id, c]));
-  const peso = (c) => [c.categoria_padre_id ? 0 : 1, c.ordine ?? 9999, String(c.nome || "")];
+  // la radice della catena. Il giro ha un tetto: una categoria che
+  // finisse per essere padre di se' stessa bloccherebbe la pagina
+  const radiceDi = (c) => {
+    let cur = c;
+    for (let i = 0; i < 10 && cur?.categoria_padre_id; i++) {
+      const su = perId.get(cur.categoria_padre_id);
+      if (!su || su.id === cur.id) break;
+      cur = su;
+    }
+    return cur;
+  };
+  const peso = (c) => [c.ordine ?? 9999, String(c.nome || "")];
   const principale = {};
   (coll.data || []).forEach((r) => {
     const c = perId.get(r.categoria_id);
     if (!c) return;
+    const radice = radiceDi(c);
     const gia = principale[r.prodotto_id];
-    if (!gia) { principale[r.prodotto_id] = c; return; }
-    const a = peso(c), b = peso(gia);
-    if (a[0] !== b[0] ? a[0] < b[0] : a[1] !== b[1] ? a[1] < b[1] : a[2].localeCompare(b[2]) < 0) {
-      principale[r.prodotto_id] = c;
-    }
+    if (!gia) { principale[r.prodotto_id] = radice; return; }
+    const a = peso(radice), b = peso(gia);
+    if (a[0] !== b[0] ? a[0] < b[0] : a[1].localeCompare(b[1]) < 0) principale[r.prodotto_id] = radice;
   });
   return { categorie, principale };
 }
