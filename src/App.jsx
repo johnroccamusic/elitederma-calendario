@@ -22624,6 +22624,32 @@ function LoghiMasterPubblicati({ masterId }) {
 // Rifa' e scarica un logo gia' assegnato, tale e quale: stessa categoria,
 // stesso nome, stesso codice. Non consuma nessun numero e non scrive
 // nello storico: e' una ristampa. Il file si perde, il codice no.
+// Come si chiama il file di un logo.
+//
+// Si legge: "Logo PMU Artist nero Italia Di Costanzo.png". Prima era
+// "pmu_artist-nero-APSS0414IT.png": giusto per una macchina, inutile
+// per chi lo riceve su WhatsApp e deve capire al volo di chi e' e quale
+// delle due versioni ha in mano. Il codice non serve nel nome — e'
+// stampato dentro al logo, e si legge nell'elenco.
+//
+// Gli spazi nei nomi dei file vanno bene dappertutto, iOS e Android
+// compresi. Si tolgono solo i caratteri che romperebbero un percorso
+// (barre, due punti) e il trattino lungo dell'etichetta della
+// categoria, che "PMU — Artist" scrive e nessuno vuole in un nome.
+function nomeFileLogo({ categoria, variante, persona, estensione = ".png" }) {
+  // l'etichetta si prende com'e' scritta ("PMU — Artist"): passarla da
+  // toTitleCase farebbe "Pmu". Il ripiego sulla chiave invece si
+  // sistema, perche' li' e' tutto minuscolo con gli underscore
+  const reparto = categoria?.etichetta
+    ? String(categoria.etichetta).replace(/[—–]/g, " ")
+    : toTitleCase(String(categoria?.chiave || "").replace(/_/g, " "));
+  // i caratteri che romperebbero un percorso si tolgono PRIMA di mettere
+  // le maiuscole: "maria/rossi" diventa "Maria Rossi" e non "Maria rossi"
+  const chi = toTitleCase(String(persona || "").replace(/[\\/:*?"<>|]+/g, " ").trim());
+  const pezzi = ["Logo", reparto, variante, chi].filter((x) => x && String(x).trim());
+  return pezzi.join(" ").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() + estensione;
+}
+
 // Rifa' un logo gia' assegnato, tale e quale, e torna i file invece di
 // scaricarli: stessa categoria, stesso nome, stesso codice. Non consuma
 // nessun numero e non scrive nello storico — e' una ristampa. Il file
@@ -22639,13 +22665,17 @@ async function componiLoghiGenerati(riga, loghiCategorie, loghiImpostazioni) {
   const senzaNumero = categoria.chiave === "master" || categoria.chiave === "master_assistant";
   const codice = senzaNumero ? "" : (riga.codice || "");
   const nome = String(riga.allieva_nome || "").trim().toUpperCase();
-  const suffisso = codice ? `-${codice}` : `-${nomeFileSicuro(nome).baseSicura}`;
   const comuni = { nomeTesto: nome, codiceTesto: codice, categoria, famigliaNome: "loghiFontNomeGen", famigliaNumero: "loghiFontNumeroGen", ombraNome: ombraLogoDi(loghiImpostazioni, "nome"), ombraNumero: ombraLogoDi(loghiImpostazioni, "numero") };
+  const persona = riga.allieva_nome;
   const nero = await componiLogoPng({ ...comuni, percorsoLogo: categoria.logo_nero_path, variante: "nero" });
-  const fuori = { nero: { blob: nero.blob, nome: `${categoria.chiave}-nero${suffisso}.png` }, bianco: null, base: `${categoria.chiave}${suffisso}` };
+  const fuori = {
+    nero: { blob: nero.blob, nome: nomeFileLogo({ categoria, variante: "nero", persona }) },
+    bianco: null,
+    base: nomeFileLogo({ categoria, variante: "", persona, estensione: "" }),
+  };
   if (categoria.richiede_bianco && categoria.logo_bianco_path) {
     const bianco = await componiLogoPng({ ...comuni, percorsoLogo: categoria.logo_bianco_path, variante: "bianco", larghezzaRiferimento: nero.larghezza });
-    fuori.bianco = { blob: bianco.blob, nome: `${categoria.chiave}-bianco${suffisso}.png` };
+    fuori.bianco = { blob: bianco.blob, nome: nomeFileLogo({ categoria, variante: "bianco", persona }) };
   }
   return fuori;
 }
@@ -22912,7 +22942,6 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
       // il logo Master e' un titolo, non una licenza numerata: niente
       // codice progressivo, e il contatore non si tocca
       const codice = senzaNumero ? "" : calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero);
-      const suffisso = codice ? `-${codice}` : `-${nomeFileSicuro(nomeAllieva.trim()).baseSicura}`;
       const fatti = [];
       const nero = await componiLogoPng({
         percorsoLogo: categoria.logo_nero_path,
@@ -22925,7 +22954,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
         ombraNome: ombraLogoDi(loghiImpostazioni, "nome"),
         ombraNumero: ombraLogoDi(loghiImpostazioni, "numero"),
       });
-      fatti.push({ variante: "nero", blob: nero.blob, url: URL.createObjectURL(nero.blob), nomeFile: `${categoria.chiave}-nero${suffisso}.png` });
+      fatti.push({ variante: "nero", blob: nero.blob, url: URL.createObjectURL(nero.blob), nomeFile: nomeFileLogo({ categoria, variante: "nero", persona: nomeAllieva }) });
 
       if (categoria.richiede_bianco) {
         // il bianco usa la stessa calibrazione del nero: qui gli si passa
@@ -22944,7 +22973,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
           ombraNome: ombraLogoDi(loghiImpostazioni, "nome"),
           ombraNumero: ombraLogoDi(loghiImpostazioni, "numero"),
         });
-        fatti.push({ variante: "bianco", blob: bianco.blob, url: URL.createObjectURL(bianco.blob), nomeFile: `${categoria.chiave}-bianco${suffisso}.png` });
+        fatti.push({ variante: "bianco", blob: bianco.blob, url: URL.createObjectURL(bianco.blob), nomeFile: nomeFileLogo({ categoria, variante: "bianco", persona: nomeAllieva }) });
       }
 
       // le anteprime di prima non servono piu': gli indirizzi temporanei si
