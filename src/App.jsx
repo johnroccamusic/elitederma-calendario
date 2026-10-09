@@ -41740,7 +41740,7 @@ function PannelloDatePagamentoMancanti({ righe, corsoById, fornitoriById, costiC
 // Questa pagina serve a svuotarlo in un pomeriggio e poi a sparire: la
 // tessera in home si mostra solo se c'è ancora qualcuno, quindi quando
 // l'ultimo è a posto se ne va da sola e il codice si può togliere.
-function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefinizioni, onApriIscritto, onBack, titolo = "Assegnazione kit" }) {
+function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefinizioni, onApriIscritto, ricarica, onBack, titolo = "Assegnazione kit" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
 
@@ -41757,19 +41757,41 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
     return m;
   }, [kitDefinizioni]);
 
+  // PERCHE' UN ALLIEVO FINISCE QUI. Sono quattro motivi diversi, e
+  // finche' non erano scritti sembravano un errore della pagina: un
+  // allievo col pacchetto giusto nella sua scheda compariva lo stesso,
+  // e chi guardava non poteva sapere che il pacchetto era scritto solo
+  // come NOME e non collegato.
+  //
+  // Il pacchetto vive in due campi: `pacchetto_kit` (il nome, che legge
+  // il magazzino) e `kit_id` (il collegamento, da cui esce il diploma).
+  // Scrivere il primo senza il secondo e' la cosa che succede piu'
+  // spesso, ed e' anche l'unica che si puo' rimettere a posto da sola.
+  const motivoDi = (i, kitPerId, kitPerNomeCorso, corsoId) => {
+    const kit = i?.kit_id ? kitPerId[i.kit_id] : null;
+    if (kit?.diploma_path) return null;                       // tutto a posto
+    if (kit) return { chiave: "senzaDiploma", testo: `"${kit.nome}" non ha un diploma caricato` };
+    if (i?.kit_id) return { chiave: "sparito", testo: "il pacchetto collegato non esiste più" };
+    const nome = String(i?.pacchetto_kit || "").trim();
+    if (!nome) return { chiave: "niente", testo: "nessun pacchetto" };
+    const trovato = kitPerNomeCorso.get(`${corsoId}|${nome.toLowerCase()}`);
+    if (trovato?.diploma_path) return { chiave: "dacollegare", testo: `"${nome}" scritto ma non collegato`, kit: trovato };
+    if (trovato) return { chiave: "senzaDiploma", testo: `"${nome}" non ha un diploma caricato` };
+    return { chiave: "nomeIgnoto", testo: `"${nome}" non è un pacchetto di questo corso` };
+  };
+
   const classi = useMemo(() => {
     const kitPerId = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
-    const senzaPacchetto = (i) => {
-      const kit = i?.kit_id ? kitPerId[i.kit_id] : null;
-      return !kit?.diploma_path;
-    };
+    const kitPerNomeCorso = new Map();
+    (kitDefinizioni || []).forEach((k) => { kitPerNomeCorso.set(`${k.corso_id}|${String(k.nome || "").trim().toLowerCase()}`, k); });
     const perClasse = new Map();
     (iscritti || []).forEach((i) => {
-      if (!senzaPacchetto(i)) return;
       const cd = (corsiDate || []).find((x) => x.id === i.corso_data_id);
       if (!cd) return;
+      const motivo = motivoDi(i, kitPerId, kitPerNomeCorso, cd.corso_id);
+      if (!motivo) return;
       if (!perClasse.has(cd.id)) perClasse.set(cd.id, { cd, allievi: [] });
-      perClasse.get(cd.id).allievi.push(i);
+      perClasse.get(cd.id).allievi.push({ ...i, motivo });
     });
     return [...perClasse.values()]
       .map((g) => ({
@@ -41789,6 +41811,27 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
   }, [iscritti, corsiDate, corsi, location, kitDefinizioni, oggi]);
 
   const quanti = classi.reduce((s, g) => s + g.allievi.length, 0);
+  // quelli che si sistemano da soli: il nome c'e' e corrisponde a un
+  // pacchetto del loro corso, manca solo il collegamento
+  const daCollegare = classi.flatMap((g) => g.allievi.filter((i) => i.motivo?.chiave === "dacollegare"));
+  const [collegando, setCollegando] = useState(false);
+  const [esito, setEsito] = useState("");
+  async function collegaTutti() {
+    if (daCollegare.length === 0) return;
+    if (!window.confirm(`Collegare il pacchetto a ${daCollegare.length} allievi?\n\nIl nome c'è già scritto nella loro scheda e corrisponde a un pacchetto del loro corso: si scrive il collegamento, da cui esce il diploma. Non cambia nessun nome e non tocca il magazzino.`)) return;
+    setCollegando(true); setEsito("");
+    let fatti = 0; const errori = [];
+    for (const i of daCollegare) {
+      const { error } = await supabase.from("iscritti").update({ kit_id: i.motivo.kit.id }).eq("id", i.id).select("id");
+      if (error) errori.push(`${i.nome} ${i.cognome}: ${testoErrore(error)}`);
+      else fatti += 1;
+    }
+    setCollegando(false);
+    setEsito(errori.length
+      ? `${fatti} collegati · non riusciti: ${errori.slice(0, 3).join(" · ")}`
+      : `${fatti} allievi collegati: ora il diploma esce.`);
+    ricarica?.(["iscritti"]);
+  }
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -41813,7 +41856,25 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
                 Il diploma viene solo dal pacchetto: senza, a fine corso non esce niente. Clicca un nome, scegli il
                 pacchetto nella sua scheda e salva — sparisce da qui da solo.
                 Le classi già finite non compaiono: lì il momento del diploma è passato.
+                {" "}Sotto ogni nome c'è scritto <b>perché</b> è in elenco: non sono tutti lo stesso caso.
               </div>
+              {/* Quelli che si sistemano da soli. Il pacchetto vive in
+                  due campi — il nome, che legge il magazzino, e il
+                  collegamento, da cui esce il diploma — e scrivere il
+                  primo senza il secondo e' la cosa che succede piu'
+                  spesso: in scheda si vede il pacchetto giusto e il
+                  diploma non uscirebbe. */}
+              {daCollegare.length > 0 && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <span style={{ flex: "1 1 240px", minWidth: 0, ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.55 }}>
+                    <b>{daCollegare.length}</b> hanno già il pacchetto giusto scritto in scheda, ma non collegato: il diploma non uscirebbe.
+                  </span>
+                  <Button onClick={collegaTutti} disabled={collegando}>
+                    {collegando ? "Collego…" : `Collega tutti (${daCollegare.length})`}
+                  </Button>
+                </div>
+              )}
+              {esito && <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: esito.includes("non riusciti") ? "#C0392B" : "#2E7D32", marginTop: 8 }}>{esito}</div>}
             </div>
 
             {classi.map((g) => {
@@ -41837,10 +41898,20 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {g.allievi.map((i) => (
                       <button key={i.id} onClick={() => onApriIscritto(i)} data-niente-ombra
+                        title={i.motivo?.testo}
                         style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY,
                           background: "linear-gradient(180deg, #FFFFFF 0%, #FBF7EF 100%)",
-                          border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "8px 12px", cursor: "pointer" }}>
+                          border: `1px solid ${i.motivo?.chiave === "dacollegare" ? "#EBD9AE" : CREAM_BORDER}`,
+                          borderRadius: 12, padding: "8px 12px", cursor: "pointer", textAlign: "left" }}>
                         {`${i.nome} ${i.cognome}`.toUpperCase()}
+                        {/* il motivo scritto sotto al nome: tre parole
+                            che dicono se e' un dimenticato, un
+                            collegamento mancante o un pacchetto senza
+                            diploma — tre rimedi diversi */}
+                        <span style={{ display: "block", ...fontBody, fontSize: 10.5, fontWeight: 400,
+                          color: i.motivo?.chiave === "dacollegare" ? "#8A6D1D" : MUTED, marginTop: 2, letterSpacing: 0 }}>
+                          {i.motivo?.testo}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -79821,6 +79892,7 @@ export default function App() {
           iscritti={iscritti} corsiDate={corsiDate} corsi={corsi} location={location}
           kitDefinizioni={kitDefinizioni}
           onApriIscritto={apriIscrittoDaAssegnazioneKit}
+          ricarica={fetchDati}
           onBack={() => setView("home")}
         />
       )}
