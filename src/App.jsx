@@ -40487,6 +40487,19 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   const maxBarra = Math.max(1, ...andamentoMensile.flatMap((m) => [m.ricavi, m.costi]));
 
   const sediConDati = location.filter((l) => corsiDate.some((cd) => cd.location_id === l.id && cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine));
+  // DUE ROMA NON SONO LA STESSA ROMA. In elenco compaiono due righe
+  // identiche nel nome — Roma "Sede centrale" e Roma "Uffici centrali",
+  // due Milano, due Napoli, due Udine — e con numeri diversi sembrano un
+  // errore. Dove la citta' si ripete si scrive anche il nome della sede;
+  // dove e' una sola non si aggiunge niente, o si allungherebbe ogni
+  // riga per un problema che li' non c'e'.
+  const cittaRipetute = useMemo(() => {
+    const conta = {};
+    (location || []).forEach((l) => { const k = String(l.nome || "").trim().toLowerCase(); conta[k] = (conta[k] || 0) + 1; });
+    return new Set(Object.keys(conta).filter((k) => conta[k] > 1));
+  }, [location]);
+  const sottoSede = (l) => (cittaRipetute.has(String(l?.nome || "").trim().toLowerCase())
+    ? (l?.nome_sede || l?.indirizzo || null) : null);
   const righeSedi = (sediConDati.length ? sediConDati : location)
     .map((l) => {
       const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById, soloTrascorsi: perCassa });
@@ -40541,35 +40554,35 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
         </div>
       </div>
 
-      {/* i modi di leggere lo stesso periodo, uno per riquadro */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0,1fr))" : "repeat(5, minmax(0,1fr))", gap: isMobile ? 7 : 12, marginBottom: 18 }}>
+      {/* I modi di leggere lo stesso periodo, con il vestito dei
+          segnalatori del resto dell'app: scheda bianca, disco colorato a
+          sinistra, titolo e sotto una riga che dice cosa conta.
+          Erano cinque quadrati alti quanto larghi con l'icona in cima e
+          due righe di testo: tre quarti del riquadro restavano vuoti e
+          la fila si mangiava mezza pagina. */}
+      <div style={stileRigaSegnalatori(isMobile, { marginBottom: 18 })}>
         {[
-          { v: "andamento", l: "Andamento ad oggi", sub: `Dal ${fmtData(dataDa)} a oggi`, Icona: IconaGraficoSu },
-          { v: "prospettiva", l: "Prospettiva di guadagno", sub: `Fino al ${fmtData(dataProspettiva)}`, Icona: IconaTargetRiga },
-          { v: "30giorni", l: "Ultimi 30 giorni", sub: "Finestra mobile", Icona: IconaOrologioCard },
-          { v: "trimestre", l: "Trimestre", sub: "Ultimi 90 giorni", Icona: IconaCalendarioCard },
-          { v: "anno", l: "Anno", sub: "Anno solare intero", Icona: IconaCalendarioCard },
-        ].map((v) => {
-          const attivo = periodo === v.v;
-          return (
-            <button key={v.v} onClick={() => setPeriodo(v.v)}
-              style={{
-                width: "100%", minWidth: 0, boxSizing: "border-box", cursor: "pointer", textAlign: "center",
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-                gap: isMobile ? 4 : 6, padding: isMobile ? "10px 4px" : "14px 10px",
-                borderRadius: isMobile ? 12 : 18,
-                background: attivo ? BG : "#FBF7F0",
-                border: `${attivo ? 2 : 1}px solid ${attivo ? GOLD : CREAM_BORDER}`,
-                aspectRatio: "1 / 1", overflow: "hidden",
-              }}>
-              <span style={{ width: isMobile ? 30 : 46, height: isMobile ? 30 : 46, borderRadius: "50%", flexShrink: 0, background: "#F3E7D2", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <v.Icona size={isMobile ? 16 : 22} color={GOLD} />
-              </span>
-              <span style={{ ...fontDisplay, fontSize: isMobile ? 10.5 : 13, fontWeight: 700, color: NAVY, lineHeight: 1.15, overflowWrap: "anywhere" }}>{v.l}</span>
-              {!isMobile && <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, lineHeight: 1.25, overflowWrap: "anywhere" }}>{v.sub}</span>}
-            </button>
-          );
-        })}
+          { v: "andamento", l: "Andamento ad oggi", sub: `Dal ${fmtData(dataDa)} a oggi`, Icona: IconaGraficoSu, tinta: "#2E7D32" },
+          { v: "prospettiva", l: "Prospettiva di guadagno", sub: `Fino al ${fmtData(dataProspettiva)}`, Icona: IconaTargetRiga, tinta: "#B8860B" },
+          { v: "30giorni", l: "Ultimi 30 giorni", sub: "Finestra mobile", Icona: IconaOrologioCard, tinta: "#6E7391" },
+          { v: "trimestre", l: "Trimestre", sub: "Ultimi 90 giorni", Icona: IconaCalendarioCard, tinta: "#6E7391" },
+          { v: "anno", l: "Anno", sub: "Anno solare intero", Icona: IconaCalendarioCard, tinta: "#6E7391" },
+        ].map((v) => (
+          <RiquadroSegnalatore
+            key={v.v}
+            etichetta={v.l}
+            // qui non c'e' un numero da gridare: il valore e' il periodo
+            // stesso, e la riga sotto dice come si conta
+            valore={v.sub}
+            unita={null}
+            Icona={v.Icona}
+            disco={v.tinta}
+            colore={v.tinta}
+            sfondo={periodo === v.v ? BG : "#FFFFFF"}
+            evidenziato={periodo === v.v}
+            onClick={() => setPeriodo(v.v)}
+          />
+        ))}
       </div>
 
       {/* dire a voce come si sta contando: i due modi danno numeri diversi
@@ -40708,7 +40721,12 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
                         <div style={{ width: 24, height: 24, borderRadius: 7, background: BG, ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           {r.location.nome.slice(0, 2).toUpperCase()}
                         </div>
-                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.location.nome}</span>
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{ display: "block", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.location.nome}</span>
+                          {sottoSede(r.location) && (
+                            <span style={{ display: "block", ...fontBody, fontSize: 10, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>{sottoSede(r.location)}</span>
+                          )}
+                        </span>
                       </div>
                       {r.trend != null ? (
                         <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: r.trend >= 0 ? "#2E7D32" : "#C0392B", flexShrink: 0 }}>{r.trend >= 0 ? "↗" : "↘"} {fmtPctErp(r.trend)}</span>
@@ -40753,7 +40771,14 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
                             <div style={{ width: 26, height: 26, borderRadius: 8, background: BG, ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                               {r.location.nome.slice(0, 2).toUpperCase()}
                             </div>
-                            <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{r.location.nome}</span>
+                            <span style={{ minWidth: 0 }}>
+                              <span style={{ display: "block", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{r.location.nome}</span>
+                              {sottoSede(r.location) && (
+                                <span style={{ display: "block", ...fontBody, fontSize: 10.5, color: MUTED, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 190 }} title={sottoSede(r.location)}>
+                                  {sottoSede(r.location)}
+                                </span>
+                              )}
+                            </span>
                           </div>
                         </td>
                         <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.ricavi)}</td>
@@ -74423,17 +74448,33 @@ function GraficoAndamentoCosti({ punti }) {
     </svg>
   );
 }
+// Quanto costa ogni sede, in euro e in percentuale sul totale.
+//
+// La riga della percentuale leggeva `d.costi`, un campo che non esiste:
+// i due posti che disegnano questa barra passano righe fatte di
+// { sede, totale }. Il conto dava NaN, quindi la percentuale si
+// scriveva "—" e la barra restava vuota su tutte le sedi — un grafico
+// che non ha mai mostrato niente, in silenzio, perche' NaN non rompe
+// niente: passa e basta.
 function BarraCostiPerSede({ dati, totale }) {
   if (dati.length === 0) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun costo registrato nel periodo.</div>;
   return (
     <div>
       {dati.map((d, i) => {
-        const pct = totale > 0 ? (d.costi / totale) * 100 : 0;
+        const euro = Number(d.totale) || 0;
+        const pct = totale > 0 ? (euro / totale) * 100 : 0;
         return (
           <div key={d.sede.id} style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600 }}>
-              <span>{d.sede.nome}</span>
-              <span>{fmtPctErp(pct)}</span>
+            {/* gli EURO, non solo la percentuale. "Roma 34%" non dice
+                se sono tremila o trentamila, e questa e' una pagina di
+                costi: la percentuale resta accanto, piu' piccola, per
+                leggere il peso di una sede sul totale. */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 5, ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600 }}>
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.sede.nome}</span>
+              <span style={{ whiteSpace: "nowrap" }}>
+                {fmtEuroErp2(euro)}
+                <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, marginLeft: 6 }}>{fmtPctErp(pct)}</span>
+              </span>
             </div>
             <div style={{ height: 10, borderRadius: 6, background: BG, overflow: "hidden" }}>
               <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", borderRadius: 6, background: i === 0 ? GOLD : NAVY }} />
