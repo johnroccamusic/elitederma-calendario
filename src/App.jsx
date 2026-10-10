@@ -45548,9 +45548,9 @@ function ultimaSpesaDelFornitore(spese, fornitoreId) {
 // quasi mai riguarda di nuovo la stessa edizione: imputarla a quella
 // vecchia sporcherebbe il riepilogo di un corso magari gia' chiuso, e in
 // silenzio.
-function catalogazioneEreditata(ultima) {
+function catalogazioneEreditata(ultima, spese = null, fornitoreId = null) {
   if (!ultima) return {};
-  return {
+  const er = {
     categoriaId: ultima.categoria_id || "",
     sottocategoriaId: ultima.sottocategoria_id || "",
     tipoAmbito: ultima.tipo_ambito || "generale",
@@ -45569,6 +45569,17 @@ function catalogazioneEreditata(ultima) {
     ricorrenza: ultima.ricorrenza || "nessuna",
     ereditataDa: ultima.id,
   };
+  // Quello che l'ultima spesa non sa dire lo sanno quelle prima. Fino a
+  // qui si guardava SOLO la piu' recente: se era entrata vuota da
+  // Fatture in Cloud — e capita spesso — non si ereditava niente, pur
+  // avendo venti spese dello stesso fornitore gia' catalogate alle
+  // spalle. Si risale campo per campo, come fa la scheda dello
+  // Scadenziario.
+  if (spese && fornitoreId) {
+    const piuIndietro = classificazioneConEredita({}, spese, fornitoreId);
+    for (const campo of CAMPI_CLASSIFICAZIONE_EREDITABILI) if (!er[campo] && piuIndietro[campo]) er[campo] = piuIndietro[campo];
+  }
+  return er;
 }
 // La sottopagina dell'allineamento: le coppie movimento-spesa che si
 // somigliano, una per una, con la domanda secca.
@@ -76204,10 +76215,31 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
                     // categoria/sottocategoria di default del fornitore (Anagrafiche):
                     // si propone da sola scegliendo il fornitore, resta comunque
                     // modificabile qui sotto se questa spesa è di un'altra categoria
+                    let catId = categoriaId, sottoId = sottocategoriaId;
                     if (!ambitoBloccato && f?.sottocategoria_id) {
-                      setCategoriaId(f.categoria_id || "");
-                      setSottocategoriaId(f.sottocategoria_id);
+                      catId = f.categoria_id || "";
+                      sottoId = f.sottocategoria_id;
+                      setCategoriaId(catId);
+                      setSottocategoriaId(sottoId);
                     }
+                    // LA CLASSIFICAZIONE SEGUE IL FORNITORE.
+                    // Che tipo di costo e' — fisso o variabile, quanto e'
+                    // riducibile, quanto e' essenziale — per lo stesso
+                    // fornitore non cambia quasi mai: Meta e' Meta ogni
+                    // volta. Si prende dall'ultima spesa di questo
+                    // fornitore gia' catalogata, risalendo finche' serve,
+                    // e in mancanza dai predefiniti della categoria.
+                    // Riempie solo le caselle vuote: quello che si e' gia'
+                    // scelto a mano non si tocca.
+                    const cat = categoriaDiSottocategoria(costiCategorie, costiSottocategorie, sottoId, catId);
+                    const er = classificazioneConEredita({}, spese, id, cat);
+                    if (!direttoIndiretto && er.direttoIndiretto) setDirettoIndiretto(er.direttoIndiretto);
+                    if (!fissoVariabile && er.fissoVariabile) setFissoVariabile(er.fissoVariabile);
+                    if (!ricorrenteOccasionale && er.ricorrenteOccasionale) setRicorrenteOccasionale(er.ricorrenteOccasionale);
+                    if (!controllabilita && er.controllabilita) setControllabilita(er.controllabilita);
+                    if (!riducibilita && er.riducibilita) setRiducibilita(er.riducibilita);
+                    if (!essenzialita && er.essenzialita) setEssenzialita(er.essenzialita);
+                    if (!responsabileCosto && er.responsabileCosto) setResponsabileCosto(er.responsabileCosto);
                   }}
                 />
               </Field>
@@ -78647,7 +78679,7 @@ export default function App() {
       statoIniziale: "pagata", metodoPagamento: metodoDaMovimentoBanca(m),
       movimentoBancaId: m.id, movimentoDescrizione: m.descrizione, movimentoControparte: controparte,
       ivaPercentuale: ultima ? (ultima.iva_percentuale ?? 0) : 0,
-      ...catalogazioneEreditata(ultima),
+      ...catalogazioneEreditata(ultima, spese, fornitore?.id),
     });
     setAmministrazioneTabIniziale("banca");
     setSpesaRitornoView("amministrazione");
