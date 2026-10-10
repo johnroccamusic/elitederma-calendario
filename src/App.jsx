@@ -40564,8 +40564,19 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
             <input
               type="date"
               value={c.valore || ""}
-              onChange={(e) => c.salva(e.target.value)}
-              title={c.inUso ? "Questa data comanda il periodo che stai guardando" : "Si scrive sempre; conta quando scegli il periodo che la usa"}
+              // TOCCARE UNA DATA LA FA COMANDARE.
+              // Chi scrive in un campo data sta dicendo "voglio vedere da
+              // qui": se quella data non e' quella in uso, il periodo si
+              // sposta da solo su quello che la usa. Prima no, e il
+              // risultato era un campo che accettava il numero senza che
+              // sotto cambiasse una virgola — sembrava che l'app non si
+              // aggiornasse. Il pallino dorato "in uso" non bastava a
+              // spiegarlo: e' successo due volte.
+              onChange={(e) => {
+                c.salva(e.target.value);
+                if (!c.inUso) setPeriodo(c.chiave === "da" ? "andamento" : "prospettiva");
+              }}
+              title={c.inUso ? "Questa data comanda il periodo che stai guardando" : "Scrivendo qui il periodo passa a quello che usa questa data"}
               // Il campo resta nero e pieno anche quando non comanda: si
               // scrive sempre. Era grigio e al 65% di opacita', e nel resto
               // dell'app quello vuol dire "disattivato" — sembrava rotto.
