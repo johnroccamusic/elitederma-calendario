@@ -78330,7 +78330,24 @@ export default function App() {
     setSpesaRitornoView("gestionieventi");
     setView("spesaform");
   }
-  function apriModificaSpesa(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
+  // "Modifica spesa": si torna DA DOVE SI E' ENTRATI, non sempre a Prima
+  // nota cassa.
+  //
+  // Il ritorno era scritto a mano su "inserimentocostiricavi", e finche'
+  // la scheda si apriva solo da li' andava bene. Da quando la si apre
+  // anche da Performance Aziendale (Statistiche), correggere la
+  // categoria di una spesa e uscire portava in Prima nota cassa: si
+  // perdeva il punto in cui si stava guardando, senza capire perche'.
+  //
+  // Se si e' gia' dentro la scheda — una spesa aperta da un'altra spesa
+  // — il ritorno di prima si tiene: scriverci "spesaform" vorrebbe dire
+  // uscire e ritrovarsi dentro.
+  function apriModificaSpesa(id) {
+    setSpesaInModifica(id);
+    setSpesaPrefill(null);
+    if (view !== "spesaform") setSpesaRitornoView(view || "inserimentocostiricavi");
+    apriViewProtetta("spesaform");
+  }
   // "Modifica spesa" aperta da una riga già in Amministrazione: al
   // salvataggio "Indietro" deve tornare lì, non a Prima nota cassa
   function apriModificaSpesaDaAmministrazione(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("amministrazione"); apriViewProtetta("spesaform"); }
@@ -79660,7 +79677,19 @@ export default function App() {
           spese={spese} speseAttribuzioni={speseAttribuzioni}
           ricarica={fetchDati}
           onBack={() => { if (spesaPrefill?.classeId) { setSpesaPrefill(null); setView("scheda"); } else { setSpesaPrefill(null); setView(spesaRitornoView); } }}
-          titoloPrecedente={spesaPrefill?.classeId ? "Scheda" : spesaRitornoView === "gestionieventi" ? "Evento" : (spesaRitornoView === "amministrazione" ? "Contabilità" : spesaRitornoView === "assegnazionemaster" ? "Operativo corsi" : "Prima nota cassa")}
+          /* il nome scritto sul tasto Indietro: deve dire DOVE si torna.
+             Era una catena di tre casi e tutto il resto finiva su
+             "Prima nota cassa" — da quando la scheda si apre anche da
+             Performance Aziendale, quel tasto mentiva. */
+          titoloPrecedente={spesaPrefill?.classeId ? "Scheda" : ({
+            gestionieventi: "Evento",
+            amministrazione: "Contabilità",
+            assegnazionemaster: "Operativo corsi",
+            inserimentocostiricavi: "Prima nota cassa",
+            dashboardanalisi: "Performance Aziendale",
+            statistiche: "Statistiche",
+            scheda: "Scheda",
+          }[spesaRitornoView] || "Indietro")}
         />
       )}
 
