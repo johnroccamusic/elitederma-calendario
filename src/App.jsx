@@ -40565,8 +40565,12 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
               type="date"
               value={c.valore || ""}
               onChange={(e) => c.salva(e.target.value)}
-              title={c.inUso ? "Questa data comanda il periodo che stai guardando" : "Questa data non conta nel periodo selezionato"}
-              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: c.inUso ? NAVY : MUTED, background: "#fff", border: `1px solid ${c.inUso ? GOLD : CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px", opacity: c.inUso ? 1 : 0.65 }}
+              title={c.inUso ? "Questa data comanda il periodo che stai guardando" : "Si scrive sempre; conta quando scegli il periodo che la usa"}
+              // Il campo resta nero e pieno anche quando non comanda: si
+              // scrive sempre. Era grigio e al 65% di opacita', e nel resto
+              // dell'app quello vuol dire "disattivato" — sembrava rotto.
+              // Che sia in uso o no lo dicono l'etichetta e il bordo.
+              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${c.inUso ? GOLD : CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px" }}
             />
           </div>
         ))}
