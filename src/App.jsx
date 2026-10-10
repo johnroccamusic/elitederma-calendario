@@ -40924,15 +40924,14 @@ function PaginaDashboardAnalisi({
             andamento, e per arrivarci si scorreva al buio. Sono due
             domande diverse — "come sta andando" e "dove stiamo
             spendendo" — e si guardano una alla volta. */}
-        <div style={stileRigaSegnalatori(isMobile, { marginBottom: 22 })}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 6 : 14, maxWidth: isMobile ? 300 : 430, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
           {[
-            { v: "andamento", l: "Andamento", sub: "Ricavi, utile e sedi", Icona: IconaGraficoSu, tinta: "#2E7D32" },
-            { v: "costi", l: "Analisi costi di gestione", sub: "Dove incide di più", Icona: IconaTileCostiRicavi, tinta: "#B8860B" },
+            { v: "andamento", l: "Andamento", Icona: IconaGraficoSu },
+            { v: "costi", l: "Analisi costi di gestione", Icona: IconaTileCostiRicavi },
           ].map((t) => (
-            <RiquadroSegnalatore
-              key={t.v} etichetta={t.l} valore={t.sub} unita={null}
-              Icona={t.Icona} disco={t.tinta} colore={t.tinta}
-              sfondo={sezione === t.v ? BG : "#FFFFFF"} evidenziato={sezione === t.v}
+            <TileHome
+              key={t.v} title={t.l} Icona={t.Icona} etichettaDueRighe
+              evidenziato={sezione === t.v}
               onClick={() => { setSezione(t.v); window.scrollTo(0, 0); }}
             />
           ))}
