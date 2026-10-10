@@ -40500,6 +40500,18 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   }, [location]);
   const sottoSede = (l) => (cittaRipetute.has(String(l?.nome || "").trim().toLowerCase())
     ? (l?.nome_sede || l?.indirizzo || null) : null);
+  // Il margine: quanto resta di quello che e' entrato. Senza ricavi non
+  // esiste — non e' zero, e scriverci 0% direbbe "va malissimo" di una
+  // sede che semplicemente non ha ancora incassato niente.
+  const margineSede = (r) => (r?.ricavi > 0 ? (r.utile / r.ricavi) * 100 : null);
+  // gli stessi tre colori dell'indice di performance per sede, cosi' le
+  // due pagine si leggono con lo stesso occhio
+  const coloreMargine = (m) => (m == null ? MUTED : m < 0 ? "#C0392B" : m >= 15 ? "#2E7D32" : "#B7791F");
+  // Quanto dell'incassato se ne va in costi, sulla sede stessa. E' il
+  // complemento del margine — insieme fanno cento — e i colori si
+  // rovesciano: qui tanto e' brutto.
+  const spesePctSede = (r) => (r?.ricavi > 0 ? (r.costi / r.ricavi) * 100 : null);
+  const coloreSpesePct = (p) => (p == null ? MUTED : p > 100 ? "#C0392B" : p <= 85 ? "#2E7D32" : "#B7791F");
   const righeSedi = (sediConDati.length ? sediConDati : location)
     .map((l) => {
       const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById, soloTrascorsi: perCassa });
@@ -40536,21 +40548,51 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
           restano. */}
       <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? 12 : 16, marginBottom: 12, display: "flex", gap: isMobile ? 14 : 30, flexWrap: "wrap", alignItems: "flex-end" }}>
         {[
-          { chiave: "da", etichetta: "Analisi dal", valore: dataDa, salva: setDataDa },
-          { chiave: "a", etichetta: "Prospettiva fino al", valore: dataProspettiva, salva: setDataProspettiva },
+          // QUALE DELLE DUE DATE CONTA. "Analisi dal" vale solo in
+          // "Andamento ad oggi", "Prospettiva fino al" solo in
+          // "Prospettiva di guadagno", e sulle tre finestre fisse non
+          // conta nessuna delle due. Finche' erano tutte e due accese
+          // allo stesso modo, cambiarne una e non vedere muovere niente
+          // sembrava un difetto: era solo quella sbagliata.
+          { chiave: "da", etichetta: "Analisi dal", valore: dataDa, salva: setDataDa, inUso: periodo === "andamento" },
+          { chiave: "a", etichetta: "Prospettiva fino al", valore: dataProspettiva, salva: setDataProspettiva, inUso: periodo === "prospettiva" },
         ].map((c) => (
           <div key={c.chiave} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{c.etichetta}</div>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: c.inUso ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>
+              {c.etichetta}{c.inUso && <span style={{ color: GOLD }}> · in uso</span>}
+            </div>
             <input
               type="date"
               value={c.valore || ""}
               onChange={(e) => c.salva(e.target.value)}
-              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px" }}
+              title={c.inUso ? "Questa data comanda il periodo che stai guardando" : "Questa data non conta nel periodo selezionato"}
+              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: c.inUso ? NAVY : MUTED, background: "#fff", border: `1px solid ${c.inUso ? GOLD : CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px", opacity: c.inUso ? 1 : 0.65 }}
             />
           </div>
         ))}
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 220px", lineHeight: 1.5, minWidth: 0 }}>
-          Restano impostate: le ritrovi domani e anche aprendo l'app dal telefono.
+        {/* Le tre finestre fisse stanno qui, con le date: sono tutte e
+            cinque la stessa domanda — "su che periodo conto". Erano
+            tessere grandi accanto ai due modi di contare, e sembravano
+            cose dello stesso ordine; non lo sono. */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          {[
+            { v: "30giorni", l: "Ultimi 30 giorni" },
+            { v: "trimestre", l: "Trimestre" },
+            { v: "anno", l: "Anno solare" },
+          ].map((f) => {
+            const attivo = periodo === f.v;
+            return (
+              <button key={f.v} type="button" onClick={() => setPeriodo(f.v)}
+                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: attivo ? "#fff" : NAVY,
+                  background: attivo ? NAVY : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`,
+                  borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                {f.l}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 180px", lineHeight: 1.5, minWidth: 0 }}>
+          Le date restano impostate: le ritrovi domani e anche aprendo l'app dal telefono.
         </div>
       </div>
 
@@ -40564,9 +40606,6 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
         {[
           { v: "andamento", l: "Andamento ad oggi", sub: `Dal ${fmtData(dataDa)} a oggi`, Icona: IconaGraficoSu, tinta: "#2E7D32" },
           { v: "prospettiva", l: "Prospettiva di guadagno", sub: `Fino al ${fmtData(dataProspettiva)}`, Icona: IconaTargetRiga, tinta: "#B8860B" },
-          { v: "30giorni", l: "Ultimi 30 giorni", sub: "Finestra mobile", Icona: IconaOrologioCard, tinta: "#6E7391" },
-          { v: "trimestre", l: "Trimestre", sub: "Ultimi 90 giorni", Icona: IconaCalendarioCard, tinta: "#6E7391" },
-          { v: "anno", l: "Anno", sub: "Anno solare intero", Icona: IconaCalendarioCard, tinta: "#6E7391" },
         ].map((v) => (
           <RiquadroSegnalatore
             key={v.v}
@@ -40735,6 +40774,11 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
                     <div style={{ display: "flex", gap: 14, marginBottom: 8, ...fontBody, fontSize: 11.5 }}>
                       <div><span style={{ color: MUTED }}>Ricavi </span><span style={{ color: NAVY, fontWeight: 700 }}>{fmtEuroErp(r.ricavi)}</span></div>
                       <div><span style={{ color: MUTED }}>Utile </span><span style={{ color: NAVY, fontWeight: 700 }}>{fmtEuroErp(r.utile)}</span></div>
+                      <div><span style={{ color: MUTED }}>Spese </span><span style={{ color: NAVY, fontWeight: 700 }}>{fmtEuroErp(r.costi)}</span></div>
+                    </div>
+                    <div style={{ display: "flex", gap: 14, marginBottom: 8, ...fontBody, fontSize: 11.5 }}>
+                      <div><span style={{ color: MUTED }}>Margine </span><span style={{ color: coloreMargine(margineSede(r)), fontWeight: 700 }}>{fmtPctErp(margineSede(r))}</span></div>
+                      <div><span style={{ color: MUTED }}>Spese </span><span style={{ color: coloreSpesePct(spesePctSede(r)), fontWeight: 700 }}>{fmtPctErp(spesePctSede(r))}</span></div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ flex: 1, height: 6, background: BG, borderRadius: 3, overflow: "hidden" }}>
@@ -40753,7 +40797,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      {[{ c: "sede", l: "Sede" }, { c: "ricavi", l: "Ricavi" }, { c: "utile", l: "Utile" }, { c: "riempimento", l: "Riempimento" }, { c: null, l: "Trend" }].map((th) => (
+                      {[{ c: "sede", l: "Sede" }, { c: "ricavi", l: "Ricavi" }, { c: "utile", l: "Utile" }, { c: "spese", l: "Spese" }, { c: "margine", l: "Margine %" }, { c: "spesepct", l: "Spese %" }, { c: "riempimento", l: "Riempimento" }, { c: null, l: "Trend" }].map((th) => (
                         <ThOrdina key={th.l} campo={th.c} ordine={ordineSedi} onOrdina={cambiaOrdineSedi} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                       ))}
                     </tr>
@@ -40763,6 +40807,9 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
                       sede: (r) => r.location?.nome || "",
                       ricavi: (r) => r.ricavi ?? null,
                       utile: (r) => r.utile ?? null,
+                      spese: (r) => r.costi ?? null,
+                      margine: (r) => margineSede(r),
+                      spesepct: (r) => spesePctSede(r),
                       riempimento: (r) => r.riempimentoMedio ?? null,
                     }).map((r) => (
                       <tr key={r.location.id}>
@@ -40783,6 +40830,21 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
                         </td>
                         <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.ricavi)}</td>
                         <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.utile)}</td>
+                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.costi)}</td>
+                        {/* le due percentuali. Sono complementari — utile e
+                            spese sommati fanno i ricavi, quindi i due numeri
+                            fanno sempre cento — e stanno tutte e due perche'
+                            rispondono a due domande che non si fanno
+                            insieme: "quanto mi resta" e "quanto mi costa
+                            incassare li'". */}
+                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, fontWeight: 700, color: coloreMargine(margineSede(r)), whiteSpace: "nowrap" }}
+                          title="Utile diviso ricavi: quanto resta di quello che è entrato in questa sede">
+                          {fmtPctErp(margineSede(r))}
+                        </td>
+                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, fontWeight: 700, color: coloreSpesePct(spesePctSede(r)), whiteSpace: "nowrap" }}
+                          title="Spese diviso ricavi della stessa sede: quanto dell'incassato se ne va in costi">
+                          {fmtPctErp(spesePctSede(r))}
+                        </td>
                         <td style={{ padding: "10px 8px", minWidth: 100 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ flex: 1, height: 6, background: BG, borderRadius: 3, overflow: "hidden", minWidth: 40 }}>
@@ -40845,6 +40907,9 @@ function PaginaDashboardAnalisi({
   onApriModificaSpesa, ricarica, onBack, titolo = "Performance Aziendale",
 }) {
   const isMobile = useIsMobile();
+  // quale delle due si sta guardando: si apre sull'andamento, che e' la
+  // domanda che ci si fa entrando
+  const [sezione, setSezione] = useState("andamento");
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
@@ -40853,19 +40918,41 @@ function PaginaDashboardAnalisi({
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
 
+        {/* DUE SEZIONI, DUE LINGUETTE.
+            Stavano una sotto l'altra sulla stessa pagina: un rotolo in
+            cui l'analisi dei costi cominciava dopo due schermate di
+            andamento, e per arrivarci si scorreva al buio. Sono due
+            domande diverse — "come sta andando" e "dove stiamo
+            spendendo" — e si guardano una alla volta. */}
+        <div style={stileRigaSegnalatori(isMobile, { marginBottom: 22 })}>
+          {[
+            { v: "andamento", l: "Andamento", sub: "Ricavi, utile e sedi", Icona: IconaGraficoSu, tinta: "#2E7D32" },
+            { v: "costi", l: "Analisi costi di gestione", sub: "Dove incide di più", Icona: IconaTileCostiRicavi, tinta: "#B8860B" },
+          ].map((t) => (
+            <RiquadroSegnalatore
+              key={t.v} etichetta={t.l} valore={t.sub} unita={null}
+              Icona={t.Icona} disco={t.tinta} colore={t.tinta}
+              sfondo={sezione === t.v ? BG : "#FFFFFF"} evidenziato={sezione === t.v}
+              onClick={() => { setSezione(t.v); window.scrollTo(0, 0); }}
+            />
+          ))}
+        </div>
+
+        {sezione === "andamento" && (
         <SezioneAnalisiAndamento
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} spese={spese}
           costiCategorie={costiCategorie} entrateManuali={entrateManuali}
         />
+        )}
 
-        <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, margin: "40px 0 30px" }} />
-
+        {sezione === "costi" && (
         <SezioneAnalisiCosti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} eventi={eventi} fornitori={fornitori}
           spese={spese} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
           ricarica={ricarica} onApriModificaSpesa={onApriModificaSpesa}
         />
+        )}
       </div>
     </div>
   );
@@ -74805,7 +74892,13 @@ function GraficoParetoCosti({ categorie }) {
 }
 // barra comparativa generica (fisso/variabile/semivariabile, oppure
 // ricorrente/occasionale/investimento/straordinario)
-function BarraComparativaCosti({ voci }) {
+// Le due barre "fissi/variabili" e "ricorrenti/occasionali".
+//
+// Ogni voce si puo' aprire: "Non classificato 67.496 €" da solo non
+// serve a niente — serve sapere QUALI spese sono, per andarle a
+// classificare. Chi non passa onVoce ha la barra di prima, che legge e
+// basta.
+function BarraComparativaCosti({ voci, onVoce = null }) {
   const totale = voci.reduce((s, v) => s + v.valore, 0);
   return (
     <div>
@@ -74815,12 +74908,22 @@ function BarraComparativaCosti({ voci }) {
         ))}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
-        {voci.map((v) => (
-          <div key={v.etichetta} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: NAVY }}>
-            <span style={{ width: 9, height: 9, borderRadius: 2, background: v.colore, display: "inline-block", flexShrink: 0 }} />
-            {v.etichetta} <b>{fmtEuroErp(v.valore)}</b>
-          </div>
-        ))}
+        {voci.map((v) => {
+          const apribile = !!onVoce && v.valore > 0;
+          return (
+            <button
+              key={v.etichetta} type="button" disabled={!apribile}
+              onClick={apribile ? () => onVoce(v) : undefined}
+              title={apribile ? `Vedi le spese: ${v.etichetta}` : undefined}
+              style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: NAVY,
+                background: "none", border: "none", padding: 0, cursor: apribile ? "pointer" : "default",
+                textDecoration: apribile ? "underline" : "none", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, textUnderlineOffset: 3 }}
+            >
+              <span style={{ width: 9, height: 9, borderRadius: 2, background: v.colore, display: "inline-block", flexShrink: 0 }} />
+              {v.etichetta} <b>{fmtEuroErp(v.valore)}</b>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -74859,6 +74962,8 @@ function SezioneAnalisiCosti({
   const [stato, setStato] = useState("");
   const [origine, setOrigine] = useState("");
   const [drillDown, setDrillDown] = useState(null);
+  // l'elenco dietro a una voce delle due barre: { titolo, colore, filtro }
+  const [elencoSpese, setElencoSpese] = useState(null);
   const [segnalazioniAperte, setSegnalazioniAperte] = useState(true);
 
   const range = rangePeriodoAnalisiCosti(periodo, { da: customDa, a: customA });
@@ -75055,21 +75160,27 @@ function SezioneAnalisiCosti({
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14, marginBottom: 18 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Costi fissi e variabili</div>
-            <BarraComparativaCosti voci={[
-              { etichetta: "Fisso", valore: kpi.perFissoVariabile.fisso, colore: NAVY },
-              { etichetta: "Variabile", valore: kpi.perFissoVariabile.variabile, colore: GOLD },
-              { etichetta: "Semivariabile", valore: kpi.perFissoVariabile.semivariabile, colore: "#7C8DA6" },
-              { etichetta: "Non classificato", valore: kpi.perFissoVariabile.nd, colore: "#D9D4C4" },
-            ]} />
+            <BarraComparativaCosti
+              onVoce={(v) => setElencoSpese({ titolo: v.etichetta, colore: v.colore, filtro: v.filtro })}
+              voci={[
+                { etichetta: "Fisso", valore: kpi.perFissoVariabile.fisso, colore: NAVY, filtro: (sp) => sp.fisso_variabile === "fisso" },
+                { etichetta: "Variabile", valore: kpi.perFissoVariabile.variabile, colore: GOLD, filtro: (sp) => sp.fisso_variabile === "variabile" },
+                { etichetta: "Semivariabile", valore: kpi.perFissoVariabile.semivariabile, colore: "#7C8DA6", filtro: (sp) => sp.fisso_variabile === "semivariabile" },
+                // "non classificato" e' tutto quello che non e' nessuna
+                // delle tre: la stessa regola con cui e' stato sommato
+                { etichetta: "Non classificato", valore: kpi.perFissoVariabile.nd, colore: "#D9D4C4", filtro: (sp) => !["fisso", "variabile", "semivariabile"].includes(sp.fisso_variabile) },
+              ]} />
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Ricorrenti, occasionali e investimenti</div>
-            <BarraComparativaCosti voci={[
-              { etichetta: "Ricorrenti", valore: kpi.perRicorrenzaNatura.ricorrente, colore: NAVY },
-              { etichetta: "Occasionali", valore: kpi.perRicorrenzaNatura.occasionale, colore: GOLD },
-              { etichetta: "Investimenti", valore: kpi.perRicorrenzaNatura.investimento, colore: "#2563EB" },
-              { etichetta: "Straordinari", valore: kpi.perRicorrenzaNatura.straordinario, colore: "#C0392B" },
-            ]} />
+            <BarraComparativaCosti
+              onVoce={(v) => setElencoSpese({ titolo: v.etichetta, colore: v.colore, filtro: v.filtro })}
+              voci={[
+                { etichetta: "Ricorrenti", valore: kpi.perRicorrenzaNatura.ricorrente, colore: NAVY, filtro: (sp) => sp.natura !== "investimento" && sp.natura !== "straordinario" && sp.ricorrente_occasionale === "ricorrente" },
+                { etichetta: "Occasionali", valore: kpi.perRicorrenzaNatura.occasionale, colore: GOLD, filtro: (sp) => sp.natura !== "investimento" && sp.natura !== "straordinario" && sp.ricorrente_occasionale === "occasionale" },
+                { etichetta: "Investimenti", valore: kpi.perRicorrenzaNatura.investimento, colore: "#2563EB", filtro: (sp) => sp.natura === "investimento" },
+                { etichetta: "Straordinari", valore: kpi.perRicorrenzaNatura.straordinario, colore: "#C0392B", filtro: (sp) => sp.natura === "straordinario" },
+              ]} />
           </div>
         </div>
 
@@ -75131,6 +75242,19 @@ function SezioneAnalisiCosti({
             </table>
           </div>
         </div>
+
+        {elencoSpese && (() => {
+          const voci = kpi.vociIncluse.filter(({ spesa }) => elencoSpese.filtro(spesa));
+          return (
+            <PannelloElencoSpese
+              titolo={elencoSpese.titolo} colore={elencoSpese.colore}
+              voci={voci} totale={round2(voci.reduce((s, v) => s + v.importo, 0))}
+              range={range} fornitori={fornitori} costiCategorie={costiCategorie}
+              onApriModificaSpesa={onApriModificaSpesa}
+              onClose={() => setElencoSpese(null)}
+            />
+          );
+        })()}
 
         {drillDown && (
           <PannelloDrillDownCosti
@@ -75268,6 +75392,61 @@ function PannelloSegnalazioniGestionali({ aperto, onToggle, spese, speseAttribuz
 
 // pannello laterale di drill-down: dettaglio di una categoria (totale,
 // andamento, per sede, elenco spese, allegati)
+// L'elenco delle spese dietro a una voce delle due barre.
+//
+// "Non classificato 67.496 €" dice che c'e' un problema e non dice
+// dov'e'. Qui ci sono le righe, dalla piu' grossa: si clicca e si apre
+// la scheda della spesa, che e' il posto dove si classifica.
+function PannelloElencoSpese({ titolo, colore, voci, totale, range, fornitori, costiCategorie, onApriModificaSpesa, onClose }) {
+  const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
+  const categorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
+  const righe = [...(voci || [])].sort((a, b) => b.importo - a.importo);
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "flex-end", zIndex: 1000 }} onClick={onClose}>
+      <div style={{ background: "#fff", width: "min(520px, 100%)", height: "100%", overflowY: "auto", padding: 24 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+          <div>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>{fmtData(range.inizio)} — {fmtData(range.fine)}</div>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 11, height: 11, borderRadius: 3, background: colore, display: "inline-block", flexShrink: 0 }} />
+              {titolo}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: MUTED, padding: 4 }} aria-label="Chiudi">×</button>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginTop: 14, marginBottom: 4 }}>{fmtEuroErp(totale)}</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>
+          {righe.length} spes{righe.length === 1 ? "a" : "e"}{onApriModificaSpesa ? " — clicca una riga per aprirla e classificarla" : ""}
+        </div>
+        {righe.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna spesa in questa voce.</div>}
+        {righe.map(({ spesa, importo }) => (
+          <button
+            key={spesa.id} type="button"
+            onClick={onApriModificaSpesa ? () => onApriModificaSpesa(spesa.id) : undefined}
+            style={{ display: "flex", width: "100%", textAlign: "left", gap: 10, alignItems: "baseline", justifyContent: "space-between",
+              padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}`, background: "none", border: "none",
+              borderTopStyle: "solid", cursor: onApriModificaSpesa ? "pointer" : "default" }}
+          >
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: "block", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                {spesa.descrizione || spesa.oggetto || categorieById[spesa.categoria_id]?.nome || "(senza descrizione)"}
+              </span>
+              <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                {[
+                  spesa.data_documento ? fmtData(spesa.data_documento) : null,
+                  fornitoriById[spesa.fornitore_id]?.nome || null,
+                  categorieById[spesa.categoria_id]?.nome || null,
+                ].filter(Boolean).join(" · ")}
+              </span>
+            </span>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(importo)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PannelloDrillDownCosti({ drillDown, onClose, kpi, range, location, corsi, corsiDate, fornitori, costiSottocategorie, onApriModificaSpesa, ricarica }) {
   const categoria = drillDown.categoria;
   const vociCategoria = kpi.vociIncluse.filter((v) => v.spesa.categoria_id === categoria.id);
