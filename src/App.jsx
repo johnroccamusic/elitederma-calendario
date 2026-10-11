@@ -40640,6 +40640,13 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   // nemmeno gli omaggi, che valgono zero ma sarebbero righe in piu'.
   // useMemo e non useCallback: in questo file useCallback non e'
   // importato, e la build non lo segnala — lo trova solo il montaggio.
+  //
+  // Si somma l'IMPONIBILE, come per i corsi e per i costi. Fino al
+  // 11/10/2026 qui si prendeva il totale con l'IVA dentro: i corsi
+  // entravano netti, i prodotti lordi, e il totale in cima mescolava le
+  // due cose — dal 1/9 erano circa 1.900 € di IVA contati come ricavo.
+  // Dove l'imponibile manca si ripiega sul totale, come fa
+  // importoNettoQuota per le quote degli allievi.
   const venditeNel = useMemo(() => (inizio, fine) => {
     const valida = (v) => !v.simulazione
       && (v.tipo_movimento || "vendita") === "vendita"
@@ -40649,7 +40656,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
         const d = String(v.data_ordine || "").slice(0, 10);
         return v.origine === origine && valida(v) && d >= inizio && d <= fine;
       })
-      .reduce((s2, v) => s2 + (Number(v.totale) || 0), 0));
+      .reduce((s2, v) => s2 + importoNettoQuota(v.totale_imponibile, v.totale), 0));
     return { shop: somma("woocommerce"), banco: somma("pos") };
   }, [venditeShop]);
 
