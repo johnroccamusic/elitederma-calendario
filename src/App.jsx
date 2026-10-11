@@ -74838,10 +74838,41 @@ function calcolaKpiAnalisiCosti({ spese, speseAttribuzioni, costiCategorie, cost
 // tendina ricercabile compatta (bottone + <select> a comparsa), usata
 // per ogni filtro della barra di "Analisi costi di gestione": evita la
 // lunga fila di pulsanti-città vietata dal brief
+// UN ELENCO VERO, NON UN <select> CHE NON SI APRE.
+// Cliccando il filtro compariva un <select> nativo gia' richiuso: il
+// browser non spalanca da solo la tendina di un select, nemmeno con
+// autoFocus, e quello appariva sotto il pulsante con lo stesso aspetto
+// del pulsante. Dal di fuori sembrava che il clic non facesse niente —
+// e al clic successivo l'onBlur lo faceva pure sparire.
+//
+// Ora si apre un pannello come quello dei fornitori: campo di ricerca in
+// cima (le categorie e i fornitori sono centinaia), le voci una sotto
+// l'altra, "Tutti" per togliere il filtro. Si chiude scegliendo, col
+// clic fuori o con Esc.
 function FiltroRicercabile({ chiave, etichetta, valore, setValore, opzioni, apriChiave, setApriChiave, larghezza }) {
   const aperto = apriChiave === chiave;
+  const [filtro, setFiltro] = useState("");
+  const contenitore = useRef(null);
+  useEffect(() => { if (!aperto) setFiltro(""); }, [aperto]);
+  useEffect(() => {
+    if (!aperto) return;
+    function fuori(e) { if (contenitore.current && !contenitore.current.contains(e.target)) setApriChiave(""); }
+    function esc(e) { if (e.key === "Escape") setApriChiave(""); }
+    document.addEventListener("mousedown", fuori);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", fuori); document.removeEventListener("keydown", esc); };
+  }, [aperto, setApriChiave]);
+
+  const q = filtro.trim().toLowerCase();
+  const filtrate = q ? (opzioni || []).filter((o) => String(o.nome || "").toLowerCase().includes(q)) : (opzioni || []);
+  const rigaStile = (attiva) => ({
+    ...fontBody, fontSize: 12.5, color: NAVY, background: attiva ? "#F4F1E8" : "transparent",
+    border: "none", width: "100%", textAlign: "left", padding: "7px 10px", cursor: "pointer",
+    fontWeight: attiva ? 700 : 400, borderRadius: 6,
+  });
+
   return (
-    <div style={{ position: "relative", flex: `1 1 ${larghezza || 150}px`, minWidth: 130 }}>
+    <div ref={contenitore} style={{ position: "relative", flex: `1 1 ${larghezza || 150}px`, minWidth: 130 }}>
       <button
         onClick={() => setApriChiave(aperto ? "" : chiave)}
         style={{
@@ -74856,16 +74887,25 @@ function FiltroRicercabile({ chiave, etichetta, valore, setValore, opzioni, apri
         <IconaChevronGiuErp size={12} color={MUTED} />
       </button>
       {aperto && (
-        <select
-          autoFocus
-          style={{ ...inputStyle, ...fontBody, fontSize: 12.5, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, width: "auto" }}
-          value={valore}
-          onChange={(e) => { setValore(e.target.value); setApriChiave(""); }}
-          onBlur={() => setApriChiave("")}
-        >
-          <option value="">Tutti</option>
-          {opzioni.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
-        </select>
+        <div style={{ position: "absolute", zIndex: 60, top: "calc(100% + 4px)", left: 0, minWidth: "100%", width: "max-content", maxWidth: 320, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 10px 28px rgba(14,27,51,0.16)", padding: 8 }}>
+          {(opzioni || []).length > 8 && (
+            <input
+              autoFocus style={{ ...inputStyle, marginBottom: 6, fontSize: 12.5 }} placeholder="Cerca…"
+              value={filtro} onChange={(e) => setFiltro(e.target.value)}
+            />
+          )}
+          <div style={{ maxHeight: 240, overflowY: "auto" }}>
+            <button type="button" onClick={() => { setValore(""); setApriChiave(""); }} style={rigaStile(!valore)}>Tutti</button>
+            {filtrate.map((o) => (
+              <button type="button" key={o.id} onClick={() => { setValore(o.id); setApriChiave(""); }} style={rigaStile(o.id === valore)}>
+                {o.nome}
+              </button>
+            ))}
+            {filtrate.length === 0 && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 10px" }}>Nessun risultato per "{filtro.trim()}".</div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
