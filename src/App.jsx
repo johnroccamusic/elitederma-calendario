@@ -75235,7 +75235,7 @@ function SezioneAnalisiCosti({
         <PannelloSegnalazioniGestionali
           aperto={segnalazioniAperte} onToggle={() => setSegnalazioniAperte((v) => !v)}
           spese={spese} speseAttribuzioni={speseAttribuzioni} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} costiSoglieAllerta={costiSoglieAllerta}
-          corsiDate={corsiDate} iscritti={iscritti} location={location} range={range} rangeConfronto={rangeConfronto}
+          corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} location={location} range={range} rangeConfronto={rangeConfronto}
         />
 
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 4 }}>Voci di spesa principali</div>
@@ -75321,7 +75321,7 @@ function SezioneAnalisiCosti({
 
 // pannello "Segnalazioni gestionali": alert calcolati dai dati reali,
 // non da soglie inventate — ogni riga cita l'importo/percentuale vera
-function PannelloSegnalazioniGestionali({ aperto, onToggle, spese, speseAttribuzioni, costiCategorie, costiSottocategorie, costiSoglieAllerta, corsiDate, iscritti, location, range, rangeConfronto }) {
+function PannelloSegnalazioniGestionali({ aperto, onToggle, spese, speseAttribuzioni, costiCategorie, costiSottocategorie, costiSoglieAllerta, corsi, corsiDate, iscritti, location, range, rangeConfronto }) {
   const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
   const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
   const tutteLeSpese = speseComplete(spese, corsiDate, iscritti, costiSottocategorie);
@@ -75363,6 +75363,27 @@ function PannelloSegnalazioniGestionali({ aperto, onToggle, spese, speseAttribuz
       return { sede: l, ricavi: ricaviSede, costi: costiSede, rapporto: ricaviSede > 0 ? round1Erp((costiSede / ricaviSede) * 100) : null };
     }).filter((r) => r.rapporto != null && r.costi > 0).sort((a, b) => b.rapporto - a.rapporto);
     if (rapportiSede[0] && rapportiSede[0].rapporto > 50) righe.push({ tipo: "sede", testo: `La sede di ${rapportiSede[0].sede.nome} presenta il rapporto costi/ricavi più elevato (${fmtPctErp(rapportiSede[0].rapporto)}).` });
+
+    // Stessa domanda della sede, ma per corso: quale corso costa di piu'
+    // in rapporto a quello che porta. E' la riga che serve per decidere
+    // se un corso va riprezzato o smesso — una sede si cambia, un corso
+    // che non copre i suoi costi li rifa' a ogni edizione.
+    //
+    // Si conta a corso, non a edizione: una singola classe mezza vuota
+    // capita, un corso in perdita su tutte le edizioni del periodo no.
+    // Sotto i 300 euro di costo non si segnala: con cifre cosi' piccole
+    // il rapporto esplode per il nulla.
+    const rapportiCorso = (corsi || []).map((c) => {
+      const idsCd = new Set(cdPeriodo.filter((cd) => cd.corso_id === c.id).map((cd) => cd.id));
+      if (idsCd.size === 0) return null;
+      const ricaviCorso = round2((iscritti || []).filter((i) => idsCd.has(i.corso_data_id)).reduce((s, i) => s + (i.totale_pattuito || 0), 0));
+      const costiCorso = calcolaTotaleSpese(tutteLeSpese, speseAttribuzioni, costiCategorieById, corsiDateById, range.inizio, range.fine, { corsoId: c.id }).totale;
+      return { corso: c, edizioni: idsCd.size, ricavi: ricaviCorso, costi: costiCorso, rapporto: ricaviCorso > 0 ? round1Erp((costiCorso / ricaviCorso) * 100) : null };
+    }).filter((r) => r && r.rapporto != null && r.costi >= 300).sort((a, b) => b.rapporto - a.rapporto);
+    if (rapportiCorso[0] && rapportiCorso[0].rapporto > 50) {
+      const r = rapportiCorso[0];
+      righe.push({ tipo: "corso", testo: `Il corso "${r.corso.nome}" presenta il rapporto costi/ricavi più elevato (${fmtPctErp(r.rapporto)}): ${fmtEuroErp(r.costi)} di spese su ${fmtEuroErp(r.ricavi)} incassati, in ${r.edizioni} edizion${r.edizioni === 1 ? "e" : "i"}.` });
+    }
 
     // fatture scadute
     const scadute = attuale.vociIncluse.filter((v) => v.spesa.stato === "scaduta");
