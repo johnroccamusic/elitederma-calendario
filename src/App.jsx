@@ -6238,44 +6238,54 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
       {onMetodo && (
         <>
           <div style={{ height: 1, background: "#E6DFCE", margin: "12px 0 10px" }} />
-          {/* lo stato in fondo alla riga dei metodi: da solo su una riga
-              sua si portava via un piano intero per due parole, e sta bene
-              dov'e' la domanda a cui risponde — come e' stata pagata, e se
-              e' stata pagata */}
-          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 8, flexWrap: "wrap", ...fontBody, fontSize: isMobile ? 9.5 : 12, color: NAVY }}>
-            {!isMobile && <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>}
-            {(opzioniMetodo || METODI_QUOTA).map((opz) => (
-              <label key={opz} style={{ display: "flex", alignItems: "center", gap: isMobile ? 3 : 5, cursor: "pointer", whiteSpace: "nowrap" }}>
-                <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} disabled={soloLettura} onChange={() => onMetodo(opz)} style={isMobile ? { width: 11, height: 11, margin: 0, flexShrink: 0 } : undefined} />
-                {etichettaMetodo(opz)}
-              </label>
-            ))}
-            {/* UN NOME VECCHIO NON SPARISCE MAI.
-                Se su questa scheda c'e' scritto un metodo che oggi non si
-                puo' piu' scegliere — "Contanti", o qualunque nome prima di
-                una rinomina — compare qui in fondo, acceso. Senza, la riga
-                si sarebbe vista tutta spenta e chi la guarda avrebbe
-                pensato che il metodo non fosse mai stato scritto.
-                "Contanti" in particolare non genera IVA: riscriverlo
-                "Cash con IVA" farebbe nascere imposta che non c'e'. */}
-            {valori.metodo && !(opzioniMetodo || METODI_QUOTA).includes(valori.metodo) && (
-              <label style={{ display: "flex", alignItems: "center", gap: isMobile ? 3 : 5, whiteSpace: "nowrap", color: MUTED }}>
-                <input type="radio" name={titolo + "-metodo"} checked readOnly disabled style={isMobile ? { width: 11, height: 11, margin: 0, flexShrink: 0 } : undefined} />
-                {valori.metodo}
-              </label>
+          {/* UNA RIGA SOLA: quando, come, e se e' stato pagato.
+              I metodi erano pallini in fila e la data stava su un piano
+              suo piu' sotto. Con otto metodi i pallini non ci stavano
+              piu' nemmeno su un portatile, e la data lontana dal metodo
+              sembrava un'altra cosa: sono le tre risposte alla stessa
+              domanda — com'e' entrato questo soldo. */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, flexWrap: "wrap", ...fontBody, fontSize: isMobile ? 10.5 : 12, color: NAVY }}>
+            {onIncassatoIl && (
+              <input
+                type="date" value={incassatoIl || ""} disabled={soloLettura}
+                onChange={(e) => onIncassatoIl(e.target.value)}
+                title={valori?.metodo === "Bonifico" ? "Il giorno dell'accredito in banca: e' la data con cui entra in prima nota" : "Il giorno del pagamento: e' la data con cui entra in prima nota"}
+                style={{ ...inputStyle, width: "auto", flex: "0 0 auto", padding: isMobile ? "6px 6px" : "7px 9px", fontSize: isMobile ? 11 : 12.5 }}
+              />
             )}
+            <select
+              value={valori.metodo || ""} disabled={soloLettura}
+              onChange={(e) => onMetodo(e.target.value)}
+              style={{ ...inputStyle, width: "auto", flex: "1 1 150px", minWidth: 0, padding: isMobile ? "6px 6px" : "7px 9px", fontSize: isMobile ? 11 : 12.5, fontWeight: 600 }}
+            >
+              <option value="">Metodo…</option>
+              {(opzioniMetodo || METODI_QUOTA).map((opz) => (
+                <option key={opz} value={opz}>{etichettaMetodo(opz)}</option>
+              ))}
+              {/* UN NOME VECCHIO NON SPARISCE MAI.
+                  Se su questa scheda c'e' scritto un metodo che oggi non
+                  si puo' piu' scegliere — "Contanti", sulle quattro schede
+                  che ce l'hanno — resta qui in fondo. Senza, la tendina si
+                  sarebbe aperta vuota e il primo salvataggio avrebbe
+                  cancellato in silenzio come era stato pagato.
+                  "Contanti" in particolare non genera IVA: riscriverlo
+                  "Cash con IVA" farebbe nascere imposta che non c'e'. */}
+              {valori.metodo && !(opzioniMetodo || METODI_QUOTA).includes(valori.metodo) && (
+                <option value={valori.metodo}>{valori.metodo} (voce non più in uso)</option>
+              )}
+            </select>
             {onPagato && (
-              <span style={{ marginLeft: "auto" }}>
+              <span style={{ marginLeft: "auto", flexShrink: 0 }}>
                 <SemaforoPagamento pagato={pagato} onClick={soloLettura ? undefined : () => onPagato(!pagato)} piu={isMobile ? -2 : 0} />
               </span>
             )}
           </div>
         </>
       )}
-      {/* La data in cui i soldi sono arrivati davvero: per il bonifico
-          l'accredito in banca, per gli altri il giorno del pagamento. E'
-          la data con cui la quota entra in prima nota. */}
-      {pagato && onIncassatoIl && (
+      {/* La data sta nella riga qui sopra, accanto al metodo. Resta qui
+          sotto solo nelle quote di sola lettura, dove non c'e' un metodo
+          da scegliere e quindi nemmeno quella riga. */}
+      {!onMetodo && pagato && onIncassatoIl && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap", ...fontBody, fontSize: isMobile ? 11 : 12, color: NAVY }}>
           <span style={{ color: MUTED, whiteSpace: "nowrap" }}>{valori?.metodo === "Bonifico" ? "Accreditato il" : "Incassato il"}</span>
           <input type="date" value={incassatoIl || ""} disabled={soloLettura} onChange={(e) => onIncassatoIl(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: isMobile ? 11.5 : 12.5 }} />
