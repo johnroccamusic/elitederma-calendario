@@ -75218,7 +75218,7 @@ function SezioneAnalisiCosti({
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {[{ c: "categoria", l: "Categoria" }, { c: "importo", l: "Importo" }, { c: "incidenza", l: "Incidenza" }, { c: null, l: "Ricorrente" }, { c: null, l: "Riducibilità" }, { c: null, l: "Azione" }].map((th) => (
+                  {[{ c: "categoria", l: "Categoria" }, { c: "importo", l: "Importo" }, { c: "incidenza", l: "% sulle spese" }, { c: null, l: "% sui ricavi" }, { c: null, l: "Ricorrente" }, { c: null, l: "Riducibilità" }, { c: null, l: "Azione" }].map((th) => (
                     <ThOrdina key={th.l} campo={th.c} ordine={ordineCosti} onOrdina={cambiaOrdineCosti} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
@@ -75233,6 +75233,15 @@ function SezioneAnalisiCosti({
                   const nRicorrenti = vociCategoria.filter((v) => v.spesa.ricorrente_occasionale === "ricorrente").length;
                   const nRiducibiliAlta = vociCategoria.filter((v) => v.spesa.riducibilita === "alta").length;
                   const pct = kpi.totale > 0 ? round1Erp((c.totale / kpi.totale) * 100) : 0;
+                  // Due pesi diversi della stessa cifra. "Sulle spese" dice
+                  // quanta parte del costo complessivo se ne va li'; "sui
+                  // ricavi" dice quanto di quello che l'accademia incassa
+                  // serve a pagarla — ed e' la domanda che conta davvero,
+                  // perche' una voce puo' essere il 30% delle spese e il 3%
+                  // del fatturato. Il denominatore e' lo stesso del KPI
+                  // "Incidenza sui ricavi" qui sopra: il pattuito delle
+                  // iscrizioni del periodo.
+                  const pctRicavi = kpi.ricavi > 0 ? round1Erp((c.totale / kpi.ricavi) * 100) : null;
                   return (
                     <tr key={c.categoria.id} style={{ cursor: "pointer" }} onClick={() => setDrillDown({ tipo: "categoria", categoria: c.categoria })}>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
@@ -75240,14 +75249,8 @@ function SezioneAnalisiCosti({
                         {c.categoria.nome}
                       </td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(c.totale)}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, minWidth: 130 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ flex: 1, height: 6, background: BG, borderRadius: 3, overflow: "hidden", minWidth: 50 }}>
-                            <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: i === 0 ? GOLD : NAVY }} />
-                          </div>
-                          <span style={{ ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>{fmtPctErp(pct)}</span>
-                        </div>
-                      </td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtPctErp(pct)}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: pctRicavi == null ? MUTED : NAVY, whiteSpace: "nowrap" }}>{pctRicavi == null ? "N/D" : fmtPctErp(pctRicavi)}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{nRicorrenti}/{vociCategoria.length}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{nRiducibiliAlta}/{vociCategoria.length}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
@@ -75257,7 +75260,7 @@ function SezioneAnalisiCosti({
                   );
                 })}
                 {kpi.categorieOrdinate.length === 0 && (
-                  <tr><td colSpan={6} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna spesa registrata in questo periodo.</td></tr>
+                  <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna spesa registrata in questo periodo.</td></tr>
                 )}
               </tbody>
             </table>
