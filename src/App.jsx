@@ -40500,7 +40500,7 @@ function BarraPeriodoAnalisi({ isMobile }) {
 // PaginaErp (KPI/grafici/andamento per sede), meno "+ Nuova operazione"
 // (si trova ora in "Inserimento costi e ricavi") e meno il click sulla
 // card "Costi operativi" (qui è solo un KPI, la vista dedicata non c'è più)
-function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, costiCategorie, entrateManuali }) {
+function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, costiCategorie, entrateManuali, venditeShop }) {
   const { ordine: ordineSedi, cambiaOrdine: cambiaOrdineSedi, ordina: ordinaSedi } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   // il periodo e le due date arrivano dalla barra qui sotto, che e' la
@@ -40546,6 +40546,43 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
     () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById, soloTrascorsi: perCassa }),
     [corsiDate, iscritti, spese, costiCategorieById, entrateManuali, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById, perCassa]
   );
+
+  // DA DOVE ARRIVANO I RICAVI.
+  // I quattro riquadri qui sopra sommano i corsi e le entrate a mano, e
+  // basta: lo shop e il banco non ci sono mai entrati. Non e' un errore
+  // di quei numeri — e' che "Incassato" li' vuol dire "incassato dai
+  // corsi" — ma a guardarli sembrava tutto il giro d'affari.
+  //
+  // Qui sotto le tre sorgenti stanno separate, cosi' si vede quale pesa.
+  // Si contano solo gli ordini dove il soldo e' arrivato davvero:
+  // "completed" e "processing" (su WooCommerce vuol dire pagato e non
+  // ancora spedito). Annullati, falliti, rimborsati e in attesa no, e
+  // nemmeno gli omaggi, che valgono zero ma sarebbero righe in piu'.
+  const perCanale = useMemo(() => {
+    const dentro = (v) => {
+      const d = String(v.data_ordine || "").slice(0, 10);
+      return d >= range.inizio && d <= range.fine;
+    };
+    const valida = (v) => !v.simulazione
+      && (v.tipo_movimento || "vendita") === "vendita"
+      && ["completed", "processing"].includes(v.stato);
+    const somma = (origine) => round2((venditeShop || [])
+      .filter((v) => v.origine === origine && valida(v) && dentro(v))
+      .reduce((s2, v) => s2 + (Number(v.totale) || 0), 0));
+    const shop = somma("woocommerce");
+    const banco = somma("pos");
+    // "Dai corsi" e' esattamente il numero del riquadro "Incassato" qui
+    // sopra — iscrizioni piu' le entrate a mano registrate in accademia.
+    // Tenerli insieme e' voluto: cosi' i due riquadri dicono la stessa
+    // cifra e si controllano a vicenda, invece di discordare di poco e
+    // lasciare il dubbio su quale sia quello giusto.
+    const corsiEuro = round2(kpi.ricavi);
+    return {
+      corsi: corsiEuro, shop, banco, prodotti: round2(shop + banco),
+      totale: round2(corsiEuro + shop + banco),
+      perAllievo: kpi.nAllievi > 0 ? round2(corsiEuro / kpi.nAllievi) : null,
+    };
+  }, [venditeShop, range.inizio, range.fine, kpi.ricavi, kpi.nAllievi]);
 
   const varRicavi = variazionePctErp(kpi.ricavi, kpiPrec.ricavi);
   const varCosti = variazionePctErp(kpi.costi, kpiPrec.costi);
@@ -40706,6 +40743,34 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
             sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`}
             Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
           <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
+        </div>
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Da dove arrivano i ricavi</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+          {`Nel periodo: ${fmtEuroErp(perCanale.totale)} in tutto. `}
+          I quattro riquadri qui sopra contano solo i corsi — lo shop e il banco non ci entrano.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
+          <CardKpiErp
+            titolo="Dai corsi"
+            valore={fmtEuroErp(perCanale.corsi)}
+            sub={perCanale.totale > 0 ? `${fmtPctErp(round1Erp((perCanale.corsi / perCanale.totale) * 100))} del totale` : "—"}
+            Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
+          <CardKpiErp
+            titolo="Dallo shop online"
+            valore={fmtEuroErp(perCanale.shop)}
+            sub={perCanale.totale > 0 ? `${fmtPctErp(round1Erp((perCanale.shop / perCanale.totale) * 100))} del totale` : "—"}
+            Icona={IconaCarrelloPos} coloreIcona="#B8860B" coloreBgIcona="#F6EEDA" />
+          <CardKpiErp
+            titolo="Dal banco e POS"
+            valore={fmtEuroErp(perCanale.banco)}
+            sub={perCanale.totale > 0 ? `${fmtPctErp(round1Erp((perCanale.banco / perCanale.totale) * 100))} del totale` : "—"}
+            Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
+          <CardKpiErp
+            titolo="In media per allievo"
+            valore={perCanale.perAllievo == null ? "—" : fmtEuroErp(perCanale.perAllievo)}
+            sub={kpi.nAllievi > 0 ? `${fmtEuroErp(perCanale.corsi)} su ${kpi.nAllievi} allievi` : "Nessun allievo nel periodo"}
+            Icona={IconaRicevutaErp} coloreIcona="#6E7391" coloreBgIcona="#ECEDF2" />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,2fr) minmax(0,1fr)", gap: 14, marginBottom: 18, alignItems: "start" }}>
@@ -40927,7 +40992,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
 // ex parte analitica di PaginaMagazzino), separate da un titolo grande
 function PaginaDashboardAnalisi({
   corsi, location, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali,
-  eventi, fornitori, speseAttribuzioni, costiBudget, costiSoglieAllerta,
+  eventi, fornitori, speseAttribuzioni, costiBudget, costiSoglieAllerta, venditeShop,
   onApriModificaSpesa, ricarica, onBack, titolo = "Performance Aziendale",
 }) {
   const isMobile = useIsMobile();
@@ -40964,7 +41029,7 @@ function PaginaDashboardAnalisi({
         {sezione === "andamento" && (
         <SezioneAnalisiAndamento
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} spese={spese}
-          costiCategorie={costiCategorie} entrateManuali={entrateManuali}
+          costiCategorie={costiCategorie} entrateManuali={entrateManuali} venditeShop={venditeShop}
         />
         )}
 
@@ -77984,7 +78049,7 @@ export default function App() {
     statvenditealbanco: ["vendite_shop_storico"],
     statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop_storico"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno", "eventi"],
-    dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta"],
+    dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "vendite_shop"],
     // "corsi" e "corsi_date" servono alla colonna "Frangente": la vendita
     // registra l'edizione, il nome del corso sta altrove
     venditealbanco: ["vendite_shop", "corsi", "corsi_date"],
@@ -79953,6 +80018,7 @@ export default function App() {
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} entrateManuali={entrateManuali}
           eventi={eventi} fornitori={fornitori} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
+          venditeShop={venditeShop}
           onApriModificaSpesa={apriModificaSpesa} ricarica={fetchDati} onBack={() => setView("statistiche")}
           titolo={etichettaTasto("statistiche", "performance", "Performance Aziendale")}
         />
