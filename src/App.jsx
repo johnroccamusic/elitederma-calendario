@@ -5632,12 +5632,12 @@ function conTotaleAggiornato(prev, valore, applicaIva) {
 // serve identica anche per ogni riga aggiunta con "+"
 function conMetodoAggiornato(prev, v) {
   if (v === "Cash no iva") {
-    return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: "" };
+    return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "", imponibile: "" };
   }
   if (prev.metodo === "Cash no iva" && prev.totale !== "") {
-    return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
+    return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
   }
-  return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
+  return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "" };
 }
 // come conMetodoAggiornato, ma per le quote dove "Cash no iva" non blocca
 // la casella imponibile (Quota pre corso, Da avere al corso): resta
@@ -5645,14 +5645,14 @@ function conMetodoAggiornato(prev, v) {
 // imponibile) risulta zero invece di apparire vuota
 function conMetodoAggiornatoSenzaBlocco(prev, v) {
   if (v === "Cash no iva") {
-    if (prev.totale !== "") return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: prev.totale };
-    if (prev.imponibile !== "") return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", totale: prev.imponibile };
-    return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
+    if (prev.totale !== "") return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "", imponibile: prev.totale };
+    if (prev.imponibile !== "") return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "", totale: prev.imponibile };
+    return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "" };
   }
   if (prev.metodo === "Cash no iva" && prev.totale !== "") {
-    return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
+    return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
   }
-  return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
+  return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "" };
 }
 function ivaDiQuota(q) {
   // imponibile vuoto (es. "Cash no iva": la casella resta bloccata
@@ -6000,7 +6000,7 @@ function ordinaCorsi(lista) {
 }
 // totale effettivo di una quota (acconto/precorso) salvata su un iscritto, interessi compresi
 function totQuota(i, prefisso) {
-  const interessi = i[`${prefisso}_metodo`] === "Rate" ? (i[`${prefisso}_interessi`] || 0) : 0;
+  const interessi = i[`${prefisso}_metodo`] === "APPago" ? (i[`${prefisso}_interessi`] || 0) : 0;
   return round2((i[`${prefisso}_totale`] || 0) + interessi);
 }
 // totale da pagare per le modelle: usa il prezzo speciale se impostato, altrimenti n. modelle × 60€
@@ -6038,6 +6038,36 @@ function modelleTotaleDi(i) {
 // costo netto gonfia il margine del 22%. Dove l'imponibile non e' stato
 // scritto si ripiega sul totale: meglio un dato con l'IVA dentro che una
 // riga che sparisce dal conto.
+// I METODI CON CUI ENTRA UNA QUOTA.
+// Il valore scritto sul database e' la stringa stessa, come e' sempre
+// stato: non un codice. Cambiare una di queste parole vuol dire
+// convertire anche lo storico — vedi la migrazione del 11/10/2026.
+//
+// "Cash no iva" e' l'unica voce con un comportamento suo: blocca
+// l'imponibile e non scorpora l'IVA. Tutte le altre, contanti con
+// fattura compresi, l'IVA ce l'hanno.
+//
+// "APPago" e' il finanziamento a rate: porta con se' il campo interessi,
+// e il totale della quota resta al netto di quelli. Fino al 11/10/2026
+// questa voce si chiamava "Rate".
+const METODI_QUOTA = [
+  "Sito con carta", "Sito Scalapay", "APPago", "POS fisico", "POS dell'app",
+  "Bonifico", "Cash con IVA", "Cash no iva",
+];
+// Al corso si incassa di persona: niente sito, niente finanziamento.
+const METODI_SALDO = ["POS fisico", "POS dell'app", "Bonifico", "Cash con IVA", "Cash no iva"];
+// quello che si legge nella tendina, dove serve una parola in piu'
+const ETICHETTA_METODO = {
+  "Cash con IVA": "Cash con IVA (fattura)",
+  "Cash no iva": "Cash no IVA",
+  "APPago": "APPago (a rate)",
+};
+function etichettaMetodo(m) { return ETICHETTA_METODO[m] || m; }
+// i due POS sono la stessa cosa per la cassa: il soldo va in banca, non
+// nella busta. Il vecchio "Pos" resta riconosciuto per le schede che
+// nessuno ha piu' aperto dopo la conversione.
+function eMetodoPos(m) { return m === "POS fisico" || m === "POS dell'app" || m === "Pos"; }
+
 function importoNettoQuota(imponibile, totale) {
   return imponibile != null ? Number(imponibile) || 0 : Number(totale) || 0;
 }
@@ -6185,7 +6215,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
         {campoImporto("IVA 22%", <input style={stileImporto(true)} value={ivaDiQuota(valori)} disabled />)}
         {filo}
         {campoImporto(
-          titolo === "Quota acconto" && valori.metodo === "Rate" ? "Totale (senza interessi)" : "Totale",
+          titolo === "Quota acconto" && valori.metodo === "APPago" ? "Totale (senza interessi)" : "Totale",
           <input
             style={stileImporto(soloLettura || totaleBloccato)}
             inputMode="decimal"
@@ -6212,17 +6242,28 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
               sua si portava via un piano intero per due parole, e sta bene
               dov'e' la domanda a cui risponde — come e' stata pagata, e se
               e' stata pagata */}
-          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 8, flexWrap: "nowrap", ...fontBody, fontSize: isMobile ? 9.5 : 12, color: NAVY }}>
-            {/* da telefono "Metodo:" sparisce: cinque nomi in fila davanti a
-                dei pallini si capiscono da soli, e quelle lettere sono la
-                differenza fra stare in riga e andare a capo */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 8, flexWrap: "wrap", ...fontBody, fontSize: isMobile ? 9.5 : 12, color: NAVY }}>
             {!isMobile && <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>Metodo:</span>}
-            {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
+            {(opzioniMetodo || METODI_QUOTA).map((opz) => (
               <label key={opz} style={{ display: "flex", alignItems: "center", gap: isMobile ? 3 : 5, cursor: "pointer", whiteSpace: "nowrap" }}>
                 <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} disabled={soloLettura} onChange={() => onMetodo(opz)} style={isMobile ? { width: 11, height: 11, margin: 0, flexShrink: 0 } : undefined} />
-                {opz}
+                {etichettaMetodo(opz)}
               </label>
             ))}
+            {/* UN NOME VECCHIO NON SPARISCE MAI.
+                Se su questa scheda c'e' scritto un metodo che oggi non si
+                puo' piu' scegliere — "Contanti", o qualunque nome prima di
+                una rinomina — compare qui in fondo, acceso. Senza, la riga
+                si sarebbe vista tutta spenta e chi la guarda avrebbe
+                pensato che il metodo non fosse mai stato scritto.
+                "Contanti" in particolare non genera IVA: riscriverlo
+                "Cash con IVA" farebbe nascere imposta che non c'e'. */}
+            {valori.metodo && !(opzioniMetodo || METODI_QUOTA).includes(valori.metodo) && (
+              <label style={{ display: "flex", alignItems: "center", gap: isMobile ? 3 : 5, whiteSpace: "nowrap", color: MUTED }}>
+                <input type="radio" name={titolo + "-metodo"} checked readOnly disabled style={isMobile ? { width: 11, height: 11, margin: 0, flexShrink: 0 } : undefined} />
+                {valori.metodo}
+              </label>
+            )}
             {onPagato && (
               <span style={{ marginLeft: "auto" }}>
                 <SemaforoPagamento pagato={pagato} onClick={soloLettura ? undefined : () => onPagato(!pagato)} piu={isMobile ? -2 : 0} />
@@ -6233,8 +6274,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
       )}
       {/* La data in cui i soldi sono arrivati davvero: per il bonifico
           l'accredito in banca, per gli altri il giorno del pagamento. E'
-          la data con cui la quota entra in prima nota (dal 16/09/2026);
-          prima c'era solo "pagato", senza un giorno. */}
+          la data con cui la quota entra in prima nota. */}
       {pagato && onIncassatoIl && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap", ...fontBody, fontSize: isMobile ? 11 : 12, color: NAVY }}>
           <span style={{ color: MUTED, whiteSpace: "nowrap" }}>{valori?.metodo === "Bonifico" ? "Accreditato il" : "Incassato il"}</span>
@@ -6242,7 +6282,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
           <span style={{ color: MUTED, fontSize: 10.5 }}>è la data con cui entra in prima nota</span>
         </div>
       )}
-      {onMetodo && valori.metodo === "Rate" && (
+      {onMetodo && valori.metodo === "APPago" && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <div style={{ flex: 1 }}>
             <Field label="Interessi">
@@ -8559,7 +8599,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
       <BloccoQuota
         titolo="Importo pagamento"
         valori={valori}
-        opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti"]}
+        opzioniMetodo={METODI_QUOTA}
         onImponibile={(v) => setValori((prev) => conImponibileAggiornato(prev, v, true))}
         onTotale={(v) => setValori((prev) => conTotaleAggiornato(prev, v, true))}
         onMetodo={(v) => setValori((prev) => conMetodoAggiornato(prev, v))}
@@ -12391,7 +12431,7 @@ function QuotaLettura({ titolo, Icona, d, prefisso }) {
         Icona={Icona}
         valori={valori}
         soloLettura
-        opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+        opzioniMetodo={METODI_QUOTA}
         onMetodo={() => {}}
         pagato={pagato}
         onPagato={() => {}}
@@ -12410,7 +12450,7 @@ function QuotaLettura({ titolo, Icona, d, prefisso }) {
             bonificoFileNuovo: null,
           }}
           soloLettura
-          opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+          opzioniMetodo={METODI_QUOTA}
           onMetodo={() => {}}
           pagato={!!r.pagato}
           onPagato={() => {}}
@@ -12433,7 +12473,7 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
   );
   const totaleSenzaIva = round2(quote.reduce((s, q) => s + (d[`${q}_imponibile`] || 0), 0) + sommaExtra("imponibile"));
   const totaleConIva = round2(quote.reduce((s, q) => s + (d[`${q}_totale`] || 0), 0) + sommaExtra("totale"));
-  const interessiTotali = round2(quote.reduce((s, q) => s + (d[`${q}_metodo`] === "Rate" ? (d[`${q}_interessi`] || 0) : 0), 0));
+  const interessiTotali = round2(quote.reduce((s, q) => s + (d[`${q}_metodo`] === "APPago" ? (d[`${q}_interessi`] || 0) : 0), 0));
   const restanoDaPagare = round2(
     (d.acconto_pagato ? 0 : (d.acconto_totale || 0))
     + (d.precorso_pagato ? 0 : (d.precorso_totale || 0))
@@ -29177,7 +29217,12 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   }
   const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false, integrazioneId: null };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
-  const [pagAccontoPagato, setPagAccontoPagato] = useState(false);
+  // L'ACCONTO NASCE PAGATO.
+  // Senza acconto non si entra in aula: un acconto "da pagare" non e' una
+  // cosa che esiste, e' solo una casella che qualcuno si dimentica di
+  // spuntare — e finche' non la spunta quei soldi non compaiono in prima
+  // nota. Resta comunque togliibile a mano, per il caso raro.
+  const [pagAccontoPagato, setPagAccontoPagato] = useState(true);
   // il giorno in cui acconto e pre corso sono stati incassati (per il
   // bonifico, accreditati): la data con cui entrano in prima nota
   const [pagAccontoIncassatoIl, setPagAccontoIncassatoIl] = useState("");
@@ -29871,7 +29916,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setVecchiaIscrizione(false);
-    setPagAcconto(QUOTA_VUOTA); setPagAccontoPagato(false); setPagAccontoIncassatoIl(""); setAccontoExtra([]);
+    setPagAcconto(QUOTA_VUOTA); setPagAccontoPagato(true); setPagAccontoIncassatoIl(dataOggiStr()); setAccontoExtra([]);
     setPagPrecorso(QUOTA_VUOTA); setPagPrecorsoPagato(false); setPagPrecorsoIncassatoIl(""); setPrecorsoExtra([]);
     setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
@@ -30025,7 +30070,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       imponibile: valori.imponibile,
       totale: valori.totale,
       metodo: valori.metodo,
-      interessi: valori.metodo === "Rate" ? valori.interessi : "",
+      interessi: valori.metodo === "APPago" ? valori.interessi : "",
       pagato,
       // il file caricato dal venditore come prova del pagamento segnalato
       // (integrazione.file_path) passa alla nuova riga: senza, la scheda
@@ -30046,7 +30091,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
       totale: r.totale === "" ? null : parseNum(r.totale),
       metodo: r.metodo || null,
-      interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
+      interessi: r.metodo === "APPago" && r.interessi !== "" ? parseNum(r.interessi) : null,
       pagato: !!r.pagato,
       bonifico_file: r.bonificoFilePath || null,
       bonifico_segnalato: !!r.bonificoSegnalato,
@@ -30223,7 +30268,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         acconto_imponibile: pagAcconto.imponibile === "" ? null : parseNum(pagAcconto.imponibile),
         acconto_totale: pagAcconto.totale === "" ? null : parseNum(pagAcconto.totale),
         acconto_metodo: pagAcconto.metodo || null,
-        acconto_interessi: pagAcconto.metodo === "Rate" && pagAcconto.interessi !== "" ? parseNum(pagAcconto.interessi) : null,
+        acconto_interessi: pagAcconto.metodo === "APPago" && pagAcconto.interessi !== "" ? parseNum(pagAcconto.interessi) : null,
         acconto_pagato: pagAccontoPagato,
         acconto_pagato_il: pagAccontoPagato ? (pagAccontoIncassatoIl || dataOggiStr()) : null,
         acconto_bonifico_file: pathBonificoAcconto,
@@ -30233,7 +30278,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
           totale: r.totale === "" ? null : parseNum(r.totale),
           metodo: r.metodo || null,
-          interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
+          interessi: r.metodo === "APPago" && r.interessi !== "" ? parseNum(r.interessi) : null,
           pagato: !!r.pagato,
           bonifico_file: pathsBonificoAccontoExtra[idx],
           bonifico_segnalato: segnalatiAccontoExtra[idx],
@@ -30243,7 +30288,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         precorso_imponibile: pagPrecorso.imponibile === "" ? null : parseNum(pagPrecorso.imponibile),
         precorso_totale: pagPrecorso.totale === "" ? null : parseNum(pagPrecorso.totale),
         precorso_metodo: pagPrecorso.metodo || null,
-        precorso_interessi: pagPrecorso.metodo === "Rate" && pagPrecorso.interessi !== "" ? parseNum(pagPrecorso.interessi) : null,
+        precorso_interessi: pagPrecorso.metodo === "APPago" && pagPrecorso.interessi !== "" ? parseNum(pagPrecorso.interessi) : null,
         precorso_pagato: pagPrecorsoPagato,
         precorso_pagato_il: pagPrecorsoPagato ? (pagPrecorsoIncassatoIl || dataOggiStr()) : null,
         precorso_bonifico_file: pathBonificoPrecorso,
@@ -30253,7 +30298,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
           totale: r.totale === "" ? null : parseNum(r.totale),
           metodo: r.metodo || null,
-          interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
+          interessi: r.metodo === "APPago" && r.interessi !== "" ? parseNum(r.interessi) : null,
           pagato: !!r.pagato,
           bonifico_file: pathsBonificoPrecorsoExtra[idx],
           bonifico_skip: !!r.bonificoSkip,
@@ -30470,7 +30515,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     }
 
     if ((dati.accontoMetodo || dati.accontoImporto) && !salta(pagAcconto.totale !== "")) {
-      const metodo = ["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"].find((m) => m.toLowerCase() === (dati.accontoMetodo || "").toLowerCase());
+      // i nomi vecchi restano riconosciuti: chi importa un foglio scritto
+      // mesi fa non deve sapere che le voci sono state rinominate
+      const VECCHI_NOMI_METODO = { sito: "Sito con carta", pos: "POS fisico", rate: "APPago", contanti: "Cash con IVA" };
+      const scritto = (dati.accontoMetodo || "").trim().toLowerCase();
+      const metodo = METODI_QUOTA.find((m) => m.toLowerCase() === scritto) || VECCHI_NOMI_METODO[scritto] || null;
       setPagAcconto((prev) => {
         let next = metodo ? { ...prev, metodo } : prev;
         if (dati.accontoImporto) next = conTotaleAggiornato(next, dati.accontoImporto.replace(",", "."), true);
@@ -31832,7 +31881,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           <BloccoQuota
             titolo="Quota acconto" Icona={IconaBanconota}
             valori={pagAcconto}
-            opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+            opzioniMetodo={METODI_QUOTA}
             totaleBloccato={false}
             imponibileBloccato={pagAcconto.metodo === "Cash no iva"}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
@@ -31840,15 +31889,15 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             onMetodo={(v) =>
               setPagAcconto((prev) => {
                 if (v === "Cash no iva") {
-                  return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: "" };
+                  return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "", imponibile: "" };
                 }
                 // si esce da "Cash no iva": ripristina l'IVA ricalcolando
                 // l'imponibile dal totale già inserito, invece di lasciare
                 // l'imponibile vuoto come se non fosse mai stato compilato
                 if (prev.metodo === "Cash no iva" && prev.totale !== "") {
-                  return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
+                  return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
                 }
-                return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
+                return { ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "" };
               })
             }
             onInteressi={(v) => setPagAcconto((prev) => ({ ...prev, interessi: v }))}
@@ -31873,7 +31922,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               key={idx}
               titolo={`Acconto aggiuntivo ${idx + 1}`}
               valori={riga}
-              opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+              opzioniMetodo={METODI_QUOTA}
               imponibileBloccato={riga.metodo === "Cash no iva"}
               onImponibile={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? conImponibileAggiornato(r, v, true) : r)))}
               onTotale={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? (r.metodo === "Cash no iva" ? { ...r, totale: v } : conTotaleAggiornato(r, v, true)) : r)))}
@@ -31902,7 +31951,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           <BloccoQuota
             titolo="Quota pre corso" Icona={IconaClipboardErp}
             valori={pagPrecorso}
-            opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+            opzioniMetodo={METODI_QUOTA}
             onImponibile={(v) => setPagPrecorso((prev) => conImponibileAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
             onTotale={(v) => setPagPrecorso((prev) => conTotaleAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
             onMetodo={(v) => setPagPrecorso((prev) => conMetodoAggiornatoSenzaBlocco(prev, v))}
@@ -31922,7 +31971,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               key={idx}
               titolo={`Pre corso aggiuntivo ${idx + 1}`}
               valori={riga}
-              opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+              opzioniMetodo={METODI_QUOTA}
               onImponibile={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conImponibileAggiornato(r, v, r.metodo !== "Cash no iva") : r)))}
               onTotale={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conTotaleAggiornato(r, v, r.metodo !== "Cash no iva") : r)))}
               onMetodo={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conMetodoAggiornatoSenzaBlocco(r, v) : r)))}
@@ -31958,12 +32007,12 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       totale: prezzoDermografoLordo != null ? String(prezzoDermografoLordo) : "",
                       imponibile: imponibileDermografo != null ? String(imponibileDermografo) : "",
                     }}
-                    opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+                    opzioniMetodo={METODI_QUOTA}
                     totaleBloccato
                     imponibileBloccato
                     onImponibile={() => {}}
                     onTotale={() => {}}
-                    onMetodo={(v) => setPagDermografo((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" }))}
+                    onMetodo={(v) => setPagDermografo((prev) => ({ ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "" }))}
                     onInteressi={(v) => setPagDermografo((prev) => ({ ...prev, interessi: v }))}
                     pagato={pagDermografoPagato}
                     onPagato={setPagDermografoPagato}
@@ -31981,7 +32030,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           <BloccoQuota
             titolo="Da avere al corso" Icona={IconaPortafoglio}
             valori={pagSaldo}
-            opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva"]}
+            opzioniMetodo={METODI_SALDO}
             onImponibile={(v) => setPagSaldo((prev) => conImponibileAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
             onTotale={(v) => setPagSaldo((prev) => conTotaleAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
             onMetodo={(v) => setPagSaldo((prev) => conMetodoAggiornatoSenzaBlocco(prev, v))}
@@ -32058,7 +32107,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                         style={{ ...campoAreaScheda, background: "#EDEAE2", color: NAVY, fontWeight: 700 }}
                         value={(() => {
                           const interessiTotali = tutteLeQuote
-                            .filter((q) => q !== pagSaldo && q.metodo === "Rate")
+                            .filter((q) => q !== pagSaldo && q.metodo === "APPago")
                             .reduce((somma, q) => somma + parseNum(q.interessi), 0);
                           if (interessiTotali <= 0) return "";
                           return (totaleConIva + interessiTotali).toFixed(2);
@@ -33846,7 +33895,7 @@ function quotePagateDiIscritto(i) {
   ["acconto", "precorso"].forEach((prefisso) => {
     (Array.isArray(i[`${prefisso}_extra`]) ? i[`${prefisso}_extra`] : []).forEach((r) => {
       if (!r.metodo) return;
-      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      const interessi = r.metodo === "APPago" ? (r.interessi || 0) : 0;
       quote.push({ fase: prefisso, totale: round2((r.totale || 0) + interessi), imponibile: r.imponibile || 0, metodo: r.metodo });
     });
   });
@@ -33887,8 +33936,12 @@ function contiRiepilogoClasse({
   // "Da avere al corso": gli unici importi incassati fisicamente il giorno
   // del corso — acconto e pre corso arrivano prima e non passano dalle
   // mani del master in aula
-  const contanti = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? (((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i)) : 0), 0) + incassiExtraContanti + venditeContanti);
-  const pos = round2(listaIscritti.reduce((s, i) => s + (i.incassato && i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos + venditePos);
+  // Contanti e' contanti con qualunque nome: "Cash con IVA" (dal
+  // 11/10/2026), "Cash no iva", e "Contanti" delle schede vecchie. La
+  // fattura cambia l'IVA, non dove finiscono i soldi — nella busta.
+  const eContanti = (m) => m === "Cash con IVA" || m === "Cash no iva" || m === "Contanti";
+  const contanti = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? ((eContanti(i.saldo_metodo) ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i)) : 0), 0) + incassiExtraContanti + venditeContanti);
+  const pos = round2(listaIscritti.reduce((s, i) => s + (i.incassato && eMetodoPos(i.saldo_metodo) ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos + venditePos);
   // Le spese con origine_scadenziario_chiave sono i pagamenti delle righe
   // automatiche (compensi disposti dalla busta, parti bonifico saldate,
   // fatture di alloggio e location): il loro costo sta gia' in
@@ -40558,19 +40611,23 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   // "completed" e "processing" (su WooCommerce vuol dire pagato e non
   // ancora spedito). Annullati, falliti, rimborsati e in attesa no, e
   // nemmeno gli omaggi, che valgono zero ma sarebbero righe in piu'.
-  const perCanale = useMemo(() => {
-    const dentro = (v) => {
-      const d = String(v.data_ordine || "").slice(0, 10);
-      return d >= range.inizio && d <= range.fine;
-    };
+  // useMemo e non useCallback: in questo file useCallback non e'
+  // importato, e la build non lo segnala — lo trova solo il montaggio.
+  const venditeNel = useMemo(() => (inizio, fine) => {
     const valida = (v) => !v.simulazione
       && (v.tipo_movimento || "vendita") === "vendita"
       && ["completed", "processing"].includes(v.stato);
     const somma = (origine) => round2((venditeShop || [])
-      .filter((v) => v.origine === origine && valida(v) && dentro(v))
+      .filter((v) => {
+        const d = String(v.data_ordine || "").slice(0, 10);
+        return v.origine === origine && valida(v) && d >= inizio && d <= fine;
+      })
       .reduce((s2, v) => s2 + (Number(v.totale) || 0), 0));
-    const shop = somma("woocommerce");
-    const banco = somma("pos");
+    return { shop: somma("woocommerce"), banco: somma("pos") };
+  }, [venditeShop]);
+
+  const perCanale = useMemo(() => {
+    const { shop, banco } = venditeNel(range.inizio, range.fine);
     // "Dai corsi" e' esattamente il numero del riquadro "Incassato" qui
     // sopra — iscrizioni piu' le entrate a mano registrate in accademia.
     // Tenerli insieme e' voluto: cosi' i due riquadri dicono la stessa
@@ -40582,14 +40639,31 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
       totale: round2(corsiEuro + shop + banco),
       perAllievo: kpi.nAllievi > 0 ? round2(corsiEuro / kpi.nAllievi) : null,
     };
-  }, [venditeShop, range.inizio, range.fine, kpi.ricavi, kpi.nAllievi]);
+  }, [venditeNel, range.inizio, range.fine, kpi.ricavi, kpi.nAllievi]);
 
-  const varRicavi = variazionePctErp(kpi.ricavi, kpiPrec.ricavi);
+  // I TRE RIQUADRI IN CIMA PARLANO DELL'AZIENDA, NON DEI SOLI CORSI.
+  // "Pagato" ha sempre contato tutte le uscite — anche quelle dello shop
+  // e della struttura — mentre di fronte c'era il solo incasso dei corsi:
+  // due numeri di perimetro diverso messi uno accanto all'altro, con la
+  // differenza fra i due chiamata "Differenza di cassa". Ora entrambi
+  // guardano tutta l'azienda, e la differenza vuol dire qualcosa.
+  //
+  // I corsi da soli non spariscono: sono il primo dei quattro riquadri
+  // di "Da dove arrivano i ricavi", qui sotto.
+  const incassoTotale = perCanale.totale;
+  const incassoTotalePrec = useMemo(() => {
+    const { shop, banco } = venditeNel(rangePrec.inizio, rangePrec.fine);
+    return round2(kpiPrec.ricavi + shop + banco);
+  }, [venditeNel, rangePrec.inizio, rangePrec.fine, kpiPrec.ricavi]);
+  const utileTotale = round2(incassoTotale - kpi.costi);
+  const utileTotalePrec = round2(incassoTotalePrec - kpiPrec.costi);
+
+  const varRicavi = variazionePctErp(incassoTotale, incassoTotalePrec);
   const varCosti = variazionePctErp(kpi.costi, kpiPrec.costi);
-  const varUtile = variazionePctErp(kpi.utile, kpiPrec.utile);
+  const varUtile = variazionePctErp(utileTotale, utileTotalePrec);
   const varAllievi = variazionePctErp(kpi.nAllievi, kpiPrec.nAllievi);
 
-  const marginePct = kpi.ricavi > 0 ? round1Erp((kpi.utile / kpi.ricavi) * 100) : 0;
+  const marginePct = incassoTotale > 0 ? round1Erp((utileTotale / incassoTotale) * 100) : 0;
   const giudizioMargine = marginePct >= 30 ? "Ottima" : marginePct >= 15 ? "Buona" : marginePct >= 0 ? "Da migliorare" : "In perdita";
 
   const mesiRange = useMemo(() => {
@@ -40727,26 +40801,19 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
               contro impegnato. Lo stesso numero sotto due nomi diversi
               sarebbe il modo piu' rapido per leggerne uno credendo che
               sia l'altro */}
-          {/* "dai corsi" nel titolo, non solo nel sottotitolo. Questo
-              numero sono le iscrizioni (piu' le entrate a mano, che sono
-              rare): lo shop e il banco non ci sono mai stati dentro. Ma
-              un riquadro grosso che dice "Incassato" e nient'altro si
-              legge come il giro d'affari dell'azienda, e di li' nasce il
-              sospetto che dentro ci siano anche le vendite — contate due
-              volte. Sono separate nei quattro riquadri qui sotto. */}
           <CardKpiErp
-            titolo={perCassa ? "Incassato dai corsi" : inProspettiva ? "Ricavi attesi dai corsi" : "Ricavi dai corsi"}
-            valore={fmtEuroErp(kpi.ricavi)} variazione={varRicavi}
-            sub={perCassa ? `Entrato dal ${fmtData(dataDa)} a oggi` : inProspettiva ? `Pattuito fino al ${fmtData(dataProspettiva)}` : "vs stesso periodo precedente"}
+            titolo={perCassa ? "Incassato" : inProspettiva ? "Ricavi attesi" : "Ricavi totali"}
+            valore={fmtEuroErp(incassoTotale)} variazione={varRicavi}
+            sub={perCassa ? `Corsi, shop e banco dal ${fmtData(dataDa)}` : inProspettiva ? `Corsi, shop e banco fino al ${fmtData(dataProspettiva)}` : "Corsi, shop e banco"}
             Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
           <CardKpiErp
             titolo={perCassa ? "Pagato" : "Costi operativi"}
             valore={fmtEuroErp(kpi.costi)} variazione={varCosti} variazioneInvertita
-            sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% ${perCassa ? "dell'incassato" : inProspettiva ? "dei ricavi attesi" : "dei ricavi"}` : "—"}
+            sub={incassoTotale > 0 ? `${fmtPctErp(round1Erp((kpi.costi / incassoTotale) * 100))} ${perCassa ? "dell'incassato" : inProspettiva ? "dei ricavi attesi" : "dei ricavi"}` : "—"}
             Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
           <CardKpiErp
             titolo={perCassa ? "Differenza di cassa" : inProspettiva ? "Guadagno atteso" : "Utile netto"}
-            valore={fmtEuroErp(kpi.utile)} variazione={varUtile}
+            valore={fmtEuroErp(utileTotale)} variazione={varUtile}
             sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`}
             Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
           <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
@@ -40754,8 +40821,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
 
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Da dove arrivano i ricavi</div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
-          {`Il giro d'affari del periodo: ${fmtEuroErp(perCanale.totale)}. `}
-          Le tre sorgenti non si sovrappongono — i corsi sono le iscrizioni, le altre due sono le vendite di prodotti — quindi i tre numeri si sommano.
+          Le tre sorgenti dell'«Incassato» qui sopra, separate: non si sovrappongono — i corsi sono le iscrizioni, le altre due le vendite di prodotti — quindi i tre numeri si sommano a {fmtEuroErp(perCanale.totale)}.
         </div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
           <CardKpiErp
@@ -41262,7 +41328,7 @@ function calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate = false 
     }
     (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r, idx) => {
       if (!r.metodo || !!r.pagato !== soloIncassate) return;
-      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      const interessi = r.metodo === "APPago" ? (r.interessi || 0) : 0;
       righe.push({ key: `accontoextra_${i.id}_${idx}`, iscritto: i, corsoData: cd, fase: "Acconto (rata aggiuntiva)", importo: round2((r.totale || 0) + interessi), scadenza: scadenzaAcconto });
     });
     if ((i.precorso_totale || 0) > 0 && i.precorso_metodo && !!i.precorso_pagato === soloIncassate) {
@@ -41270,7 +41336,7 @@ function calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate = false 
     }
     (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r, idx) => {
       if (!r.metodo || !!r.pagato !== soloIncassate) return;
-      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      const interessi = r.metodo === "APPago" ? (r.interessi || 0) : 0;
       righe.push({ key: `precorsoextra_${i.id}_${idx}`, iscritto: i, corsoData: cd, fase: "Pre corso (rata aggiuntiva)", importo: round2((r.totale || 0) + interessi), scadenza: cd.data_inizio });
     });
     const saldoDaIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
@@ -49292,11 +49358,11 @@ function PaginaInserimentoCostiRicavi({
     };
     if (i.acconto_pagato && i.acconto_metodo) aggiungi("acconto", "Acconto", i.acconto_pagato_il, totQuota(i, "acconto"), i.acconto_metodo);
     (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r, idx) => {
-      if (r.pagato && r.metodo) aggiungi(`acconto_${idx}`, "Acconto", i.acconto_pagato_il, round2((r.totale || 0) + (r.metodo === "Rate" ? (r.interessi || 0) : 0)), r.metodo);
+      if (r.pagato && r.metodo) aggiungi(`acconto_${idx}`, "Acconto", i.acconto_pagato_il, round2((r.totale || 0) + (r.metodo === "APPago" ? (r.interessi || 0) : 0)), r.metodo);
     });
     if (i.precorso_pagato && i.precorso_metodo) aggiungi("precorso", "Pre corso", i.precorso_pagato_il, totQuota(i, "precorso"), i.precorso_metodo);
     (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r, idx) => {
-      if (r.pagato && r.metodo) aggiungi(`precorso_${idx}`, "Pre corso", i.precorso_pagato_il, round2((r.totale || 0) + (r.metodo === "Rate" ? (r.interessi || 0) : 0)), r.metodo);
+      if (r.pagato && r.metodo) aggiungi(`precorso_${idx}`, "Pre corso", i.precorso_pagato_il, round2((r.totale || 0) + (r.metodo === "APPago" ? (r.interessi || 0) : 0)), r.metodo);
     });
     if (i.incassato && i.saldo_metodo) aggiungi("saldo", "Saldo al corso", i.saldo_incassato_il || cd?.data_inizio, (i.saldo_totale || 0) + modelleTotaleDi(i), i.saldo_metodo);
   });
