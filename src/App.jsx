@@ -6181,12 +6181,21 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
       </div>
     </div>
   );
-  const stileImporto = (bloccato) => ({
+  // CASH NO IVA: ESISTE SOLO IL TOTALE.
+  // In contanti senza fattura non c'e' imposta da scorporare, quindi
+  // imponibile e IVA non sono caselle "da riempire dopo": non esistono
+  // proprio. Restavano bianche e scrivibili, e chi le trovava vuote ci
+  // metteva un numero — che poi faceva nascere IVA su una quota che non
+  // ne ha. Qui si spengono tutte e due, e si scrive solo il totale.
+  const senzaIva = valori.metodo === "Cash no iva";
+  const stileImporto = (bloccato, spento = false) => ({
     ...campoAreaScheda, fontWeight: 700, fontSize: isMobile ? 13 : 14,
     padding: isMobile ? "6px 3px" : "10px 12px",
     paddingRight: isMobile ? 3 : 26,
     textAlign: isMobile ? "center" : "left",
-    background: bloccato ? "#EDF1F4" : "#fff", color: bloccato ? MUTED : NAVY,
+    background: spento ? "#E3E6EA" : bloccato ? "#EDF1F4" : "#fff",
+    color: spento ? "#A6ACB8" : bloccato ? MUTED : NAVY,
+    ...(spento ? { borderColor: "#D3D8DF" } : {}),
   });
   return (
     <div style={{ ...areaSchedaIscritto, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 16, padding: isMobile ? 9 : 12, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
@@ -6204,15 +6213,23 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
         {filo}
         {campoImporto("Imponibile", (
           <input
-            style={stileImporto(soloLettura || imponibileBloccato)}
+            style={stileImporto(soloLettura || imponibileBloccato, senzaIva)}
             inputMode="decimal"
-            value={valori.imponibile}
-            disabled={soloLettura || imponibileBloccato}
+            value={senzaIva ? "" : valori.imponibile}
+            disabled={soloLettura || imponibileBloccato || senzaIva}
+            title={senzaIva ? "In contanti senza fattura non c'è imponibile: si scrive solo il totale" : undefined}
             onChange={(e) => onImponibile && onImponibile(e.target.value)}
           />
         ))}
         {filo}
-        {campoImporto("IVA 22%", <input style={stileImporto(true)} value={ivaDiQuota(valori)} disabled />)}
+        {campoImporto("IVA 22%", (
+          <input
+            style={stileImporto(true, senzaIva)}
+            value={senzaIva ? "" : ivaDiQuota(valori)}
+            title={senzaIva ? "In contanti senza fattura non c'è IVA" : undefined}
+            disabled
+          />
+        ))}
         {filo}
         {campoImporto(
           titolo === "Quota acconto" && valori.metodo === "APPago" ? "Totale (senza interessi)" : "Totale",
