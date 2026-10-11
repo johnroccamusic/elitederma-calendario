@@ -35104,12 +35104,28 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   // l'incassato DI settembre — e la riga sopra ai riquadri prometteva la
   // seconda cosa. Shop e banco, accanto, si sono sempre contati per data
   // dell'ordine: nello stesso riquadro convivevano due criteri.
+  //
+  // Un acconto preso per un corso di dicembre CONTA: i soldi sono
+  // entrati, e l'azienda ci cammina. Quello che non conta e' la promessa
+  // di incasso — il saldo che l'allieva deve ancora dare — e quella non
+  // e' mai stata qui dentro: sta in "Crediti da incassare".
+  //
+  // Si tiene comunque il conto di quanta parte riguarda corsi non ancora
+  // tenuti, perche' e' cassa su cui l'accademia ha ancora un'aula da
+  // fare: si legge nella riga sotto i riquadri, senza essere tolta.
   const cdPerIdKpi = Object.fromEntries(corsiDate.map((cd) => [cd.id, cd]));
-  const incassatoNelPeriodo = round2(iscritti.reduce((s, i) => {
+  const nelPeriodo = (v) => v.data && v.data >= inizio && v.data <= fine;
+  let incassatoTutto = 0, incassatoPromesso = 0;
+  iscritti.forEach((i) => {
     const cd = cdPerIdKpi[i.corso_data_id];
-    if (sedeId && cd?.location_id !== sedeId) return s;
-    return s + quoteIncassateDi(i, cd).reduce((q, v) => q + (v.data && v.data >= inizio && v.data <= fine ? v.netto : 0), 0);
-  }, 0));
+    if (sedeId && cd?.location_id !== sedeId) return;
+    const quanto = quoteIncassateDi(i, cd).reduce((q, v) => q + (nelPeriodo(v) ? v.netto : 0), 0);
+    if (!quanto) return;
+    incassatoTutto += quanto;
+    if (cd && !conclusaKpi(cd)) incassatoPromesso += quanto;
+  });
+  const incassatoNelPeriodo = round2(incassatoTutto);
+  const incassatoCorsiDaVenire = round2(incassatoPromesso);
   // incassi non legati a un'iscrizione (es. vendita di un prodotto in
   // accademia): stesso trattamento "al netto di IVA" dei ricavi corsi,
   // così restano confrontabili nello stesso KPI
@@ -35179,7 +35195,7 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   const cashFlow = round2(incassatoReale - costi);
   const creditiDaIncassare = round2(iscrittiFiltrati.filter((i) => !i.incassato).reduce((s, i) => s + (i.saldo_totale || 0) + modelleTotaleDi(i), 0));
   const pagamentiAperti = iscrittiFiltrati.filter((i) => !i.incassato && (i.saldo_totale || 0) + modelleTotaleDi(i) > 0).length;
-  return { ricavi, costi, utile, nAllievi: iscrittiFiltrati.length, riempimentoMedio, cashFlow, creditiDaIncassare, pagamentiAperti, cdFiltrate, iscrittiFiltrati };
+  return { ricavi, costi, utile, nAllievi: iscrittiFiltrati.length, riempimentoMedio, cashFlow, creditiDaIncassare, pagamentiAperti, cdFiltrate, iscrittiFiltrati, incassatoCorsiDaVenire };
 }
 
 function CardKpiErp({ titolo, valore, variazione, variazioneInvertita, sub, Icona, coloreIcona, coloreBgIcona, scuro, onClick }) {
@@ -40898,6 +40914,20 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
             Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
           <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
         </div>
+
+        {perCassa && kpi.incassatoCorsiDaVenire > 0 && (
+          /* Dentro l'incassato, ma vale la pena saperlo: su questi soldi
+             l'accademia ha ancora un'aula da fare. */
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, padding: isMobile ? "10px 12px" : "12px 16px", borderRadius: 12, background: "#FBF1D9", border: "1px solid #E8D9A0", flexWrap: "wrap" }}>
+            <IconaPortafoglio size={17} color={GOLD} />
+            <span style={{ ...fontBody, fontSize: isMobile ? 12 : 12.5, color: NAVY }}>
+              Di cui <strong>{fmtEuroErp(kpi.incassatoCorsiDaVenire)}</strong> per corsi che devono ancora tenersi.
+            </span>
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 200px", minWidth: 0 }}>
+              Soldi già in cassa, contati nell'incassato: l'aula però è ancora da fare.
+            </span>
+          </div>
+        )}
 
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Da dove arrivano i ricavi</div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
