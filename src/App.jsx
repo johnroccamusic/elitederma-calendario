@@ -74717,6 +74717,15 @@ function speseComplete(spese, corsiDate, iscritti, costiSottocategorie) {
 // grafici e tabelle: ritorna sia il totale sia l'elenco delle "voci
 // incluse" (spesa + importo effettivamente contato), utile per i
 // drill-down e per i raggruppamenti per categoria/sede/ecc.
+// il rapporto spese/ricavi di un corso, a colpo d'occhio. Oltre il 100%
+// il corso ha speso piu' di quanto ha portato; oltre il 60% mangia piu'
+// della meta' di quello che incassa.
+function coloreRapportoCosti(pct) {
+  if (pct == null) return MUTED;
+  if (pct >= 100) return "#C0392B";
+  if (pct >= 60) return "#B8860B";
+  return "#2E7D32";
+}
 function calcolaTotaleSpese(spese, speseAttribuzioni, costiCategorieById, corsiDateById, inizio, fine, filtri = {}) {
   const attribPerSpesa = {};
   (speseAttribuzioni || []).forEach((a) => { (attribPerSpesa[a.spesa_id] ||= []).push(a); });
@@ -75095,6 +75104,48 @@ function SezioneAnalisiCosti({
   const opzioniCorso = corsi.map((c) => ({ id: c.id, nome: c.nome.toUpperCase() }));
   const opzioniClasse = corsiDate.map((cd) => ({ id: cd.id, nome: `${fmtData(cd.data_inizio)} — ${corsi.find((c) => c.id === cd.corso_id)?.nome || ""}`.toUpperCase() }));
   const opzioniEvento = eventi.map((e) => ({ id: e.id, nome: e.nome.toUpperCase() }));
+  // QUANTO COSTA OGNI CORSO, NON OGNI EDIZIONE.
+  // La stessa domanda del Pareto, girata dall'altra parte: non "in che
+  // categoria di spesa finiscono i soldi" ma "quale corso se li mangia".
+  // Un corso si riprezza o si smette; una singola edizione andata male
+  // no, e per questo si somma su tutte le edizioni del periodo.
+  //
+  // I ricavi sono il pattuito delle iscrizioni — la stessa base del KPI
+  // "Incidenza sui ricavi" e della colonna "% sui ricavi" qui sotto, cosi'
+  // i numeri della pagina si controllano a vicenda. Le spese arrivano da
+  // calcolaTotaleSpese con il filtro corso, che prende sia quelle
+  // intestate al corso sia quelle intestate a una sua classe.
+  const costiPerCorso = useMemo(() => {
+    const corsiDateById2 = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+    const costiCategorieById2 = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
+    const tutte = speseComplete(spese, corsiDate, iscritti, costiSottocategorie);
+    const cdPeriodo = (corsiDate || []).filter((cd) => cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine
+      && (!filtri.sedeId || cd.location_id === filtri.sedeId)
+      && (!filtri.corsoId || cd.corso_id === filtri.corsoId)
+      && (!filtri.classeId || cd.id === filtri.classeId));
+    const righe = (corsi || []).map((c) => {
+      const ids = new Set(cdPeriodo.filter((cd) => cd.corso_id === c.id).map((cd) => cd.id));
+      const costi = calcolaTotaleSpese(tutte, speseAttribuzioni, costiCategorieById2, corsiDateById2, range.inizio, range.fine, { ...filtri, corsoId: c.id }).totale;
+      if (ids.size === 0 && costi === 0) return null;
+      const ricavi = round2((iscritti || []).filter((i) => ids.has(i.corso_data_id)).reduce((sum, i) => sum + (i.totale_pattuito || 0), 0));
+      return {
+        corso: c, famiglia: c.categoria || "Senza tipologia", edizioni: ids.size, ricavi, costi,
+        pct: ricavi > 0 ? round1Erp((costi / ricavi) * 100) : null,
+      };
+    }).filter(Boolean);
+    const perFamiglia = {};
+    righe.forEach((r) => { (perFamiglia[r.famiglia] ||= []).push(r); });
+    return Object.entries(perFamiglia).map(([famiglia, voci]) => {
+      const ricavi = round2(voci.reduce((sum, v) => sum + v.ricavi, 0));
+      const costi = round2(voci.reduce((sum, v) => sum + v.costi, 0));
+      return {
+        famiglia, ricavi, costi, edizioni: voci.reduce((sum, v) => sum + v.edizioni, 0),
+        pct: ricavi > 0 ? round1Erp((costi / ricavi) * 100) : null,
+        voci: [...voci].sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1)),
+      };
+    }).sort((a, b) => b.costi - a.costi);
+  }, [corsi, corsiDate, iscritti, spese, speseAttribuzioni, costiCategorie, costiSottocategorie, range.inizio, range.fine, filtri]);
+
   const opzioniCategoria = [...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => ({ id: c.id, nome: c.nome }));
   const opzioniSottocategoria = sottocategorieDiCategoria(costiSottocategorie, categoriaId).map((v) => ({ id: v.id, nome: v.nome }));
   const opzioniFornitore = fornitori.map((f) => ({ id: f.id, nome: f.nome.toUpperCase() }));
@@ -75288,6 +75339,55 @@ function SezioneAnalisiCosti({
                 })}
                 {kpi.categorieOrdinate.length === 0 && (
                   <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna spesa registrata in questo periodo.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 26 }}>Costo dei corsi</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+          Quanto costa ogni corso rispetto a quello che porta, sommando tutte le edizioni del periodo. I ricavi sono il pattuito delle iscrizioni, come nel resto della pagina.
+        </div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
+              <thead>
+                <tr>
+                  {["Corso", "Edizioni", "Ricavi", "Spese", "% sui ricavi"].map((t, k) => (
+                    <th key={t} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: k === 0 ? "left" : "right", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{t}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {costiPerCorso.map((f) => (
+                  <React.Fragment key={f.famiglia}>
+                    {/* la riga della tipologia: PMU, ESTETICA. E' il totale
+                        dei corsi che stanno sotto, e si legge da sola */}
+                    <tr style={{ background: BG }}>
+                      <td style={{ padding: "9px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{f.famiglia}</td>
+                      <td style={{ padding: "9px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "right" }}>{f.edizioni}</td>
+                      <td style={{ padding: "9px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp(f.ricavi)}</td>
+                      <td style={{ padding: "9px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp(f.costi)}</td>
+                      <td style={{ padding: "9px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, fontWeight: 700, color: coloreRapportoCosti(f.pct), textAlign: "right" }}>{f.pct == null ? "N/D" : fmtPctErp(f.pct)}</td>
+                    </tr>
+                    {f.voci.map((r) => (
+                      <tr key={r.corso.id} style={{ cursor: "pointer" }}
+                        onClick={() => setElencoSpese({
+                          titolo: r.corso.nome, colore: NAVY,
+                          filtro: (sp) => sp.corso_id === r.corso.id || (sp.classe_id && (corsiDate || []).some((cd) => cd.id === sp.classe_id && cd.corso_id === r.corso.id)),
+                        })}>
+                        <td style={{ padding: "11px 14px 11px 28px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{r.corso.nome}</td>
+                        <td style={{ padding: "11px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, textAlign: "right" }}>{r.edizioni}</td>
+                        <td style={{ padding: "11px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp(r.ricavi)}</td>
+                        <td style={{ padding: "11px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp(r.costi)}</td>
+                        <td style={{ padding: "11px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: coloreRapportoCosti(r.pct), textAlign: "right" }}>{r.pct == null ? "N/D" : fmtPctErp(r.pct)}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+                {costiPerCorso.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun corso nel periodo selezionato.</td></tr>
                 )}
               </tbody>
             </table>
