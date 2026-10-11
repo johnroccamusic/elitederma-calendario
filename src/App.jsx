@@ -35130,7 +35130,19 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
     ? round2(incassatoReale + totaleEntrateManuali)
     : round2(iscrittiFiltrati.reduce((s, i) => s + (i.totale_pattuito || 0), 0) + totaleEntrateManuali);
   const costiClasse = round2(cdFiltrate.reduce((s, cd) => s + costoClasseErp(cd), 0));
-  const quoteVenditore = round2(iscrittiFiltrati.reduce((s, i) => s + (i.quota_venditore || 0), 0));
+  // LE QUOTE VENDITORE NON SI SOMMANO QUI.
+  // Una quota venditore esce dalla cassa quando la si segna pagata dal
+  // Riepilogo amministrativo, e in quel momento diventa una spesa vera
+  // con la sua data (origine_scadenziario_chiave "venditore…" /
+  // "cash_venditore…"). Sommarla anche come campo dell'iscritto voleva
+  // dire contarla due volte: all'11/10/2026, 6.820 euro gia' dentro le
+  // spese piu' 9.565 riaggiunti qui.
+  //
+  // Vale per tutti i costi di un corso — master, sala, alloggi,
+  // assistenti, modelle: passano tutti di li', e la loro unica traccia
+  // e' la spesa. La riga qui sotto resta a zero per non cambiare il
+  // resto del conto.
+  const quoteVenditore = 0;
   // spese di "Analisi costi di gestione": sull'imponibile, coerente coi
   // ricavi (sempre al netto di IVA) — le voci extra taggate del
   // Riepilogo amministrativo sono già incluse in costiClasse sopra
