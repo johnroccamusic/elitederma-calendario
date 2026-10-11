@@ -35054,6 +35054,33 @@ function riepilogoMensilePrimaNota(spesePagate) {
 //     non si e' tenuto, quindi non ha speso niente;
 //   - i costi restano quelli dei corsi gia' conclusi piu' le spese
 //     registrate, che nella tabella sono gia' tutte pagate.
+// CASSA VERA: ogni quota conta nel giorno in cui i soldi sono arrivati.
+//
+// Le date sono le stesse della Prima nota, cosi' le due pagine non si
+// contraddicono: l'acconto e il pre corso al giorno della spunta (in
+// mancanza, il giorno dell'iscrizione), il saldo al giorno dell'incasso
+// (in mancanza, il giorno del corso, che e' quando i soldi passano di
+// mano in aula). I pagamenti aggiuntivi seguono la quota a cui
+// appartengono, perche' non hanno una data loro.
+//
+// Gli importi sono NETTI, non lordi come in Prima nota: su questa pagina
+// i costi sono al netto dell'IVA, e un ricavo lordo di fronte a un costo
+// netto non e' un margine, e' un numero inventato.
+function quoteIncassateDi(i, cd) {
+  const giornoIscrizione = String(i.ts || "").slice(0, 10) || null;
+  const fuori = [];
+  const metti = (data, netto) => { if (netto > 0) fuori.push({ data: data || giornoIscrizione, netto: round2(netto) }); };
+  if (i.acconto_pagato) metti(i.acconto_pagato_il, importoNettoQuota(i.acconto_imponibile, i.acconto_totale));
+  (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r) => {
+    if (r?.pagato) metti(i.acconto_pagato_il, importoNettoQuota(r.imponibile, r.totale));
+  });
+  if (i.precorso_pagato) metti(i.precorso_pagato_il, importoNettoQuota(i.precorso_imponibile, i.precorso_totale));
+  (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r) => {
+    if (r?.pagato) metti(i.precorso_pagato_il, importoNettoQuota(r.imponibile, r.totale));
+  });
+  if (i.incassato) metti(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cd?.data_inizio, importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i));
+  return fuori;
+}
 function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio, fine, sedeId, corsoById, locById, soloTrascorsi = false }) {
   const oggiKpi = dataOggiStr();
   const cdNelPeriodo = corsiDate.filter((cd) => cd.data_inizio >= inizio && cd.data_inizio <= fine && (!sedeId || cd.location_id === sedeId));
@@ -35064,11 +35091,25 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   const idsCd = new Set(cdFiltrate.map((cd) => cd.id));
   const iscrittiFiltrati = iscritti.filter((i) => idsCd.has(i.corso_data_id));
 
-  // dei corsi che devono ancora tenersi resta solo la cassa gia' entrata
-  const idsDaVenire = new Set(soloTrascorsi ? cdNelPeriodo.filter((cd) => !conclusaKpi(cd)).map((cd) => cd.id) : []);
-  const anticipiDaVenire = idsDaVenire.size
-    ? round2(iscritti.filter((i) => idsDaVenire.has(i.corso_data_id)).reduce((s, i) => s + anticipiIncassatiDi(i), 0))
-    : 0;
+  // QUANTO E' ENTRATO IN QUESTI GIORNI.
+  // Si guardano tutte le iscrizioni, non solo quelle delle edizioni che
+  // partono nel periodo, e di ognuna si prendono le quote pagate con una
+  // data dentro la finestra.
+  //
+  // Prima si contavano i soldi delle edizioni che COMINCIAVANO nel
+  // periodo, da qualunque data fossero arrivati. Sui dati dell'11/10/2026
+  // voleva dire contare 33.648,83 euro incassati prima del 1 settembre e
+  // lasciarne fuori 35.841,69 entrati davvero nel periodo, ma per corsi
+  // che partono dopo. Era l'incassato DEI CORSI DI settembre, non
+  // l'incassato DI settembre — e la riga sopra ai riquadri prometteva la
+  // seconda cosa. Shop e banco, accanto, si sono sempre contati per data
+  // dell'ordine: nello stesso riquadro convivevano due criteri.
+  const cdPerIdKpi = Object.fromEntries(corsiDate.map((cd) => [cd.id, cd]));
+  const incassatoNelPeriodo = round2(iscritti.reduce((s, i) => {
+    const cd = cdPerIdKpi[i.corso_data_id];
+    if (sedeId && cd?.location_id !== sedeId) return s;
+    return s + quoteIncassateDi(i, cd).reduce((q, v) => q + (v.data && v.data >= inizio && v.data <= fine ? v.netto : 0), 0);
+  }, 0));
   // incassi non legati a un'iscrizione (es. vendita di un prodotto in
   // accademia): stesso trattamento "al netto di IVA" dei ricavi corsi,
   // così restano confrontabili nello stesso KPI
@@ -35082,7 +35123,7 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   // corsi ancora da tenere. Quello che resta da avere non sparisce: e'
   // "Crediti da incassare", qui sotto, che e' il posto giusto per una
   // cosa che ancora non e' successa
-  const incassatoReale = round2(iscrittiFiltrati.reduce((s, i) => s + incassatoDi(i), 0) + anticipiDaVenire);
+  const incassatoReale = incassatoNelPeriodo;
   // in modalita' cassa il ricavo E' l'incassato: non il pattuito, che
   // comprende saldi che devono ancora arrivare
   const ricavi = soloTrascorsi
@@ -40805,7 +40846,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
           sullo stesso periodo, e senza una riga di spiegazione sembra un
           errore invece che una domanda diversa */}
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
-        {periodo === "andamento" && "Solo cassa: entra quello che è stato incassato davvero — anticipi e rate con la spunta \"pagato\", saldi segnati come incassati — ed esce quello che è stato pagato. Quello che resta da avere è qui sotto, in \"Crediti da incassare\"."}
+        {periodo === "andamento" && "Solo cassa: ogni quota conta nel giorno in cui i soldi sono arrivati, non in quello del corso — stesse date della Prima nota. Un acconto di luglio per un corso di settembre sta a luglio. Quello che resta da avere è qui sotto, in \"Crediti da incassare\"."}
         {periodo === "prospettiva" && "Previsione: conta tutto il pattuito delle iscrizioni, compresi i corsi che devono ancora tenersi. Non è cassa — è quello che ci si aspetta di incassare entro quella data."}
         {periodo !== "andamento" && periodo !== "prospettiva" && "Finestra fissa sul pattuito, senza tenere conto di cosa sia già stato incassato."}
       </div>
