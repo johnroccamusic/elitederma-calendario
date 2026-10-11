@@ -40412,6 +40412,90 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   );
 }
 
+// LA BARRA DEL PERIODO, UNA SOLA PER TUTTE E DUE LE SEZIONI.
+// Le date e la finestra scelta stanno nelle impostazioni condivise e non
+// in uno stato locale: cosi' "Andamento" e "Analisi costi di gestione"
+// guardano sempre lo stesso periodo, e passando dall'una all'altra non si
+// ricomincia da capo. Si ritrovano anche domani, e anche aprendo l'app
+// dal telefono.
+function usaPeriodoAnalisi() {
+  const [periodo, setPeriodo] = useImpostazioneCondivisa("analisi_periodo", "andamento");
+  const [dataDa, setDataDa] = useImpostazioneCondivisa("analisi_data_partenza", `${new Date().getFullYear()}-01-01`);
+  const [dataProspettiva, setDataProspettiva] = useImpostazioneCondivisa("analisi_data_prospettiva", `${new Date().getFullYear()}-12-31`);
+  return { periodo, setPeriodo, dataDa, setDataDa, dataProspettiva, setDataProspettiva };
+}
+function BarraPeriodoAnalisi({ isMobile }) {
+  const { periodo, setPeriodo, dataDa, setDataDa, dataProspettiva, setDataProspettiva } = usaPeriodoAnalisi();
+  // Le due date stanno in alto e da sole, sopra ai pulsanti, perche' non
+  // sono un'opzione fra le altre: sono i due estremi entro cui tutto il
+  // resto della pagina fa i conti. Si scrivono una volta e restano.
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? 12 : 16, marginBottom: 12, display: "flex", gap: isMobile ? 14 : 30, flexWrap: "wrap", alignItems: "flex-end" }}>
+      {[
+        // QUALE DELLE DUE DATE CONTA. "Analisi dal" vale solo in
+        // "Andamento ad oggi", "Prospettiva fino al" solo in
+        // "Prospettiva di guadagno", e sulle tre finestre fisse non
+        // conta nessuna delle due. Finche' erano tutte e due accese
+        // allo stesso modo, cambiarne una e non vedere muovere niente
+        // sembrava un difetto: era solo quella sbagliata.
+        { chiave: "da", etichetta: "Analisi dal", valore: dataDa, salva: setDataDa, inUso: periodo === "andamento" },
+        { chiave: "a", etichetta: "Prospettiva fino al", valore: dataProspettiva, salva: setDataProspettiva, inUso: periodo === "prospettiva" },
+      ].map((c) => (
+        <div key={c.chiave} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: c.inUso ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>
+            {c.etichetta}{c.inUso && <span style={{ color: GOLD }}> · in uso</span>}
+          </div>
+          <input
+            type="date"
+            value={c.valore || ""}
+            // TOCCARE UNA DATA LA FA COMANDARE.
+            // Chi scrive in un campo data sta dicendo "voglio vedere da
+            // qui": se quella data non e' quella in uso, il periodo si
+            // sposta da solo su quello che la usa. Prima no, e il
+            // risultato era un campo che accettava il numero senza che
+            // sotto cambiasse una virgola — sembrava che l'app non si
+            // aggiornasse. Il pallino dorato "in uso" non bastava a
+            // spiegarlo: e' successo due volte.
+            onChange={(e) => {
+              c.salva(e.target.value);
+              if (!c.inUso) setPeriodo(c.chiave === "da" ? "andamento" : "prospettiva");
+            }}
+            title={c.inUso ? "Questa data comanda il periodo che stai guardando" : "Scrivendo qui il periodo passa a quello che usa questa data"}
+            // Il campo resta nero e pieno anche quando non comanda: si
+            // scrive sempre. Era grigio e al 65% di opacita', e nel resto
+            // dell'app quello vuol dire "disattivato" — sembrava rotto.
+            // Che sia in uso o no lo dicono l'etichetta e il bordo.
+            style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${c.inUso ? GOLD : CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px" }}
+          />
+        </div>
+      ))}
+      {/* Le tre finestre fisse stanno qui, con le date: sono tutte e
+          cinque la stessa domanda — "su che periodo conto". Erano
+          tessere grandi accanto ai due modi di contare, e sembravano
+          cose dello stesso ordine; non lo sono. */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {[
+          { v: "30giorni", l: "Ultimi 30 giorni" },
+          { v: "trimestre", l: "Trimestre" },
+          { v: "anno", l: "Anno solare" },
+        ].map((f) => {
+          const attivo = periodo === f.v;
+          return (
+            <button key={f.v} type="button" onClick={() => setPeriodo(f.v)}
+              style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: attivo ? "#fff" : NAVY,
+                background: attivo ? NAVY : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`,
+                borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              {f.l}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 180px", lineHeight: 1.5, minWidth: 0 }}>
+        Le date restano impostate: le ritrovi domani e anche aprendo l'app dal telefono.
+      </div>
+    </div>
+  );
+}
 // "Analisi andamento": prima sezione di "Dashboard analisi" — ex corpo di
 // PaginaErp (KPI/grafici/andamento per sede), meno "+ Nuova operazione"
 // (si trova ora in "Inserimento costi e ricavi") e meno il click sulla
@@ -40419,13 +40503,9 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
 function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, costiCategorie, entrateManuali }) {
   const { ordine: ordineSedi, cambiaOrdine: cambiaOrdineSedi, ordina: ordinaSedi } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
-  const [periodo, setPeriodo] = useState("andamento");
-  // Le due date non sono un filtro: sono l'impostazione dell'analisi. Si
-  // scrivono una volta e restano — domani, e anche aprendo l'app dal
-  // telefono. Per questo stanno nelle impostazioni condivise e non in uno
-  // stato che muore chiudendo la pagina.
-  const [dataDa, setDataDa] = useImpostazioneCondivisa("analisi_data_partenza", `${new Date().getFullYear()}-01-01`);
-  const [dataProspettiva, setDataProspettiva] = useImpostazioneCondivisa("analisi_data_prospettiva", `${new Date().getFullYear()}-12-31`);
+  // il periodo e le due date arrivano dalla barra qui sotto, che e' la
+  // stessa di "Analisi costi di gestione": vedi usaPeriodoAnalisi
+  const { periodo, setPeriodo, dataDa, dataProspettiva } = usaPeriodoAnalisi();
   // LA PAGINA NON SI FILTRA PIU' PER SEDE.
   // C'era una riga di pastiglie con tutte le sedi, e occupava due righe
   // intere di nomi in maiuscolo — fra cui MILANO due volte, NAPOLI due
@@ -40553,74 +40633,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
       <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Analisi andamento</div>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>Ecco come sta andando Elitederma, {fmtDataLunga(dataOggiStr())}.</div>
 
-      {/* Le due date stanno in alto e da sole, sopra ai pulsanti, perche'
-          non sono un'opzione fra le altre: sono i due estremi entro cui
-          tutto il resto della pagina fa i conti. Si scrivono una volta e
-          restano. */}
-      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, boxShadow: "var(--ombra-aree, none)", padding: isMobile ? 12 : 16, marginBottom: 12, display: "flex", gap: isMobile ? 14 : 30, flexWrap: "wrap", alignItems: "flex-end" }}>
-        {[
-          // QUALE DELLE DUE DATE CONTA. "Analisi dal" vale solo in
-          // "Andamento ad oggi", "Prospettiva fino al" solo in
-          // "Prospettiva di guadagno", e sulle tre finestre fisse non
-          // conta nessuna delle due. Finche' erano tutte e due accese
-          // allo stesso modo, cambiarne una e non vedere muovere niente
-          // sembrava un difetto: era solo quella sbagliata.
-          { chiave: "da", etichetta: "Analisi dal", valore: dataDa, salva: setDataDa, inUso: periodo === "andamento" },
-          { chiave: "a", etichetta: "Prospettiva fino al", valore: dataProspettiva, salva: setDataProspettiva, inUso: periodo === "prospettiva" },
-        ].map((c) => (
-          <div key={c.chiave} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: c.inUso ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>
-              {c.etichetta}{c.inUso && <span style={{ color: GOLD }}> · in uso</span>}
-            </div>
-            <input
-              type="date"
-              value={c.valore || ""}
-              // TOCCARE UNA DATA LA FA COMANDARE.
-              // Chi scrive in un campo data sta dicendo "voglio vedere da
-              // qui": se quella data non e' quella in uso, il periodo si
-              // sposta da solo su quello che la usa. Prima no, e il
-              // risultato era un campo che accettava il numero senza che
-              // sotto cambiasse una virgola — sembrava che l'app non si
-              // aggiornasse. Il pallino dorato "in uso" non bastava a
-              // spiegarlo: e' successo due volte.
-              onChange={(e) => {
-                c.salva(e.target.value);
-                if (!c.inUso) setPeriodo(c.chiave === "da" ? "andamento" : "prospettiva");
-              }}
-              title={c.inUso ? "Questa data comanda il periodo che stai guardando" : "Scrivendo qui il periodo passa a quello che usa questa data"}
-              // Il campo resta nero e pieno anche quando non comanda: si
-              // scrive sempre. Era grigio e al 65% di opacita', e nel resto
-              // dell'app quello vuol dire "disattivato" — sembrava rotto.
-              // Che sia in uso o no lo dicono l'etichetta e il bordo.
-              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${c.inUso ? GOLD : CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px" }}
-            />
-          </div>
-        ))}
-        {/* Le tre finestre fisse stanno qui, con le date: sono tutte e
-            cinque la stessa domanda — "su che periodo conto". Erano
-            tessere grandi accanto ai due modi di contare, e sembravano
-            cose dello stesso ordine; non lo sono. */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          {[
-            { v: "30giorni", l: "Ultimi 30 giorni" },
-            { v: "trimestre", l: "Trimestre" },
-            { v: "anno", l: "Anno solare" },
-          ].map((f) => {
-            const attivo = periodo === f.v;
-            return (
-              <button key={f.v} type="button" onClick={() => setPeriodo(f.v)}
-                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: attivo ? "#fff" : NAVY,
-                  background: attivo ? NAVY : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`,
-                  borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                {f.l}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 180px", lineHeight: 1.5, minWidth: 0 }}>
-          Le date restano impostate: le ritrovi domani e anche aprendo l'app dal telefono.
-        </div>
-      </div>
+      <BarraPeriodoAnalisi isMobile={isMobile} />
 
       {/* I modi di leggere lo stesso periodo, con il vestito dei
           segnalatori del resto dell'app: scheda bianca, disco colorato a
@@ -74740,24 +74753,6 @@ function calcolaTotaleSpese(spese, speseAttribuzioni, costiCategorieById, corsiD
   }
   return { totale: round2(totale), vociIncluse };
 }
-// range di periodo standard (mese/trimestre/semestre/anno/personalizzato)
-function rangePeriodoAnalisiCosti(periodo, personalizzato) {
-  const oggi = new Date();
-  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  if (periodo === "mese") {
-    return { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth(), 1)), fine: fmt(new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0)) };
-  }
-  if (periodo === "trimestre") {
-    const meseInizio = Math.floor(oggi.getMonth() / 3) * 3;
-    return { inizio: fmt(new Date(oggi.getFullYear(), meseInizio, 1)), fine: fmt(new Date(oggi.getFullYear(), meseInizio + 3, 0)) };
-  }
-  if (periodo === "semestre") {
-    const meseInizio = oggi.getMonth() < 6 ? 0 : 6;
-    return { inizio: fmt(new Date(oggi.getFullYear(), meseInizio, 1)), fine: fmt(new Date(oggi.getFullYear(), meseInizio + 6, 0)) };
-  }
-  if (periodo === "personalizzato") return { inizio: personalizzato?.da || fmt(oggi), fine: personalizzato?.a || fmt(oggi) };
-  return { inizio: `${oggi.getFullYear()}-01-01`, fine: `${oggi.getFullYear()}-12-31` };
-}
 function rangeConfrontoAnalisiCosti(range, tipo) {
   const [aI, mI, gI] = range.inizio.split("-").map(Number);
   const [aF, mF, gF] = range.fine.split("-").map(Number);
@@ -74964,9 +74959,12 @@ function SezioneAnalisiCosti({
 }) {
   const isMobile = useIsMobile();
   const { ordine: ordineCosti, cambiaOrdine: cambiaOrdineCosti, ordina: ordinaCosti } = useOrdinamentoTabella();
-  const [periodo, setPeriodo] = useState("anno");
-  const [customDa, setCustomDa] = useState(dataOggiStr());
-  const [customA, setCustomA] = useState(dataOggiStr());
+  // Il periodo e' quello della barra in cima, la stessa di "Andamento":
+  // una pagina sola, una domanda sola su che periodo si sta guardando.
+  // Prima qui c'erano cinque pastiglie loro (Mese/Trimestre/Semestre/
+  // Anno/Personalizzato) e due date loro: due selettori di periodo nella
+  // stessa pagina, che rispondevano diverso e non si parlavano.
+  const { periodo, dataDa, dataProspettiva } = usaPeriodoAnalisi();
   const [confronto, setConfronto] = useState("periodoprecedente");
   const [apriFiltro, setApriFiltro] = useState("");
   const [sedeId, setSedeId] = useState("");
@@ -74987,7 +74985,7 @@ function SezioneAnalisiCosti({
   const [elencoSpese, setElencoSpese] = useState(null);
   const [segnalazioniAperte, setSegnalazioniAperte] = useState(true);
 
-  const range = rangePeriodoAnalisiCosti(periodo, { da: customDa, a: customA });
+  const range = rangePeriodoErp(periodo, dataDa, dataProspettiva);
   const rangeConfronto = (confronto === "nessuno" || confronto === "budget") ? null : rangeConfrontoAnalisiCosti(range, confronto);
   const filtri = useMemo(() => ({ sedeId, corsoId, classeId, eventoId, categoriaId, sottocategoriaId, fornitoreId, fissoVariabile, ricorrenteOccasionale, natura, riducibilita, stato, origine }),
     [sedeId, corsoId, classeId, eventoId, categoriaId, sottocategoriaId, fornitoreId, fissoVariabile, ricorrenteOccasionale, natura, riducibilita, stato, origine]);
@@ -75066,30 +75064,19 @@ function SezioneAnalisiCosti({
       <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Analisi costi di gestione</div>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>Quanto spendiamo, dove incide di più, cosa sta crescendo, cosa possiamo ridurre.</div>
 
-      {/* barra filtri */}
+      <BarraPeriodoAnalisi isMobile={isMobile} />
+
+      {/* i filtri di questa sola sezione: il confronto e il taglio per
+          sede, corso, categoria, fornitore. Il PERIODO non sta qui: e'
+          quello della barra qui sopra, comune a tutta la pagina */}
       <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-              {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "semestre", l: "Semestre" }, { v: "anno", l: "Anno" }, { v: "personalizzato", l: "Personalizzato" }].map((p) => (
-                <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "8px 12px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>{p.l}</button>
-              ))}
-            </div>
             <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
               {[{ v: "periodoprecedente", l: "Vs periodo prec." }, { v: "annoprecedente", l: "Vs anno prec." }, { v: "budget", l: "Vs budget" }, { v: "nessuno", l: "Nessun confronto" }].map((p) => (
                 <button key={p.v} onClick={() => setConfronto(p.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "8px 12px", borderRadius: 16, border: "none", background: confronto === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>{p.l}</button>
               ))}
             </div>
           </div>
-          {periodo === "personalizzato" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 240px", minWidth: 0 }}>
-                <Field label="Da quando a quando">
-                  <SelettorePeriodo da={customDa} a={customA} vuoto="Scegli il periodo"
-                    onCambia={({ da, a }) => { setCustomDa(da); setCustomA(a); }} />
-                </Field>
-              </div>
-            </div>
-          )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <FiltroRicercabile chiave="sede" etichetta="Sede" valore={sedeId} setValore={setSedeId} opzioni={opzioniSede} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
             <FiltroRicercabile chiave="corso" etichetta="Corso" valore={corsoId} setValore={setCorsoId} opzioni={opzioniCorso} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
