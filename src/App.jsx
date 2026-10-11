@@ -40727,8 +40727,15 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
               contro impegnato. Lo stesso numero sotto due nomi diversi
               sarebbe il modo piu' rapido per leggerne uno credendo che
               sia l'altro */}
+          {/* "dai corsi" nel titolo, non solo nel sottotitolo. Questo
+              numero sono le iscrizioni (piu' le entrate a mano, che sono
+              rare): lo shop e il banco non ci sono mai stati dentro. Ma
+              un riquadro grosso che dice "Incassato" e nient'altro si
+              legge come il giro d'affari dell'azienda, e di li' nasce il
+              sospetto che dentro ci siano anche le vendite — contate due
+              volte. Sono separate nei quattro riquadri qui sotto. */}
           <CardKpiErp
-            titolo={perCassa ? "Incassato" : inProspettiva ? "Ricavi attesi" : "Ricavi totali"}
+            titolo={perCassa ? "Incassato dai corsi" : inProspettiva ? "Ricavi attesi dai corsi" : "Ricavi dai corsi"}
             valore={fmtEuroErp(kpi.ricavi)} variazione={varRicavi}
             sub={perCassa ? `Entrato dal ${fmtData(dataDa)} a oggi` : inProspettiva ? `Pattuito fino al ${fmtData(dataProspettiva)}` : "vs stesso periodo precedente"}
             Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
@@ -40747,8 +40754,8 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
 
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Da dove arrivano i ricavi</div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
-          {`Nel periodo: ${fmtEuroErp(perCanale.totale)} in tutto. `}
-          I quattro riquadri qui sopra contano solo i corsi — lo shop e il banco non ci entrano.
+          {`Il giro d'affari del periodo: ${fmtEuroErp(perCanale.totale)}. `}
+          Le tre sorgenti non si sovrappongono — i corsi sono le iscrizioni, le altre due sono le vendite di prodotti — quindi i tre numeri si sommano.
         </div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
           <CardKpiErp
