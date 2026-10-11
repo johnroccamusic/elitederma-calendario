@@ -40426,7 +40426,18 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   // stato che muore chiudendo la pagina.
   const [dataDa, setDataDa] = useImpostazioneCondivisa("analisi_data_partenza", `${new Date().getFullYear()}-01-01`);
   const [dataProspettiva, setDataProspettiva] = useImpostazioneCondivisa("analisi_data_prospettiva", `${new Date().getFullYear()}-12-31`);
-  const [sedeSel, setSedeSel] = useState("");
+  // LA PAGINA NON SI FILTRA PIU' PER SEDE.
+  // C'era una riga di pastiglie con tutte le sedi, e occupava due righe
+  // intere di nomi in maiuscolo — fra cui MILANO due volte, NAPOLI due
+  // volte, ROMA due volte e UDINE due volte, perche' le sotto-sedi della
+  // stessa citta' si chiamano uguale e li' non si distinguevano. Tolta
+  // il 11/10/2026.
+  //
+  // La costante resta perche' il conto sa gia' filtrare per sede, e la
+  // tabella "Andamento per sede" piu' sotto continua a dare la stessa
+  // risposta sede per sede, con il nome della sotto-sede accanto.
+  // Rimetterla e' una riga.
+  const sedeSel = "";
   const [confrontoAnnualeAperto, setConfrontoAnnualeAperto] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -40655,21 +40666,6 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
             onClose={() => setConfrontoAnnualeAperto(false)}
           />
         )}
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginRight: 4, whiteSpace: "nowrap" }}>Analisi sede</div>
-          <button onClick={() => setSedeSel("")} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === "" ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === "" ? NAVY : "#fff", color: sedeSel === "" ? "#fff" : NAVY, cursor: "pointer" }}>
-            Tutte le sedi
-          </button>
-          {location.map((l) => (
-            <button key={l.id} onClick={() => setSedeSel(l.id)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === l.id ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === l.id ? NAVY : "#fff", color: sedeSel === l.id ? "#fff" : NAVY, cursor: "pointer" }}>
-              {l.nome}
-            </button>
-          ))}
-          <button disabled title="Non ancora disponibile" style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C7C9D4", cursor: "not-allowed", marginLeft: "auto" }}>
-            Confronta sedi
-          </button>
-        </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
           {/* in modalita' cassa i primi tre numeri non sono piu' gli
