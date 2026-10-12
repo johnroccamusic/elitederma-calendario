@@ -6067,6 +6067,10 @@ function etichettaMetodo(m) { return ETICHETTA_METODO[m] || m; }
 // nella busta. Il vecchio "Pos" resta riconosciuto per le schede che
 // nessuno ha piu' aperto dopo la conversione.
 function eMetodoPos(m) { return m === "POS fisico" || m === "POS dell'app" || m === "Pos"; }
+// I soldi che non passano mai dal conto: restano nelle buste di classe.
+// "Contanti" e' il nome vecchio di "Cash con IVA" — la fattura cambia
+// l'IVA, non dove finiscono i soldi.
+function eMetodoContanti(m) { return m === "Cash no iva" || m === "Cash con IVA" || m === "Contanti"; }
 
 function importoNettoQuota(imponibile, totale) {
   return imponibile != null ? Number(imponibile) || 0 : Number(totale) || 0;
@@ -35069,16 +35073,16 @@ function riepilogoMensilePrimaNota(spesePagate) {
 function quoteIncassateDi(i, cd) {
   const giornoIscrizione = String(i.ts || "").slice(0, 10) || null;
   const fuori = [];
-  const metti = (data, netto) => { if (netto > 0) fuori.push({ data: data || giornoIscrizione, netto: round2(netto) }); };
-  if (i.acconto_pagato) metti(i.acconto_pagato_il, importoNettoQuota(i.acconto_imponibile, i.acconto_totale));
+  const metti = (data, netto, metodo) => { if (netto > 0) fuori.push({ data: data || giornoIscrizione, netto: round2(netto), metodo: metodo || "" }); };
+  if (i.acconto_pagato) metti(i.acconto_pagato_il, importoNettoQuota(i.acconto_imponibile, i.acconto_totale), i.acconto_metodo);
   (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r) => {
-    if (r?.pagato) metti(i.acconto_pagato_il, importoNettoQuota(r.imponibile, r.totale));
+    if (r?.pagato) metti(i.acconto_pagato_il, importoNettoQuota(r.imponibile, r.totale), r.metodo);
   });
-  if (i.precorso_pagato) metti(i.precorso_pagato_il, importoNettoQuota(i.precorso_imponibile, i.precorso_totale));
+  if (i.precorso_pagato) metti(i.precorso_pagato_il, importoNettoQuota(i.precorso_imponibile, i.precorso_totale), i.precorso_metodo);
   (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r) => {
-    if (r?.pagato) metti(i.precorso_pagato_il, importoNettoQuota(r.imponibile, r.totale));
+    if (r?.pagato) metti(i.precorso_pagato_il, importoNettoQuota(r.imponibile, r.totale), r.metodo);
   });
-  if (i.incassato) metti(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cd?.data_inizio, importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i));
+  if (i.incassato) metti(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cd?.data_inizio, importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i), i.saldo_metodo);
   return fuori;
 }
 function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio, fine, sedeId, corsoById, locById, soloTrascorsi = false }) {
@@ -35126,6 +35130,22 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   });
   const incassatoNelPeriodo = round2(incassatoTutto);
   const incassatoCorsiDaVenire = round2(incassatoPromesso);
+  // DOVE SONO FINITI QUESTI SOLDI.
+  // Meta' dell'incassato dei corsi non passa dal conto: sono contanti,
+  // e restano nelle buste di classe finche' qualcuno non li versa. Un
+  // totale solo non lo diceva, e il numero sembrava enorme proprio
+  // perche' una parte non la si ritrova guardando l'estratto conto.
+  let inContanti = 0, inBanca = 0;
+  iscritti.forEach((i) => {
+    const cd = cdPerIdKpi[i.corso_data_id];
+    if (sedeId && cd?.location_id !== sedeId) return;
+    quoteIncassateDi(i, cd).forEach((v) => {
+      if (!nelPeriodo(v)) return;
+      if (eMetodoContanti(v.metodo)) inContanti += v.netto; else inBanca += v.netto;
+    });
+  });
+  const incassatoContanti = round2(inContanti);
+  const incassatoBanca = round2(inBanca);
   // incassi non legati a un'iscrizione (es. vendita di un prodotto in
   // accademia): stesso trattamento "al netto di IVA" dei ricavi corsi,
   // così restano confrontabili nello stesso KPI
@@ -35195,7 +35215,7 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   const cashFlow = round2(incassatoReale - costi);
   const creditiDaIncassare = round2(iscrittiFiltrati.filter((i) => !i.incassato).reduce((s, i) => s + (i.saldo_totale || 0) + modelleTotaleDi(i), 0));
   const pagamentiAperti = iscrittiFiltrati.filter((i) => !i.incassato && (i.saldo_totale || 0) + modelleTotaleDi(i) > 0).length;
-  return { ricavi, costi, utile, nAllievi: iscrittiFiltrati.length, riempimentoMedio, cashFlow, creditiDaIncassare, pagamentiAperti, cdFiltrate, iscrittiFiltrati, incassatoCorsiDaVenire };
+  return { ricavi, costi, utile, nAllievi: iscrittiFiltrati.length, riempimentoMedio, cashFlow, creditiDaIncassare, pagamentiAperti, cdFiltrate, iscrittiFiltrati, incassatoCorsiDaVenire, incassatoContanti, incassatoBanca };
 }
 
 function CardKpiErp({ titolo, valore, variazione, variazioneInvertita, sub, Icona, coloreIcona, coloreBgIcona, scuro, onClick }) {
@@ -40955,6 +40975,33 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
             sub={kpi.nAllievi > 0 ? `${fmtEuroErp(perCanale.corsi)} su ${kpi.nAllievi} allievi` : "Nessun allievo nel periodo"}
             Icona={IconaRicevutaErp} coloreIcona="#6E7391" coloreBgIcona="#ECEDF2" />
         </div>
+
+        {/* DOVE SONO FINITI I SOLDI DEI CORSI.
+            Sapere quanto e' entrato non basta se meta' non passa dal
+            conto: i contanti restano nelle buste di classe finche'
+            qualcuno non li versa, e guardando l'estratto conto non si
+            ritrovano. Tenuti insieme in un numero solo, l'incassato
+            sembrava enorme proprio per questo. */}
+        {perCassa && (kpi.incassatoContanti > 0 || kpi.incassatoBanca > 0) && (
+          <>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Dove sono finiti i soldi dei corsi</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+              Gli stessi {fmtEuroErp(perCanale.corsi)} di sopra, divisi per come sono stati pagati. Shop e banco non sono qui dentro.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(2, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
+              <CardKpiErp
+                titolo="Passati dal conto"
+                valore={fmtEuroErp(kpi.incassatoBanca)}
+                sub="Bonifico, carta dal sito, POS, APPago e Scalapay"
+                Icona={IconaBanconota} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
+              <CardKpiErp
+                titolo="Contanti, mai in banca"
+                valore={fmtEuroErp(kpi.incassatoContanti)}
+                sub="Cash con e senza IVA: restano nelle buste di classe finché non si versano"
+                Icona={IconaPortafoglio} coloreIcona="#B8860B" coloreBgIcona="#F6EEDA" />
+            </div>
+          </>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,2fr) minmax(0,1fr)", gap: 14, marginBottom: 18, alignItems: "start" }}>
           <div
