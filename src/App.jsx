@@ -39,7 +39,7 @@ import PrezziListini from "./prezzi/PrezziListini.jsx";
 // un posto solo, e di qui si leggono per i codici con cui le master comprano
 import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
 import { muoviStock, allineaShop, pubblicatoSuShop } from "./magazzino/stock.js";
-import { usePuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
+import { usePuntiMaster, useCarrelliPuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
 import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
 import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
@@ -13120,6 +13120,60 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
     </div>
   );
 }
+// IL DETTAGLIO DEI CARRELLI.
+// I riquadri dicono quanti punti; questo dice da dove sono usciti —
+// ogni vendita attribuita alla master, shop online e POS, con i suoi
+// punti. Viene dalla stessa vista dei riquadri, quindi la somma della
+// colonna "punti" e' il totale delle schede: se un giorno non lo fosse,
+// il difetto sta nella vista e si vede subito.
+function DettaglioCarrelliMaster({ masterId, isMobile }) {
+  const righe = useCarrelliPuntiMaster(masterId, true);
+  if (righe == null) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "14px 2px" }}>Sto leggendo i carrelli…</div>;
+  if (righe.length === 0) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "14px 2px" }}>Nessuna vendita attribuita.</div>;
+  const puntiTotali = round2(righe.reduce((s2, r) => s2 + r.punti, 0));
+  const valoreTotale = round2(righe.reduce((s2, r) => s2 + r.totale, 0));
+  const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, textAlign: "left", padding: "9px 10px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" };
+  const td = { ...fontBody, fontSize: 12.5, color: NAVY, padding: "10px 10px", borderTop: `1px solid ${CREAM_BORDER}`, verticalAlign: "top" };
+  return (
+    <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: isMobile ? "12px 12px" : "14px 16px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{righe.length} carrell{righe.length === 1 ? "o" : "i"}</span>
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{fmtEuroErp2(valoreTotale)} venduti</span>
+        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: GOLD, marginLeft: "auto" }}>{fmtPunti(puntiTotali)} punti</span>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
+          <thead>
+            <tr>
+              {["Data", "Ordine", "Dove", "Come", "Prodotti", "Totale", "Punti"].map((t, k) => (
+                <th key={t} style={{ ...th, textAlign: k >= 5 ? "right" : "left" }}>{t}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {righe.map((r) => (
+              <tr key={r.venditaId}>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtData(String(r.data || "").slice(0, 10))}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", color: MUTED }}>{r.numero || "—"}</td>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>
+                  {r.evento ? "Evento" : r.origine === "woocommerce" ? "Shop online" : "POS"}
+                  {r.coupon && <span style={{ display: "block", ...fontBody, fontSize: 11, color: MUTED }}>{r.coupon}</span>}
+                </td>
+                <td style={{ ...td, whiteSpace: "nowrap", color: r.cash ? "#8A6D1D" : NAVY }}>{r.cash ? "Contanti" : "Carta"}</td>
+                <td style={{ ...td, minWidth: 160 }}>
+                  {r.prodotti.slice(0, 3).join(" · ")}
+                  {r.prodotti.length > 3 && <span style={{ color: MUTED }}> e altri {r.prodotti.length - 3}</span>}
+                </td>
+                <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(r.totale)}</td>
+                <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap", fontWeight: 700, color: GOLD }}>{fmtPunti(r.punti)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 // Dashboard master: chi entra con la password di una specifica master
 // (Password menù > Password Master) trova già selezionata la propria
 // scheda, senza tendina — a differenza della Dashboard venditori, non
@@ -13161,6 +13215,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // i punti dalle vendite: shop/POS sul netto, cash sul lordo. Il conto sta
   // nella view v_punti_master, qui si legge e basta
   const puntiDaVendite = usePuntiMaster(masterSelId);
+  const [carrelliPuntiAperti, setCarrelliPuntiAperti] = useState(false);
   // target vendite prodotti in corso per la master selezionata (mai per
   // il team vendite corsi: i due silos restano separati, vedi Target
   // Master in Impostazioni)
@@ -13324,6 +13379,14 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     // Due blocchi uno sotto l'altro — i punti e le vendite —
     // quindi serve un frammento: il return non puo' restituirne
     // due sciolti.
+    // ogni canale ha la sua percentuale: non si puo' sommare i punti e
+    // moltiplicare una volta sola
+    const totaleProvvigioni = puntiDaVendite ? round2(
+      ((puntiDaVendite.punti_shop_pos || 0) * percEuroDash.posShop) / 100
+      + ((puntiDaVendite.punti_cash || 0) * percEuroDash.cash) / 100
+      + ((puntiDaVendite.punti_evento_pos || 0) * percEuroDash.eventoPosShop) / 100
+      + ((puntiDaVendite.punti_evento_cash || 0) * percEuroDash.eventoCash) / 100
+    ) : 0;
     return (
     <>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", gap: isMobile ? 6 : 12, marginBottom: 12 }}>
@@ -13374,6 +13437,17 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       <div style={lblPunti}>Punti<br />carriera</div>
       <div style={{ ...numPunti, color: GOLD }}>{puntiDaVendite ? fmtPunti(puntiDaVendite.punti_carriera || 0) : "…"}</div>
       <div style={ptPunti}>somma dei tre</div>
+    </div>
+    {/* TOTALE PROVVIGIONI: la somma in euro delle quattro schede che
+        pagano. Le cifre c'erano gia', una per scheda, ma per sapere
+        quanto si e' maturato in tutto bisognava sommarle a mente —
+        con quattro percentuali diverse, e sbagliando. Personali e
+        carriera restano fuori: i primi sono roba comprata da lei, la
+        seconda e' una somma di punti, non di soldi. */}
+    <div style={{ ...cardPunti, background: NAVY, border: "none" }} title="Punti shop/POS + cash + eventi carta + eventi contanti, ognuno alla sua percentuale">
+      <div style={{ ...lblPunti, color: "rgba(255,255,255,0.72)" }}>Totale<br />provvigioni</div>
+      <div style={{ ...numPunti, color: "#fff" }}>{puntiDaVendite ? fmtEuroErp2(totaleProvvigioni) : "…"}</div>
+      <div style={{ ...ptPunti, color: "rgba(255,255,255,0.6)" }}>maturati in tutto</div>
     </div>
     {/* Qui c'era "Punti accumulati", un settimo numero di punti
         contato in JavaScript su questa pagina. Diceva una cifra
@@ -13546,6 +13620,17 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               {codiciMaster()}
               {schedePuntiMaster()}
               {contatoriVenditeMaster()}
+              {/* I riquadri dicono quanti punti in tutto; qui si vede da
+                  quali carrelli sono usciti. Stessa fonte, quindi i due
+                  numeri non possono discordare. */}
+              <button
+                type="button"
+                onClick={() => setCarrelliPuntiAperti((v) => !v)}
+                style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "11px 16px", cursor: "pointer", width: "100%", marginTop: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+              >
+                {carrelliPuntiAperti ? "Nascondi il dettaglio dei carrelli" : "Dettaglio carrelli →"}
+              </button>
+              {carrelliPuntiAperti && <DettaglioCarrelliMaster masterId={masterSel.id} isMobile={isMobile} />}
             </div>
           ) : (
             <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13, marginBottom: 20 }}>La raccolta punti non è ancora stata impostata.</div>

@@ -48,4 +48,61 @@ export function usePuntiMaster(masterId) {
   return dati;
 }
 
+// I CARRELLI UNO PER UNO.
+// I riquadri dicono quanti punti in totale; questo dice da dove sono
+// usciti. Si legge da v_punti_master_righe, che ha una riga per
+// prodotto venduto: qui si raggruppa per vendita, perche' la domanda e'
+// "quali carrelli", non "quali prodotti".
+//
+// Stessa fonte dei riquadri, quindi i due numeri non possono
+// discordare: la somma dei punti dei carrelli e' il totale delle schede.
+export function useCarrelliPuntiMaster(masterId, attivo) {
+  const [righe, setRighe] = useState(null);
+
+  useEffect(() => {
+    let vivo = true;
+    if (!masterId || !attivo) { setRighe(null); return undefined; }
+    (async () => {
+      const { data, error } = await supabase
+        .from("v_punti_master_righe")
+        .select("vendita_id, numero_ordine, data_ordine, origine, metodo_pagamento, codice_coupon, prodotto, quantita, punti, e_cash, e_evento, totale_vendita, netto_allora")
+        .eq("master_id", masterId)
+        .order("data_ordine", { ascending: false })
+        .limit(2000);
+      if (!vivo) return;
+      if (error) { setRighe([]); return; }
+      // una riga per carrello: i prodotti si sommano dentro
+      const perVendita = new Map();
+      (data || []).forEach((r) => {
+        const chiave = r.vendita_id;
+        const gia = perVendita.get(chiave);
+        if (gia) {
+          gia.punti += Number(r.punti) || 0;
+          gia.pezzi += Number(r.quantita) || 0;
+          gia.prodotti.push(r.prodotto);
+        } else {
+          perVendita.set(chiave, {
+            venditaId: chiave,
+            numero: r.numero_ordine,
+            data: r.data_ordine,
+            origine: r.origine,
+            metodo: r.metodo_pagamento,
+            coupon: r.codice_coupon,
+            cash: !!r.e_cash,
+            evento: !!r.e_evento,
+            totale: Number(r.totale_vendita) || 0,
+            punti: Number(r.punti) || 0,
+            pezzi: Number(r.quantita) || 0,
+            prodotti: [r.prodotto],
+          });
+        }
+      });
+      setRighe([...perVendita.values()].sort((a, b) => String(b.data || "").localeCompare(String(a.data || ""))));
+    })();
+    return () => { vivo = false; };
+  }, [masterId, attivo]);
+
+  return righe;
+}
+
 export default usePuntiMaster;
