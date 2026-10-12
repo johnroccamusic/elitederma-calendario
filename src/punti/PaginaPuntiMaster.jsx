@@ -121,14 +121,14 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
     setScaricando(null);
   }
 
-  const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase",
-    letterSpacing: 0.6, padding: "8px 10px", textAlign: "right", whiteSpace: "nowrap" };
-  const td = { ...fontBody, fontSize: 14, color: NAVY, padding: "10px 10px", textAlign: "right",
+  const th = { ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase",
+    letterSpacing: 0.3, padding: "8px 7px", textAlign: "right", lineHeight: 1.2 };
+  const td = { ...fontBody, fontSize: 13, color: NAVY, padding: "10px 7px", textAlign: "right",
     borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "32px 28px 60px" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1320, margin: "0 auto" }}>
         <button onClick={onBack} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff",
           border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "7px 14px", cursor: "pointer", marginBottom: 10 }}>
           ← Amministrazione
@@ -151,19 +151,24 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
         {!caricando && (
           <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
+              {/* niente minWidth: la tabella sta dentro lo spazio bianco e
+                  non si scorre di lato. Le intestazioni sono corte per lo
+                  stesso motivo — "Punti" davanti a ognuna delle sette era
+                  una parola ripetuta sette volte che rubava larghezza ai
+                  numeri, che sono quello che si viene a leggere. */}
+              <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
                 <thead>
                   <tr style={{ background: "#FAF6EE" }}>
-                    <th style={{ ...th, textAlign: "left" }}>Master</th>
-                    <th style={th}>Punti shop/POS</th>
-                    <th style={th}>Punti cash</th>
-                    <th style={th}>Punti shop/POS eventi</th>
-                    <th style={th}>Punti cash eventi</th>
-                    <th style={th}>Punti personali</th>
-                    <th style={th}>Punti carriera</th>
-                    <th style={th}>Totale provvigioni</th>
-                    <th style={th}>Ultimo scarico</th>
-                    <th style={{ ...th, textAlign: "center" }}>&nbsp;</th>
+                    <th style={{ ...th, textAlign: "left", width: "16%" }}>Master</th>
+                    <th style={{ ...th, width: "8%" }} title="Punti shop/POS">Shop<br />POS</th>
+                    <th style={{ ...th, width: "8%" }} title="Punti cash">Cash</th>
+                    <th style={{ ...th, width: "8%" }} title="Punti shop/POS eventi">Eventi<br />carta</th>
+                    <th style={{ ...th, width: "8%" }} title="Punti cash eventi">Eventi<br />cash</th>
+                    <th style={{ ...th, width: "8%" }} title="Punti personali: comprati da lei col suo codice">Perso<br />nali</th>
+                    <th style={{ ...th, width: "9%" }} title="Punti carriera: tutto quello che ha mosso">Carriera</th>
+                    <th style={{ ...th, width: "10%" }} title="Quanto ha maturato in euro">Provvigioni</th>
+                    <th style={{ ...th, width: "9%" }}>Ultimo<br />scarico</th>
+                    <th style={{ ...th, textAlign: "center", width: "16%" }}>Scarica</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -183,17 +188,17 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
                     const tastoScarica = (tipo, testo, attivo, spiega) => (
                       <button onClick={() => setDaConfermare({ id: r.master_id, tipo })} disabled={!attivo}
                         title={attivo ? spiega : "Non c'è niente da scaricare"}
-                        style={{ ...fontBody, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap",
+                        style={{ ...fontBody, fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap", flex: "1 1 0", minWidth: 0,
                           color: attivo ? (tipo === "carriera" ? NAVY : "#fff") : MUTED,
                           background: attivo ? (tipo === "carriera" ? "#fff" : NAVY) : "#F2F2F0",
                           border: tipo === "carriera" ? `1px solid ${attivo ? NAVY : CREAM_BORDER}` : "none",
-                          borderRadius: 20, padding: "6px 12px", cursor: attivo ? "pointer" : "default" }}>
+                          borderRadius: 20, padding: "6px 8px", cursor: attivo ? "pointer" : "default" }}>
                         {testo}
                       </button>
                     );
                     return (
                       <tr key={r.master_id}>
-                        <td style={{ ...td, textAlign: "left", fontWeight: 700 }}>{r.master}</td>
+                        <td style={{ ...td, textAlign: "left", fontWeight: 700, whiteSpace: "normal", lineHeight: 1.2 }}>{r.master}</td>
                         <td style={{ ...td, color: NAVY, fontWeight: 700 }}>{punti(r.punti_shop_pos)}</td>
                         <td style={{ ...td, color: "#8A6D1D", fontWeight: 700 }}>{punti(r.punti_cash)}</td>
                         <td style={{ ...td, color: NAVY }}>{punti(r.punti_evento_pos)}</td>
@@ -206,8 +211,8 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
                         </td>
                         <td style={{ ...td, textAlign: "center" }}>
                           {conferma ? (
-                            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                              <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>
+                            <span style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
+                              <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, lineHeight: 1.2 }}>
                                 {conferma === "carriera" ? `Azzero la carriera (${punti(r.punti_carriera)})?` : `Pago ${euro(provvigioni)}?`}
                               </span>
                               <button onClick={() => scarica(r, conferma)} disabled={scaricando === r.master_id}
@@ -220,9 +225,9 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
                                   textDecoration: "underline", cursor: "pointer" }}>annulla</button>
                             </span>
                           ) : (
-                            <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
-                              {tastoScarica("periodici", "Scarica punti periodici", haPunti, "Segna i punti come pagati: shop/POS, cash, eventi e personali ripartono da zero. La carriera non si tocca.")}
-                              {tastoScarica("carriera", "Scarica punti carriera", haCarriera, "Azzera il totale di sempre. Si fa a inizio percorso o per rimettere in pari un conto: non serve per pagare.")}
+                            <span style={{ display: "flex", gap: 5, justifyContent: "center" }}>
+                              {tastoScarica("periodici", "Periodici", haPunti, "Scarica punti periodici — segna i punti come pagati: shop/POS, cash, eventi e personali ripartono da zero. La carriera non si tocca.")}
+                              {tastoScarica("carriera", "Carriera", haCarriera, "Scarica punti carriera — azzera il totale di sempre. Si fa a inizio percorso o per rimettere in pari un conto: non serve per pagare.")}
                             </span>
                           )}
                         </td>
