@@ -19440,7 +19440,14 @@ function sottocategorieDiCategoria(costiSottocategorie, categoriaId) {
 // categorie "aziendali" (non legate a una singola classe): taggabili
 // solo da "+ Nuova operazione" nella dashboard, non dal "+" del
 // Riepilogo amministrativo di una singola data di corso
-const CHIAVI_ESCLUSE_RIEPILOGO = ["personale_accademia", "oneri_contributivi", "commerciale", "commissioni_pagamento", "pubblicita_acquisizione", "agenzie_consulenti", "affitto_aule_esterne", "struttura_centrale", "fiere_eventi", "prodotti_vendita", "versamenti_adempimenti"];
+// "Affitto aule e strutture esterne" era in questo elenco e non doveva
+// esserci: la sala e' il costo di classe per eccellenza. Ci era finita
+// perche' "Costo Location" nasce da solo dalla tariffa della sede, e si
+// temeva il doppione — ma un supplemento (ore in piu', pulizia, quota
+// alla struttura ospitante) e' un'altra spesa, non un doppione, e
+// finora non c'era modo di scriverla sulla classe. Rimessa il
+// 12/10/2026.
+const CHIAVI_ESCLUSE_RIEPILOGO = ["personale_accademia", "oneri_contributivi", "commerciale", "commissioni_pagamento", "pubblicita_acquisizione", "agenzie_consulenti", "struttura_centrale", "fiere_eventi", "prodotti_vendita", "versamenti_adempimenti"];
 
 // tendina "Associa categoria di spesa": usata su assistente/master/
 // location/hotel per dire una volta sola a quale sotto-categoria di
