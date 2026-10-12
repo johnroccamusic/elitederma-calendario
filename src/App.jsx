@@ -19690,7 +19690,7 @@ function IconaDiRigaCosto({ tipo, size = 17 }) {
 // nessuna parte: lo si disegna a tratteggio invece che pieno. Serve a
 // distinguere una scelta fatta da una previsione — leggere "Scad." e non
 // trovare un euro nello scadenziario e' successo davvero, su Udine.
-function SegmentoModalita({ valori = ["B", "C", "1/2"], attivo, onSceglie, titoli = {}, bloccato = false, previsto = null }) {
+function SegmentoModalita({ valori = ["B", "C", "Mix"], attivo, onSceglie, titoli = {}, bloccato = false, previsto = null }) {
   return (
     <span style={{ display: "inline-flex", gap: 4, justifyContent: "center" }}>
       {valori.map((chiave) => {
@@ -19705,7 +19705,7 @@ function SegmentoModalita({ valori = ["B", "C", "1/2"], attivo, onSceglie, titol
               // ventitre' pixel per lato, non uno di piu': in una riga alta
               // trentacinque, tre tasti piu' grandi di cosi' diventano il
               // pezzo che si vede per primo, mentre come si paga si guarda
-              // una volta sola. Il testo scende con la scatola — "1/2" sono
+              // una volta sola. Il testo scende con la scatola — "Mix" sono
               // tre caratteri e ci devono stare dentro senza toccare i bordi.
               ...fontBody, fontSize: 9, fontWeight: 700, lineHeight: 1,
               width: 23, height: 23, minWidth: 23, flexShrink: 0, padding: 0, borderRadius: 7,
@@ -19801,7 +19801,7 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
   const modalitaSpesa = totaleNum === 0 ? null
     : Math.abs(cashNum) < 0.005 ? "B"
     : Math.abs(cashNum - totaleNum) < 0.005 ? "C"
-    : Math.abs(cashNum - totaleNum / 2) < 0.01 ? "1/2"
+    : Math.abs(cashNum - totaleNum / 2) < 0.01 ? "Mix"
     : null;
   function impostaModalitaSpesa(chiave) {
     const nuovoCash = chiave === "B" ? 0 : chiave === "C" ? totaleNum : round2(totaleNum / 2);
@@ -19810,7 +19810,7 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
   }
   // Con "tutto a bonifico" la casella Cash si chiude: un importo cash
   // scritto li' contraddirebbe la scelta appena fatta due colonne piu' in
-  // la'. Con C e 1/2 resta aperta - li' un importo diverso e' una
+  // la'. Con C e Mix resta aperta - li' un importo diverso e' una
   // correzione legittima, e semplicemente spegne i flag.
   const cashBloccato = modalitaSpesa === "B";
 
@@ -19870,7 +19870,7 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
       <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <SegmentoModalita
           attivo={modalitaSpesa}
-          titoli={{ B: "Tutto a bonifico", C: "Tutto cash", "1/2": "Metà e metà" }}
+          titoli={{ B: "Tutto a bonifico", C: "Tutto cash", Mix: "Divisa a mano: parte da metà e metà, poi le due caselle si riscrivono" }}
           onSceglie={impostaModalitaSpesa}
         />
       </div>
@@ -26829,6 +26829,23 @@ function modalitaVenditore(quoteVenditoriSplit, corsoDataId, chiaveVenditore) {
   return riga?.modalita || "C";
 }
 
+// Le due quote di una spesa divisa: si scrive una casella e l'altra e'
+// quello che resta. La somma deve fare il totale della voce sempre — e'
+// lo stesso soldo diviso in due, non due spese — quindi invece di
+// lasciar scrivere due cifre che non tornano e poi dirlo, la seconda la
+// calcola l'app. Oltre il totale non si va: quella non e' una
+// divisione, e' un errore di battitura.
+function quoteSplitDa(totaleRiga, valore) {
+  const totale = round2(Number(totaleRiga) || 0);
+  const scritto = valore === "" || valore == null ? 0 : round2(parseNum(valore));
+  if (!Number.isFinite(scritto)) return { errore: "non è un importo." };
+  if (scritto < 0) return { errore: "una quota non può essere negativa." };
+  if (scritto > totale + 0.004) {
+    return { errore: `${fmtEuroErp2(scritto)} è più del totale della voce (${fmtEuroErp2(totale)}). Le due quote insieme devono fare il totale.` };
+  }
+  return { scritto, altro: round2(totale - scritto) };
+}
+
 function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi = [] }, overrides = {}) {
   const { splitOverride = {}, giorniPresenzaOverride = {} } = overrides;
   function conSplit(rigaId, base) {
@@ -26855,7 +26872,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     const bonifico = round2(perVenditore.reduce((somma, v) => {
       const modalita = modalitaVenditore(quoteVenditoriSplit, corsoData.id, v.chiave);
       if (modalita === "B") return somma + v.totale;
-      if (modalita === "1/2") return somma + v.totale / 2;
+      if (modalita === "Mix") return somma + v.totale / 2;
       return somma;
     }, 0));
     return {
@@ -26958,10 +26975,21 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   const nomeLocationPerTitolo = locSedeClasse?.nome_sede
     ? `${locSedeClasse.nome_sede}, ${toTitleCase(locSedeClasse?.nome || "")}`
     : toTitleCase(locSedeClasse?.nome || "—");
+  // La sala divisa a mano: se qualcuno ha scritto le due quote (modalita'
+  // Mix nel Riepilogo), comandano quelle. Finche' sono vuote decide
+  // pagamento_sede, tutto di qua o tutto di la', come e' sempre stato.
+  // Il TOTALE non cambia mai: resta quello della tariffa.
+  const splitSedeScritto = corsoData.location_bonifico != null || corsoData.location_cash != null;
+  const bonificoSedeClasse = splitSedeScritto
+    ? round2(Number(corsoData.location_bonifico) || 0)
+    : (pagamentoSedeClasse === "cash" ? 0 : costoLocationClasse);
+  const cashSedeClasse = splitSedeScritto
+    ? round2(Number(corsoData.location_cash) || 0)
+    : (pagamentoSedeClasse === "cash" ? costoLocationClasse : 0);
   const rigaLocationClasse = totaleSedeClasse != null ? {
     rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${nomeLocationPerTitolo}`, totale: costoLocationClasse, anagrafica: locSedeClasse || null,
-    bonifico: pagamentoSedeClasse === "cash" ? 0 : costoLocationClasse,
-    cash: pagamentoSedeClasse === "cash" ? costoLocationClasse : 0,
+    bonifico: bonificoSedeClasse,
+    cash: cashSedeClasse,
     scadenza: corsoData.scadenza_pagamento_location || null,
     // "gestita" = "Gestisci sede" è stata aperta e salvata almeno una
     // volta per questo corso (corsoData.pagamento_sede valorizzato) — non
@@ -27797,7 +27825,7 @@ function PannelloRiepilogoAmministrativo({
 
   // i 3 flag B/Cash/1-2 vicino a ogni riga "Costo Master": si escludono a
   // vicenda perché derivano dallo stesso split bonifico/cash della riga,
-  // non da uno stato a parte — B = tutto a bonifico, C = tutto cash, 1/2
+  // non da uno stato a parte — B = tutto a bonifico, C = tutto cash, Mix
   // (il default finché nessuno sceglie) = metà e metà. Un pareggio dei
   // due importi diverso da questi 3 casi (es. modificato a mano nei campi
   // Bonifico/Cash della riga) non fa risultare nessun flag spuntato.
@@ -27826,9 +27854,26 @@ function PannelloRiepilogoAmministrativo({
   // un importo fra due caselle - le due tariffe della sede (cash e
   // bonifico) sono numeri diversi, quindi cambiando modo puo' cambiare
   // anche il totale della riga. E' lo stesso che gia' succede all'hotel.
-  async function impostaPagamentoSede(modalita) {
+  async function impostaPagamentoSede(modalita, riga = null) {
+    // Mix: si parte da meta' e meta' e si scrivono le due caselle. Le
+    // quote stanno su location_bonifico/location_cash, e finche' ci sono
+    // comandano loro sul tipo di pagamento.
+    if (modalita === "Mix") {
+      const totale = round2(riga?.totale || 0);
+      if (!totale) { setMsg("La sala non ha un importo da dividere: scrivi prima la tariffa in \"Gestisci sede\"."); return; }
+      const meta = round2(totale / 2);
+      const { error: erroreMix } = await supabase.from("corsi_date")
+        .update({ location_bonifico: meta, location_cash: round2(totale - meta) }).eq("id", corsoData.id);
+      if (erroreMix) { setMsg("Errore: " + testoErrore(erroreMix)); return; }
+      setMsg(`Sala divisa: ${euroRiepilogo(meta)} a bonifico e ${euroRiepilogo(round2(totale - meta))} in contanti. Le due caselle si riscrivono, basta che insieme facciano ${euroRiepilogo(totale)}.`);
+      ricarica(["corsi_date"]);
+      return;
+    }
     const tipo = modalita === "C" ? "cash" : "bonifico";
-    const campi = { pagamento_sede: tipo };
+    // tornando a "tutto di qua" o "tutto di la'" la divisione a mano si
+    // cancella: lasciarla scritta la farebbe vincere di nascosto sulla
+    // scelta appena fatta
+    const campi = { pagamento_sede: tipo, location_bonifico: null, location_cash: null };
     if (tipo === "cash") campi.scadenza_pagamento_location = null;
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
@@ -27841,7 +27886,7 @@ function PannelloRiepilogoAmministrativo({
     // Se ne conosce una sola, quel modo e' l'unico che pratica e la meta'
     // non si puo' fare: si dice e non si scrive niente. Senza nessuna
     // delle due (pattuito a corpo) si divide l'importo concordato.
-    if (modalita === "1/2") {
+    if (modalita === "Mix") {
       const totB = r.periodoBonifico ?? (r.nottiPrenotate != null && r.tariffaBonifico != null ? round2(r.nottiPrenotate * r.tariffaBonifico) : null);
       const totC = r.periodoCash ?? (r.nottiPrenotate != null && r.tariffaCash != null ? round2(r.nottiPrenotate * r.tariffaCash) : null);
       if ((totB == null) !== (totC == null)) {
@@ -27908,23 +27953,44 @@ function PannelloRiepilogoAmministrativo({
   function campiSplitDi(tipo) {
     if (tipo === "venditore") return ["quota_venditore_bonifico", "quota_venditore_cash"];
     if (tipo === "modelle") return ["commissione_modelle_bonifico", "commissione_modelle_cash"];
+    if (tipo === "location") return ["location_bonifico", "location_cash"];
     return ["quota_bonifico", "quota_cash"];
   }
+  // "Mix" non vuol dire piu' "meta' e meta'": vuol dire "divisa a mano".
+  // Qualunque spartizione che non sia tutta di qua o tutta di la' e'
+  // Mix — 200 e 100 come 150 e 150. Prima una divisione sbilanciata non
+  // accendeva nessuno dei tre tasti, e la riga sembrava senza modo.
   function modalitaSplitMaster(r) {
-    if (!r.totale) return "1/2";
+    if (!r.totale) return "Mix";
     const frazioneBonifico = r.bonifico / r.totale;
     if (Math.abs(frazioneBonifico - 1) < 0.005) return "B";
     if (Math.abs(frazioneBonifico) < 0.005) return "C";
-    if (Math.abs(frazioneBonifico - 0.5) < 0.01) return "1/2";
-    return null;
+    return "Mix";
   }
   function impostaSplitMaster(r, modalita) {
     const [campoBonifico, campoCash] = campiSplitDi(r.tipo);
+    // Mix parte da meta' e meta': e' il punto di partenza piu' onesto
+    // quando non si sa ancora come verra' divisa. Da li' si riscrivono
+    // le due caselle.
     const bonifico = modalita === "B" ? r.totale : modalita === "C" ? 0 : round2(r.totale / 2);
     const cash = round2(r.totale - bonifico);
     // non cambia nessun totale: sposta soltanto lo stesso importo fra le
-    // due caselle che si possono gia' compilare a mano
+    // due caselle
     salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: bonifico, [campoCash]: cash });
+  }
+  // SCRIVENDO UNA CASELLA, L'ALTRA SI COMPLETA.
+  // La somma delle due deve fare il totale della voce, sempre: e' lo
+  // stesso soldo diviso in due, non due spese. Invece di lasciar
+  // scrivere due cifre che non tornano e poi dirlo, la seconda la
+  // calcola l'app. Oltre il totale non si va: quella non e' una
+  // divisione, e' un errore di battitura.
+  function scriviQuotaSplit(r, quale, valore) {
+    const esito = quoteSplitDa(r.totale, valore);
+    if (esito.errore) { setMsg(`"${r.nome}": ${esito.errore}`); return; }
+    const [campoBonifico, campoCash] = campiSplitDi(r.tipo);
+    salvaSplitRiga(r.tabella, r.rigaId, quale === "bonifico"
+      ? { [campoBonifico]: esito.scritto, [campoCash]: esito.altro }
+      : { [campoCash]: esito.scritto, [campoBonifico]: esito.altro });
   }
 
   // righe "Costi della classe" (Compenso Master, Costo Location, Costo
@@ -27968,7 +28034,7 @@ function PannelloRiepilogoAmministrativo({
   // che "Pagamenti effettuati" registra dalla busta.
   const righeVenditoriCash = quoteVenditoreDettaglio.map((v) => {
     const modalita = modalitaVenditore(quoteVenditoriSplit, corsoData.id, v.chiave);
-    const suoBonifico = modalita === "B" ? v.totale : modalita === "1/2" ? round2(v.totale / 2) : 0;
+    const suoBonifico = modalita === "B" ? v.totale : modalita === "Mix" ? round2(v.totale / 2) : 0;
     const suoCash = round2(v.totale - suoBonifico);
     const rigaId = `${corsoData.id}_${v.chiave}`;
     const impegnoCash = impegniPerChiave.get(`cash_venditore_${rigaId}`) || null;
@@ -28608,14 +28674,22 @@ function PannelloRiepilogoAmministrativo({
                       // sono la somma di come ha scelto ogni venditore, quindi
                       // scriverli a mano vorrebbe dire contraddire il dettaglio
                       // che sta due righe sotto
-                      // "tutto a bonifico" chiude anche le due caselle delle
-                      // righe a split libero: scriverci un cash
-                      // contraddirebbe la scelta appena fatta due colonne
-                      // piu' in la'. Con C e 1/2 restano aperte — li' un
-                      // importo diverso e' una correzione legittima, e
-                      // semplicemente spegne i flag.
-                      const bloccato = r.tipo === "location" || r.tipo === "alloggio" || r.tipo === "venditore"
-                        || modalitaSplitMaster(r) === "B";
+                      // SI SCRIVE SOLO IN MIX.
+                      // In "tutto a bonifico" o "tutto cash" le due cifre
+                      // le dice gia' il tasto: scriverci dentro
+                      // contraddirebbe la scelta fatta due colonne piu' in
+                      // la'. In Mix invece la divisione la decide una
+                      // persona, e le caselle sono il modo di dirla.
+                      //
+                      // L'alloggio resta fuori anche in Mix: li' le due
+                      // meta' costano tariffe diverse (l'hotel fattura una
+                      // cifra e ne chiede un'altra in contanti), quindi
+                      // spostare euro fra le caselle direbbe una bugia sul
+                      // conto dell'albergo. Il venditore pure: bonifico e
+                      // cash sono la somma di come ha scelto ogni
+                      // venditore, nel dettaglio due righe piu' sotto.
+                      const modoRiga = modalitaSplitMaster(r);
+                      const bloccato = r.tipo === "alloggio" || r.tipo === "venditore" || modoRiga !== "Mix";
                       const [campoBonifico, campoCash] = campiSplitDi(r.tipo);
                       return (
                         <React.Fragment key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash}>
@@ -28638,12 +28712,12 @@ function PannelloRiepilogoAmministrativo({
                           <div style={{ minWidth: 0 }}>
                             {bloccato
                               ? <div style={cifraRiga}>€ {r.bonifico}</div>
-                              : <input style={campoCifra} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoBonifico]: v }); }} />}
+                              : <input style={campoCifra} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value; if (parseNum(v || 0) !== (r.bonifico || 0)) scriviQuotaSplit(r, "bonifico", v); }} />}
                           </div>
                           <div style={{ minWidth: 0 }}>
                             {bloccato
                               ? <div style={cifraRiga}>€ {r.cash}</div>
-                              : <input style={campoCifra} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />}
+                              : <input style={campoCifra} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value; if (parseNum(v || 0) !== (r.cash || 0)) scriviQuotaSplit(r, "cash", v); }} />}
                           </div>
                           {/* Il flag "Cash a": Busta o Scadenziario, per la
                               sola parte in contanti della riga. Busta = esce
@@ -28700,10 +28774,13 @@ function PannelloRiepilogoAmministrativo({
                           <div style={{ minWidth: 0, display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
                             {r.tipo === "location" && (
                               <SegmentoModalita
-                                valori={["B", "C"]}
                                 attivo={modalitaSplitMaster(r)}
-                                titoli={{ B: "Tutto a bonifico", C: "Tutto cash — attenzione: la sede ha due tariffe diverse, il totale puo' cambiare" }}
-                                onSceglie={impostaPagamentoSede}
+                                titoli={{
+                                  B: "Tutto a bonifico",
+                                  C: "Tutto cash — attenzione: la sede ha due tariffe diverse, il totale puo' cambiare",
+                                  Mix: "Divisa fra bonifico e contanti: parte da metà e metà, poi le due caselle si riscrivono",
+                                }}
+                                onSceglie={(chiave) => impostaPagamentoSede(chiave, r)}
                               />
                             )}
                             {r.tipo === "alloggio" && (
@@ -28711,15 +28788,15 @@ function PannelloRiepilogoAmministrativo({
                               // importi: con due tariffe diverse la meta'
                               // non e' meta' del totale
                               <SegmentoModalita
-                                attivo={r.modoPagamento === "meta" ? "1/2" : modalitaSplitMaster(r)}
-                                titoli={{ B: "Tutto a bonifico", C: "Tutto cash", "1/2": "Metà a bonifico e metà in contanti, ciascuna alla sua tariffa" }}
+                                attivo={r.modoPagamento === "meta" ? "Mix" : modalitaSplitMaster(r)}
+                                titoli={{ B: "Tutto a bonifico", C: "Tutto cash", Mix: "Metà a bonifico e metà in contanti, ciascuna alla sua tariffa" }}
                                 onSceglie={(chiave) => impostaTipoPagamentoAlloggio(r, chiave)}
                               />
                             )}
                             {(r.tipo === "master" || r.tipo === "assistente" || r.tipo === "modelle") && (
                               <SegmentoModalita
                                 attivo={modalitaSplitMaster(r)}
-                                titoli={{ B: "Tutto a bonifico", C: "Tutto cash", "1/2": "Metà e metà" }}
+                                titoli={{ B: "Tutto a bonifico", C: "Tutto cash", Mix: "Divisa a mano: parte da metà e metà, poi le due caselle si riscrivono" }}
                                 onSceglie={(chiave) => impostaSplitMaster(r, chiave)}
                               />
                             )}
@@ -28786,7 +28863,7 @@ function PannelloRiepilogoAmministrativo({
                                   // devono esserci: la riga sopra dice quanto
                                   // va a bonifico in tutto, e senza queste non
                                   // si vede chi ce l'ha mandato.
-                                  const suoBonifico = modalita === "B" ? v.totale : modalita === "1/2" ? round2(v.totale / 2) : 0;
+                                  const suoBonifico = modalita === "B" ? v.totale : modalita === "Mix" ? round2(v.totale / 2) : 0;
                                   const suoCash = round2(v.totale - suoBonifico);
                                   const cellaDedotta = cifraRiga;
                                   return (
@@ -28833,7 +28910,7 @@ function PannelloRiepilogoAmministrativo({
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                                       <SegmentoModalita
                                         attivo={modalita}
-                                        titoli={{ B: "Tutto a bonifico", C: "Tutto cash", "1/2": "Metà e metà" }}
+                                        titoli={{ B: "Tutto a bonifico", C: "Tutto cash", Mix: "Divisa a mano: parte da metà e metà, poi le due caselle si riscrivono" }}
                                         onSceglie={(chiave) => salvaModalitaVenditore(v.chiave, chiave)}
                                       />
                                     </div>
