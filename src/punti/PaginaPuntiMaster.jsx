@@ -18,6 +18,14 @@ import { NAVY, GOLD, MUTED, CREAM_BORDER, BG, fontBody, fontDisplay } from "../u
 const punti = (n) =>
   Number(n || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Le stesse percentuali della dashboard della master, lette dalla
+// stessa impostazione: se qui dicessero un'altra cosa, la master e chi
+// la paga leggerebbero due cifre diverse per lo stesso lavoro.
+const PERCENTUALI_DEFAULT = { posShop: 15, cash: 20, eventoPosShop: 8, eventoCash: 10 };
+const CHIAVE_PERCENTUALI = "puntiMaster_percentualiEuro";
+const euro = (n) =>
+  `${Number(n || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
 // la stagione di oggi, con la stessa regola della funzione sul database
 export function stagioneCorrente(d = new Date()) {
   const anno = d.getMonth() + 1 >= 9 ? d.getFullYear() : d.getFullYear() - 1;
@@ -38,17 +46,20 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
   // Serve perche' un punto che non arriva non si vede: non compare da
   // nessuna parte, e l'assenza non si nota finche' qualcuno non protesta.
   const [scoperte, setScoperte] = useState([]);
+  const [perc, setPerc] = useState(PERCENTUALI_DEFAULT);
   const stagione = stagioneCorrente();
 
   const leggi = useCallback(async () => {
     setCaricando(true);
     try {
-      const [a, b, c, d] = await Promise.all([
+      const [a, b, c, d, e] = await Promise.all([
         supabase.from("v_punti_master").select("*").order("punti_totali", { ascending: false }),
         supabase.from("v_punti_master_stagioni").select("*"),
         supabase.from("punti_master_scarichi").select("*").order("scaricato_fino_a", { ascending: false }),
         supabase.from("v_punti_codici_scoperti").select("*").order("data", { ascending: false }),
+        supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", CHIAVE_PERCENTUALI).maybeSingle(),
       ]);
+      setPerc({ ...PERCENTUALI_DEFAULT, ...(e.error ? {} : (e.data?.valore || {})) });
       if (a.error) throw a.error;
       setRighe(a.data || []);
       setStagioni(b.data || []);
@@ -78,7 +89,13 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
     return m;
   }, [scarichi]);
 
-  async function scarica(r) {
+  // DUE SCARICHI, NON UNO.
+  // "Periodici" segna i punti come pagati: shop/POS, cash, eventi e
+  // personali ripartono da zero. "Carriera" azzera il totale di sempre,
+  // ed e' un'altra decisione — si fa a inizio percorso o per rimettere
+  // in pari un conto sbagliato, non ogni volta che si paga. Finche'
+  // erano un tasto solo, pagare una master le cancellava la carriera.
+  async function scarica(r, tipo = "periodici") {
     setScaricando(r.master_id);
     setDaConfermare(null);
     try {
@@ -88,10 +105,13 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
       // cambia un costo d'acquisto
       const { error } = await supabase.from("punti_master_scarichi").insert({
         master_id: r.master_id,
+        tipo,
         scaricato_fino_a: new Date().toISOString(),
         punti_shop_pos: Number(r.punti_shop_pos || 0),
         punti_cash: Number(r.punti_cash || 0),
-        punti_totali: Number(r.punti_totali || 0),
+        // quanto si e' scaricato DAVVERO: sui periodici il totale da
+        // pagare, sulla carriera il totale di sempre
+        punti_totali: Number((tipo === "carriera" ? r.punti_carriera : r.punti_totali) || 0),
         stagione: stagioneCorrente(),
         creato_da: utenteLoggato?.nome || ruoloUtente || null,
       });
@@ -115,8 +135,11 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
         </button>
         <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: NAVY, marginBottom: 2 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
-          Punti maturati da ogni master e non ancora pagati. Scaricandoli si segna la data del pagamento:
-          le vendite successive ripartono da zero, lo storico resta. Stagione in corso: <b>{stagione}</b> (settembre → agosto).
+          Le stesse caselle che la master vede nella sua dashboard, con quanto ha maturato in euro.
+          <b> Scarica punti periodici</b> segna i punti come pagati — shop/POS, cash, eventi e personali ripartono da zero —
+          e <b>non tocca la carriera</b>, che è quanto ha mosso da quando c'è.
+          <b> Scarica punti carriera</b> azzera quella: si fa a inizio percorso o per rimettere in pari un conto, non per pagare.
+          Niente si cancella davvero: ogni scarico è una data, e lo storico resta. Stagione in corso: <b>{stagione}</b> (settembre → agosto).
         </div>
 
         {errore && (
@@ -128,37 +151,66 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
         {!caricando && (
           <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
                 <thead>
                   <tr style={{ background: "#FAF6EE" }}>
                     <th style={{ ...th, textAlign: "left" }}>Master</th>
                     <th style={th}>Punti shop/POS</th>
                     <th style={th}>Punti cash</th>
-                    <th style={th}>Da pagare</th>
-                    <th style={th}>Stagione {stagione}</th>
+                    <th style={th}>Punti shop/POS eventi</th>
+                    <th style={th}>Punti cash eventi</th>
+                    <th style={th}>Punti personali</th>
+                    <th style={th}>Punti carriera</th>
+                    <th style={th}>Totale provvigioni</th>
                     <th style={th}>Ultimo scarico</th>
                     <th style={{ ...th, textAlign: "center" }}>&nbsp;</th>
                   </tr>
                 </thead>
                 <tbody>
                   {righe.map((r) => {
-                    const st = perStagione[r.master_id]?.[stagione];
                     const ult = ultimoScarico[r.master_id];
                     const haPunti = Number(r.punti_totali || 0) > 0;
+                    const haCarriera = Number(r.punti_carriera || 0) > 0;
+                    // ogni canale alla sua percentuale: i punti non si
+                    // sommano prima e si moltiplicano dopo
+                    const provvigioni = Math.round((
+                      (Number(r.punti_shop_pos || 0) * perc.posShop) / 100
+                      + (Number(r.punti_cash || 0) * perc.cash) / 100
+                      + (Number(r.punti_evento_pos || 0) * perc.eventoPosShop) / 100
+                      + (Number(r.punti_evento_cash || 0) * perc.eventoCash) / 100
+                    ) * 100) / 100;
+                    const conferma = daConfermare?.id === r.master_id ? daConfermare.tipo : null;
+                    const tastoScarica = (tipo, testo, attivo, spiega) => (
+                      <button onClick={() => setDaConfermare({ id: r.master_id, tipo })} disabled={!attivo}
+                        title={attivo ? spiega : "Non c'è niente da scaricare"}
+                        style={{ ...fontBody, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap",
+                          color: attivo ? (tipo === "carriera" ? NAVY : "#fff") : MUTED,
+                          background: attivo ? (tipo === "carriera" ? "#fff" : NAVY) : "#F2F2F0",
+                          border: tipo === "carriera" ? `1px solid ${attivo ? NAVY : CREAM_BORDER}` : "none",
+                          borderRadius: 20, padding: "6px 12px", cursor: attivo ? "pointer" : "default" }}>
+                        {testo}
+                      </button>
+                    );
                     return (
                       <tr key={r.master_id}>
                         <td style={{ ...td, textAlign: "left", fontWeight: 700 }}>{r.master}</td>
                         <td style={{ ...td, color: NAVY, fontWeight: 700 }}>{punti(r.punti_shop_pos)}</td>
                         <td style={{ ...td, color: "#8A6D1D", fontWeight: 700 }}>{punti(r.punti_cash)}</td>
-                        <td style={{ ...td, fontWeight: 800 }}>{punti(r.punti_totali)}</td>
-                        <td style={{ ...td, color: MUTED }}>{st ? punti(st.punti_totali) : "—"}</td>
+                        <td style={{ ...td, color: NAVY }}>{punti(r.punti_evento_pos)}</td>
+                        <td style={{ ...td, color: "#8A6D1D" }}>{punti(r.punti_evento_cash)}</td>
+                        <td style={{ ...td, color: MUTED }} title="Comprati da lei col suo codice: contano nella carriera, non maturano soldi">{punti(r.punti_personali)}</td>
+                        <td style={{ ...td, color: GOLD, fontWeight: 800 }}>{punti(r.punti_carriera)}</td>
+                        <td style={{ ...td, fontWeight: 800 }} title={`shop/POS ${perc.posShop}% · cash ${perc.cash}% · eventi carta ${perc.eventoPosShop}% · eventi contanti ${perc.eventoCash}%`}>{euro(provvigioni)}</td>
                         <td style={{ ...td, color: MUTED, fontSize: 12 }}>
-                          {ult ? `${new Date(ult.scaricato_fino_a).toLocaleDateString("it-IT")} · ${punti(ult.punti_totali)}` : "mai"}
+                          {ult ? `${new Date(ult.scaricato_fino_a).toLocaleDateString("it-IT")} · ${ult.tipo === "carriera" ? "carriera" : "periodici"}` : "mai"}
                         </td>
                         <td style={{ ...td, textAlign: "center" }}>
-                          {daConfermare === r.master_id ? (
-                            <span style={{ display: "inline-flex", gap: 6 }}>
-                              <button onClick={() => scarica(r)} disabled={scaricando === r.master_id}
+                          {conferma ? (
+                            <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                              <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>
+                                {conferma === "carriera" ? `Azzero la carriera (${punti(r.punti_carriera)})?` : `Pago ${euro(provvigioni)}?`}
+                              </span>
+                              <button onClick={() => scarica(r, conferma)} disabled={scaricando === r.master_id}
                                 style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#fff", background: "#C0392B",
                                   border: "none", borderRadius: 20, padding: "7px 14px", cursor: "pointer" }}>
                                 {scaricando === r.master_id ? "Scarico…" : "Confermo"}
@@ -168,14 +220,10 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
                                   textDecoration: "underline", cursor: "pointer" }}>annulla</button>
                             </span>
                           ) : (
-                            <button onClick={() => setDaConfermare(r.master_id)} disabled={!haPunti}
-                              title={haPunti ? "Segna i punti come pagati: da qui in poi riparte da zero" : "Non ci sono punti da scaricare"}
-                              style={{ ...fontBody, fontSize: 12, fontWeight: 800,
-                                color: haPunti ? "#fff" : MUTED, background: haPunti ? NAVY : "#F2F2F0",
-                                border: "none", borderRadius: 20, padding: "7px 16px",
-                                cursor: haPunti ? "pointer" : "default" }}>
-                              Scarica
-                            </button>
+                            <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+                              {tastoScarica("periodici", "Scarica punti periodici", haPunti, "Segna i punti come pagati: shop/POS, cash, eventi e personali ripartono da zero. La carriera non si tocca.")}
+                              {tastoScarica("carriera", "Scarica punti carriera", haCarriera, "Azzera il totale di sempre. Si fa a inizio percorso o per rimettere in pari un conto: non serve per pagare.")}
+                            </span>
                           )}
                         </td>
                       </tr>
