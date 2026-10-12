@@ -67597,8 +67597,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           // che nove volte su dieci e' solo una spunta. Il codice extra
           // adesso e' un link che si apre quando serve.
           <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            {!corsoPosId && couponReferralPersonale && (
-              <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, minWidth: 0 }}>
+            {!corsoPosId && !acquistoPersonale && couponReferralPersonale && (
+              <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, minWidth: 0, flexWrap: "wrap" }}>
                 <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
                 <span style={{ whiteSpace: "nowrap" }}>Usa il mio referral</span>
                 {/* il codice sta nella riga, non sopra: e' un'etichetta di
@@ -67615,6 +67615,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
                   <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 6px", whiteSpace: "nowrap" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
                 )}
+                {/* a cosa serve: senza scritto, il referral si confondeva
+                    col codice con cui la master compra per se' */}
+                <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, flexBasis: "100%", lineHeight: 1.3 }}>
+                  Codice sconto riservato agli allievi fuori dai corsi
+                </span>
               </label>
             )}
             {couponDellEdizione(corsoPosId) && (
@@ -67625,19 +67630,34 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </label>
             )}
             {/* il separatore solo se a sinistra c'e' davvero qualcosa */}
-            {((!corsoPosId && couponReferralPersonale) || couponDellEdizione(corsoPosId)) && !isMobile && (
+            {((!corsoPosId && !acquistoPersonale && couponReferralPersonale) || couponDellEdizione(corsoPosId)) && !isMobile && (
               <span style={{ width: 1, alignSelf: "stretch", minHeight: 20, background: CREAM_BORDER, flexShrink: 0 }} />
             )}
-            {codiceExtraAperto || couponCodiceTesto.trim() !== "" ? (
+            {acquistoPersonale ? (
+              /* Comprando per se' il codice e' quello suo e non si cambia.
+                 Il campo del codice extra resterebbe pieno del suo codice
+                 e spento: si capisce meglio una riga che lo dice. */
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto", ...fontBody, fontSize: isMobile ? 11.5 : 12, color: MUTED, whiteSpace: "nowrap" }}>
+                Acquisto personale
+                <span style={{ ...fontDisplay, fontSize: isMobile ? 12 : 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, background: "#F7EEDE", borderRadius: 999, padding: "2px 8px" }}>
+                  {String(couponAcquistoPersonale?.codice || "").toUpperCase()}
+                </span>
+                · nessun altro codice
+              </span>
+            ) : codiceExtraAperto || couponCodiceTesto.trim() !== "" ? (
               <div style={{ flex: "1 1 180px", minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <input
                     autoFocus={codiceExtraAperto}
-                    style={{ ...inputStyle, padding: "5px 9px", fontSize: 13, textTransform: "uppercase", opacity: (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
+                    style={{ ...inputStyle, padding: "5px 9px", fontSize: 13, textTransform: "uppercase", opacity: acquistoPersonale || (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
                     value={couponCodiceTesto}
-                    disabled={!!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
+                    // in un acquisto personale il codice e' quello suo e
+                    // basta: un secondo codice sopra vorrebbe dire due
+                    // sconti sulla stessa riga, e la vendita non
+                    // apparterrebbe piu' a nessuno dei due
+                    disabled={acquistoPersonale || !!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
                     onChange={(e) => applicaCodiceCoupon(e.target.value)}
-                    placeholder={scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso" : referralPersonaleInUso ? "Spegni il tuo referral" : "Codice sconto extra"}
+                    placeholder={acquistoPersonale ? "Acquisto personale: nessun altro codice" : scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso" : referralPersonaleInUso ? "Spegni il tuo referral" : "Codice sconto extra"}
                   />
                   <button onClick={() => { applicaCodiceCoupon(""); setCodiceExtraAperto(false); }} title="Chiudi il codice extra"
                     style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2, flexShrink: 0 }}>✕</button>
