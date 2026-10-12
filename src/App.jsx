@@ -40,7 +40,11 @@ import PrezziListini from "./prezzi/PrezziListini.jsx";
 import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
 import { muoviStock, allineaShop, pubblicatoSuShop } from "./magazzino/stock.js";
 import { usePuntiMaster, useCarrelliPuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
-import PaginaPuntiMaster from "./punti/PaginaPuntiMaster.jsx";
+// ATTENZIONE: in questo file esiste gia' una stagioneCorrente() che
+// torna un NUMERO (2026), usata per gli obiettivi. Quella dei punti torna
+// il testo "2026/27", che e' quello che va scritto in
+// punti_master_scarichi.stagione. Due nomi uguali, due cose diverse.
+import PaginaPuntiMaster, { stagioneCorrente as stagionePuntiCorrente } from "./punti/PaginaPuntiMaster.jsx";
 import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
 import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import { creaZip, siPuoCondividere } from "./file/zip.js";
@@ -51731,8 +51735,10 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
         && String(v.data_ordine || "") >= INIZIO_PREPARAZIONI_SEDE
         && !v.simulazione
         && (v.tipo_movimento || "vendita") === "vendita"
-        && v.corso_data_id
-        && sediCentraliPerCorso.has(v.corso_data_id)
+        // due strade per arrivare qui: la vendita e' di una sede centrale
+        // (li' la merce non ce l'ha addosso nessuno) oppure chi ha
+        // venduto ha premuto "Ritira adesso" al banco
+        && (v.da_preparare === true || (v.corso_data_id && sediCentraliPerCorso.has(v.corso_data_id)))
         // "preparata" lo scrive SOLO chi preme il tasto qui: non dipende
         // da quale versione dell'app aveva in mano chi ha venduto
         && !v.preparata_in_sede_il
@@ -65628,6 +65634,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // solo dentro il modulo del corriere. Ora e' una casella sua, con i suoi
   // campi, e la spedizione — quando c'e' — se li fa bastare.
   const [fattAttiva, setFattAttiva] = useState(false);
+  // "Ritira adesso": la merce non passa di mano al banco, il pacco lo
+  // monta chi sta in magazzino. La vendita compare in "Ordini in arrivo"
+  // insieme a quelli dello shop online. Vale per qualunque vendita, non
+  // solo per quelle di una sede centrale, che ci finiscono gia' da sole.
+  const [ritiroAttivo, setRitiroAttivo] = useState(false);
   const [fattClienteId, setFattClienteId] = useState("");
   const [fattDitta, setFattDitta] = useState("");
   const [fattNome, setFattNome] = useState("");
@@ -66041,7 +66052,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return {
       carrello, note, metodoPagamento, corsoPosId, scontoTipo, scontoValore, couponCodiceTesto, referralPersonaleAttivo, scontoCorsoAttivo, omaggioAttivo,
       spedizioneAttiva, sped: { spedIscrittoId, spedNome, spedCognome, spedIndirizzo, spedCivico, spedCitta, spedCap, spedProvincia, spedCitofono, spedInterno, spedCellulare },
-      fattAttiva, fattComeSpedizione, fatt: { fattClienteId, fattDitta, fattNome, fattCognome, fattPiva, fattCf, fattCodDest, fattPec, fattIndirizzo, fattCivico, fattCap, fattCitta, fattProv },
+      fattAttiva, ritiroAttivo, fattComeSpedizione, fatt: { fattClienteId, fattDitta, fattNome, fattCognome, fattPiva, fattCf, fattCodDest, fattPec, fattIndirizzo, fattCivico, fattCap, fattCitta, fattProv },
     };
   }
   function ripristinaCarrello(c) {
@@ -66058,6 +66069,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setSpedCivico(sp.spedCivico || ""); setSpedCitta(sp.spedCitta || ""); setSpedCap(sp.spedCap || ""); setSpedProvincia(sp.spedProvincia || "");
     setSpedCitofono(sp.spedCitofono || ""); setSpedInterno(sp.spedInterno || ""); setSpedCellulare(sp.spedCellulare || "");
     setFattAttiva(!!c.fattAttiva); setFattComeSpedizione(c.fattComeSpedizione !== false);
+    setRitiroAttivo(!!c.ritiroAttivo);
     const f = c.fatt || {};
     setFattClienteId(f.fattClienteId || ""); setFattDitta(f.fattDitta || ""); setFattNome(f.fattNome || ""); setFattCognome(f.fattCognome || "");
     setFattPiva(f.fattPiva || ""); setFattCf(f.fattCf || ""); setFattCodDest(f.fattCodDest || ""); setFattPec(f.fattPec || "");
@@ -66170,10 +66182,59 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const couponReferralPersonale = (() => {
     if (operatore?.tipo !== "master") return null;
     const oggi = dataOggiStr();
+    // il REFERRAL, non il codice d'acquisto: vivono nella stessa tabella
+    // e sono tutti e due "suoi e senza edizione", a distinguerli e' solo
+    // la serie. Senza il filtro usciva quello che capitava.
     return (coupon || []).find((c) => c.master_id === operatore.id && !c.corsi_date_id && c.codice
+      && c.serie_regole !== "acquisto_master"
       && !(c.valido_da && oggi < c.valido_da) && !(c.valido_fino_a && oggi > c.valido_fino_a)) || null;
   })();
+  // IL CODICE CON CUI LA MASTER COMPRA PER SE'.
+  // Non e' una vendita a un cliente: non matura provvigione, ma i punti
+  // contano nella carriera. Il POS lo usa quando si sceglie "Collega ad
+  // acquisto personale" nella tendina qui sotto.
+  const couponAcquistoPersonale = (() => {
+    if (!operatore || operatore.tipo !== "master") return null;
+    return (coupon || []).find((c) => c.master_id === operatore.id && !c.corsi_date_id && c.codice
+      && c.serie_regole === "acquisto_master") || null;
+  })();
   const [referralPersonaleAttivo, setReferralPersonaleAttivo] = useState(false);
+  // ACQUISTO PERSONALE DELLA MASTER.
+  // Si sceglie dalla stessa tendina dei corsi perche' risponde alla
+  // stessa domanda — a chi appartiene questa vendita — e perche' le due
+  // cose si escludono: o e' un acquisto suo, o e' una vendita a un
+  // cliente del corso.
+  const [acquistoPersonale, setAcquistoPersonale] = useState(false);
+  // quanto ha maturato, in euro, e i punti che ci stanno dietro: si
+  // legge dalla stessa vista della sua dashboard e di Punti master, cosi'
+  // i tre posti non possono dire tre cifre diverse
+  const [puntiMaster, setPuntiMaster] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    if (!acquistoPersonale || !operatore || operatore.tipo !== "master") { setPuntiMaster(null); return undefined; }
+    (async () => {
+      const [v, imp] = await Promise.all([
+        supabase.from("v_punti_master").select("punti_shop_pos, punti_cash, punti_evento_pos, punti_evento_cash, punti_carriera, punti_totali").eq("master_id", operatore.id).maybeSingle(),
+        supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", CHIAVE_PERCENTUALI_EURO_PUNTI).maybeSingle(),
+      ]);
+      if (!vivo) return;
+      const p = { ...PERCENTUALI_EURO_PUNTI_DEFAULT, ...(imp.error ? {} : (imp.data?.valore || {})) };
+      const d = v.error ? null : v.data;
+      setPuntiMaster(d ? {
+        ...d,
+        // ogni canale alla sua percentuale: i punti non si sommano prima
+        // e si moltiplicano dopo
+        provvigioni: round2(
+          ((Number(d.punti_shop_pos) || 0) * p.posShop) / 100
+          + ((Number(d.punti_cash) || 0) * p.cash) / 100
+          + ((Number(d.punti_evento_pos) || 0) * p.eventoPosShop) / 100
+          + ((Number(d.punti_evento_cash) || 0) * p.eventoCash) / 100,
+        ),
+      } : null);
+    })();
+    return () => { vivo = false; };
+  }, [acquistoPersonale, operatore?.id, operatore?.tipo]);
+  const provvigioniDaUsare = acquistoPersonale ? round2(puntiMaster?.provvigioni || 0) : 0;
   // il carrello che si sta battendo, valutato con le stesse regole con
   // cui l'elenco dei carrelli sospesi valuta quelli parcheggiati: serve
   // solo a chi amministra il carrello di un altro (vedi perContoDiAltri).
@@ -66233,6 +66294,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }, [metodoPagamento, couponAttivo?.id, pctContantiCorsiPos]);
   function nuovaVendita() {
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setClientePos(""); setMsg("");
+    // l'acquisto personale vale per quel carrello, non resta acceso: i
+    // punti appena spesi sono finiti, e il carrello dopo ripone la domanda
+    setAcquistoPersonale(false); setRitiroAttivo(false);
     // la provenienza vale per i pezzi di quel carrello, non e' una regola
     // che resta accesa: il carrello dopo ripone la sua domanda
     setDalKitPerProdotto({});
@@ -66407,7 +66471,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // somma delle righe; un omaggio non la fa pagare
   const speseSpedizione = spedizioneAttiva && !omaggioAttivo ? COSTO_SPEDIZIONE_POS : 0;
 
-  const totaleConSpedizione = round2(totaleNetto + speseSpedizione);
+  // LE PROVVIGIONI SI SPENDONO TUTTE O NIENTE.
+  // Sono soldi gia' maturati: scalarne una parte vorrebbe dire tenere un
+  // resto da qualche parte, e quel resto non ha un posto dove stare — il
+  // taglio dello scarico e' uno solo, non sa di meta'. Quindi il
+  // carrello deve valere almeno quanto le provvigioni, e si scalano per
+  // intero. Lo sconto e' uno sconto vero: l'IVA si calcola su quello che
+  // resta, come per qualunque altro sconto.
+  const provvigioniScalabili = provvigioniDaUsare > 0 && round2(totaleNetto + speseSpedizione) >= provvigioniDaUsare - 0.004
+    ? provvigioniDaUsare : 0;
+  const totaleConSpedizione = round2(totaleNetto + speseSpedizione - provvigioniScalabili);
   // L'IVA si scorpora solo se quella vendita un documento fiscale ce
   // l'ha. Una vendita in contanti senza fattura non genera IVA: non c'e'
   // un'imposta da versare, quindi l'imponibile e' il totale e l'IVA e'
@@ -66716,6 +66789,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
       richiede_fattura: fattAttiva,
+      // "Ritira adesso": il pacco lo prepara chi sta in magazzino, e la
+      // vendita compare in "Ordini in arrivo" insieme a quelli dello shop
+      da_preparare: ritiroAttivo,
       // se qualche riga esce da un kit in aula la vendita porta la
       // provenienza e la spedizione del corso, cosi' la scheda di fine
       // corso la ritrova fra i pezzi da attribuire. DA QUALE scatola sono
@@ -66803,10 +66879,36 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       salvaCarrelliSospesi(senzaQuestoCarrello);
       setCarrelloSospesoId(null);
     }
+    // LE PROVVIGIONI SPESE SI SEGNANO COME PAGATE.
+    // Scrivere uno scarico "periodici" e' lo stesso gesto che si fa in
+    // Amministrazione quando si paga una master: i punti del periodo
+    // ripartono da zero e in quella pagina compare la data di oggi come
+    // ultimo scarico. La carriera non si tocca — ha il suo taglio.
+    //
+    // Si fa DOPO la vendita, non prima: cosi' i punti di questo acquisto
+    // (che e' suo, col suo codice) restano nel periodo nuovo invece di
+    // essere azzerati appena nati.
+    const provvigioniSpese = provvigioniScalabili;
+    const puntiDaScaricare = puntiMaster;
+    if (provvigioniSpese > 0 && puntiDaScaricare && operatore?.tipo === "master") {
+      supabase.from("punti_master_scarichi").insert({
+        master_id: operatore.id,
+        tipo: "periodici",
+        scaricato_fino_a: new Date().toISOString(),
+        punti_shop_pos: Number(puntiDaScaricare.punti_shop_pos || 0),
+        punti_cash: Number(puntiDaScaricare.punti_cash || 0),
+        punti_totali: Number(puntiDaScaricare.punti_totali || 0),
+        stagione: stagionePuntiCorrente(),
+        creato_da: operatore?.nome || null,
+        nota: `Spesi al banco: ${fmtEuroErp2(provvigioniSpese)}`,
+      }).then(({ error }) => {
+        if (error) setMsg(`Vendita registrata, ma non sono riuscito a segnare i punti come spesi: ${testoErrore(error)}. Falli scaricare da Amministrazione → Punti master.`);
+      });
+    }
     nuovaVendita();
     setMsg(datiSpedizione
       ? `${etichettaEsito} e spedizione inviata a Raf.${fattAttiva ? " Fattura da emettere." : ""}`
-      : `${etichettaEsito}.${fattAttiva ? " Fattura da emettere." : ""}`);
+      : `${etichettaEsito}.${provvigioniSpese > 0 ? ` ${fmtEuroErp2(provvigioniSpese)} di provvigioni spesi: punti azzerati, carriera intatta.` : ""}${fattAttiva ? " Fattura da emettere." : ""}`);
 
     (async () => {
       // Lo scarico che non riesce NON ferma piu' la vendita. Si fermava, e
@@ -67143,16 +67245,36 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
-      {corsiEleggibiliPos.length > 0 && (
+      {/* la tendina compare anche senza corsi di oggi, se la master ha il
+          suo codice d'acquisto: l'acquisto personale non dipende da
+          un'edizione */}
+      {(corsiEleggibiliPos.length > 0 || couponAcquistoPersonale) && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
           <Field label="Collega la vendita al corso">
-            <select style={inputStyle} value={corsoPosId} onChange={(e) => {
+            <select style={inputStyle} value={acquistoPersonale ? "__personale" : corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
-              setCorsoPosId(nuovoId); setSpedIscrittoId("");
-              setScontoCorsoAttivo(true);
+              setSpedIscrittoId("");
+              if (nuovoId === "__personale") {
+                // L'acquisto personale non e' un corso: si stacca da
+                // qualunque edizione e prende il codice con cui la master
+                // compra per se'. Niente provvigione, punti in carriera.
+                setAcquistoPersonale(true);
+                setCorsoPosId("");
+                setScontoCorsoAttivo(false);
+                setReferralPersonaleAttivo(false);
+                setCouponAttivo(couponAcquistoPersonale || null);
+                setCouponValore(couponAcquistoPersonale ? String(couponAcquistoPersonale.valore ?? "") : "");
+                setCouponCodiceTesto(couponAcquistoPersonale ? String(couponAcquistoPersonale.codice || "").toUpperCase() : "");
+                return;
+              }
+              setAcquistoPersonale(false);
+              setCorsoPosId(nuovoId); setScontoCorsoAttivo(true);
               applicaCouponDelCorso(nuovoId);
             }}>
               <option value="">— vendita non legata a un corso —</option>
+              {/* la master compra per se': stessa tendina, perche' e' la
+                  stessa domanda — a chi appartiene questa vendita */}
+              {couponAcquistoPersonale && <option value="__personale">Collega ad acquisto personale ({String(couponAcquistoPersonale.codice || "").toUpperCase()})</option>}
               {corsiEleggibiliPos.map((cd) => (
                 // LA DATA CI VUOLE. Due edizioni dello stesso corso nella
                 // stessa citta' si leggevano identiche — "NEEDLING · Napoli"
@@ -67193,6 +67315,36 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </span>
             </label>
           )}
+          {/* ACQUISTO PERSONALE: quanto ha maturato e quanto si scala.
+              Si vede prima di incassare, perche' e' l'unica cosa che
+              cambia il totale e nessuno la sceglie riga per riga. */}
+          {acquistoPersonale && (
+            <div style={{ marginTop: 8, marginBottom: 12, padding: "11px 13px", borderRadius: 12, background: "#FBF7EE", border: "1px solid #E8D4B0" }}>
+              {puntiMaster == null ? (
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Sto leggendo i tuoi punti…</span>
+              ) : provvigioniDaUsare <= 0 ? (
+                <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>
+                  Non hai provvigioni da spendere. L'acquisto si paga per intero; i punti di questa spesa vanno comunque nella tua carriera.
+                </span>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.4 }}>Provvigioni da spendere</span>
+                    <span style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: NAVY }}>{fmtEuroErp2(provvigioniDaUsare)}</span>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 12, color: provvigioniScalabili > 0 ? "#2E7D32" : "#C0392B", marginTop: 4, lineHeight: 1.45 }}>
+                    {provvigioniScalabili > 0
+                      ? `Si scalano tutte da questo carrello: paghi ${fmtEuroErp2(totaleDaIncassare)}.`
+                      : `Il carrello non basta: serve almeno ${fmtEuroErp2(provvigioniDaUsare)} di merce. Le provvigioni si spendono tutte in una volta, non a pezzi.`}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.4 }}>
+                    Incassando, i punti si azzerano e in Amministrazione → Punti master compare la data di oggi come ultimo scarico. La carriera ({fmtPunti(puntiMaster.punti_carriera || 0)}) non si tocca.
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* lo sconto del corso si vede: applicato in silenzio sarebbe
               solo un numero che compare nel totale, e chi vende non
               saprebbe se e' quello giusto */}
@@ -67604,6 +67756,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           ...(puoOmaggiare ? [{ id: "pos-omaggio", Icona: IconaRegalo, testo: "Omaggio", acceso: omaggioAttivo, cambia: setOmaggioAttivo }] : []),
           { id: "pos-spedizione", Icona: IconaCamionConsegna, testo: "Aggiungi spese spedizione", acceso: spedizioneAttiva, cambia: setSpedizioneAttiva },
           { id: "pos-richiede-fattura", Icona: IconaCatDocumento, testo: "Richiede fattura", acceso: fattAttiva, cambia: setFattAttiva },
+          { id: "pos-ritira-adesso", Icona: IconaTileLogistica, testo: "Ritira adesso", acceso: ritiroAttivo, cambia: setRitiroAttivo },
         ].map((o, i) => (
           <React.Fragment key={o.id}>
             {i > 0 && (righeOpzioni
@@ -67923,7 +68076,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
       {(() => {
-        const bloccato = carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim());
+        // provvigioni da spendere ma carrello troppo piccolo: non si
+        // incassa. Scalarne una parte vorrebbe dire tenere un resto, e un
+        // resto non ha dove stare — il taglio dello scarico e' uno solo.
+        const carrelloTroppoPiccolo = provvigioniDaUsare > 0 && provvigioniScalabili === 0;
+        const bloccato = carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim()) || carrelloTroppoPiccolo;
         return (
           <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginBottom: 10 }}>
           <button
@@ -78217,7 +78374,7 @@ export default function App() {
     // corto a meta' lavoro.
     vendite_shop: async () => {
       const query = () => {
-        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, busta_numero").eq("simulazione", false);
+        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, busta_numero, da_preparare, preparata_in_sede_il").eq("simulazione", false);
         return (venditeStoricoIntero.current ? q : q.gte("data_ordine", DA_QUANDO_VENDITE_IN_MEMORIA)).order("data_ordine", { ascending: false }).order("id");
       };
       setVenditeShop(await leggiTutte(query));
