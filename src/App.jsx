@@ -46251,6 +46251,33 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   const [importando, setImportando] = useState(false);
   const [leggendo, setLeggendo] = useState(false);
   const [regole, setRegole] = useState([]);
+  // IL CONTO LETTO DALLA BANCA, non dal file.
+  // Dal 13/10/2026 i movimenti scendono da soli ogni mattina alle 7 (vedi
+  // la edge function lunchflow-sync). Qui si vede il saldo, quando e'
+  // stato letto l'ultima volta, e si puo' chiedere un giro adesso.
+  const [conti, setConti] = useState([]);
+  const [sincronizzando, setSincronizzando] = useState(false);
+  const leggiConti = React.useCallback(async () => {
+    const { data } = await supabase.from("lunchflow_conti").select("*").order("nome");
+    setConti(data || []);
+  }, []);
+  useEffect(() => { leggiConti(); }, [leggiConti]);
+  async function sincronizzaBanca() {
+    setSincronizzando(true); setMsg("");
+    try {
+      const { data, error } = await supabase.functions.invoke("lunchflow-sync");
+      if (error) throw new Error(data?.errore || error.message);
+      if (data?.errore) throw new Error(data.errore);
+      setMsg(data.nuovi > 0
+        ? `Scaricati ${data.nuovi} movimenti nuovi da ${data.conti} cont${data.conti === 1 ? "o" : "i"}.`
+        : "Nessun movimento nuovo: era gia' tutto sceso.");
+      await leggiConti();
+      await carica();
+    } catch (e) {
+      setMsg(e?.message || "Sincronizzazione non riuscita.");
+    }
+    setSincronizzando(false);
+  }
   const [regoleAperte, setRegoleAperte] = useState(false);
   // la sottopagina: l'elenco dei movimenti oppure l'allineamento, dove si
   // guardano le coppie sospette una per una
@@ -46635,6 +46662,44 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
           l'allineamento, dove si guardano le coppie sospette una per una.
           La seconda porta il numero addosso, cosi' si sa se c'e' lavoro
           da fare senza entrarci */}
+      {/* IL CONTO IN CIMA: saldo, quando e' stato letto, e il tasto per
+          rileggerlo adesso. Prima di qui l'unico modo di sapere a che
+          punto era la banca era guardare la data dell'ultimo movimento
+          importato a mano — che dice quando e' stato fatto l'import, non
+          quando la banca e' stata vista. */}
+      {/* la striscia c'e' sempre, anche al primo giro: se comparisse solo
+          dopo aver letto un conto, il primo giro non si potrebbe lanciare
+          da nessuna parte */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 12, padding: isMobile ? "12px 14px" : "14px 18px", borderRadius: 16, background: "#fff", border: `1px solid ${CREAM_BORDER}`, boxShadow: "var(--ombra-aree, none)" }}>
+          {conti.length === 0 && (
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Conto corrente</div>
+              <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 2 }}>Mai letto dalla banca. Premi «Aggiorna ora» per il primo giro.</div>
+            </div>
+          )}
+          {conti.map((c) => (
+            <div key={c.id} style={{ minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{c.nome || "Conto"}</div>
+              <div style={{ ...fontDisplay, fontSize: isMobile ? 20 : 24, fontWeight: 700, color: Number(c.saldo) < 0 ? "#C0392B" : NAVY, lineHeight: 1.15 }}>
+                {c.saldo == null ? "—" : fmtEuroErp2(Number(c.saldo))}
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: c.ultimo_esito && c.ultimo_esito !== "ok" ? "#C0392B" : MUTED, marginTop: 2 }}>
+                {c.ultimo_esito && c.ultimo_esito !== "ok"
+                  ? c.ultimo_esito
+                  : c.ultimo_sync
+                  ? `letto il ${new Date(c.ultimo_sync).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+                  : "mai letto"}
+              </div>
+            </div>
+          ))}
+          <div style={{ flex: 1 }} />
+          <button type="button" onClick={sincronizzaBanca} disabled={sincronizzando}
+            title="Richiede a Lunch Flow saldo e movimenti adesso. Succede comunque da solo ogni mattina alle 7."
+            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 12, padding: "10px 18px", cursor: sincronizzando ? "default" : "pointer", opacity: sincronizzando ? 0.5 : 1, whiteSpace: "nowrap" }}>
+            {sincronizzando ? "Sto leggendo la banca…" : "Aggiorna ora"}
+          </button>
+      </div>
+
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {[
           { chiave: "movimenti", testo: "Estratto conto" },
