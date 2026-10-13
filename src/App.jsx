@@ -65552,11 +65552,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // per le master: un venditore in sede vede tutti i corsi del giorno e
   // non e' detto che stia vendendo per uno di quelli.
   const unicoCorsoDiOggi = operatore?.tipo === "master" && corsiEleggibiliPos.length === 1 ? corsiEleggibiliPos[0].id : null;
+  // LA SCELTA FATTA A MANO VINCE SULLA PRESELEZIONE.
+  // Stando al corso capita di vendere a una cliente che col corso non
+  // c'entra niente: si sceglie "vendita fuori dal corso" e la riga di
+  // sopra la rimetteva subito sul corso, perche' guardava solo se il
+  // campo era vuoto — e vuoto lo e' anche quando qualcuno l'ha svuotato
+  // apposta. Quella scelta era impossibile da fare.
+  //
+  // Il contrassegno dura quanto il carrello: la vendita dopo riparte
+  // dalla preselezione, perche' lo sconto della classe e' un diritto
+  // degli allievi e non deve dipendere da cosa si e' scelto mezz'ora fa.
+  const [sceltaCorsoManuale, setSceltaCorsoManuale] = useState(false);
   useEffect(() => {
-    if (!unicoCorsoDiOggi || corsoPosId) return;
+    if (!unicoCorsoDiOggi || corsoPosId || sceltaCorsoManuale) return;
     setCorsoPosId(unicoCorsoDiOggi);
     applicaCouponDelCorso(unicoCorsoDiOggi);
-  }, [unicoCorsoDiOggi, corsoPosId]);
+  }, [unicoCorsoDiOggi, corsoPosId, sceltaCorsoManuale]);
   // "Prelevato dai kit in loco": il pezzo venduto è stato tirato fuori da un
   // kit presente in aula. Dal magazzino centrale era già uscito quando Raf
   // ha spedito il pacco: scaricarlo di nuovo qui lo conterebbe due volte.
@@ -66296,7 +66307,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setClientePos(""); setMsg("");
     // l'acquisto personale vale per quel carrello, non resta acceso: i
     // punti appena spesi sono finiti, e il carrello dopo ripone la domanda
-    setAcquistoPersonale(false); setRitiroAttivo(false);
+    setAcquistoPersonale(false); setRitiroAttivo(false); setSceltaCorsoManuale(false);
     // la provenienza vale per i pezzi di quel carrello, non e' una regola
     // che resta accesa: il carrello dopo ripone la sua domanda
     setDalKitPerProdotto({});
@@ -67254,6 +67265,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <select style={inputStyle} value={acquistoPersonale ? "__personale" : corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
               setSpedIscrittoId("");
+              setSceltaCorsoManuale(true);
               if (nuovoId === "__personale") {
                 // L'acquisto personale non e' un corso: si stacca da
                 // qualunque edizione e prende il codice con cui la master
@@ -67271,7 +67283,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               setCorsoPosId(nuovoId); setScontoCorsoAttivo(true);
               applicaCouponDelCorso(nuovoId);
             }}>
-              <option value="">— vendita non legata a un corso —</option>
+              <option value="">— vendita fuori dal corso (cliente esterna) —</option>
               {/* la master compra per se': stessa tendina, perche' e' la
                   stessa domanda — a chi appartiene questa vendita */}
               {couponAcquistoPersonale && <option value="__personale">Collega ad acquisto personale ({String(couponAcquistoPersonale.codice || "").toUpperCase()})</option>}
