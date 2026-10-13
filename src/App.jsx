@@ -67299,10 +67299,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               setCorsoPosId(nuovoId); setScontoCorsoAttivo(true);
               applicaCouponDelCorso(nuovoId);
             }}>
-              <option value="">— vendita fuori dal corso (cliente esterna) —</option>
+              <option value="">— vendita fuori dai corsi senza sconti —</option>
               {/* la master compra per se': stessa tendina, perche' e' la
                   stessa domanda — a chi appartiene questa vendita */}
-              {couponReferralPersonale && <option value="__referral">Vendi al cliente con il referral code ({String(couponReferralPersonale.codice || "").toUpperCase()})</option>}
+              {couponReferralPersonale && <option value="__referral">Vendi fuori dal corso con il mio referral ({String(couponReferralPersonale.codice || "").toUpperCase()})</option>}
               {couponAcquistoPersonale && <option value="__personale">Collega ad acquisto personale ({String(couponAcquistoPersonale.codice || "").toUpperCase()})</option>}
               {corsiEleggibiliPos.map((cd) => (
                 // LA DATA CI VUOLE. Due edizioni dello stesso corso nella
