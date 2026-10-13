@@ -45242,6 +45242,10 @@ function PannelloCassaContanti({
   // nessuno aveva annunciato.
   const busteInArrivo = useMemo(() => contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi, spese, venditeShop, busteAppendici }),
     [corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, spese, venditeShop, busteAppendici]);
+  // La casella "In arrivo" dice quanto contante sta tornando, ma non da
+  // dove: l'elenco busta per busta e' gia' in questa pagina, piu' in
+  // basso. Cliccando la casella ci si va, invece di cercarlo scorrendo.
+  const rifBusteInArrivo = useRef(null);
   async function registraMovimento(tipo) {
     const valore = importo === "" ? null : parseNum(importo);
     if (valore == null || !(valore > 0)) { setMsg("Serve un importo maggiore di zero."); return; }
@@ -45368,6 +45372,8 @@ function PannelloCassaContanti({
             colore: "#8A6D1D",
             Icona: IconaBustaInViaggio,
             nota: `${busteInArrivo.quante} bust${busteInArrivo.quante === 1 ? "a" : "e"} ancora fuori`,
+            titolo: "Vedi quali classi, una per una",
+            onClick: () => rifBusteInArrivo.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
           }] : []),
         ];
         // si guardano solo le caselle che ci sono adesso: "Mancano in
@@ -45393,6 +45399,7 @@ function PannelloCassaContanti({
                   hanno la stessa larghezza e quindi gli stessi corpi */}
               <RiquadroSegnalatore
                 etichetta={c.etichetta} valore={euroRiepilogo(c.valore)} nota={c.nota} Icona={c.Icona}
+                onClick={c.onClick} titolo={c.titolo}
                 colore={c.colore === NAVY ? "#6E7391" : c.colore}
                 disco={c.colore === "#C0392B" ? "#C0392B" : (c.colore === GOLD || c.colore === "#8A6D1D") ? "#B8860B" : "#6E7391"}
               />
@@ -45403,19 +45410,25 @@ function PannelloCassaContanti({
         );
       })()}
 
-      {/* Le contabilita' che aspettano di essere approvate: le buste dei
-          corsi finiti e le appendici aperte. Da qui si vede solo l'elenco,
-          e si apre la classe. Nessuna busta si chiude da qui: prima c'era
+      {/* SI CHIAMA "IN ARRIVO", come la casella in cima, e non in un
+          altro modo. Prima la casella diceva "In arrivo" e questo riquadro
+          "Avvisi contabilita' da approvare": due nomi per la stessa cosa,
+          e chi legge si chiede quale delle due sia. Una busta in arrivo e'
+          per definizione una busta da approvare.
+
+          Le contabilita' che aspettano: le buste dei corsi finiti e le
+          appendici aperte. Da qui si vede solo l'elenco, e si apre la
+          classe. Nessuna busta si chiude da qui: prima c'era
           una spunta "ok, busta in cassa" ed e' stata tolta, perche' mettere
           in cassa un contante senza aver approvato incassi e spese nel
           Riepilogo della classe vuol dire congelare un importo che nessuno
           ha controllato. Una riga sparisce appena la busta e' in cassa: da
           li' in poi la si trova nel saldo. */}
       {busteInArrivo.righe.length > 0 && (
-        <div style={{ ...cardStyle, marginBottom: 14 }}>
-          <TitoloSezioneRiepilogo grande>Avvisi contabilità da approvare</TitoloSezioneRiepilogo>
+        <div ref={rifBusteInArrivo} style={{ ...cardStyle, marginBottom: 14, scrollMarginTop: 16 }}>
+          <TitoloSezioneRiepilogo grande>In arrivo</TitoloSezioneRiepilogo>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6 }}>
-            Si approvano dal Riepilogo amministrativo della classe: incassi, spese, Disponi pagamenti e poi la busta in cassa.
+            {busteInArrivo.quante} bust{busteInArrivo.quante === 1 ? "a" : "e"} per {euroRiepilogo(busteInArrivo.totale)}, ancora fuori. Si approvano dal Riepilogo amministrativo della classe: incassi, spese, Disponi pagamenti e poi la busta in cassa.
           </div>
           {busteInArrivo.righe.map(({ cd, importo, appendice }) => {
             const nomeCorso = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "Corso";
