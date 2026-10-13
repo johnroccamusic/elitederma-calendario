@@ -67303,7 +67303,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               {/* la master compra per se': stessa tendina, perche' e' la
                   stessa domanda — a chi appartiene questa vendita */}
               {couponReferralPersonale && <option value="__referral">Vendi fuori dal corso con il mio referral ({String(couponReferralPersonale.codice || "").toUpperCase()})</option>}
-              {couponAcquistoPersonale && <option value="__personale">Collega ad acquisto personale ({String(couponAcquistoPersonale.codice || "").toUpperCase()})</option>}
+              {couponAcquistoPersonale && <option value="__personale">Acquisto personale con sconto master ({String(couponAcquistoPersonale.codice || "").toUpperCase()})</option>}
               {corsiEleggibiliPos.map((cd) => (
                 // LA DATA CI VUOLE. Due edizioni dello stesso corso nella
                 // stessa citta' si leggevano identiche — "NEEDLING · Napoli"
