@@ -83,6 +83,49 @@ async function chiedi(percorso: string, chiave: string) {
   return await risposta.json();
 }
 
+// IL SALDO, SENZA INDOVINARE IL NOME DEL CAMPO. Gli aggregatori lo
+// chiamano in dieci modi diversi (balance, current, booked, available) e
+// spesso annidato (balances[0].amount.value). Invece di una catena di ??
+// lunga una riga, si scende nell'oggetto e si prende il primo numero che
+// sta sotto una chiave che parla di saldo. Se non c'e', torna null e
+// chi chiama lo dice in chiaro.
+const PAROLE_SALDO = /balance|saldo|current|booked|available|amount|value/i;
+function cercaSaldo(nodo: unknown, dentroSaldo = false, profondita = 0): number | null {
+  if (profondita > 4 || nodo == null) return null;
+  if (typeof nodo === "number" && Number.isFinite(nodo)) return dentroSaldo ? nodo : null;
+  if (typeof nodo === "string") {
+    const n = Number(nodo.replace(",", "."));
+    return dentroSaldo && Number.isFinite(n) && nodo.trim() !== "" ? n : null;
+  }
+  if (Array.isArray(nodo)) {
+    for (const v of nodo) {
+      const t = cercaSaldo(v, dentroSaldo, profondita + 1);
+      if (t != null) return t;
+    }
+    return null;
+  }
+  if (typeof nodo === "object") {
+    const righe = Object.entries(nodo as Record<string, unknown>);
+    // prima le chiavi che parlano di saldo, poi il resto
+    for (const [k, v] of righe) {
+      if (!PAROLE_SALDO.test(k)) continue;
+      const t = cercaSaldo(v, true, profondita + 1);
+      if (t != null) return t;
+    }
+    for (const [k, v] of righe) {
+      if (PAROLE_SALDO.test(k)) continue;
+      const t = cercaSaldo(v, dentroSaldo, profondita + 1);
+      if (t != null) return t;
+    }
+  }
+  return null;
+}
+
+const chiaviDi = (o: unknown): string => {
+  if (o == null || typeof o !== "object") return JSON.stringify(o)?.slice(0, 120) ?? "niente";
+  return Object.keys(o as Record<string, unknown>).join(", ").slice(0, 200) || "nessuno";
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
@@ -97,10 +140,10 @@ Deno.serve(async (req) => {
   const daCapo = corpo?.daCapo === true;
 
   const esito: {
-    conti: number; nuovi: number; aggiornati: number;
+    conti: number; nuovi: number; aggiornati: number; adottati: number;
     saldi: { conto: string; saldo: number | null }[];
     avvisi: string[];
-  } = { conti: 0, nuovi: 0, aggiornati: 0, saldi: [], avvisi: [] };
+  } = { conti: 0, nuovi: 0, aggiornati: 0, adottati: 0, saldi: [], avvisi: [] };
 
   try {
     const elenco = await chiedi("/accounts", chiave);
@@ -111,7 +154,13 @@ Deno.serve(async (req) => {
     for (const conto of conti) {
       const contoId = String(conto.id ?? conto.accountId ?? "");
       if (!contoId) continue;
-      const nomeConto = String(conto.name ?? conto.displayName ?? conto.iban ?? contoId);
+      const iban = String(conto.name ?? conto.displayName ?? conto.iban ?? contoId);
+      // L'estratto conto importato a mano chiama il conto col numero
+      // (CC0010523827), Lunch Flow manda l'IBAN intero, che finisce con
+      // quello. Si tiene l'etichetta che il pannello mostra gia': due
+      // nomi per lo stesso conto vorrebbero dire due conti nei filtri.
+      const { data: etichetta } = await supabase.rpc("lunchflow_etichetta_conto", { p_iban: iban });
+      const nomeConto = typeof etichetta === "string" && etichetta ? etichetta : iban;
 
       // IL SALDO. Se non arriva, non si ferma tutto: i movimenti valgono
       // anche senza, e un saldo vecchio e' meglio di una pagina vuota.
@@ -119,9 +168,16 @@ Deno.serve(async (req) => {
       let valuta = "EUR";
       try {
         const b = await chiedi(`/accounts/${contoId}/balance`, chiave);
-        const grezzo = b?.balance ?? b?.amount ?? b?.available ?? null;
-        saldo = grezzo == null ? null : Number(grezzo);
+        const grezzo = cercaSaldo(b);
+        saldo = grezzo;
         valuta = String(b?.currency ?? conto.currency ?? "EUR");
+        if (saldo == null) {
+          // non si indovina piu': si dice cos'e' arrivato, cosi' dalla
+          // pagina si legge il nome del campo giusto invece di un vuoto
+          esito.avvisi.push(
+            `Saldo di "${nomeConto}": nella risposta non c'e' un numero riconoscibile. Campi ricevuti: ${chiaviDi(b)}`,
+          );
+        }
       } catch (e) {
         esito.avvisi.push(`Saldo di "${nomeConto}" non letto: ${(e as Error).message}`);
       }
@@ -171,15 +227,39 @@ Deno.serve(async (req) => {
         });
 
       if (righe.length > 0) {
-        // Upsert sull'impronta: quello che c'e' gia' resta com'e' — stato,
-        // riconciliazione e nota sono decisioni di una persona, e un
-        // secondo giro di sincronizzazione non le deve cancellare.
-        const { data: gia } = await supabase
-          .from("movimenti_banca")
-          .select("impronta")
-          .in("impronta", righe.map((r) => r.impronta));
-        const conosciute = new Set((gia || []).map((r: { impronta: string }) => r.impronta));
-        const daInserire = righe.filter((r) => !conosciute.has(r.impronta));
+        // PRIMA DI SCRIVERE, L'ABBINAMENTO. Molti di questi movimenti
+        // sono gia' nella tabella, arrivati dal file dell'estratto conto:
+        // quelle righe hanno la riconciliazione, la nota, il
+        // collegamento alla spesa, e non vanno sdoppiate. La funzione
+        // lunchflow_abbina cerca per ognuno il gemello (stesso conto,
+        // stesso importo, data entro tre giorni) e gli scrive sopra solo
+        // l'identificativo di Lunch Flow. Sta nel database e non qui
+        // perche' e' un giro di centinaia di confronti e di update: dal
+        // browser o da qui sarebbero centinaia di chiamate.
+        const { data: abbinati, error: erroreAbbina } = await supabase.rpc("lunchflow_abbina", {
+          p_conto: nomeConto,
+          p_movimenti: righe.map((r) => ({ id: r.lunchflow_id, data: r.data_operazione, importo: r.importo })),
+        });
+        if (erroreAbbina) throw new Error(`Abbinamento non riuscito: ${erroreAbbina.message}`);
+        const adottati: string[] = abbinati?.adottati || [];
+        const giaNote: string[] = abbinati?.gia_note || [];
+        const fuori = new Set([...adottati, ...giaNote]);
+        esito.adottati += adottati.length;
+
+        // Resta l'impronta come seconda rete: se una riga di Lunch Flow
+        // e' gia' scesa in un giro precedente, l'identificativo la
+        // ferma sopra; questo copre il caso di una riga vecchia a cui
+        // l'identificativo non e' stato scritto.
+        const candidate = righe.filter((r) => !fuori.has(r.lunchflow_id));
+        const conosciute = new Set<string>();
+        if (candidate.length > 0) {
+          const { data: gia } = await supabase
+            .from("movimenti_banca")
+            .select("impronta")
+            .in("impronta", candidate.map((r) => r.impronta));
+          for (const r of (gia || []) as { impronta: string }[]) conosciute.add(r.impronta);
+        }
+        const daInserire = candidate.filter((r) => !conosciute.has(r.impronta));
 
         if (daInserire.length > 0) {
           // la colonna raw non esiste su movimenti_banca: si tiene fuori
@@ -188,7 +268,7 @@ Deno.serve(async (req) => {
           if (error) throw new Error(`Scrittura dei movimenti non riuscita: ${error.message}`);
           esito.nuovi += pulite.length;
         }
-        esito.aggiornati += righe.length - daInserire.length;
+        esito.aggiornati += righe.length - daInserire.length - adottati.length;
       }
 
       await supabase.from("lunchflow_conti").upsert({
