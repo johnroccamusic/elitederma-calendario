@@ -4685,6 +4685,12 @@ const CHIAVE_TABELLA_CEDIBILE = "cedibile_tabellaPerMargine";
 // gia' stato e nota e non va allargato: una chiave "idMovimento:idSpesa"
 // per ogni no detto, cosi' quella coppia non si ripropone piu'.
 const CHIAVE_COPPIE_SCARTATE_BANCA = "banca_coppieScartate";
+// Le coppie della prima nota dichiarate buone tutte e due: due pagamenti
+// ricorrenti dello stesso importo non sono un doppione, e senza un modo
+// di dirlo l'elenco li riproponeva per sempre. La chiave e' fatta coi
+// due id in ordine, cosi' non dipende da quale si guarda per primo.
+const CHIAVE_COPPIE_PRIMA_NOTA_OK = "banca_coppiePrimaNotaOk";
+function chiaveCoppiaSpese(a, b) { return [a, b].sort().join(":"); }
 // doppione = importo entro il 10% e non piu' di 30 giorni di distanza
 const TOLLERANZA_DOPPIONE_PCT = 10;
 const GIORNI_DOPPIONE = 30;
@@ -46089,7 +46095,7 @@ function catalogazioneEreditata(ultima, spese = null, fornitoreId = null) {
 // professionista. Per questo ogni riga mostra numero di documento, data
 // e descrizione per esteso: e' quello che distingue un doppione da due
 // spese vere che si somigliano.
-function PannelloDoppioniPrimaNota({ coppie = [], fornitoriById = {}, onUnisci, isMobile, msg }) {
+function PannelloDoppioniPrimaNota({ coppie = [], fornitoriById = {}, onUnisci, onVaBene, isMobile, msg }) {
   const data = (d) => (d ? new Date(d).toLocaleDateString("it-IT") : "—");
   const riga = (sp, altra) => (
     <div style={{ flex: "1 1 280px", minWidth: 0, background: "#FAF8F3", borderRadius: 10, padding: 12 }}>
@@ -46130,6 +46136,18 @@ function PannelloDoppioniPrimaNota({ coppie = [], fornitoriById = {}, onUnisci, 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {riga(a, b)}
             {riga(b, a)}
+          </div>
+          {/* La terza strada, che e' quella giusta nove volte su dieci:
+              un canone ricorrente ha sempre lo stesso importo e lo stesso
+              fornitore, e due mensilita' vicine non sono un doppione.
+              Senza questo tasto restavano in elenco per sempre, e
+              l'unica uscita era cancellarne una vera. */}
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <button type="button" onClick={() => onVaBene(a, b)}
+              title="Sono due pagamenti veri, non un doppione: toglila dall'elenco senza cancellare niente"
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#fff", border: "1px solid #2E7D32", borderRadius: 999, padding: "8px 18px", cursor: "pointer" }}>
+              Vanno bene tutte e due
+            </button>
           </div>
         </div>
       ))}
@@ -46244,6 +46262,8 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   const [abbinamentiAperti, setAbbinamentiAperti] = useState(null);
   const [coppieScartate, salvaCoppieScartate] = useImpostazioneCondivisa(CHIAVE_COPPIE_SCARTATE_BANCA, []);
   const scartate = new Set(Array.isArray(coppieScartate) ? coppieScartate : []);
+  const [coppiePrimaNotaOk, salvaCoppiePrimaNotaOk] = useImpostazioneCondivisa(CHIAVE_COPPIE_PRIMA_NOTA_OK, []);
+  const primaNotaOk = new Set(Array.isArray(coppiePrimaNotaOk) ? coppiePrimaNotaOk : []);
   const [applicandoRegole, setApplicandoRegole] = useState(false);
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
 
@@ -46559,11 +46579,26 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
         if (!a.fornitore_id || a.fornitore_id !== b.fornitore_id) continue;
         const giorni = Math.abs(Date.parse(a.data_pagamento) - Date.parse(b.data_pagamento)) / 86400000;
         if (giorni > 7) continue;
+        // gia' guardata e dichiarata buona: due pagamenti veri, non un
+        // doppione. Non si ripropone piu'.
+        if (primaNotaOk.has(chiaveCoppiaSpese(a.id, b.id))) continue;
         coppie.push({ a, b, giorni: Math.round(giorni) });
       }
     }
     return coppie.sort((x, y) => x.giorni - y.giorni || Number(y.a.totale) - Number(x.a.totale));
-  }, [spese]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spese, coppiePrimaNotaOk]);
+
+  // "Vanno bene tutte e due": non cancella niente, dice solo che quella
+  // coppia e' stata guardata e non e' un doppione. Serve per i pagamenti
+  // ricorrenti — stesso importo, stesso fornitore, date vicine — che
+  // altrimenti ricomparivano a ogni apertura della pagina.
+  function coppiaVaBene(a, b) {
+    const chiave = chiaveCoppiaSpese(a.id, b.id);
+    if (primaNotaOk.has(chiave)) return;
+    salvaCoppiePrimaNotaOk([...primaNotaOk, chiave]);
+    setMsg(`Tenute tutte e due: ${fmtEuroErp2(Number(a.totale) || 0)} di ${fornitoriById[a.fornitore_id]?.nome || "quel fornitore"}. Non la riproporro' piu'.`);
+  }
 
   // Unisce: quella che si tiene si prende quello che le manca e che
   // l'altra ha (numero e data del documento, allegato), poi l'altra si
@@ -46617,7 +46652,7 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
       </div>
 
       {vista === "doppioni" ? (
-        <PannelloDoppioniPrimaNota coppie={doppioniPrimaNota} fornitoriById={fornitoriById} onUnisci={unisciSpese} isMobile={isMobile} msg={msg} />
+        <PannelloDoppioniPrimaNota coppie={doppioniPrimaNota} fornitoriById={fornitoriById} onUnisci={unisciSpese} onVaBene={coppiaVaBene} isMobile={isMobile} msg={msg} />
       ) : vista === "allineamento" ? (
         <PannelloAllineamentoBanca
           coppie={coppieSospette}
