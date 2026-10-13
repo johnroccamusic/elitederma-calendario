@@ -65451,9 +65451,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) }))
     : [];
 
-  // "Collega la vendita al corso" (opzionale): permette di legare la vendita al
-  // corso attivo — serve alla verifica di congruità dell'Inventario
-  // post corso ("Venduti") e alla spedizione a domicilio qui sotto.
+  // "Opzioni di vendita" (la tendina in cima al carrello): a chi
+  // appartiene questa vendita. Il corso attivo — e allora serve alla
+  // verifica di congruita' dell'Inventario post corso ("Venduti") e alla
+  // spedizione a domicilio qui sotto — oppure una cliente che col corso
+  // non c'entra, oppure un acquisto della master per se'.
   // Una master vede solo i corsi assegnati a lei; un venditore, non
   // essendo assegnato a un corso specifico, vede tutti quelli in corso
   // oggi in una qualunque sede.
@@ -67261,7 +67263,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           un'edizione */}
       {(corsiEleggibiliPos.length > 0 || couponAcquistoPersonale) && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
-          <Field label="Collega la vendita al corso">
+          {/* "Collega la vendita al corso" era vero quando la tendina
+              faceva una cosa sola. Adesso ne fa tre — corso, cliente
+              esterna, acquisto personale — e l'etichetta ne annunciava
+              una. */}
+          <Field label="Opzioni di vendita">
             <select style={inputStyle} value={acquistoPersonale ? "__personale" : corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
               setSpedIscrittoId("");
