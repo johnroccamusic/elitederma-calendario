@@ -67268,7 +67268,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               esterna, acquisto personale — e l'etichetta ne annunciava
               una. */}
           <Field label="Opzioni di vendita">
-            <select style={inputStyle} value={acquistoPersonale ? "__personale" : corsoPosId} onChange={(e) => {
+            <select style={inputStyle} value={acquistoPersonale ? "__personale" : referralPersonaleInUso ? "__referral" : corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
               setSpedIscrittoId("");
               setSceltaCorsoManuale(true);
@@ -67285,13 +67285,24 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 setCouponCodiceTesto(couponAcquistoPersonale ? String(couponAcquistoPersonale.codice || "").toUpperCase() : "");
                 return;
               }
+              if (nuovoId === "__referral") {
+                // il referral e' il codice che la master da' ai clienti
+                // fuori dai corsi: non e' un'edizione, quindi la vendita
+                // resta slegata e prende quel codice
+                setAcquistoPersonale(false);
+                setCorsoPosId(""); setScontoCorsoAttivo(false);
+                commutaReferralPersonale(true);
+                return;
+              }
               setAcquistoPersonale(false);
+              setReferralPersonaleAttivo(false);
               setCorsoPosId(nuovoId); setScontoCorsoAttivo(true);
               applicaCouponDelCorso(nuovoId);
             }}>
               <option value="">— vendita fuori dal corso (cliente esterna) —</option>
               {/* la master compra per se': stessa tendina, perche' e' la
                   stessa domanda — a chi appartiene questa vendita */}
+              {couponReferralPersonale && <option value="__referral">Vendi al cliente con il referral code ({String(couponReferralPersonale.codice || "").toUpperCase()})</option>}
               {couponAcquistoPersonale && <option value="__personale">Collega ad acquisto personale ({String(couponAcquistoPersonale.codice || "").toUpperCase()})</option>}
               {corsiEleggibiliPos.map((cd) => (
                 // LA DATA CI VUOLE. Due edizioni dello stesso corso nella
@@ -67581,7 +67592,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {/* sconto e coupon in una tessera sola: sono due modi di fare la
           stessa cosa e si escludono a vicenda, tenerli vicini lo dice
           senza doverlo scrivere */}
-      <div style={{ border: `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: puoScontare ? undefined : "#EDF2F8", borderRadius: 14, padding: puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px"), marginBottom: isMobile ? 10 : 14, boxShadow: puoScontare ? OMBRA_POS.tessera : OMBRA_POS.tasto, display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
+      {/* LA CORNICE SOLO SE C'E' QUALCOSA DENTRO.
+          Portata la spunta del referral nella tendina, a chi non puo'
+          scontare restava un riquadro azzurro con dentro un solo link:
+          una scatola disegnata intorno al niente. Quando non c'e' uno
+          sconto di corso da accendere ne' un codice scritto, il link
+          resta da solo, senza bordo e senza fondo. */}
+      {(() => { const riquadroVuoto = !puoScontare && !couponDellEdizione(corsoPosId) && !acquistoPersonale && !codiceExtraAperto && couponCodiceTesto.trim() === ""; return (
+      <div style={{ border: riquadroVuoto ? "none" : `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: riquadroVuoto ? "transparent" : (puoScontare ? undefined : "#EDF2F8"), borderRadius: 14, padding: riquadroVuoto ? 0 : (puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px")), marginBottom: isMobile ? 10 : 14, boxShadow: riquadroVuoto ? "none" : (puoScontare ? OMBRA_POS.tessera : OMBRA_POS.tasto), display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
         {puoScontare && (
           <>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
@@ -67615,31 +67633,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           // che nove volte su dieci e' solo una spunta. Il codice extra
           // adesso e' un link che si apre quando serve.
           <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            {!corsoPosId && !acquistoPersonale && couponReferralPersonale && (
-              <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: referralPersonaleAttivo ? "#2E7D32" : NAVY, minWidth: 0, flexWrap: "wrap" }}>
-                <input type="checkbox" checked={referralPersonaleAttivo} onChange={(e) => commutaReferralPersonale(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
-                <span style={{ whiteSpace: "nowrap" }}>Usa il mio referral</span>
-                {/* il codice sta nella riga, non sopra: e' un'etichetta di
-                    cosa si sta accendendo, e va letto e copiato, non riscritto */}
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#F7EEDE", borderRadius: 999, padding: "2px 4px 2px 8px", flexShrink: 0 }}>
-                  <span style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>{couponReferralPersonale.codice}</span>
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); try { navigator.clipboard.writeText(String(couponReferralPersonale.codice || "").toUpperCase()); } catch (err) { /* niente appunti: si legge e si copia a mano */ } }}
-                    title="Copia il codice"
-                    style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: MUTED, display: "flex", alignItems: "center" }}>
-                    <IconaCopiaFile size={13} />
-                  </button>
-                </span>
-                {referralPersonaleAttivo && couponPersonaleAttivo && fasceContantiInUso && (
-                  <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 6px", whiteSpace: "nowrap" }}>{metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
-                )}
-                {/* a cosa serve: senza scritto, il referral si confondeva
-                    col codice con cui la master compra per se' */}
-                <span style={{ ...fontBody, fontSize: 11, fontWeight: 400, color: MUTED, flexBasis: "100%", lineHeight: 1.3 }}>
-                  Codice sconto riservato agli allievi fuori dai corsi
-                </span>
-              </label>
-            )}
+            {/* La spunta "Usa il mio referral" stava qui. Dal 13/10/2026
+                e' una voce della tendina "Opzioni di vendita", insieme al
+                corso e all'acquisto personale: sono quattro modi di dire
+                a chi appartiene la vendita, e stavano in due posti
+                diversi — uno sopra l'altro — come se fossero cose di
+                ordine diverso. */}
             {couponDellEdizione(corsoPosId) && (
               <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY }}>
                 <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
@@ -67648,7 +67647,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </label>
             )}
             {/* il separatore solo se a sinistra c'e' davvero qualcosa */}
-            {((!corsoPosId && !acquistoPersonale && couponReferralPersonale) || couponDellEdizione(corsoPosId)) && !isMobile && (
+            {couponDellEdizione(corsoPosId) && !isMobile && (
               <span style={{ width: 1, alignSelf: "stretch", minHeight: 20, background: CREAM_BORDER, flexShrink: 0 }} />
             )}
             {acquistoPersonale ? (
@@ -67714,6 +67713,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         )}
       </div>
+      ); })()}
 
       {scontoApplicato > 0 && (
         <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
