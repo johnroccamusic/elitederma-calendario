@@ -85,9 +85,35 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
     await conErrore(() => salvaStampa(s.id, { [campo]: valore }), "Scheda non salvata");
   }
 
+  // CHIUSE DI SERIE, UNA RIGA PER PRODOTTO.
+  // Ogni scheda aperta e' alta mezza schermata: con una ventina di
+  // prodotti la pagina diventa un rotolo in cui per trovare il blocco
+  // notes si scorre al buio. Chiuse si leggono tutte in un colpo, e si
+  // apre quella che serve.
+  const [aperte, setAperte] = useState(() => new Set());
+  const apri = (id, acceso) => setAperte((prec) => {
+    const n = new Set(prec);
+    if (acceso) n.add(id); else n.delete(id);
+    return n;
+  });
+
   async function nuova() {
     setOccupato("nuova");
-    await conErrore(async () => { await creaStampa(""); await carica(); }, "Scheda non creata");
+    // La scheda nuova nasce in fondo all'elenco (si ordina per "ordine" e
+    // poi per data) e si apre gia' aperta: altrimenti il tasto sembrava
+    // non fare niente — succedeva davvero, il 13/10/2026 ne sono nate
+    // tre vuote in venti secondi perche' nessuna si vedeva.
+    await conErrore(async () => {
+      const creata = await creaStampa("");
+      await carica();
+      if (creata?.id) {
+        apri(creata.id, true);
+        setTimeout(() => {
+          const el = document.getElementById(`stampa-${creata.id}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 80);
+      }
+    }, "Scheda non creata");
     setOccupato("");
   }
 
@@ -169,9 +195,34 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
           const mie = righePerStampa[s.id] || [];
           const foto = urlPubblico(s.foto_path);
           const suoiFile = filePerStampa[s.id] || [];
+          const aperta = aperte.has(s.id);
           return (
-            <div key={s.id} style={card}>
-              <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+            <div key={s.id} id={`stampa-${s.id}`} style={{ ...card, padding: aperta ? card.padding : 12 }}>
+              {/* LA RIGA CHIUSA: solo il nome, e il tasto per aprire.
+                  Il nome qui non si scrive — si legge. Il campo dove si
+                  cambia resta dentro, aperta la scheda: una casella di
+                  testo in una riga da elenco invita a scriverci, e basta
+                  un clic di troppo per rinominare un prodotto senza
+                  accorgersene. */}
+              <div
+                onClick={() => apri(s.id, !aperta)}
+                style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minWidth: 0 }}
+              >
+                <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                  {s.nome?.trim() || "Scheda senza nome"}
+                </span>
+                {!aperta && (mie.length > 0 || suoiFile.length > 0) && (
+                  <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>
+                    {mie.length} dat{mie.length === 1 ? "o" : "i"}{suoiFile.length > 0 ? ` · ${suoiFile.length} file` : ""}
+                  </span>
+                )}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ flexShrink: 0, transform: aperta ? "rotate(180deg)" : "none", transition: "transform .15s" }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+              {aperta && (
+              <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 14 }}>
 
                 {/* la foto, e sotto il file da mandare in stampa */}
                 <div style={{ width: 210, flexShrink: 0 }}>
@@ -301,6 +352,7 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
                   )}
                 </div>
               </div>
+              )}
             </div>
           );
         })}
