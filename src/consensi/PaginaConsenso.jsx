@@ -438,7 +438,7 @@ export default function PaginaConsenso({ codice, edizione = null }) {
                 onCambia={(r) => setAnamnesi((p) => ({ ...p, [d.chiave]: r }))}
               />
             ))}
-            <Campo etichetta="Altro da segnalare">
+            <Campo etichetta="ALTRO DA SEGNALARE: indicare se hai altre patologie e quali farmaci assumi">
               <textarea
                 style={{ ...campo, minHeight: 88, resize: "vertical" }}
                 value={v.noteSalute} onChange={cambia("noteSalute")}
