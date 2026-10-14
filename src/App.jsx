@@ -66363,7 +66363,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // sconto si rifa' da solo
   // un codice personale (della master, senza classe) pagato in contanti o
   // con buono Amazon prende invece la seconda serie del referral
-  const couponPersonaleAttivo = !!couponAttivo?.master_id && !couponAttivo?.corsi_date_id;
+  // "personale" = il referral della master, che vale su tutto e ha la sua
+  // serie di fasce. Un codice di NEEDLING suo ma senza edizione — need30,
+  // che Tommaso da' agli allievi di needling ovunque si tenga il corso —
+  // non e' un referral: deve prendere le fasce dei corsi di needling, non
+  // quelle del referral. Senza questa riga finiva nel ramo sbagliato solo
+  // perche' nessuna classe lo rivendica.
+  const couponPersonaleAttivo = !!couponAttivo?.master_id && !couponAttivo?.corsi_date_id
+    && couponAttivo?.serie_regole !== "needling";
   // il codice di un corso di NEEDLING ha la sua serie di fasce, scritta
   // in Genera coupon → Generazione automatica codici needling
   const couponNeedlingAttivo = couponAttivo?.serie_regole === "needling";
@@ -66391,10 +66398,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       ? fasceCorsiPerPagamento(
           serieScontoScritta(regolaReferralPos?.fasce) ? regolaReferralPos.fasce : couponAttivo.fasce_sconto,
           fasceReferralContantiPos, pagamentoContaComeContanti(metodoPagamento))
+      // Le tabelle d'aula valgono per il codice di una classe E per un
+      // codice di needling senza edizione: in tutti e due i casi lo
+      // sconto e' quello che la scuola fa ai suoi allievi, e l'edizione
+      // dice solo quale classe, non quale regola.
       : fasceCorsiPerPagamento(
-          !!couponAttivo.corsi_date_id && serieScontoScritta(cartaDiClasse) ? cartaDiClasse : couponAttivo.fasce_sconto,
+          (!!couponAttivo.corsi_date_id || couponNeedlingAttivo) && serieScontoScritta(cartaDiClasse) ? cartaDiClasse : couponAttivo.fasce_sconto,
           contantiDiClasse,
-          !!couponAttivo.corsi_date_id && pagamentoContaComeContanti(metodoPagamento)))
+          (!!couponAttivo.corsi_date_id || couponNeedlingAttivo) && pagamentoContaComeContanti(metodoPagamento)))
     : null;
   // L'eccezione del reparto vale SOLO col codice di un corso di needling:
   // su tutti gli altri un prodotto needling si sconta come gli altri,
@@ -66406,7 +66417,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // ognuno con la sua serie
   const fasceContantiInUso = couponAFasce && pagamentoContaComeContanti(metodoPagamento) && (couponPersonaleAttivo
     ? serieScontoScritta(fasceReferralContantiPos)
-    : serieScontoScritta(fasceContantiCorsiPos));
+    : serieScontoScritta(contantiDiClasse));
   const scontoCoupon = couponAcquistoMaster
     ? scontoAcquistoMasterCarrello(carrello, prodottiPerId, cedibilePerProdotto, quotaMasterPos)
     : couponAFasce
