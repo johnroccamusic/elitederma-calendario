@@ -5677,67 +5677,21 @@ function quotaVenditoreDi(totalePattuito) {
   if (base <= 50) return 50;
   return Math.ceil(base / 5) * 5;
 }
-// LA QUOTA COORDINATORE
+// LA COMMISSIONE DELLA VENDITRICE E' UNA SOLA: `quotaVenditoreDi` qui
+// sopra, scritta su `iscritti.quota_venditore` quando si chiude la
+// vendita.
 //
-// Una percentuale secca del totale pattuito: nessun minimo e nessun
-// arrotondamento ai 5 euro, al contrario della quota venditore — quella
-// e' un compenso che si contratta e si dice al telefono, questa e' una
-// frazione. La si cambia in Impostazioni → Commissioni sui corsi.
+// Qui stava una seconda commissione, la "quota coordinatore": una
+// percentuale secca sul pattuito (0,25%) che nasceva il 01/10/2026 e si
+// calcolava viva su OGNI iscrizione di OGNI corso. Tolta il 14/10/2026:
+// non veniva pagata a nessuno, e intanto riempiva "Commissioni sui corsi"
+// di cifre che non erano il compenso di nessuno — su tutto ottobre 2026
+// faceva 305,99 euro contro gli 8.780 di quote venditore vere.
 //
-// Nata all'1% il 01/10/2026 e portata a 0,25% lo stesso giorno: sul
-// calendario di ottobre l'1% faceva 1.262 euro, troppo.
-const CHIAVE_PERCENTUALE_COORDINATORE = "provvigioni_quotaCoordinatorePct";
-const PERCENTUALE_COORDINATORE_DEFAULT = 0.25;
-function percentualeCoordinatoreAttiva() {
-  const n = Number(LAYOUT_CACHE[CHIAVE_PERCENTUALE_COORDINATORE]);
-  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : PERCENTUALE_COORDINATORE_DEFAULT;
-}
-function quotaCoordinatoreDi(totalePattuito) {
-  return round2(parseNum(totalePattuito) * percentualeCoordinatoreAttiva() / 100);
-}
-// La percentuale che vale per un corso. Scritta sul corso se c'e' una
-// deroga, altrimenti quella generale: NULL non vuol dire zero, vuol dire
-// "usa quella di Impostazioni". Cosi' si compila solo dove serve, invece
-// di riempire ventotto righe perche' una commissione esista.
-function percentualeCommissioneCorso(corso) {
-  // Il controllo esplicito su null non e' pignoleria: `Number(null)` fa
-  // ZERO, non NaN, quindi un corso senza deroga — che sono tutti, appena
-  // messa la colonna — passava il test di validita' e prendeva lo 0%.
-  // Tutte le commissioni uscivano a zero senza un errore da nessuna parte.
-  const grezzo = corso?.percentuale_commissione;
-  if (grezzo == null || grezzo === "") return percentualeCoordinatoreAttiva();
-  const n = Number(grezzo);
-  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : percentualeCoordinatoreAttiva();
-}
-// La commissione di una singola iscrizione: la percentuale del suo corso,
-// sul totale pattuito. Si calcola sempre viva — non c'e' piu' niente da
-// congelare, da quando questa cifra non entra nei costi della classe e
-// non passa in prima nota.
-function commissioneCorsoDiIscritto(iscritto, corso) {
-  return round2(parseNum(iscritto?.totale_pattuito) * percentualeCommissioneCorso(corso) / 100);
-}
-// Vale solo per i corsi che devono ancora cominciare: e' un accordo nuovo
-// (01/10/2026) e non si applica all'indietro.
-function quotaCoordinatoreAttivaPer(corsoData) {
-  const inizio = corsoData?.data_inizio || "";
-  return !!inizio && inizio >= dataOggiStr();
-}
-// IL CONGELAMENTO VALE SOLO ALL'INDIETRO.
-//
-// Su un corso che deve ancora cominciare la quota si ricalcola sempre con
-// la percentuale di oggi: se domani si passa dallo 0,25% allo 0,3%, tutte
-// le classi future si adeguano da sole, senza che nessuno riapra novanta
-// schede. E' il motivo per cui la riga nei costi compare subito, senza
-// aspettare che qualcuno risalvi gli iscritti.
-//
-// Su un corso gia' cominciato invece comanda il numero scritto sulla
-// scheda: quello era l'accordo di allora, e un cambio di percentuale fatto
-// oggi non puo' riscrivere il passato. Se la colonna e' vuota — perche' il
-// corso e' anteriore a questo accordo — la quota e' zero.
-function quotaCoordinatoreDiIscritto(iscritto, corsoData) {
-  if (quotaCoordinatoreAttivaPer(corsoData)) return quotaCoordinatoreDi(iscritto?.totale_pattuito);
-  return iscritto?.quota_coordinatore || 0;
-}
+// Restano nel database e non le legge piu' nessuno:
+// `corsi.percentuale_commissione`, `iscritti.quota_coordinatore`,
+// `corsi_date.quota_coordinatore_bonifico/_cash`. Non si cancellano:
+// portano i numeri delle due settimane in cui la regola e' esistita.
 
 // etichette del modulo di iscrizione PDF (pagina 6, layout fisso a due colonne:
 // etichetta a sinistra, valore a destra sulla stessa riga) mappate ai campi del form
@@ -10682,44 +10636,32 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
   );
 }
 
-// "Commissioni sui corsi": quanto matura il coordinamento, mese per mese.
+// "Commissioni sui corsi": quanto matura chi vende, mese per mese.
 //
-// SU TUTTO, non sulle proprie vendite. Chi coordina prende una percentuale
-// su OGNI iscrizione di OGNI corso, chiunque l'abbia chiusa: e' il
-// compenso per tenere in piedi il calendario, non una provvigione di
-// vendita. Qui dentro c'e' stato per sbaglio un filtro sul venditore, e
-// mostrava un decimo del vero.
+// LA CIFRA E' QUELLA SCRITTA SULL'ISCRIZIONE, `iscritti.quota_venditore`:
+// 7% del pattuito, minimo 50 euro, arrotondata ai 5 superiori, o la quota
+// speciale se e' stata forzata a mano. Non si ricalcola: e' il numero che
+// la venditrice ha visto quando ha chiuso la vendita, e un conto rifatto
+// oggi le direbbe una cifra diversa da quella pattuita.
 //
-// Si calcola sul totale pattuito, con la percentuale del corso (deroga sul
-// corso, altrimenti quella generale di Commissioni sui corsi). Sempre
-// viva: non c'e' niente di congelato, quindi cambiare la percentuale in
-// Impostazioni cambia questa pagina all'istante.
+// SU TUTTE le iscrizioni di tutte le edizioni del mese, non solo sulle
+// proprie: qui si guarda quanto ha prodotto il calendario. Chi vuole le
+// sue vendite le trova nelle altre schede della dashboard.
 //
-// Non e' un costo della classe e non passa dal riepilogo contabile: quella
-// riga c'e' stata per qualche ora il 01/10/2026 ed e' stata tolta di
-// proposito. Qui dentro e' l'unico posto dove questo numero vive.
-// "Commissioni sui corsi": quanto matura il coordinamento, mese per mese.
+// QUI C'ERA UN'ALTRA COSA, fino al 14/10/2026: una percentuale secca sul
+// pattuito (0,25%), la "quota coordinatore", nata il 01/10. Non veniva
+// pagata a nessuno e intanto riempiva questa pagina di cifre che non erano
+// il compenso di nessuno — su ottobre 2026 faceva 305,99 euro contro gli
+// 8.780 di quote venditore. Il coordinatore prende una cifra fissa, e solo
+// quando e' al corso a fare gli incassi: non e' una percentuale, e non si
+// calcola da qui.
 //
-// SU TUTTO, non sulle proprie vendite. Chi coordina prende una percentuale
-// su OGNI iscrizione di OGNI corso, chiunque l'abbia chiusa: e' il
-// compenso per tenere in piedi il calendario, non una provvigione di
-// vendita. Qui dentro c'e' stato per sbaglio un filtro sul venditore, e
-// mostrava un decimo del vero.
-//
-// Si calcola sul totale pattuito, con la percentuale del corso (deroga sul
-// corso, altrimenti quella generale di Commissioni sui corsi), e si
-// calcola VIVA: cambiare la percentuale in Impostazioni cambia tutti i
-// mesi all'istante.
-//
-// Tranne quelli gia' liquidati. Quelli scendono nello Storico con
-// l'importo congelato al momento del pagamento: un mese pagato non puo'
-// cambiare cifra perche' tre mesi dopo si e' decisa un'altra percentuale.
-// E' l'unico congelamento che serve, ed e' legato a un fatto — il
+// Un mese gia' liquidato scende nello Storico con l'importo congelato al
+// momento del pagamento: le iscrizioni possono ancora cambiare, un mese
+// pagato no. E' l'unico congelamento, ed e' legato a un fatto — il
 // pagamento — non a una data.
 //
-// Non e' un costo della classe e non passa dal riepilogo contabile: quella
-// riga c'e' stata per qualche ora il 01/10/2026 ed e' stata tolta di
-// proposito. Qui dentro e' l'unico posto dove questo numero vive.
+// Non e' un costo della classe e non passa dal riepilogo contabile.
 // "OTTOBRE 2026" da "2026-10"
 function nomeMese(chiave) {
   const [anno, m] = String(chiave || "").split("-").map(Number);
@@ -10748,12 +10690,13 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
         id: cd.id, inizio: cd.data_inizio, fine: cd.data_fine || cd.data_inizio,
         corso: corso?.nome || "—",
         sede: (location || []).find((l) => l.id === cd.location_id)?.nome || "—",
-        pct: percentualeCommissioneCorso(corso),
         iscritti: 0, pattuito: 0, quota: 0,
       };
       voce.iscritti += 1;
       voce.pattuito = round2(voce.pattuito + (i.totale_pattuito || 0));
-      voce.quota = round2(voce.quota + commissioneCorsoDiIscritto(i, corso));
+      // la quota scritta sull'iscrizione, non una percentuale ricalcolata:
+      // e' quella che la venditrice ha visto quando ha chiuso la vendita
+      voce.quota = round2(voce.quota + (i.quota_venditore || 0));
       perEdizione.set(cd.id, voce);
     });
     const perMese = new Map();
@@ -10787,11 +10730,12 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
   const storico = [...chiusi, ...orfani].sort((a, b) => b.chiave.localeCompare(a.chiave));
 
   async function liquida(m) {
-    if (!window.confirm(`Segnare ${nomeMese(m.chiave)} come liquidato?\n\n${fmtEuroErp2(m.totale)} su ${m.iscritti} iscrizion${m.iscritti === 1 ? "e" : "i"}.\n\nL'importo si congela: da qui in avanti un cambio di percentuale non lo tocca piu'. Il mese scende nello Storico.`)) return;
+    if (!window.confirm(`Segnare ${nomeMese(m.chiave)} come liquidato?\n\n${fmtEuroErp2(m.totale)} su ${m.iscritti} iscrizion${m.iscritti === 1 ? "e" : "i"}.\n\nL'importo si congela: da qui in avanti un cambio di quota non lo tocca piu'. Il mese scende nello Storico.`)) return;
     setInCorso(m.chiave);
     const { error } = await supabase.from("commissioni_corsi_liquidazioni").insert({
+      // `percentuale` resta a null: la colonna e' della vecchia regola a
+      // percentuale, qui l'importo e' la somma delle quote venditore
       mese: m.chiave, importo: m.totale, iscritti: m.iscritti, edizioni: m.righe.length,
-      percentuale: percentualeCoordinatoreAttiva(),
     });
     setInCorso("");
     if (error) { setMsg("Non sono riuscito a liquidare: " + testoErrore(error)); return; }
@@ -10800,7 +10744,7 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
   }
 
   async function riapri(l) {
-    if (!window.confirm(`Riaprire ${nomeMese(l.mese)}?\n\nTorna fra i mesi da liquidare e l'importo ricomincia a seguire la percentuale di oggi: puo' uscire diverso da ${fmtEuroErp2(l.importo)}.`)) return;
+    if (!window.confirm(`Riaprire ${nomeMese(l.mese)}?\n\nTorna fra i mesi da liquidare e l'importo ricomincia a seguire le quote scritte sulle iscrizioni: puo' uscire diverso da ${fmtEuroErp2(l.importo)}.`)) return;
     setInCorso(l.mese);
     const { error } = await supabase.from("commissioni_corsi_liquidazioni").delete().eq("mese", l.mese);
     setInCorso("");
@@ -10846,7 +10790,7 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
           {m.righe.map((v) => (
             <div key={v.id} style={{ display: "grid", gridTemplateColumns: griglia, gap: isMobile ? 4 : 8, alignItems: "center", minHeight: 32, padding: isMobile ? "0 8px" : "0 12px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
               <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: MUTED, whiteSpace: "nowrap" }}>{giorni(v)}</span>
-              <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: NAVY, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${v.corso} — ${String(v.pct).replace(".", ",")}% su ${fmtEuroErp2(v.pattuito)}`}>{v.corso}</span>
+              <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, color: NAVY, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${v.corso} — ${fmtEuroErp2(v.quota)} su ${fmtEuroErp2(v.pattuito)} di pattuito`}>{v.corso}</span>
               <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={v.sede}>{v.sede}</span>
               <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, textAlign: "center" }}>{v.iscritti}</span>
               <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(v.quota)}</span>
@@ -18192,125 +18136,18 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
     </>
   );
 }
-
-// "Commissioni sui corsi": la percentuale sul totale pattuito di
-// un'iscrizione che spetta a chi l'ha venduta, generale e con le deroghe
-// per corso. Si chiamava "Definizione provvigioni" e conteneva anche le
-// fasce di provvigione sulle vendite di prodotti: quelle sono sparite
-// l'08/10/2026 con tutto il vecchio meccanismo dei compensi.
-function DefinizioneProvvigioni() {
-  const [msg, setMsg] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [pctCoordinatore, setPctCoordinatore] = useImpostazioneCondivisa(CHIAVE_PERCENTUALE_COORDINATORE, PERCENTUALE_COORDINATORE_DEFAULT);
-  const [corsiOrdinati, setCorsiOrdinati] = useState([]);
-
-  async function caricaCorsi() {
-    const { data } = await supabase.from("corsi").select("id, nome, percentuale_commissione").order("nome");
-    setCorsiOrdinati(data || []);
-  }
-  useEffect(() => { caricaCorsi(); }, []);
-
-  // vuoto = nessuna deroga, cioe' NULL: diverso da zero, che vorrebbe dire
-  // "su questo corso non si prende niente"
-  async function salvaPercentualeCorso(corso, testo) {
-    const t = String(testo || "").trim();
-    const v = t === "" ? null : parseNum(t);
-    if (v != null && (!Number.isFinite(v) || v < 0 || v > 100)) { setMsg("La percentuale deve stare fra 0 e 100."); return; }
-    if (v === (corso.percentuale_commissione == null ? null : Number(corso.percentuale_commissione))) return;
-    const { error } = await supabase.from("corsi").update({ percentuale_commissione: v }).eq("id", corso.id);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    setMsg(v == null ? `${corso.nome}: torna alla percentuale generale.` : `${corso.nome}: ${String(v).replace(".", ",")}%.`);
-    caricaCorsi();
-  }
-
-  // Niente tasto di riallineamento: non c'e' piu' niente da riallineare.
-  // La commissione si calcola viva dalla percentuale del corso ogni volta
-  // che la si guarda, quindi cambiare il numero qui sopra basta e avanza.
-  // C'e' stato per qualche ora il 01/10/2026, quando la cifra veniva
-  // congelata sulla scheda dell'allievo: l'RPC aggiorna_quote_coordinatore
-  // resta sul database, inoffensiva, ma non la chiama piu' nessuno.
-
-  const campoNumero = { ...inputStyle, width: 78, padding: "7px 8px", textAlign: "right" };
-
-  // Qui c'erano le fasce di provvigione per canale (tabella
-  // provvigioni_fasce) e i premi a volume: il meccanismo con cui prima
-  // dei punti si pagava chi vendeva. Tolti l'08/10/2026 — quello che si
-  // riconosce lo decidono i punti e le percentuali di Gestione punti, e
-  // due sistemi di compenso aperti insieme erano il modo piu' sicuro di
-  // pagare due volte o nessuna. La tabella resta sul database: nessuno
-  // la legge, e le 38 vendite che portano una provvigione congelata la
-  // tengono come storia.
-  // Di questa scheda restano le commissioni sui corsi, che non sono una
-  // provvigione su un margine ma una percentuale sul pattuito di
-  // un'iscrizione, e sono vive.
-
-  return (
-    <div>
-      <div style={{ ...subStyle, marginTop: -4 }}>
-        Una percentuale sul <b>totale pattuito</b> di un’iscrizione, per chi l’ha venduta. Si calcola viva ogni volta che la si guarda: cambiando il numero qui sotto, cambiano anche le iscrizioni già inserite.
-      </div>
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={hStyle}>Commissioni sui corsi</div>
-        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
-          Una percentuale del <b style={{ color: NAVY }}>totale pattuito</b> di ogni iscrizione — non del margine, come le fasce qui sopra.
-          {" "}Si vede nella dashboard del venditore, sotto <b style={{ color: NAVY }}>Commissioni sui corsi</b>, divisa per mesi: non entra nei costi della classe e non passa dal riepilogo contabile.
-          {" "}Quello che scrivi qui vale subito, ovunque: non c’è niente di congelato da aggiornare.
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600 }}>Percentuale generale</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <input
-              style={campoNumero} inputMode="decimal" defaultValue={pctCoordinatore}
-              onBlur={(e) => {
-                const v = parseNum(e.target.value);
-                if (!Number.isFinite(v) || v < 0 || v > 100) { setMsg("La percentuale deve stare fra 0 e 100."); return; }
-                if (v !== Number(pctCoordinatore)) { setPctCoordinatore(v); setMsg(`Percentuale generale portata allo ${String(v).replace(".", ",")}%.`); }
-              }}
-            />
-            <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
-          </div>
-          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-            Su 1.000 € di pattuito fa {fmtEuroErp2(round2(1000 * (Number(pctCoordinatore) || 0) / 100))}.
-          </span>
-        </div>
-
-        {/* Le deroghe: un corso che vale piu' lavoro puo' avere la sua.
-            Vuoto NON vuol dire zero, vuol dire "quella generale": cosi' si
-            compila solo dove serve, invece di dover riempire ventotto
-            righe perche' una commissione esista. */}
-        <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600, marginTop: 18, marginBottom: 6 }}>
-          Deroghe per corso
-        </div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
-          Lascia vuoto per usare la percentuale generale. Scrivi un numero solo dove quel corso deve valere diversamente.
-        </div>
-        {corsiOrdinati.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "6px 0" }}>Nessun corso a listino.</div>
-        ) : (
-          <div style={{ maxHeight: 260, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10 }}>
-            {corsiOrdinati.map((c) => (
-              <div key={c.id} style={{ display: "grid", gridTemplateColumns: "1fr 92px", gap: 8, alignItems: "center", padding: "5px 10px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.nome}>{c.nome}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <input
-                    style={campoNumero} inputMode="decimal"
-                    placeholder={String(pctCoordinatore).replace(".", ",")}
-                    defaultValue={c.percentuale_commissione ?? ""}
-                    onBlur={(e) => salvaPercentualeCorso(c, e.target.value)}
-                  />
-                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>{msg}</div>}
-    </div>
-  );
-}
-
+// Qui stava "Commissioni sui corsi": la casella con la percentuale sul
+// pattuito (0,25%) e la tabella delle deroghe corso per corso. Tolta il
+// 14/10/2026 insieme alla regola che serviva — vedi la nota accanto a
+// quotaVenditoreDi. Prima ancora, nello stesso riquadro, c'erano le fasce
+// di provvigione per canale e i premi a volume, tolti l'08/10/2026 quando
+// il compenso e' passato ai punti.
+//
+// Il compenso di chi vende e' uno solo e si chiama quota venditore: nasce
+// con l'iscrizione, sta sulla scheda dell'allieva e si vede in
+// "Commissioni sui corsi" nella dashboard del venditore. Non si regola da
+// nessuna parte in Impostazioni, perche' non e' una percentuale che si
+// decide: e' 7% del pattuito, minimo 50 euro, arrotondata ai 5.
 function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
@@ -18352,7 +18189,6 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
   const [showNotificheModal, setShowNotificheModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
-  const [showProvvigioniModal, setShowProvvigioniModal] = useState(false);
   // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
   // modali (compreso un gesto di swipe-per-tornare-indietro del trackpad,
   // o il tasto "indietro" del mouse) salta oltre e riporta alla schermata
@@ -18367,7 +18203,6 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       [showMagazziniModal, setShowMagazziniModal], [showIntestazioneModal, setShowIntestazioneModal],
       [showNotificheModal, setShowNotificheModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
-      [showProvvigioniModal, setShowProvvigioniModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
     if (aperto) { registraInterceptaIndietro(() => aperto[1](false)); return () => registraInterceptaIndietro(null); }
@@ -18375,7 +18210,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
     showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal, showNotificheModal,
-    showTargetMasterModal, showTargetVenditoriModal, showProvvigioniModal,
+    showTargetMasterModal, showTargetVenditoriModal,
   ]);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
@@ -18569,7 +18404,6 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
       voci: [
         { chiave: "corsi", etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
-        { chiave: "provvigioni", etichetta: "Commissioni sui corsi", Icona: IconaTargetRiga, onClick: () => setShowProvvigioniModal(true) },
         { chiave: "tipimodelle", etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
         { chiave: "hotel", etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
         { chiave: "location", etichetta: "Definisci Location", Icona: IconaPin, onClick: onApriGestioneLocation },
@@ -18930,12 +18764,6 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
         <Modal title="Intestazione società" onClose={() => setShowIntestazioneModal(false)}>
           <div style={subStyle}>Le righe che vanno in cima ai documenti, una sotto l'altra come si vogliono leggere. Si salvano da sole uscendo dal campo; quelle lasciate vuote non compaiono.</div>
           <IntestazioneSocieta intestazione={intestazioneSocieta} ricarica={ricarica} />
-        </Modal>
-      )}
-
-      {showProvvigioniModal && (
-        <Modal title="Commissioni sui corsi" onClose={() => setShowProvvigioniModal(false)} maxWidth={760}>
-          <DefinizioneProvvigioni />
         </Modal>
       )}
 
@@ -29497,10 +29325,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [emailIscritto, setEmailIscritto] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
-  // vale solo per le classi non ancora cominciate: vedi quotaCoordinatoreAttivaPer
-  const quotaCoordinatoreAttiva = quotaCoordinatoreAttivaPer(corsoData);
-  // il corso di questa edizione: da li' viene la percentuale di commissione
-  const corsoDelCorsoData = (corsi || []).find((c) => c.id === corsoData?.corso_id) || null;
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
   const [fileScreenRecap, setFileScreenRecap] = useState(null);
@@ -31835,16 +31659,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
                     </div>
                   </div>
-                  <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
-                  {quotaCoordinatoreAttiva && (
-                  <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Commissione corso ({String(percentualeCommissioneCorso(corsoDelCorsoData)).replace(".", ",")}%)</div>
-                    <div style={{ position: "relative" }}>
-                      <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : commissioneCorsoDiIscritto({ totale_pattuito: totalePattuito }, corsoDelCorsoData).toFixed(2)} disabled />
-                      {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
-                    </div>
-                  </div>
-                  )}
                   <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
                   <div style={{ flex: "1 1 0", minWidth: 0 }}>
                     <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Quota speciale</div>
