@@ -10,7 +10,7 @@ import {
   NAVY, CREAM_BORDER, BG, BG_CHIARO, MUTED, GRAFITE, GOLD, GRIGIO_TENDINA_MODELLA,
   GIALLO_MATTINA, ARANCIO_POMERIGGIO, VERDE_TROVATA, ROSSO_DA_TROVARE,
   fontDisplay, stileTitoloPagina, fontBody, fontHero, fontCondensato,
-  inputStyle, campoCompattoStyle, round2, numeroFascia, corpoTestoInFila,
+  inputStyle, campoCompattoStyle, round2, numeroFascia,
   FAMIGLIA_STRETTA, GRIGIO_LEGGIBILE,
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
@@ -12001,34 +12001,11 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const filo = { height: 1, background: CREAM_BORDER };
   const spaziatura = isMobile ? "14px 14px" : "18px 20px";
 
-  // Il righello della fila di tasti.
-  //
-  // Quanto sia largo un pulsante non lo si sa scrivendo il codice: sono
-  // tre, quattro o cinque a seconda del corso, e la scheda sta in una
-  // colonna che cambia larghezza col telefono. Si misura la riga vera e
-  // si ricalcola il corpo del testo (vedi corpoTestoInFila): e' l'unico
-  // modo di tenere il testo in proporzione senza tagliare niente.
-  const rigaTastiRef = useRef(null);
-  const [larghezzaTasti, setLarghezzaTasti] = useState(0);
-  useLayoutEffect(() => {
-    const nodo = rigaTastiRef.current;
-    if (!nodo) return undefined;
-    // la larghezza utile e' quella DENTRO la spaziatura della riga
-    const misura = () => {
-      const stile = window.getComputedStyle ? window.getComputedStyle(nodo) : null;
-      const dentro = nodo.clientWidth
-        - (parseFloat(stile?.paddingLeft) || 0)
-        - (parseFloat(stile?.paddingRight) || 0);
-      setLarghezzaTasti(dentro > 0 ? dentro : 0);
-    };
-    misura();
-    // ResizeObserver non c'e' ovunque (e non c'e' nei test): senza, si
-    // resta alla misura del primo disegno, che e' gia' quella giusta
-    if (typeof window.ResizeObserver !== "function") return undefined;
-    const osservatore = new window.ResizeObserver(misura);
-    osservatore.observe(nodo);
-    return () => osservatore.disconnect();
-  }, [isMobile, conScorte, inFinestraInventario, !!codiceReferral]);
+  // Qui c'era il righello della fila di tasti: si misurava la larghezza
+  // vera della riga per calcolare il corpo del testo (corpoTestoInFila) e
+  // tenere cinque pulsanti su una sola riga. Tolto il 14/10/2026 insieme
+  // a quella riga: le schede ora vanno a capo da sole, e una griglia che
+  // si dispone da se' non ha bisogno di sapere quanto e' larga.
 
   return (
     // Niente piu' filo colorato tutt'intorno: il colore del corso resta
@@ -12249,99 +12226,84 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           parole, e le due parole stanno una sopra l'altra */}
       {(() => {
       const tastiRiga = [
-          onApriClasse && { testo: "Dettagli corso", onClick: () => onApriClasse(corsoData.id) },
-          onApriModelle && { testo: "Dettagli modelle", onClick: () => onApriModelle(corsoData.id) },
+          onApriClasse && { testo: "Dettagli corso", Icona: IconaCorsoRiga, onClick: () => onApriClasse(corsoData.id) },
+          onApriModelle && { testo: "Dettagli modelle", Icona: IconaTipoModellaRiga, onClick: () => onApriModelle(corsoData.id) },
           // Accanto a "Dettagli modelle" perche' e' la stessa domanda vista
           // da un altro lato: li' chi viene, qui cosa ha dichiarato chi
           // viene. La master lo guarda prima di far toccare la modella
           // dall'allieva, e deve trovarlo nella sua classe, non in
           // Gestione modelle dove spesso non entra.
-          onApriConsensi && { testo: "Consensi modelle", onClick: () => onApriConsensi(corsoData.id) },
+          onApriConsensi && { testo: "Consensi modelle", Icona: IconaCatDocumento, onClick: () => onApriConsensi(corsoData.id) },
           // compare solo dove c'e' davvero una scorta da cui prendere:
           // senza un pacco partito il quadro non avrebbe niente dentro
-          conScorte && onApriCambi && { testo: "Cambi e integrazioni", onClick: () => onApriCambi(corsoData.id) },
+          conScorte && onApriCambi && { testo: "Cambi e integrazioni", Icona: IconaCatScatola, onClick: () => onApriCambi(corsoData.id) },
           // l'inventario si compila a corso finito, o poco prima: prima non
           // c'e' niente da contare, e dopo una settimana il pacco e' gia'
           // partito da un pezzo
-          conScorte && inFinestraInventario && onApriInventario && { testo: "Inventario fine corso", onClick: () => onApriInventario(corsoData.id) },
+          conScorte && inFinestraInventario && onApriInventario && { testo: "Inventario fine corso", Icona: IconaScatolaErp, onClick: () => onApriInventario(corsoData.id) },
       ].filter(Boolean);
 
-      // Il testo scende insieme al pulsante, non dopo.
+      // LE SCHEDE DELLE AREE.
       //
-      // Su cinque tasti in fila, su un telefono, ogni pulsante finisce
-      // sotto i settanta pixel: "integrazioni" a corpo fisso li sfonda,
-      // e quello che si vede e' una parola tagliata o due parole una
-      // sopra l'altra. Qui il corpo e' una FRAZIONE della larghezza del
-      // pulsante (cqw = un centesimo del contenitore), quindi il
-      // rapporto fra testo e scatola resta lo stesso a ogni larghezza —
-      // il pannello si rimpicciolisce tutto insieme invece di rompersi.
+      // Erano cinque pulsanti in fila, tutti uguali, con due parole una
+      // sopra l'altra e il corpo del testo calcolato come frazione della
+      // larghezza: su un telefono da 390 finivano sotto i sette pixel e
+      // diventavano riccioli grigi. Tutta quella matematica serviva a
+      // tenerli su UNA riga, che era la premessa sbagliata.
       //
-      // La frazione la decide la parola piu' lunga di TUTTA la riga, non
-      // quella di ogni tasto: cosi' i pulsanti hanno tutti lo stesso
-      // corpo e la riga resta una riga, non una scaletta. Il tetto in px
-      // e' la misura di sempre, che su schermo largo vince — da
-      // desktop non cambia niente.
-      const parolePiuLunghe = tastiRiga.map((t) => t.testo)
-        .flatMap((x) => x.split(" ")).map((x) => x.length);
-      const piuLunga = Math.max(1, ...parolePiuLunghe);
-      const gap = isMobile ? 6 : 12;
-      const paddingOrizzontale = (isMobile ? 6 : 16) * 2 + 2; // padding dei due lati + bordo
-      const quantiTotali = tastiRiga.length;
-      // da telefono tre punti in meno: 9 invece di 12. Su schermo largo
-      // la misura resta quella di sempre
-      const misura = (quanti) => corpoTestoInFila({
-        larghezzaRiga: larghezzaTasti,
-        quanti, gap, paddingOrizzontale, parolaPiuLunga: piuLunga,
-        massimo: isMobile ? 9 : 15,
-      });
-
-      // Sotto una certa misura rimpicciolire non e' piu' adattarsi.
-      //
-      // Cinque scatole su un telefono da 390 fanno settanta pixel l'una,
-      // e "integrazioni" — dodici lettere — a quella larghezza sta solo
-      // sotto i sette pixel. Non e' tagliato, ma non si legge: il testo
-      // in proporzione ha senso finche' resta una scritta, non quando
-      // diventa un ricciolo grigio.
-      //
-      // Allora, e solo allora, la riga va a capo. Non e' un'eccezione
-      // alla regola: e' l'unico modo di dare al pulsante piu' larghezza,
-      // che e' quello che alla proporzione serviva fin dall'inizio. Con
-      // tre tasti non succede mai; con cinque succede sui telefoni
-      // stretti, dove una riga sola era gia' una finzione.
-      // La soglia NON scende col corpo, resta 9.
-      //
-      // Abbassandola a 7 il testo sarebbe rimasto su una riga sola anche
-      // dove prima andava a capo, e su un telefono da 390 con cinque
-      // scatole sarebbe sceso a 7,2px: piu' piccolo di prima, non solo
-      // di tre punti. Cosi' invece cambia una cosa sola — il corpo
-      // massimo — e dove la riga andava a capo continua ad andarci.
-      const SOGLIA_LEGGIBILE = 9;
-      const corpoUnaFila = misura(quantiTotali);
-      const aCapo = isMobile && quantiTotali > 2 && corpoUnaFila < SOGLIA_LEGGIBILE;
-      const perFila = aCapo ? Math.ceil(quantiTotali / 2) : quantiTotali;
-      const corpo = aCapo ? misura(perFila) : corpoUnaFila;
+      // Adesso sono schede larghe che vanno a capo da sole: l'icona in un
+      // disco a sinistra dice di cosa si tratta prima che si legga, il
+      // testo sta su due righe e la freccia a destra dice che si entra.
+      // `auto-fit` con `minmax(min(..))` riempie la riga di quante ne
+      // stanno — tre su schermo largo, una o due sul telefono — senza che
+      // nessuno decida un numero: il `min(...,100%)` impedisce alla
+      // colonna di essere piu' larga del contenitore su schermi stretti.
+      const spazio = isMobile ? 8 : 12;
       return (
-      <div ref={rigaTastiRef} data-riga="tasti" style={{ display: "flex", alignItems: "stretch", gap, flexWrap: aCapo ? "wrap" : "nowrap", padding: spaziatura }}>
-        {tastiRiga.map((t) => (
-          <button
-            key={t.testo}
-            onClick={(e) => { e.stopPropagation(); t.onClick(); }}
-            style={{
-              ...fontBody, fontSize: corpo, fontWeight: 700, color: NAVY, lineHeight: 1.15,
-              background: "#F7F4EC", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12,
-              padding: isMobile ? "8px 6px" : "10px 16px", cursor: "pointer", textAlign: "center",
-              flex: aCapo ? `1 1 calc(${(100 / perFila).toFixed(2)}% - ${gap}px)` : "1 1 0", minWidth: 0,
-            }}
-          >
-            {t.testo.split(" ").map((parola, i) => (
-              // niente a capo dentro la parola e niente trabocco: se mai
-              // il calcolo del corpo sbagliasse di un pelo, la parola
-              // stringe le lettere invece di uscire dal pulsante o di
-              // spezzarsi a meta'
-              <span key={i} style={{ display: "block", whiteSpace: "nowrap" }}>{parola}</span>
-            ))}
-          </button>
-        ))}
+      <div
+        data-riga="tasti"
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(auto-fit, minmax(min(${isMobile ? 160 : 230}px, 100%), 1fr))`,
+          gap: spazio, padding: spaziatura, alignItems: "stretch",
+        }}
+      >
+        {tastiRiga.map((t) => {
+          // due righe: la prima parola sopra, il resto sotto. E' come
+          // sono scritte tutte — "Dettagli corso", "Cambi e integrazioni",
+          // "Inventario fine corso" — e il taglio cade dove cadrebbe
+          // leggendole a voce.
+          const parole = t.testo.split(" ");
+          const sopra = parole[0];
+          const sotto = parole.slice(1).join(" ");
+          const lato = isMobile ? 38 : 46;
+          return (
+            <button
+              key={t.testo}
+              onClick={(e) => { e.stopPropagation(); t.onClick(); }}
+              style={{
+                ...fontBody, display: "flex", alignItems: "center", gap: isMobile ? 9 : 12,
+                background: "#F7F4EC", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
+                padding: isMobile ? "9px 10px" : "12px 14px", cursor: "pointer",
+                textAlign: "left", minWidth: 0, width: "100%",
+              }}
+            >
+              <span style={{
+                width: lato, height: lato, borderRadius: "50%", flexShrink: 0,
+                background: "#EFE7D8", display: "inline-flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {t.Icona ? <t.Icona size={isMobile ? 20 : 24} color={NAVY} /> : null}
+              </span>
+              {/* minWidth 0 anche qui: senza, un nome lungo allarga la
+                  colonna della griglia invece di andare a capo */}
+              <span style={{ minWidth: 0, flex: 1, lineHeight: 1.2 }}>
+                <span style={{ display: "block", fontSize: isMobile ? 12.5 : 14.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{sopra}</span>
+                {sotto && <span style={{ display: "block", fontSize: isMobile ? 12.5 : 14.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{sotto}</span>}
+              </span>
+              <IconaChevronDestra size={isMobile ? 15 : 18} color={GOLD} />
+            </button>
+          );
+        })}
       </div>
       );
       })()}
