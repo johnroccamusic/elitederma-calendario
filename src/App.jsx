@@ -13498,11 +13498,21 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
 
 
   if (contabilitaClasse) {
-    // Il file della contabilita' copre tutto, dock compreso: da qui la
-    // master segna incassato o non incassato e basta. L'unica uscita e'
-    // il tasto Esci in fondo alla lista.
+    // La contabilita' copre la pagina ma NON il dock.
+    //
+    // Prima stava a zIndex 6000, sopra tutto: l'idea era "qui si segna
+    // incassato e basta, l'unica uscita e' Esci in fondo alla lista". Ma
+    // chi ci entra dalla sua classe si trova senza il tasto Casa — e la
+    // via d'uscita non si cerca in fondo a un elenco lungo: la si cerca
+    // dove sta sempre.
+    //
+    // 1900 e' sotto il dock (2000) e sopra il contenuto della pagina.
+    // Lo spazio che si lascia e' dove sta il dock, e cambia: da telefono
+    // in basso, da scrivania in cima — gli stessi 104 punti che lascia
+    // il contenitore di tutta l'app. Senza, le ultime righe della lista
+    // (o il titolo) finiscono sotto i tasti proprio quando servono.
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 6000, overflowY: "auto", background: BG, WebkitOverflowScrolling: "touch", paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 1900, overflowY: "auto", background: BG, WebkitOverflowScrolling: "touch", paddingTop: isMobile ? "env(safe-area-inset-top, 0px)" : 104, paddingBottom: isMobile ? "calc(env(safe-area-inset-bottom, 0px) + 120px)" : 24 }}>
         <VistaMaster param={contabilitaClasse.token} onEsci={() => { setContabilitaClasse(null); window.scrollTo(0, 0); }} />
       </div>
     );
@@ -33199,7 +33209,11 @@ function VistaMaster({ param, onEsci = null }) {
       const token = decodeURIComponent(param || "").trim();
       if (!token) { setErrore(true); return; }
       const { data, error } = await supabase.rpc("master_vista", { p_token: token });
-      if (error || !data) { setErrore(true); return; }
+      // `!data` non basta: con un token che non corrisponde a niente la
+      // funzione risponde un oggetto vuoto, non null. Senza `corso_data`
+      // la pagina leggeva `cd.data_inizio` su un undefined e si spegneva
+      // tutta — schermata bianca invece di "link non valido".
+      if (error || !data || !data.corso_data) { setErrore(true); return; }
       setDati({
         cd: data.corso_data,
         corso: data.corso,
