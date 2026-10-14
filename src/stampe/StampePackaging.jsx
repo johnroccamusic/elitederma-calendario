@@ -118,7 +118,7 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
   }
 
   async function butta(s) {
-    if (!window.confirm(`Eliminare la scheda${s.nome ? ` "${s.nome}"` : ""}?\n\nSpariscono anche le sue righe. La foto e i file restano nell'archivio.`)) return;
+    if (!window.confirm(`Eliminare la scheda${s.nome ? ` "${s.nome}"` : ""}?\n\nSpariscono anche le sue righe, la foto e i file caricati. Restano solo quelli che un'altra scheda sta usando.`)) return;
     await conErrore(async () => { await eliminaStampa(s.id); await carica(); }, "Scheda non eliminata");
   }
 

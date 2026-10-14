@@ -103,9 +103,53 @@ export async function salvaStampa(id, campi) {
   if (error) throw new Error(error.message);
 }
 
+// Cancellare una scheda butta anche la sua roba dal secchio: foto e file
+// caricati. Tenerli voleva dire un archivio che cresce di cose che
+// nessuno sa piu' a cosa servivano, e nessun modo di ripulirlo dalla
+// pagina.
+//
+// MA SOLO QUELLO CHE NON SERVE PIU' A NESSUNO. Due schede che puntano
+// allo stesso file sono la norma — "Duplica prodotto" le fa apposta, e
+// il block notes A5 e quello A4 hanno la stessa grafica — e cancellare
+// da sotto l'altra sarebbe un danno silenzioso: quella resterebbe con
+// un'immagine rotta e nessun avviso.
 export async function eliminaStampa(id) {
+  // i percorsi si leggono PRIMA: dopo, le righe dei file se ne vanno in
+  // cascata e non si sa piu' cosa buttare
+  const { data: scheda } = await supabase
+    .from("stampe_packaging").select("foto_path, file_path").eq("id", id).maybeSingle();
+  const { data: suoiFile } = await supabase
+    .from("stampe_packaging_file").select("percorso").eq("stampa_id", id);
+  const percorsi = [...new Set([
+    scheda?.foto_path,
+    scheda?.file_path,
+    ...(suoiFile || []).map((f) => f.percorso),
+  ].filter(Boolean))];
+
   const { error } = await supabase.from("stampe_packaging").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  if (percorsi.length === 0) return;
+
+  // Chi usa ancora questi percorsi, adesso che la scheda non c'e' piu'.
+  // Si rileggono tutte le schede invece di interrogare percorso per
+  // percorso: sono poche decine, e un `in.(...)` con dentro barre e
+  // trattini e' un filtro che si rompe in silenzio.
+  const [{ data: schede }, { data: righeFile }] = await Promise.all([
+    supabase.from("stampe_packaging").select("foto_path, file_path"),
+    supabase.from("stampe_packaging_file").select("percorso"),
+  ]);
+  const ancoraUsati = new Set([
+    ...(schede || []).flatMap((x) => [x.foto_path, x.file_path]),
+    ...(righeFile || []).map((f) => f.percorso),
+  ].filter(Boolean));
+  const daButtare = percorsi.filter((x) => !ancoraUsati.has(x));
+  if (daButtare.length === 0) return;
+
+  // Se il secchio rifiuta non si rilancia l'errore: la scheda e' gia'
+  // andata, e dire "Scheda non eliminata" sarebbe falso. Al massimo
+  // restano dei file orfani — il contrario, scheda viva e file spariti,
+  // sarebbe peggio.
+  await supabase.storage.from(BUCKET_STAMPE).remove(daButtare);
 }
 
 export async function salvaRiga(id, campi) {
