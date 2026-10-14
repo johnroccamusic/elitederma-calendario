@@ -117,8 +117,16 @@ function Allegato({ etichetta, percorso }) {
 // corso: e' la stessa cosa guardata da un'altra porta, e due schede
 // diverse per lo stesso consenso avrebbero voluto dire due posti dove
 // ricordarsi di aggiungere un campo.
-export function Riga({ c, isMobile }) {
+export function Riga({ c, isMobile, riepilogoSempre = false }) {
   const [aperta, setAperta] = useState(false);
+  // Quello che la master deve vedere SENZA aprire: i soli "si" e le note.
+  // Si accende solo dove serve (la scheda del corso) e resta spento
+  // nell'archivio: li' l'elenco e' lungo e di tutte le classi, e spargere
+  // HIV e gravidanze lungo una lista che si scorre e' un'altra cosa dal
+  // leggerle sulla modella che si ha davanti fra due minuti.
+  const risposte = c.anamnesi || null;
+  const domande = risposte ? (contenutoDaVersione(c.versioneTesto).anamnesi || []) : [];
+  const siDetti = domande.filter((d) => risposte[d.chiave]?.r === true);
   const voce = (etichetta, valore) => (valore ? (
     <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 3 }}>
       <span style={{ color: MUTED }}>{etichetta}: </span>{valore}
@@ -138,6 +146,34 @@ export function Riga({ c, isMobile }) {
           {c.trattamento === "Altro" && c.trattamentoAltro ? c.trattamentoAltro : c.trattamento || "—"} · {quando(c.ts)}
         </span>
       </button>
+
+      {riepilogoSempre && !aperta && (siDetti.length > 0 || c.noteSalute) && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: "#8A2D2D", background: "#FBEDEC", border: "1px solid #F0D3D0", borderRadius: 10, padding: "9px 11px", marginTop: 8, lineHeight: 1.5 }}>
+          {siDetti.length > 0 && (
+            <div>
+              <b>Ha dichiarato di sì a:</b>{" "}
+              {siDetti.map((d) => d.domanda + (risposte[d.chiave]?.s ? ` (${risposte[d.chiave].s})` : "")).join(" · ")}
+            </div>
+          )}
+          {c.noteSalute && (
+            <div style={{ marginTop: siDetti.length > 0 ? 5 : 0 }}>
+              <b>Ha scritto:</b> {c.noteSalute}
+            </div>
+          )}
+        </div>
+      )}
+      {/* niente da segnalare va detto, o il silenzio si confonde con
+          "non ho ancora guardato" */}
+      {riepilogoSempre && !aperta && siDetti.length === 0 && !c.noteSalute && risposte && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", marginTop: 7 }}>
+          Nessuna segnalazione: ha risposto no a tutte.
+        </div>
+      )}
+      {riepilogoSempre && !aperta && !risposte && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 7 }}>
+          Consenso firmato prima del questionario sulla salute{c.noteSalute ? "." : " e senza note."}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
         {c.consensoFotoVideo

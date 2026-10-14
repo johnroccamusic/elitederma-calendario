@@ -101,7 +101,10 @@ export default function ConsensiDelCorso({ corsoData, isMobile = false, titoloCl
               {g.consensi.length} modell{g.consensi.length === 1 ? "a" : "e"}
             </div>
           </div>
-          {g.consensi.map((c) => <Riga key={c.id} c={c} isMobile={isMobile} />)}
+          {/* il riepilogo dei si' e delle note sta SOTTO IL NOME, senza
+              aprire: la master scorre l'elenco e vede subito su chi
+              fermarsi. Aprire serve per il documento e la firma. */}
+          {g.consensi.map((c) => <Riga key={c.id} c={c} isMobile={isMobile} riepilogoSempre />)}
         </div>
       ))}
     </div>
