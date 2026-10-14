@@ -29,6 +29,7 @@ import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
 import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
 import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
+import ConsensiDelCorso from "./consensi/ConsensiDelCorso.jsx";
 import QrConsensi from "./consensi/QrConsensi.jsx";
 import Ricevuta from "./pos/Ricevuta.jsx";
 import GestioneEventi from "./eventi/GestioneEventi.jsx";
@@ -31208,6 +31209,11 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           // "Assegna modelle" è un lavoro suo, con il suo tasto in home: chi
           // non ha quel permesso non deve trovarne la porta di servizio qui
           ...(puoAssegnareModelle ? [{ chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true, attivo: vista === "modelle" }] : []),
+          // Lo guarda la master, in aula, prima di toccare la modella: per
+          // questo non sta dietro al permesso di "Assegna modelle" ne' a
+          // quello di contabilita'. Chi apre la scheda della sua classe
+          // deve poter leggere cosa ha dichiarato chi si siede davanti.
+          { chiave: "consensi", etichetta: "Consensi compilati", Icona: IconaCatDocumento, onClick: () => setVista("consensi"), primario: true, attivo: vista === "consensi" },
         ];
         // In sola lettura la scheda e' una vetrina: si guarda chi c'e' e si
         // chiama, nient'altro. Niente iscrizioni, niente contabilita',
@@ -31378,6 +31384,20 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           ricarica={ricarica} onMessaggio={setMsg}
           onIntestazione={() => setCostiAperto(false)}
         />
+      )}
+
+      {vista === "consensi" && (
+        <div style={{ background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "18px 14px 24px" : "22px 22px 28px", marginBottom: 22 }}>
+          <div style={{ ...hStyle, fontSize: 23, margin: "0 0 4px", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Consensi compilati</div>
+          <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
+            Quello che ogni modella ha firmato e dichiarato, giorno per giorno. Apri una riga per leggere tutto: il documento, la firma e le risposte sulla salute.
+          </div>
+          <ConsensiDelCorso
+            corsoData={corsoData}
+            isMobile={isMobile}
+            titoloClasse={[(corsi || []).find((c) => c.id === corsoData?.corso_id)?.nome, (location || []).find((l) => l.id === corsoData?.location_id)?.nome].filter(Boolean).join(" — ")}
+          />
+        </div>
       )}
 
       {vista === "form" && (
@@ -77913,7 +77933,12 @@ export default function App() {
   // Come le altre tre rotte pubbliche esce di qui prima di montare
   // l'applicazione — chi arriva da quel codice non deve vedere nient'altro
   const paramConsenso = new URLSearchParams(window.location.search).get("consenso");
-  if (paramConsenso) return <PaginaConsenso codice={paramConsenso} />;
+  if (paramConsenso) {
+    // `edizione` e non `classe`: quel nome e' gia' preso dalla rotta
+    // ?modelle=, dove vale "1" e vuol dire un'altra cosa
+    const edizione = new URLSearchParams(window.location.search).get("edizione");
+    return <PaginaConsenso codice={paramConsenso} edizione={edizione || null} />;
+  }
   // ?ricevuta=<CODICE>: dove Stripe rimanda chi ha appena pagato col QR.
   // Esce di qui come le altre rotte pubbliche: chi arriva da un
   // pagamento vede la sua ricevuta e nient'altro dell'applicazione

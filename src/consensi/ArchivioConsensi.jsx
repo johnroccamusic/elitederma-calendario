@@ -31,8 +31,11 @@ const soloData = (g) => {
 };
 
 /** Il codice da far inquadrare, uno per consenso. */
-export function Codice({ modello, isMobile }) {
-  const indirizzo = `${window.location.origin}${window.location.pathname}?consenso=${modello.codice}`;
+// `edizione` lega il consenso a una classe: chi inquadra QUESTO codice
+// finisce in "Consensi compilati" di quel corso. Senza, il consenso
+// nasce senza padrone e si trova solo nell'archivio generale.
+export function Codice({ modello, isMobile, edizione = null, sottotitolo = null }) {
+  const indirizzo = `${window.location.origin}${window.location.pathname}?consenso=${modello.codice}${edizione ? `&edizione=${edizione}` : ""}`;
   const svg = useMemo(() => qrSvg(indirizzo, { lato: isMobile ? 190 : 220 }), [indirizzo, isMobile]);
 
   return (
@@ -46,7 +49,7 @@ export function Codice({ modello, isMobile }) {
       <div style={{ flex: "1 1 220px", minWidth: 0 }}>
         <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>{modello.nome}</div>
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
-          Fallo inquadrare alla modella: si apre il modulo, lo compila lei, firma col dito e invia.
+          {sottotitolo || "Fallo inquadrare alla modella: si apre il modulo, lo compila lei, firma col dito e invia."}
         </div>
         <div style={{ ...fontBody, fontSize: 11.5, color: NAVY, marginTop: 8, wordBreak: "break-all", background: "#FAF8F3", borderRadius: 8, padding: "8px 10px" }}>
           {indirizzo}
@@ -109,7 +112,12 @@ function Allegato({ etichetta, percorso }) {
   );
 }
 
-function Riga({ c, isMobile }) {
+// La scheda di un consenso: chiusa mostra nome e trattamento, aperta
+// tutto il resto. La presta anche "Consensi compilati" dentro la scheda
+// corso: e' la stessa cosa guardata da un'altra porta, e due schede
+// diverse per lo stesso consenso avrebbero voluto dire due posti dove
+// ricordarsi di aggiungere un campo.
+export function Riga({ c, isMobile }) {
   const [aperta, setAperta] = useState(false);
   const voce = (etichetta, valore) => (valore ? (
     <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 3 }}>

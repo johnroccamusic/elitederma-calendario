@@ -287,7 +287,7 @@ function FirmaDito({ onCambia }) {
   );
 }
 
-export default function PaginaConsenso({ codice }) {
+export default function PaginaConsenso({ codice, edizione = null }) {
   const modello = consensoDaCodice(codice);
   const [v, setV] = useState({
     nome: "", cognome: "", dataNascita: "", luogoNascita: "", residenza: "",
@@ -355,6 +355,10 @@ export default function PaginaConsenso({ codice }) {
         consensoTrattamento: true, consensoFotoVideo: fotoVideo,
       },
       { fronte, retro, firma },
+      // da quale classe arriva: lo dice il QR stampato dalla scheda corso.
+      // Col QR generico appeso in aula resta null, e il consenso si trova
+      // solo nell'archivio generale — li' ci sono tutti.
+      edizione,
     );
     setInviando(false);
     if (esito.errore) { setErrore(esito.errore); return; }

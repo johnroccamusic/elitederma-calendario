@@ -163,6 +163,24 @@ export async function leggiConsensi(): Promise<ConsensoRaccolto[]> {
 }
 
 /**
+ * I consensi di UNA edizione, dal piu' recente.
+ *
+ * Il legame e' `corso_data_id`, che si scrive solo se la modella ha
+ * inquadrato il QR di quella classe (`?consenso=<codice>&edizione=<id>`).
+ * Un consenso firmato dal QR generico — quello appeso in aula, che non
+ * sa a quale corso appartiene — non compare qui: si trova nell'archivio
+ * dentro Gestione modelle, dove ci sono tutti.
+ */
+export async function leggiConsensiDelCorso(corsoDataId: string): Promise<ConsensoRaccolto[]> {
+  if (!corsoDataId) return [];
+  const { data } = await supabase
+    .from("consensi_modelle").select("*")
+    .eq("corso_data_id", corsoDataId)
+    .order("ts", { ascending: false });
+  return (data || []).map(daRiga);
+}
+
+/**
  * L'indirizzo temporaneo con cui si guarda un file del bucket privato.
  *
  * Dieci minuti: il tempo di aprirlo e chiuderlo. Un link che non scade
