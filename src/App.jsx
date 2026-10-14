@@ -11943,7 +11943,7 @@ function TitoloColonnaMaster({ Icona, testo, children }) {
   );
 }
 
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita }) {
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
@@ -12251,6 +12251,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       const tastiRiga = [
           onApriClasse && { testo: "Dettagli corso", onClick: () => onApriClasse(corsoData.id) },
           onApriModelle && { testo: "Dettagli modelle", onClick: () => onApriModelle(corsoData.id) },
+          // Accanto a "Dettagli modelle" perche' e' la stessa domanda vista
+          // da un altro lato: li' chi viene, qui cosa ha dichiarato chi
+          // viene. La master lo guarda prima di far toccare la modella
+          // dall'allieva, e deve trovarlo nella sua classe, non in
+          // Gestione modelle dove spesso non entra.
+          onApriConsensi && { testo: "Consensi modelle", onClick: () => onApriConsensi(corsoData.id) },
           // compare solo dove c'e' davvero una scorta da cui prendere:
           // senza un pacco partito il quadro non avrebbe niente dentro
           conScorte && onApriCambi && { testo: "Cambi e integrazioni", onClick: () => onApriCambi(corsoData.id) },
@@ -13135,7 +13141,7 @@ function DettaglioCarrelliMaster({ masterId, isMobile }) {
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, onBack, titolo = "Dashboard master" }) {
   // il totale in euro dei carrelli lo vedono solo programmatore e Chiara
   // Colonnelli; le master vedono vendite e punti, mai l'importo
   const mostraEuroCarrelli = vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato);
@@ -13670,7 +13676,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
-                onApriClasse={onApriClasse} onApriModelle={onApriModelle}
+                onApriClasse={onApriClasse} onApriModelle={onApriModelle} onApriConsensi={onApriConsensi}
                 onApriCambi={onApriCambi} conScorte={edizioniConScorte.has(cd.id)}
                 onApriInventario={onApriInventarioFineCorso}
                 inFinestraInventario={oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 7)}
@@ -78198,6 +78204,8 @@ export default function App() {
   // era l'unica cosa che si vedeva prima cliccando la card, e resta a un
   // tocco di distanza invece di sparire
   const [classeMasterModelle, setClasseMasterModelle] = useState(false);
+  // i consensi di quella classe, stessa porta delle modelle
+  const [classeMasterConsensi, setClasseMasterConsensi] = useState(false);
   const [modelleDallaScheda, setModelleDallaScheda] = useState(false);
   // l'ordine di aprire subito "Aggiungi corso", dato da una delle tre
   // pagine figlie. Si consuma appena si esce da Gestione corsi, o il
@@ -79319,13 +79327,14 @@ export default function App() {
   // dichiara cosa ha preso e perche' mentre il corso e' in corso
   function apriCambiIntegrazioni(corsoDataId) { scrollAppInCima(); setInventarioSedeCorsoDataId(corsoDataId); setView("cambiintegrazioni"); }
   function apriInventarioFineCorso(corsoDataId) { scrollAppInCima(); setInventarioSedeCorsoDataId(corsoDataId); setView("inventariofinecorso"); }
-  function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(false); setModelleDallaScheda(false); setView("classemaster"); }
+  function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(false); setClasseMasterConsensi(false); setModelleDallaScheda(false); setView("classemaster"); }
   // Le modelle aperte dal tasto sulla scheda, senza passare dalla classe.
   // Ci si arriva anche da dentro la classe: la differenza la ricorda
   // `modelleDallaScheda`, perche' l'indietro deve riportare da dove si e'
   // partiti — alla dashboard se si e' arrivati dal tasto, alla classe se
   // si e' arrivati da li'.
-  function apriModelleMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(true); setModelleDallaScheda(true); setView("classemaster"); }
+  function apriModelleMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(true); setClasseMasterConsensi(false); setModelleDallaScheda(true); setView("classemaster"); }
+  function apriConsensiMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterConsensi(true); setClasseMasterModelle(false); setModelleDallaScheda(false); setView("classemaster"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriAmministrazione() { apriViewProtetta("amministrazione"); }
@@ -80775,6 +80784,7 @@ export default function App() {
           onApriInventarioFineCorso={apriInventarioFineCorso}
           onApriClasse={apriClasseMaster}
           onApriModelle={apriModelleMaster}
+          onApriConsensi={apriConsensiMaster}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "dashboardmaster", "Dashboard master")}
         />
@@ -80785,6 +80795,28 @@ export default function App() {
         const corso = cd ? corsi.find((c) => c.id === cd.corso_id) : null;
         const loc = cd ? location.find((l) => l.id === cd.location_id) : null;
         if (!cd || !corso || !loc) return <div style={{ maxWidth: 640, margin: "0 auto", padding: "20px", ...fontBody, color: MUTED }}>Classe non trovata.</div>;
+        if (classeMasterConsensi) {
+          return (
+            <div style={{ maxWidth: 760, margin: "0 auto", padding: "4px 20px 40px" }}>
+              <button
+                onClick={() => { scrollAppInCima(); setClasseMasterConsensi(false); setView("dashboardmaster"); }}
+                title="Indietro"
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: "8px 0" }}
+              >
+                <IconaFrecciaSinistra size={20} />
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla dashboard</span>
+              </button>
+              <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 26, fontWeight: 700, color: NAVY, margin: "4px 0 2px" }}>Consensi modelle</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
+                {corso?.nome}{loc?.nome ? ` — ${loc.nome}` : ""}. Quello che ogni modella ha firmato, giorno per giorno: apri una riga per il documento, la firma e le risposte sulla salute.
+              </div>
+              <ConsensiDelCorso
+                corsoData={cd} isMobile={isMobile}
+                titoloClasse={[corso?.nome, loc?.nome].filter(Boolean).join(" — ")}
+              />
+            </div>
+          );
+        }
         if (classeMasterModelle) {
           // La stessa pagina del link che si manda alle master, aperta da
           // dentro l'app: l'elenco delle modelle allievo per allievo, con
