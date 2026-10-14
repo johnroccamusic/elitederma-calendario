@@ -65349,6 +65349,28 @@ function IconaInfoTondo({ size = 20, color = MUTED }) {
   );
 }
 
+// I punti di una riga del carrello, scritti accanto al prezzo.
+//
+// Col pezzo singolo si legge il numero e basta. Con due o piu' si legge
+// il totale della riga, che e' quello che conta, e fra parentesi quanto
+// vale uno: senza, su "6,80 punti" di due pezzi uno si chiede se sono
+// per uno o per tutti e due, e la domanda torna ogni volta.
+//
+// Niente punti, niente scritta: un "0 punti" su un prodotto senza costo
+// d'acquisto sembra una regola, ed e' invece un'anagrafica incompleta.
+function PuntiDellaRiga({ punti, isMobile }) {
+  if (!punti || !(punti.totale > 0)) return null;
+  const uno = fmtPunti(punti.unitario);
+  return (
+    <span
+      style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: GOLD, fontWeight: 700 }}
+      title={punti.quantita > 1 ? `${uno} punti a pezzo` : "Punti che questo pezzo fa maturare"}
+    >
+      {" · "}{fmtPunti(punti.totale)} punti{punti.quantita > 1 ? ` (${uno} l'uno)` : ""}
+    </span>
+  );
+}
+
 function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
@@ -66643,6 +66665,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // vale i suoi punti anche se venduto scontato. Sono punti INTERI: la quota
   // che spetta alla master la decide chi amministra, dopo, con le quote per
   // canale. La spedizione non fa punti
+  // QUANTI PUNTI VALE UNA RIGA DEL CARRELLO.
+  //
+  // Si legge sotto il nome, accanto al prezzo: al banco la master decide
+  // anche in base a questo, e il totale in fondo le diceva solo quanto ha
+  // messo insieme, non quale pezzo glieli stava dando.
+  //
+  // Lo stesso conto del totale (puntiProdotto), quindi la somma delle
+  // righe fa il numero in fondo: due conti diversi sarebbero due numeri
+  // che non tornano, e il primo a non fidarsi sarebbe chi vende.
+  //
+  // Il metodo di pagamento conta: in contanti il punto vale diverso, e
+  // cambiando il metodo questi numeri si rifanno da soli.
+  const puntiDiRiga = (r) => {
+    if (operatore?.tipo !== "master" || omaggioAttivo) return null;
+    const pp = puntiProdotto(prodottiPerId[r.prodottoId], sicurezzaPuntiDi(schemaPuntiPos), pagamentoContaComeContanti(metodoPagamento));
+    if (pp == null) return null;
+    const quantita = Number(r.quantita) || 0;
+    return { unitario: round2(pp), totale: round2(pp * quantita), quantita };
+  };
   const puntiCarrello = (() => {
     if (operatore?.tipo !== "master" || omaggioAttivo || carrello.length === 0) return null;
     const sicurezza = sicurezzaPuntiDi(schemaPuntiPos);
@@ -67499,10 +67540,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                           style={{ background: "none", border: "none", color: "#8A6D1D", cursor: "pointer", fontSize: isMobile ? 11 : 12, padding: 0, lineHeight: 1 }}>↺</button>
                       </>
                     )}
+                    <PuntiDellaRiga punti={puntiDiRiga(r)} isMobile={isMobile} />
                     {r.sku ? <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10, color: grigioCarrello, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Cod. {r.sku}</span> : null}
                   </div>
                 ) : (
-                  <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>
+                    {fmtEuroErp2(r.prezzo)}
+                    <PuntiDellaRiga punti={puntiDiRiga(r)} isMobile={isMobile} />
+                    {r.sku ? ` · Cod. ${r.sku}` : ""}
+                  </div>
                 )}
               </div>
               {/* La quantita' e i suoi due comandi, come sul disegno: il
