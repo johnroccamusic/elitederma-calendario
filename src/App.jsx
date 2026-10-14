@@ -5240,8 +5240,51 @@ function scontoSulMargineCarrello(righe, prodottoPerId, percentuale) {
 // Il prezzo del carrello e' sempre quello al pubblico: sul netto la
 // stessa percentuale vale circa un quinto in meno, ed e' esattamente
 // cio' che si e' scelto chiedendo "sul netto".
-function scontoCouponCarrello(righe, prodottoPerId, percentuale, base) {
+// SU QUALI RIGHE VALE UN COUPON.
+//
+// Un coupon puo' essere ristretto a certe categorie o a certi prodotti —
+// `ambito` dice quale — e puo' escluderne altri. Fino al 14/10/2026 il
+// POS non lo guardava: applicava la percentuale a tutto il carrello.
+// `need30`, che vale il 30% sui soli prodotti da needling, ha scontato
+// un dermografo Horus del 24,59% (il 30% letto sul netto). Non e' un
+// caso limite: un codice ristretto e' ristretto perche' su certi
+// prodotti quel margine non c'e'.
+//
+// Gli id scritti sul coupon sono di WooCommerce, non nostri: si
+// traducono con `woo_category_id` / `woo_product_id`. Un id che non
+// trova corrispondenza NON vale come "tutto": vale come niente, o
+// un'anagrafica disallineata riaprirebbe lo sconto su tutto il
+// catalogo — esattamente il guasto da cui si viene.
+function copertureCoupon(coupon, prodottiShop, categorieProdotti, prodottiCategorie) {
+  const ambito = coupon?.ambito || "tutto";
+  const categorieDi = (prodottoId) => {
+    const righe = collegamentiConPadri(prodottiCategorie, categorieProdotti)
+      .filter((pc) => pc.prodotto_id === prodottoId);
+    return new Set(righe.map((pc) => pc.categoria_id));
+  };
+  const escluseCat = idsLocaliDaWoo(coupon?.escludi_categorie_ids, categorieProdotti, "woo_category_id");
+  const esclusiProd = idsLocaliDaWoo(coupon?.escludi_prodotti_ids, prodottiShop, "woo_product_id");
+  const incluseCat = idsLocaliDaWoo(coupon?.categorie_ids, categorieProdotti, "woo_category_id");
+  const inclusiProd = idsLocaliDaWoo(coupon?.prodotti_ids, prodottiShop, "woo_product_id");
+
+  return (prodottoId) => {
+    if (!prodottoId) return ambito === "tutto";
+    if (esclusiProd.has(prodottoId)) return false;
+    const sue = categorieDi(prodottoId);
+    if ([...escluseCat].some((c) => sue.has(c))) return false;
+    if (ambito === "categorie") return [...incluseCat].some((c) => sue.has(c));
+    if (ambito === "prodotti") return inclusiProd.has(prodottoId);
+    return true;
+  };
+}
+
+// `copre` dice quali righe il coupon tocca davvero. Chi non lo passa
+// sconta tutto, come prima: le chiamate che non hanno sottomano
+// l'anagrafica delle categorie non possono decidere, e cambiare il loro
+// risultato di nascosto sarebbe peggio del guasto.
+function scontoCouponCarrello(righe, prodottoPerId, percentuale, base, copre = null) {
   if (!(percentuale > 0)) return 0;
+  if (copre) righe = (righe || []).filter((r) => copre(r.prodottoId));
   const lordo = round2((righe || []).reduce((s, r) => s + r.prezzo * r.quantita, 0));
   if (lordo <= 0) return 0;
   if (base === "margine") return scontoSulMargineCarrello(righe, prodottoPerId, percentuale);
@@ -66114,6 +66157,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // la serie. Senza il filtro usciva quello che capitava.
     return (coupon || []).find((c) => c.master_id === operatore.id && !c.corsi_date_id && c.codice
       && c.serie_regole !== "acquisto_master"
+      // e NON un codice ristretto a certe categorie. Tommaso Giumbini ha
+      // "need30" — il 30% sui soli prodotti da needling, suo e senza
+      // edizione come il referral — e usciva quello al posto di TG997U:
+      // il POS gli offriva come codice personale uno sconto d'aula.
+      && codiceSuTuttoIlCatalogo(c)
       && !(c.valido_da && oggi < c.valido_da) && !(c.valido_fino_a && oggi > c.valido_fino_a)) || null;
   })();
   // IL CODICE CON CUI LA MASTER COMPRA PER SE'.
@@ -66124,6 +66172,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     if (!operatore || operatore.tipo !== "master") return null;
     return (coupon || []).find((c) => c.master_id === operatore.id && !c.corsi_date_id && c.codice
       && c.serie_regole === "acquisto_master") || null;
+  })();
+  // I CODICI RISTRETTI DELLA MASTER.
+  //
+  // Suoi, senza edizione, ma validi solo su certe categorie: "need30" e'
+  // il 30% sui prodotti da needling, che Tommaso Giumbini da' agli
+  // allievi di quel corso ovunque si tenga. Non sono il suo referral —
+  // quello vale su tutto — e non sono il codice d'aula di una classe,
+  // perche' non hanno un'edizione.
+  //
+  // Prima non c'era modo di sceglierli dal POS: bisognava scrivere il
+  // codice a mano nel campo, e intanto uno di loro usciva al posto del
+  // referral nella tendina.
+  const couponiRistrettiMaster = (() => {
+    if (operatore?.tipo !== "master") return [];
+    const oggi = dataOggiStr();
+    return (coupon || []).filter((c) => c.master_id === operatore.id && !c.corsi_date_id && c.codice
+      && c.serie_regole !== "acquisto_master"
+      && !codiceSuTuttoIlCatalogo(c)
+      && !(c.valido_da && oggi < c.valido_da) && !(c.valido_fino_a && oggi > c.valido_fino_a));
   })();
   const [referralPersonaleAttivo, setReferralPersonaleAttivo] = useState(false);
   // ACQUISTO PERSONALE DELLA MASTER.
@@ -66281,6 +66348,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // mano resta quello che e' sempre stato — e' un importo deciso caso
   // per caso, non una regola.
   const baseCoupon = BASE_SCONTO_VALIDA(couponAttivo?.base_sconto);
+  // Su quali righe vale il coupon attivo: un codice ristretto a certe
+  // categorie non deve scontare il resto del carrello. Si ricalcola solo
+  // quando cambia il coupon o l'anagrafica, non a ogni riga.
+  const coperturaCoupon = useMemo(
+    () => (couponAttivo ? copertureCoupon(couponAttivo, prodottiShop, categorieProdotti, prodottiCategorie) : null),
+    [couponAttivo, prodottiShop, categorieProdotti, prodottiCategorie],
+  );
   const couponAFasce = couponAttivo?.tipo_regola_sconto === "fasce";
   const couponSulMargine = !couponAFasce && baseCoupon === "margine";
   // le fasce da applicare: quelle scritte sul coupon, salvo che sia il
@@ -66337,7 +66411,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     ? scontoAcquistoMasterCarrello(carrello, prodottiPerId, cedibilePerProdotto, quotaMasterPos)
     : couponAFasce
       ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)
-      : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon);
+      : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
@@ -66385,7 +66459,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     if (couponAFasce) {
       return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)) / 100);
     }
-    if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
+    if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
     if (scontoNum > 0) {
       return scontoTipo === "percentuale"
         ? round2((lordoRiga * scontoNum) / 100)
@@ -66627,7 +66701,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       const lordoRiga = lordiRiga[i];
       if (omaggioAttivo || lordoRiga <= 0) return 0;
       if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)) / 100);
-      if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon);
+      if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
       if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
       return 0;
     });
@@ -67208,6 +67282,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 commutaReferralPersonale(true);
                 return;
               }
+              if (nuovoId.startsWith("__codice:")) {
+                // un codice ristretto della master: niente edizione, niente
+                // referral, solo quel coupon applicato al carrello
+                const c = couponiRistrettiMaster.find((x) => x.id === nuovoId.slice(9));
+                setAcquistoPersonale(false);
+                setReferralPersonaleAttivo(false);
+                setCorsoPosId(""); setScontoCorsoAttivo(false);
+                setCouponAttivo(c || null);
+                setCouponValore(c ? String(c.valore ?? "") : "");
+                setCouponCodiceTesto(c ? String(c.codice || "").toUpperCase() : "");
+                return;
+              }
               setAcquistoPersonale(false);
               setReferralPersonaleAttivo(false);
               setCorsoPosId(nuovoId); setScontoCorsoAttivo(true);
@@ -67218,6 +67304,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   stessa domanda — a chi appartiene questa vendita */}
               {couponReferralPersonale && <option value="__referral">Vendi fuori dal corso con il mio referral ({String(couponReferralPersonale.codice || "").toUpperCase()})</option>}
               {couponAcquistoPersonale && <option value="__personale">Acquisto personale con sconto master ({String(couponAcquistoPersonale.codice || "").toUpperCase()})</option>}
+              {/* i codici ristretti: la descrizione scritta sul coupon dice
+                  a chi vanno dati meglio di qualunque etichetta fissa */}
+              {couponiRistrettiMaster.map((c) => (
+                <option key={c.id} value={`__codice:${c.id}`}>
+                  {c.descrizione ? `${c.descrizione} ` : "Vendi con il codice "}({String(c.codice || "").toUpperCase()})
+                </option>
+              ))}
               {corsiEleggibiliPos.map((cd) => (
                 // LA DATA CI VUOLE. Due edizioni dello stesso corso nella
                 // stessa citta' si leggevano identiche — "NEEDLING · Napoli"
