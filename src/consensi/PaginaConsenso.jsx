@@ -83,6 +83,60 @@ function Campo({ etichetta, obbligatorio, children }) {
 // volta sola perche' poi la pagina si chiude e non si torna indietro
 const campo = { ...inputStyle, minHeight: 48, fontSize: 16 };
 
+/**
+ * Una domanda dell'anamnesi: la domanda e due tasti grossi, SÌ e NO.
+ *
+ * NON una spunta. Una casella non spuntata vuol dire due cose diverse —
+ * "no" e "non ho ancora risposto" — e su venti domande, su un telefono,
+ * in piedi in un corridoio, una saltata non si distingue da un no. Con
+ * due tasti il vuoto si vede: la riga resta grigia e il tasto di invio
+ * dice quante ne mancano.
+ *
+ * I tasti sono alti 48 come i campi: sotto i 44 un dito adulto sbaglia.
+ */
+function RigaAnamnesi({ domanda, aiuto, specifica, valore, onCambia }) {
+  const risposta = valore?.r;
+  const scelto = (quale) => risposta === quale;
+  const tasto = (quale, etichetta, colore) => (
+    <button
+      type="button"
+      onClick={() => onCambia({ r: quale, s: quale ? (valore?.s || "") : "" })}
+      style={{
+        ...fontBody, flex: "1 1 0", minWidth: 0, minHeight: 48, borderRadius: 11, cursor: "pointer",
+        fontSize: 15, fontWeight: 700, letterSpacing: 0.3,
+        background: scelto(quale) ? colore.pieno : "#FFFFFF",
+        color: scelto(quale) ? "#FFFFFF" : MUTED,
+        border: `1px solid ${scelto(quale) ? colore.pieno : CREAM_BORDER}`,
+      }}
+      aria-pressed={scelto(quale)}
+    >
+      {etichetta}
+    </button>
+  );
+  return (
+    <div style={{
+      background: "#fff", border: `1px solid ${risposta == null ? CREAM_BORDER : "#E4E9EF"}`,
+      borderRadius: 12, padding: 12, marginBottom: 9,
+    }}>
+      <div style={{ ...fontBody, fontSize: 14, color: NAVY, lineHeight: 1.35, fontWeight: 600 }}>{domanda}</div>
+      {aiuto && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{aiuto}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        {tasto(true, "SÌ", { pieno: "#B8860B" })}
+        {tasto(false, "NO", { pieno: "#6E7391" })}
+      </div>
+      {/* il campo libero compare solo col sì, e solo dove serve davvero */}
+      {specifica && risposta === true && (
+        <input
+          style={{ ...campo, marginTop: 9 }}
+          value={valore?.s || ""}
+          onChange={(e) => onCambia({ r: true, s: e.target.value })}
+          placeholder={aiuto || "Specifica"}
+        />
+      )}
+    </div>
+  );
+}
+
 /** Una foto del documento: si scatta, si rivede, si rifà. */
 function FotoDocumento({ etichetta, blob, onCambia }) {
   const [anteprima, setAnteprima] = useState(null);
@@ -240,6 +294,8 @@ export default function PaginaConsenso({ codice }) {
     telefono: "", email: "", documentoTipo: TIPI_DOCUMENTO[0], documentoNumero: "",
     trattamento: "", trattamentoAltro: "", noteSalute: "",
   });
+  // le risposte al questionario: { chiave: { r: true|false, s: "..." } }
+  const [anamnesi, setAnamnesi] = useState({});
   const [fronte, setFronte] = useState(null);
   const [retro, setRetro] = useState(null);
   const [firma, setFirma] = useState(null);
@@ -269,6 +325,15 @@ export default function PaginaConsenso({ codice }) {
   if (!v.nome.trim() || !v.cognome.trim()) mancanze.push("nome e cognome");
   if (!v.trattamento) mancanze.push("il trattamento");
   if (v.trattamento === "Altro" && !v.trattamentoAltro.trim()) mancanze.push("quale altro trattamento");
+  // Tutte le domande, nessuna esclusa. E' il punto del questionario: una
+  // saltata e' proprio quella su cui l'operatore si sarebbe fermato.
+  const domande = modello.contenuto.anamnesi || [];
+  const senzaRisposta = domande.filter((d) => anamnesi[d.chiave]?.r == null);
+  if (senzaRisposta.length > 0) {
+    mancanze.push(senzaRisposta.length === 1
+      ? "una domanda sulla salute"
+      : `${senzaRisposta.length} domande sulla salute`);
+  }
   if (!fronte) mancanze.push("la foto del documento");
   if (!firma) mancanze.push("la firma");
   if (!accetto) mancanze.push("la spunta del consenso");
@@ -286,6 +351,7 @@ export default function PaginaConsenso({ codice }) {
         documentoTipo: v.documentoTipo, documentoNumero: v.documentoNumero,
         trattamento: v.trattamento, trattamentoAltro: v.trattamentoAltro,
         noteSalute: v.noteSalute,
+        anamnesi,
         consensoTrattamento: true, consensoFotoVideo: fotoVideo,
       },
       { fronte, retro, firma },
@@ -353,14 +419,30 @@ export default function PaginaConsenso({ codice }) {
               <input style={campo} value={v.trattamentoAltro} onChange={cambia("trattamentoAltro")} />
             </Campo>
           )}
-          <Campo etichetta="Allergie, terapie, interventi recenti, altro da segnalare">
-            <textarea
-              style={{ ...campo, minHeight: 96, resize: "vertical" }}
-              value={v.noteSalute} onChange={cambia("noteSalute")}
-              placeholder="Se non c'è niente, lascia vuoto"
-            />
-          </Campo>
         </Sezione>
+
+        {domande.length > 0 && (
+          <Sezione
+            titolo="Il tuo stato di salute"
+            nota="Rispondi a tutte: l'operatore deve saperlo prima di cominciare, ed è il motivo per cui alcuni trattamenti si rimandano invece di andare storti. Resta fra te e la scuola."
+          >
+            {domande.map((d) => (
+              <RigaAnamnesi
+                key={d.chiave}
+                domanda={d.domanda} aiuto={d.aiuto} specifica={d.specifica}
+                valore={anamnesi[d.chiave]}
+                onCambia={(r) => setAnamnesi((p) => ({ ...p, [d.chiave]: r }))}
+              />
+            ))}
+            <Campo etichetta="Altro da segnalare">
+              <textarea
+                style={{ ...campo, minHeight: 88, resize: "vertical" }}
+                value={v.noteSalute} onChange={cambia("noteSalute")}
+                placeholder="Se non c'è altro, lascia vuoto"
+              />
+            </Campo>
+          </Sezione>
+        )}
 
         <Sezione titolo="Cosa stai firmando">
           <button

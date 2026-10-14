@@ -25,6 +25,8 @@ export interface DatiConsenso {
   trattamento?: string | null;
   trattamentoAltro?: string | null;
   noteSalute?: string | null;
+  /** risposte al questionario sanitario: { chiave: { r: si/no, s: specifica } } */
+  anamnesi?: Record<string, { r: boolean; s?: string }> | null;
   consensoTrattamento: boolean;
   consensoFotoVideo: boolean;
 }
@@ -90,6 +92,7 @@ export async function salvaConsenso(
     trattamento: dati.trattamento || null,
     trattamento_altro: dati.trattamentoAltro?.trim() || null,
     note_salute: dati.noteSalute?.trim() || null,
+    anamnesi: dati.anamnesi && Object.keys(dati.anamnesi).length > 0 ? dati.anamnesi : null,
     consenso_trattamento: true,
     consenso_foto_video: !!dati.consensoFotoVideo,
     documento_fronte_path: percorsi.fronte,
@@ -117,6 +120,7 @@ export interface ConsensoRaccolto {
   trattamento: string | null;
   trattamentoAltro: string | null;
   noteSalute: string | null;
+  anamnesi: Record<string, { r: boolean; s?: string }> | null;
   consensoFotoVideo: boolean;
   frontePath: string | null;
   retroPath: string | null;
@@ -142,6 +146,7 @@ function daRiga(r: any): ConsensoRaccolto {
     trattamento: r.trattamento || null,
     trattamentoAltro: r.trattamento_altro || null,
     noteSalute: r.note_salute || null,
+    anamnesi: r.anamnesi || null,
     consensoFotoVideo: !!r.consenso_foto_video,
     frontePath: r.documento_fronte_path || null,
     retroPath: r.documento_retro_path || null,

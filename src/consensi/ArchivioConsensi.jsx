@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
 import { qrSvg } from "../ui/qr.js";
-import { CONSENSI } from "../content/consensi";
+import { CONSENSI, contenutoDaVersione } from "../content/consensi";
 import { leggiConsensi, filtraConsensi, urlFirmato } from "./dati";
 
 const quando = (iso) => {
@@ -148,6 +148,42 @@ function Riga({ c, isMobile }) {
           {voce("Telefono", c.telefono)}
           {voce("Email", c.email)}
           {voce("Documento", [c.documentoTipo, c.documentoNumero].filter(Boolean).join(" n. "))}
+          {/* Le risposte al questionario sanitario. Si disegnano SOLO i sì:
+              venti righe di "no" seppellirebbero l'unica che conta, ed e'
+              l'unica per cui si apre questa scheda. Le domande si rileggono
+              dal testo della versione con cui la modella ha firmato, non
+              dall'ultima: una v2 e una v3 possono averne di diverse. */}
+          {(() => {
+            const risposte = c.anamnesi || null;
+            if (!risposte) return null;
+            const domande = contenutoDaVersione(c.versioneTesto).anamnesi || [];
+            const si = domande.filter((d) => risposte[d.chiave]?.r === true);
+            const senzaRisposta = domande.filter((d) => risposte[d.chiave]?.r == null);
+            if (si.length === 0) {
+              return (
+                <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "10px 12px", marginTop: 8, lineHeight: 1.45 }}>
+                  <b>Questionario:</b> nessuna segnalazione, ha risposto no a tutte.
+                </div>
+              );
+            }
+            return (
+              <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 10, padding: "10px 12px", marginTop: 8, lineHeight: 1.5 }}>
+                <b>Ha dichiarato di sì a:</b>
+                <ul style={{ margin: "5px 0 0", paddingLeft: 18 }}>
+                  {si.map((d) => (
+                    <li key={d.chiave}>
+                      {d.domanda}{risposte[d.chiave]?.s ? ` — ${risposte[d.chiave].s}` : ""}
+                    </li>
+                  ))}
+                </ul>
+                {senzaRisposta.length > 0 && (
+                  <div style={{ marginTop: 6, color: MUTED }}>
+                    {senzaRisposta.length} domand{senzaRisposta.length === 1 ? "a" : "e"} senza risposta.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {c.noteSalute && (
             <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 10, padding: "10px 12px", marginTop: 8, lineHeight: 1.45 }}>
               <b>Da sapere:</b> {c.noteSalute}
