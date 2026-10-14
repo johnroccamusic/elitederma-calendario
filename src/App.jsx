@@ -31215,11 +31215,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           // "Assegna modelle" è un lavoro suo, con il suo tasto in home: chi
           // non ha quel permesso non deve trovarne la porta di servizio qui
           ...(puoAssegnareModelle ? [{ chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true, attivo: vista === "modelle" }] : []),
-          // Lo guarda la master, in aula, prima di toccare la modella: per
-          // questo non sta dietro al permesso di "Assegna modelle" ne' a
-          // quello di contabilita'. Chi apre la scheda della sua classe
-          // deve poter leggere cosa ha dichiarato chi si siede davanti.
-          { chiave: "consensi", etichetta: "Consensi compilati", Icona: IconaCatDocumento, onClick: () => setVista("consensi"), primario: true, attivo: vista === "consensi" },
+          // I consensi delle modelle NON stanno qui. Li guarda la master,
+          // dalla riga della sua classe nella dashboard master, accanto a
+          // "Dettagli modelle": e' li' che si sta quando serve saperlo.
+          // Questa scheda e' iscrizioni e contabilita'.
         ];
         // In sola lettura la scheda e' una vetrina: si guarda chi c'e' e si
         // chiama, nient'altro. Niente iscrizioni, niente contabilita',
@@ -31390,20 +31389,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           ricarica={ricarica} onMessaggio={setMsg}
           onIntestazione={() => setCostiAperto(false)}
         />
-      )}
-
-      {vista === "consensi" && (
-        <div style={{ background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "18px 14px 24px" : "22px 22px 28px", marginBottom: 22 }}>
-          <div style={{ ...hStyle, fontSize: 23, margin: "0 0 4px", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Consensi compilati</div>
-          <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
-            Quello che ogni modella ha firmato e dichiarato, giorno per giorno. Apri una riga per leggere tutto: il documento, la firma e le risposte sulla salute.
-          </div>
-          <ConsensiDelCorso
-            corsoData={corsoData}
-            isMobile={isMobile}
-            titoloClasse={[(corsi || []).find((c) => c.id === corsoData?.corso_id)?.nome, (location || []).find((l) => l.id === corsoData?.location_id)?.nome].filter(Boolean).join(" — ")}
-          />
-        </div>
       )}
 
       {vista === "form" && (
