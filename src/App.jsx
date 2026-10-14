@@ -80192,7 +80192,19 @@ export default function App() {
                 Icona: IconaScatolaErp, attivo: true, badge: allieviSenzaKit,
                 onClick: () => setView("assegnazionekit"),
               }] : []),
-              { chiave: "qrconsensi", title: "QR consensi modelle", descrizione: "I codici da far inquadrare alle modelle per firmare il consenso", Icona: IconaTileModelle, attivo: true, onClick: () => setView("qrconsensi") },
+              // SOLO PROGRAMMATORE, dal 14/10/2026.
+              //
+              // Questi codici non sanno a quale corso appartengono: chi li
+              // usa in aula si ritrova i consensi solo nell'archivio, e in
+              // "Consensi modelle" della classe non compare niente. E'
+              // successo con i primi sette, mentre giravano due PMU BASE
+              // insieme — Roma e Pescara, stesse date — e nessuno dei due
+              // poteva piu' rivendicarli.
+              //
+              // Tolto dalla home di tutti, non tolto: qui dentro si decide
+              // a quali corsi vale ogni consenso, e il codice da far
+              // inquadrare in aula sta nella scheda della classe.
+              ...(ruoloUtente === "programmatore" ? [{ chiave: "qrconsensi", title: "Consensi modelle, impostazioni", descrizione: "A quali corsi vale ogni consenso, e i codici senza corso", Icona: IconaTileModelle, attivo: true, onClick: () => setView("qrconsensi") }] : []),
               { chiave: "stampepackaging", title: "Stampe packaging", descrizione: "Cosa si manda in tipografia: file, materiali, formati e fornitori", Icona: IconaTileNormative, attivo: true, onClick: () => setView("stampepackaging") },
               // sta in home e non piu' dentro Normative: lo aprono le
               // master e chi vende, ogni volta che iscrivono qualcuno —
@@ -81031,7 +81043,8 @@ export default function App() {
           isMobile={isMobile}
           onBack={() => setView("home")}
           TastoIndietro={TastoLivelloPrecedente}
-          titolo={etichettaTasto("home", "qrconsensi", "QR consensi modelle")}
+          corsi={corsi}
+          titolo={etichettaTasto("home", "qrconsensi", "Consensi modelle, impostazioni")}
         />
       )}
 

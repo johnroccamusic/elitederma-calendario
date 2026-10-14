@@ -34,12 +34,15 @@ const soloData = (g) => {
 // `edizione` lega il consenso a una classe: chi inquadra QUESTO codice
 // finisce in "Consensi compilati" di quel corso. Senza, il consenso
 // nasce senza padrone e si trova solo nell'archivio generale.
-export function Codice({ modello, isMobile, edizione = null, sottotitolo = null }) {
+// `nudo` toglie la cornice: nella pagina delle impostazioni il codice sta
+// gia' dentro una scheda, e due cornici una dentro l'altra sembrano un
+// errore di disegno.
+export function Codice({ modello, isMobile, edizione = null, sottotitolo = null, nudo = false }) {
   const indirizzo = `${window.location.origin}${window.location.pathname}?consenso=${modello.codice}${edizione ? `&edizione=${edizione}` : ""}`;
   const svg = useMemo(() => qrSvg(indirizzo, { lato: isMobile ? 190 : 220 }), [indirizzo, isMobile]);
 
   return (
-    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 14 : 18 }}>
+    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", background: "#fff", border: nudo ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: nudo ? 0 : (isMobile ? 14 : 18) }}>
       {svg && (
         <div
           style={{ flexShrink: 0, lineHeight: 0 }}

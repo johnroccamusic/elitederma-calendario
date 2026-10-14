@@ -16,7 +16,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
 import { CONSENSI } from "../content/consensi";
-import { leggiConsensiDelCorso } from "./dati";
+import { leggiConsensiDelCorso, leggiConsensiCorsi } from "./dati";
 import { Riga, Codice } from "./ArchivioConsensi.jsx";
 
 const GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
@@ -33,6 +33,7 @@ const soloGiorno = (iso) => String(iso || "").slice(0, 10);
 export default function ConsensiDelCorso({ corsoData, isMobile = false, titoloClasse = "" }) {
   const [righe, setRighe] = useState(null);
   const [qrAperto, setQrAperto] = useState(false);
+  const [legami, setLegami] = useState(null);
 
   useEffect(() => {
     let vivo = true;
@@ -40,6 +41,17 @@ export default function ConsensiDelCorso({ corsoData, isMobile = false, titoloCl
     leggiConsensiDelCorso(corsoData?.id).then((r) => { if (vivo) setRighe(r); });
     return () => { vivo = false; };
   }, [corsoData?.id]);
+
+  // Quali consensi valgono per QUESTO corso: lo dice `consensi_corsi`, che
+  // si imposta in "Consensi modelle, impostazioni". Prima qui c'era
+  // CONSENSI[0], il primo dell'elenco: con un consenso solo funzionava,
+  // col secondo la scheda avrebbe mostrato il codice sbagliato senza
+  // dirlo a nessuno.
+  useEffect(() => {
+    let vivo = true;
+    leggiConsensiCorsi().then((l) => { if (vivo) setLegami(l); });
+    return () => { vivo = false; };
+  }, []);
 
   // raggruppate per giornata, dalla piu' recente
   const giornate = useMemo(() => {
@@ -52,29 +64,47 @@ export default function ConsensiDelCorso({ corsoData, isMobile = false, titoloCl
     return [...per.values()].sort((a, b) => b.chiave.localeCompare(a.chiave));
   }, [righe]);
 
-  const modello = CONSENSI[0] || null;
+  const modelli = useMemo(() => {
+    if (legami === null) return null;
+    const codici = new Set(legami.filter((l) => l.corsoId === corsoData?.corso_id).map((l) => l.modelloCodice));
+    return CONSENSI.filter((m) => codici.has(m.codice));
+  }, [legami, corsoData?.corso_id]);
 
   return (
     <div>
       {/* Il QR di QUESTA classe. Sta in cima e non in fondo: se la lista e'
           vuota e' perche' nessuna ha ancora inquadrato, e la prima cosa da
           fare e' farglielo inquadrare. */}
-      {modello && (
+      {modelli !== null && modelli.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <button
             type="button" onClick={() => setQrAperto((x) => !x)}
             style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "13px 16px", width: "100%", textAlign: "left", cursor: "pointer", minHeight: 48 }}
           >
-            {qrAperto ? "Chiudi il codice" : "Mostra il codice da far inquadrare"}
+            {qrAperto
+              ? "Chiudi il codice"
+              : modelli.length === 1 ? "Mostra il codice da far inquadrare" : `Mostra i ${modelli.length} codici da far inquadrare`}
           </button>
           {qrAperto && (
-            <div style={{ marginTop: 10 }}>
-              <Codice
-                modello={modello} isMobile={isMobile} edizione={corsoData?.id}
-                sottotitolo={`Questo codice lega il consenso a ${titoloClasse || "questa classe"}: chi lo inquadra compare qui sotto.`}
-              />
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+              {modelli.map((m) => (
+                <Codice
+                  key={m.codice} modello={m} isMobile={isMobile} edizione={corsoData?.id}
+                  sottotitolo={`Questo codice lega il consenso a ${titoloClasse || "questa classe"}: chi lo inquadra compare qui sotto.`}
+                />
+              ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Nessun consenso impostato per questo corso: non e' un vuoto da
+          ignorare, e' il motivo per cui in aula non si potra' far firmare
+          niente dalla scheda. Lo si dice, e si dice dove si aggiusta. */}
+      {modelli !== null && modelli.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: "#8A2D2D", background: "#FBEDEC", border: "1px solid #F0D3D0", borderRadius: 12, padding: "12px 14px", marginBottom: 16, lineHeight: 1.55 }}>
+          Per questo corso non è impostato nessun consenso, quindi non c’è un codice da far inquadrare.
+          <div style={{ marginTop: 5 }}>Si aggiunge in <b>Consensi modelle, impostazioni</b> (tasto in home del programmatore).</div>
         </div>
       )}
 

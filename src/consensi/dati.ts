@@ -162,6 +162,37 @@ export async function leggiConsensi(): Promise<ConsensoRaccolto[]> {
   return (data || []).map(daRiga);
 }
 
+// A QUALI CORSI VALE UN CONSENSO.
+//
+// Fino al 14/10/2026 la scheda della classe mostrava il primo consenso
+// dell'elenco, sempre: con uno solo funzionava, col secondo avrebbe
+// continuato a mostrare quello sbagliato senza dirlo a nessuno.
+export interface LegameConsensoCorso {
+  id: string;
+  modelloCodice: string;
+  corsoId: string;
+}
+
+export async function leggiConsensiCorsi(): Promise<LegameConsensoCorso[]> {
+  const { data } = await supabase.from("consensi_corsi").select("*");
+  return (data || []).map((r: Record<string, string>) => ({
+    id: r.id, modelloCodice: r.modello_codice, corsoId: r.corso_id,
+  }));
+}
+
+export async function collegaConsensoACorso(modelloCodice: string, corsoId: string): Promise<string | null> {
+  // `upsert` e non `insert`: il doppio clic sullo stesso corso non deve
+  // diventare un errore rosso, deve semplicemente non fare niente
+  const { error } = await supabase.from("consensi_corsi")
+    .upsert({ modello_codice: modelloCodice, corso_id: corsoId }, { onConflict: "modello_codice,corso_id" });
+  return error ? error.message : null;
+}
+
+export async function scollegaConsensoDaCorso(id: string): Promise<string | null> {
+  const { error } = await supabase.from("consensi_corsi").delete().eq("id", id);
+  return error ? error.message : null;
+}
+
 /**
  * I consensi di UNA edizione, dal piu' recente.
  *
