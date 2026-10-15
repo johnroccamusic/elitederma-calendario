@@ -23,7 +23,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
 import { Button, Field } from "../ui/base.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle } from "../ui/stile.js";
-import { MODELLI, SEGNAPOSTI, leggiModello, salvaModello } from "./modelli.js";
+import { MODELLI, SEGNAPOSTI, leggiModello, salvaModello, leggiRegole, salvaRegola, provaInviiAutomatici, frasePeriodo } from "./modelli.js";
 
 const riquadro = {
   border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, background: "#fff",
@@ -277,7 +277,137 @@ export default function ModelliEmail({ componi }) {
               {iscritti.length ? "Scrivi oggetto e testo per vedere l'anteprima." : "Serve un'iscritta con l'email per fare l'anteprima."}
             </div>
           )}
+          <InviiAutomatici />
         </>
+      )}
+    </div>
+  );
+}
+
+// GLI INVII AUTOMATICI.
+//
+// Sta qui sotto e non in una pagina sua perche' una regola senza il suo
+// testo non vuol dire niente: chi accende "tre giorni prima" deve avere
+// appena letto cosa parte. Separarli vorrebbe dire accendere al buio.
+function InviiAutomatici() {
+  const [regole, setRegole] = useState([]);
+  const [errore, setErrore] = useState("");
+  const [caricando, setCaricando] = useState(true);
+  const [prova, setProva] = useState(null);
+  const [inCorso, setInCorso] = useState(false);
+
+  async function ricarica() {
+    const { regole: r, errore: e } = await leggiRegole();
+    setCaricando(false);
+    setErrore(e || "");
+    setRegole(r);
+  }
+  useEffect(() => { ricarica(); }, []);
+
+  const titoloDi = (chiave) => MODELLI.find((m) => m.chiave === chiave)?.titolo || chiave;
+
+  async function cambia(regola, patch, conferma) {
+    if (conferma && !window.confirm(conferma)) return;
+    const e = await salvaRegola(regola.id, patch);
+    if (e) { setErrore(e); return; }
+    setErrore("");
+    ricarica();
+  }
+
+  async function guarda() {
+    setInCorso(true);
+    setProva(null);
+    const { esito, errore: e } = await provaInviiAutomatici();
+    setInCorso(false);
+    if (e) { setErrore(e); return; }
+    setErrore("");
+    setProva(esito);
+  }
+
+  if (caricando) return null;
+
+  return (
+    <div style={{ marginTop: 22, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 16 }}>
+      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Invii automatici</div>
+      <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.5, marginBottom: 12 }}>
+        Ogni mattina Genyon guarda queste regole e manda quello che tocca oggi. Una regola spenta non manda
+        niente, e nemmeno una accesa il cui testo qui sopra è vuoto.
+      </div>
+
+      {errore && <div style={{ fontSize: 12.5, color: "#B3261E", marginBottom: 10 }}>{errore}</div>}
+
+      {!regole.length && !errore && (
+        <div style={{ ...riquadro, fontSize: 13, color: MUTED }}>Nessuna regola.</div>
+      )}
+
+      {regole.map((r) => (
+        <div key={r.id} style={{ ...riquadro, marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY }}>{titoloDi(r.chiave_modello)}</div>
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
+                {frasePeriodo(r.evento, r.scarto_giorni)}, alle iscritte di quella classe
+              </div>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: r.attiva ? "#1B7F4C" : MUTED, cursor: "pointer" }}>
+              <input
+                type="checkbox" checked={!!r.attiva}
+                onChange={() => cambia(
+                  r, { attiva: !r.attiva },
+                  r.attiva ? null
+                    : `Accendere questa regola?\n\nDa domani mattina Genyon manderà «${titoloDi(r.chiave_modello)}» da solo, ${frasePeriodo(r.evento, r.scarto_giorni)}, alle iscritte di quella classe.\n\nSe non l'hai ancora fatto, mandati prima una prova.`,
+                )}
+              />
+              {r.attiva ? "Accesa" : "Spenta"}
+            </label>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: MUTED }}>Giorni prima:</span>
+            <input
+              type="number" min="0" max="60"
+              defaultValue={Math.abs(r.scarto_giorni)}
+              onBlur={(e) => {
+                const n = Math.max(0, Math.min(60, Number(e.target.value) || 0));
+                if (n === Math.abs(r.scarto_giorni)) return;
+                cambia(r, { scarto_giorni: -n });
+              }}
+              style={{ ...inputStyle, width: 80 }}
+            />
+            {r.ultima_esecuzione && (
+              <span style={{ fontSize: 11.5, color: MUTED }}>
+                ultimo giro: {new Date(r.ultima_esecuzione).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
+              </span>
+            )}
+          </div>
+          {r.nota && <div style={{ fontSize: 11.5, color: MUTED, marginTop: 8, fontStyle: "italic" }}>{r.nota}</div>}
+        </div>
+      ))}
+
+      <Button variant="ghost" onClick={guarda} disabled={inCorso}>
+        {inCorso ? "Guardo…" : "Guarda cosa partirebbe oggi"}
+      </Button>
+
+      {prova && (
+        <div style={{ ...riquadro, marginTop: 10, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5 }}>
+          <div style={{ color: MUTED, marginBottom: 6 }}>Nessuna mail è stata mandata: è solo un controllo.</div>
+          {prova.messaggio && <div>{prova.messaggio}</div>}
+          {(prova.resoconto || []).map((r, i) => (
+            <div key={i} style={{ marginBottom: 8 }}>
+              <b style={{ color: NAVY }}>{titoloDi(r.modello)}</b> — cerca le classi del {r.data_cercata}:{" "}
+              {r.saltata ? <span style={{ color: "#B3261E" }}>{r.saltata}</span> : (
+                <>
+                  {r.classi} class{r.classi === 1 ? "e" : "i"}, {r.mandate} destinatar{r.mandate === 1 ? "ia" : "ie"}
+                  {r.saltate ? `, ${r.saltate} saltate (senza email o già mandata)` : ""}
+                </>
+              )}
+              {(r.dettaglio || []).length > 0 && (
+                <div style={{ marginTop: 4, paddingLeft: 10, borderLeft: `2px solid ${CREAM_BORDER}`, color: MUTED }}>
+                  {r.dettaglio.map((d, j) => <div key={j}>{d}</div>)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

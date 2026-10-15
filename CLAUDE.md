@@ -130,6 +130,19 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   pubblicabile è nel bundle. Funziona perché il cancello di `Accesso.jsx` è
   acceso — se un giorno lo si spegnesse, questa tabella diventerebbe illeggibile
   e le mail tornerebbero al testo del codice senza dire niente a nessuno.
+
+  **Registro e invii automatici (15/10/2026).** Ogni invio lascia una riga in
+  `email_inviate`, anche quando fallisce. Un indice unico *parziale*
+  (`chiave_modello + iscritto_id`, solo `automatica and esito = 'ok'`) impedisce
+  a una mail automatica di partire due volte, lasciando però che il tasto a mano
+  rimandi quante volte serve. `email_regole` dice *quando* parte cosa
+  (`scarto_giorni` negativo = prima dell'evento) e **nasce sempre spenta**. Il
+  lavoro notturno è la edge function `email-programmate`, che con
+  `{ "prova": true }` dice solo cosa partirebbe senza mandare niente — è il
+  pulsante «Guarda cosa partirebbe oggi». La composizione sta in
+  `supabase/functions/_shared/email.js`, importata **sia** da App.jsx **sia** da
+  Deno: due copie vorrebbero dire che l'anteprima mostra una mail e l'allieva ne
+  riceve un'altra.
 - **`.env` non è mai stato committato**, `.gitignore` corretto, nessuna chiave nella
   storia git. Il repository è però **pubblico** su GitHub.
 - **L'SSO di Vercel risulta attivo nelle impostazioni ma non blocca.** L'API dice

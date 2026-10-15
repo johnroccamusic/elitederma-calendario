@@ -50,7 +50,8 @@ import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
 import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import { creaZip, siPuoCondividere } from "./file/zip.js";
 import ModelliEmail from "./email/ModelliEmail.jsx";
-import { leggiModello as leggiModelloEmail, applicaSegnaposti as applicaSegnapostiEmail, modelloUsabile as modelloUsabileEmail } from "./email/modelli.js";
+import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
+import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaModelloEmail, valoriCorso as valoriCorsoEmail } from "../supabase/functions/_shared/email.js";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -3486,23 +3487,18 @@ function componiMailConferma({ nome, corso, corsoData, loc, modello = null }) {
   // vanno protetti (un nome con la & spaccherebbe il messaggio) e i
   // dettagli diventano una tabella invece di righe incolonnate.
   if (modelloUsabileEmail(modello)) {
-    const perTesto = {
-      nome: nome ? toTitleCase(nome) : "",
-      corso: nomeCorso, date: quando, citta, sede: nomeSede, indirizzo,
-      dettagli: righe.map(([k, v]) => `${k}: ${v}`).join("\n"),
-    };
-    const perHtml = { ...perTesto };
-    for (const k of Object.keys(perHtml)) perHtml[k] = pulisci(perHtml[k]);
-    perHtml.dettagli = tabellaHtml;
-    // si protegge PRIMA il testo scritto a mano e POI si sostituisce: al
-    // contrario, un valore che contiene una & verrebbe protetto due volte
-    // e nella mail si leggerebbe "&amp;"
-    const corpoHtml = applicaSegnapostiEmail(pulisci(modello.testo).replace(/\n/g, "<br>"), perHtml);
-    return {
-      oggetto: applicaSegnapostiEmail(modello.oggetto, perTesto),
-      testo: applicaSegnapostiEmail(modello.testo, perTesto),
-      html: `${apre}${corpoHtml}\n</div>`,
-    };
+    // la stessa funzione che usa il lavoro notturno: se un giorno
+    // divergessero, l'anteprima in Setting direbbe una cosa e l'allieva
+    // ne leggerebbe un'altra
+    return componiDaModelloEmail(modello, valoriCorsoEmail({
+      nome,
+      nomeCorso: corso?.nome,
+      dataInizio: corsoData?.data_inizio,
+      dataFine: corsoData?.data_fine,
+      citta: corsoData?.citta || loc?.citta || loc?.nome,
+      sede: loc?.nome_sede,
+      indirizzo: corsoData?.indirizzo || loc?.indirizzo,
+    }));
   }
 
   const oggetto = `Conferma iscrizione – ${nomeCorso}${quando ? `, ${quando}` : ""}`;
@@ -30275,6 +30271,22 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [invioConferma, setInvioConferma] = useState(null);
   // l'esito appartiene a un iscritto: cambiando scheda non deve restare li'
   useEffect(() => { setInvioConferma(null); }, [modificandoId]);
+  // Quello che a questa iscritta e' gia' stato mandato. Prima non si
+  // sapeva: la conferma si poteva rimandare dieci volte senza che nulla
+  // lo dicesse, e alla domanda "gliel'abbiamo mandata?" non c'era
+  // risposta. Si rilegge dopo ogni invio, cosi' la riga nuova compare
+  // senza ricaricare la scheda.
+  const [confermeInviate, setConfermeInviate] = useState([]);
+  useEffect(() => {
+    if (!modificandoId) { setConfermeInviate([]); return; }
+    let vivo = true;
+    supabase.from("email_inviate")
+      .select("inviata_il, esito, destinatario, inviata_da, automatica")
+      .eq("iscritto_id", modificandoId).eq("chiave_modello", "conferma_iscrizione")
+      .order("inviata_il", { ascending: false }).limit(5)
+      .then(({ data }) => { if (vivo) setConfermeInviate(data || []); });
+    return () => { vivo = false; };
+  }, [modificandoId, invioConferma]);
   const [totalePattuito, setTotalePattuito] = useState("");
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
@@ -30469,8 +30481,31 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     });
     // come per crea-accesso: l'errore vero sta nel corpo della risposta
     const errore = data?.errore || (error ? await testoErroreFunzione(error) : "");
+    // IL REGISTRO SI SCRIVE SEMPRE, anche quando e' andata male: un invio
+    // fallito e' proprio il caso in cui qualcuno deve poter sapere cos'e'
+    // successo, e senza riga non resterebbe niente.
+    const { data: utenteOra } = await supabase.auth.getUser();
+    const { error: erroreRegistro } = await supabase.from("email_inviate").insert({
+      chiave_modello: "conferma_iscrizione",
+      destinatario,
+      iscritto_id: modificandoId,
+      corso_data_id: corsoData?.id || null,
+      oggetto: mail.oggetto,
+      esito: errore ? "errore" : "ok",
+      errore: errore || null,
+      resend_id: data?.id || null,
+      inviata_da: utenteOra?.user?.email || null,
+      automatica: false,
+    });
     if (errore) { setInvioConferma({ stato: "errore", testo: errore }); return; }
-    setInvioConferma({ stato: "ok", testo: `Mail di conferma inviata a ${destinatario}.` });
+    // se la mail e' partita ma il registro no, lo si dice: il contrario
+    // sarebbe una scheda che giura di non aver mandato niente
+    setInvioConferma({
+      stato: "ok",
+      testo: erroreRegistro
+        ? `Mail inviata a ${destinatario}, ma non sono riuscito a segnarlo nel registro: ${erroreRegistro.message}`
+        : `Mail di conferma inviata a ${destinatario}.`,
+    });
   }
   // template dei giorni di questo corso-tipo (Modella del Master/Allievi),
   // usato sia dal selettore "Giorno" nell'iscrizione sia da "Assegna modelle"
@@ -32415,6 +32450,18 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             {invioConferma?.testo && (
               <div style={{ ...fontBody, fontSize: 12.5, marginTop: 6, fontWeight: 700, color: invioConferma.stato === "ok" ? "#1E7A4B" : "#C0392B" }}>
                 {invioConferma.testo}
+              </div>
+            )}
+            {confermeInviate.length > 0 && (
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
+                {confermeInviate.map((r, i) => (
+                  <div key={i}>
+                    {r.esito === "ok" ? "Inviata" : "Tentativo fallito"} il{" "}
+                    {new Date(r.inviata_il).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    {" a "}{r.destinatario}
+                    {r.automatica ? " (automatica)" : r.inviata_da ? ` · ${r.inviata_da}` : ""}
+                  </div>
+                ))}
               </div>
             )}
           </div>
