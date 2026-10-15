@@ -80888,7 +80888,8 @@ export default function App() {
       {view === "puntimaster" && (
         <PaginaPuntiMaster
           ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
-          onBack={() => setView("erp")}
+          onBack={() => setView("compensipremi")}
+          titoloIndietro={etichettaTasto("home", "compensipremi", "Area compensi e premi")}
           titolo={etichettaTasto("compensipremi", "puntimaster", "Punti master")}
         />
       )}

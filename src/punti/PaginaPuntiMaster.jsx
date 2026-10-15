@@ -32,7 +32,11 @@ export function stagioneCorrente(d = new Date()) {
   return `${anno}/${String((anno + 1) % 100).padStart(2, "0")}`;
 }
 
-export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruoloUtente, utenteLoggato }) {
+// `titoloIndietro` e' il nome di dove si torna: lo dice chi apre la
+// pagina. Era scritto qui dentro — "Amministrazione" — e quando la
+// pagina ha traslocato in "Coupon e punti" il tasto ha continuato a
+// dire, e a fare, la cosa vecchia.
+export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", titoloIndietro = "Indietro", ruoloUtente, utenteLoggato }) {
   const [righe, setRighe] = useState([]);
   const [stagioni, setStagioni] = useState([]);
   const [scarichi, setScarichi] = useState([]);
@@ -131,7 +135,7 @@ export default function PaginaPuntiMaster({ onBack, titolo = "Punti master", ruo
       <div style={{ maxWidth: 1320, margin: "0 auto" }}>
         <button onClick={onBack} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff",
           border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "7px 14px", cursor: "pointer", marginBottom: 10 }}>
-          ← Amministrazione
+          ← {titoloIndietro}
         </button>
         <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: NAVY, marginBottom: 2 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
