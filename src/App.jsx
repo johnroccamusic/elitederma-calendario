@@ -12148,7 +12148,7 @@ function TitoloColonnaMaster({ Icona, testo, children }) {
   );
 }
 
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita, comeAssistente = false }) {
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
@@ -12242,6 +12242,13 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
                 leggere — attaccato al nome, in rosso, a corpo meta' del
                 titolo. Resta scritto anche nei corsi dello storico, a codice
                 scaduto: li' e' un dato di archivio, non piu' da dettare */}
+            {/* la stessa persona in due ruoli: qui non e' la master, e
+                deve vederlo prima di aprire i conti di qualcun altro */}
+            {comeAssistente && (
+              <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: "#8A6D1D", background: "#FDF6E6", border: "1px solid #EBD9AE", borderRadius: 999, padding: isMobile ? "2px 8px" : "3px 11px", marginLeft: 8, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>
+                come assistente
+              </span>
+            )}
             {!!codiceReferral && (
               <span title="Codice sconto di questa classe" style={{ fontSize: isMobile ? 10.5 : 14.5, fontWeight: 700, color: "#C0392B", marginLeft: 8, whiteSpace: "nowrap" }}>
                 {String(codiceReferral || "").toUpperCase()}
@@ -13338,7 +13345,86 @@ function DettaglioCarrelliMaster({ masterId, isMobile }) {
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, onBack, titolo = "Dashboard master" }) {
+// LA DASHBOARD DELL'ASSISTENTE.
+//
+// Le sue classi e basta. Niente punti, niente carrelli, niente target:
+// quelli sono della master, e un'assistente che li vedesse vedrebbe i
+// conti di qualcun altro.
+//
+// Quali tasti compaiono dentro la scheda del corso lo decidono i suoi
+// permessi (AREE_SCHEDA_ASSISTENTE, spuntati in Password assistenti):
+// qui si passa il gestore solo se il permesso c'e', e CardDataMaster
+// disegna il tasto solo se il gestore gli arriva.
+function PaginaDashboardAssistente({
+  assistenteId, assistenti, corsi, location, corsiDate, corsiDateDocenti, hotel, iscritti,
+  permessi = [], onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario,
+  onBack, titolo = "Dashboard assistente",
+}) {
+  const isMobile = useIsMobile();
+  const oggiStr = dataOggiStr();
+  const io = (assistenti || []).find((a) => a.id === assistenteId) || null;
+  const puo = (chiave) => (permessi || []).includes(chiave);
+
+  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  const mie = useMemo(
+    () => edizioniComeAssistente(corsiDate, corsiDateDocenti, assistenteId),
+    [corsiDate, corsiDateDocenti, assistenteId],
+  );
+  const [vista, setVista] = useState("prossimi");
+  const prossime = mie.filter((cd) => oggiStr <= (cd.data_fine || cd.data_inizio)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
+  const storico = mie.filter((cd) => oggiStr > (cd.data_fine || cd.data_inizio)).sort((a, b) => b.data_inizio.localeCompare(a.data_inizio));
+  const inVista = vista === "storico" ? storico : prossime;
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 14, color: MUTED, marginBottom: 18 }}>
+          {io?.nome ? `${io.nome}. ` : ""}Le classi a cui sei assegnata: dove si tiene il corso, come arrivarci e chi chiamare.
+        </div>
+
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, width: "fit-content", marginBottom: 18 }}>
+          {[{ v: "prossimi", l: `Prossimi corsi (${prossime.length})` }, { v: "storico", l: `Storico (${storico.length})` }].map((t) => (
+            <button key={t.v} onClick={() => setVista(t.v)}
+              style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, padding: "9px 18px", borderRadius: 16, border: "none", background: vista === t.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+
+        {inVista.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, lineHeight: 1.55 }}>
+            {vista === "storico" ? "Nessun corso passato." : "Nessun corso in programma."}
+            <div style={{ marginTop: 6 }}>
+              Le classi compaiono qui quando qualcuno ti assegna a un'edizione, da <b style={{ color: NAVY }}>Amministrazione → Operativo corsi</b>. Essere abilitata a un tipo di corso non basta.
+            </div>
+          </div>
+        ) : inVista.map((cd) => (
+          <CardDataMaster
+            key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
+            hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
+            iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
+            onApriClasse={puo("sch_dettaglicorso") ? onApriClasse : null}
+            onApriModelle={puo("sch_modelle") ? onApriModelle : null}
+            onApriConsensi={puo("sch_consensi") ? onApriConsensi : null}
+            onApriCambi={puo("sch_cambi") ? onApriCambi : null}
+            onApriInventario={puo("sch_inventario") ? onApriInventario : null}
+            conScorte={puo("sch_cambi")}
+            inFinestraInventario={puo("sch_inventario") && oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 7)}
+            codiceReferral={null}
+            onApriContabilita={null}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, assistenteId = null, corsiDateDocenti = [], onBack, titolo = "Dashboard master" }) {
   // il totale in euro dei carrelli lo vedono solo programmatore e Chiara
   // Colonnelli; le master vedono vendite e punti, mai l'importo
   const mostraEuroCarrelli = vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato);
@@ -13398,13 +13484,30 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // prossimi per cinque giorni, e la master vedeva "in programma" un corso
   // gia' fatto
   const [vistaCorsiMaster, setVistaCorsiMaster] = useState("prossimi");
+  // LE CLASSI DOVE ASSISTE, nella dashboard che ha gia'.
+  //
+  // Tre master sono anche assistenti. Non prendono una seconda password e
+  // una seconda area: quelle edizioni compaiono qui, marcate, insieme
+  // alle sue. Si guardano solo quando si guarda la propria scheda —
+  // sfogliando quella di un'altra master non c'entrano niente.
+  const idAssistenteDiChiGuarda = (masterSelId && masterSelId === masterLoggataId) ? assistenteId : null;
+  const comeAssistente = useMemo(
+    () => edizioniComeAssistente(corsiDate, corsiDateDocenti, idAssistenteDiChiGuarda),
+    [corsiDate, corsiDateDocenti, idAssistenteDiChiGuarda],
+  );
+  const idComeAssistente = useMemo(() => new Set(comeAssistente.map((cd) => cd.id)), [comeAssistente]);
+  const sueInTutto = useMemo(() => {
+    const dellaMaster = corsiDate.filter((cd) => cd.master_id === masterSelId);
+    const gia = new Set(dellaMaster.map((cd) => cd.id));
+    return [...dellaMaster, ...comeAssistente.filter((cd) => !gia.has(cd.id))];
+  }, [corsiDate, masterSelId, comeAssistente]);
   const prossimeDate = useMemo(
-    () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr <= (cd.data_fine || cd.data_inizio)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
-    [corsiDate, masterSelId, oggiStr]
+    () => sueInTutto.filter((cd) => oggiStr <= (cd.data_fine || cd.data_inizio)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
+    [sueInTutto, oggiStr]
   );
   const storicoDate = useMemo(
-    () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr > (cd.data_fine || cd.data_inizio)).sort((a, b) => b.data_inizio.localeCompare(a.data_inizio)),
-    [corsiDate, masterSelId, oggiStr]
+    () => sueInTutto.filter((cd) => oggiStr > (cd.data_fine || cd.data_inizio)).sort((a, b) => b.data_inizio.localeCompare(a.data_inizio)),
+    [sueInTutto, oggiStr]
   );
   const dateInVista = vistaCorsiMaster === "storico" ? storicoDate : prossimeDate;
   // Inventario Post Corso: eleggibile un corso in corso o finito da al
@@ -13883,6 +13986,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
+                comeAssistente={idComeAssistente.has(cd.id)}
                 onApriClasse={onApriClasse} onApriModelle={onApriModelle} onApriConsensi={onApriConsensi}
                 onApriCambi={onApriCambi} conScorte={edizioniConScorte.has(cd.id)}
                 onApriInventario={onApriInventarioFineCorso}
@@ -22282,9 +22386,27 @@ const CHIAVE_LOGHI_MASTER_PUBBLICATI = "loghi_masterPubblicati";
 const CHIAVE_CARRELLI_SOSPESI = "pos_carrelliSospesi";
 // chi sta usando il POS: master, venditore o utente dell'app — la stessa
 // identita' che il POS scrive sulle vendite e sui carrelli sospesi
+// LE EDIZIONI DOVE UNA PERSONA FA L'ASSISTENTE.
+//
+// L'assegnazione vive in `corsi_date_docenti` con `tipo: "assistente"`,
+// la stessa tabella dove stanno master e leve di ogni edizione. NON in
+// `assistente_corsi`, che dice un'altra cosa: quali TIPI di corso sa
+// fare — PMU, laminazione — non a quale classe e' attesa.
+function edizioniComeAssistente(corsiDate, corsiDateDocenti, assistenteId) {
+  if (!assistenteId) return [];
+  const sue = new Set((corsiDateDocenti || [])
+    .filter((d) => d.tipo === "assistente" && String(d.persona_id) === String(assistenteId))
+    .map((d) => d.corso_data_id));
+  return (corsiDate || []).filter((cd) => sue.has(cd.id));
+}
+
 function operatoreCorrente(utenteLoggato, venditoreLoggato) {
   return utenteLoggato?.masterId
     ? { tipo: "master", id: utenteLoggato.masterId, nome: utenteLoggato.nome }
+    : utenteLoggato?.assistenteId
+    // l'assistente non ha un codice suo: vende al corso dov'e', con lo
+    // sconto di quella classe. Il POS la riconosce da qui
+    ? { tipo: "assistente", id: utenteLoggato.assistenteId, nome: utenteLoggato.nome }
     : (venditoreLoggato || utenteLoggato?.venditoreId)
     ? { tipo: "venditore", id: venditoreLoggato?.id || utenteLoggato.venditoreId, nome: venditoreLoggato?.nome || utenteLoggato.venditoreNome || utenteLoggato.nome }
     : utenteLoggato
@@ -26697,6 +26819,7 @@ const AREA_MADRE_VISTA = {
   crmallievielenco: ["crmallievi"],
   generacoupon: ["compensipremi"],
   gestionepunti: ["compensipremi"],
+  dashboardassistente: ["home"],
   prezzilistini: ["magazzinoshop"],
   listinoprivato: ["magazzinoshop"],
   venditeshop: ["magazzinoshop"],
@@ -66030,9 +66153,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const corsiFinestraPos = (corsiDate || []).filter((cd) =>
     (cd.data_inizio <= oggiStrPos && cd.data_fine >= oggiStrPos)
     || (cd.data_fine < oggiStrPos && cd.data_fine >= cinqueGgFaPos));
+  // L'assistente vede SOLO le classi dove e' assegnata, nella stessa
+  // finestra di tutti: i giorni del corso piu' cinque. Non ha un codice
+  // suo — vende al corso dov'e', con lo sconto di quella classe — quindi
+  // fuori da quelle classi non le resta che la vendita senza sconti.
   const corsiEleggibiliPos = operatore?.tipo === "master"
     ? corsiFinestraPos.filter((cd) => cd.master_id === operatore.id)
-    : corsiFinestraPos;
+    : operatore?.tipo === "assistente"
+      ? (() => {
+        const sue = new Set(edizioniComeAssistente(corsiDate, corsiDateDocentiPos, operatore.id).map((cd) => cd.id));
+        return corsiFinestraPos.filter((cd) => sue.has(cd.id));
+      })()
+      : corsiFinestraPos;
   const [corsoPosId, setCorsoPosId] = useState("");
   // Vendere a un evento non e' vendere a un corso: il materiale portato
   // in fiera e' in consegna all'evento, non e' uscito dal magazzino.
@@ -66344,6 +66476,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // scheda si apre per intero. Null = nessuna aperta
   const [storicoAperto, setStoricoAperto] = useState(null);
   const [statoQr, setStatoQr] = useState("in_attesa");
+  // le assegnazioni per edizione: il POS non le riceve, e servono solo a
+  // capire di quali classi e' assistente chi sta vendendo
+  const [corsiDateDocentiPos, setCorsiDateDocentiPos] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    if (operatoreReale?.tipo !== "assistente" && operatoreImpersonato?.tipo !== "assistente") return undefined;
+    supabase.from("corsi_date_docenti").select("corso_data_id, tipo, persona_id").eq("tipo", "assistente")
+      .then(({ data }) => { if (vivo) setCorsiDateDocentiPos(data || []); });
+    return () => { vivo = false; };
+  }, [operatoreReale?.tipo, operatoreImpersonato?.tipo]);
   const [creandoQr, setCreandoQr] = useState(false);
   // "copiato" per qualche secondo, poi torna com'era: un tasto che non
   // risponde lascia il dubbio di non averlo premuto, e si preme due volte
@@ -80968,6 +81110,12 @@ export default function App() {
               { chiave: "gestionieventi", title: "Gestione eventi", descrizione: "Le fiere e gli eventi: spese, incassi e materiale", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionieventi") && !tastoAbilitato("gestionedate"), onClick: () => apriGestioneEventi("home") },
               { chiave: "dashboardvenditori", title: "Dashboard venditori", descrizione: "Monitora vendite, performance e obiettivi del team", Icona: IconaTileVenditori, attivo: tastoAbilitato("dashboardvenditori"), onClick: apriLoginVenditore },
               { chiave: "dashboardmaster", title: "Dashboard master", descrizione: "Gestisci master, specializzazioni e valutazioni", Icona: IconaTileMaster, attivo: tastoAbilitato("dashboardmaster"), onClick: apriDashboardMaster },
+              // Solo a chi e' assistente, e solo se non entra come master:
+              // in quel caso le sue classi da assistente stanno gia'
+              // dentro la dashboard che apre, marcate.
+              ...(utenteLoggato?.assistenteId && !utenteLoggato?.masterId
+                ? [{ chiave: "dashboardassistente", title: "Dashboard assistente", descrizione: "Le classi a cui sei assegnata: dove andare e chi chiamare", Icona: IconaTileMaster, attivo: true, onClick: () => setView("dashboardassistente") }]
+                : []),
               { chiave: "erp", title: "Amministrazione", descrizione: "Finanziaria e organizzativa", Icona: IconaTileCostiRicavi, attivo: tastoAbilitato("erp"), onClick: apriErp },
               { chiave: "magazzinoshop", title: "Gestione magazzino e shop", descrizione: "Prodotti, scorte, shop online e relative vendite", Icona: IconaTileGestioneMagazzino, attivo: tastoAbilitato("magazzinoshop"), onClick: apriMagazzinoShop },
               { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos, badge: numeroCarrelliSospesi },
@@ -81582,6 +81730,23 @@ export default function App() {
         />
       )}
 
+      {view === "dashboardassistente" && (
+        <PaginaDashboardAssistente
+          assistenteId={utenteLoggato?.assistenteId || null}
+          assistenti={assistente} corsi={corsi} location={location}
+          corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti}
+          hotel={hotel} iscritti={iscritti}
+          permessi={utenteLoggato?.permessi || []}
+          onApriClasse={apriClasseMaster}
+          onApriModelle={apriModelleMaster}
+          onApriConsensi={apriConsensiMaster}
+          onApriCambi={apriCambiIntegrazioni}
+          onApriInventario={apriInventarioFineCorso}
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "dashboardassistente", "Dashboard assistente")}
+        />
+      )}
+
       {view === "dashboardmaster" && (
         <PaginaDashboardMaster
           master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti}
@@ -81597,6 +81762,7 @@ export default function App() {
           onApriClasse={apriClasseMaster}
           onApriModelle={apriModelleMaster}
           onApriConsensi={apriConsensiMaster}
+          assistenteId={utenteLoggato?.assistenteId || null} corsiDateDocenti={corsiDateDocenti}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "dashboardmaster", "Dashboard master")}
         />
