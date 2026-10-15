@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase, leggiTutte } from "./supabase.js";
-import { regioneDaCitta } from "./comuni-regioni";
+import { regioneDaCitta, REGIONI } from "./comuni-regioni";
 // I mattoni condivisi vivono fuori di qui: li usa anche il modulo
 // "rientro materiali corso", e due copie degli stessi colori sarebbero
 // due verita' sullo stesso blu. Modal e' rimasto in questo file perche'
@@ -12224,9 +12224,39 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               </span>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-            <IconaPin size={isMobile ? 14 : 17} color={MUTED} />
-            <span style={{ ...fontDisplay, fontSize: isMobile ? 15 : 19, fontWeight: 500, color: MUTED, overflowWrap: "anywhere" }}>{toTitleCase(loc?.nome || "—")}</span>
+          {/* DOVE ANDARE E CHI CHIAMARE.
+              Prima c'era la sola citta'. La master che parte ha bisogno
+              dell'indirizzo per arrivarci e di un numero per quando non
+              ci arriva — e andava a cercarli altrove, o li chiedeva.
+              Si leggono dall'EDIZIONE, non dalla sede: cosi' valgono
+              identici per una sede fissa e per una occasionale, e non
+              cambiano se un domani la sede trasloca. */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 4 }}>
+            <span style={{ display: "inline-flex", flexShrink: 0, marginTop: isMobile ? 2 : 3 }}>
+              <IconaPin size={isMobile ? 14 : 17} color={MUTED} />
+            </span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", ...fontDisplay, fontSize: isMobile ? 15 : 19, fontWeight: 500, color: MUTED, overflowWrap: "anywhere" }}>
+                {toTitleCase(corsoData.citta || loc?.citta || loc?.nome || "—")}
+                {loc?.nome_sede ? <span style={{ fontSize: isMobile ? 12 : 14 }}>{" · "}{loc.nome_sede}</span> : null}
+              </span>
+              {corsoData.indirizzo && (
+                <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 11.5 : 13, color: MUTED, overflowWrap: "anywhere", marginTop: 1 }}>
+                  {corsoData.indirizzo}
+                </span>
+              )}
+              {corsoData.telefono && (
+                // si chiama premendolo: in viaggio nessuno ricopia un
+                // numero a mano
+                <a
+                  href={`tel:${String(corsoData.telefono).replace(/[^+\d]/g, "")}`}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ display: "inline-block", ...fontBody, fontSize: isMobile ? 11.5 : 13, fontWeight: 700, color: NAVY, textDecoration: "none", marginTop: 2 }}
+                >
+                  ☏ {corsoData.telefono}
+                </a>
+              )}
+            </span>
           </div>
         </div>
 
@@ -25697,11 +25727,94 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
 // finestra per creare rapidamente una nuova data cliccando un giorno vuoto
 // nel calendario: tipo di corso, città (se non già fissata dal contesto) e
 // durata in giorni con +/-, poi Salva o Annulla
+// DOVE SI TIENE IL CORSO.
+//
+// Due strade. Una SEDE REGISTRATA e' una di quelle in anagrafica: scelta
+// dalla tendina, regione, citta', indirizzo e telefono arrivano da lei.
+// Una SEDE OCCASIONALE e' il corso individuale in una citta' qualsiasi,
+// che sede fissa non diventera' mai: i dati si scrivono qui, per quella
+// volta.
+//
+// In tutti e due i casi regione e citta' finiscono su `corsi_date`, in
+// forma strutturata. E' quello che permette la statistica per zona —
+// dove c'e' piu' richiesta — e funziona identica per le une e per le
+// altre. Indirizzo e telefono servono alla master, sulla scheda del
+// corso: dove andare e chi chiamare se non ci arriva.
+//
+// La sede occasionale una riga `location` ce l'ha lo stesso, marcata
+// `solo_edizione`: regge costi di sala, magazzino e statistiche come
+// tutte le altre, ma non compare mai nella tendina delle sedi.
+// Scrive la data a calendario, e se la sede e' occasionale la crea.
+//
+// DUE SCRITTURE IN FILA, e la seconda dipende dalla prima: se la riga
+// `location` nasce e poi `corsi_date` non passa, resta una sede fantasma
+// nell'elenco — nascosta, ma c'e'. Si rimedia cancellandola, perche' e'
+// nata qui dentro ed e' nostra: le scritture in sequenza vanno in una
+// transazione, e finche' questa non c'e' si rimette a posto a mano.
+async function creaDataCorso({ corso_id, location_id, data_inizio, data_fine, master_id, sedeOccasionale, sedeRegistrata }) {
+  let locId = location_id;
+  let natoQui = null;
+  if (!locId && sedeOccasionale) {
+    const { data, error } = await supabase.from("location").insert({
+      // `nome` e' la citta', come su tutte le sedi di questo database
+      nome: (sedeOccasionale.citta || "").trim().toUpperCase(),
+      nome_sede: (sedeOccasionale.nomeSede || "").trim() || null,
+      citta: (sedeOccasionale.citta || "").trim(),
+      regione: sedeOccasionale.regione || null,
+      indirizzo: (sedeOccasionale.indirizzo || "").trim() || null,
+      telefono: (sedeOccasionale.telefono || "").trim() || null,
+      solo_edizione: true,
+      ricorrente_occasionale: "occasionale",
+    }).select("id").single();
+    if (error) return error.message;
+    locId = data.id;
+    natoQui = data.id;
+  }
+  const sede = sedeRegistrata || sedeOccasionale || {};
+  const { error } = await supabase.from("corsi_date").insert({
+    corso_id, location_id: locId, data_inizio, data_fine, master_id: master_id || null,
+    // la fotografia di dov'e' stato QUESTO corso: se la sede cambia
+    // indirizzo, le edizioni passate continuano a dire il vero
+    regione: sede.regione || null,
+    citta: (sede.citta || sede.nome || "").trim() || null,
+    indirizzo: (sede.indirizzo || "").trim() || null,
+    telefono: (sede.telefono || "").trim() || null,
+    sede_occasionale: !!sedeOccasionale,
+  });
+  if (error) {
+    if (natoQui) await supabase.from("location").delete().eq("id", natoQui);
+    return error.message;
+  }
+  return null;
+}
+
 function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva, onChiudi }) {
   const [corsoSel, setCorsoSel] = useState("");
   const [locSel, setLocSel] = useState(cittaFissa || "");
   const [giorni, setGiorni] = useState(1);
   const [masterSel, setMasterSel] = useState(""); // vuoto = "La assegno in seguito"
+  const [tipoSede, setTipoSede] = useState("registrata");
+  const [occ, setOcc] = useState({ nomeSede: "", regione: "", citta: "", indirizzo: "", telefono: "" });
+  // le sedi nate per una volta sola non si ripropongono: l'elenco deve
+  // restare quello dei posti dove si torna
+  const sediScegliibili = (location || []).filter((l) => !l.solo_edizione);
+  const sedeScelta = sediScegliibili.find((l) => l.id === locSel) || null;
+
+  // Scritta la citta', la regione si propone da sola: la tabella
+  // comune -> regione sta nel bundle, non serve rete. Resta una tendina
+  // perche' il dato deve essere uno dei venti, non quello che si e'
+  // battuto — una statistica per regione con "Lazio" e "lazio" dentro
+  // non e' una statistica.
+  function scriviCitta(testo) {
+    setOcc((o) => {
+      const trovata = regioneDaCitta(testo);
+      return { ...o, citta: testo, regione: trovata && !o.regione ? trovata : o.regione };
+    });
+  }
+
+  const mancaPerOccasionale = tipoSede === "occasionale"
+    && (!occ.citta.trim() || !occ.regione);
+  const campoOcc = { ...inputStyle, marginBottom: 8 };
 
   return (
     <Modal title={`Nuova data — ${fmtData(dataClic)}`} onClose={onChiudi}>
@@ -25712,12 +25825,61 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
         </select>
       </Field>
       {!cittaFissa && (
-        <Field label="Sede">
-          <select style={inputStyle} value={locSel} onChange={(e) => setLocSel(e.target.value)}>
-            <option value="">Seleziona sede</option>
-            {location.map((l) => <option key={l.id} value={l.id}>{l.nome_sede ? `${l.nome_sede} — ${l.nome.toUpperCase()}` : l.nome.toUpperCase()}</option>)}
-          </select>
-        </Field>
+        <>
+          <Field label="Dove si tiene">
+            <div style={{ display: "flex", gap: 8 }}>
+              {[
+                { v: "registrata", l: "Sede registrata" },
+                { v: "occasionale", l: "Sede occasionale" },
+              ].map((t) => (
+                <button
+                  key={t.v} type="button" onClick={() => setTipoSede(t.v)}
+                  style={{
+                    ...fontBody, flex: 1, minHeight: 44, borderRadius: 12, cursor: "pointer",
+                    fontSize: 13.5, fontWeight: 700,
+                    background: tipoSede === t.v ? NAVY : "#fff",
+                    color: tipoSede === t.v ? "#fff" : NAVY,
+                    border: `1px solid ${tipoSede === t.v ? NAVY : CREAM_BORDER}`,
+                  }}
+                >
+                  {t.l}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          {tipoSede === "registrata" ? (
+            <Field label="Sede">
+              <select style={inputStyle} value={locSel} onChange={(e) => setLocSel(e.target.value)}>
+                <option value="">Seleziona sede</option>
+                {sediScegliibili.map((l) => <option key={l.id} value={l.id}>{l.nome_sede ? `${l.nome_sede} — ${l.nome.toUpperCase()}` : l.nome.toUpperCase()}</option>)}
+              </select>
+              {/* quello che la master leggera' sulla scheda: si vede
+                  adesso, cosi' se manca lo si sa prima e non dopo */}
+              {sedeScelta && (
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
+                  {[sedeScelta.regione, toTitleCase(sedeScelta.citta || sedeScelta.nome || "")].filter(Boolean).join(" · ")}
+                  {sedeScelta.indirizzo ? ` · ${sedeScelta.indirizzo}` : " · senza indirizzo"}
+                  {sedeScelta.telefono ? ` · ${sedeScelta.telefono}` : " · senza telefono"}
+                </div>
+              )}
+            </Field>
+          ) : (
+            <Field label="La sede di questa volta">
+              <input style={campoOcc} value={occ.nomeSede} onChange={(e) => setOcc((o) => ({ ...o, nomeSede: e.target.value }))} placeholder="Nome del posto (studio, hotel, centro…)" />
+              <input style={campoOcc} value={occ.citta} onChange={(e) => scriviCitta(e.target.value)} placeholder="Città *" />
+              <select style={campoOcc} value={occ.regione} onChange={(e) => setOcc((o) => ({ ...o, regione: e.target.value }))}>
+                <option value="">Regione *</option>
+                {REGIONI.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <input style={campoOcc} value={occ.indirizzo} onChange={(e) => setOcc((o) => ({ ...o, indirizzo: e.target.value }))} placeholder="Via e civico" />
+              <input style={{ ...campoOcc, marginBottom: 0 }} value={occ.telefono} onChange={(e) => setOcc((o) => ({ ...o, telefono: e.target.value }))} placeholder="Telefono del referente" />
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+                Città e regione servono alle statistiche per zona e sono obbligatorie. Indirizzo e telefono li legge la master sulla scheda del corso.
+              </div>
+            </Field>
+          )}
+        </>
       )}
       <Field label="Durata (giorni)">
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
@@ -25748,8 +25910,15 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
       )}
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
         <Button
-          disabled={!corsoSel || !locSel}
-          onClick={() => onSalva({ corso_id: corsoSel, location_id: locSel, data_inizio: dataClic, data_fine: addGiorni(dataClic, giorni - 1), master_id: masterSel || null })}
+          disabled={!corsoSel || (tipoSede === "registrata" ? !locSel : mancaPerOccasionale)}
+          onClick={() => onSalva({
+            corso_id: corsoSel,
+            location_id: tipoSede === "registrata" ? locSel : null,
+            data_inizio: dataClic, data_fine: addGiorni(dataClic, giorni - 1),
+            master_id: masterSel || null,
+            sedeOccasionale: tipoSede === "occasionale" ? occ : null,
+            sedeRegistrata: tipoSede === "registrata" ? sedeScelta : null,
+          })}
         >
           Salva
         </Button>
@@ -25867,11 +26036,11 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
   const [popupNuovo, setPopupNuovo] = useState(apriPopupInizialeData || null);
   const [popupElimina, setPopupElimina] = useState(null); // evento corsi_date cliccato, o null
 
-  async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine, master_id }) {
-    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine, master_id: master_id || null });
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+  async function salvaNuovo(dati) {
+    const esito = await creaDataCorso(dati);
+    if (esito) { window.alert("Errore: " + esito); return; }
     setPopupNuovo(null);
-    ricarica(["corsi_date"]);
+    ricarica(["corsi_date", "location"]);
   }
   async function eliminaEsistente(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
@@ -25990,11 +26159,11 @@ function CalendarioModifica({ corsi, location, corsiDate, iscritti, master, cdId
   // calendario disponibile nell'altro Calendario e in "Aggiungi data"
   const [popupNuovo, setPopupNuovo] = useState(null);
   const [popupElimina, setPopupElimina] = useState(null);
-  async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine, master_id }) {
-    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine, master_id: master_id || null });
-    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+  async function salvaNuovo(dati) {
+    const esito = await creaDataCorso(dati);
+    if (esito) { window.alert("Errore: " + esito); return; }
     setPopupNuovo(null);
-    ricarica(["corsi_date"]);
+    ricarica(["corsi_date", "location"]);
   }
   async function eliminaEsistente(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
