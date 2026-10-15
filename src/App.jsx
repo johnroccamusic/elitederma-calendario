@@ -4842,13 +4842,15 @@ const PUNTI_LISTINO = {};
 let PUNTI_LISTINO_CARICATI = null;
 function caricaPuntiListino() {
   if (PUNTI_LISTINO_CARICATI) return PUNTI_LISTINO_CARICATI;
-  PUNTI_LISTINO_CARICATI = supabase.from("v_prezzi_listini").select("id, punti_calcolati, punti_cash").limit(5000)
+  // Un numero solo per prodotto. Fino al 15/10/2026 ce n'erano due —
+  // `punti_cash` leggeva il LORDO — e lo stesso dermografo faceva 403
+  // punti con la carta e 492 in contanti. I punti dicono quanto vale un
+  // prodotto, non come e' stato pagato: la differenza fra i canali la fa
+  // la percentuale in euro di Gestione punti, e basta quella.
+  PUNTI_LISTINO_CARICATI = supabase.from("v_prezzi_listini").select("id, punti_calcolati").limit(5000)
     .then(({ data }) => {
       (data || []).forEach((r) => {
-        PUNTI_LISTINO[r.id] = {
-          carta: r.punti_calcolati == null ? null : Number(r.punti_calcolati),
-          contanti: r.punti_cash == null ? null : Number(r.punti_cash),
-        };
+        PUNTI_LISTINO[r.id] = r.punti_calcolati == null ? null : Number(r.punti_calcolati);
       });
       return PUNTI_LISTINO;
     })
@@ -4866,16 +4868,16 @@ function usePuntiListino() {
     return () => { vivo = false; };
   }, []);
 }
-function puntiProdotto(p, _sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, contanti = false) {
+// `contanti` non serve piu' e resta nella firma solo per non toccare le
+// quattro chiamate: il metodo di pagamento non cambia i punti di un pezzo.
+function puntiProdotto(p, _sicurezzaGenerale = SCHEMA_PUNTI_MASTER_DEFAULT.accantonamentoPct, _contanti = false) {
   if (!p?.id) return null;
   // un prodotto che dall'app non si vende non fa punti, e questo la
   // vista non lo sa: lo dicono due campi dell'anagrafica
   const inVenditaViaApp = p.prezzo_vendita != null && (!p.escludi_vendita_diretta || (p.woo_product_id != null && p.stato === "publish"));
   if (!inVenditaViaApp) return null;
-  const riga = PUNTI_LISTINO[p.id];
-  if (!riga) return null;
-  const v = contanti ? riga.contanti : riga.carta;
-  return v == null ? null : round2(v);
+  const punti = PUNTI_LISTINO[p.id];
+  return punti == null ? null : round2(punti);
 }
 // Dal 21/09/2026 lo sconto dell'allievo NON decurta piu' i punti della
 // master: un pezzo vale i suoi punti interi (puntiProdotto) che sia venduto
