@@ -4923,17 +4923,24 @@ function nomeVivoDellaRiga(riga, indici) {
 // della vista.
 const PUNTI_LISTINO = {};
 let PUNTI_LISTINO_CARICATI = null;
-function caricaPuntiListino() {
-  if (PUNTI_LISTINO_CARICATI) return PUNTI_LISTINO_CARICATI;
+function caricaPuntiListino(forza = false) {
+  if (PUNTI_LISTINO_CARICATI && !forza) return PUNTI_LISTINO_CARICATI;
   // Un numero solo per prodotto. Fino al 15/10/2026 ce n'erano due —
   // `punti_cash` leggeva il LORDO — e lo stesso dermografo faceva 403
   // punti con la carta e 492 in contanti. I punti dicono quanto vale un
   // prodotto, non come e' stato pagato: la differenza fra i canali la fa
   // la percentuale in euro di Gestione punti, e basta quella.
-  PUNTI_LISTINO_CARICATI = supabase.from("v_prezzi_listini").select("id, punti_calcolati").limit(5000)
+  //
+  // SI LEGGE `punti_prodotto`, NON `punti_calcolati`. Il primo e' il
+  // numero buono: quello scritto a mano in Prezzi e listini se c'e',
+  // altrimenti la formula. Leggendo il secondo, un valore corretto a
+  // mano non arrivava mai al banco — sul Dermografo Horus erano stati
+  // scritti 405 e il POS continuava a dire 403,28, senza che niente
+  // dicesse perche'.
+  PUNTI_LISTINO_CARICATI = supabase.from("v_prezzi_listini").select("id, punti_prodotto").limit(5000)
     .then(({ data }) => {
       (data || []).forEach((r) => {
-        PUNTI_LISTINO[r.id] = r.punti_calcolati == null ? null : Number(r.punti_calcolati);
+        PUNTI_LISTINO[r.id] = r.punti_prodotto == null ? null : Number(r.punti_prodotto);
       });
       return PUNTI_LISTINO;
     })
@@ -4941,15 +4948,20 @@ function caricaPuntiListino() {
   return PUNTI_LISTINO_CARICATI;
 }
 // Finche' la tabella dei punti non e' arrivata, chi la legge vede
-// "nessun punto". Questo hook fa ridisegnare appena c'e': si chiama una
-// volta sola, in cima ad App, e vale per tutto l'albero.
-function usePuntiListino() {
+// "nessun punto". Questo hook fa ridisegnare appena c'e'.
+//
+// `forza` serve a chi apre una pagina dove quei numeri contano — il POS —
+// perche' la tabella si carica UNA volta per sessione: correggendo i
+// punti di un prodotto in Prezzi e listini e tornando al banco senza
+// ricaricare la pagina, il banco diceva ancora i vecchi. Chi la chiama
+// senza `forza` (App, in cima all'albero) continua a pagarla una volta.
+function usePuntiListino(forza = false) {
   const [, setGiro] = useState(0);
   useEffect(() => {
     let vivo = true;
-    caricaPuntiListino().then(() => { if (vivo) setGiro((n) => n + 1); });
+    caricaPuntiListino(forza).then(() => { if (vivo) setGiro((n) => n + 1); });
     return () => { vivo = false; };
-  }, []);
+  }, [forza]);
 }
 // `contanti` non serve piu' e resta nella firma solo per non toccare le
 // quattro chiamate: il metodo di pagamento non cambia i punti di un pezzo.
@@ -65609,6 +65621,10 @@ function PuntiDellaRiga({ punti, isMobile }) {
 }
 
 function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
+  // i punti del listino si rileggono ogni volta che si apre il banco:
+  // se nel frattempo qualcuno li ha corretti in Prezzi e listini, qui si
+  // vede subito invece che al prossimo ricaricamento della pagina
+  usePuntiListino(true);
   const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
   // il nome dei prodotti nelle righe gia' salvate si rilegge dall'anagrafica:
