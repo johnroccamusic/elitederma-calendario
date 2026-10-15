@@ -138,8 +138,23 @@ function RigaAnamnesi({ domanda, aiuto, specifica, valore, onCambia }) {
 }
 
 /** Una foto del documento: si scatta, si rivede, si rifà. */
+// LA FOTO DEL DOCUMENTO.
+//
+// Niente `capture`. Quell'attributo dice al telefono "apri la
+// fotocamera e basta": su iPhone fa sparire la voce Libreria foto, e
+// dentro i browser dentro le app (Instagram, WhatsApp) la scorciatoia a
+// volte non apre proprio niente — il 15/10/2026 le modelle di un corso
+// non riuscivano ne' a scattare ne' a scegliere dalla galleria.
+//
+// Senza, il telefono mostra la sua scelta di sempre — Fotocamera,
+// Libreria, File — e quella funziona ovunque.
+//
+// Il campo non si nasconde con `display: none`: nascosto cosi' su Safari
+// certi gesti non lo raggiungono. Resta nella pagina, invisibile, e si
+// apre da un tasto vero col suo riferimento.
 function FotoDocumento({ etichetta, blob, onCambia }) {
   const [anteprima, setAnteprima] = useState(null);
+  const campoFile = useRef(null);
   useEffect(() => {
     if (!blob) { setAnteprima(null); return undefined; }
     const url = URL.createObjectURL(blob);
@@ -163,17 +178,28 @@ function FotoDocumento({ etichetta, blob, onCambia }) {
           </button>
         </div>
       ) : (
-        <label style={{ display: "block", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: "22px 14px", textAlign: "center", cursor: "pointer", background: "#fff" }}>
+        <div>
           <input
-            type="file" accept="image/*" capture="environment"
-            onChange={(e) => onCambia(e.target.files?.[0] || null)}
-            style={{ display: "none" }}
+            ref={campoFile}
+            type="file" accept="image/*"
+            onChange={(e) => {
+              onCambia(e.target.files?.[0] || null);
+              // si svuota: scegliendo DUE VOLTE la stessa foto, senza
+              // questo il campo non cambia valore e non succede niente
+              e.target.value = "";
+            }}
+            style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
           />
-          <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>Scatta o scegli</span>
-          <span style={{ display: "block", ...fontBody, fontSize: 12, color: MUTED, marginTop: 4 }}>
-            Appoggialo su un piano, senza riflessi
-          </span>
-        </label>
+          <button
+            type="button" onClick={() => campoFile.current?.click()}
+            style={{ display: "block", width: "100%", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: "22px 14px", textAlign: "center", cursor: "pointer", background: "#fff", minHeight: 88 }}
+          >
+            <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>Scatta o scegli dalla galleria</span>
+            <span style={{ display: "block", ...fontBody, fontSize: 12, color: MUTED, marginTop: 4 }}>
+              Appoggialo su un piano, senza riflessi
+            </span>
+          </button>
+        </div>
       )}
     </div>
   );
