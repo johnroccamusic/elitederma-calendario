@@ -6574,13 +6574,14 @@ function Gate({ onOk }) {
   // personalizzate si ricade sui valori di sempre (RIGHE_SISTEMA_DEFAULT)
   async function check() {
     setVerificando(true);
-    const [{ data: utenti }, { data: masterRighe }, { data: venditoriRighe }] = await Promise.all([
+    const [{ data: utenti }, { data: masterRighe }, { data: venditoriRighe }, { data: assistentiRighe }] = await Promise.all([
       // le colonne si elencano una per una, quindi ogni permesso nuovo va
       // aggiunto anche qui: "puo_omaggi" era stato dimenticato, e chi
       // l'aveva spuntato entrava lo stesso senza poter fare omaggi
       supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore, puo_omaggi"),
       supabase.from("master").select("id, nome, password, permessi, venditore_id"),
       supabase.from("venditori").select("id, nome, password, permessi"),
+      supabase.from("assistente").select("id, nome, password, permessi, master_id"),
     ]);
     setVerificando(false);
     const righe = utenti || [];
@@ -6620,6 +6621,18 @@ function Gate({ onOk }) {
     // account nominale (Gestione utenti > Venditore collegato): per chi fa
     // sia lavoro d'ufficio sia vendita con la stessa identità (es. Raffaele)
     const venditoreDelNominale = nominale?.venditore_id ? (venditoriRighe || []).find((v) => v.id === nominale.venditore_id) : null;
+    // L'ASSISTENTE, quarta della fila. Stesso meccanismo della master: la
+    // password identifica la persona, non c'e' una tendina di nomi.
+    //
+    // Chi e' gia' master NON entra di qui: ha `master_id` scritto, la sua
+    // porta e' quella di sempre, e le edizioni dove fa l'assistente le
+    // trova dentro la dashboard che ha gia'. Una seconda password per la
+    // stessa persona vuol dire due chiavi per la stessa porta, e prima o
+    // poi una delle due resta quella vecchia.
+    const assistenteTrovata = (assistentiRighe || []).find((a) => !a.master_id && !!a.password && code && a.password === code);
+    // e, entrando come master, quale assistente e' la stessa persona:
+    // serve a mostrarle anche le classi dove assiste
+    const assistenteDellaMaster = masterTrovata ? (assistentiRighe || []).find((a) => a.master_id === masterTrovata.id) : null;
 
     let ruolo = null, utente = null;
     if (sProgrammatore.password && code === sProgrammatore.password) { ruolo = "programmatore"; utente = sProgrammatore; }
@@ -6636,6 +6649,9 @@ function Gate({ onOk }) {
         // deve davvero chiudersi
         permessi: [...new Set([...(masterTrovata.permessi || []), ...(venditoreDellaMaster ? [...(venditoreDellaMaster.permessi || []), "dashboardvenditori"] : [])])],
         chiave_sistema: null, masterId: masterTrovata.id,
+        // la stessa persona che in certe classi fa l'assistente: le sue
+        // edizioni da assistente entrano nella dashboard che ha gia'
+        ...(assistenteDellaMaster ? { assistenteId: assistenteDellaMaster.id } : {}),
         // il nome del venditore va tenuto distinto da quello della master:
         // le vendite/iscritti hanno "tutor" valorizzato col nome venditore
         // (es. "ANDREA"), non con quello anagrafico master ("ANDREA PAURA")
@@ -6654,6 +6670,14 @@ function Gate({ onOk }) {
         permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori", ...(masterDelVenditore ? (masterDelVenditore.permessi || []) : [])])],
         chiave_sistema: null, venditoreId: venditoreTrovato.id, venditoreNome: venditoreTrovato.nome,
         ...(masterDelVenditore ? { masterId: masterDelVenditore.id } : {}),
+      };
+    }
+    else if (assistenteTrovata) {
+      ruolo = "user";
+      utente = {
+        id: assistenteTrovata.id, nome: assistenteTrovata.nome,
+        permessi: assistenteTrovata.permessi || [],
+        chiave_sistema: null, assistenteId: assistenteTrovata.id,
       };
     }
     else if (nominale) {
@@ -16986,6 +17010,129 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
     </tr>
   );
 }
+// COSA VEDE UN'ASSISTENTE DENTRO UNA SUA CLASSE.
+//
+// I tasti della home li decide TASTI_HOME, come per tutti. Questi sono i
+// cinque della scheda corso, che per le master ci sono sempre: per
+// un'assistente si accendono uno a uno. E' la differenza fra sapere dove
+// si va e aprire i conti di una classe che non e' sua.
+//
+// Le chiavi vivono nello stesso elenco `permessi`, con un prefisso loro:
+// un array solo da leggere, e nessun campo nuovo da ricordarsi.
+const AREE_SCHEDA_ASSISTENTE = [
+  { chiave: "sch_dettaglicorso", etichetta: "Dettagli corso" },
+  { chiave: "sch_modelle", etichetta: "Dettagli modelle" },
+  { chiave: "sch_consensi", etichetta: "Consensi modelle" },
+  { chiave: "sch_cambi", etichetta: "Cambi e integrazioni" },
+  { chiave: "sch_inventario", etichetta: "Inventario fine corso" },
+];
+
+// una riga di "Password assistenti". Gemella di RigaTabellaMaster, senza
+// il venditore collegato: un'assistente non vende col suo codice — vende
+// al corso dov'e', con lo sconto di quel corso.
+function RigaTabellaAssistente({ assistenteRec, ricarica }) {
+  const isMobile = useIsMobile();
+  const [password, setPassword] = useState(assistenteRec.password || "");
+  const [permessiLocali, setPermessiLocali] = useState(assistenteRec.permessi || []);
+  useEffect(() => { setPermessiLocali(assistenteRec.permessi || []); }, [assistenteRec.permessi]);
+  // chi e' gia' master entra da li': niente seconda password
+  const entraComeMaster = !!assistenteRec.master_id;
+
+  async function salvaPassword() {
+    if ((assistenteRec.password || "") === password.trim()) return;
+    const { error } = await supabase.from("assistente").update({ password: password.trim() || null }).eq("id", assistenteRec.id);
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    ricarica(["assistente"]);
+  }
+  async function toggleTasto(chiave, checked) {
+    const attuali = permessiLocali;
+    const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
+    setPermessiLocali(nuovi);
+    const { error } = await supabase.from("assistente").update({ permessi: nuovi }).eq("id", assistenteRec.id);
+    if (error) { window.alert("Errore: " + testoErrore(error)); setPermessiLocali(attuali); return; }
+    ricarica(["assistente"]);
+  }
+  const tutte = [...TASTI_HOME, ...AREE_SCHEDA_ASSISTENTE];
+
+  if (isMobile) {
+    return (
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{assistenteRec.nome}</div>
+        {entraComeMaster ? (
+          <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", marginTop: 4 }}>Entra come master: password e permessi sono i suoi.</div>
+        ) : (
+          <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaPassword}
+            placeholder="Nessuna password" style={{ ...inputStyle, marginTop: 8 }} />
+        )}
+        {!entraComeMaster && tutte.map((t) => (
+          <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{t.etichetta}</span>
+            <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+          </label>
+        ))}
+      </div>
+    );
+  }
+  const tdStyle = { padding: "8px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY };
+  return (
+    <tr>
+      <td style={tdStyle}>{assistenteRec.nome}</td>
+      <td style={tdStyle}>
+        {entraComeMaster ? (
+          <span style={{ ...fontBody, fontSize: 11, color: "#2E7D32", fontWeight: 700 }}>come master</span>
+        ) : (
+          <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaPassword}
+            placeholder="Nessuna" style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 11, textAlign: "center" }} />
+        )}
+      </td>
+      {tutte.map((t) => (
+        <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
+          {entraComeMaster ? <span style={{ color: MUTED }}>—</span> : (
+            <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+          )}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+function TabellaPasswordAssistenti({ assistente, ricarica }) {
+  const isMobile = useIsMobile();
+  const ordinate = [...(assistente || [])].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+  const tutte = [...TASTI_HOME, ...AREE_SCHEDA_ASSISTENTE];
+  const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, lineHeight: 1.2, verticalAlign: "bottom" };
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password assistenti</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+        Ogni assistente entra con la propria password e trova le classi a cui è assegnata. Le ultime cinque colonne sono i tasti dentro la scheda del corso: si accendono uno a uno. Chi è anche master non ha una password qui — entra dalla sua, e le classi dove assiste le trova nella dashboard che ha già.
+      </div>
+      {ordinate.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna assistente definita in Setting.</div>
+      ) : isMobile ? (
+        <div>{ordinate.map((a) => <RigaTabellaAssistente key={a.id} assistenteRec={a} ricarica={ricarica} />)}</div>
+      ) : (
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+          <table style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ ...thStyle, minWidth: 150 }}>Nome</th>
+                <th style={{ ...thStyle, minWidth: 80 }}>Password</th>
+                {tutte.map((t) => (
+                  <th key={t.chiave} style={{ ...thStyle, textAlign: "center", minWidth: LARGHEZZA_COLONNA_SPUNTA }}>
+                    <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>{ordinate.map((a) => <RigaTabellaAssistente key={a.id} assistenteRec={a} ricarica={ricarica} />)}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // sezione "Password Master": una riga per ogni master già definita in
 // Setting > Definisci Master, sempre allineata a quella lista (nessuna
 // creazione/eliminazione qui: si aggiungono/tolgono master da Setting).
@@ -17995,7 +18142,7 @@ function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti
     </div>
   );
 }
-function PaginaPasswordMenu({ passwordMenu, utentiApp, master, venditori, ricarica, onBack, senzaIntestazione = false }) {
+function PaginaPasswordMenu({ passwordMenu, utentiApp, master, venditori, assistente = [], ricarica, onBack, senzaIntestazione = false }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
@@ -18019,6 +18166,8 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, venditori, ricari
         </div>
 
         <TabellaPasswordMaster master={master} venditori={venditori} ricarica={ricarica} />
+
+        <TabellaPasswordAssistenti assistente={assistente} ricarica={ricarica} />
 
         <TabellaPasswordVenditori venditori={venditori} master={master} ricarica={ricarica} />
 
@@ -80899,7 +81048,7 @@ export default function App() {
           areaIniziale={areaImpostazioni}
           onChiediAccessoUtenti={chiediAccessoUtenti}
           onBack={() => setView("home")}
-          propsUtenti={{ passwordMenu, utentiApp, master, venditori, ricarica: fetchDati, onBack: () => setView("home") }}
+          propsUtenti={{ passwordMenu, utentiApp, master, venditori, assistente, ricarica: fetchDati, onBack: () => setView("home") }}
           propsSetting={{
             ruoloUtente, utenteLoggato, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
             venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi,
