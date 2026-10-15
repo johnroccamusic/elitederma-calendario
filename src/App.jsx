@@ -13446,7 +13446,7 @@ function PaginaDashboardAssistente({
   );
 }
 
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, assistenteId = null, corsiDateDocenti = [], onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, assistenteId = null, assistenti = [], corsiDateDocenti = [], onBack, titolo = "Dashboard master" }) {
   // il totale in euro dei carrelli lo vedono solo programmatore e Chiara
   // Colonnelli; le master vedono vendite e punti, mai l'importo
   const mostraEuroCarrelli = vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato);
@@ -13476,8 +13476,20 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const [tabellaCedibileDash] = useImpostazioneCondivisa(CHIAVE_TABELLA_CEDIBILE, null);
   const [incidenzaCostiDash] = useImpostazioneCondivisa(CHIAVE_INCIDENZA_COSTI, INCIDENZA_COSTI_DEFAULT);
   const isMobile = useIsMobile();
-  const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
-  const masterSel = master.find((m) => m.id === masterSelId) || null;
+  // Chi entra come ASSISTENTE parte sulla propria scheda, come una
+  // master sulla sua: la tendina non deve nemmeno comparirle. Prima si
+  // trovava davanti l'elenco di tutte e doveva cercarsi.
+  const [masterSelId, setMasterSelId] = useState(
+    masterLoggataId || (assistenteId && !masterLoggataId ? `ass:${assistenteId}` : ""),
+  );
+  // `masterSel` serve a sapere SE si sta guardando qualcuno. Sfogliando
+  // un'assistente non c'e' nessuna master, ma qualcuno lo si sta
+  // guardando lo stesso: senza questo la pagina diceva "scegli una
+  // master" e non mostrava niente.
+  const assistenteSfogliataId = String(masterSelId || "").startsWith("ass:") ? String(masterSelId).slice(4) : null;
+  const assistenteSelezionata = assistenteSfogliataId
+    ? (assistenti || []).find((a) => a.id === assistenteSfogliataId) || null : null;
+  const masterSel = master.find((m) => m.id === masterSelId) || assistenteSelezionata || null;
   // i punti dalle vendite: shop/POS sul netto, cash sul lordo. Il conto sta
   // nella view v_punti_master, qui si legge e basta
   const puntiDaVendite = usePuntiMaster(masterSelId);
@@ -13512,17 +13524,29 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // una seconda area: quelle edizioni compaiono qui, marcate, insieme
   // alle sue. Si guardano solo quando si guarda la propria scheda —
   // sfogliando quella di un'altra master non c'entrano niente.
-  const idAssistenteDiChiGuarda = (masterSelId && masterSelId === masterLoggataId) ? assistenteId : null;
+  // le assistenti che hanno una dashboard loro: quelle che sono anche
+  // master non ci sono, la loro e' gia' nell'elenco qui sopra
+  const assistentiSenzaDashboard = useMemo(
+    () => (assistenti || []).filter((a) => !a.master_id).sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""))),
+    [assistenti],
+  );
+  // scegliendo una voce "ass:<id>" si guarda la dashboard di quella
+  // assistente invece di quella di una master
+  const idAssistenteDiChiGuarda = assistenteSfogliataId
+    || ((masterSelId && masterSelId === masterLoggataId) ? assistenteId : null);
   const comeAssistente = useMemo(
     () => edizioniComeAssistente(corsiDate, corsiDateDocenti, idAssistenteDiChiGuarda),
     [corsiDate, corsiDateDocenti, idAssistenteDiChiGuarda],
   );
   const idComeAssistente = useMemo(() => new Set(comeAssistente.map((cd) => cd.id)), [comeAssistente]);
   const sueInTutto = useMemo(() => {
-    const dellaMaster = corsiDate.filter((cd) => cd.master_id === masterSelId);
+    // sfogliando un'assistente ci sono SOLO le classi dove assiste: di
+    // corsi suoi non ne ha, e `masterSelId` qui dentro e' "ass:<id>",
+    // che a nessuna edizione corrisponde
+    const dellaMaster = assistenteSfogliataId ? [] : corsiDate.filter((cd) => cd.master_id === masterSelId);
     const gia = new Set(dellaMaster.map((cd) => cd.id));
     return [...dellaMaster, ...comeAssistente.filter((cd) => !gia.has(cd.id))];
-  }, [corsiDate, masterSelId, comeAssistente]);
+  }, [corsiDate, masterSelId, comeAssistente, assistenteSfogliataId]);
   const prossimeDate = useMemo(
     () => sueInTutto.filter((cd) => oggiStr <= (cd.data_fine || cd.data_inizio)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
     [sueInTutto, oggiStr]
@@ -13965,18 +13989,31 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         {/* una master normale vede solo la propria dashboard; chi dirige
             l'accademia (ha il permesso Setting) parte dalla sua ma puo'
             passare a quella di ogni altra master */}
-        {(!masterLoggataId || sceltaLibera) && (
+        {(!masterLoggataId || sceltaLibera) && !(assistenteId && !masterLoggataId && !sceltaLibera) && (
           <select
             style={{ ...inputStyle, width: "auto", minWidth: 220, marginBottom: 20 }}
             value={masterSelId} onChange={(e) => setMasterSelId(e.target.value)}
           >
             <option value="">— scegli master —</option>
             {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+            {/* Anche le assistenti, da qui. Chi dirige l'accademia guarda
+                la dashboard di chiunque: le master dalla prima parte
+                dell'elenco, le assistenti dalla seconda — separate, o non
+                si capisce chi e' chi. Quelle che sono anche master non si
+                ripetono: la loro dashboard e' gia' qui sopra, con le
+                classi dove assistono marcate. */}
+            {assistentiSenzaDashboard.length > 0 && (
+              <optgroup label="Assistenti">
+                {assistentiSenzaDashboard.map((a) => (
+                  <option key={`ass:${a.id}`} value={`ass:${a.id}`}>{String(a.nome || "").toUpperCase()}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         )}
 
         {!masterSel ? (
-          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli una master per vedere i suoi prossimi corsi.</div>
+          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli una master — o un'assistente — per vedere i suoi prossimi corsi.</div>
         ) : tabMaster !== "corsi" ? null : (
           <>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
@@ -81894,7 +81931,7 @@ export default function App() {
           onApriClasse={apriClasseMaster}
           onApriModelle={apriModelleMaster}
           onApriConsensi={apriConsensiMaster}
-          assistenteId={utenteLoggato?.assistenteId || null} corsiDateDocenti={corsiDateDocenti}
+          assistenteId={utenteLoggato?.assistenteId || null} assistenti={assistente} corsiDateDocenti={corsiDateDocenti}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "dashboardmaster", "Dashboard master")}
         />
