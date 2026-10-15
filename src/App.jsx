@@ -65772,36 +65772,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       setCouponAttivo(null); setCouponValore(""); setCouponCodiceTesto("");
     }
   }, [corsoPosId, corsiEleggibiliPos]);
-  // Una master che vende mentre e' al corso trova il corso gia' scelto e
-  // il suo codice sconto gia' applicato, senza doverli cercare.
+  // NESSUNA PRESELEZIONE DEL CORSO.
   //
-  // Non e' una comodita': lo sconto della classe e' un diritto degli
-  // allievi di quel corso, e affidarlo al fatto che la master si ricordi
-  // di aprire una tendina mentre sta vendendo fra una lezione e l'altra
-  // vuol dire che a volte non viene fatto — e chi ci rimette e' l'allieva,
-  // che non sa nemmeno che le spettava.
+  // Qui il corso del giorno si sceglieva da solo, quando ce n'era uno
+  // solo. Era comodo in aula e sbagliato fuori: una master che esce dal
+  // corso e vende a chi passa si ritrovava la vendita agganciata alla
+  // classe, con lo sconto degli allievi addosso, senza averlo chiesto.
+  // E il corso resta in tendina fino a cinque giorni dopo la fine.
   //
-  // Solo con UN corso eleggibile: se una master ne ha due in aula nello
-  // stesso giorno, quale sia la vendita giusta lo sa lei, non noi. E solo
-  // per le master: un venditore in sede vede tutti i corsi del giorno e
-  // non e' detto che stia vendendo per uno di quelli.
-  const unicoCorsoDiOggi = operatore?.tipo === "master" && corsiEleggibiliPos.length === 1 ? corsiEleggibiliPos[0].id : null;
-  // LA SCELTA FATTA A MANO VINCE SULLA PRESELEZIONE.
-  // Stando al corso capita di vendere a una cliente che col corso non
-  // c'entra niente: si sceglie "vendita fuori dal corso" e la riga di
-  // sopra la rimetteva subito sul corso, perche' guardava solo se il
-  // campo era vuoto — e vuoto lo e' anche quando qualcuno l'ha svuotato
-  // apposta. Quella scelta era impossibile da fare.
-  //
-  // Il contrassegno dura quanto il carrello: la vendita dopo riparte
-  // dalla preselezione, perche' lo sconto della classe e' un diritto
-  // degli allievi e non deve dipendere da cosa si e' scelto mezz'ora fa.
-  const [sceltaCorsoManuale, setSceltaCorsoManuale] = useState(false);
-  useEffect(() => {
-    if (!unicoCorsoDiOggi || corsoPosId || sceltaCorsoManuale) return;
-    setCorsoPosId(unicoCorsoDiOggi);
-    applicaCouponDelCorso(unicoCorsoDiOggi);
-  }, [unicoCorsoDiOggi, corsoPosId, sceltaCorsoManuale]);
+  // Adesso si parte sempre da "vendita fuori dai corsi senza sconti" e
+  // la classe la sceglie lei. Perche' nessuno se la dimentichi, quando
+  // c'e' un corso suo in corso e non e' stato scelto niente, sotto la
+  // tendina compare un avviso.
   // "Prelevato dai kit in loco": il pezzo venduto è stato tirato fuori da un
   // kit presente in aula. Dal magazzino centrale era già uscito quando Raf
   // ha spedito il pacco: scaricarlo di nuovo qui lo conterebbe due volte.
@@ -66574,7 +66556,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setClientePos(""); setMsg("");
     // l'acquisto personale vale per quel carrello, non resta acceso: i
     // punti appena spesi sono finiti, e il carrello dopo ripone la domanda
-    setAcquistoPersonale(false); setRitiroAttivo(false); setSceltaCorsoManuale(false);
+    setAcquistoPersonale(false); setRitiroAttivo(false);
     // la provenienza vale per i pezzi di quel carrello, non e' una regola
     // che resta accesa: il carrello dopo ripone la sua domanda
     setDalKitPerProdotto({});
@@ -67609,7 +67591,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <select style={inputStyle} value={acquistoPersonale ? "__personale" : referralPersonaleInUso ? "__referral" : corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
               setSpedIscrittoId("");
-              setSceltaCorsoManuale(true);
               if (nuovoId === "__personale") {
                 // L'acquisto personale non e' un corso: si stacca da
                 // qualunque edizione e prende il codice con cui la master
@@ -67692,6 +67673,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               ))}
             </select>
           </Field>
+          {/* Nessuna preselezione: se c'e' un corso suo in corso e non e'
+              stato scelto, lo si dice. Senza, dimenticarsene vuol dire
+              un'allieva che paga prezzo pieno e nessuno che se ne accorge
+              prima di aver incassato. */}
+          {(() => {
+            if (corsoPosId || acquistoPersonale || referralPersonaleInUso) return null;
+            const inCorso = corsiEleggibiliPos.filter((cd) => cd.data_fine >= oggiStrPos);
+            if (inCorso.length === 0) return null;
+            return (
+              <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: "#8A6D1D", background: "#FDF6E6", border: "1px solid #EBD9AE", borderRadius: 12, padding: "9px 12px", marginTop: -6, marginBottom: 12, lineHeight: 1.45 }}>
+                {inCorso.length === 1
+                  ? `Stai vendendo fuori dai corsi. Se questa vendita è di ${corsoById[inCorso[0].corso_id]?.nome || "quel corso"}, scegli la classe qui sopra o l'allieva paga prezzo pieno.`
+                  : "Stai vendendo fuori dai corsi. Se questa vendita è di una delle tue classi, scegliela qui sopra o chi compra paga prezzo pieno."}
+              </div>
+            );
+          })()}
           {/* Vendendo per conto della master la vendita e' sua: punti,
               provvigione e riconoscimento vanno a lei. Togliendo la
               spunta resta legata al corso — i contanti in quella busta,
