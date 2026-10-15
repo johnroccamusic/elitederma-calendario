@@ -42,6 +42,53 @@ const BUCKET = "consensi-documenti";
 const estensione = (b: Blob) => (b.type === "image/png" ? "png" : b.type === "image/webp" ? "webp" : "jpg");
 
 /**
+ * La foto del documento, portata a JPEG prima di partire.
+ *
+ * PERCHE'. Un iPhone fotografa in HEIC. Noi salvavamo il file com'era
+ * ma lo chiamavamo `.jpg`: in archivio veniva fuori un documento che
+ * Chrome e Firefox non aprono — Safari si', ed e' per questo che non se
+ * n'era accorto nessuno. La conversione va fatta QUI, sul telefono che
+ * la foto l'ha appena scattata: quello sa decodificare l'HEIC, il
+ * computer di chi la guardera' no.
+ *
+ * E SI RIMPICCIOLISCE. Uno scatto da iPhone pesa quattro o cinque mega;
+ * di un documento d'identita' servono i dati, non la grana della carta.
+ * A 2000 pixel di lato lungo si legge tutto e si sta sotto il mezzo
+ * mega: in aula, con la linea del telefono di qualcun altro, e' la
+ * differenza fra inviare e riprovare.
+ *
+ * SE QUALCOSA NON VA, torna il file originale. Un consenso che parte con
+ * una foto pesante e' meglio di un consenso che non parte.
+ */
+async function aJpeg(file: Blob, latoMax = 2000, qualita = 0.85): Promise<Blob> {
+  try {
+    if (typeof document === "undefined" || typeof HTMLCanvasElement === "undefined") return file;
+    // `from-image` applica l'orientamento scritto negli EXIF: senza, le
+    // foto scattate in verticale finiscono coricate
+    const bitmap = typeof createImageBitmap === "function"
+      ? await createImageBitmap(file as File, { imageOrientation: "from-image" } as ImageBitmapOptions)
+      : null;
+    if (!bitmap) return file;
+    const scala = Math.min(1, latoMax / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scala));
+    const h = Math.max(1, Math.round(bitmap.height * scala));
+    const tela = document.createElement("canvas");
+    tela.width = w; tela.height = h;
+    const ctx = tela.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const jpeg = await new Promise<Blob | null>((risolvi) => tela.toBlob(risolvi, "image/jpeg", qualita));
+    // se la conversione esce piu' pesante dell'originale (succede con
+    // immagini gia' piccole e molto compresse) si tiene l'originale
+    if (!jpeg || (jpeg.size >= file.size && file.type === "image/jpeg")) return file;
+    return jpeg;
+  } catch {
+    return file;
+  }
+}
+
+/**
  * Invia il consenso.
  *
  * I file vanno su PRIMA della riga, sotto una cartella che porta l'id
@@ -64,8 +111,11 @@ export async function salvaConsenso(
 
   const percorsi: Record<string, string | null> = { fronte: null, retro: null, firma: null };
   for (const chiave of ["fronte", "retro", "firma"] as const) {
-    const blob = file[chiave];
-    if (!blob) continue;
+    const grezzo = file[chiave];
+    if (!grezzo) continue;
+    // la firma nasce gia' da una tela, in PNG, ed e' leggera: si tocca
+    // solo quello che arriva dalla fotocamera
+    const blob = chiave === "firma" ? grezzo : await aJpeg(grezzo);
     const percorso = `${id}/${chiave}.${estensione(blob)}`;
     const { error } = await supabase.storage.from(BUCKET).upload(percorso, blob, {
       contentType: blob.type || "image/jpeg",

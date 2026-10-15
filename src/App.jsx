@@ -67639,6 +67639,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   {corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}
                   {" · "}{fmtDataCompatta(cd.data_inizio, cd.data_fine)}
                   {cd.data_fine < oggiStrPos ? " · concluso" : ""}
+                  {/* IL CODICE, come sulle altre voci della tendina.
+                      Senza, chi cerca "APR272" — il codice che ha dato
+                      agli allievi — scorreva una lista di nomi di corsi e
+                      non lo trovava, e concludeva che il suo codice non
+                      c'era. E se la classe un codice non ce l'ha, lo dice
+                      PRIMA di sceglierla: scegliendola, lo sconto
+                      risultava zero e niente spiegava perche'. */}
+                  {(() => {
+                    const c = couponDellEdizione(cd.id);
+                    return c ? ` · ${String(c.codice || "").toUpperCase()}` : " · SENZA CODICE SCONTO";
+                  })()}
                 </option>
               ))}
             </select>
