@@ -67428,11 +67428,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                   stessa domanda — a chi appartiene questa vendita */}
               {couponReferralPersonale && <option value="__referral">Vendi fuori dal corso con il mio referral ({String(couponReferralPersonale.codice || "").toUpperCase()})</option>}
               {couponAcquistoPersonale && <option value="__personale">Acquisto personale con sconto master ({String(couponAcquistoPersonale.codice || "").toUpperCase()})</option>}
-              {/* i codici ristretti: la descrizione scritta sul coupon dice
-                  a chi vanno dati meglio di qualunque etichetta fissa */}
+              {/* i codici ristretti: si legge la descrizione scritta sul
+                  coupon e basta. Il codice fra parentesi c'era e l'ho
+                  tolto: qui si sceglie A CHI si vende, non si detta un
+                  codice, e la sigla la si legge comunque nel campo del
+                  coupon appena la voce e' scelta.
+                  Senza descrizione resta la sigla, che e' meglio di una
+                  voce senza nome. */}
               {couponiRistrettiMaster.map((c) => (
                 <option key={c.id} value={`__codice:${c.id}`}>
-                  {c.descrizione ? `${c.descrizione} ` : "Vendi con il codice "}({String(c.codice || "").toUpperCase()})
+                  {c.descrizione || `Vendi con il codice ${String(c.codice || "").toUpperCase()}`}
                 </option>
               ))}
               {corsiEleggibiliPos.map((cd) => (
