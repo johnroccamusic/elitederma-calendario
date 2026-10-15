@@ -3449,6 +3449,58 @@ function fmtIntervalloEsteso(inizio, fine) {
   return `${giornoI} ${MESI[meseI - 1].toLowerCase()} ${annoI} – ${giornoF} ${MESI[meseF - 1].toLowerCase()} ${annoF}`;
 }
 
+// La mail di conferma iscrizione. Parte solo dal pulsante nella scheda
+// iscritto, mai da sola: gli import e le correzioni salvano iscritti di
+// continuo, e una conferma spedita per sbaglio a un allievo vero non si
+// ritira. Dentro non ci sono importi: quelli cambiano (acconti, sconti,
+// saldo) e una cifra sbagliata in una mail fa piu' danno di nessuna cifra.
+//
+// La sede: prima quella scritta sulla classe (sede occasionale), poi quella
+// registrata. E' lo stesso ordine della scheda della master.
+function componiMailConferma({ nome, corso, corsoData, loc }) {
+  const pulisci = (s) => String(s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const nomeCorso = corso?.nome ? toTitleCase(corso.nome) : "il corso";
+  const quando = corsoData?.data_inizio ? fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine || corsoData.data_inizio) : "";
+  const citta = toTitleCase(corsoData?.citta || loc?.citta || loc?.nome || "");
+  const nomeSede = loc?.nome_sede ? toTitleCase(loc.nome_sede) : "";
+  const indirizzo = corsoData?.indirizzo || loc?.indirizzo || "";
+  const saluto = nome ? `Ciao ${toTitleCase(nome)},` : "Ciao,";
+
+  const righe = [
+    ["Corso", nomeCorso],
+    ["Date", quando],
+    ["Città", citta],
+    ["Sede", nomeSede],
+    ["Indirizzo", indirizzo],
+  ].filter(([, v]) => v);
+
+  const oggetto = `Conferma iscrizione – ${nomeCorso}${quando ? `, ${quando}` : ""}`;
+  const testo = [
+    saluto,
+    "",
+    `la tua iscrizione al corso ${nomeCorso} è confermata.`,
+    "",
+    ...righe.map(([k, v]) => `${k}: ${v}`),
+    "",
+    "Qualche giorno prima del corso riceverai gli ultimi dettagli organizzativi.",
+    "Per qualsiasi domanda puoi rispondere direttamente a questa mail.",
+    "",
+    "A presto,",
+    "Elitederma Academy",
+  ].join("\n");
+
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1f2a44;max-width:560px">
+<p>${pulisci(saluto)}</p>
+<p>la tua iscrizione al corso <strong>${pulisci(nomeCorso)}</strong> è confermata.</p>
+<table style="border-collapse:collapse;margin:16px 0">${righe
+    .map(([k, v]) => `<tr><td style="padding:4px 16px 4px 0;color:#7a7f8c">${pulisci(k)}</td><td style="padding:4px 0"><strong>${pulisci(v)}</strong></td></tr>`)
+    .join("")}</table>
+<p>Qualche giorno prima del corso riceverai gli ultimi dettagli organizzativi.<br>Per qualsiasi domanda puoi rispondere direttamente a questa mail.</p>
+<p>A presto,<br><strong>Elitederma Academy</strong></p>
+</div>`;
+  return { oggetto, testo, html };
+}
+
 // genera la griglia di un mese come array di settimane (7 celle, null=padding)
 function generaSettimane(anno, mese) {
   const primoGiorno = new Date(anno, mese, 1);
@@ -30182,6 +30234,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [indirizzoResidenza, setIndirizzoResidenza] = useState("");
   const [capResidenza, setCapResidenza] = useState("");
   const [emailIscritto, setEmailIscritto] = useState("");
+  // esito dell'ultimo invio della mail di conferma: { stato: "lavoro" | "ok" | "errore", testo }
+  const [invioConferma, setInvioConferma] = useState(null);
+  // l'esito appartiene a un iscritto: cambiando scheda non deve restare li'
+  useEffect(() => { setInvioConferma(null); }, [modificandoId]);
   const [totalePattuito, setTotalePattuito] = useState("");
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
@@ -30351,6 +30407,28 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     : (dermografoSenzaIva ? prezzoDermografoLordo : round2(prezzoDermografoLordo / 1.22));
   const ivaDermografo = prezzoDermografoLordo == null ? null : round2(prezzoDermografoLordo - imponibileDermografo);
   const loc = location.find((l) => l.id === corsoData.location_id);
+
+  // L'invio passa da una conferma esplicita con l'indirizzo scritto per
+  // esteso: e' l'ultimo momento in cui si vede un errore di battitura
+  // prima che la mail parta davvero.
+  async function inviaMailConferma() {
+    const destinatario = emailIscritto.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(destinatario)) {
+      setInvioConferma({ stato: "errore", testo: "Manca un'email valida nella scheda: compilala e riprova." });
+      return;
+    }
+    const chi = [nome, cognome].map((s) => (s || "").trim()).filter(Boolean).join(" ") || "questo iscritto";
+    if (!window.confirm(`Inviare la mail di conferma iscrizione a ${chi}?\n\n${destinatario}`)) return;
+    const mail = componiMailConferma({ nome: (nome || "").trim(), corso, corsoData, loc });
+    setInvioConferma({ stato: "lavoro" });
+    const { data, error } = await supabase.functions.invoke("invia-email", {
+      body: { a: destinatario, oggetto: mail.oggetto, html: mail.html, testo: mail.testo },
+    });
+    // come per crea-accesso: l'errore vero sta nel corpo della risposta
+    const errore = data?.errore || (error ? await testoErroreFunzione(error) : "");
+    if (errore) { setInvioConferma({ stato: "errore", testo: errore }); return; }
+    setInvioConferma({ stato: "ok", testo: `Mail di conferma inviata a ${destinatario}.` });
+  }
   // template dei giorni di questo corso-tipo (Modella del Master/Allievi),
   // usato sia dal selettore "Giorno" nell'iscrizione sia da "Assegna modelle"
   const giorniCorsoDiQuesto = (corsiGiorni || []).filter((g) => g.corso_id === corsoData.corso_id).sort((a, b) => a.numero_giorno - b.numero_giorno);
@@ -32272,6 +32350,31 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             <IconaClipboardErp size={16} color={GOLD} />
             Riepilogo all'iscrizione
           </button>
+        )}
+        {/* La conferma parte solo da qui, a mano: vedi componiMailConferma.
+            Usa l'email com'e' scritta nel campo in questo momento, anche se
+            non si e' ancora usciti dal campo per salvarla. */}
+        {modificandoId && !soloLettura && (
+          <div style={{ marginBottom: 14 }}>
+            <button
+              onClick={inviaMailConferma}
+              disabled={invioConferma?.stato === "lavoro"}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%",
+                ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY,
+                border: `1px solid ${NAVY}`, borderRadius: 14, padding: "10px 14px",
+                cursor: invioConferma?.stato === "lavoro" ? "wait" : "pointer",
+                opacity: invioConferma?.stato === "lavoro" ? 0.7 : 1,
+              }}
+            >
+              {invioConferma?.stato === "lavoro" ? "Invio in corso…" : "Invia mail di conferma"}
+            </button>
+            {invioConferma?.testo && (
+              <div style={{ ...fontBody, fontSize: 12.5, marginTop: 6, fontWeight: 700, color: invioConferma.stato === "ok" ? "#1E7A4B" : "#C0392B" }}>
+                {invioConferma.testo}
+              </div>
+            )}
+          </div>
         )}
         <div {...propsSezione("anagrafica")}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
