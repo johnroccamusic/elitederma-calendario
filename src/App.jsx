@@ -12276,6 +12276,28 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
                   {corsoData.indirizzo}
                 </span>
               )}
+              {/* L'ALLOGGIO, con le sue note: dove dorme e cosa sapere
+                  prima di arrivarci — il parcheggio, l'orario del
+                  check-in, chi chiedere. Le note sono dell'albergo, non
+                  del soggiorno: si scrivono una volta e si rileggono
+                  ogni volta che ci si torna. */}
+              {hotelAssociato && (
+                <span style={{ display: "block", ...fontBody, fontSize: isMobile ? 11.5 : 13, color: MUTED, marginTop: 3, lineHeight: 1.45 }}>
+                  <b style={{ color: NAVY }}>Alloggio:</b> {hotelAssociato.nome}
+                  {[hotelAssociato.indirizzo, hotelAssociato.civico].filter(Boolean).length
+                    ? ` · ${[hotelAssociato.indirizzo, hotelAssociato.civico].filter(Boolean).join(" ")}` : ""}
+                  {hotelAssociato.citta ? ` · ${toTitleCase(hotelAssociato.citta)}` : ""}
+                  {hotelAssociato.telefono && (
+                    <a href={`tel:${String(hotelAssociato.telefono).replace(/[^+\d]/g, "")}`} onClick={(e) => e.stopPropagation()}
+                      style={{ ...fontBody, fontWeight: 700, color: NAVY, textDecoration: "none", marginLeft: 6 }}>
+                      ☏ {hotelAssociato.telefono}
+                    </a>
+                  )}
+                  {hotelAssociato.note && (
+                    <span style={{ display: "block", color: "#8A6D1D", marginTop: 1 }}>{hotelAssociato.note}</span>
+                  )}
+                </span>
+              )}
               {corsoData.telefono && (
                 // si chiama premendolo: in viaggio nessuno ricopia un
                 // numero a mano
@@ -26022,9 +26044,10 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
 // nell'elenco — nascosta, ma c'e'. Si rimedia cancellandola, perche' e'
 // nata qui dentro ed e' nostra: le scritture in sequenza vanno in una
 // transazione, e finche' questa non c'e' si rimette a posto a mano.
-async function creaDataCorso({ corso_id, location_id, data_inizio, data_fine, master_id, sedeOccasionale, sedeRegistrata }) {
+async function creaDataCorso({ corso_id, location_id, data_inizio, data_fine, master_id, sedeOccasionale, sedeRegistrata, alloggio_id, alloggioOccasionale }) {
   let locId = location_id;
   let natoQui = null;
+  let hotelNatoQui = null;
   if (!locId && sedeOccasionale) {
     const { data, error } = await supabase.from("location").insert({
       // `nome` e' la citta', come su tutte le sedi di questo database
@@ -26041,9 +26064,35 @@ async function creaDataCorso({ corso_id, location_id, data_inizio, data_fine, ma
     locId = data.id;
     natoQui = data.id;
   }
+  // L'alloggio occasionale: stessa regola della sede. La riga esiste e
+  // tiene le note — che sono dell'albergo, non del soggiorno, e si
+  // rileggono da Gestione Hotel anche fra un anno — ma non compare nella
+  // tendina degli alloggi registrati.
+  let allId = alloggio_id || null;
+  if (!allId && alloggioOccasionale?.nome?.trim()) {
+    const { data, error } = await supabase.from("hotel").insert({
+      nome: alloggioOccasionale.nome.trim(),
+      indirizzo: (alloggioOccasionale.indirizzo || "").trim() || null,
+      civico: (alloggioOccasionale.civico || "").trim() || null,
+      citta: (alloggioOccasionale.citta || "").trim() || null,
+      telefono: (alloggioOccasionale.telefono || "").trim() || null,
+      nome_referente: (alloggioOccasionale.referente || "").trim() || null,
+      note: (alloggioOccasionale.note || "").trim() || null,
+      solo_edizione: true,
+      ricorrente_occasionale: "occasionale",
+    }).select("id").single();
+    if (error) {
+      if (natoQui) await supabase.from("location").delete().eq("id", natoQui);
+      return error.message;
+    }
+    allId = data.id;
+    hotelNatoQui = data.id;
+  }
+
   const sede = sedeRegistrata || sedeOccasionale || {};
   const { error } = await supabase.from("corsi_date").insert({
     corso_id, location_id: locId, data_inizio, data_fine, master_id: master_id || null,
+    alloggio_id: allId,
     // la fotografia di dov'e' stato QUESTO corso: se la sede cambia
     // indirizzo, le edizioni passate continuano a dire il vero
     regione: sede.regione || null,
@@ -26053,18 +26102,37 @@ async function creaDataCorso({ corso_id, location_id, data_inizio, data_fine, ma
     sede_occasionale: !!sedeOccasionale,
   });
   if (error) {
+    // quello che e' nato qui dentro si porta via: una sede o un albergo
+    // fantasma, nati per un corso che non e' mai stato scritto, restano
+    // in anagrafica e nessuno sa piu' perche'
     if (natoQui) await supabase.from("location").delete().eq("id", natoQui);
+    if (hotelNatoQui) await supabase.from("hotel").delete().eq("id", hotelNatoQui);
     return error.message;
   }
   return null;
 }
 
 function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva, onChiudi }) {
+  // gli alloggi se li legge da solo all'apertura: i componenti che
+  // montano questo modale non li hanno, e passarglieli voleva dire
+  // toccare quattro firme per una lista di venti righe
+  const [hotel, setHotel] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("hotel").select("id, nome, citta, indirizzo, civico, telefono, note, solo_edizione").order("nome")
+      .then(({ data }) => { if (vivo) setHotel(data || []); });
+    return () => { vivo = false; };
+  }, []);
   const [corsoSel, setCorsoSel] = useState("");
   const [locSel, setLocSel] = useState(cittaFissa || "");
   const [giorni, setGiorni] = useState(1);
   const [masterSel, setMasterSel] = useState(""); // vuoto = "La assegno in seguito"
   const [tipoSede, setTipoSede] = useState("registrata");
+  // L'alloggio e' una scelta a se', indipendente dalla sede: capita di
+  // fare un corso nella sede di sempre ma in un albergo diverso.
+  const [tipoAlloggio, setTipoAlloggio] = useState("nessuno");
+  const [hotelSel, setHotelSel] = useState("");
+  const [allOcc, setAllOcc] = useState({ nome: "", indirizzo: "", civico: "", citta: "", telefono: "", referente: "", note: "" });
   const [occ, setOcc] = useState({ nomeSede: "", regione: "", citta: "", indirizzo: "", telefono: "" });
   // le sedi nate per una volta sola non si ripropongono: l'elenco deve
   // restare quello dei posti dove si torna
@@ -26083,6 +26151,11 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
     });
   }
 
+  const alloggiScegliibili = (hotel || []).filter((h) => !h.solo_edizione);
+  const alloggioScelto = alloggiScegliibili.find((h) => h.id === hotelSel) || null;
+  const mancaPerAlloggio = tipoAlloggio === "registrato"
+    ? !hotelSel
+    : tipoAlloggio === "occasionale" ? !allOcc.nome.trim() : false;
   const mancaPerOccasionale = tipoSede === "occasionale"
     && (!occ.citta.trim() || !occ.regione);
   const campoOcc = { ...inputStyle, marginBottom: 8 };
@@ -26152,6 +26225,63 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
           )}
         </>
       )}
+      {/* L'ALLOGGIO. Scelta a se', non legata alla sede: un corso nella
+          sede di sempre puo' avere un albergo diverso. "Nessuno" e' il
+          caso normale — a Roma non dorme nessuno in albergo. */}
+      <Field label="Alloggio">
+        <div style={{ display: "flex", gap: 8 }}>
+          {[
+            { v: "nessuno", l: "Nessuno" },
+            { v: "registrato", l: "Registrato" },
+            { v: "occasionale", l: "Occasionale" },
+          ].map((t) => (
+            <button
+              key={t.v} type="button" onClick={() => setTipoAlloggio(t.v)}
+              style={{
+                ...fontBody, flex: 1, minHeight: 44, borderRadius: 12, cursor: "pointer",
+                fontSize: 13, fontWeight: 700,
+                background: tipoAlloggio === t.v ? NAVY : "#fff",
+                color: tipoAlloggio === t.v ? "#fff" : NAVY,
+                border: `1px solid ${tipoAlloggio === t.v ? NAVY : CREAM_BORDER}`,
+              }}
+            >
+              {t.l}
+            </button>
+          ))}
+        </div>
+        {tipoAlloggio === "registrato" && (
+          <>
+            <select style={{ ...inputStyle, marginTop: 8 }} value={hotelSel} onChange={(e) => setHotelSel(e.target.value)}>
+              <option value="">Seleziona alloggio</option>
+              {alloggiScegliibili.map((h) => <option key={h.id} value={h.id}>{h.nome}{h.citta ? ` — ${h.citta}` : ""}</option>)}
+            </select>
+            {alloggioScelto && (
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
+                {[alloggioScelto.indirizzo, alloggioScelto.civico].filter(Boolean).join(" ")}
+                {alloggioScelto.telefono ? ` · ${alloggioScelto.telefono}` : ""}
+                {alloggioScelto.note ? ` · ${alloggioScelto.note}` : ""}
+              </div>
+            )}
+          </>
+        )}
+        {tipoAlloggio === "occasionale" && (
+          <div style={{ marginTop: 8 }}>
+            <input style={campoOcc} value={allOcc.nome} onChange={(e) => setAllOcc((o) => ({ ...o, nome: e.target.value }))} placeholder="Nome dell'alloggio *" />
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={{ ...campoOcc, flex: "2 1 0", minWidth: 0 }} value={allOcc.indirizzo} onChange={(e) => setAllOcc((o) => ({ ...o, indirizzo: e.target.value }))} placeholder="Via" />
+              <input style={{ ...campoOcc, flex: "1 1 0", minWidth: 0 }} value={allOcc.civico} onChange={(e) => setAllOcc((o) => ({ ...o, civico: e.target.value }))} placeholder="Civico" />
+            </div>
+            <input style={campoOcc} value={allOcc.citta} onChange={(e) => setAllOcc((o) => ({ ...o, citta: e.target.value }))} placeholder="Città" />
+            <input style={campoOcc} value={allOcc.telefono} onChange={(e) => setAllOcc((o) => ({ ...o, telefono: e.target.value }))} placeholder="Telefono" />
+            <input style={campoOcc} value={allOcc.referente} onChange={(e) => setAllOcc((o) => ({ ...o, referente: e.target.value }))} placeholder="Chi chiedere" />
+            <textarea style={{ ...campoOcc, minHeight: 70, resize: "vertical", marginBottom: 0 }} value={allOcc.note} onChange={(e) => setAllOcc((o) => ({ ...o, note: e.target.value }))} placeholder="Note: parcheggio, orari del check-in, cosa sapere…" />
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+              Le note restano sull'alloggio e si rileggono da <b style={{ color: NAVY }}>Setting → Gestione Hotel</b>, anche fra un anno. Non comparirà nella tendina degli alloggi registrati.
+            </div>
+          </div>
+        )}
+      </Field>
+
       <Field label="Durata (giorni)">
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
           <button
@@ -26181,7 +26311,7 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
       )}
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
         <Button
-          disabled={!corsoSel || (tipoSede === "registrata" ? !locSel : mancaPerOccasionale)}
+          disabled={!corsoSel || (tipoSede === "registrata" ? !locSel : mancaPerOccasionale) || mancaPerAlloggio}
           onClick={() => onSalva({
             corso_id: corsoSel,
             location_id: tipoSede === "registrata" ? locSel : null,
@@ -26189,6 +26319,8 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
             master_id: masterSel || null,
             sedeOccasionale: tipoSede === "occasionale" ? occ : null,
             sedeRegistrata: tipoSede === "registrata" ? sedeScelta : null,
+            alloggio_id: tipoAlloggio === "registrato" ? (hotelSel || null) : null,
+            alloggioOccasionale: tipoAlloggio === "occasionale" ? allOcc : null,
           })}
         >
           Salva
@@ -26311,7 +26443,7 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
     const esito = await creaDataCorso(dati);
     if (esito) { window.alert("Errore: " + esito); return; }
     setPopupNuovo(null);
-    ricarica(["corsi_date", "location"]);
+    ricarica(["corsi_date", "location", "hotel"]);
   }
   async function eliminaEsistente(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
@@ -26434,7 +26566,7 @@ function CalendarioModifica({ corsi, location, corsiDate, iscritti, master, cdId
     const esito = await creaDataCorso(dati);
     if (esito) { window.alert("Errore: " + esito); return; }
     setPopupNuovo(null);
-    ricarica(["corsi_date", "location"]);
+    ricarica(["corsi_date", "location", "hotel"]);
   }
   async function eliminaEsistente(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
