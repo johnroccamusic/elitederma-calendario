@@ -112,6 +112,14 @@ Verificato interrogando il database e Vercel, non leggendo i file:
 - **Fatto bene**: le credenziali WooCommerce stanno in variabili d'ambiente delle
   edge function (`WC_CONSUMER_KEY`, `WC_WEBHOOK_SECRET`…), e `woo-webhook` verifica
   la firma HMAC. È il pattern da estendere a Stripe, WhatsApp ed email.
+- **Email (dal 15/10/2026).** Invio tramite Resend con la edge function
+  `invia-email`, mittente `notifiche@elitederma.net`, risposte a
+  `notifiche@elitederma.it`. Dominio separato perché elitederma.it sta su Jimdo,
+  che non permette i record DNS di Resend; elitederma.net è su GoDaddy e
+  verificato. La chiave è il secret `RESEND_API_KEY`. La funzione accetta solo
+  una sessione valida o la service role key: la chiave pubblicabile, che è nel
+  bundle, non basta. Massimo 20 destinatari per invio; le campagne agli ex
+  allievi avranno una funzione propria (disiscrizione, lotti, registro).
 - **`.env` non è mai stato committato**, `.gitignore` corretto, nessuna chiave nella
   storia git. Il repository è però **pubblico** su GitHub.
 - **L'SSO di Vercel risulta attivo nelle impostazioni ma non blocca.** L'API dice
