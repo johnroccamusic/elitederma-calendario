@@ -395,6 +395,43 @@ function useRinominaTastiAttiva() {
   return attiva !== false;
 }
 
+// RINOMINARE UNA TESSERA CHE NON STA IN UNA GrigliaTasti.
+//
+// La rinomina col tasto destro vive dentro GrigliaTasti, che tiene le
+// etichette e le salva. Ma ci sono tessere disegnate a mano fuori da
+// quella griglia — le linguette di Genera coupon, le due di Performance
+// aziendale — e li' il tasto destro non faceva niente: non e' che fosse
+// spento, e' che nessuno l'aveva collegato.
+//
+// Stessa tabella e stessa forma di GrigliaTasti (`impostazioni_layout_tasti`,
+// una riga per `pagina`, una mappa `etichette`), cosi' i nomi dati di qui
+// e quelli dati di la' sono la stessa cosa e non due elenchi paralleli.
+// Si usa una `pagina` che la griglia non usa, o i due si pestano i piedi.
+function useEtichetteTasti(pagina) {
+  const [etichette, setEtichette] = useState({});
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("impostazioni_layout_tasti").select("etichette").eq("pagina", pagina).maybeSingle()
+      .then(({ data }) => { if (vivo) setEtichette(data?.etichette || {}); });
+    return () => { vivo = false; };
+  }, [pagina]);
+
+  const nome = (chiave, predefinito) => etichette[chiave] || predefinito;
+  async function rinomina(chiave, predefinito) {
+    const nuovo = window.prompt("Come si chiama questo tasto?", nome(chiave, predefinito));
+    if (nuovo === null) return;
+    // vuoto = torna al nome di serie, tolto dalla mappa invece che
+    // salvato vuoto: altrimenti il tasto resterebbe senza scritta
+    const mappa = { ...etichette };
+    if (nuovo.trim()) mappa[chiave] = nuovo.trim(); else delete mappa[chiave];
+    setEtichette(mappa);
+    const { error } = await supabase.from("impostazioni_layout_tasti")
+      .upsert({ pagina, etichette: mappa }, { onConflict: "pagina" });
+    if (error) window.alert("Nome non salvato: " + error.message);
+  }
+  return [nome, rinomina];
+}
+
 // restituisce [valore, salva]: il valore parte dal predefinito, poi
 // arriva quello condiviso appena il database risponde
 function useLayoutCondiviso(chiave, predefinito) {
@@ -1708,9 +1745,13 @@ function IconaRicercaCard({ size = 18 }) {
     </svg>
   );
 }
-function IconaOrologioCard({ size = 18 }) {
+// `color` c'era in tutte le altre icone e qui no: dentro il disco scuro
+// di una tessera il `currentColor` ereditato e' scuro, e l'orologio
+// usciva nero su blu. Il predefinito resta currentColor, quindi dove era
+// gia' usata non cambia niente.
+function IconaOrologioCard({ size = 18, color = "currentColor" }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
     </svg>
   );
@@ -26172,7 +26213,7 @@ const AREA_MADRE_VISTA = {
   magazzinoesterni: ["magazzinoshop"],
   gestioneshop: ["magazzinoshop"],
   gestioneiva: ["erp"],
-  puntimaster: ["erp"],
+  puntimaster: ["compensipremi"],
 };
 // Logistica prodotti: le 4 fasi di spedizione di un'edizione, in
 // ordine. Ogni
@@ -35395,7 +35436,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, onApriPuntiMaster, onApriFattureDaEmettere, fattureDaEmettere = 0, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
+function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, onApriGestioneIva, onApriFattureDaEmettere, fattureDaEmettere = 0, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -35413,7 +35454,6 @@ function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti
             { chiave: "operativocorsi", title: "Operativo corsi", descrizione: "Assegna master, assistenti, leve, hotel e sedi a ogni edizione.", Icona: IconaTileMaster, attivo: true, onClick: onApriAssegnazioneMaster },
             { chiave: "anagrafiche", title: "Anagrafiche", descrizione: "Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.", Icona: IconaTileAnagrafiche, attivo: true, onClick: onApriAnagrafiche },
             { chiave: "gestioneiva", title: "Gestione IVA", descrizione: "IVA su acquisti e vendite, per aliquota e per prodotto.", Icona: IconaTileClassificazioneVoci, attivo: true, onClick: onApriGestioneIva },
-            { chiave: "puntimaster", title: "Punti master", descrizione: "Punti maturati da ogni master, shop/POS e cash, e lo scarico quando glieli paghi.", Icona: IconaTileMaster, attivo: true, onClick: onApriPuntiMaster },
             { chiave: "fattureemettere", title: "Fatture da emettere", descrizione: "Gli incassi con carta al POS, coi dati di fatturazione da controllare prima del documento.", Icona: IconaTileFattureRicevute, attivo: true, onClick: onApriFattureDaEmettere, badge: fattureDaEmettere },
           ]}
         />
@@ -39953,7 +39993,11 @@ function PannelloCodiciAcquistoMaster({ master, coupon, couponAcquistoPerMasterI
   );
 }
 
-function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, regoleReferralNeedling, venditeShop, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
+function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, regoleReferralNeedling, venditeShop, puntiMasterImpostazioni, ruoloUtente, ricarica, onBack, titolo = "Genera Coupon" }) {
+  // i nomi delle cinque tessere si riscrivono col tasto destro, come
+  // quelli della home: stessa tabella, pagina "generacoupon"
+  const [nomeTessera, rinominaTessera] = useEtichetteTasti("generacoupon");
+  const rinominaAccesa = useRinominaTastiAttiva();
   const { ordine: ordineClassifica, cambiaOrdine: cambiaOrdineClassifica, ordina: ordinaClassifica } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("manuale");
@@ -40364,8 +40408,9 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
             { v: "acquistomaster", l: "Genera codice sconto master", Icona: IconaTileMaster },
           ].map((t) => (
             <TileHome
-              key={t.v} title={t.l} Icona={t.Icona} etichettaDueRighe
+              key={t.v} title={nomeTessera(t.v, t.l)} Icona={t.Icona} etichettaDueRighe
               evidenziato={tab === t.v}
+              onRinominaEtichetta={ruoloUtente === "programmatore" && rinominaAccesa ? () => rinominaTessera(t.v, t.l) : undefined}
               onClick={() => { setTab(t.v); setMsg(""); window.scrollTo(0, 0); }}
             />
           ))}
@@ -52364,7 +52409,7 @@ function PaginaGestionePunti({ master, venditeShop, prodottiShop, puntiMasterImp
 // provvigioni e i premi. Il primo tasto e' "Genera coupon", che stava in
 // Gestione magazzino e shop: un codice referral e' uno strumento di
 // compenso, non un pezzo del magazzino. Altri tasti arriveranno qui.
-function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, onApriGestionePunti, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Area compensi e premi" }) {
+function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, onApriGestionePunti, onApriPuntiMaster, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Area compensi e premi" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -52379,6 +52424,11 @@ function PaginaCompensiPremiHub({ onBack, onApriGeneraCoupon, onApriGestionePunt
           definizioni={[
             { chiave: "generacoupon", title: "Genera Coupon", descrizione: "Crea e gestisci codici sconto e referral per shop e POS.", Icona: IconaTileCoupon, attivo: true, onClick: onApriGeneraCoupon },
             { chiave: "gestionepunti", title: "Gestione punti", descrizione: "La finestra della raccolta e i punti maturati da ogni master.", Icona: IconaTileMaster, attivo: true, onClick: onApriGestionePunti },
+            // Veniva da Amministrazione. I punti di una master sono un
+            // compenso, non una voce di contabilita': stanno accanto ai
+            // codici che li generano e alla finestra della raccolta, non
+            // in mezzo a IVA e categorie di spesa.
+            { chiave: "puntimaster", title: "Punti master", descrizione: "Punti maturati da ogni master, shop/POS e cash, e lo scarico quando glieli paghi.", Icona: IconaTilePuntiMaster, attivo: true, onClick: onApriPuntiMaster },
           ]}
         />
       </div>
@@ -79730,7 +79780,6 @@ export default function App() {
       { chiave: "operativocorsi", titolo: etichettaTasto("amministrazione", "operativocorsi", "Operativo corsi"), apri: () => setView("assegnazionemaster") },
       { chiave: "anagrafiche", titolo: etichettaTasto("amministrazione", "anagrafiche", "Anagrafiche"), apri: () => apriViewProtetta("anagrafiche") },
       { chiave: "gestioneiva", titolo: etichettaTasto("amministrazione", "gestioneiva", "Gestione IVA"), apri: apriGestioneIva },
-      { chiave: "puntimaster", titolo: etichettaTasto("amministrazione", "puntimaster", "Punti master"), apri: apriPuntiMaster },
     ] },
     { chiave: "magazzinoshop", titolo: etichettaTasto("home", "magazzinoshop", "Gestione magazzino e shop"), apri: apriMagazzinoShop, figli: [
       { chiave: "gestionemagazzino", titolo: etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino"), apri: apriMagazzino },
@@ -79750,6 +79799,7 @@ export default function App() {
     { chiave: "compensipremi", titolo: etichettaTasto("home", "compensipremi", "Area compensi e premi"), apri: apriCompensiPremi, figli: [
       { chiave: "generacoupon", titolo: etichettaTasto("compensipremi", "generacoupon", "Genera Coupon"), apri: apriGeneraCoupon },
       { chiave: "gestionepunti", titolo: etichettaTasto("compensipremi", "gestionepunti", "Gestione punti"), apri: apriGestionePunti },
+      { chiave: "puntimaster", titolo: etichettaTasto("compensipremi", "puntimaster", "Punti master"), apri: apriPuntiMaster },
     ] },
     { chiave: "generazioneloghi", titolo: etichettaTasto("home", "generazioneloghi", "Assegna logo"), apri: apriGenerazioneLoghi, figli: [] },
     { chiave: "gestionemodelle", titolo: etichettaTasto("home", "gestionemodelle", "Gestione modelle"), apri: apriGestioneModelle, figli: [] },
@@ -80482,7 +80532,6 @@ export default function App() {
           onApriAssegnazioneMaster={() => setView("assegnazionemaster")}
           onApriAnagrafiche={() => apriViewProtetta("anagrafiche")}
           onApriGestioneIva={apriGestioneIva}
-          onApriPuntiMaster={apriPuntiMaster}
           onApriFattureDaEmettere={() => setView("fattureemettere")}
           fattureDaEmettere={fattureDaEmettere}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.amministrazione?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("amministrazione", { ordine: o })}
@@ -80615,7 +80664,7 @@ export default function App() {
         <PaginaPuntiMaster
           ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
           onBack={() => setView("erp")}
-          titolo={etichettaTasto("amministrazione", "puntimaster", "Punti master")}
+          titolo={etichettaTasto("compensipremi", "puntimaster", "Punti master")}
         />
       )}
 
@@ -80647,6 +80696,7 @@ export default function App() {
           regoleReferralAutomatico={regoleReferralAutomatico} regoleReferralNeedling={regoleReferralNeedling}
           venditeShop={venditeShop}
           puntiMasterImpostazioni={puntiMasterImpostazioni}
+          ruoloUtente={ruoloUtente}
           ricarica={fetchDati} onBack={() => setView("compensipremi")}
           titolo={etichettaTasto("compensipremi", "generacoupon", "Genera Coupon")}
         />
@@ -81229,6 +81279,7 @@ export default function App() {
           onBack={() => setView("home")}
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriGestionePunti={apriGestionePunti}
+          onApriPuntiMaster={apriPuntiMaster}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.compensipremi?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("compensipremi", { ordine: o })}
           colonneTasti={layoutTasti.compensipremi?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("compensipremi", { colonne: n })}
           etichetteTasti={layoutTasti.compensipremi?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("compensipremi", chiave, testo)}
