@@ -66293,6 +66293,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // cose si escludono: o e' un acquisto suo, o e' una vendita a un
   // cliente del corso.
   const [acquistoPersonale, setAcquistoPersonale] = useState(false);
+  // Le provvigioni maturate si possono anche NON spendere su questo
+  // carrello: si scalano tutte o niente, e tutte su una spesa piccola
+  // vuol dire bruciarle per poco. Acceso di serie, perche' e' quello che
+  // faceva prima e perche' chi apre quella scelta di solito le vuole
+  // usare; si spegne con la spunta accanto alla cifra.
+  const [scalaProvvigioni, setScalaProvvigioni] = useState(true);
   // quanto ha maturato, in euro, e i punti che ci stanno dietro: si
   // legge dalla stessa vista della sua dashboard e di Punti master, cosi'
   // i tre posti non possono dire tre cifre diverse
@@ -66584,7 +66590,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // carrello deve valere almeno quanto le provvigioni, e si scalano per
   // intero. Lo sconto e' uno sconto vero: l'IVA si calcola su quello che
   // resta, come per qualunque altro sconto.
-  const provvigioniScalabili = provvigioniDaUsare > 0 && round2(totaleNetto + speseSpedizione) >= provvigioniDaUsare - 0.004
+  const provvigioniScalabili = scalaProvvigioni && provvigioniDaUsare > 0
+    && round2(totaleNetto + speseSpedizione) >= provvigioniDaUsare - 0.004
     ? provvigioniDaUsare : 0;
   const totaleConSpedizione = round2(totaleNetto + speseSpedizione - provvigioniScalabili);
   // L'IVA si scorpora solo se quella vendita un documento fiscale ce
@@ -67497,14 +67504,28 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.4 }}>Provvigioni da spendere</span>
                     <span style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: NAVY }}>{fmtEuroErp2(provvigioniDaUsare)}</span>
                   </div>
-                  <div style={{ ...fontBody, fontSize: 12, color: provvigioniScalabili > 0 ? "#2E7D32" : "#C0392B", marginTop: 4, lineHeight: 1.45 }}>
-                    {provvigioniScalabili > 0
-                      ? `Si scalano tutte da questo carrello: paghi ${fmtEuroErp2(totaleDaIncassare)}.`
-                      : `Il carrello non basta: serve almeno ${fmtEuroErp2(provvigioniDaUsare)} di merce. Le provvigioni si spendono tutte in una volta, non a pezzi.`}
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 7, cursor: "pointer" }}>
+                    <input
+                      type="checkbox" checked={scalaProvvigioni}
+                      onChange={(e) => setScalaProvvigioni(e.target.checked)}
+                      style={{ width: 20, height: 20, marginTop: 1, flexShrink: 0 }}
+                    />
+                    <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, lineHeight: 1.4 }}>
+                      Scala le provvigioni da questo carrello
+                    </span>
+                  </label>
+                  <div style={{ ...fontBody, fontSize: 12, color: !scalaProvvigioni ? MUTED : (provvigioniScalabili > 0 ? "#2E7D32" : "#C0392B"), marginTop: 4, lineHeight: 1.45 }}>
+                    {!scalaProvvigioni
+                      ? `Spenta: paghi tutto, ${fmtEuroErp2(totaleDaIncassare)}, e le provvigioni restano dove sono per la prossima volta.`
+                      : provvigioniScalabili > 0
+                        ? `Si scalano tutte da questo carrello: paghi ${fmtEuroErp2(totaleDaIncassare)}.`
+                        : `Il carrello non basta: serve almeno ${fmtEuroErp2(provvigioniDaUsare)} di merce. Le provvigioni si spendono tutte in una volta, non a pezzi.`}
                   </div>
-                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.4 }}>
-                    Incassando, i punti si azzerano e in Amministrazione → Punti master compare la data di oggi come ultimo scarico. La carriera ({fmtPunti(puntiMaster.punti_carriera || 0)}) non si tocca.
-                  </div>
+                  {provvigioniScalabili > 0 && (
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.4 }}>
+                      Incassando, i punti si azzerano e in Coupon e punti → Punti master compare la data di oggi come ultimo scarico. La carriera ({fmtPunti(puntiMaster.punti_carriera || 0)}) non si tocca.
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -67887,11 +67908,23 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           {[
             { etichetta: senzaIva ? "Subtotale" : "Subtotale (IVA incl.)", valore: subtotale },
             ...(scontoApplicato > 0 ? [{ etichetta: "Sconto", valore: scontoApplicato, negativo: true }] : []),
+            // LE PROVVIGIONI SCALATE, scritte.
+            //
+            // Senza questa riga il riquadro diceva 600 di subtotale, 110,70
+            // di sconto e 351,83 da incassare, e sembrava un errore di
+            // calcolo: i 137,47 di provvigioni spese sparivano fra la
+            // seconda riga e il totale. Il riquadro giallo sopra il
+            // carrello lo diceva, ma a parole e tre dita piu' in alto.
+            ...(provvigioniScalabili > 0 ? [{ etichetta: "Provvigioni usate", valore: provvigioniScalabili, negativo: true }] : []),
             // in contanti o buono Amazon senza fattura l'IVA non c'e': le
             // righe Imponibile e IVA non si mostrano proprio
             ...(senzaIva ? [] : [{ etichetta: "Imponibile", valore: imponibile }, { etichetta: "IVA 22%", valore: iva }]),
-          ].map(({ etichetta, valore, negativo }, i) => (
-            <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, ...fontBody, fontSize: isMobile ? 12 : 13, lineHeight: 1.15, color: negativo ? "#C0392B" : NAVY, marginBottom: isMobile && i === 2 ? 0 : (isMobile ? 4 : 5) }}>
+          ].map(({ etichetta, valore, negativo }, i, tutte) => (
+            // l'aria sotto l'ultima riga non serve: prima era legata
+            // all'indice 2, che era l'ultima finche' le righe erano tre.
+            // Aggiunta "Provvigioni usate" quel 2 non voleva piu' dire
+            // niente — meglio dire "l'ultima" e non contarle.
+            <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, ...fontBody, fontSize: isMobile ? 12 : 13, lineHeight: 1.15, color: negativo ? "#C0392B" : NAVY, marginBottom: isMobile && i === tutte.length - 1 ? 0 : (isMobile ? 4 : 5) }}>
               <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: negativo ? "#C0392B" : grigioCarrello, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700 }}>{etichetta}</span>
               <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{negativo ? "− " : ""}{fmtEuroErp2(valore)}</span>
             </div>
