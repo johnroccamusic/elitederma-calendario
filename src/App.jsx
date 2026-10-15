@@ -64011,6 +64011,18 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
                   <div style={{ flex: "0 1 110px" }}><Field label="Civico"><input defaultValue={selezionato.civico || ""} onBlur={(e) => { if (e.target.value !== (selezionato.civico || "")) salvaCampo("civico", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
                   <div style={{ flex: "1 1 180px" }}><Field label="Città"><input defaultValue={selezionato.citta || ""} onBlur={(e) => { if (e.target.value !== (selezionato.citta || "")) salvaCampo("citta", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
                 </div>
+                {/* Le note si scrivono anche creando un alloggio occasionale
+                    dalla nuova data, e quel popup promette che si rileggono
+                    da qui. Senza questo campo la promessa era falsa: finivano
+                    nel database e non le rivedeva piu' nessuno. */}
+                <Field label="Note">
+                  <textarea
+                    defaultValue={selezionato.note || ""}
+                    onBlur={(e) => { if (e.target.value !== (selezionato.note || "")) salvaCampo("note", e.target.value.trim() || null); }}
+                    style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+                    placeholder="Parcheggio, orari del check-in, cosa sapere…"
+                  />
+                </Field>
                 <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
                   <div style={{ flex: "1 1 200px" }}><Field label="Partita IVA"><input defaultValue={selezionato.partita_iva || ""} onBlur={(e) => { if (e.target.value !== (selezionato.partita_iva || "")) salvaCampo("partita_iva", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
                   <div style={{ flex: "1 1 160px" }}><Field label="Codice destinatario"><input defaultValue={selezionato.codice_destinatario || ""} onBlur={(e) => { if (e.target.value !== (selezionato.codice_destinatario || "")) salvaCampo("codice_destinatario", e.target.value.trim().toUpperCase() || null); }} style={inputStyle} /></Field></div>
