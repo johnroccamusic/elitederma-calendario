@@ -49,6 +49,8 @@ import PaginaPuntiMaster, { stagioneCorrente as stagionePuntiCorrente } from "./
 import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
 import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import { creaZip, siPuoCondividere } from "./file/zip.js";
+import ModelliEmail from "./email/ModelliEmail.jsx";
+import { leggiModello as leggiModelloEmail, applicaSegnaposti as applicaSegnapostiEmail, modelloUsabile as modelloUsabileEmail } from "./email/modelli.js";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
@@ -3457,7 +3459,7 @@ function fmtIntervalloEsteso(inizio, fine) {
 //
 // La sede: prima quella scritta sulla classe (sede occasionale), poi quella
 // registrata. E' lo stesso ordine della scheda della master.
-function componiMailConferma({ nome, corso, corsoData, loc }) {
+function componiMailConferma({ nome, corso, corsoData, loc, modello = null }) {
   const pulisci = (s) => String(s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const nomeCorso = corso?.nome ? toTitleCase(corso.nome) : "il corso";
   const quando = corsoData?.data_inizio ? fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine || corsoData.data_inizio) : "";
@@ -3474,6 +3476,35 @@ function componiMailConferma({ nome, corso, corsoData, loc }) {
     ["Indirizzo", indirizzo],
   ].filter(([, v]) => v);
 
+  const tabellaHtml = `<table style="border-collapse:collapse;margin:16px 0">${righe
+    .map(([k, v]) => `<tr><td style="padding:4px 16px 4px 0;color:#7a7f8c">${pulisci(k)}</td><td style="padding:4px 0"><strong>${pulisci(v)}</strong></td></tr>`)
+    .join("")}</table>`;
+  const apre = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1f2a44;max-width:560px">`;
+
+  // IL MODELLO SCRITTO IN SETTING, SE C'E'. I valori sono gli stessi per
+  // le due versioni della mail; cambia solo come sono scritti — in HTML
+  // vanno protetti (un nome con la & spaccherebbe il messaggio) e i
+  // dettagli diventano una tabella invece di righe incolonnate.
+  if (modelloUsabileEmail(modello)) {
+    const perTesto = {
+      nome: nome ? toTitleCase(nome) : "",
+      corso: nomeCorso, date: quando, citta, sede: nomeSede, indirizzo,
+      dettagli: righe.map(([k, v]) => `${k}: ${v}`).join("\n"),
+    };
+    const perHtml = { ...perTesto };
+    for (const k of Object.keys(perHtml)) perHtml[k] = pulisci(perHtml[k]);
+    perHtml.dettagli = tabellaHtml;
+    // si protegge PRIMA il testo scritto a mano e POI si sostituisce: al
+    // contrario, un valore che contiene una & verrebbe protetto due volte
+    // e nella mail si leggerebbe "&amp;"
+    const corpoHtml = applicaSegnapostiEmail(pulisci(modello.testo).replace(/\n/g, "<br>"), perHtml);
+    return {
+      oggetto: applicaSegnapostiEmail(modello.oggetto, perTesto),
+      testo: applicaSegnapostiEmail(modello.testo, perTesto),
+      html: `${apre}${corpoHtml}\n</div>`,
+    };
+  }
+
   const oggetto = `Conferma iscrizione – ${nomeCorso}${quando ? `, ${quando}` : ""}`;
   const testo = [
     saluto,
@@ -3489,12 +3520,10 @@ function componiMailConferma({ nome, corso, corsoData, loc }) {
     "Elitederma Academy",
   ].join("\n");
 
-  const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1f2a44;max-width:560px">
+  const html = `${apre}
 <p>${pulisci(saluto)}</p>
 <p>la tua iscrizione al corso <strong>${pulisci(nomeCorso)}</strong> è confermata.</p>
-<table style="border-collapse:collapse;margin:16px 0">${righe
-    .map(([k, v]) => `<tr><td style="padding:4px 16px 4px 0;color:#7a7f8c">${pulisci(k)}</td><td style="padding:4px 0"><strong>${pulisci(v)}</strong></td></tr>`)
-    .join("")}</table>
+${tabellaHtml}
 <p>Qualche giorno prima del corso riceverai gli ultimi dettagli organizzativi.<br>Per qualsiasi domanda puoi rispondere direttamente a questa mail.</p>
 <p>A presto,<br><strong>Elitederma Academy</strong></p>
 </div>`;
@@ -18830,6 +18859,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
   const [showMagazziniModal, setShowMagazziniModal] = useState(false);
   const [showIntestazioneModal, setShowIntestazioneModal] = useState(false);
   const [showNotificheModal, setShowNotificheModal] = useState(false);
+  const [showModelliEmailModal, setShowModelliEmailModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
   // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
@@ -18844,7 +18874,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
     const modaliAperti = [
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showMagazziniModal, setShowMagazziniModal], [showIntestazioneModal, setShowIntestazioneModal],
-      [showNotificheModal, setShowNotificheModal],
+      [showNotificheModal, setShowNotificheModal], [showModelliEmailModal, setShowModelliEmailModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
@@ -18852,7 +18882,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
     registraInterceptaIndietro(null);
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
-    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal, showNotificheModal,
+    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal, showNotificheModal, showModelliEmailModal,
     showTargetMasterModal, showTargetVenditoriModal,
   ]);
 
@@ -19060,6 +19090,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
         { chiave: "loghi", etichetta: "Setting loghi", Icona: IconaFormeRiga, onClick: onApriSettingLoghi },
         { chiave: "intestazione", etichetta: "Intestazione società", Icona: IconaIntestazioneRiga, onClick: () => setShowIntestazioneModal(true) },
         { chiave: "notifiche", etichetta: "Notifiche push", Icona: IconaCampanellaErp, onClick: () => setShowNotificheModal(true) },
+        { chiave: "modelliemail", etichetta: "Modelli email", Icona: IconaBustaErp, onClick: () => setShowModelliEmailModal(true) },
         { chiave: "kit", etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
       ],
     },
@@ -19400,6 +19431,12 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       {showNotificheModal && (
         <Modal title="Notifiche push" onClose={() => setShowNotificheModal(false)} maxWidth={760}>
           <PaginaNotifichePush master={master} utenteLoggato={utenteLoggato} />
+        </Modal>
+      )}
+
+      {showModelliEmailModal && (
+        <Modal title="Modelli email" onClose={() => setShowModelliEmailModal(false)} maxWidth={760}>
+          <ModelliEmail componi={componiMailConferma} />
         </Modal>
       )}
 
@@ -30419,8 +30456,14 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     }
     const chi = [nome, cognome].map((s) => (s || "").trim()).filter(Boolean).join(" ") || "questo iscritto";
     if (!window.confirm(`Inviare la mail di conferma iscrizione a ${chi}?\n\n${destinatario}`)) return;
-    const mail = componiMailConferma({ nome: (nome || "").trim(), corso, corsoData, loc });
     setInvioConferma({ stato: "lavoro" });
+    // Il modello scritto in Setting > Modelli email, riletto a ogni invio
+    // e mai tenuto in memoria: chi corregge una frase deve vederne
+    // l'effetto alla mail dopo, senza che nessuno ricarichi l'app. Se la
+    // riga non c'e' o e' stata svuotata, `componiMailConferma` ripiega da
+    // sola sul testo scritto nel codice.
+    const { modello } = await leggiModelloEmail("conferma_iscrizione");
+    const mail = componiMailConferma({ nome: (nome || "").trim(), corso, corsoData, loc, modello });
     const { data, error } = await supabase.functions.invoke("invia-email", {
       body: { a: destinatario, oggetto: mail.oggetto, html: mail.html, testo: mail.testo },
     });

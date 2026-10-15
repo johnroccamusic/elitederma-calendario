@@ -120,6 +120,16 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   una sessione valida o la service role key: la chiave pubblicabile, che è nel
   bundle, non basta. Massimo 20 destinatari per invio; le campagne agli ex
   allievi avranno una funzione propria (disiscrizione, lotti, registro).
+
+  Il testo delle mail sta in **`email_modelli`** (una riga per `chiave`, la
+  prima è `conferma_iscrizione`), scritto da Setting → Modelli email. I
+  segnaposti fra graffe li sostituisce `componiMailConferma` in App.jsx; se la
+  riga manca o è stata svuotata vale il testo scritto nel codice, che resta lì
+  apposta. È la **prima tabella con una sola policy `to authenticated`** e non
+  `anon`: da qui si decide cosa esce a nome di Elitederma, e la chiave
+  pubblicabile è nel bundle. Funziona perché il cancello di `Accesso.jsx` è
+  acceso — se un giorno lo si spegnesse, questa tabella diventerebbe illeggibile
+  e le mail tornerebbero al testo del codice senza dire niente a nessuno.
 - **`.env` non è mai stato committato**, `.gitignore` corretto, nessuna chiave nella
   storia git. Il repository è però **pubblico** su GitHub.
 - **L'SSO di Vercel risulta attivo nelle impostazioni ma non blocca.** L'API dice
