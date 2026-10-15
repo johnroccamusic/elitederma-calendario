@@ -66045,6 +66045,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [storicoAperto, setStoricoAperto] = useState(null);
   const [statoQr, setStatoQr] = useState("in_attesa");
   const [creandoQr, setCreandoQr] = useState(false);
+  // "copiato" per qualche secondo, poi torna com'era: un tasto che non
+  // risponde lascia il dubbio di non averlo premuto, e si preme due volte
+  const [linkCopiato, setLinkCopiato] = useState(false);
   // Col metodo POS ci sono due modi di incassare davvero, e vanno detti
   // perche' il conto e' identico ma il gesto no: "esterno" e' il
   // terminale fisico che si batte al banco — quello che si e' sempre
@@ -66814,7 +66817,38 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return scalate;
   }
 
-  async function chiediPagamentoQr() {
+  // IL LINK DI PAGAMENTO, COPIATO.
+  //
+  // E' lo stesso indirizzo che il QR contiene: chi non ha la cliente
+  // davanti lo incolla su WhatsApp e lei paga da casa. Non e' il link di
+  // Stripe — quello e' lunghissimo e in un QR non ci sta — ma il nostro
+  // codice corto, che porta li'.
+  //
+  // `navigator.clipboard` esiste solo in pagina sicura, e dentro certi
+  // browser dentro le app non c'e': se manca si ripiega sul vecchio
+  // `execCommand`, e se non funziona nemmeno quello il link resta
+  // scritto nella finestra e si seleziona a mano.
+  async function copiaLink(indirizzo) {
+    if (!indirizzo) return false;
+    try {
+      await navigator.clipboard.writeText(indirizzo);
+      setLinkCopiato(true); setTimeout(() => setLinkCopiato(false), 2500);
+      return true;
+    } catch { /* si prova l'altra strada */ }
+    try {
+      const campo = document.createElement("textarea");
+      campo.value = indirizzo;
+      campo.style.position = "fixed"; campo.style.opacity = "0";
+      document.body.appendChild(campo);
+      campo.select();
+      const fatto = document.execCommand("copy");
+      document.body.removeChild(campo);
+      if (fatto) { setLinkCopiato(true); setTimeout(() => setLinkCopiato(false), 2500); }
+      return fatto;
+    } catch { return false; }
+  }
+
+  async function chiediPagamentoQr(perIlLink = false) {
     setCreandoQr(true); setMsgQr("");
     const { data, error } = await supabase.functions.invoke("stripe-crea-pagamento", {
       body: {
@@ -66839,6 +66873,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     }
     setRichiestaQr(data);
     setStatoQr("in_attesa");
+    if (perIlLink) {
+      const copiato = await copiaLink(data.indirizzo);
+      if (!copiato) setMsgQr("Il telefono non mi fa copiare da solo: il link è scritto nella finestra, tienilo premuto e copialo.");
+    }
   }
 
   async function annullaRichiestaQr() {
@@ -68364,16 +68402,37 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                       ? "Il carrello è vuoto: aggiungi i prodotti e il QR si accende."
                       : totaleDaIncassare <= 0
                         ? "Il totale da incassare è zero: non c'è niente da far pagare."
-                        : "La cliente inquadra, paga e scrive lei i dati per la fattura."}
+                        : "La cliente inquadra il QR — o riceve il link su WhatsApp — paga e scrive lei i dati per la fattura."}
                   </span>
-                  <button
-                    type="button" onClick={chiediPagamentoQr} data-niente-ombra
-                    title={carrello.length === 0 ? "Carrello vuoto" : totaleDaIncassare <= 0 ? "Totale a zero" : "Prepara il QR da far inquadrare"}
-                    disabled={creandoQr || carrello.length === 0 || totaleDaIncassare <= 0}
-                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: creandoQr || carrello.length === 0 ? "default" : "pointer", opacity: creandoQr || carrello.length === 0 || totaleDaIncassare <= 0 ? 0.45 : 1, whiteSpace: "nowrap" }}
-                  >
-                    {creandoQr ? "Preparo…" : `Mostra il QR · ${fmtEuroErp2(totaleDaIncassare)}`}
-                  </button>
+                  {(() => {
+                    const spento = creandoQr || carrello.length === 0 || totaleDaIncassare <= 0;
+                    const perche = carrello.length === 0 ? "Carrello vuoto" : totaleDaIncassare <= 0 ? "Totale a zero" : null;
+                    return (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+                        {/* DUE STRADE PER LO STESSO PAGAMENTO. Il QR se la
+                            cliente e' davanti; il link se non c'e' — si
+                            incolla su WhatsApp e paga da casa. E' lo stesso
+                            indirizzo, chiesto allo stesso modo: cambia solo
+                            come le arriva. */}
+                        <button
+                          type="button" onClick={() => chiediPagamentoQr(true)} data-niente-ombra
+                          title={perche || "Prepara il link da mandare su WhatsApp"}
+                          disabled={spento}
+                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: linkCopiato ? "#2E7D32" : NAVY, background: "#fff", border: `1px solid ${linkCopiato ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 14, padding: "9px 15px", cursor: spento ? "default" : "pointer", opacity: spento ? 0.45 : 1, whiteSpace: "nowrap" }}
+                        >
+                          {linkCopiato ? "Link copiato ✓" : "Copia il link"}
+                        </button>
+                        <button
+                          type="button" onClick={() => chiediPagamentoQr(false)} data-niente-ombra
+                          title={perche || "Prepara il QR da far inquadrare"}
+                          disabled={spento}
+                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: spento ? "default" : "pointer", opacity: spento ? 0.45 : 1, whiteSpace: "nowrap" }}
+                        >
+                          {creandoQr ? "Preparo…" : `Mostra il QR · ${fmtEuroErp2(totaleDaIncassare)}`}
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
               {msgQr && <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 8 }}>{msgQr}</div>}
@@ -68422,6 +68481,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>oppure detta questo codice</div>
               <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, letterSpacing: 4, marginTop: 2 }}>{richiestaQr.codice}</div>
               <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2, wordBreak: "break-all" }}>{richiestaQr.indirizzo}</div>
+              {/* copiabile anche da qui: il QR si e' aperto, ma la cliente
+                  magari e' appena uscita e il link glielo si manda */}
+              <button
+                type="button" onClick={() => copiaLink(richiestaQr.indirizzo)}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: linkCopiato ? "#2E7D32" : NAVY, background: "#fff", border: `1px solid ${linkCopiato ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 12, padding: "9px 16px", marginTop: 10, cursor: "pointer", minHeight: 42 }}
+              >
+                {linkCopiato ? "Link copiato ✓" : "Copia il link"}
+              </button>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16 }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: statoQr === "in_attesa" ? "#C9A227" : "#C0392B" }} />
                 <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: statoQr === "in_attesa" ? "#8A6D1D" : "#C0392B" }}>
