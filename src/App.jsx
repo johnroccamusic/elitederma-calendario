@@ -432,6 +432,89 @@ function useEtichetteTasti(pagina) {
   return [nome, rinomina];
 }
 
+// L'AVVISO CHE LE MASTER LEGGONO ENTRANDO.
+//
+// Un messaggio scritto da chi amministra in Impostazioni, che compare a
+// chi entra con un'utenza master e sparisce quando preme "Ho letto".
+//
+// `aggiornato` e' la firma dell'avviso: cambiando il testo cambia lei, e
+// l'avviso torna a comparire a tutte. Un avviso corretto e' un avviso
+// nuovo, e chi l'aveva letto prima aveva letto un'altra cosa.
+const CHIAVE_AVVISO_MASTER = "avviso_master";
+const AVVISO_MASTER_VUOTO = { titolo: "", testo: "", acceso: false, aggiornato: "" };
+
+function AvvisoPerLeMaster({ masterId }) {
+  const [avviso] = useLayoutCondiviso(CHIAVE_AVVISO_MASTER, AVVISO_MASTER_VUOTO);
+  const [letto, setLetto] = useState(null);   // null = non lo so ancora
+  const [salvando, setSalvando] = useState(false);
+  const isMobile = useIsMobile();
+
+  const acceso = !!avviso?.acceso && !!String(avviso?.testo || "").trim();
+  const versione = String(avviso?.aggiornato || "");
+
+  // Si chiede al database se QUESTA master ha gia' letto QUESTA versione.
+  // Finche' non si sa, non si mostra niente: un avviso che lampeggia e
+  // sparisce e' peggio di un avviso che arriva mezzo secondo dopo.
+  useEffect(() => {
+    let vivo = true;
+    if (!masterId || !acceso || !versione) { setLetto(true); return undefined; }
+    setLetto(null);
+    supabase.from("avvisi_master_letti").select("id")
+      .eq("master_id", masterId).eq("versione", versione).maybeSingle()
+      .then(({ data }) => { if (vivo) setLetto(!!data); })
+      // se la lettura fallisce si fa finta di averlo letto: meglio un
+      // avviso mancato che un modale che non si chiude piu'
+      .catch(() => { if (vivo) setLetto(true); });
+    return () => { vivo = false; };
+  }, [masterId, acceso, versione]);
+
+  async function hoLetto() {
+    setSalvando(true);
+    const { error } = await supabase.from("avvisi_master_letti")
+      .upsert({ master_id: masterId, versione }, { onConflict: "master_id,versione" });
+    setSalvando(false);
+    // Si chiude comunque. Se la scrittura non e' passata l'avviso
+    // tornera' al prossimo ingresso, che e' il male minore: tenere
+    // qualcuno chiuso fuori dall'app per un errore di rete, no.
+    setLetto(true);
+    if (error) console.warn("avviso master non segnato come letto:", error.message);
+  }
+
+  if (!masterId || !acceso || letto !== false) return null;
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 7000, background: "rgba(14,27,51,0.55)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 18,
+    }}>
+      <div style={{
+        background: "#fff", borderRadius: 20, maxWidth: 520, width: "100%",
+        maxHeight: "82vh", overflowY: "auto", padding: isMobile ? "20px 18px" : "26px 28px",
+        boxShadow: "0 24px 60px rgba(0,0,0,0.3)",
+      }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 19 : 22, fontWeight: 700, color: NAVY, marginBottom: 10 }}>
+          {String(avviso.titolo || "").trim() || "Un avviso per te"}
+        </div>
+        {/* pre-wrap: il testo si scrive in una casella con gli a capo, e
+            quegli a capo sono parte di quello che si e' voluto dire */}
+        <div style={{ ...fontBody, fontSize: isMobile ? 14 : 15, color: NAVY, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+          {avviso.testo}
+        </div>
+        <button
+          type="button" onClick={hoLetto} disabled={salvando}
+          style={{
+            ...fontBody, marginTop: 20, width: "100%", minHeight: 50, borderRadius: 14, border: "none",
+            background: NAVY, color: "#fff", fontSize: 15.5, fontWeight: 700,
+            cursor: salvando ? "default" : "pointer", opacity: salvando ? 0.6 : 1,
+          }}
+        >
+          {salvando ? "Un momento…" : "Ho letto"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // restituisce [valore, salva]: il valore parte dal predefinito, poi
 // arriva quello condiviso appena il database risponde
 function useLayoutCondiviso(chiave, predefinito) {
@@ -17280,6 +17363,32 @@ function PaginaAspettoApp() {
   const [tastoStileAcceso, salvaTastoStile] = useLayoutCondiviso(CHIAVE_TASTO_STILE, true);
   // e la rinomina dei tasti col tocco sul nome, stessa cosa
   const [rinominaTastiAttiva, salvaRinominaTasti] = useLayoutCondiviso(CHIAVE_RINOMINA_TASTI, true);
+  // l'avviso che le master leggono entrando
+  const [avvisoMaster, salvaAvvisoMaster] = useLayoutCondiviso(CHIAVE_AVVISO_MASTER, AVVISO_MASTER_VUOTO);
+  const [bozzaAvviso, setBozzaAvviso] = useState(null);
+  const [lettureAvviso, setLettureAvviso] = useState(null);
+  const avvisoInCorso = bozzaAvviso || { ...AVVISO_MASTER_VUOTO, ...(avvisoMaster || {}) };
+  // chi l'ha letto: si rilegge quando cambia la versione
+  useEffect(() => {
+    let vivo = true;
+    const versione = String(avvisoMaster?.aggiornato || "");
+    if (!versione) { setLettureAvviso([]); return undefined; }
+    supabase.from("avvisi_master_letti").select("master_id, letto_il").eq("versione", versione)
+      .then(({ data }) => { if (vivo) setLettureAvviso(data || []); });
+    return () => { vivo = false; };
+  }, [avvisoMaster?.aggiornato]);
+  function salvaIlTesto() {
+    const pulito = {
+      titolo: String(avvisoInCorso.titolo || "").trim(),
+      testo: String(avvisoInCorso.testo || "").trim(),
+      acceso: !!avvisoInCorso.acceso,
+      // la firma cambia a ogni salvataggio: cosi' chi l'aveva letto lo
+      // rivede, e deve rivederlo — il testo non e' piu' quello
+      aggiornato: new Date().toISOString(),
+    };
+    salvaAvvisoMaster(pulito);
+    setBozzaAvviso(null);
+  }
   // Lo sfondo dell'app: una foto per il computer (16:9) e una per il
   // telefono (verticale). Si caricano nel bucket "sfondi-app" e l'indirizzo
   // si ricorda fra le impostazioni condivise; l'app le adatta da sola a
@@ -17431,6 +17540,62 @@ function PaginaAspettoApp() {
           telefono capita di aprire la finestrella del nome mentre si
           voleva solo entrare. Spento, i nomi gia' dati restano: si
           spegne l'attrezzo, non il lavoro fatto. */}
+      {/* L'AVVISO ALLE MASTER.
+          Compare a chi entra con un'utenza master e sparisce quando
+          preme "Ho letto". Chi l'ha letto resta scritto, cosi' si sa se
+          e' arrivato: su localStorage la stessa persona l'avrebbe
+          rivisto dal tablet come se non l'avesse mai aperto.
+          Cambiando il testo l'avviso torna a comparire a tutte: un
+          avviso corretto e' un avviso nuovo. */}
+      <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18 }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Avviso per le master, all'ingresso</div>
+        <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 12, lineHeight: 1.5 }}>
+          Compare a chi entra con un'utenza master e sparisce quando preme «Ho letto». Cambiando il testo torna a comparire a tutte.
+        </div>
+        <input
+          style={{ ...inputStyle, marginBottom: 10 }}
+          value={avvisoInCorso.titolo}
+          onChange={(e) => setBozzaAvviso({ ...avvisoInCorso, titolo: e.target.value })}
+          placeholder="Titolo (se lo lasci vuoto: «Un avviso per te»)"
+        />
+        <textarea
+          style={{ ...inputStyle, minHeight: 120, resize: "vertical", lineHeight: 1.5 }}
+          value={avvisoInCorso.testo}
+          onChange={(e) => setBozzaAvviso({ ...avvisoInCorso, testo: e.target.value })}
+          placeholder="Quello che devono leggere. Gli a capo che scrivi qui si vedono anche a loro."
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 12 }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input
+              type="checkbox" checked={!!avvisoInCorso.acceso}
+              onChange={(e) => setBozzaAvviso({ ...avvisoInCorso, acceso: e.target.checked })}
+              style={{ width: 20, height: 20 }}
+            />
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>Mostralo</span>
+          </label>
+          <Button onClick={salvaIlTesto} disabled={!bozzaAvviso}>
+            {bozzaAvviso ? "Salva e fallo rivedere a tutte" : "Salvato"}
+          </Button>
+          {bozzaAvviso && (
+            <button type="button" onClick={() => setBozzaAvviso(null)}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>
+              Annulla
+            </button>
+          )}
+        </div>
+        {/* chi l'ha letto: e' il motivo per cui le letture stanno su una
+            tabella invece che nel browser di ognuna */}
+        {!bozzaAvviso && avvisoMaster?.aggiornato && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
+            {lettureAvviso == null
+              ? "Sto leggendo chi l'ha aperto…"
+              : lettureAvviso.length === 0
+                ? "Nessuna l'ha ancora letto."
+                : `L'hanno letto in ${lettureAvviso.length}.`}
+          </div>
+        )}
+      </div>
+
       <div style={{ ...cardStyle, padding: isMobile ? 16 : 22, marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0, flex: "1 1 260px" }}>
           <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Modifica dei titoli dei tasti</div>
@@ -80092,6 +80257,10 @@ export default function App() {
       {/* "Stile": i colori scelti a mano sugli oggetti. Il tasto lo vede
           solo il programmatore, i colori li vedono tutti */}
       <PannelloStileOggetti vista={view} programmatore={ruoloUtente === "programmatore"} />
+      {/* l'avviso alle master: sta qui, fuori da ogni vista, perche' non
+          appartiene a una pagina — appartiene all'ingresso */}
+      <AvvisoPerLeMaster masterId={utenteLoggato?.masterId || null} />
+
       {preferitiDisponibili && slotPreferitoInScelta != null && (
         <ModaleScegliPreferito
           destinazioni={destinazioniPreferiti} onScegli={scegliPreferito} onClose={() => setSlotPreferitoInScelta(null)}
