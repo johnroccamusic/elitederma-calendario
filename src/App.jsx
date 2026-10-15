@@ -40343,11 +40343,31 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
-        <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "needling", l: "Generazione automatica codici needling" }, { v: "referral", l: "Genera referral code" }, { v: "acquistomaster", l: "Genera codice sconto master" }].map((t) => (
-            <button key={t.v} onClick={() => { setTab(t.v); setMsg(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 18, border: "none", background: tab === t.v ? NAVY : BG, color: tab === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
-              {t.l}
-            </button>
+        {/* I cinque modi di fare un codice, come i tasti della home:
+            quadrato, icona in alto, nome sotto. Erano pastiglie marroni
+            in fila, tutte uguali tranne che per la scritta — e la piu'
+            lunga, "Generazione automatica codici needling", era il
+            doppio delle altre e rompeva la riga.
+            `auto-fit` con `minmax(min(..))` ne mette quante ne stanno,
+            senza che nessuno decida un numero: cinque su schermo largo,
+            due o tre sul telefono. */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(auto-fit, minmax(min(${isMobile ? 140 : 168}px, 100%), 1fr))`,
+          gap: isMobile ? 8 : 14, marginBottom: isMobile ? 16 : 22,
+        }}>
+          {[
+            { v: "manuale", l: "Generazione manuale", Icona: IconaMatitaNota },
+            { v: "automatica", l: "Generazione automatica", Icona: IconaOrologioCard },
+            { v: "needling", l: "Automatica codici needling", Icona: IconaCatEtichetta },
+            { v: "referral", l: "Genera referral code", Icona: IconaPersonaAggiungi },
+            { v: "acquistomaster", l: "Genera codice sconto master", Icona: IconaTileMaster },
+          ].map((t) => (
+            <TileHome
+              key={t.v} title={t.l} Icona={t.Icona} etichettaDueRighe
+              evidenziato={tab === t.v}
+              onClick={() => { setTab(t.v); setMsg(""); window.scrollTo(0, 0); }}
+            />
           ))}
         </div>
 
