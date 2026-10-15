@@ -52548,7 +52548,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
         && (v.tipo_movimento || "vendita") === "vendita"
         // due strade per arrivare qui: la vendita e' di una sede centrale
         // (li' la merce non ce l'ha addosso nessuno) oppure chi ha
-        // venduto ha premuto "Ritira adesso" al banco
+        // venduto ha premuto "Manda in preparazione" al banco
         && (v.da_preparare === true || (v.corso_data_id && sediCentraliPerCorso.has(v.corso_data_id)))
         // "preparata" lo scrive SOLO chi preme il tasto qui: non dipende
         // da quale versione dell'app aveva in mano chi ha venduto
@@ -66480,7 +66480,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // solo dentro il modulo del corriere. Ora e' una casella sua, con i suoi
   // campi, e la spedizione — quando c'e' — se li fa bastare.
   const [fattAttiva, setFattAttiva] = useState(false);
-  // "Ritira adesso": la merce non passa di mano al banco, il pacco lo
+  // "Manda in preparazione": la merce non passa di mano al banco, il pacco lo
   // monta chi sta in magazzino. La vendita compare in "Ordini in arrivo"
   // insieme a quelli dello shop online. Vale per qualunque vendita, non
   // solo per quelle di una sede centrale, che ci finiscono gia' da sole.
@@ -67751,7 +67751,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
       richiede_fattura: fattAttiva,
-      // "Ritira adesso": il pacco lo prepara chi sta in magazzino, e la
+      // "Manda in preparazione": il pacco lo prepara chi sta in magazzino, e la
       // vendita compare in "Ordini in arrivo" insieme a quelli dello shop
       da_preparare: ritiroAttivo,
       // se qualche riga esce da un kit in aula la vendita porta la
@@ -68824,7 +68824,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           ...(puoOmaggiare ? [{ id: "pos-omaggio", Icona: IconaRegalo, testo: "Omaggio", acceso: omaggioAttivo, cambia: setOmaggioAttivo }] : []),
           { id: "pos-spedizione", Icona: IconaCamionConsegna, testo: "Aggiungi spese spedizione", acceso: spedizioneAttiva, cambia: setSpedizioneAttiva },
           { id: "pos-richiede-fattura", Icona: IconaCatDocumento, testo: "Richiede fattura", acceso: fattAttiva, cambia: setFattAttiva },
-          { id: "pos-ritira-adesso", Icona: IconaTileLogistica, testo: "Ritira adesso", acceso: ritiroAttivo, cambia: setRitiroAttivo },
+          // L'id resta quello di prima: e' l'identita' con cui il colore
+          // dato a mano in Aspetto dell'app e' stato salvato, e cambiarla
+          // vorrebbe dire ritrovare il tasto grigio.
+          { id: "pos-ritira-adesso", Icona: IconaTileLogistica, testo: "Manda in preparazione", acceso: ritiroAttivo, cambia: setRitiroAttivo },
         ].map((o, i) => (
           <React.Fragment key={o.id}>
             {i > 0 && (righeOpzioni
