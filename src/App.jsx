@@ -13990,26 +13990,33 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             l'accademia (ha il permesso Setting) parte dalla sua ma puo'
             passare a quella di ogni altra master */}
         {(!masterLoggataId || sceltaLibera) && !(assistenteId && !masterLoggataId && !sceltaLibera) && (
-          <select
-            style={{ ...inputStyle, width: "auto", minWidth: 220, marginBottom: 20 }}
-            value={masterSelId} onChange={(e) => setMasterSelId(e.target.value)}
-          >
-            <option value="">— scegli master —</option>
-            {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-            {/* Anche le assistenti, da qui. Chi dirige l'accademia guarda
-                la dashboard di chiunque: le master dalla prima parte
-                dell'elenco, le assistenti dalla seconda — separate, o non
-                si capisce chi e' chi. Quelle che sono anche master non si
-                ripetono: la loro dashboard e' gia' qui sopra, con le
-                classi dove assistono marcate. */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+            {/* DUE TENDINE, non una con due gruppi. Una sola, divisa in
+                sezioni, sul telefono si apre come un elenco unico e le
+                assistenti finivano in fondo a venti nomi di master: c'e'
+                chi non le ha proprio viste. Due si leggono per quello
+                che sono — scegli una master, oppure un'assistente. */}
+            <select
+              style={{ ...inputStyle, width: "auto", minWidth: 210 }}
+              value={assistenteSfogliataId ? "" : masterSelId}
+              onChange={(e) => setMasterSelId(e.target.value)}
+            >
+              <option value="">— scegli master —</option>
+              {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+            </select>
             {assistentiSenzaDashboard.length > 0 && (
-              <optgroup label="Assistenti">
+              <select
+                style={{ ...inputStyle, width: "auto", minWidth: 210 }}
+                value={assistenteSfogliataId ? `ass:${assistenteSfogliataId}` : ""}
+                onChange={(e) => setMasterSelId(e.target.value)}
+              >
+                <option value="">— scegli assistente —</option>
                 {assistentiSenzaDashboard.map((a) => (
                   <option key={`ass:${a.id}`} value={`ass:${a.id}`}>{String(a.nome || "").toUpperCase()}</option>
                 ))}
-              </optgroup>
+              </select>
             )}
-          </select>
+          </div>
         )}
 
         {!masterSel ? (
@@ -79739,7 +79746,12 @@ export default function App() {
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
-    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico", "loghi_categorie", "loghi_impostazioni"],
+    // `assistente` e `corsi_date_docenti` servono da quando l'area master
+    // ospita anche le assistenti: senza, l'elenco arriva vuoto e la
+    // seconda tendina non compare proprio — che e' esattamente quello che
+    // si vedeva. Non e' un errore: nessuno aveva chiesto quelle tabelle.
+    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico", "loghi_categorie", "loghi_impostazioni", "assistente", "corsi_date_docenti"],
+    dashboardassistente: ["assistente", "corsi_date_docenti", "corsi", "location", "corsi_date", "hotel", "iscritti"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
