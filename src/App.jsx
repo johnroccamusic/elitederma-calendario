@@ -26587,7 +26587,17 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
     ricarica(["corsi_date", "location", "hotel"]);
   }
   async function eliminaEsistente(id) {
-    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    // Si arriva qui col DOPPIO CLICK su una barra del calendario, e la
+    // domanda era "Sei sicuro di voler cancellare questo dato?" — un
+    // dato. Ma `iscritti.corso_data_id` e' ON DELETE CASCADE: insieme
+    // alla classe se ne vanno le allieve, i loro acconti e saldi, il
+    // coupon, i docenti e la logistica dei kit. Si conta prima, e il
+    // numero si scrive nella domanda.
+    const quante = iscritti.filter((i) => i.corso_data_id === id).length;
+    const domanda = quante
+      ? `Questa classe ha ${quante} iscritt${quante === 1 ? "a" : "e"}.\n\nCancellandola spariscono anche loro, con acconti, saldi e codice sconto. Non si recuperano.\n\nCancellare lo stesso?`
+      : "Cancellare questa data? Non ha iscritti.";
+    if (!window.confirm(domanda)) return;
     const { error } = await supabase.from("corsi_date").delete().eq("id", id);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     setPopupElimina(null);
@@ -64802,7 +64812,44 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
     ricarica(["location"]);
   }
   async function eliminaLocation(id) {
-    if (!window.confirm("Sei sicuro di voler cancellare questa sede? Rimuove anche le date collegate a quella città.")) return;
+    // CANCELLARE UNA SEDE NON TOGLIE UNA RIGA: la porta via con tutto
+    // quello che ci sta attaccato. `corsi_date.location_id` e'
+    // ON DELETE CASCADE verso `location`, e a sua volta
+    // `iscritti.corso_data_id` e' ON DELETE CASCADE verso `corsi_date`.
+    // Una sede cancellata si porta via OGNI corso tenuto li' e OGNI
+    // allieva iscritta, con acconti, saldi, coupon, docenti e logistica.
+    // E non lascia righe orfane: la cascata cancella anche le prove.
+    //
+    // La domanda di prima diceva "rimuove anche le date collegate a
+    // quella città". Le date, non le persone. Adesso si contano prima, e
+    // se c'e' anche una sola iscritta non si cancella niente: prima si
+    // svuota la città, e quella e' una decisione che si prende a mente
+    // fredda, un corso alla volta.
+    const sede = location.find((l) => l.id === id);
+    const { data: classi, error: erroreConta } = await supabase
+      .from("corsi_date").select("id, data_inizio").eq("location_id", id);
+    if (erroreConta) { setMsg("Non riesco a controllare cosa verrebbe cancellato: " + erroreConta.message); return; }
+    const ids = (classi || []).map((c) => c.id);
+    let allieve = 0;
+    if (ids.length) {
+      const { count, error: erroreIscritti } = await supabase
+        .from("iscritti").select("id", { count: "exact", head: true }).in("corso_data_id", ids);
+      if (erroreIscritti) { setMsg("Non riesco a contare gli iscritti: " + erroreIscritti.message); return; }
+      allieve = count || 0;
+    }
+    if (allieve > 0) {
+      window.alert(
+        `Non cancello "${sede?.nome || "questa sede"}".\n\n` +
+        `Ci sono ${ids.length} cors${ids.length === 1 ? "o" : "i"} con ${allieve} iscritt${allieve === 1 ? "a" : "e"}: ` +
+        `cancellando la sede sparirebbero anche loro, con acconti, saldi e codici sconto, e non si recuperano.\n\n` +
+        `Se la sede va davvero tolta, prima vanno chiusi o spostati i corsi.`,
+      );
+      return;
+    }
+    const avviso = ids.length
+      ? `Cancellare "${sede?.nome || "questa sede"}"?\n\nSi porta via anche ${ids.length} cors${ids.length === 1 ? "o" : "i"} a calendario (nessun iscritto). L'operazione non si annulla.`
+      : `Cancellare "${sede?.nome || "questa sede"}"?\n\nNon ha corsi collegati.`;
+    if (!window.confirm(avviso)) return;
     const { error } = await supabase.from("location").delete().eq("id", id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg("Sede eliminata.");
@@ -79879,6 +79926,18 @@ export default function App() {
     const numIscritti = iscritti.filter((i) => i.corso_data_id === id).length;
     const etichetta = cd ? (cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`) : "";
     if (!window.confirm(`Stai per cancellare definitivamente una data GIÀ CONCLUSA (${etichetta}) insieme a ${numIscritti} iscritt${numIscritti === 1 ? "o" : "i"}, ai loro dati di pagamento e al codice referral di questa edizione. L'operazione non è reversibile. Continuare?`)) return;
+    // Seconda conferma, scritta a mano: questa e' l'UNICA strada che puo'
+    // cancellare delle allieve, e deve costare qualcosa. Il database
+    // adesso rifiuta di cancellare una classe che ha iscritti (il vincolo
+    // e' RESTRICT, non piu' CASCADE), quindi le righe si tolgono qui,
+    // dichiarandolo, invece di sparire da sole in silenzio.
+    if (numIscritti > 0) {
+      const atteso = "CANCELLA";
+      const scritto = window.prompt(`Ultima verifica.\n\nStai per cancellare ${numIscritti} iscritt${numIscritti === 1 ? "o" : "i"} insieme alla classe. Non si recuperano.\n\nPer confermare scrivi ${atteso} qui sotto.`);
+      if ((scritto || "").trim().toUpperCase() !== atteso) { window.alert("Cancellazione annullata."); return; }
+      const { error: erroreIscritti } = await supabase.from("iscritti").delete().eq("corso_data_id", id);
+      if (erroreIscritti) { window.alert("Non sono riuscito a cancellare gli iscritti: " + erroreIscritti.message); return; }
+    }
     const { error } = await supabase.from("corsi_date").delete().eq("id", id);
     if (error) {
       // il messaggio grezzo del database ("violates foreign key
