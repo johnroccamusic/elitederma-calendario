@@ -30367,6 +30367,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // il codice fiscale: lo chiede anche il venditore dal 16/10/2026,
   // prima esisteva solo fra i campi del modulo dell'allieva
   const [codiceFiscale, setCodiceFiscale] = useState("");
+  // cosa manca ancora alla scheda. Non impedisce di salvare: si vede e
+  // basta, finche' qualcuno non lo completa.
+  const [daCompletare, setDaCompletare] = useState([]);
+  const [avvisoQuote, setAvvisoQuote] = useState("");
 
   // IL PONTE FRA LE CHIAVI DEL MODULO E LE VARIABILI DELLA SCHEDA.
   //
@@ -31117,6 +31121,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setCorsoParziale(false); setGiorniPresenza([]); setTipoOfferta(""); setTagliaDivisa("");
     setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza(""); setEmailIscritto(""); setCodiceFiscale("");
+    setDaCompletare([]); setAvvisoQuote("");
     setRichiedeFattura(false); svuotaCampiFattura();
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
@@ -31140,6 +31145,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setCivicoResidenza(i.civico_residenza || ""); setInternoResidenza(i.interno_residenza || "");
     setProvResidenza(i.prov_residenza || ""); setStatoResidenza(i.stato_residenza || "");
     setCodiceFiscale(i.codice_fiscale || "");
+    setDaCompletare([]); setAvvisoQuote("");
     setVecchiaIscrizione(i.vecchia_iscrizione === true);
     setPagAcconto({
       imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
@@ -31341,7 +31347,21 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // esistente, altrimenti un campo mancante da prima (es. taglia divisa mai
   // compilata) bloccherebbe in silenzio ogni futuro salvataggio automatico.
   async function persistiIscritto(strict = !modificandoId) {
-    if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return false; }
+    // QUATTRO CAMPI, E BASTA. Nome, cognome, email e cellulare: senza
+    // questi un'iscrizione non si rintraccia e non si contatta. Tutto il
+    // resto si completa dopo — un acconto preso in fiera col pacchetto
+    // ancora da decidere e' la normalita', e bloccarlo voleva dire far
+    // tenere i dati su un foglietto.
+    const serveAncora = [];
+    if (!nome.trim())     serveAncora.push("nome");
+    if (!cognome.trim())  serveAncora.push("cognome");
+    if (!emailIscritto.trim()) serveAncora.push("email");
+    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailIscritto.trim())) serveAncora.push("un'email scritta bene");
+    if (!telefono.trim()) serveAncora.push("cellulare");
+    if (serveAncora.length) {
+      setMsg(`Per salvare serve ancora: ${serveAncora.join(", ")}.`);
+      return false;
+    }
     if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
     // Il dermografo non si chiede più qui: la domanda arriva solo quando il
     // pacchetto scelto dichiara "Dermografo da acquistare a parte", e vive
@@ -31424,36 +31444,52 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     const pattuitoConIva = round2(pattuito * 1.22);
     const tornaSulNetto = Math.abs(sommaImponibili - pattuito) <= 0.01;
     const tornaSulLordo = Math.abs(sommaTotali - pattuitoConIva) <= 0.01 || Math.abs(sommaTotali - pattuito) <= 0.01;
-    if (strict && pattuito > 0 && !tornaSulNetto && !tornaSulLordo) {
+    // LE QUOTE CHE NON COPRONO IL PATTUITO: si avvisa, non si blocca.
+    //
+    // Il controllo serve e resta — un'iscrizione da 590 con dentro solo
+    // l'acconto da 150 e' l'errore grosso che si vuole intercettare — ma
+    // da oggi non impedisce di salvare: una scheda a meta' e' un fatto
+    // normale, e il venditore deve poterla mettere via e tornarci.
+    // Diventa una frase che resta sotto gli occhi finche' i conti non
+    // tornano.
+    let avvisoQuote = "";
+    if (pattuito > 0 && !tornaSulNetto && !tornaSulLordo) {
       const differenza = round2(Math.abs(pattuito - sommaImponibili));
-      setMsg(sommaImponibili < pattuito
-        ? `Impossibile salvare: le quote registrate coprono ${fmtEuroErp2(sommaImponibili)} di imponibile (${fmtEuroErp2(sommaTotali)} con IVA) contro un pattuito di ${fmtEuroErp2(pattuito)} (${fmtEuroErp2(pattuitoConIva)} con IVA). Mancano ${fmtEuroErp2(differenza)} da distribuire fra quota pre corso e da avere al corso.`
-        : `Impossibile salvare: le quote registrate coprono ${fmtEuroErp2(sommaImponibili)} di imponibile (${fmtEuroErp2(sommaTotali)} con IVA) e superano di ${fmtEuroErp2(differenza)} il pattuito di ${fmtEuroErp2(pattuito)} (${fmtEuroErp2(pattuitoConIva)} con IVA).`);
-      return false;
+      avvisoQuote = sommaImponibili < pattuito
+        ? `Attenzione: le quote coprono ${fmtEuroErp2(sommaImponibili)} di imponibile (${fmtEuroErp2(sommaTotali)} con IVA) contro un pattuito di ${fmtEuroErp2(pattuito)} (${fmtEuroErp2(pattuitoConIva)} con IVA). Mancano ${fmtEuroErp2(differenza)} da distribuire fra quota pre corso e da avere al corso.`
+        : `Attenzione: le quote coprono ${fmtEuroErp2(sommaImponibili)} di imponibile (${fmtEuroErp2(sommaTotali)} con IVA) e superano di ${fmtEuroErp2(differenza)} il pattuito di ${fmtEuroErp2(pattuito)} (${fmtEuroErp2(pattuitoConIva)} con IVA).`;
     }
 
-    const altriMancanti = [];
-    if (strict) {
-      // il pacchetto dichiara che il dermografo si compra a parte: allora
-      // modello e modalità di pagamento non sono facoltativi
-      if (dermografoAParte && !dermografoScelta) altriMancanti.push("la risposta sul dermografo acquistato a parte");
-      if (dermografoAParte && dermografoComprato && !dermografoPagamento) altriMancanti.push("come l'allievo paga il dermografo");
-      if (totalePattuito === "") altriMancanti.push("totale pattuito");
-      if (pagAcconto.totale === "") altriMancanti.push("quota acconto");
-      if (!pacchettoKit.trim()) altriMancanti.push("pacchetto/kit");
-      if (!tutor.trim()) altriMancanti.push("tutor");
-      if (!telefono.trim()) altriMancanti.push("numero di telefono");
-      if (!tagliaDivisa) altriMancanti.push("taglia divisa");
-    }
+    // QUELLO CHE MANCA ALLA SCHEDA, ma non impedisce di salvarla.
+    //
+    // Prima questo elenco bloccava il salvataggio di ogni iscrizione
+    // nuova: senza pacchetto, tutor, taglia divisa, totale pattuito e
+    // quota acconto non si andava avanti. Era pensato per non lasciare
+    // schede a meta', e otteneva l'opposto — la scheda restava fuori
+    // dall'app.
+    //
+    // Resta il metodo di pagamento di una quota con un importo scritto:
+    // quello non e' "incompleto", e' un numero che non si sa dove mettere
+    // in contabilita'. E resta il file del bonifico di una quota gia'
+    // segnata pagata, che e' la prova di un incasso.
+    const daCompletare = [];
+    if (dermografoAParte && !dermografoScelta) daCompletare.push("la risposta sul dermografo acquistato a parte");
+    if (dermografoAParte && dermografoComprato && !dermografoPagamento) daCompletare.push("come l'allievo paga il dermografo");
+    if (totalePattuito === "") daCompletare.push("totale pattuito");
+    if (pagAcconto.totale === "") daCompletare.push("quota acconto");
+    if (!pacchettoKit.trim()) daCompletare.push("pacchetto/kit");
+    if (!tutor.trim()) daCompletare.push("tutor");
+    if (!tagliaDivisa) daCompletare.push("taglia divisa");
 
-    if (metodiMancanti.length > 0 || fileBonificoMancanti.length > 0 || altriMancanti.length > 0) {
+    if (metodiMancanti.length > 0 || fileBonificoMancanti.length > 0) {
       const parti = [];
       if (metodiMancanti.length > 0) parti.push(`manca metodo di pagamento ${metodiMancanti.join(", oppure ")}`);
       if (fileBonificoMancanti.length > 0) parti.push(`manca il file del bonifico per ${fileBonificoMancanti.join(", ")}`);
-      altriMancanti.forEach((campo) => parti.push(`manca ${campo}`));
       setMsg("Impossibile salvare: " + parti.join(". ") + ".");
       return false;
     }
+    setDaCompletare(daCompletare);
+    setAvvisoQuote(avvisoQuote);
 
     setCaricando(true);
     try {
@@ -33590,6 +33626,20 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             )}
           </div>
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
+          {/* QUELLO CHE MANCA, senza impedire di salvare. Prima queste
+              cose bloccavano il salvataggio di un'iscrizione nuova, e una
+              scheda presa in fiera a meta' restava fuori dall'app. Ora si
+              salva e resta scritto cosa manca, finche' non si completa. */}
+          {!soloLettura && avvisoQuote && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, background: "#FDF8EF", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "9px 12px", marginTop: 10, lineHeight: 1.55 }}>
+              {avvisoQuote}
+            </div>
+          )}
+          {!soloLettura && daCompletare.length > 0 && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, background: "#FDF8EF", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "9px 12px", marginTop: 10, lineHeight: 1.55 }}>
+              <b style={{ color: NAVY }}>Da completare:</b> {daCompletare.join(", ")}.
+            </div>
+          )}
         </div>
         </div>
       )}

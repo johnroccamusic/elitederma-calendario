@@ -21,6 +21,7 @@ import React from "react";
 import { Field } from "../ui/base.jsx";
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/scheda.jsx";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
+import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE } from "./disposizione.js";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -141,7 +142,7 @@ export function AreaAnagrafica({
                       onCambiaObbligo={onCambiaObbligo}
                     />
                   )}
-                  <Field label={campo.etichetta}>
+                  <Field label={configurazione ? campo.etichetta : <EtichettaVenditore campo={campo} />}>
                     <Casella
                       campo={campo}
                       valore={configurazione ? "" : valori[campo.chiave]}
@@ -158,6 +159,32 @@ export function AreaAnagrafica({
         </div>
       ))}
     </div>
+  );
+}
+
+// L'ETICHETTA NELLA SCHEDA DEL VENDITORE.
+//
+// Quattro campi hanno l'asterisco rosso e senza di loro non si salva;
+// tutti gli altri dicono "opzionale", perche' il guasto da cui si viene
+// e' che il venditore non riusciva a salvare un'iscrizione presa in
+// fiera con mezzo pacchetto ancora da decidere, e non capiva perche'.
+//
+// Nella pagina di configurazione questa roba non compare: li' gli
+// asterischi vogliono dire un'altra cosa — cosa deve riempire l'allieva
+// — e due significati sullo stesso segno sarebbero peggio di niente.
+function EtichettaVenditore({ campo }) {
+  const serve = OBBLIGATORI_VENDITORE.includes(campo.chiave);
+  const nota = NOTA_VENDITORE[campo.chiave];
+  return (
+    <span>
+      {campo.etichetta}
+      {serve && <span style={{ color: "#B3261E", fontWeight: 700 }}> *</span>}
+      {!serve && (
+        <span style={{ color: CREAM_BORDER, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+          {" "}{nota || "opzionale"}
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -114,3 +114,28 @@ export const GRUPPI_LETTURA = [
   { titolo: "Pagherà in totale", icona: "portafoglio", chiavi: ["totale_senza_iva", "totale_con_interessi"] },
   { titolo: "Dati organizzativi", icona: "clipboard", chiavi: ["accordi_commerciali", "richiede_modelle", "numero_modelle", "prezzo_speciale_modelle", "taglia_divisa", "note"] },
 ];
+
+// COSA SERVE DAVVERO PER SALVARE UNA SCHEDA.
+//
+// Quattro campi, e sono quelli senza i quali l'iscrizione non si puo'
+// nemmeno rintracciare: come si chiama, e come la si raggiunge. Tutto il
+// resto si completa dopo — il venditore prende un acconto in fiera e il
+// pacchetto lo decide la settimana dopo, e bloccarlo li' voleva dire
+// fargli tenere i dati su un foglietto.
+//
+// NON CONFONDERE con l'obbligatorieta' del modulo dell'allieva, che e'
+// un'altra cosa e sta in `modulo_iscrizione_campi`: quella dice cosa
+// deve riempire LEI per poter spedire, e la decide chi amministra dalla
+// pagina in Setting.
+export const OBBLIGATORI_VENDITORE = ["nome", "cognome", "email", "telefono"];
+
+// Cosa scrivere accanto a un campo nella scheda del venditore. I dati di
+// fatturazione non sono mai "opzionali" in senso stretto: non si chiedono
+// affatto a un privato, e a un'azienda servono tutti — tranne il civico,
+// che certi indirizzi non hanno, e il codice destinatario e la PEC, che
+// sono due strade per la stessa cosa e ne basta una.
+export const NOTA_VENDITORE = {
+  fattura_civico:   "opzionale",
+  fattura_cod_dest: "o la PEC",
+  fattura_pec:      "o il Cod. Dest.",
+};
