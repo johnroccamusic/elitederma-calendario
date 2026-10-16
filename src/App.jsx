@@ -19443,7 +19443,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       )}
 
       {showModuloIscrizioneModal && (
-        <Modal title="Modulo di iscrizione" onClose={() => setShowModuloIscrizioneModal(false)} maxWidth={820}>
+        <Modal title="Modulo di iscrizione" onClose={() => setShowModuloIscrizioneModal(false)} maxWidth={820} scorrevole>
           <ModuloIscrizione icone={{
             persona: IconaPersonaSemplice, ricevuta: IconaRicevutaErp, scatola: IconaScatolaErp,
             banconota: IconaBanconota, clipboard: IconaClipboardErp, portafoglio: IconaPortafoglio,
@@ -24591,7 +24591,12 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   );
 }
 
-function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40 }) {
+// `scorrevole`: la finestra si tiene dentro lo schermo e a scorrere e' il
+// suo contenuto, non la pagina sotto. Serve a quelle lunghe — il modulo
+// di iscrizione sono tredici riquadri — dove altrimenti il titolo e la
+// crocetta per chiudere finiscono fuori vista dopo due dita di scroll, e
+// non si capisce piu' dove si e'.
+function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scorrevole = false }) {
   const overlayRef = React.useRef(null);
   const isMobile = useIsMobile();
   // In fondo allo schermo di un telefono non c'e' solo il vetro: c'e' la
@@ -24647,10 +24652,18 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40 }) {
           partire dall'alto e a scorrere — con margini automatici non viene
           mai tagliata in cima, come succederebbe con align-items: center */}
       <div
-        style={{ ...cardStyle, maxWidth, width: "100%", height: "fit-content", margin: "auto" }}
+        style={{
+          ...cardStyle, maxWidth, width: "100%", margin: "auto",
+          ...(scorrevole
+            ? { maxHeight: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }
+            : { height: "fit-content" }),
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          ...(scorrevole ? { flex: "0 0 auto", paddingBottom: 10, borderBottom: `1px solid ${CREAM_BORDER}` } : null),
+        }}>
           <div style={{ ...hStyle, margin: 0 }}>{title}</div>
           <button
             onClick={onClose}
@@ -24660,7 +24673,9 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40 }) {
             ×
           </button>
         </div>
-        {children}
+        {scorrevole
+          ? <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0, paddingTop: 12, marginRight: -6, paddingRight: 6 }}>{children}</div>
+          : children}
       </div>
     </div>
   );
