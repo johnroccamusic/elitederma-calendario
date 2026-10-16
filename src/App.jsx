@@ -11141,7 +11141,7 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
 }
 
 
-function PaginaDashboardVenditori({
+function PaginaDashboardVenditori({ eventi = [], onApriEvento,
   corsi, location, corsiDate, iscritti, master, venditori, ricarica, onBack, apriData, onApriIscritto, venditoreBloccato,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
   cronologicoHome, setCronologicoHome,
@@ -11679,6 +11679,7 @@ function PaginaDashboardVenditori({
 
             {tabDashboardVenditore === "corsi" && (
               <SezioneDateCorsi
+                eventi={eventi} onApriEvento={onApriEvento}
                 titolo="Iscrivi Allievo"
                 corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
                 ricarica={ricarica} onApriData={apriData}
@@ -15814,7 +15815,7 @@ function PannelloProvvigioniModelle({ corsi, location, corsiDate, iscritti, spes
   );
 }
 
-function PaginaGestioneModelle({
+function PaginaGestioneModelle({ eventi = [], onApriEvento,
   corsi, location, corsiDate, iscritti, master, corsiGiorni, spese = [], ricarica, onBack, apriDataModelle, onApriIscritto,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
   cronologicoHome, setCronologicoHome,
@@ -15899,6 +15900,7 @@ function PaginaGestioneModelle({
           />
         ) : (
           <SezioneDateCorsi
+                eventi={eventi} onApriEvento={onApriEvento}
             corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
             ricarica={ricarica} onApriData={apriDataModelle}
             filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
@@ -79977,7 +79979,7 @@ export default function App() {
     slidecorsi: ["corsi"],
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
-    dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
+    dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "eventi"],
     // `assistente` e `corsi_date_docenti` servono da quando l'area master
     // ospita anche le assistenti: senza, l'elenco arriva vuoto e la
     // seconda tendina non compare proprio — che e' esattamente quello che
@@ -79985,7 +79987,7 @@ export default function App() {
     dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico", "loghi_categorie", "loghi_impostazioni", "assistente", "corsi_date_docenti"],
     dashboardassistente: ["assistente", "corsi_date_docenti", "corsi", "location", "corsi_date", "hotel", "iscritti"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
-    gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese"],
+    gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese", "eventi"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     compensipremi: [],
     gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
@@ -82139,6 +82141,7 @@ export default function App() {
 
       {view === "dashboardvenditori" && (
         <PaginaDashboardVenditori
+          eventi={eventi} onApriEvento={apriEvento}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} venditori={venditori}
           ricarica={fetchDati} onBack={() => { setVenditoreLoggato(null); setView("home"); }} apriData={apriData}
           onApriIscritto={apriIscritto}
@@ -82444,6 +82447,7 @@ export default function App() {
 
       {view === "gestionemodelle" && (
         <PaginaGestioneModelle
+          eventi={eventi} onApriEvento={apriEvento}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} corsiGiorni={corsiGiorni}
           spese={spese}
           ricarica={fetchDati} onBack={() => setView("home")} apriDataModelle={apriDataModelle}
