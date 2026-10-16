@@ -1778,6 +1778,39 @@ function sanitizzaNomeFile(nome) {
 // wa.me vuole solo cifre col prefisso internazionale: i numeri qui sono
 // quasi sempre cellulari italiani inseriti senza prefisso, quindi si
 // aggiunge "39" solo se non sembra già averlo (numero internazionale più lungo)
+// Il cellulare si scrive col prefisso internazionale: +39 333 1234567.
+//
+// Non e' un capriccio di forma. Lo stesso numero scritto "3331234567",
+// "+39 333 1234567" e "0039 333 1234567" sono tre scritture diverse per
+// WhatsApp, per chi cerca un'allieva e per chi un giorno confrontera' le
+// anagrafiche: senza una forma sola, la stessa persona risulta tre volte.
+//
+// Si corregge da sola uscendo dal campo, invece di rifiutare quello che
+// e' stato scritto: chi detta un numero al telefono non deve anche
+// ricordarsi il formato.
+function normalizzaCellulare(testo) {
+  const grezzo = String(testo || "").trim();
+  if (!grezzo) return "";
+  // 0039 e 00 39 sono lo stesso prefisso scritto all'antica
+  let cifre = grezzo.replace(/[^\d+]/g, "");
+  if (cifre.startsWith("00")) cifre = "+" + cifre.slice(2);
+  if (cifre.startsWith("+")) {
+    const sole = cifre.slice(1).replace(/\D/g, "");
+    // niente cifre dopo il piu': non e' un numero, si lascia com'e'
+    return sole ? "+" + sole : grezzo;
+  }
+  const sole = cifre.replace(/\D/g, "");
+  // nessuna cifra: qualcuno ci ha scritto dell'altro. Non e' compito di
+  // questa funzione cancellarglielo — meglio un campo strano che un
+  // campo svuotato da solo.
+  if (!sole) return grezzo;
+  // un numero italiano senza prefisso: dieci cifre che cominciano per 3.
+  // Se non somiglia a questo si lascia com'e' — meglio un numero strano
+  // che un +39 appiccicato davanti a un fisso estero.
+  if (sole.length === 10 && sole.startsWith("3")) return "+39" + sole;
+  return grezzo;
+}
+
 function numeroWhatsapp(telefono) {
   const cifre = (telefono || "").replace(/\D/g, "");
   return cifre.length > 10 ? cifre : `39${cifre}`;
@@ -32672,7 +32705,16 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                     <Field label="Email"><input value={emailIscritto} onChange={(e) => setEmailIscritto(e.target.value)} onBlur={autosalva} style={campoAreaScheda} /></Field>
                   </div>
                   <div style={{ flex: "1 1 150px" }}>
-                    <Field label="Cellulare"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                    <Field label="Cellulare (+39...)">
+                      <input
+                        value={telefono}
+                        onChange={(e) => setTelefono(e.target.value)}
+                        onBlur={() => { setTelefono(normalizzaCellulare(telefono)); autosalva(); }}
+                        placeholder="+39 333 1234567"
+                        inputMode="tel"
+                        style={campoAreaScheda}
+                      />
+                    </Field>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>

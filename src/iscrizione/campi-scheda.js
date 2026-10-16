@@ -21,7 +21,7 @@ export const CAMPI_MODULO = [
   { chiave: "prov_residenza", etichetta: "Provincia" },
   { chiave: "stato_residenza", etichetta: "Stato" },
   { chiave: "email", etichetta: "Email" },
-  { chiave: "telefono", etichetta: "Cellulare" },
+  { chiave: "telefono", etichetta: "Cellulare (+39...)" },
   { chiave: "tutor", etichetta: "Tutor" },
   { chiave: "tipo_cliente", etichetta: "Intestazione (Privato / Azienda)" },
   // Dati di fatturazione
