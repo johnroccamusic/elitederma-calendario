@@ -21,9 +21,9 @@ import { componiDaModello, modelloUsabile, valoriCorso } from "../../supabase/fu
 // La usa l'invio vero e la usa l'anteprima in Impostazioni: se fossero
 // due scritture, un giorno l'anteprima mostrerebbe una mail e l'allieva
 // ne riceverebbe un'altra.
-export function componiMailModulo({ valori, link, modello = null }) {
+export function componiMailModulo({ valori, righe = [], link, modello = null }) {
   if (modelloUsabile(modello)) {
-    const mail = componiDaModello(modello, { valori: { ...valori, link }, righe: [] });
+    const mail = componiDaModello(modello, { valori: { ...valori, link }, righe });
     // IL LINK DEVE ESSERCI COMUNQUE. Se chi scrive il testo si dimentica
     // il segnaposto {link}, la mail arriverebbe senza il modulo: una
     // lettera che dice "compila qui" e non dice dove.
@@ -80,7 +80,11 @@ export async function inviaModulo({ iscritto, corso, corsoData, loc, chi = "" })
     return { ok: false, errore: "Manca un'email valida nella scheda.", link };
   }
 
-  const valori = valoriCorso({
+  // `valoriCorso` torna DUE cose: i valori e le righe dei dettagli. Qui
+  // c'era `const valori = valoriCorso(...)`, cioe' l'oggetto intero preso
+  // per i valori: `valori.nome` era undefined, e nella mail si leggeva
+  // "Ciao undefined". La build non puo' accorgersene.
+  const { valori, righe: righeDettagli } = valoriCorso({
     nome: iscritto.nome,
     nomeCorso: corso?.nome,
     dataInizio: corsoData?.data_inizio,
@@ -95,7 +99,7 @@ export async function inviaModulo({ iscritto, corso, corsoData, loc, chi = "" })
   const { data: riga } = await supabase
     .from("email_modelli").select("*").eq("chiave", "invio_modulo").maybeSingle();
 
-  const mail = componiMailModulo({ valori, link, modello: riga });
+  const mail = componiMailModulo({ valori, righe: righeDettagli, link, modello: riga });
 
   const { data, error } = await supabase.functions.invoke("invia-email", {
     body: { a: destinatario, oggetto: mail.oggetto, html: mail.html, testo: mail.testo },

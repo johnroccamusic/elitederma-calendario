@@ -61,7 +61,8 @@ import { valoriCorso } from "../../supabase/functions/_shared/email.js";
 // vede quanto e' lungo in mezzo al testo — che e' la cosa che si sbaglia
 // a immaginare scrivendo.
 function anteprimaMailModulo({ nome, corso, corsoData, loc, token, modello }) {
-  const valori = valoriCorso({
+  // due cose, non una: vedi la nota in invio.js
+  const { valori, righe } = valoriCorso({
     nome,
     nomeCorso: corso?.nome,
     dataInizio: corsoData?.data_inizio,
@@ -70,7 +71,7 @@ function anteprimaMailModulo({ nome, corso, corsoData, loc, token, modello }) {
     sede: loc?.nome_sede,
     indirizzo: corsoData?.indirizzo || loc?.indirizzo,
   });
-  return componiMailModulo({ valori, link: linkModulo(token || "IL-GETTONE-DI-QUESTA-ISCRIZIONE"), modello });
+  return componiMailModulo({ valori, righe, link: linkModulo(token || "IL-GETTONE-DI-QUESTA-ISCRIZIONE"), modello });
 }
 
 
