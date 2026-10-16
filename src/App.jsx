@@ -18827,7 +18827,7 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
 // "Commissioni sui corsi" nella dashboard del venditore. Non si regola da
 // nessuna parte in Impostazioni, perche' non e' una percentuale che si
 // decide: e' 7% del pattuito, minimo 50 euro, arrotondata ai 5.
-function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
+function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, onApriModuloIscrizione, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -18867,7 +18867,6 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
   const [showIntestazioneModal, setShowIntestazioneModal] = useState(false);
   const [showNotificheModal, setShowNotificheModal] = useState(false);
   const [showModelliEmailModal, setShowModelliEmailModal] = useState(false);
-  const [showModuloIscrizioneModal, setShowModuloIscrizioneModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
   // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
@@ -18883,7 +18882,6 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showMagazziniModal, setShowMagazziniModal], [showIntestazioneModal, setShowIntestazioneModal],
       [showNotificheModal, setShowNotificheModal], [showModelliEmailModal, setShowModelliEmailModal],
-      [showModuloIscrizioneModal, setShowModuloIscrizioneModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
@@ -18891,7 +18889,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
     registraInterceptaIndietro(null);
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
-    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal, showNotificheModal, showModelliEmailModal, showModuloIscrizioneModal,
+    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal, showNotificheModal, showModelliEmailModal,
     showTargetMasterModal, showTargetVenditoriModal,
   ]);
 
@@ -19100,7 +19098,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
         { chiave: "intestazione", etichetta: "Intestazione società", Icona: IconaIntestazioneRiga, onClick: () => setShowIntestazioneModal(true) },
         { chiave: "notifiche", etichetta: "Notifiche push", Icona: IconaCampanellaErp, onClick: () => setShowNotificheModal(true) },
         { chiave: "modelliemail", etichetta: "Modelli email", Icona: IconaBustaErp, onClick: () => setShowModelliEmailModal(true) },
-        { chiave: "moduloiscrizione", etichetta: "Modulo di iscrizione", Icona: IconaClipboardErp, onClick: () => setShowModuloIscrizioneModal(true) },
+        { chiave: "moduloiscrizione", etichetta: "Modulo di iscrizione", Icona: IconaClipboardErp, onClick: onApriModuloIscrizione },
         { chiave: "kit", etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
       ],
     },
@@ -19441,21 +19439,6 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       {showNotificheModal && (
         <Modal title="Notifiche push" onClose={() => setShowNotificheModal(false)} maxWidth={760}>
           <PaginaNotifichePush master={master} utenteLoggato={utenteLoggato} />
-        </Modal>
-      )}
-
-      {showModuloIscrizioneModal && (
-        <Modal title="Modulo di iscrizione" onClose={() => setShowModuloIscrizioneModal(false)} maxWidth={820} scorrevole>
-          {/* la scelta e' una sola per tutta l'accademia: la cambia solo
-              chi amministra, gli altri la vedono e basta */}
-          <ModuloIscrizione
-            amministratore={ruoloUtente === "programmatore" || ruoloUtente === "amministratore"}
-            icone={{
-              persona: IconaPersonaSemplice, ricevuta: IconaRicevutaErp, scatola: IconaScatolaErp,
-              banconota: IconaBanconota, clipboard: IconaClipboardErp, portafoglio: IconaPortafoglio,
-              calendario: IconaCalendarioCard, documento: IconaCatDocumento,
-            }}
-          />
         </Modal>
       )}
 
@@ -24598,7 +24581,10 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   );
 }
 
-// `scorrevole`: la finestra si tiene dentro lo schermo e a scorrere e' il
+// `scorrevole`: oggi non la usa nessuno — era del modulo di iscrizione,
+// che dal 16/10/2026 e' una pagina sua. Resta perche' il problema che
+// risolve tornera': una finestra piu' alta dello schermo.
+// La finestra si tiene dentro lo schermo e a scorrere e' il
 // suo contenuto, non la pagina sotto. Serve a quelle lunghe — il modulo
 // di iscrizione sono tredici riquadri — dove altrimenti il titolo e la
 // crocetta per chiudere finiscono fuori vista dopo due dita di scroll, e
@@ -80143,6 +80129,11 @@ export default function App() {
     spesaform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "spese", "spese_attribuzioni"],
     abbonamentoform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi", "abbonamenti_attribuzioni"],
     fontdiplomi: ["font_diplomi", "segnaposti_config"],
+    // non chiede niente a fetchDati: le sue due tabelle
+    // (modulo_iscrizione_campi e modulo_iscrizione_testi) se le legge da
+    // sola. La voce c'e' lo stesso, perche' una vista che manca da questa
+    // mappa sembra una dimenticanza e non una scelta.
+    moduloiscrizione: [],
     slidecorsi: ["corsi"],
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
@@ -81809,6 +81800,7 @@ export default function App() {
             onApriGestioneAssistenti: apriGestioneAssistenti,
             onApriGestioneHotel: apriGestioneHotel,
             onApriGestioneLocation: apriGestioneLocation,
+            onApriModuloIscrizione: () => setView("moduloiscrizione"),
             titolo: etichettaTasto("home", "impostazioni", "Impostazioni"),
           }}
         />
@@ -81816,6 +81808,22 @@ export default function App() {
 
       {view === "slidecorsi" && (
         <PaginaSlideCorsi corsi={corsi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+      )}
+
+      {/* era un modale, ed era sbagliato: il modulo e' lungo quasi due
+          schermi e si leggeva dentro un riquadro sospeso, con due barre
+          di scorrimento una dentro l'altra. La scelta e' una sola per
+          tutta l'accademia, e la cambia solo chi amministra. */}
+      {view === "moduloiscrizione" && (
+        <ModuloIscrizione
+          onBack={() => setView("impostazioni")}
+          amministratore={ruoloUtente === "programmatore" || ruoloUtente === "amministratore"}
+          icone={{
+            persona: IconaPersonaSemplice, ricevuta: IconaRicevutaErp, scatola: IconaScatolaErp,
+            banconota: IconaBanconota, clipboard: IconaClipboardErp, portafoglio: IconaPortafoglio,
+            calendario: IconaCalendarioCard, documento: IconaCatDocumento,
+          }}
+        />
       )}
 
       {view === "gestionedate" && (

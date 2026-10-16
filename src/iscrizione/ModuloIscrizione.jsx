@@ -1,5 +1,15 @@
 // SETTING > MODULO DI ISCRIZIONE.
 //
+// E' una pagina intera, non una finestra sospesa. Era un modale, e per
+// un modulo lungo quasi due schermi non andava: si leggeva dentro un
+// riquadro che galleggiava sopra la pagina sotto, con due barre di
+// scorrimento una dentro l'altra. Qui invece si scorre come si scorre
+// una pagina.
+//
+// Due linguette:
+//   I campi      quali voci della scheda vanno sul modulo dell'allieva
+//   Il contratto regolamento, privacy e consensi, da leggere e correggere
+//
 // Si decide qui, una volta per tutti, quali campi della scheda di
 // iscrizione finiscono sul modulo che riceve l'allieva.
 //
@@ -25,16 +35,14 @@
 // sotto, in un blocco a parte, perche' non appartengono alla scheda.
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase.js";
-import { Button, Field } from "../ui/base.jsx";
+import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea, RigaLettura } from "../ui/scheda.jsx";
-import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
-import { SEZIONI, CONSENSI, INTRO } from "./contenuto.js";
+import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, stileTitoloPagina } from "../ui/stile.js";
 import { CAMPI_MODULO, PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { leggiScelte, salvaScelta } from "./campi.js";
 import { AreaAnagrafica } from "./AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, CHIAVI_ANAGRAFICHE } from "./disposizione.js";
-
-const REGOLAMENTO = SEZIONI.find((s) => s.tipo === "testo");
+import TestoContratto from "./TestoContratto.jsx";
 
 // I riquadri che nella scheda stanno fuori dall'anagrafica. Qui sono
 // solo da trasferire — l'allieva li legge, non li compila — e per questo
@@ -51,12 +59,12 @@ const DA_TRASFERIRE = [
   { titolo: "Dati organizzativi", icona: "clipboard", chiavi: ["accordi_commerciali", "richiede_modelle", "numero_modelle", "prezzo_speciale_modelle", "taglia_divisa", "note"] },
 ];
 
-export default function ModuloIscrizione({ icone = {}, amministratore = true }) {
+export default function ModuloIscrizione({ icone = {}, amministratore = true, onBack, titolo = "Modulo di iscrizione" }) {
+  const [linguetta, setLinguetta] = useState("campi");
   const [scelte, setScelte] = useState({});
   const [errore, setErrore] = useState("");
   const [salvando, setSalvando] = useState("");
   const [chi, setChi] = useState("");
-  const [regolamentoAperto, setRegolamentoAperto] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -179,8 +187,43 @@ export default function ModuloIscrizione({ icone = {}, amministratore = true }) 
     stileArea: pannello,
   };
 
+  const LINGUETTE = [
+    { chiave: "campi", etichetta: "I campi del modulo" },
+    { chiave: "contratto", etichetta: "Il contratto" },
+  ];
+
   return (
-    <div style={{ ...fontBody }}>
+    <div style={{ background: "transparent", minHeight: "100vh", ...fontBody }}>
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: "24px 20px 80px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+        <TastoLivelloPrecedente titolo="Setting" onClick={onBack} />
+        <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {LINGUETTE.map((l) => {
+          const qui = linguetta === l.chiave;
+          return (
+            <button
+              key={l.chiave} type="button" onClick={() => setLinguetta(l.chiave)}
+              style={{
+                ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px",
+                borderRadius: 10, cursor: "pointer",
+                background: qui ? NAVY : "#fff", color: qui ? "#fff" : NAVY,
+                border: `1px solid ${qui ? NAVY : CREAM_BORDER}`,
+              }}
+            >
+              {l.etichetta}
+            </button>
+          );
+        })}
+      </div>
+
+      {linguetta === "contratto" && (
+        <TestoContratto Icona={I.documento} amministratore={amministratore} />
+      )}
+
+      {linguetta === "campi" && <>
       <div style={{
         border: `1px solid ${GOLD}`, background: "#FDF8EF", borderRadius: 12,
         padding: "10px 12px", marginBottom: 15, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5,
@@ -255,35 +298,27 @@ export default function ModuloIscrizione({ icone = {}, amministratore = true }) 
       <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
         <IntestazioneArea Icona={I.documento}>Firma</IntestazioneArea>
         <div style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.5 }}>
-          <b style={{ color: NAVY }}>{CONSENSI.firmaEtichetta}</b> — sempre presente e non si toglie: senza firma
-          il modulo non vale niente. Per questo non ha una spunta.
+          <b style={{ color: NAVY }}>La firma dell'allieva</b> — sempre presente e non si toglie: senza firma
+          il modulo non vale niente. Per questo non ha una spunta. Come si chiama sul modulo si cambia
+          dalla linguetta <b style={{ color: NAVY }}>Il contratto</b>.
         </div>
       </div>
 
+      {/* il regolamento non sta piu' qui: ha una linguetta sua, dove si
+          legge per intero e si corregge */}
       <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
         <IntestazioneArea Icona={I.documento}>Regolamento, privacy e consensi</IntestazioneArea>
+        {/* niente numero di punti: da quando il regolamento si corregge
+            dall'app, un conteggio scritto qui diventerebbe falso al primo
+            punto aggiunto, e nessuno andrebbe a cercarlo */}
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
-          {REGOLAMENTO.blocchi.length} punti più l'informativa sul trattamento dei dati e l'autorizzazione alle
+          Il regolamento di partecipazione, l'informativa sul trattamento dei dati e l'autorizzazione alle
           immagini. Vanno sempre sul modulo, e nemmeno questi hanno una spunta.
         </div>
-        <Button variant="ghost" onClick={() => setRegolamentoAperto((v) => !v)}>
-          {regolamentoAperto ? "Chiudi il regolamento" : "Leggi il regolamento completo"}
-        </Button>
-        {regolamentoAperto && (
-          <div style={{ marginTop: 12, maxHeight: 420, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, background: "#fff" }}>
-            <div style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{INTRO.titolo}</div>
-            {REGOLAMENTO.blocchi.map((b) => (
-              <div key={b.titolo} style={{ marginBottom: 16 }}>
-                <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{b.titolo}</div>
-                {b.punti.map((p, i) => <p key={i} style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "8px 0" }}>{p}</p>)}
-              </div>
-            ))}
-            <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, margin: "18px 0 6px" }}>{CONSENSI.informativaEtichetta}</div>
-            {CONSENSI.informativaTesto.map((p, i) => <p key={i} style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "8px 0" }}>{p}</p>)}
-            <p style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "14px 0 0", whiteSpace: "pre-line" }}>{CONSENSI.immaginiTesto}</p>
-          </div>
-        )}
+        <Button variant="ghost" onClick={() => setLinguetta("contratto")}>Leggi e correggi il contratto</Button>
       </div>
+      </>}
+    </div>
     </div>
   );
 }

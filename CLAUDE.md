@@ -167,6 +167,26 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   Gli altri cinque lavori notturni del progetto si limitano a mandare un JWT del
   progetto e si fidano del cancello: le loro funzioni non controllano nient'altro.
   Per una che spedisce posta a nome nostro non bastava.
+- **Il testo del contratto si corregge dall'app (16/10/2026).** Regolamento,
+  informativa privacy e consensi stanno in `src/iscrizione/contenuto.js`,
+  trascritti parola per parola dal modulo del sito. Da Setting → Modulo di
+  iscrizione → **Il contratto** si leggono per intero e si correggono; la
+  correzione va in **`modulo_iscrizione_testi`** (`chiave`, `corpo` jsonb), che è
+  la seconda tabella con una sola policy `to authenticated`.
+
+  Come `email_modelli`: **riga mancante = vale il testo del codice**. La tabella
+  nasce vuota apposta, e «Rimetti com'era» cancella la riga invece di riscrivere
+  il testo. Quello che una persona firma non può dipendere dal fatto che una
+  select sia andata a buon fine.
+
+  Qui niente si salva da solo: sono clausole contrattuali, e una parola cambiata
+  uscendo da un campo è una cosa di cui nessuno si accorge. Si entra in
+  correzione, si scrive, si preme Salva.
+
+  **Attenzione a cosa cambia davvero.** Oggi `contenuto.js` lo legge solo questa
+  pagina: il modulo che l'allieva riceve **non esiste ancora** (è la Fase 2).
+  Correggere il testo adesso prepara quel modulo, non cambia niente di ciò che
+  gira oggi.
 - **`.env` non è mai stato committato**, `.gitignore` corretto, nessuna chiave nella
   storia git. Il repository è però **pubblico** su GitHub.
 - **L'SSO di Vercel risulta attivo nelle impostazioni ma non blocca.** L'API dice
