@@ -79907,7 +79907,12 @@ export default function App() {
     // "password_menu"/"utenti_app" (gia' fra le essenziali) servono
     // all'area "Utenti", che da ora vive qui dentro
     impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi"],
-    gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare", "impegno"],
+    // `eventi` serve perche' il calendario disegna le fiere accanto ai
+    // corsi, nella stessa griglia. Senza, la lista arriva vuota e la barra
+    // non c'e': nessun errore, solo un evento che "e' sparito". Compariva
+    // o no a seconda delle pagine viste prima nella stessa sessione —
+    // Magazzino e Analisi caricano `eventi`, e da li' in poi si vedeva.
+    gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare", "impegno", "eventi"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno", "location_prezzi"],
@@ -79987,7 +79992,7 @@ export default function App() {
     statisticavenditori: ["corsi", "corsi_date", "iscritti", "venditori", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     ultimeiscrizioni: ["corsi", "location", "corsi_date", "iscritti"],
     assegnazionemaster: ["corsi", "location", "corsi_date", "corsi_date_docenti", "master", "hotel", "assistente", "leva", "spese", "impostazioni_layout_assegnazione_master", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi"],
-    calendario: ["corsi", "location", "corsi_date", "iscritti", "master"],
+    calendario: ["corsi", "location", "corsi_date", "iscritti", "master", "eventi"],
     cerca: ["corsi", "location", "corsi_date", "iscritti"],
     cercaiscritto: ["corsi", "location", "corsi_date", "iscritti"],
     // "impegno" serve al riepilogo amministrativo: una quota in contanti
