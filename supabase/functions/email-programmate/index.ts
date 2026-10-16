@@ -37,7 +37,7 @@ const admin = createClient(
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-token",
 };
 const json = (corpo: unknown, status = 200) =>
   new Response(JSON.stringify(corpo), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -59,7 +59,41 @@ function piuGiorni(data: string, giorni: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// CHI PUO' FAR PARTIRE LE EMAIL. Tre strade, in ordine di quanto sono
+// probabili:
+//
+//  1. il lavoro notturno, che si riconosce dal gettone `x-cron-token`;
+//  2. una persona che ha fatto accesso e preme "Guarda cosa partirebbe
+//     oggi" in Setting;
+//  3. un'altra funzione del progetto con la service role key.
+//
+// PERCHE' IL GETTONE E NON LA SERVICE ROLE KEY. La terza strada e' il
+// confronto esatto con SUPABASE_SERVICE_ROLE_KEY, e per usarla il cron
+// dovrebbe avere quella chiave nel vault. Mettercela vuol dire far
+// passare da qualche parte — una chat, un file — una credenziale che
+// scavalca ogni policy: anagrafiche, pagamenti, allegati degli allievi.
+// Il gettone invece nasce dentro Postgres (gen_random_bytes), non esce
+// mai dal database se non per arrivare qui, e vale solo a far partire
+// questa funzione. Se si perde non si perde niente: si rigenera.
+//
+// Verificarlo qui e non confrontarlo in TypeScript: il gettone sta nel
+// vault, che non si legge da fuori. Lo confronta `public.email_cron_ok`,
+// una funzione `security definer` che puo' eseguire solo il ruolo di
+// servizio — cosi' chi ha la chiave pubblicabile, che e' nel bundle, non
+// se ne puo' servire per indovinare il gettone un carattere alla volta.
+//
+// Il cancello di Supabase resta davanti a tutto questo: `verify_jwt` e'
+// acceso, quindi una richiesta senza una chiave del progetto non arriva
+// nemmeno qui. Le barriere sono due.
 async function autorizzato(req: Request): Promise<boolean> {
+  const gettoneCron = (req.headers.get("x-cron-token") || "").trim();
+  if (gettoneCron) {
+    const { data, error } = await admin.rpc("email_cron_ok", { gettone: gettoneCron });
+    if (!error && data === true) return true;
+    // un gettone sbagliato non e' un motivo per provare le altre
+    // strade: chi lo manda sta dicendo di essere il cron
+    return false;
+  }
   const gettone = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
   if (!gettone) return false;
   if (gettone === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return true;

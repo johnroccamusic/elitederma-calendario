@@ -143,6 +143,30 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   `supabase/functions/_shared/email.js`, importata **sia** da App.jsx **sia** da
   Deno: due copie vorrebbero dire che l'anteprima mostra una mail e l'allieva ne
   riceve un'altra.
+
+  **Il cron è acceso dal 16/10/2026** (`email-programmate-giornaliero`, `0 6 * * *`),
+  e la policy di `email_regole` è `to authenticated`. Ma **non parte niente**:
+  l'unica regola che esiste (`dettagli_organizzativi`, −3 giorni dall'inizio
+  corso) è spenta, e il giro di prova risponde «Nessuna regola accesa.»
+
+  Come si autentica il cron, e perché non con la service role key: la funzione
+  confronta il gettone ricevuto con la propria `SUPABASE_SERVICE_ROLE_KEY`
+  carattere per carattere, e il JWT `service_role` che il vault ha da agosto
+  (`fic_service_key`) è di prima del passaggio alle chiavi nuove — provato, 403.
+  Mettere dentro quella giusta voleva dire far passare da una chat o da un file
+  una credenziale che scavalca ogni policy. Quindi il cron manda **due** header:
+  `Authorization: Bearer <JWT anon>`, che serve solo a passare il cancello
+  `verify_jwt` di Supabase, e `x-cron-token`, un gettone di 32 byte **nato dentro
+  Postgres** (`gen_random_bytes`) e mai uscito dal database, che la funzione fa
+  verificare a `public.email_cron_ok` — `security definer`, eseguibile solo da
+  `service_role`, così la chiave pubblicabile del bundle non lo può usare come
+  oracolo. Verificato: gettone giusto 200, inventato 403, assente 403.
+  Per rigenerarlo: cancellare la riga `email_cron_token` dal vault e rieseguire
+  `20261016133139_email_cron_gettone.sql`.
+
+  Gli altri cinque lavori notturni del progetto si limitano a mandare un JWT del
+  progetto e si fidano del cancello: le loro funzioni non controllano nient'altro.
+  Per una che spedisce posta a nome nostro non bastava.
 - **`.env` non è mai stato committato**, `.gitignore` corretto, nessuna chiave nella
   storia git. Il repository è però **pubblico** su GitHub.
 - **L'SSO di Vercel risulta attivo nelle impostazioni ma non blocca.** L'API dice
