@@ -53,6 +53,15 @@ export const STATI = {
   },
 };
 
+// I DUE COLORI DELLA FASCIA: fatto e da fare.
+//
+// Non uno per stato. Quello che conta scorrendo un elenco di dieci
+// allievi non e' "a che punto e' questa", e' "che cosa manca": verde
+// quello che c'e' gia', rosso quello che si aspetta ancora. Il pallino
+// di adesso si riconosce dall'alone, non dal colore.
+export const VERDE = "#2E7D32";
+export const ROSSO = "#C0392B";
+
 // l'ordine in cui si attraversano, per disegnare la fascia
 export const ORDINE = ["dati_inseriti", "modulo_inviato", "modulo_ricevuto", "confermato"];
 

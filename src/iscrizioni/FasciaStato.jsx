@@ -4,20 +4,26 @@
 // scheda — che e' il punto: un'iscrizione ferma in attesa del modulo
 // deve saltare all'occhio scorrendo l'elenco, non dopo tre clic.
 //
-// Il pallino acceso e' quello dello stato attuale, e la linea che ci
-// ARRIVA e' colorata: si vede da dove si e' passati. "Dati inseriti" e'
-// grigio e "Confermato" e' taupe, e stanno zitti; i due in mezzo sono
-// ocra e blu, e si vedono — perche' sono quelli in cui si aspetta
-// qualcosa da qualcuno.
+// VERDE QUELLO CHE C'E', ROSSO QUELLO CHE MANCA.
+//
+// Scorrendo un elenco di dieci allievi non interessa "a che punto e'
+// questa": interessa cosa manca. Quindi le tappe gia' fatte — compresa
+// quella di adesso — sono verdi, e quelle che si aspettano ancora sono
+// rosse. Il pallino di ADESSO si riconosce dall'alone intorno e dalla
+// scritta in grassetto, non da un colore suo.
+//
+// Prima ogni stato aveva il suo colore (ocra, blu, taupe) e tutto il
+// resto era grigio: diceva dove si era arrivati, ma non cosa restava da
+// fare — che e' la domanda vera davanti a una lista.
 //
 // Su schermo stretto le etichette sparirebbero una sull'altra (quattro
 // parole in fila non stanno in 375 px), quindi resta solo quella del
 // pallino acceso: tanto e' l'unica che serve leggere.
 import React from "react";
-import { STATI, ORDINE } from "./stato.js";
+import { STATI, ORDINE, VERDE, ROSSO } from "./stato.js";
 
-const GRIGIO = "#CFC9BE";
-const GRIGIO_SCURO = "#8C8578";
+const VERDE_TENUE = "#E9F6EC";
+const ROSSO_TENUE = "#FDECEC";
 
 function IconaAereo({ size = 15, color = "#fff" }) {
   return (
@@ -66,7 +72,6 @@ const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_r
 export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false }) {
   const attuale = STATI[stato] ? stato : "dati_inseriti";
   const indice = ORDINE.indexOf(attuale);
-  const colore = STATI[attuale].colore;
   const palla = compatto ? 24 : 32;
   const icona = compatto ? 12 : 15;
 
@@ -79,11 +84,13 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
       }}
     >
       {ORDINE.map((chiave, i) => {
-        const acceso = i === indice;
+        const acceso = i === indice;          // dove siamo adesso
+        const fatto = i <= indice;            // gia' passato (o e' questo)
+        const tinta = fatto ? VERDE : ROSSO;
         const Icona = ICONE[chiave];
-        // la linea che ARRIVA a questo pallino: colorata se ci siamo
-        // passati o ci siamo adesso
-        const lineaAccesa = i > 0 && i <= indice;
+        // la linea che ARRIVA a questo pallino: verde se il passo c'e'
+        // gia', rossa se si aspetta ancora
+        const lineaFatta = i > 0 && i <= indice;
         return (
           <React.Fragment key={chiave}>
             {i > 0 && (
@@ -91,9 +98,9 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                 aria-hidden
                 style={{
                   flex: "1 1 0", minWidth: 8, height: 3, borderRadius: 2,
-                  background: lineaAccesa ? colore : GRIGIO,
+                  background: lineaFatta ? VERDE : ROSSO,
                   marginTop: palla / 2 - 1.5,
-                  opacity: lineaAccesa ? 1 : 0.6,
+                  opacity: lineaFatta ? 1 : 0.35,
                 }}
               />
             )}
@@ -112,16 +119,17 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                     style={{
                       width: palla, height: palla, borderRadius: "50%",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      background: acceso ? colore : GRIGIO,
-                      boxShadow: acceso ? `0 0 0 ${compatto ? 3 : 5}px ${STATI[chiave].sfondo}` : "none",
+                      background: tinta,
+                      opacity: fatto ? 1 : 0.45,
+                      boxShadow: acceso ? `0 0 0 ${compatto ? 3 : 5}px ${fatto ? VERDE_TENUE : ROSSO_TENUE}` : "none",
                       flex: "0 0 auto",
-                      border: siPreme && !acceso ? `2px solid ${STATI.modulo_inviato.colore}` : "none",
+                      border: siPreme && !fatto ? `2px solid ${ROSSO}` : "none",
                       padding: 0,
                       cursor: siPreme ? "pointer" : "default",
                       opacity: inviando && chiave === "modulo_inviato" ? 0.5 : 1,
                     }}
                   >
-                    <Icona size={icona} color={acceso ? "#fff" : (siPreme ? STATI.modulo_inviato.colore : GRIGIO_SCURO)} />
+                    <Icona size={icona} color="#fff" />
                   </Palla>
                 );
               })()}
@@ -130,11 +138,15 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                   style={{
                     fontSize: compatto ? 10.5 : 11.5,
                     fontWeight: acceso ? 700 : 500,
-                    color: acceso ? colore : GRIGIO_SCURO,
+                    color: fatto ? VERDE : ROSSO,
+                    opacity: fatto ? 1 : 0.8,
                     marginTop: 5, whiteSpace: "nowrap", lineHeight: 1.2,
                   }}
                 >
-                  {chiave === "modulo_inviato" && onInvia && indice < ORDINE.indexOf("modulo_inviato")
+                  {/* finche' il modulo non e' partito quel passo non e'
+                      uno stato raggiunto, e' una cosa da fare: lo dice
+                      anche negli elenchi, dove non si puo' premere */}
+                  {chiave === "modulo_inviato" && indice < ORDINE.indexOf("modulo_inviato")
                     ? (inviando ? "Invio…" : "Invia modulo")
                     : STATI[chiave].etichetta}
                 </div>
