@@ -56,7 +56,7 @@ import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import { statoDi, aggiornaStatoDopoAcconto } from "./iscrizioni/stato.js";
-import { inviaModulo, linkModulo } from "./iscrizioni/invio.js";
+import { inviaModulo, linkModulo, segnaInviatoAMano } from "./iscrizioni/invio.js";
 import FasciaStato from "./iscrizioni/FasciaStato.jsx";
 import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
 import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaModelloEmail, valoriCorso as valoriCorsoEmail } from "../supabase/functions/_shared/email.js";
@@ -30397,8 +30397,15 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // cosa manca ancora alla scheda. Non impedisce di salvare: si vede e
   // basta, finche' qualcuno non lo completa.
   // l'invio del modulo all'allieva, dal pallino della fascia
-  const [inviandoModulo, setInviandoModulo] = useState(false);
-  const [esitoModulo, setEsitoModulo] = useState(null);   // { ok, testo, link }
+  // l'invio del modulo: quale riga sta spedendo, e com'e' andata.
+  // Per id e non un flag solo, perche' il pallino si preme anche
+  // dall'elenco, dove le righe sono dieci.
+  // la domanda prima di spedire. Non window.confirm: quello ha solo due
+  // tasti, e qui ne servono tre — manda, copia il link, lascia perdere.
+  const [chiediInvio, setChiediInvio] = useState(null);   // { rec, giaPartito, salvaPrima }
+  const [linkCopiatoModulo, setLinkCopiatoModulo] = useState(false);
+  const [inviandoId, setInviandoId] = useState(null);
+  const [esitoModulo, setEsitoModulo] = useState(null);   // { id, ok, testo, link }
   const [daCompletare, setDaCompletare] = useState([]);
   const [avvisoQuote, setAvvisoQuote] = useState("");
 
@@ -31912,56 +31919,68 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
   // MANDA IL MODULO, dal pallino "Invia modulo" della fascia.
   //
+  // Si preme da due posti: dentro la scheda aperta e dall'elenco della
+  // classe. La differenza e' una sola — dalla scheda aperta si salva
+  // prima, perche' il modulo si costruisce coi dati che stanno sul
+  // database adesso e mandarlo senza salvare vorrebbe dire spedire la
+  // versione di prima delle modifiche appena fatte. Dall'elenco non c'e'
+  // niente da salvare: la riga e' gia' quella.
+  //
   // Se e' gia' partito chiede conferma: all'allieva arriva una mail, e
   // non deve succedere per un tocco di troppo su un telefono.
   //
-  // Prima salva la scheda. Il modulo che le arriva e' fatto con i dati
-  // che ci sono ADESSO sul database: mandarlo senza salvare vorrebbe
-  // dire spedirle la versione di prima delle modifiche appena fatte, che
-  // e' esattamente il motivo per cui si rimanda.
-  async function mandaModuloAllAllieva(giaPartito) {
-    const rec = iscritti.find((x) => x.id === modificandoId);
-    if (!rec) return;
-    if (giaPartito) {
-      const quando = rec.modulo_inviato_il
-        ? ` (la prima volta il ${new Date(rec.modulo_inviato_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })})`
-        : "";
-      // su un'iscrizione gia' confermata il link c'e' ma non serve a
-      // niente: la pagina le dice che e' tutto completo. Meglio dirlo
-      // prima che scoprirlo dopo aver mandato una mail
-      const giaChiusa = statoDi(rec) === "confermato"
-        ? "\n\nATTENZIONE: questa iscrizione è già confermata, quindi aprendo il link lei leggerà che non c'è più niente da compilare."
-        : "";
-      if (!window.confirm(`Vuoi inviare nuovamente il modulo a ${[rec.nome, rec.cognome].filter(Boolean).join(" ")}?${quando}\n\nLe arriverà una mail con il link aggiornato.${giaChiusa}`)) return;
-    }
-    setInviandoModulo(true);
+  // NIENTE FALLIMENTI MUTI. Qualunque cosa vada storta finisce in
+  // `esitoModulo` e si legge sotto la fascia: un tasto che non fa
+  // niente e non dice niente e' il guasto peggiore.
+  function mandaModulo(rec, giaPartito, { salvaPrima = false } = {}) {
+    if (!rec?.id) return;
+    // SI CHIEDE SEMPRE, anche la prima volta: da qui parte una mail a
+    // una persona vera, e non deve succedere per un tocco di troppo.
+    setLinkCopiatoModulo(false);
+    setEsitoModulo(null);
+    setChiediInvio({ rec, giaPartito, salvaPrima });
+  }
+
+  // quello che succede dopo aver risposto "Invia la mail".
+  async function eseguiInvio(rec, { salvaPrima = false } = {}) {
+    setChiediInvio(null);
+    setInviandoId(rec.id);
     setEsitoModulo(null);
     try {
-      if (!soloLettura) {
+      if (salvaPrima && !soloLettura) {
         const salvata = await persistiIscritto(false);
-        if (!salvata) { setInviandoModulo(false); return; }
+        if (!salvata) {
+          setEsitoModulo({ id: rec.id, ok: false, testo: "Prima di mandare il modulo bisogna poter salvare la scheda: vedi il messaggio qui sotto." });
+          return;
+        }
         await ricarica();
       }
       const { data: fresco } = await supabase
-        .from("iscritti").select("*").eq("id", modificandoId).maybeSingle();
+        .from("iscritti").select("*").eq("id", rec.id).maybeSingle();
+      const quella = fresco || rec;
+      if (!quella.token_modulo) {
+        setEsitoModulo({ id: rec.id, ok: false, testo: "Questa iscrizione non ha ancora un link del modulo. Riprova fra poco." });
+        return;
+      }
       // chi sta spedendo: la sessione Supabase, come fa gia' la mail di
-      // conferma qui sopra. `utenteLoggato` in questa scheda non esiste —
-      // la build non se ne accorge, e al primo clic la pagina sarebbe
-      // morta
+      // conferma. `utenteLoggato` in questa scheda non esiste.
       const { data: utenteOra } = await supabase.auth.getUser();
+      const classe = corsiDate.find((x) => x.id === quella.corso_data_id) || corsoData;
+      const suoCorso = corsi.find((x) => x.id === classe?.corso_id) || corso;
+      const suaSede = location.find((x) => x.id === classe?.location_id) || loc;
       const esito = await inviaModulo({
-        iscritto: fresco || rec,
-        corso, corsoData, loc,
+        iscritto: quella,
+        corso: suoCorso, corsoData: classe, loc: suaSede,
         chi: utenteOra?.user?.email || "",
       });
       setEsitoModulo(esito.ok
-        ? { ok: true, testo: esito.errore || `Modulo inviato a ${(fresco || rec).email}.`, link: esito.link }
-        : { ok: false, testo: esito.errore, link: esito.link });
+        ? { id: rec.id, ok: true, testo: esito.errore || `Modulo inviato a ${quella.email}.`, link: esito.link }
+        : { id: rec.id, ok: false, testo: esito.errore, link: esito.link });
       if (esito.ok) await ricarica();
     } catch (e) {
-      setEsitoModulo({ ok: false, testo: e.message || String(e), link: linkModulo(rec.token_modulo) });
+      setEsitoModulo({ id: rec.id, ok: false, testo: `Non è partito: ${e.message || String(e)}`, link: rec.token_modulo ? linkModulo(rec.token_modulo) : null });
     } finally {
-      setInviandoModulo(false);
+      setInviandoId(null);
     }
   }
 
@@ -32513,8 +32532,80 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     );
   }
 
+  // LA DOMANDA PRIMA DI SPEDIRE, definita una volta e disegnata nei due
+  // posti da cui si puo' premere: la scheda aperta e l'elenco della
+  // classe. Stava dentro il blocco della scheda, e dall'elenco non
+  // compariva proprio: si premeva il pallino e non succedeva niente.
+  // Tre strade e non due: il window.confirm del browser offre solo OK e
+  // Annulla, e qui serve anche copiare il link — a certe allieve il
+  // modulo si manda su WhatsApp, non per mail.
+  const riquadroInvio = chiediInvio && (
+                <Modal
+                  title={chiediInvio.giaPartito ? "Inviare di nuovo il modulo?" : "Inviare il modulo?"}
+                  onClose={() => setChiediInvio(null)}
+                  maxWidth={460}
+                >
+                  <div style={{ ...fontBody, fontSize: 13.5, color: GRAFITE, lineHeight: 1.6 }}>
+                    {chiediInvio.giaPartito
+                      ? <>Vuoi inviare <b style={{ color: NAVY }}>di nuovo</b> il modulo a{" "}
+                          <b style={{ color: NAVY }}>{[chiediInvio.rec.nome, chiediInvio.rec.cognome].filter(Boolean).join(" ")}</b>?</>
+                      : <>Vuoi inviare il modulo di iscrizione a{" "}
+                          <b style={{ color: NAVY }}>{[chiediInvio.rec.nome, chiediInvio.rec.cognome].filter(Boolean).join(" ")}</b>?</>}
+                    {chiediInvio.rec.email && <div style={{ marginTop: 6, color: MUTED }}>{chiediInvio.rec.email}</div>}
+                    {chiediInvio.giaPartito && chiediInvio.rec.modulo_inviato_il && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: MUTED }}>
+                        La prima volta il {new Date(chiediInvio.rec.modulo_inviato_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}.
+                      </div>
+                    )}
+                    {statoDi(chiediInvio.rec) === "confermato" && (
+                      <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: "#FDF1F0", border: "1px solid #B3261E", fontSize: 12.5 }}>
+                        Questa iscrizione è già confermata: aprendo il link leggerà che non c'è più niente da compilare.
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
+                    <Button
+                      onClick={() => eseguiInvio(chiediInvio.rec, { salvaPrima: chiediInvio.salvaPrima })}
+                      disabled={!chiediInvio.rec.email}
+                    >
+                      Invia la mail
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={async () => {
+                        const link = linkModulo(chiediInvio.rec.token_modulo);
+                        try { await navigator.clipboard.writeText(link); }
+                        catch { window.prompt("Copia il link:", link); }
+                        setLinkCopiatoModulo(true);
+                        const { data: utenteOra } = await supabase.auth.getUser();
+                        const errore = await segnaInviatoAMano({
+                          iscritto: chiediInvio.rec,
+                          corsoData: corsiDate.find((x) => x.id === chiediInvio.rec.corso_data_id) || corsoData,
+                          chi: utenteOra?.user?.email || "",
+                        });
+                        setEsitoModulo(errore
+                          ? { id: chiediInvio.rec.id, ok: false, testo: `Link copiato, ma la scheda non si è aggiornata: ${errore}`, link }
+                          : { id: chiediInvio.rec.id, ok: true, testo: "Link copiato e segnato come inviato: mandalo tu.", link });
+                        setChiediInvio(null);
+                        await ricarica();
+                      }}
+                    >
+                      {linkCopiatoModulo ? "Link copiato ✓" : "Copia il link"}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setChiediInvio(null)}>Chiudi</Button>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
+                    {chiediInvio.rec.email
+                      ? <>Copiando il link l'iscrizione viene segnata come «modulo inviato»: vuol dire che lo mandi tu, su WhatsApp o altrove.</>
+                      : <>Questa scheda non ha un'email: si può solo copiare il link.</>}
+                  </div>
+                </Modal>
+              );
+
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: isMobile ? "20px 8px 160px" : "40px 20px 160px" }}>
+      {riquadroInvio}
       {msgErrore && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2000 }}>
           <div style={{ ...cardStyle, maxWidth: 360, width: "100%", marginBottom: 0, textAlign: "center" }}>
@@ -32794,9 +32885,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               </div>
               <FasciaStato
                 stato={statoDi(rec)} compatto={isMobile} larghezzaMax={isMobile ? 280 : 350}
-                onInvia={mandaModuloAllAllieva} inviando={inviandoModulo}
+                onInvia={(gia) => mandaModulo(rec, gia, { salvaPrima: true })}
+                inviando={inviandoId === rec.id}
               />
-              {esitoModulo && (
+              {esitoModulo?.id === rec.id && (
                 <div style={{
                   ...fontBody, fontSize: 12.5, marginTop: 10, lineHeight: 1.55,
                   color: esitoModulo.ok ? "#2E7D32" : "#B3261E",
@@ -34218,7 +34310,22 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       {i.note && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                     </div>
                   </div>
-                  <FasciaStato stato={statoDi(i)} compatto={isMobile} larghezzaMax={isMobile ? 260 : 330} />
+                  {/* si preme anche da qui: e' il posto dove si guarda
+                      chi deve ancora ricevere il modulo. Dall'elenco non
+                      c'e' niente da salvare prima — la riga e' gia'
+                      quella che c'e' sul database. */}
+                  <div style={{ minWidth: 0 }}>
+                    <FasciaStato
+                      stato={statoDi(i)} compatto={isMobile} larghezzaMax={isMobile ? 260 : 330}
+                      onInvia={soloLettura ? null : (gia) => mandaModulo(i, gia)}
+                      inviando={inviandoId === i.id}
+                    />
+                    {esitoModulo?.id === i.id && (
+                      <div style={{ ...fontBody, fontSize: 11.5, marginTop: 6, lineHeight: 1.5, color: esitoModulo.ok ? "#2E7D32" : "#C0392B" }}>
+                        {esitoModulo.testo}
+                      </div>
+                    )}
+                  </div>
                   </div>
                   <span style={{ fontSize: isMobile ? 13.5 : 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: isMobile ? 10 : 12, marginLeft: "auto", flexShrink: 0 }}>
                     {i.telefono && (

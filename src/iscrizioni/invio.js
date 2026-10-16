@@ -129,3 +129,36 @@ export async function inviaModulo({ iscritto, corso, corsoData, loc, chi = "" })
 
   return { ok: true, errore: "", link };
 }
+
+/**
+ * Segna il modulo come inviato SENZA mandare la mail.
+ *
+ * Serve a chi copia il link e lo manda su WhatsApp: il modulo e'
+ * partito davvero, solo per un'altra strada, e la scheda deve dirlo. Se
+ * non lo segnasse, quell'iscrizione resterebbe per sempre su "Invia
+ * modulo" e qualcuno lo rimanderebbe.
+ *
+ * Lascia la sua riga nel registro, con esito "ok" e destinatario vuoto:
+ * cosi' si distingue dalle mail partite da qui.
+ */
+export async function segnaInviatoAMano({ iscritto, corsoData, chi = "" }) {
+  const patch = { stato: "modulo_inviato" };
+  if (!iscritto.modulo_inviato_il) patch.modulo_inviato_il = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("iscritti").update(patch).eq("id", iscritto.id).select("id");
+  if (error) return error.message;
+  if (!data?.length) return "Nessuna riga aggiornata: controlla i permessi.";
+
+  const { error: erroreRegistro } = await supabase.from("email_inviate").insert({
+    chiave_modello: "invio_modulo",
+    iscritto_id: iscritto.id,
+    corso_data_id: corsoData?.id || null,
+    destinatario: "",
+    oggetto: "Link copiato e mandato a mano",
+    esito: "ok",
+    automatica: false,
+    inviata_da: chi || null,
+  });
+  if (erroreRegistro) console.error("email_inviate: riga non scritta —", erroreRegistro.message);
+  return null;
+}
