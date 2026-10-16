@@ -85,3 +85,25 @@ export const AREE_ANAGRAFICHE = [AREA_ALLIEVO, AREA_FATTURAZIONE];
 // tutte le chiavi disegnate dalle due aree, nell'ordine in cui si vedono
 export const CHIAVI_ANAGRAFICHE = AREE_ANAGRAFICHE
   .flatMap((a) => a.righe.flatMap((r) => r.campi.map((c) => c.chiave)));
+
+// I RIQUADRI CHE L'ALLIEVA LEGGE E NON COMPILA.
+//
+// Stanno fuori dall'anagrafica: il corso, quanto costa, il pacchetto, le
+// quote. Sul modulo di lei sono di sola lettura — li ha scritti il
+// venditore e devono arrivare in fondo come sono partiti — quindi si
+// disegnano come righe, non come caselle.
+//
+// Stavano dentro ModuloIscrizione.jsx. Sono usciti qui il 16/10/2026
+// perche' li legge anche la pagina che apre l'allieva: due elenchi,
+// un giorno, direbbero due cose diverse sullo stesso modulo.
+export const GRUPPI_LETTURA = [
+  { titolo: "Il corso", icona: "calendario", chiavi: ["corso_nome", "corso_data_inizio", "corso_data_fine", "corso_citta", "corso_indirizzo", "corso_master"] },
+  { titolo: "Dati di vendita", icona: "ricevuta", chiavi: ["totale_pattuito", "quota_venditore", "quota_speciale"] },
+  { titolo: "Pacchetto / Kit", icona: "scatola", chiavi: ["pacchetto_kit", "tipo_offerta", "dermografo"] },
+  { titolo: "Presenza al corso", icona: "calendario", chiavi: ["giorni_presenza"] },
+  { titolo: "Quota acconto", icona: "banconota", chiavi: ["acconto_imponibile", "acconto_totale", "acconto_pagato_il", "acconto_metodo", "acconto_pagato"] },
+  { titolo: "Quota pre corso", icona: "clipboard", chiavi: ["precorso_imponibile", "precorso_totale", "precorso_pagato_il", "precorso_metodo", "precorso_pagato"] },
+  { titolo: "Da avere al corso", icona: "portafoglio", chiavi: ["saldo_imponibile", "saldo_totale", "saldo_metodo"] },
+  { titolo: "Pagherà in totale", icona: "portafoglio", chiavi: ["totale_senza_iva", "totale_con_interessi"] },
+  { titolo: "Dati organizzativi", icona: "clipboard", chiavi: ["accordi_commerciali", "richiede_modelle", "numero_modelle", "prezzo_speciale_modelle", "taglia_divisa", "note"] },
+];

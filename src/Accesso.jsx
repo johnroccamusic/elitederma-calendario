@@ -81,8 +81,9 @@ class ConfineErrori extends React.Component {
 }
 
 // Le pagine pubbliche dell'app - il link per la master, la ricerca
-// modelle, i biglietti di viaggio e il modulo del consenso che la modella
-// apre col QR - sono fatte apposta per chi non ha, e non deve avere, un
+// modelle, i biglietti di viaggio, il consenso che la modella apre col
+// QR, la ricevuta di chi ha pagato e il modulo di iscrizione che compila
+// l'allieva - sono fatte apposta per chi non ha, e non deve avere, un
 // account. Il gate le lascia passare: a difenderle e' il token
 // nell'indirizzo, non il login. Senza questa deroga App.jsx non verrebbe
 // nemmeno importato, e chi riceve il link troverebbe il form "Area
@@ -91,7 +92,17 @@ class ConfineErrori extends React.Component {
 // Questa lista e' l'unico posto che decide chi passa. Ogni rotta pubblica
 // nuova va scritta QUI oltre che in App.jsx: "consenso" c'era la' e non
 // qui, e il QR portava la modella dritta sul form dello staff (19/09/2026).
-const PARAMETRI_PUBBLICI = ["master", "modelle", "biglietti", "consenso"];
+//
+// Ed e' successo di nuovo, senza che nessuno lo dicesse: "ricevuta" —
+// dove Stripe rimanda chi ha appena pagato col QR — era in App.jsx e non
+// qui dal 25/09/2026. Chi pagava si trovava davanti al form dello staff
+// invece che alla sua ricevuta. Aggiunta il 16/10/2026 insieme a
+// "modulo", trovandola mentre si collegava quest'ultima.
+//
+// Il confronto fra le due liste non lo fa nessuno: se un giorno si vuole
+// smettere di scoprirlo per caso, va messo un controllo che le guardi
+// tutte e due.
+const PARAMETRI_PUBBLICI = ["master", "modelle", "biglietti", "consenso", "ricevuta", "modulo"];
 
 function rottaPubblica() {
   if (typeof window === "undefined") return false;

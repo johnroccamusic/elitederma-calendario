@@ -51,6 +51,7 @@ import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import { creaZip, siPuoCondividere } from "./file/zip.js";
 import ModelliEmail from "./email/ModelliEmail.jsx";
 import ModuloIscrizione from "./iscrizione/ModuloIscrizione.jsx";
+import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
@@ -79470,6 +79471,13 @@ export default function App() {
     const mostraClasse = new URLSearchParams(window.location.search).get("classe") === "1";
     return <VistaRicercaModelle param={paramModelle} mostraClasse={mostraClasse} />;
   }
+  // ?modulo=<gettone>: il modulo di iscrizione che compila l'allieva.
+  // Come le altre rotte pubbliche esce di qui prima di montare
+  // l'applicazione: chi apre quel link non deve vedere nient'altro, e
+  // soprattutto non deve passare dal cancello dell'accesso — non ha e
+  // non avra' mai un account.
+  const paramModulo = new URLSearchParams(window.location.search).get("modulo");
+  if (paramModulo) return <PaginaModulo token={paramModulo} />;
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
   // chi ha fatto accesso: "user" (password generica, tutti), "amministratore"

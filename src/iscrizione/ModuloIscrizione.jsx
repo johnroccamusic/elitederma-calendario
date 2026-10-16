@@ -41,23 +41,9 @@ import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, stileT
 import { CAMPI_MODULO, PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { leggiScelte, salvaScelta } from "./campi.js";
 import { AreaAnagrafica } from "./AreeAnagrafiche.jsx";
-import { AREA_ALLIEVO, AREA_FATTURAZIONE, CHIAVI_ANAGRAFICHE } from "./disposizione.js";
+import { AREA_ALLIEVO, AREA_FATTURAZIONE, CHIAVI_ANAGRAFICHE, GRUPPI_LETTURA as DA_TRASFERIRE } from "./disposizione.js";
 import TestoContratto from "./TestoContratto.jsx";
 
-// I riquadri che nella scheda stanno fuori dall'anagrafica. Qui sono
-// solo da trasferire — l'allieva li legge, non li compila — e per questo
-// si disegnano come righe di sola lettura invece che come caselle.
-const DA_TRASFERIRE = [
-  { titolo: "Il corso", icona: "calendario", chiavi: ["corso_nome", "corso_data_inizio", "corso_data_fine", "corso_citta", "corso_indirizzo", "corso_master"] },
-  { titolo: "Dati di vendita", icona: "ricevuta", chiavi: ["totale_pattuito", "quota_venditore", "quota_speciale"] },
-  { titolo: "Pacchetto / Kit", icona: "scatola", chiavi: ["pacchetto_kit", "tipo_offerta", "dermografo"] },
-  { titolo: "Presenza al corso", icona: "calendario", chiavi: ["giorni_presenza"] },
-  { titolo: "Quota acconto", icona: "banconota", chiavi: ["acconto_imponibile", "acconto_totale", "acconto_pagato_il", "acconto_metodo", "acconto_pagato"] },
-  { titolo: "Quota pre corso", icona: "clipboard", chiavi: ["precorso_imponibile", "precorso_totale", "precorso_pagato_il", "precorso_metodo", "precorso_pagato"] },
-  { titolo: "Da avere al corso", icona: "portafoglio", chiavi: ["saldo_imponibile", "saldo_totale", "saldo_metodo"] },
-  { titolo: "Pagherà in totale", icona: "portafoglio", chiavi: ["totale_senza_iva", "totale_con_interessi"] },
-  { titolo: "Dati organizzativi", icona: "clipboard", chiavi: ["accordi_commerciali", "richiede_modelle", "numero_modelle", "prezzo_speciale_modelle", "taglia_divisa", "note"] },
-];
 
 export default function ModuloIscrizione({ icone = {}, amministratore = true, onBack, titolo = "Modulo di iscrizione" }) {
   const [linguetta, setLinguetta] = useState("campi");
