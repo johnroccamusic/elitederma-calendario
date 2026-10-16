@@ -79624,8 +79624,20 @@ export default function App() {
   const CARICATORI_TABELLA = {
     corsi: async () => setCorsi(ordinaCorsi((await supabase.from("corsi").select("*").order("nome")).data)),
     location: async () => setLocation((await supabase.from("location").select("*").order("nome")).data || []),
-    corsi_date: async () => setCorsiDate((await supabase.from("corsi_date").select("*").order("data_inizio")).data || []),
-    iscritti: async () => setIscritti((await supabase.from("iscritti").select("*").order("ts")).data || []),
+    // Le due tabelle che crescono col lavoro, e le uniche in cui un taglio
+    // silenzioso vorrebbe dire DIMENTICARE UNA CLASSE O UN'ALLIEVA. Oggi
+    // sono 113 e 247, ben sotto le mille righe oltre le quali PostgREST
+    // smette di rispondere senza dirlo; al ritmo di questi mesi gli
+    // iscritti ci arrivano entro l'estate del 2027. Non e' un problema che
+    // si presenta con un errore: la classe semplicemente non ci sarebbe
+    // piu', come e' gia' successo con gli accessori dei kit.
+    //
+    // Il secondo `order("id")` non e' un vezzo: `data_inizio` e `ts` non
+    // sono unici, e leggendo a pagine due righe pari merito possono
+    // scambiarsi fra una pagina e l'altra — una finisce due volte, l'altra
+    // sparisce.
+    corsi_date: async () => setCorsiDate(await leggiTutte(() => supabase.from("corsi_date").select("*").order("data_inizio").order("id"))),
+    iscritti: async () => setIscritti(await leggiTutte(() => supabase.from("iscritti").select("*").order("ts").order("id"))),
     master: async () => setMaster((await supabase.from("master").select("*").order("nome")).data || []),
     hotel: async () => setHotel((await supabase.from("hotel").select("*").order("nome")).data || []),
     assistente: async () => setAssistente((await supabase.from("assistente").select("*").order("nome")).data || []),
