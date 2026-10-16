@@ -7,6 +7,8 @@
 // `predefinito: false` vuol dire che parte spento perche' e' roba
 // nostra, non sua: quanto prende il venditore, gli accordi commerciali,
 // le note interne.
+import { TIPI_DOCUMENTO } from "../tipi-documento.js";
+
 export const CAMPI_MODULO = [
   // Dati dell'allievo
   { chiave: "nome", etichetta: "Nome" },
@@ -79,7 +81,7 @@ export const CAMPI_MODULO = [
   { chiave: "taglia_divisa", etichetta: "Taglia divisa" },
   { chiave: "note", etichetta: "Note", predefinito: false },
   // Quello che mette lei: resta dal modulo del sito
-  { chiave: "doc_tipo", etichetta: "Tipo documento" },
+  { chiave: "doc_tipo", etichetta: "Tipo documento", opzioni: TIPI_DOCUMENTO },
   { chiave: "doc_numero", etichetta: "Numero documento" },
   { chiave: "doc_fronte", etichetta: "Foto documento — fronte" },
   { chiave: "doc_retro", etichetta: "Foto documento — retro" },

@@ -16,13 +16,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import FirmaDito from "../ui/FirmaDito.jsx";
+import { TIPI_DOCUMENTO } from "../tipi-documento.js";
 import {
   NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay, inputStyle,
 } from "../ui/stile.js";
 import { consensoDaCodice } from "../content/consensi";
 import { salvaConsenso } from "./dati";
 
-const TIPI_DOCUMENTO = ["Carta d'identità", "Patente", "Passaporto"];
 
 // LA VIA DEL RITORNO, ma solo per chi lavora.
 //

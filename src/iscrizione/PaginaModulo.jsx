@@ -89,15 +89,34 @@ function Letto({ etichetta, valore, larghezza = "1 1 180px" }) {
   );
 }
 
-/** Un campo che compila lei. */
+/** Un campo che compila lei: casella, oppure tendina se ha un elenco. */
 function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false }) {
   const { chiave, maiuscolo, lunghezza, suggerimento, tipo } = campo;
+  // un elenco chiuso si sceglie, non si scrive: cosi' "patente",
+  // "Patente" e "pat." non diventano tre cose diverse in archivio
+  const opzioni = campo.opzioni || PER_CHIAVE[chiave]?.opzioni || null;
+  const stileComune = {
+    ...fontBody, width: "100%", boxSizing: "border-box", minWidth: 0,
+    padding: "11px 11px", fontSize: 16, borderRadius: 8, minHeight: 44,
+    border: `1px ${spento ? "solid" : "dashed"} ${spento ? CREAM_BORDER : GOLD}`,
+    background: spento ? "#F3F0E9" : "#FFFDF8", color: NAVY,
+  };
   return (
     <div style={{ flex: campo.larghezza || "1 1 180px", minWidth: 0, marginBottom: 12, ...(spento ? { opacity: 0.45 } : null) }}>
       <div style={etichettaStile}>
         {campo.etichetta || etichettaDi(chiave)}
         {obbligatorio && !spento && <span style={{ color: "#B3261E", fontWeight: 700 }}> *</span>}
       </div>
+      {opzioni ? (
+        <select
+          value={valore || ""} disabled={spento}
+          onChange={(e) => onCambia(chiave, e.target.value)}
+          style={stileComune}
+        >
+          <option value="">— scegli —</option>
+          {opzioni.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
       <input
         value={valore || ""} disabled={spento}
         maxLength={lunghezza}
@@ -109,13 +128,9 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false }) {
           if (lunghezza) v = v.slice(0, lunghezza);
           onCambia(chiave, v);
         }}
-        style={{
-          ...fontBody, width: "100%", boxSizing: "border-box", minWidth: 0,
-          padding: "11px 11px", fontSize: 16, borderRadius: 8, minHeight: 44,
-          border: `1px ${spento ? "solid" : "dashed"} ${spento ? CREAM_BORDER : GOLD}`,
-          background: spento ? "#F3F0E9" : "#FFFDF8", color: NAVY,
-        }}
+        style={stileComune}
       />
+      )}
     </div>
   );
 }
