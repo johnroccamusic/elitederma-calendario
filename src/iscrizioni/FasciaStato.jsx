@@ -51,7 +51,19 @@ function IconaMatita({ size = 15, color = "#fff" }) {
 }
 const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_ricevuto: IconaFoglio, confermato: IconaSpunta };
 
-export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330 }) {
+// LA TAPPA "MODULO INVIATO" E' ANCHE IL COMANDO.
+//
+// Finche' il modulo non e' partito quel pallino non dice uno stato, dice
+// cosa fare: "Invia modulo". Premuto, diventa "Modulo inviato" — ed e'
+// la stessa cosa, guardata prima e dopo.
+//
+// Resta premibile anche dopo: se la scheda cambia, il modulo che
+// l'allieva ha in mano non e' piu' quello giusto, e si rimanda. Ma non
+// di sfuggita: chiede conferma, perche' le arriva una mail.
+//
+// Senza `onInvia` la fascia e' quella di prima e non si tocca: nelle
+// liste serve a leggere, non a spedire.
+export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false }) {
   const attuale = STATI[stato] ? stato : "dati_inseriti";
   const indice = ORDINE.indexOf(attuale);
   const colore = STATI[attuale].colore;
@@ -86,19 +98,34 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
               />
             )}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 auto", minWidth: 0 }}>
-              <div
-                title={STATI[chiave].etichetta}
-                style={{
-                  width: palla, height: palla, borderRadius: "50%",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: acceso ? colore : GRIGIO,
-                  boxShadow: acceso ? `0 0 0 ${compatto ? 3 : 5}px ${STATI[chiave].sfondo}` : "none",
-                  flex: "0 0 auto",
-                }}
-              >
-                <Icona size={icona} color={acceso ? "#fff" : GRIGIO_SCURO} />
-              </div>
-              {(!compatto || acceso) && (
+              {(() => {
+                const siPreme = !!onInvia && chiave === "modulo_inviato" && !inviando;
+                const giaPartito = indice >= ORDINE.indexOf("modulo_inviato");
+                const Palla = siPreme ? "button" : "div";
+                return (
+                  <Palla
+                    type={siPreme ? "button" : undefined}
+                    onClick={siPreme ? () => onInvia(giaPartito) : undefined}
+                    title={siPreme
+                      ? (giaPartito ? "Il modulo è già partito: premi per rimandarlo" : "Manda il modulo all'allieva")
+                      : STATI[chiave].etichetta}
+                    style={{
+                      width: palla, height: palla, borderRadius: "50%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: acceso ? colore : GRIGIO,
+                      boxShadow: acceso ? `0 0 0 ${compatto ? 3 : 5}px ${STATI[chiave].sfondo}` : "none",
+                      flex: "0 0 auto",
+                      border: siPreme && !acceso ? `2px solid ${STATI.modulo_inviato.colore}` : "none",
+                      padding: 0,
+                      cursor: siPreme ? "pointer" : "default",
+                      opacity: inviando && chiave === "modulo_inviato" ? 0.5 : 1,
+                    }}
+                  >
+                    <Icona size={icona} color={acceso ? "#fff" : (siPreme ? STATI.modulo_inviato.colore : GRIGIO_SCURO)} />
+                  </Palla>
+                );
+              })()}
+              {(!compatto || acceso || (onInvia && chiave === "modulo_inviato")) && (
                 <div
                   style={{
                     fontSize: compatto ? 10.5 : 11.5,
@@ -107,7 +134,9 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                     marginTop: 5, whiteSpace: "nowrap", lineHeight: 1.2,
                   }}
                 >
-                  {STATI[chiave].etichetta}
+                  {chiave === "modulo_inviato" && onInvia && indice < ORDINE.indexOf("modulo_inviato")
+                    ? (inviando ? "Invio…" : "Invia modulo")
+                    : STATI[chiave].etichetta}
                 </div>
               )}
             </div>

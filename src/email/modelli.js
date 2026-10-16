@@ -19,6 +19,11 @@ export const MODELLI = [
     aChi: "All'allieva, dal pulsante «Invia mail di conferma» nella sua scheda.",
   },
   {
+    chiave: "invio_modulo",
+    titolo: "Invio del modulo di iscrizione",
+    aChi: "All'allieva, dal passo «Invia modulo» sulla fascia della sua scheda. Deve contenere {link}: è l'indirizzo del modulo da compilare e firmare.",
+  },
+  {
     chiave: "dettagli_organizzativi",
     titolo: "Dettagli organizzativi prima del corso",
     aChi: "Alle iscritte della classe, da sole, nei giorni prima dell'inizio. Parte solo se la regola è accesa in «Invii automatici» e questo testo non è vuoto.",
@@ -30,6 +35,7 @@ export const MODELLI = [
 // {date} e' "12–13 novembre 2026" e non "12/11/2026".
 export const SEGNAPOSTI = [
   { chiave: "nome", spiega: "il nome dell'allieva, come Chiara" },
+  { chiave: "link", spiega: "l'indirizzo del modulo da compilare — solo nella mail di invio del modulo" },
   { chiave: "corso", spiega: "il nome del corso" },
   { chiave: "date", spiega: "le date per esteso, come 12–13 novembre 2026" },
   { chiave: "citta", spiega: "la città del corso" },

@@ -56,6 +56,7 @@ import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import { statoDi, aggiornaStatoDopoAcconto } from "./iscrizioni/stato.js";
+import { inviaModulo, linkModulo } from "./iscrizioni/invio.js";
 import FasciaStato from "./iscrizioni/FasciaStato.jsx";
 import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
 import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaModelloEmail, valoriCorso as valoriCorsoEmail } from "../supabase/functions/_shared/email.js";
@@ -30395,6 +30396,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [codiceFiscale, setCodiceFiscale] = useState("");
   // cosa manca ancora alla scheda. Non impedisce di salvare: si vede e
   // basta, finche' qualcuno non lo completa.
+  // l'invio del modulo all'allieva, dal pallino della fascia
+  const [inviandoModulo, setInviandoModulo] = useState(false);
+  const [esitoModulo, setEsitoModulo] = useState(null);   // { ok, testo, link }
   const [daCompletare, setDaCompletare] = useState([]);
   const [avvisoQuote, setAvvisoQuote] = useState("");
 
@@ -31906,6 +31910,61 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     ricarica(["corsi_date"]);
   }
 
+  // MANDA IL MODULO, dal pallino "Invia modulo" della fascia.
+  //
+  // Se e' gia' partito chiede conferma: all'allieva arriva una mail, e
+  // non deve succedere per un tocco di troppo su un telefono.
+  //
+  // Prima salva la scheda. Il modulo che le arriva e' fatto con i dati
+  // che ci sono ADESSO sul database: mandarlo senza salvare vorrebbe
+  // dire spedirle la versione di prima delle modifiche appena fatte, che
+  // e' esattamente il motivo per cui si rimanda.
+  async function mandaModuloAllAllieva(giaPartito) {
+    const rec = iscritti.find((x) => x.id === modificandoId);
+    if (!rec) return;
+    if (giaPartito) {
+      const quando = rec.modulo_inviato_il
+        ? ` (la prima volta il ${new Date(rec.modulo_inviato_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })})`
+        : "";
+      // su un'iscrizione gia' confermata il link c'e' ma non serve a
+      // niente: la pagina le dice che e' tutto completo. Meglio dirlo
+      // prima che scoprirlo dopo aver mandato una mail
+      const giaChiusa = statoDi(rec) === "confermato"
+        ? "\n\nATTENZIONE: questa iscrizione è già confermata, quindi aprendo il link lei leggerà che non c'è più niente da compilare."
+        : "";
+      if (!window.confirm(`Vuoi inviare nuovamente il modulo a ${[rec.nome, rec.cognome].filter(Boolean).join(" ")}?${quando}\n\nLe arriverà una mail con il link aggiornato.${giaChiusa}`)) return;
+    }
+    setInviandoModulo(true);
+    setEsitoModulo(null);
+    try {
+      if (!soloLettura) {
+        const salvata = await persistiIscritto(false);
+        if (!salvata) { setInviandoModulo(false); return; }
+        await ricarica();
+      }
+      const { data: fresco } = await supabase
+        .from("iscritti").select("*").eq("id", modificandoId).maybeSingle();
+      // chi sta spedendo: la sessione Supabase, come fa gia' la mail di
+      // conferma qui sopra. `utenteLoggato` in questa scheda non esiste —
+      // la build non se ne accorge, e al primo clic la pagina sarebbe
+      // morta
+      const { data: utenteOra } = await supabase.auth.getUser();
+      const esito = await inviaModulo({
+        iscritto: fresco || rec,
+        corso, corsoData, loc,
+        chi: utenteOra?.user?.email || "",
+      });
+      setEsitoModulo(esito.ok
+        ? { ok: true, testo: esito.errore || `Modulo inviato a ${(fresco || rec).email}.`, link: esito.link }
+        : { ok: false, testo: esito.errore, link: esito.link });
+      if (esito.ok) await ricarica();
+    } catch (e) {
+      setEsitoModulo({ ok: false, testo: e.message || String(e), link: linkModulo(rec.token_modulo) });
+    } finally {
+      setInviandoModulo(false);
+    }
+  }
+
   async function salvaIscritto() {
     const ok = await persistiIscritto();
     if (!ok) return;
@@ -32733,7 +32792,37 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>
                 Stato dell'iscrizione
               </div>
-              <FasciaStato stato={statoDi(rec)} compatto={isMobile} larghezzaMax={isMobile ? 280 : 350} />
+              <FasciaStato
+                stato={statoDi(rec)} compatto={isMobile} larghezzaMax={isMobile ? 280 : 350}
+                onInvia={mandaModuloAllAllieva} inviando={inviandoModulo}
+              />
+              {esitoModulo && (
+                <div style={{
+                  ...fontBody, fontSize: 12.5, marginTop: 10, lineHeight: 1.55,
+                  color: esitoModulo.ok ? "#2E7D32" : "#B3261E",
+                }}>
+                  {esitoModulo.testo}
+                  {/* il link torna sempre, anche quando la mail non e'
+                      partita: cosi' lo si copia e si manda a mano */}
+                  {esitoModulo.link && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try { navigator.clipboard.writeText(esitoModulo.link); setEsitoModulo({ ...esitoModulo, copiato: true }); }
+                        catch { window.prompt("Copia il link:", esitoModulo.link); }
+                      }}
+                      style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "5px 10px", marginLeft: 8, cursor: "pointer" }}
+                    >
+                      {esitoModulo.copiato ? "Link copiato ✓" : "Copia il link"}
+                    </button>
+                  )}
+                </div>
+              )}
+              {rec.modulo_inviato_il && (
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8 }}>
+                  Modulo inviato il {new Date(rec.modulo_inviato_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}
+                </div>
+              )}
               {rec.modulo_ricevuto_il && (
                 <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10 }}>
                   Modulo ricevuto il {new Date(rec.modulo_ricevuto_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}
