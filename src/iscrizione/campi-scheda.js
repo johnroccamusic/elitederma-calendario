@@ -22,6 +22,7 @@ export const CAMPI_MODULO = [
   { chiave: "stato_residenza", etichetta: "Stato" },
   { chiave: "email", etichetta: "Email" },
   { chiave: "telefono", etichetta: "Cellulare (+39...)" },
+  { chiave: "codice_fiscale", etichetta: "Codice fiscale" },
   { chiave: "tutor", etichetta: "Tutor" },
   { chiave: "tipo_cliente", etichetta: "Intestazione" },
   // Dati di fatturazione
@@ -80,10 +81,11 @@ export const CAMPI_MODULO = [
   // Quello che mette lei: resta dal modulo del sito
   { chiave: "doc_tipo", etichetta: "Tipo documento" },
   { chiave: "doc_numero", etichetta: "Numero documento" },
-  { chiave: "codice_fiscale", etichetta: "Codice fiscale" },
   { chiave: "doc_fronte", etichetta: "Foto documento — fronte" },
   { chiave: "doc_retro", etichetta: "Foto documento — retro" },
 ];
 
 export const PER_CHIAVE = Object.fromEntries(CAMPI_MODULO.map((c) => [c.chiave, c]));
-export const SUOI = ["doc_tipo", "doc_numero", "codice_fiscale", "doc_fronte", "doc_retro"];
+// Quello che resta solo suo: il documento. Il codice fiscale e' salito
+// fra i dati dell'allievo il 16/10/2026 — lo chiede anche il venditore.
+export const SUOI = ["doc_tipo", "doc_numero", "doc_fronte", "doc_retro"];

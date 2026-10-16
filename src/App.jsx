@@ -30364,6 +30364,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [provResidenza, setProvResidenza] = useState("");
   const [statoResidenza, setStatoResidenza] = useState("");
   const [emailIscritto, setEmailIscritto] = useState("");
+  // il codice fiscale: lo chiede anche il venditore dal 16/10/2026,
+  // prima esisteva solo fra i campi del modulo dell'allieva
+  const [codiceFiscale, setCodiceFiscale] = useState("");
 
   // IL PONTE FRA LE CHIAVI DEL MODULO E LE VARIABILI DELLA SCHEDA.
   //
@@ -30382,6 +30385,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     citta_residenza: setCittaResidenza, prov_residenza: setProvResidenza,
     stato_residenza: setStatoResidenza,
     email: setEmailIscritto, telefono: setTelefono, tutor: setTutor,
+    codice_fiscale: setCodiceFiscale,
     tipo_cliente: scegliTipoCliente,
     fattura_ditta: setFatturaDitta, fattura_indirizzo: setFatturaIndirizzo,
     fattura_civico: setFatturaCivico, fattura_citta: setFatturaCitta,
@@ -30396,6 +30400,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     citta_residenza: cittaResidenza, prov_residenza: provResidenza,
     stato_residenza: statoResidenza,
     email: emailIscritto, telefono, tutor, tipo_cliente: tipoCliente,
+    codice_fiscale: codiceFiscale,
     fattura_ditta: fatturaDitta, fattura_indirizzo: fatturaIndirizzo,
     fattura_civico: fatturaCivico, fattura_citta: fatturaCitta,
     fattura_prov: fatturaProv, fattura_cap: fatturaCap,
@@ -31111,7 +31116,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setCorsoParziale(false); setGiorniPresenza([]); setTipoOfferta(""); setTagliaDivisa("");
-    setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza(""); setEmailIscritto("");
+    setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza(""); setEmailIscritto(""); setCodiceFiscale("");
     setRichiedeFattura(false); svuotaCampiFattura();
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
@@ -31134,6 +31139,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setCittaResidenza(i.citta_residenza || ""); setIndirizzoResidenza(i.indirizzo_residenza || ""); setCapResidenza(i.cap_residenza || ""); setEmailIscritto(i.email || "");
     setCivicoResidenza(i.civico_residenza || ""); setInternoResidenza(i.interno_residenza || "");
     setProvResidenza(i.prov_residenza || ""); setStatoResidenza(i.stato_residenza || "");
+    setCodiceFiscale(i.codice_fiscale || "");
     setVecchiaIscrizione(i.vecchia_iscrizione === true);
     setPagAcconto({
       imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
@@ -31633,6 +31639,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           interno_residenza: internoResidenza.trim() || null,
           prov_residenza: provResidenza.trim().toUpperCase() || null,
           stato_residenza: statoResidenza.trim() || null,
+          codice_fiscale: codiceFiscale.trim().toUpperCase() || null,
           email: emailIscritto.trim().toLowerCase() || null,
         }).eq("id", idIscritto);
       }

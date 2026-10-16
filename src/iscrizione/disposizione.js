@@ -33,6 +33,13 @@ export const AREA_ALLIEVO = {
       { chiave: "nome", etichetta: "Nome", larghezza: 1, maiuscolo: true },
       { chiave: "cognome", etichetta: "Cognome", larghezza: 1, maiuscolo: true },
     ] },
+    // il codice fiscale sta coi dati di chi si iscrive, non col
+    // documento: serve per la fattura e per il diploma, non solo a
+    // identificarla. Prima stava fra "quello che compila l'allieva" e
+    // nella scheda del venditore non c'era proprio.
+    { campi: [
+      { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, salvaUscendo: true },
+    ] },
     { campi: [
       { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", maiuscolo: true, salvaUscendo: true },
       { chiave: "civico_residenza", etichetta: "Civico", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
