@@ -79914,9 +79914,9 @@ export default function App() {
     // Magazzino e Analisi caricano `eventi`, e da li' in poi si vedeva.
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare", "impegno", "eventi"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
-    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi"],
+    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi", "utenti_app", "impegno"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno", "location_prezzi"],
-    riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
+    riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi", "costi_categorie"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm", "prodotti_shop"],
@@ -79928,7 +79928,7 @@ export default function App() {
     statanalisicodici: ["corsi", "location", "corsi_date", "master", "prodotti_shop", "regole_referral_automatico"],
     statvenditealbanco: ["vendite_shop_storico"],
     statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop_storico"],
-    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno", "eventi"],
+    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno", "eventi", "documento_fornitore", "location_prezzi", "quote_venditori_split"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "vendite_shop"],
     // "corsi" e "corsi_date" servono alla colonna "Frangente": la vendita
     // registra l'edizione, il nome del corso sta altrove
@@ -79978,7 +79978,7 @@ export default function App() {
     gestionevenditori: ["venditori", "master"],
     gestioneleve: ["leva", "corsi", "corsi_date", "corsi_date_docenti"],
     gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
-    gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "hotel_prezzi", "hotel_periodi_speciali"],
     gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie", "location_prezzi"],
     gestionieventi: ["location", "master", "assistente", "venditori", "prodotti_shop", "bundle_componenti", "costi_categorie", "costi_sottocategorie", "fornitori", "hotel"],
     // provvisoria: l'elenco degli allievi senza pacchetto. Senza questa
@@ -79995,9 +79995,20 @@ export default function App() {
     calendario: ["corsi", "location", "corsi_date", "iscritti", "master", "eventi"],
     cerca: ["corsi", "location", "corsi_date", "iscritti"],
     cercaiscritto: ["corsi", "location", "corsi_date", "iscritti"],
+    // Queste sette si aprono quasi sempre da una pagina che i loro dati li
+    // aveva gia' chiesti, e per questo sembravano a posto. Aperte per
+    // prime — da un collegamento, da un ricarico, da chi atterra li' — si
+    // trovavano le liste vuote, senza un errore che lo dicesse.
+    progettiincorso: ["master", "utenti_app"],
+    rientridaverificare: ["corsi", "corsi_date", "location", "master"],
+    analisiconsumi: ["corsi", "corsi_date", "location", "master"],
+    magazzinoguasti: ["corsi", "corsi_date", "location"],
+    inventariofinecorso: ["iscritti", "kit_definizioni", "location"],
+    cambiintegrazioni: ["iscritti", "kit_definizioni", "location"],
+    qrconsensi: ["corsi"],
     // "impegno" serve al riepilogo amministrativo: una quota in contanti
     // puo' essere rinviata agli impegni quando il cash del corso non basta
-    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "impegno", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "vendite_shop", "location_prezzi"],
+    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "impegno", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "vendite_shop", "location_prezzi", "utenti_app"],
   };
 
   async function caricaIniziale() {
