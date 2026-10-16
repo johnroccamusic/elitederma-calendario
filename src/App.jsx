@@ -50,6 +50,7 @@ import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
 import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import { creaZip, siPuoCondividere } from "./file/zip.js";
 import ModelliEmail from "./email/ModelliEmail.jsx";
+import ModuloIscrizione from "./iscrizione/ModuloIscrizione.jsx";
 import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
 import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaModelloEmail, valoriCorso as valoriCorsoEmail } from "../supabase/functions/_shared/email.js";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
@@ -18856,6 +18857,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
   const [showIntestazioneModal, setShowIntestazioneModal] = useState(false);
   const [showNotificheModal, setShowNotificheModal] = useState(false);
   const [showModelliEmailModal, setShowModelliEmailModal] = useState(false);
+  const [showModuloIscrizioneModal, setShowModuloIscrizioneModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
   // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
@@ -18871,6 +18873,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showMagazziniModal, setShowMagazziniModal], [showIntestazioneModal, setShowIntestazioneModal],
       [showNotificheModal, setShowNotificheModal], [showModelliEmailModal, setShowModelliEmailModal],
+      [showModuloIscrizioneModal, setShowModuloIscrizioneModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
@@ -18878,7 +18881,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
     registraInterceptaIndietro(null);
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
-    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal, showNotificheModal, showModelliEmailModal,
+    showCorsoModal, showTipiModellaModal, showMagazziniModal, showIntestazioneModal, showNotificheModal, showModelliEmailModal, showModuloIscrizioneModal,
     showTargetMasterModal, showTargetVenditoriModal,
   ]);
 
@@ -19087,6 +19090,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
         { chiave: "intestazione", etichetta: "Intestazione società", Icona: IconaIntestazioneRiga, onClick: () => setShowIntestazioneModal(true) },
         { chiave: "notifiche", etichetta: "Notifiche push", Icona: IconaCampanellaErp, onClick: () => setShowNotificheModal(true) },
         { chiave: "modelliemail", etichetta: "Modelli email", Icona: IconaBustaErp, onClick: () => setShowModelliEmailModal(true) },
+        { chiave: "moduloiscrizione", etichetta: "Modulo di iscrizione", Icona: IconaClipboardErp, onClick: () => setShowModuloIscrizioneModal(true) },
         { chiave: "kit", etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
       ],
     },
@@ -19427,6 +19431,12 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       {showNotificheModal && (
         <Modal title="Notifiche push" onClose={() => setShowNotificheModal(false)} maxWidth={760}>
           <PaginaNotifichePush master={master} utenteLoggato={utenteLoggato} />
+        </Modal>
+      )}
+
+      {showModuloIscrizioneModal && (
+        <Modal title="Modulo di iscrizione" onClose={() => setShowModuloIscrizioneModal(false)} maxWidth={820}>
+          <ModuloIscrizione />
         </Modal>
       )}
 
