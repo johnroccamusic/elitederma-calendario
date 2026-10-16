@@ -39,6 +39,16 @@ import { DAL_CODICE } from "./testi.js";
 
 const etichettaDi = (k) => PER_CHIAVE[k]?.etichetta || k;
 
+// UN VALORE C'E' O NON C'E'.
+//
+// Serve a non mandare all'allieva righe vuote: "Presenza al corso —",
+// "Quante modelle —". Su un modulo che si firma un trattino non e'
+// un'informazione, e' una riga che non doveva partire.
+//
+// Attenzione: `false` E' una risposta ("non richiede modelle"), e lo
+// zero pure. Vuoto e' solo null, undefined o una stringa di spazi.
+const pieno = (v) => v != null && String(v).trim() !== "";
+
 const giorno = (iso) => {
   if (!iso) return "";
   try {
@@ -319,12 +329,15 @@ export default function PaginaModulo({ token }) {
     </div>
   );
 
-  // un riquadro commerciale: di sola lettura PER INTERO, anche i vuoti
+  // un riquadro commerciale: di sola lettura per intero, e senza le
+  // righe che il venditore ha lasciato vuote
   const RigaLetta = ({ chiavi }) => (
     <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
       {chiavi.map((k) => <Letto key={k} etichetta={etichettaDi(k)} valore={mostra(k, c(k)?.valore)} />)}
     </div>
   );
+  // le chiavi di un gruppo che hanno davvero qualcosa da dire
+  const scritte = (chiavi) => chiavi.filter((k) => c(k) && pieno(c(k).valore));
 
   return (
     <div style={{ ...fontBody, minHeight: "100vh", padding: "20px 14px 60px" }}>
@@ -338,13 +351,13 @@ export default function PaginaModulo({ token }) {
         <div style={pannello}>
           <IntestazioneArea>Il tuo corso</IntestazioneArea>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-            <Letto etichetta="Corso" valore={dati.corso?.nome || "—"} />
-            <Letto etichetta="Dal" valore={giorno(dati.corso?.inizio) || "—"} />
-            <Letto etichetta="Al" valore={giorno(dati.corso?.fine) || "—"} />
-          </div>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-            <Letto etichetta="Città" valore={dati.corso?.citta || "—"} />
-            <Letto etichetta="Dove" valore={[dati.corso?.sede, dati.corso?.indirizzo].filter(Boolean).join(" — ") || "—"} />
+            {[
+              ["Corso", dati.corso?.nome],
+              ["Dal",   giorno(dati.corso?.inizio)],
+              ["Al",    giorno(dati.corso?.fine)],
+              ["Città", dati.corso?.citta],
+              ["Dove",  [dati.corso?.sede, dati.corso?.indirizzo].filter(Boolean).join(" — ")],
+            ].filter(([, v]) => pieno(v)).map(([e, v]) => <Letto key={e} etichetta={e} valore={v} />)}
           </div>
         </div>
 
@@ -378,7 +391,9 @@ export default function PaginaModulo({ token }) {
         {/* I riquadri commerciali: li ha decisi il venditore, lei li legge.
             "Il corso" salta, e' gia' il riquadro in cima. */}
         {GRUPPI_LETTURA.filter((g) => g.titolo !== "Il corso").map((g) => {
-          const presenti = g.chiavi.filter((k) => c(k));
+          // niente di scritto, niente riquadro: un "Presenza al corso"
+          // con dentro un trattino non va mandato a nessuno
+          const presenti = scritte(g.chiavi);
           if (!presenti.length) return null;
           return (
             <div key={g.titolo} style={pannello}>
