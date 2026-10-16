@@ -52,6 +52,8 @@ import { creaZip, siPuoCondividere } from "./file/zip.js";
 import ModelliEmail from "./email/ModelliEmail.jsx";
 import ModuloIscrizione from "./iscrizione/ModuloIscrizione.jsx";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
+import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
+import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import { statoDi, aggiornaStatoDopoAcconto } from "./iscrizioni/stato.js";
 import FasciaStato from "./iscrizioni/FasciaStato.jsx";
 import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
@@ -19444,11 +19446,16 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
 
       {showModuloIscrizioneModal && (
         <Modal title="Modulo di iscrizione" onClose={() => setShowModuloIscrizioneModal(false)} maxWidth={820} scorrevole>
-          <ModuloIscrizione icone={{
-            persona: IconaPersonaSemplice, ricevuta: IconaRicevutaErp, scatola: IconaScatolaErp,
-            banconota: IconaBanconota, clipboard: IconaClipboardErp, portafoglio: IconaPortafoglio,
-            calendario: IconaCalendarioCard, documento: IconaCatDocumento,
-          }} />
+          {/* la scelta e' una sola per tutta l'accademia: la cambia solo
+              chi amministra, gli altri la vedono e basta */}
+          <ModuloIscrizione
+            amministratore={ruoloUtente === "programmatore" || ruoloUtente === "amministratore"}
+            icone={{
+              persona: IconaPersonaSemplice, ricevuta: IconaRicevutaErp, scatola: IconaScatolaErp,
+              banconota: IconaBanconota, clipboard: IconaClipboardErp, portafoglio: IconaPortafoglio,
+              calendario: IconaCalendarioCard, documento: IconaCatDocumento,
+            }}
+          />
         </Modal>
       )}
 
@@ -30247,6 +30254,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setFatturaCitta(""); setFatturaProv(""); setFatturaCap("");
     setFatturaPiva(""); setFatturaCodDest(""); setFatturaPec("");
   }
+
   // iscrizione inserita ora ma relativa a un corso già passato: non deve
   // sporcare le statistiche/iscrizioni "di oggi" (si basano su `ts`, il
   // momento in cui viene salvata nel database, non la data del corso)
@@ -30331,8 +30339,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [tipoOfferta, setTipoOfferta] = useState("");
   const [tagliaDivisa, setTagliaDivisa] = useState("");
   // residenza letta dal modulo di iscrizione (pagina 6): serve al CRM per
-  // citta/regione di residenza. Non ha campi visibili nel form: si legge dal
-  // PDF e si salva insieme al resto
+  // la residenza. Si legge dal PDF del modulo, e dal 16/10/2026 si
+  // compila anche a mano: i campi ci sono, nel riquadro "Dati
+  // dell'allievo". (Prima questo commento diceva che non c'erano.)
   const [cittaResidenza, setCittaResidenza] = useState("");
   const [indirizzoResidenza, setIndirizzoResidenza] = useState("");
   const [capResidenza, setCapResidenza] = useState("");
@@ -30344,6 +30353,48 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [provResidenza, setProvResidenza] = useState("");
   const [statoResidenza, setStatoResidenza] = useState("");
   const [emailIscritto, setEmailIscritto] = useState("");
+
+  // IL PONTE FRA LE CHIAVI DEL MODULO E LE VARIABILI DELLA SCHEDA.
+  //
+  // I due riquadri anagrafici li disegna AreaAnagrafica, che parla per
+  // chiave ("cap_residenza") perche' la stessa disposizione serve anche
+  // alla pagina di configurazione. Qui dentro, invece, ogni campo e' una
+  // variabile sua. Questa tabella e' la sola cosa che le lega: nessuna
+  // logica, solo il nome di la' e il setter di qua.
+  //
+  // Un campo nuovo nella disposizione senza la sua riga qui si vede
+  // subito — resta vuoto e non scrive — invece di sparire in silenzio.
+  const SCRITTORI_ANAGRAFICI = {
+    nome: setNome, cognome: setCognome,
+    indirizzo_residenza: setIndirizzoResidenza, civico_residenza: setCivicoResidenza,
+    interno_residenza: setInternoResidenza, cap_residenza: setCapResidenza,
+    citta_residenza: setCittaResidenza, prov_residenza: setProvResidenza,
+    stato_residenza: setStatoResidenza,
+    email: setEmailIscritto, telefono: setTelefono, tutor: setTutor,
+    tipo_cliente: scegliTipoCliente,
+    fattura_ditta: setFatturaDitta, fattura_indirizzo: setFatturaIndirizzo,
+    fattura_civico: setFatturaCivico, fattura_citta: setFatturaCitta,
+    fattura_prov: setFatturaProv, fattura_cap: setFatturaCap,
+    fattura_piva: setFatturaPiva, fattura_cod_dest: setFatturaCodDest,
+    fattura_pec: setFatturaPec,
+  };
+  const valoriAnagrafici = {
+    nome, cognome,
+    indirizzo_residenza: indirizzoResidenza, civico_residenza: civicoResidenza,
+    interno_residenza: internoResidenza, cap_residenza: capResidenza,
+    citta_residenza: cittaResidenza, prov_residenza: provResidenza,
+    stato_residenza: statoResidenza,
+    email: emailIscritto, telefono, tutor, tipo_cliente: tipoCliente,
+    fattura_ditta: fatturaDitta, fattura_indirizzo: fatturaIndirizzo,
+    fattura_civico: fatturaCivico, fattura_citta: fatturaCitta,
+    fattura_prov: fatturaProv, fattura_cap: fatturaCap,
+    fattura_piva: fatturaPiva, fattura_cod_dest: fatturaCodDest,
+    fattura_pec: fatturaPec,
+  };
+  function scriviAnagrafico(chiave, valore) {
+    const scrittore = SCRITTORI_ANAGRAFICI[chiave];
+    if (scrittore) scrittore(valore);
+  }
   // esito dell'ultimo invio della mail di conferma: { stato: "lavoro" | "ok" | "errore", testo }
   const [invioConferma, setInvioConferma] = useState(null);
   // l'esito appartiene a un iscritto: cambiando scheda non deve restare li'
@@ -32673,105 +32724,28 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             {spaziatoreRiga("anagrafica", "modulo")}
           </div>
 
-          {/* nome, cognome, tutor, telefono e la spunta della fattura sono
-              una cosa sola: chi compila la scheda li legge insieme, e due
-              riquadri separati facevano sembrare due argomenti diversi */}
+          {/* nome, cognome, residenza, contatti, tutor e l'intestazione
+              Privato/Azienda sono un riquadro solo: chi compila la scheda
+              li legge insieme, e riquadri separati facevano sembrare
+              argomenti diversi.
+
+              Il disegno non sta qui: sta in src/iscrizione/disposizione.js
+              e lo monta AreaAnagrafica, lo stesso componente che usa
+              Impostazioni > Modulo di iscrizione. Un campo aggiunto la'
+              compare in entrambi i posti, e i due non possono piu'
+              disallinearsi come era successo. */}
           <div {...propsRiga("anagrafica", "datiAnagrafici")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("anagrafica", "datiAnagrafici")}
-              <div style={{ ...areaSchedaIscritto, flex: 1 }}>
-                <IntestazioneArea Icona={IconaPersonaSemplice}>Dati dell'allievo</IntestazioneArea>
-                <div style={{ display: "flex", gap: 14 }}>
-                  <div style={{ flex: 1 }}>
-                    <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                  </div>
-                </div>
-                {/* LA RESIDENZA, subito dopo nome e cognome. Prima questi
-                    dati esistevano solo nel database, riempiti
-                    dall'importazione del modulo del sito: qui non c'era
-                    dove scriverli. Ora si compilano a mano, perche' sono
-                    lo stesso blocco che va sul modulo dell'allieva. */}
-                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                  <div style={{ flex: "3 1 200px" }}>
-                    <Field label="Via"><input value={indirizzoResidenza} onChange={(e) => setIndirizzoResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                  </div>
-                  <div style={{ flex: "1 1 90px" }}>
-                    <Field label="Civico"><input value={civicoResidenza} onChange={(e) => setCivicoResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                  </div>
-                  <div style={{ flex: "1 1 90px" }}>
-                    <Field label="Interno"><input value={internoResidenza} onChange={(e) => setInternoResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 90px" }}>
-                    <Field label="CAP"><input value={capResidenza} onChange={(e) => setCapResidenza(e.target.value)} onBlur={autosalva} style={campoAreaScheda} /></Field>
-                  </div>
-                  <div style={{ flex: "2 1 150px" }}>
-                    <Field label="Città"><input value={cittaResidenza} onChange={(e) => setCittaResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                  </div>
-                  <div style={{ flex: "0 1 90px" }}>
-                    <Field label="Provincia"><input value={provResidenza} maxLength={2} onChange={(e) => setProvResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                  </div>
-                  <div style={{ flex: "1 1 120px" }}>
-                    <Field label="Stato"><input value={statoResidenza} onChange={(e) => setStatoResidenza(e.target.value.toUpperCase())} onBlur={autosalva} placeholder="ITALIA" style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                  <div style={{ flex: "2 1 200px" }}>
-                    <Field label="Email"><input value={emailIscritto} onChange={(e) => setEmailIscritto(e.target.value)} onBlur={autosalva} style={campoAreaScheda} /></Field>
-                  </div>
-                  <div style={{ flex: "1 1 150px" }}>
-                    <Field label="Cellulare (+39...)">
-                      <input
-                        value={telefono}
-                        onChange={(e) => setTelefono(e.target.value)}
-                        onBlur={() => { setTelefono(normalizzaCellulare(telefono)); autosalva(); }}
-                        placeholder="+39 333 1234567"
-                        inputMode="tel"
-                        style={campoAreaScheda}
-                      />
-                    </Field>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
-                  <div style={{ flex: "2 1 140px" }}>
-                    <Field label="Tutor">
-                      <select value={tutor} onChange={(e) => setTutor(e.target.value)} style={{ ...campoAreaScheda, textTransform: "uppercase" }}>
-                        <option value="">— scegli venditore —</option>
-                        {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
-                        {/* valore già presente ma non (più) in elenco: resta visibile invece di sparire silenziosamente */}
-                        {tutor && !(venditori || []).some((v) => v.nome.toUpperCase() === tutor.toUpperCase()) && (
-                          <option value={tutor}>{tutor} (non in elenco)</option>
-                        )}
-                      </select>
-                    </Field>
-                  </div>
-                  <div style={{ flex: "1 1 220px" }}>
-                    <Field label="Intestazione">
-                      <div style={{ display: "flex", gap: 8 }}>
-                        {[{ v: "privato", l: "Privato" }, { v: "azienda", l: "Azienda" }].map((o) => (
-                          <button
-                            key={o.v} type="button"
-                            onClick={() => { scegliTipoCliente(o.v); autosalva(); }}
-                            style={{
-                              ...fontBody, flex: 1, minHeight: 40, borderRadius: 10, cursor: "pointer",
-                              fontSize: 13, fontWeight: 700,
-                              background: tipoCliente === o.v ? NAVY : "#fff",
-                              color: tipoCliente === o.v ? "#fff" : NAVY,
-                              border: `1px solid ${tipoCliente === o.v ? NAVY : CREAM_BORDER}`,
-                            }}
-                          >
-                            {o.l}
-                          </button>
-                        ))}
-                      </div>
-                    </Field>
-                  </div>
-                </div>
-              </div>
+              <AreaAnagrafica
+                area={AREA_ALLIEVO}
+                icona={IconaPersonaSemplice}
+                valori={valoriAnagrafici}
+                scrivi={scriviAnagrafico}
+                autosalva={autosalva}
+                normalizzaTelefono={normalizzaCellulare}
+                venditori={venditori}
+              />
             </div>
             {spaziatoreRiga("anagrafica", "datiAnagrafici")}
           </div>
@@ -32780,58 +32754,14 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             <div {...propsRiga("anagrafica", "fatturazione")}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
                 {manigliaRiga("anagrafica", "fatturazione")}
-                <div style={{ ...areaSchedaIscritto, flex: 1 }}>
-              <IntestazioneArea Icona={IconaRicevutaErp}>Dati di fatturazione</IntestazioneArea>
-              <Field label="Nome ditta">
-                <input value={fatturaDitta} onChange={(e) => setFatturaDitta(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
-              </Field>
-              <div style={{ display: "flex", gap: 14 }}>
-                <div style={{ flex: 3 }}>
-                  <Field label="Indirizzo">
-                    <input value={fatturaIndirizzo} onChange={(e) => setFatturaIndirizzo(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="N. civico">
-                    <input maxLength={5} value={fatturaCivico} onChange={(e) => setFatturaCivico(e.target.value.toUpperCase().slice(0, 5))} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
-                  </Field>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 14 }}>
-                <div style={{ flex: 2 }}>
-                  <Field label="Città">
-                    <input value={fatturaCitta} onChange={(e) => setFatturaCitta(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Prov.">
-                    <input maxLength={2} value={fatturaProv} onChange={(e) => setFatturaProv(e.target.value.toUpperCase().slice(0, 2))} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Cap">
-                    <input maxLength={5} value={fatturaCap} onChange={(e) => setFatturaCap(e.target.value.slice(0, 5))} style={campoAreaScheda} />
-                  </Field>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 14 }}>
-                <div style={{ flex: 1 }}>
-                  <Field label="P.IVA">
-                    <input value={fatturaPiva} onChange={(e) => setFatturaPiva(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Cod. Dest.">
-                    <input value={fatturaCodDest} onChange={(e) => setFatturaCodDest(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="PEC">
-                    <input value={fatturaPec} onChange={(e) => setFatturaPec(e.target.value)} style={campoAreaScheda} />
-                  </Field>
-                </div>
-              </div>
-                </div>
+                <AreaAnagrafica
+                  area={AREA_FATTURAZIONE}
+                  icona={IconaRicevutaErp}
+                  valori={valoriAnagrafici}
+                  scrivi={scriviAnagrafico}
+                  autosalva={autosalva}
+                  venditori={venditori}
+                />
               </div>
               {spaziatoreRiga("anagrafica", "fatturazione")}
             </div>

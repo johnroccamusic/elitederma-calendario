@@ -1,17 +1,29 @@
 // SETTING > MODULO DI ISCRIZIONE.
 //
-// E' il modulo di iscrizione del venditore, riprodotto tale e quale —
-// stessi riquadri crema col bordo oro, stesse righe, stesse etichette —
-// con accanto a ogni voce la spunta che dice se quel campo viene
-// trasferito sul modulo che riceve l'allieva.
+// Si decide qui, una volta per tutti, quali campi della scheda di
+// iscrizione finiscono sul modulo che riceve l'allieva.
 //
-// NON E' UNA SOMIGLIANZA: i riquadri, i titoli e i campi sono gli stessi
-// mattoni della scheda vera (src/ui/scheda.jsx). Se un giorno cambia un
-// bordo o un colore nella scheda, cambia anche qui, da solo.
+// NON E' UNA COPIA DELLA SCHEDA: i due riquadri in alto — "Dati
+// dell'allievo" e "Dati di fatturazione" — sono lo STESSO componente che
+// disegna la scheda vera (AreaAnagrafica, su src/iscrizione/disposizione.js),
+// montato con `configurazione` acceso. Non c'e' un secondo disegno da
+// tenere allineato: se domani cambia un campo, una larghezza o un
+// colore nella scheda, qui cambia da solo.
 //
-// Del modulo vecchio del sito resta solo quello che l'allieva deve
-// leggere o fornire: regolamento, privacy, documento e firma.
-import React, { useEffect, useState } from "react";
+// La versione precedente di questo file era invece una riproduzione
+// scritta a mano, e si era disallineata dalla scheda in tre punti.
+//
+// COME SI LEGGE. Ogni campo ha nell'angolo una spunta: accesa, il campo
+// parte sul modulo dell'allieva. L'asterisco accanto dice se, lasciato
+// vuoto dal venditore, lei DEVE riempirlo per poter spedire. I campi
+// esclusi non si nascondono: restano al loro posto, smorzati, cosi' la
+// scheda si legge sempre per intera.
+//
+// LE AGGIUNTE IN FONDO sono le tre cose che sul modulo dell'allieva
+// servono e nella scheda del venditore non esistono: il documento che
+// carica lei, la firma, e i testi di regolamento e privacy. Stanno
+// sotto, in un blocco a parte, perche' non appartengono alla scheda.
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase.js";
 import { Button, Field } from "../ui/base.jsx";
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea, RigaLettura } from "../ui/scheda.jsx";
@@ -19,10 +31,27 @@ import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay } from 
 import { SEZIONI, CONSENSI, INTRO } from "./contenuto.js";
 import { CAMPI_MODULO, PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { leggiScelte, salvaScelta } from "./campi.js";
+import { AreaAnagrafica } from "./AreeAnagrafiche.jsx";
+import { AREA_ALLIEVO, AREA_FATTURAZIONE, CHIAVI_ANAGRAFICHE } from "./disposizione.js";
 
 const REGOLAMENTO = SEZIONI.find((s) => s.tipo === "testo");
 
-export default function ModuloIscrizione({ icone = {} }) {
+// I riquadri che nella scheda stanno fuori dall'anagrafica. Qui sono
+// solo da trasferire — l'allieva li legge, non li compila — e per questo
+// si disegnano come righe di sola lettura invece che come caselle.
+const DA_TRASFERIRE = [
+  { titolo: "Il corso", icona: "calendario", chiavi: ["corso_nome", "corso_data_inizio", "corso_data_fine", "corso_citta", "corso_indirizzo", "corso_master"] },
+  { titolo: "Dati di vendita", icona: "ricevuta", chiavi: ["totale_pattuito", "quota_venditore", "quota_speciale"] },
+  { titolo: "Pacchetto / Kit", icona: "scatola", chiavi: ["pacchetto_kit", "tipo_offerta", "dermografo"] },
+  { titolo: "Presenza al corso", icona: "calendario", chiavi: ["giorni_presenza"] },
+  { titolo: "Quota acconto", icona: "banconota", chiavi: ["acconto_imponibile", "acconto_totale", "acconto_pagato_il", "acconto_metodo", "acconto_pagato"] },
+  { titolo: "Quota pre corso", icona: "clipboard", chiavi: ["precorso_imponibile", "precorso_totale", "precorso_pagato_il", "precorso_metodo", "precorso_pagato"] },
+  { titolo: "Da avere al corso", icona: "portafoglio", chiavi: ["saldo_imponibile", "saldo_totale", "saldo_metodo"] },
+  { titolo: "Pagherà in totale", icona: "portafoglio", chiavi: ["totale_senza_iva", "totale_con_interessi"] },
+  { titolo: "Dati organizzativi", icona: "clipboard", chiavi: ["accordi_commerciali", "richiede_modelle", "numero_modelle", "prezzo_speciale_modelle", "taglia_divisa", "note"] },
+];
+
+export default function ModuloIscrizione({ icone = {}, amministratore = true }) {
   const [scelte, setScelte] = useState({});
   const [errore, setErrore] = useState("");
   const [salvando, setSalvando] = useState("");
@@ -57,96 +86,80 @@ export default function ModuloIscrizione({ icone = {} }) {
     return r ? r.obbligatorio !== false : true;
   }
 
-  async function cambiaObbligo(chiave) {
-    const valore = !obbligatorio(chiave);
-    const prima = scelte[chiave];
-    setScelte((s) => ({ ...s, [chiave]: { ...(prima || { chiave, incluso: true }), obbligatorio: valore } }));
+  async function scrivi(chiave, campi, ripristino) {
     setSalvando(chiave);
-    const e = await salvaScelta(chiave, { incluso: acceso(chiave), obbligatorio: valore }, chi);
+    const e = await salvaScelta(chiave, campi, chi);
     setSalvando("");
-    if (e) { setErrore(e); setScelte((s) => ({ ...s, [chiave]: prima })); }
+    if (e) { setErrore(e); setScelte((s) => ({ ...s, [chiave]: ripristino })); }
     else setErrore("");
   }
 
   async function cambia(chiave) {
+    if (!amministratore) return;
     const valore = !acceso(chiave);
     const prima = scelte[chiave];
-    setScelte((s) => ({ ...s, [chiave]: { chiave, incluso: valore } }));
-    setSalvando(chiave);
-    const e = await salvaScelta(chiave, { incluso: valore }, chi);
-    setSalvando("");
-    if (e) { setErrore(e); setScelte((s) => ({ ...s, [chiave]: prima })); }
-    else setErrore("");
+    setScelte((s) => ({ ...s, [chiave]: { ...(prima || { chiave }), incluso: valore } }));
+    await scrivi(chiave, { incluso: valore, obbligatorio: obbligatorio(chiave) }, prima);
   }
 
-  // L'etichetta del campo con la spunta attaccata: e' la "voce" e il suo
-  // flag, uno accanto all'altra, come chiesto.
+  async function cambiaObbligo(chiave) {
+    if (!amministratore) return;
+    const valore = !obbligatorio(chiave);
+    const prima = scelte[chiave];
+    setScelte((s) => ({ ...s, [chiave]: { ...(prima || { chiave, incluso: true }), obbligatorio: valore } }));
+    await scrivi(chiave, { incluso: acceso(chiave), obbligatorio: valore }, prima);
+  }
+
+  // LA SENTINELLA. Un campo dichiarato in campi-scheda.js che nessun
+  // riquadro disegna sarebbe invisibile: la sua spunta non esisterebbe e
+  // nessuno saprebbe che c'e'. E uno disegnato ma non dichiarato non
+  // avrebbe un valore predefinito. Il controllo e' sui due elenchi, e
+  // quello che non torna si vede in pagina.
+  const disallineati = useMemo(() => {
+    const disegnate = new Set([...CHIAVI_ANAGRAFICHE, ...DA_TRASFERIRE.flatMap((b) => b.chiavi), ...SUOI]);
+    const dichiarate = new Set(CAMPI_MODULO.map((c) => c.chiave));
+    return {
+      senzaSpunta: [...dichiarate].filter((k) => !disegnate.has(k)),
+      senzaScheda: [...disegnate].filter((k) => !dichiarate.has(k)),
+    };
+  }, []);
+
+  // la spunta per i riquadri di sola lettura, dove non c'e' una casella
+  // su cui appoggiarla: qui sta attaccata all'etichetta
   function Etichetta({ chiave }) {
-    const c = PER_CHIAVE[chiave];
     const on = acceso(chiave);
     return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
         <input
-          type="checkbox" checked={on} disabled={salvando === chiave}
+          type="checkbox" checked={on} disabled={salvando === chiave || !amministratore}
           onChange={() => cambia(chiave)}
           title={on ? "Va sul modulo dell'allieva" : "Non viene trasferito"}
-          style={{ cursor: "pointer", margin: 0 }}
+          style={{ width: 13, height: 13, margin: 0, cursor: "pointer", accentColor: NAVY }}
         />
-        <span style={{ color: on ? undefined : MUTED, textDecoration: on ? "none" : "line-through" }}>
-          {c?.etichetta || chiave}
+        <span style={{ color: on ? undefined : MUTED }}>{PER_CHIAVE[chiave]?.etichetta || chiave}</span>
+        <span
+          onClick={() => on && cambiaObbligo(chiave)}
+          title={!on ? "Il campo non va sul modulo" : obbligatorio(chiave)
+            ? "Obbligatorio: se il venditore lo lascia vuoto, l'allieva deve riempirlo per poter spedire"
+            : "Facoltativo: può restare vuoto e il modulo si spedisce lo stesso"}
+          style={{
+            cursor: on ? "pointer" : "default", fontSize: 13, lineHeight: 1, fontWeight: 700,
+            color: !on ? CREAM_BORDER : obbligatorio(chiave) ? "#B3261E" : MUTED,
+            userSelect: "none", width: 8, textAlign: "center",
+          }}
+        >
+          *
         </span>
-        {on && (
-          <span
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); cambiaObbligo(chiave); }}
-            title={obbligatorio(chiave)
-              ? "Obbligatorio: se il venditore lo lascia vuoto, l'allieva deve riempirlo per poter spedire"
-              : "Facoltativo: può restare vuoto e il modulo si spedisce lo stesso"}
-            style={{
-              cursor: "pointer", fontSize: 14, lineHeight: 1,
-              color: obbligatorio(chiave) ? "#B3261E" : CREAM_BORDER,
-              fontWeight: 700, userSelect: "none", paddingLeft: 2,
-            }}
-          >
-            *
-          </span>
-        )}
       </span>
     );
   }
 
-  // un campo del modulo: l'etichetta con la spunta, e sotto la casella
-  // vuota com'e' sul modulo del venditore.
-  //
-  // `scelte` lo fa diventare una fila di tasti invece di una casella:
-  // l'intestazione Privato/Azienda sulla scheda e' cosi', e qui deve
-  // essere uguale — se no non e' piu' lo specchio di niente.
-  function Campo({ chiave, larghezza = "1 1 140px", minLabelHeight, opzioni = null }) {
+  function CampoSpento({ chiave, larghezza = "1 1 140px" }) {
     const on = acceso(chiave);
     return (
-      <div style={{ flex: larghezza, minWidth: 0 }}>
-        <Field label={<Etichetta chiave={chiave} />} minLabelHeight={minLabelHeight}>
-          {opzioni ? (
-            <div style={{ display: "flex", gap: 8 }}>
-              {opzioni.map((o, i) => (
-                <div
-                  key={o}
-                  style={{
-                    ...fontBody, flex: 1, minHeight: 40, borderRadius: 10,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 13, fontWeight: 700,
-                    background: i === 0 ? (on ? NAVY : "#B9B2A4") : "#fff",
-                    color: i === 0 ? "#fff" : NAVY,
-                    border: `1px solid ${i === 0 ? (on ? NAVY : "#B9B2A4") : CREAM_BORDER}`,
-                    opacity: on ? 1 : 0.6,
-                  }}
-                >
-                  {o}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <input style={{ ...campoAreaScheda, background: on ? "#fff" : "#F1EEE7" }} value="" disabled readOnly />
-          )}
+      <div style={{ flex: larghezza, minWidth: 0, ...(on ? null : { opacity: 0.45 }) }}>
+        <Field label={<Etichetta chiave={chiave} />}>
+          <input style={{ ...campoAreaScheda, background: "#F1EEE7" }} value="" disabled readOnly />
         </Field>
       </div>
     );
@@ -157,165 +170,93 @@ export default function ModuloIscrizione({ icone = {} }) {
   const quantiObbligatori = CAMPI_MODULO.filter((c) => acceso(c.chiave) && obbligatorio(c.chiave)).length;
   const I = icone;
 
+  const comuni = {
+    configurazione: true,
+    acceso, obbligatorio,
+    onCambiaIncluso: cambia, onCambiaObbligo: cambiaObbligo,
+    inAttesa: salvando,
+    modificabile: amministratore,
+    stileArea: pannello,
+  };
+
   return (
     <div style={{ ...fontBody }}>
       <div style={{
         border: `1px solid ${GOLD}`, background: "#FDF8EF", borderRadius: 12,
         padding: "10px 12px", marginBottom: 15, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5,
       }}>
-        Questo è il modulo di iscrizione del venditore. <b style={{ color: NAVY }}>Spunta le voci che vuoi
-        trasferire</b> sul modulo che riceve l'allieva: quelle spuntate le arriveranno già compilate.
+        Questa è la scheda di iscrizione del venditore, quella vera.
+        <b style={{ color: NAVY }}> Spunta le voci che vuoi trasferire</b> sul modulo che riceve l'allieva:
+        quelle spuntate le arriveranno già compilate, e lei le legge senza poterle cambiare.
         <div style={{ marginTop: 6, lineHeight: 1.5 }}>
-          Quello che il venditore ha gia' scritto l'allieva lo legge e basta, non lo puo' cambiare.
           L'asterisco <b style={{ color: "#B3261E" }}>*</b> accanto a una voce vuol dire che, se il venditore
           la lascia vuota, lei deve riempirla per poter spedire: toccalo per renderla facoltativa.
+          Le voci spente restano al loro posto, smorzate.
         </div>
         <div style={{ marginTop: 6, fontWeight: 700, color: NAVY }}>
           {quantiAccesi} voci su {CAMPI_MODULO.length} vanno sul modulo · {quantiObbligatori} obbligatorie
         </div>
-      </div>
-      {errore && <div style={{ fontSize: 12.5, color: "#B3261E", marginBottom: 10 }}>Non riesco a salvare: {errore}</div>}
-
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.persona}>Dati dell'allievo</IntestazioneArea>
-        <RigaLettura><Campo chiave="nome" /><Campo chiave="cognome" /></RigaLettura>
-        <RigaLettura>
-          <Campo chiave="indirizzo_residenza" larghezza="1 1 200px" />
-          <Campo chiave="civico_residenza" larghezza="0 1 90px" />
-          <Campo chiave="interno_residenza" larghezza="0 1 90px" />
-        </RigaLettura>
-        <RigaLettura>
-          <Campo chiave="cap_residenza" larghezza="0 1 90px" />
-          <Campo chiave="citta_residenza" larghezza="1 1 140px" />
-          <Campo chiave="prov_residenza" larghezza="0 1 80px" />
-          <Campo chiave="stato_residenza" larghezza="1 1 120px" />
-        </RigaLettura>
-        <RigaLettura>
-          <Campo chiave="email" larghezza="1 1 200px" />
-          <Campo chiave="telefono" larghezza="1 1 150px" />
-        </RigaLettura>
-        <RigaLettura><Campo chiave="tutor" larghezza="1 1 180px" /></RigaLettura>
-        <RigaLettura>
-          <Campo chiave="tipo_cliente" larghezza="1 1 260px" opzioni={["Privato", "Azienda"]} />
-        </RigaLettura>
-      </div>
-
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.ricevuta}>Dati di fatturazione</IntestazioneArea>
-        <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
-          Compaiono solo scegliendo <b style={{ color: NAVY }}>Azienda</b>. A un privato non vengono nemmeno
-          chiesti; a un'azienda servono tutti, o la fattura non si emette.
+        <div style={{ marginTop: 6, fontSize: 12, color: MUTED }}>
+          La scelta è una sola per tutta l'accademia: vale per ogni corso e per ogni venditore.
         </div>
-        <RigaLettura><Campo chiave="fattura_ditta" larghezza="1 1 100%" /></RigaLettura>
-        <RigaLettura>
-          <Campo chiave="fattura_indirizzo" larghezza="1 1 200px" />
-          <Campo chiave="fattura_civico" larghezza="0 1 110px" />
-        </RigaLettura>
-        <RigaLettura>
-          <Campo chiave="fattura_citta" larghezza="1 1 140px" />
-          <Campo chiave="fattura_prov" larghezza="0 1 90px" />
-          <Campo chiave="fattura_cap" larghezza="0 1 90px" />
-        </RigaLettura>
-        <RigaLettura>
-          <Campo chiave="fattura_piva" /><Campo chiave="fattura_cod_dest" /><Campo chiave="fattura_pec" />
-        </RigaLettura>
       </div>
 
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.calendario}>Il corso</IntestazioneArea>
-        <RigaLettura><Campo chiave="corso_nome" larghezza="1 1 100%" /></RigaLettura>
-        <RigaLettura>
-          <Campo chiave="corso_data_inizio" /><Campo chiave="corso_data_fine" /><Campo chiave="corso_master" />
-        </RigaLettura>
-        <RigaLettura>
-          <Campo chiave="corso_citta" larghezza="1 1 140px" />
-          <Campo chiave="corso_indirizzo" larghezza="1 1 200px" />
-        </RigaLettura>
-      </div>
+      {!amministratore && (
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, background: "#F7F4EC", borderRadius: 10, padding: "9px 12px", marginBottom: 15, fontSize: 12.5, color: GRAFITE }}>
+          Sola lettura: le spunte le cambia chi amministra.
+        </div>
+      )}
+      {errore && <div style={{ fontSize: 12.5, color: "#B3261E", marginBottom: 10 }}>Non riesco a salvare: {errore}</div>}
+      {(disallineati.senzaSpunta.length > 0 || disallineati.senzaScheda.length > 0) && (
+        <div style={{ border: "1px solid #B3261E", background: "#FDF1F0", borderRadius: 10, padding: "9px 12px", marginBottom: 15, fontSize: 12.5, color: GRAFITE }}>
+          <b style={{ color: "#B3261E" }}>Qualcosa non torna fra l'elenco dei campi e i riquadri disegnati.</b>
+          {disallineati.senzaSpunta.length > 0 && <div style={{ marginTop: 4 }}>Dichiarati ma non disegnati (nessuno può spuntarli): {disallineati.senzaSpunta.join(", ")}</div>}
+          {disallineati.senzaScheda.length > 0 && <div style={{ marginTop: 4 }}>Disegnati ma non dichiarati (senza stato predefinito): {disallineati.senzaScheda.join(", ")}</div>}
+        </div>
+      )}
 
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.ricevuta}>Dati di vendita</IntestazioneArea>
-        <RigaLettura>
-          <Campo chiave="totale_pattuito" minLabelHeight={34} />
-          <Campo chiave="quota_venditore" minLabelHeight={34} />
-          <Campo chiave="quota_speciale" minLabelHeight={34} />
-        </RigaLettura>
+      {/* I DUE RIQUADRI VERI: lo stesso componente della scheda */}
+      <AreaAnagrafica area={AREA_ALLIEVO} icona={I.persona} {...comuni} />
+      <div style={{ fontSize: 12, color: MUTED, margin: "-8px 0 10px", lineHeight: 1.5, paddingLeft: 2 }}>
+        I dati di fatturazione qui sotto compaiono sulla scheda — e sul modulo — solo scegliendo
+        <b style={{ color: NAVY }}> Azienda</b>. A un privato non vengono nemmeno chiesti; a un'azienda
+        servono tutti, o la fattura non si emette.
       </div>
+      <AreaAnagrafica area={AREA_FATTURAZIONE} icona={I.ricevuta} {...comuni} />
 
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.scatola}>Pacchetto / Kit</IntestazioneArea>
-        <RigaLettura><Campo chiave="pacchetto_kit" /><Campo chiave="tipo_offerta" /></RigaLettura>
-        <RigaLettura><Campo chiave="dermografo" larghezza="1 1 100%" /></RigaLettura>
-      </div>
-
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.calendario}>Presenza al corso</IntestazioneArea>
-        <RigaLettura><Campo chiave="giorni_presenza" larghezza="1 1 100%" /></RigaLettura>
-      </div>
-
-      {[
-        { chiave: "acconto", titolo: "Quota acconto", Icona: I.banconota },
-        { chiave: "precorso", titolo: "Quota pre corso", Icona: I.clipboard },
-      ].map((q) => (
-        <div key={q.chiave} style={pannello}>
-          <IntestazioneArea Icona={q.Icona}>{q.titolo}</IntestazioneArea>
+      {/* IL RESTO DELLA SCHEDA: l'allieva lo legge, non lo compila */}
+      {DA_TRASFERIRE.map((b) => (
+        <div key={b.titolo} style={pannello}>
+          <IntestazioneArea Icona={I[b.icona]}>{b.titolo}</IntestazioneArea>
           <RigaLettura>
-            <Campo chiave={`${q.chiave}_imponibile`} larghezza="1 1 110px" />
-            <Campo chiave={`${q.chiave}_totale`} larghezza="1 1 110px" />
-          </RigaLettura>
-          <RigaLettura>
-            <Campo chiave={`${q.chiave}_pagato_il`} larghezza="1 1 120px" />
-            <Campo chiave={`${q.chiave}_metodo`} larghezza="1 1 150px" />
-            <Campo chiave={`${q.chiave}_pagato`} larghezza="1 1 150px" />
+            {b.chiavi.map((k) => <CampoSpento key={k} chiave={k} />)}
           </RigaLettura>
         </div>
       ))}
 
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.portafoglio}>Da avere al corso</IntestazioneArea>
-        <RigaLettura>
-          <Campo chiave="saldo_imponibile" larghezza="1 1 110px" />
-          <Campo chiave="saldo_totale" larghezza="1 1 110px" />
-          <Campo chiave="saldo_metodo" larghezza="1 1 150px" />
-        </RigaLettura>
+      {/* LE AGGIUNTE: sul modulo dell'allieva servono, nella scheda del
+          venditore non esistono. Per questo stanno qui sotto e non in
+          mezzo ai riquadri della scheda. */}
+      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, margin: "26px 0 12px" }}>
+        Aggiunte per il modulo dell'allieva
+      </div>
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+        Le tre cose che nella scheda del venditore non ci sono: quello che carica lei, la firma, e i testi
+        da leggere. Arrivano dal modulo che era sul sito.
       </div>
 
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.portafoglio}>Pagherà in totale</IntestazioneArea>
-        <RigaLettura>
-          <Campo chiave="totale_senza_iva" minLabelHeight={34} />
-          <Campo chiave="totale_con_interessi" minLabelHeight={34} />
-        </RigaLettura>
-      </div>
-
-      <div style={pannello}>
-        <IntestazioneArea Icona={I.clipboard}>Dati organizzativi</IntestazioneArea>
-        <RigaLettura><Campo chiave="accordi_commerciali" larghezza="1 1 100%" /></RigaLettura>
-        <RigaLettura>
-          <Campo chiave="richiede_modelle" larghezza="1 1 200px" minLabelHeight={34} />
-          <Campo chiave="numero_modelle" larghezza="1 1 120px" minLabelHeight={34} />
-          <Campo chiave="prezzo_speciale_modelle" larghezza="1 1 120px" minLabelHeight={34} />
-        </RigaLettura>
-        <RigaLettura><Campo chiave="taglia_divisa" larghezza="1 1 160px" /></RigaLettura>
-        <RigaLettura><Campo chiave="note" larghezza="1 1 100%" /></RigaLettura>
-      </div>
-
-      {/* Quello che il venditore non ha e chiede l'allieva: resta dal
-          modulo del sito, dove veniva gia' chiesto. */}
       <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
         <IntestazioneArea Icona={I.documento}>Lo compila l'allieva</IntestazioneArea>
-        <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
-          Le uniche cose che in scheda non ci sono. Arrivano dal modulo del sito.
-        </div>
         <RigaLettura>
-          <Campo chiave="doc_tipo" /><Campo chiave="doc_numero" /><Campo chiave="codice_fiscale" />
+          {SUOI.map((k) => <CampoSpento key={k} chiave={k} />)}
         </RigaLettura>
-        <RigaLettura>
-          <Campo chiave="doc_fronte" /><Campo chiave="doc_retro" />
-        </RigaLettura>
-        <div style={{ fontSize: 12.5, color: GRAFITE, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+      </div>
+
+      <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
+        <IntestazioneArea Icona={I.documento}>Firma</IntestazioneArea>
+        <div style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.5 }}>
           <b style={{ color: NAVY }}>{CONSENSI.firmaEtichetta}</b> — sempre presente e non si toglie: senza firma
-          il modulo non vale niente.
+          il modulo non vale niente. Per questo non ha una spunta.
         </div>
       </div>
 
@@ -323,7 +264,7 @@ export default function ModuloIscrizione({ icone = {} }) {
         <IntestazioneArea Icona={I.documento}>Regolamento, privacy e consensi</IntestazioneArea>
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
           {REGOLAMENTO.blocchi.length} punti più l'informativa sul trattamento dei dati e l'autorizzazione alle
-          immagini. Vanno sempre sul modulo.
+          immagini. Vanno sempre sul modulo, e nemmeno questi hanno una spunta.
         </div>
         <Button variant="ghost" onClick={() => setRegolamentoAperto((v) => !v)}>
           {regolamentoAperto ? "Chiudi il regolamento" : "Leggi il regolamento completo"}
