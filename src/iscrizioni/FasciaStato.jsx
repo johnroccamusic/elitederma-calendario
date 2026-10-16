@@ -1,14 +1,16 @@
-// LA FASCIA DELLO STATO: tre pallini collegati, uno acceso.
+// LA FASCIA DELLO STATO: quattro pallini collegati, uno acceso.
 //
 // Sta sulla striscia di ogni iscritto, cosi' si legge senza aprire la
 // scheda — che e' il punto: un'iscrizione ferma in attesa del modulo
 // deve saltare all'occhio scorrendo l'elenco, non dopo tre clic.
 //
 // Il pallino acceso e' quello dello stato attuale, e la linea che ci
-// ARRIVA e' colorata: si vede da dove si e' passati. "Confermato" e'
-// taupe e sta zitto; gli altri due sono ocra e blu, e si vedono.
+// ARRIVA e' colorata: si vede da dove si e' passati. "Dati inseriti" e'
+// grigio e "Confermato" e' taupe, e stanno zitti; i due in mezzo sono
+// ocra e blu, e si vedono — perche' sono quelli in cui si aspetta
+// qualcosa da qualcuno.
 //
-// Su schermo stretto le etichette sparirebbero una sull'altra (tre
+// Su schermo stretto le etichette sparirebbero una sull'altra (quattro
 // parole in fila non stanno in 375 px), quindi resta solo quella del
 // pallino acceso: tanto e' l'unica che serve leggere.
 import React from "react";
@@ -39,10 +41,18 @@ function IconaSpunta({ size = 15, color = "#fff" }) {
     </svg>
   );
 }
-const ICONE = { modulo_inviato: IconaAereo, modulo_ricevuto: IconaFoglio, confermato: IconaSpunta };
+function IconaMatita({ size = 15, color = "#fff" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_ricevuto: IconaFoglio, confermato: IconaSpunta };
 
 export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330 }) {
-  const attuale = STATI[stato] ? stato : "modulo_inviato";
+  const attuale = STATI[stato] ? stato : "dati_inseriti";
   const indice = ORDINE.indexOf(attuale);
   const colore = STATI[attuale].colore;
   const palla = compatto ? 24 : 32;
@@ -111,7 +121,7 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
 // La versione minuscola: una pastiglia con pallino e parola, per quando
 // la fascia intera non ci sta (dentro la scheda, accanto al titolo).
 export function PastigliaStato({ stato }) {
-  const attuale = STATI[stato] ? stato : "modulo_inviato";
+  const attuale = STATI[stato] ? stato : "dati_inseriti";
   const s = STATI[attuale];
   return (
     <span

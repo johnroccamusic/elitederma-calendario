@@ -1,8 +1,17 @@
 // LO STATO DELL'ISCRIZIONE, e l'unico posto che lo cambia.
 //
-// Tre momenti: il venditore precompila e manda il link
-// ("modulo_inviato"), l'allievo compila e firma ("modulo_ricevuto"), e
-// quando c'e' anche l'acconto l'iscrizione e' buona ("confermato").
+// Quattro momenti:
+//   dati_inseriti    la scheda c'e', il venditore ci sta ancora lavorando
+//   modulo_inviato   il modulo e' partito davvero verso l'allieva
+//   modulo_ricevuto  l'allieva ha compilato e firmato
+//   confermato       c'e' anche l'acconto: l'iscrizione e' buona
+//
+// "DATI INSERITI" E' NATO IL 16/10/2026, e prima mancava: la colonna
+// partiva da 'modulo_inviato', quindi ogni iscrizione nuova si
+// presentava dicendo che il modulo era stato mandato. Non era vero —
+// l'invio non esiste ancora — e comunque il venditore inserisce quello
+// che sa e completa dopo i dati che mancano. In quel mentre la scheda
+// c'e' ma non e' partito niente, e deve dirlo.
 //
 // PERCHE' UNA FUNZIONE SOLA. Al modulo ricevuto si arrivera' da due
 // strade — il venditore che carica a mano il foglio firmato, e l'allievo
@@ -14,6 +23,13 @@
 import { supabase } from "../supabase.js";
 
 export const STATI = {
+  dati_inseriti: {
+    chiave: "dati_inseriti",
+    etichetta: "Dati inseriti",
+    colore: "#8C8577",        // grigio caldo: e' il punto di partenza,
+    sfondo: "#EFEBE3",        // non un allarme — si sta lavorando
+    acceso: false,
+  },
   modulo_inviato: {
     chiave: "modulo_inviato",
     etichetta: "Modulo inviato",
@@ -38,11 +54,14 @@ export const STATI = {
 };
 
 // l'ordine in cui si attraversano, per disegnare la fascia
-export const ORDINE = ["modulo_inviato", "modulo_ricevuto", "confermato"];
+export const ORDINE = ["dati_inseriti", "modulo_inviato", "modulo_ricevuto", "confermato"];
 
+// Uno stato sconosciuto o mancante vale "dati_inseriti", il gradino che
+// afferma meno: meglio dire che si sta lavorando che dichiarare partito
+// un modulo che nessuno ha visto.
 export function statoDi(iscritto) {
   const s = iscritto?.stato;
-  return STATI[s] ? s : "modulo_inviato";
+  return STATI[s] ? s : "dati_inseriti";
 }
 
 export function accontoRisultaPagato(iscritto) {
@@ -57,7 +76,7 @@ export function accontoRisultaPagato(iscritto) {
 //   modulo ricevuto + acconto NON pagato-> modulo_ricevuto
 //
 // Quindi un acconto pagato PRIMA del modulo non fa scattare niente:
-// l'iscrizione resta "modulo_inviato" e salta dritta a "confermato"
+// l'iscrizione resta dov'e' e salta dritta a "confermato"
 // quando il modulo arriva. E' il caso descritto dal punto 3, ed e'
 // anche quello che succede piu' spesso.
 //
@@ -67,9 +86,9 @@ export function accontoRisultaPagato(iscritto) {
 // nessuno gli ha mai chiesto. Per questo `decidiStato` si chiama solo
 // sui passaggi — quando il modulo arriva, o quando l'acconto cambia —
 // e mai su tutta la tabella.
-export function decidiStato({ moduloRicevuto, accontoPagato }) {
-  if (!moduloRicevuto) return "modulo_inviato";
-  return accontoPagato ? "confermato" : "modulo_ricevuto";
+export function decidiStato({ moduloInviato, moduloRicevuto, accontoPagato }) {
+  if (moduloRicevuto) return accontoPagato ? "confermato" : "modulo_ricevuto";
+  return moduloInviato ? "modulo_inviato" : "dati_inseriti";
 }
 
 // Il modulo e' arrivato. `origine` dice da quale delle due strade:
@@ -79,6 +98,7 @@ export async function segnaModuloRicevuto(iscritto, origine = "manuale") {
   if (!iscritto?.id) return "Iscritto senza identificativo.";
   if (origine !== "manuale" && origine !== "online") return `Origine non valida: ${origine}`;
   const stato = decidiStato({
+    moduloInviato: !!iscritto.modulo_inviato_il,
     moduloRicevuto: true,
     accontoPagato: accontoRisultaPagato(iscritto),
   });
@@ -109,7 +129,7 @@ export async function aggiornaStatoDopoAcconto(iscritto) {
   if (!iscritto?.id) return null;
   const moduloRicevuto = !!iscritto.modulo_ricevuto_il;
   if (!moduloRicevuto) return null;           // niente modulo, niente da decidere
-  const atteso = decidiStato({ moduloRicevuto, accontoPagato: accontoRisultaPagato(iscritto) });
+  const atteso = decidiStato({ moduloInviato: !!iscritto.modulo_inviato_il, moduloRicevuto, accontoPagato: accontoRisultaPagato(iscritto) });
   if (atteso === statoDi(iscritto)) return null;
   const { data, error } = await supabase.from("iscritti")
     .update({ stato: atteso }).eq("id", iscritto.id).select("id");

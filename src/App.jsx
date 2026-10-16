@@ -32084,7 +32084,22 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // Contabilità classe — adminSbloccato riflette lo sblocco valido per
   // l'intera sessione, non solo la vista "Contabilità classe" di questa
   // singola classe)
-  const soloLettura = !!(modificandoId && !adminSbloccato);
+  // LA SCHEDA SI CHIUDE SOLO A ISCRIZIONE CONFERMATA.
+  //
+  // Prima si bloccava appena salvata: aperta una scheda esistente, per
+  // cambiare una virgola serviva il codice amministratore. Ma il
+  // venditore inserisce quello che sa e completa dopo i dati che
+  // mancano, e costringerlo a chiedere il codice per finire il proprio
+  // lavoro non proteggeva niente — faceva solo girare il codice.
+  //
+  // Da "confermato" in poi invece c'e' il modulo firmato e l'acconto
+  // incassato: li' dentro ci sono un prezzo concordato e un pacchetto,
+  // e si toccano solo con il codice, come prima.
+  //
+  // Le 254 iscrizioni vecchie sono tutte "confermato": per loro non
+  // cambia niente.
+  const iscrittoInModifica = modificandoId ? (iscritti || []).find((x) => x.id === modificandoId) : null;
+  const soloLettura = !!(modificandoId && !adminSbloccato && statoDi(iscrittoInModifica) === "confermato");
 
   // spazi verticali della card "Gestione Iscrizioni", regolabili solo da
   // ruoloUtente "programmatore" trascinando le maniglie dedicate — vedi
