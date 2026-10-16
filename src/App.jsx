@@ -30436,6 +30436,29 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     return () => { vivo = false; };
   }, [modificandoId, invioConferma]);
   const [totalePattuito, setTotalePattuito] = useState("");
+  // COME E' SCRITTO IL TOTALE PATTUITO: "netto" (senza IVA) o "lordo"
+  // (prezzo finale, IVA inclusa).
+  //
+  // QUESTO FLAG NON TOCCA NESSUN IMPORTO. Non somma e non detrae IVA:
+  // registra come il venditore ha pattuito quella cifra, e cambia
+  // l'etichetta del campo. Il numero salvato in `totale_pattuito` e'
+  // esattamente quello digitato, e tutto quello che lo legge — la
+  // commissione del 7%, la copertura delle quote, le statistiche —
+  // continua a fare quello che faceva prima, senza un conto in piu'.
+  //
+  // Dividere per 1,22 al salvataggio sarebbe stato comodo e sbagliato:
+  // significherebbe cambiare da solo un importo concordato con una
+  // persona. Se e quando quei numeri andranno convertiti, lo decidera'
+  // qualcuno guardando questo flag — che da oggi dice, per ogni
+  // iscrizione, in che modo era stato pattuito.
+  //
+  // Da dove parte: una scheda NUOVA prende il predefinito del corso
+  // (`corsi.prezzo_iva_inclusa`: acceso sull'hennè, che si vende a
+  // prezzo finito). Una scheda GIA' ESISTENTE parte sempre da "netto":
+  // tutte quelle fino al 16/10/2026 sono state scritte cosi'.
+  const [modoPattuito, setModoPattuito] = useState("netto");
+  const corsoDiQuestaScheda = (corsi || []).find((x) => x.id === corsoData?.corso_id) || null;
+  const modoDiSerie = corsoDiQuestaScheda?.prezzo_iva_inclusa ? "lordo" : "netto";
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
@@ -31122,6 +31145,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setPacchettoKit(""); setCorsoParziale(false); setGiorniPresenza([]); setTipoOfferta(""); setTagliaDivisa("");
     setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza(""); setEmailIscritto(""); setCodiceFiscale("");
     setDaCompletare([]); setAvvisoQuote("");
+    setModoPattuito(modoDiSerie);   // scheda nuova: come si vende questo corso
     setRichiedeFattura(false); svuotaCampiFattura();
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
@@ -31145,6 +31169,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setCivicoResidenza(i.civico_residenza || ""); setInternoResidenza(i.interno_residenza || "");
     setProvResidenza(i.prov_residenza || ""); setStatoResidenza(i.stato_residenza || "");
     setCodiceFiscale(i.codice_fiscale || "");
+    // le schede fino al 16/10/2026 sono tutte scritte al netto: aprirle
+    // in lordo mostrerebbe 671 dove c'e' scritto 550
+    setModoPattuito(i.totale_pattuito_modo || "netto");
     setDaCompletare([]); setAvvisoQuote("");
     setVecchiaIscrizione(i.vecchia_iscrizione === true);
     setPagAcconto({
@@ -31637,7 +31664,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           : (dermografo || null),
         tipo_offerta: tipoOfferta.trim() || null,
         taglia_divisa: tagliaDivisa || null,
+        // l'importo e' quello digitato, non convertito: il flag qui
+        // accanto dice soltanto come era stato pattuito
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
+        totale_pattuito_modo: modoPattuito,
         quota_speciale: quotaSpeciale === "" ? null : parseNum(quotaSpeciale),
         // se compilata, la quota speciale sostituisce ovunque la quota venditore
         // calcolata al 7%: è quest'unico campo che viene letto in tutta l'app
@@ -32892,11 +32922,38 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
               </div>
               <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
               <div style={{ flex: "1 1 0", minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>Totale pattuito (senza IVA)</div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>
+                  {modoPattuito === "lordo" ? "Totale pattuito (IVA inclusa)" : "Totale pattuito (senza IVA)"}
+                </div>
                 <div style={{ position: "relative" }}>
                   <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
                   {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
                 </div>
+                {/* COME E' SCRITTO QUEL NUMERO. Cambia solo la lettura: in
+                    archivio va sempre l'imponibile, e sotto si vede quanto
+                    fa nell'altro modo, cosi' non si scambia una cifra per
+                    l'altra. */}
+                {!soloLettura && (
+                  <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
+                    {[{ v: "netto", l: "netto senza IVA" }, { v: "lordo", l: "finale IVA inclusa" }].map((o) => {
+                      const scelto = modoPattuito === o.v;
+                      return (
+                        <button
+                          key={o.v} type="button" onClick={() => setModoPattuito(o.v)}
+                          style={{
+                            ...fontBody, flex: 1, minWidth: 0, padding: isMobile ? "4px 2px" : "5px 6px",
+                            borderRadius: 7, cursor: "pointer", fontSize: isMobile ? 8.5 : 10,
+                            fontWeight: 700, lineHeight: 1.15,
+                            background: scelto ? NAVY : "#fff", color: scelto ? "#fff" : MUTED,
+                            border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`,
+                          }}
+                        >
+                          {o.l}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               {adminSbloccato && (
                 <>
