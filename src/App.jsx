@@ -6300,9 +6300,13 @@ const METODI_QUOTA = [
 // Al corso si incassa di persona: niente sito, niente finanziamento.
 const METODI_SALDO = ["POS fisico", "POS dell'app", "Bonifico", "Cash con IVA", "Cash no iva"];
 // quello che si legge nella tendina, dove serve una parola in piu'
+// Il valore salvato resta "Cash no iva" — lo leggono quaranta punti del
+// codice, compreso lo scorporo dell'IVA — ma a schermo si legge
+// "Contanti", che e' come lo chiama chi incassa. La riga sotto e' l'unico
+// posto dove le due cose si incontrano: cambiarla qui cambia ovunque.
 const ETICHETTA_METODO = {
-  "Cash con IVA": "Cash con IVA (fattura)",
-  "Cash no iva": "Cash no IVA",
+  "Cash con IVA": "Contanti con fattura",
+  "Cash no iva": "Contanti",
   "APPago": "APPago (a rate)",
 };
 function etichettaMetodo(m) { return ETICHETTA_METODO[m] || m; }
@@ -6535,7 +6539,7 @@ function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, 
                   "Contanti" in particolare non genera IVA: riscriverlo
                   "Cash con IVA" farebbe nascere imposta che non c'e'. */}
               {valori.metodo && !(opzioniMetodo || METODI_QUOTA).includes(valori.metodo) && (
-                <option value={valori.metodo}>{valori.metodo} (voce non più in uso)</option>
+                <option value={valori.metodo}>{etichettaMetodo(valori.metodo)} (voce non più in uso)</option>
               )}
             </select>
             {onPagato && (
@@ -9059,7 +9063,7 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
       {valori.metodo && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: -4, marginBottom: 10 }}>
           <span style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Pagamento segnalato come</span>
-          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "2px 10px" }}>{valori.metodo}</span>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "2px 10px" }}>{etichettaMetodo(valori.metodo)}</span>
         </div>
       )}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
@@ -9484,7 +9488,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                         {chip(IconaCalendarioCard, "Data corso", valoreCoinvolti(coinvolti, (co) => (co.cd ? fmtDataCompatta(co.cd.data_inizio, co.cd.data_fine) : "—")))}
                         {chip(IconaOrologioCard, "Data pag.", a.data_pagamento ? fmtData(a.data_pagamento) : "—")}
                         {chip(IconaBanconota, "Importo", a.importo != null ? fmtEuroErp(a.importo) : "—")}
-                        {chip(IconaCartaPos, "Metodo", a.metodo || "—")}
+                        {chip(IconaCartaPos, "Metodo", etichettaMetodo(a.metodo) || "—")}
                         {chip(IconaMatitaNota, "Nota", a.nota || "—", { full: true, alta: true, sfondo: NOTA_BG, tondo: "#F1E6D2", coloreIcona: AMBRA })}
                         {chip(
                           IconaGraffetta,
@@ -9580,7 +9584,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                       <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichettaMetodo(a.metodo) || "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{a.nota || "—"}</td>
                       <td style={{ ...celStyle, whiteSpace: "nowrap" }}>
                         {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" style={{ fontSize: 14 }} /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
@@ -12877,7 +12881,7 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
                 <CampoLettura label="Totale" valore={d.dermografo_totale != null ? fmtEuroErp2(d.dermografo_totale) : null} larghezza="1 1 110px" />
               </RigaLettura>
               <RigaLettura>
-                <CampoLettura label="Metodo" valore={d.dermografo_metodo} />
+                <CampoLettura label="Metodo" valore={etichettaMetodo(d.dermografo_metodo)} />
                 <CampoLettura label="Stato" valore={d.dermografo_pagato ? "Pagato" : "Da pagare"} />
               </RigaLettura>
             </>
@@ -48174,7 +48178,7 @@ function PannelloCassaConsulenze() {
             <div key={r.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "auto 1fr auto 28px" : "110px 1fr 110px 120px 32px", gap: 8, alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
               <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: MUTED, whiteSpace: "nowrap" }}>{fmtData(r.data)}</div>
               <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.cliente || "—"}</div>
-              {!isMobile && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{r.metodo || "—"}</div>}
+              {!isMobile && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{etichettaMetodo(r.metodo) || "—"}</div>}
               <div style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>€ {round2(Number(r.importo) || 0)}</div>
               <button onClick={() => elimina(r.id)} title="Elimina incasso" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", fontSize: 15, padding: 0 }}>×</button>
             </div>
@@ -51412,7 +51416,7 @@ function PaginaInserimentoCostiRicavi({
                     <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
                       {g.tipo === "uscita"
                         ? g.righe.map((x) => `${costiSottocategorieById[x.sottocategoria_id]?.nome || costiCategorieById[x.categoria_id]?.nome || "senza categoria"}${x.numero_documento ? ` · doc. ${x.numero_documento}` : ""}`).join("  ·  ")
-                        : g.righe.map((x) => `${x.fase} · ${x.metodo}`).join("  ·  ")}
+                        : g.righe.map((x) => `${x.fase} · ${etichettaMetodo(x.metodo)}`).join("  ·  ")}
                     </div>
                   </div>
                 ))}
