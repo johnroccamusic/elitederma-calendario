@@ -51,6 +51,8 @@ import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import { creaZip, siPuoCondividere } from "./file/zip.js";
 import ModelliEmail from "./email/ModelliEmail.jsx";
 import ModuloIscrizione from "./iscrizione/ModuloIscrizione.jsx";
+import { statoDi, aggiornaStatoDopoAcconto } from "./iscrizioni/stato.js";
+import FasciaStato from "./iscrizioni/FasciaStato.jsx";
 import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
 import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaModelloEmail, valoriCorso as valoriCorsoEmail } from "../supabase/functions/_shared/email.js";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
@@ -30222,11 +30224,19 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false, integrazioneId: null };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
   // L'ACCONTO NASCE PAGATO.
-  // Senza acconto non si entra in aula: un acconto "da pagare" non e' una
-  // cosa che esiste, e' solo una casella che qualcuno si dimentica di
-  // spuntare — e finche' non la spunta quei soldi non compaiono in prima
-  // nota. Resta comunque togliibile a mano, per il caso raro.
-  const [pagAccontoPagato, setPagAccontoPagato] = useState(true);
+  // DA PAGARE, non pagato — cambiato il 16/10/2026.
+  //
+  // Nasceva spuntato perche' l'iscrizione si apriva solo a soldi
+  // ricevuti: la casella era una formalita' e lasciarla vuota voleva dire
+  // non vedere quei soldi in prima nota. Col flusso nuovo non e' piu'
+  // cosi': il venditore precompila l'iscrizione e manda il link PRIMA che
+  // l'allievo paghi, quindi partire da "pagato" segnerebbe incassato
+  // qualcosa che non e' ancora arrivato.
+  //
+  // E' anche la condizione che fa scattare "confermato" (vedi
+  // src/iscrizioni/stato.js): se nascesse gia' spuntata, ogni iscrizione
+  // risulterebbe confermata appena arriva il modulo, pagata o no.
+  const [pagAccontoPagato, setPagAccontoPagato] = useState(false);
   // il giorno in cui acconto e pre corso sono stati incassati (per il
   // bonifico, accreditati): la data con cui entrano in prima nota
   const [pagAccontoIncassatoIl, setPagAccontoIncassatoIl] = useState("");
@@ -30987,7 +30997,9 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setVecchiaIscrizione(false);
-    setPagAcconto(QUOTA_VUOTA); setPagAccontoPagato(true); setPagAccontoIncassatoIl(dataOggiStr()); setAccontoExtra([]);
+    // scheda nuova: acconto DA PAGARE e nessuna data d'incasso — la data
+    // si scrive quando i soldi arrivano davvero, non all'apertura
+    setPagAcconto(QUOTA_VUOTA); setPagAccontoPagato(false); setPagAccontoIncassatoIl(""); setAccontoExtra([]);
     setPagPrecorso(QUOTA_VUOTA); setPagPrecorsoPagato(false); setPagPrecorsoIncassatoIl(""); setPrecorsoExtra([]);
     setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
@@ -31531,6 +31543,16 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             snapshot_iscrizione: { ...fotografia, _fotografata_il: new Date().toISOString(), _fotografata_da: venditoreLoggato.nome || null },
           }).eq("id", idIscritto);
         }
+      }
+
+      // L'acconto appena salvato puo' far scattare la conferma. La regola
+      // non sta qui: sta in src/iscrizioni/stato.js, nella stessa funzione
+      // che userà l'arrivo del modulo — a mano o dal link online. Qui si
+      // rilegge la riga salvata e le si chiede di decidere.
+      if (idIscritto) {
+        const { data: perStato } = await supabase.from("iscritti")
+          .select("id, stato, acconto_pagato, modulo_ricevuto_il").eq("id", idIscritto).maybeSingle();
+        if (perStato) await aggiornaStatoDopoAcconto(perStato);
       }
 
       ricarica(["iscritti", "acconti_da_verificare"]);
@@ -32451,6 +32473,27 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             Riepilogo all'iscrizione
           </button>
         )}
+        {/* Lo stato anche dentro la scheda: chi ci entra dalla notifica o
+            da una ricerca non e' passato dall'elenco e non l'ha visto. */}
+        {modificandoId && (() => {
+          const rec = listaIscritti.find((x) => x.id === modificandoId);
+          if (!rec) return null;
+          return (
+            <div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                Stato dell'iscrizione
+              </div>
+              <FasciaStato stato={statoDi(rec)} compatto={isMobile} larghezzaMax={isMobile ? 280 : 350} />
+              {rec.modulo_ricevuto_il && (
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10 }}>
+                  Modulo ricevuto il {new Date(rec.modulo_ricevuto_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}
+                  {rec.modulo_ricevuto_da === "online" ? " — compilato online dall'allieva" : rec.modulo_ricevuto_da === "manuale" ? " — caricato a mano" : ""}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* La conferma parte solo da qui, a mano: vedi componiMailConferma.
             Usa l'email com'e' scritta nel campo in questo momento, anche se
             non si e' ancora usciti dal campo per salvarla. */}
@@ -33824,6 +33867,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 // e' lunghissimo si accorcia lui invece di spingere il
                 // telefono sotto
                 <div style={{ display: "flex", flexWrap: isMobile ? "wrap" : "nowrap", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 2 : 10 }}>
+                  {/* nome sopra, stato sotto: la fascia deve stare nella
+                      stessa colonna del nome, se no da scrivania finisce in
+                      fila e spinge fuori il telefono */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 7 : 8, minWidth: 0, flex: "1 1 auto" }}>
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per vedere i dati dell'iscritto"
@@ -33856,6 +33903,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       {dermografoAcquistato(i) && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
                       {i.note && <span style={{ fontSize: isMobile ? 13 : 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                     </div>
+                  </div>
+                  <FasciaStato stato={statoDi(i)} compatto={isMobile} larghezzaMax={isMobile ? 260 : 330} />
                   </div>
                   <span style={{ fontSize: isMobile ? 13.5 : 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: isMobile ? 10 : 12, marginLeft: "auto", flexShrink: 0 }}>
                     {i.telefono && (
