@@ -51,6 +51,7 @@ import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import { creaZip, siPuoCondividere } from "./file/zip.js";
 import ModelliEmail from "./email/ModelliEmail.jsx";
 import ModuloIscrizione from "./iscrizione/ModuloIscrizione.jsx";
+import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { statoDi, aggiornaStatoDopoAcconto } from "./iscrizioni/stato.js";
 import FasciaStato from "./iscrizioni/FasciaStato.jsx";
 import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
@@ -4585,26 +4586,9 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
 // fondo azzurro tenue e bordo intonato, così ognuna si stacca dal bianco
 // della scheda. Le caselle dentro restano bianche con un filo appena
 // accennato: sul colore basta il bianco a dire dove si scrive.
-const areaSchedaIscritto = {
-  background: "#FBF6EA",
-  border: `1px solid ${CREAM_BORDER}`,
-  borderLeft: `4px solid ${GOLD}`,
-  borderRadius: 12,
-  padding: 16,
-};
-const campoAreaScheda = { ...inputStyle, background: "#fff", border: "1px solid #E6DFCE", borderRadius: 8 };
 // il titolo in cima a ogni area: icona a sinistra, testo maiuscolo e
 // spaziato. Le icone stanno solo qui — accanto ai metodi di pagamento no,
 // lì bastano i cerchietti
-const titoloAreaScheda = { ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 };
-function IntestazioneArea({ Icona, children }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12, color: GOLD }}>
-      {Icona && <Icona size={18} color={GOLD} />}
-      <span style={titoloAreaScheda}>{children}</span>
-    </div>
-  );
-}
 
 // tendina con ricerca: una <select> nativa va benissimo per dieci voci,
 // ma con 140 fornitori in ordine alfabetico trovare il proprio significa
@@ -12690,24 +12674,7 @@ function datiRiepilogoIscrizione(iscritto) {
 
 // un campo della scheda in sola lettura: stessa etichetta, stessa casella,
 // solo spenta
-function CampoLettura({ label, valore, larghezza = "1 1 140px", minLabelHeight }) {
-  const vuoto = valore == null || valore === "";
-  return (
-    <div style={{ flex: larghezza, minWidth: 0 }}>
-      <Field label={label} minLabelHeight={minLabelHeight}>
-        <input
-          style={{ ...campoAreaScheda, background: "#EDF1F4", color: vuoto ? MUTED : NAVY, fontWeight: 600 }}
-          value={vuoto ? "—" : String(valore)}
-          disabled
-        />
-      </Field>
-    </div>
-  );
-}
 
-function RigaLettura({ children }) {
-  return <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{children}</div>;
-}
 
 // una quota in sola lettura: e' lo stesso BloccoQuota della scheda, con i
 // campi spenti — non una copia somigliante
@@ -19440,7 +19407,11 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
 
       {showModuloIscrizioneModal && (
         <Modal title="Modulo di iscrizione" onClose={() => setShowModuloIscrizioneModal(false)} maxWidth={820}>
-          <ModuloIscrizione />
+          <ModuloIscrizione icone={{
+            persona: IconaPersonaSemplice, ricevuta: IconaRicevutaErp, scatola: IconaScatolaErp,
+            banconota: IconaBanconota, clipboard: IconaClipboardErp, portafoglio: IconaPortafoglio,
+            calendario: IconaCalendarioCard, documento: IconaCatDocumento,
+          }} />
         </Modal>
       )}
 
@@ -30298,6 +30269,13 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [cittaResidenza, setCittaResidenza] = useState("");
   const [indirizzoResidenza, setIndirizzoResidenza] = useState("");
   const [capResidenza, setCapResidenza] = useState("");
+  // civico, interno, provincia e stato: aggiunti il 16/10/2026 perche' la
+  // residenza intera va sul modulo mandato all'allieva, e un indirizzo
+  // senza civico non serve a spedirci niente
+  const [civicoResidenza, setCivicoResidenza] = useState("");
+  const [internoResidenza, setInternoResidenza] = useState("");
+  const [provResidenza, setProvResidenza] = useState("");
+  const [statoResidenza, setStatoResidenza] = useState("");
   const [emailIscritto, setEmailIscritto] = useState("");
   // esito dell'ultimo invio della mail di conferma: { stato: "lavoro" | "ok" | "errore", testo }
   const [invioConferma, setInvioConferma] = useState(null);
@@ -31025,6 +31003,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setNome(i.nome); setCognome(i.cognome); setNote(i.note || "");
     setTutor(i.tutor || ""); setTelefono(i.telefono || "");
     setCittaResidenza(i.citta_residenza || ""); setIndirizzoResidenza(i.indirizzo_residenza || ""); setCapResidenza(i.cap_residenza || ""); setEmailIscritto(i.email || "");
+    setCivicoResidenza(i.civico_residenza || ""); setInternoResidenza(i.interno_residenza || "");
+    setProvResidenza(i.prov_residenza || ""); setStatoResidenza(i.stato_residenza || "");
     setVecchiaIscrizione(i.vecchia_iscrizione === true);
     setPagAcconto({
       imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
@@ -31492,11 +31472,15 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       // residenza (dal modulo, pagina 6) salvata a parte e "best-effort": se
       // le colonne non esistono ancora sul database (migrazione non eseguita),
       // l'errore viene ignorato e NON blocca il salvataggio dell'iscrizione
-      if (idIscritto && (cittaResidenza.trim() || indirizzoResidenza.trim() || capResidenza.trim() || emailIscritto.trim())) {
+      if (idIscritto) {
         await supabase.from("iscritti").update({
           citta_residenza: cittaResidenza.trim() || null,
           indirizzo_residenza: indirizzoResidenza.trim() || null,
           cap_residenza: capResidenza.trim() || null,
+          civico_residenza: civicoResidenza.trim() || null,
+          interno_residenza: internoResidenza.trim() || null,
+          prov_residenza: provResidenza.trim().toUpperCase() || null,
+          stato_residenza: statoResidenza.trim() || null,
           email: emailIscritto.trim().toLowerCase() || null,
         }).eq("id", idIscritto);
       }
@@ -32615,6 +32599,44 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                     <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
                   </div>
                 </div>
+                {/* LA RESIDENZA, subito dopo nome e cognome. Prima questi
+                    dati esistevano solo nel database, riempiti
+                    dall'importazione del modulo del sito: qui non c'era
+                    dove scriverli. Ora si compilano a mano, perche' sono
+                    lo stesso blocco che va sul modulo dell'allieva. */}
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ flex: "3 1 200px" }}>
+                    <Field label="Via"><input value={indirizzoResidenza} onChange={(e) => setIndirizzoResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                  <div style={{ flex: "1 1 90px" }}>
+                    <Field label="Civico"><input value={civicoResidenza} onChange={(e) => setCivicoResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                  <div style={{ flex: "1 1 90px" }}>
+                    <Field label="Interno"><input value={internoResidenza} onChange={(e) => setInternoResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 90px" }}>
+                    <Field label="CAP"><input value={capResidenza} onChange={(e) => setCapResidenza(e.target.value)} onBlur={autosalva} style={campoAreaScheda} /></Field>
+                  </div>
+                  <div style={{ flex: "2 1 150px" }}>
+                    <Field label="Città"><input value={cittaResidenza} onChange={(e) => setCittaResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                  <div style={{ flex: "0 1 90px" }}>
+                    <Field label="Provincia"><input value={provResidenza} maxLength={2} onChange={(e) => setProvResidenza(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                  <div style={{ flex: "1 1 120px" }}>
+                    <Field label="Stato"><input value={statoResidenza} onChange={(e) => setStatoResidenza(e.target.value.toUpperCase())} onBlur={autosalva} placeholder="ITALIA" style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ flex: "2 1 200px" }}>
+                    <Field label="Email"><input value={emailIscritto} onChange={(e) => setEmailIscritto(e.target.value)} onBlur={autosalva} style={campoAreaScheda} /></Field>
+                  </div>
+                  <div style={{ flex: "1 1 150px" }}>
+                    <Field label="Cellulare"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} onBlur={autosalva} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                </div>
                 <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
                   <div style={{ flex: "2 1 140px" }}>
                     <Field label="Tutor">
@@ -32627,9 +32649,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                         )}
                       </select>
                     </Field>
-                  </div>
-                  <div style={{ flex: "2 1 140px" }}>
-                    <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
                   </div>
                   <div style={{ flex: "1 1 130px", marginBottom: 14 }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>

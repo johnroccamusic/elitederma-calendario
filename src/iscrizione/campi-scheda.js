@@ -1,129 +1,89 @@
-// LO SPECCHIO DELLA NOSTRA SCHEDA DI ISCRIZIONE.
+// I CAMPI DEL MODULO DI ISCRIZIONE DEL VENDITORE.
 //
-// Il modulo che va all'allieva non ricalca piu' quello vecchio del sito.
-// Di quello restano soltanto le parti che non sappiamo noi e che lei
-// deve leggere o fornire: il regolamento, l'informativa privacy, i
-// consensi, i documenti d'identita' e la firma. Per tutto il resto —
-// chi e', che corso ha preso, quanto paga — fa fede la scheda che il
-// venditore ha gia' compilato in Genyon.
+// L'elenco serve solo a sapere quali chiavi esistono e come partono: il
+// disegno — quali riquadri, quali righe, in che ordine — sta nel JSX di
+// ModuloIscrizione.jsx, che ricalca il modulo vero riquadro per riquadro.
 //
-// Quindi questo elenco e' la scheda, sezione per sezione, con le
-// etichette che il venditore vede lui: se in scheda c'e' scritto
-// "Pacchetto/Kit", qui c'e' scritto "Pacchetto/Kit". Chi decide cosa
-// mostrare all'allieva non deve tradurre niente.
-//
-// NON CI SONO GLI INGRANAGGI. La scheda salva 64 campi, ma meta' sono
-// roba di servizio — i file dei bonifici, gli imponibili, i flag
-// "segnalato" e "skip" — che su un foglio da far firmare non vogliono
-// dire niente. Se un giorno ne servisse uno, si aggiunge qui.
-//
-// `fonte` dice da dove si prende il valore: "iscritti.x" dalla riga
-// dell'allieva, "corsi_date.x" / "corsi.x" / "location.x" dalla classe.
-
-export const SEZIONI_SCHEDA = [
-  {
-    chiave: "allieva",
-    titolo: "Dati dell'allieva",
-    nota: "Come sono scritti nella scheda, sezione Anagrafica.",
-    campi: [
-      { chiave: "nome", etichetta: "Nome", fonte: "iscritti.nome", predefinito: true },
-      { chiave: "cognome", etichetta: "Cognome", fonte: "iscritti.cognome", predefinito: true },
-      { chiave: "telefono", etichetta: "Numero di telefono", fonte: "iscritti.telefono", predefinito: true },
-      { chiave: "email", etichetta: "Email", fonte: "iscritti.email", predefinito: true },
-      { chiave: "indirizzo_residenza", etichetta: "Indirizzo di residenza", fonte: "iscritti.indirizzo_residenza", predefinito: true },
-      { chiave: "cap_residenza", etichetta: "CAP", fonte: "iscritti.cap_residenza", predefinito: true },
-      { chiave: "citta_residenza", etichetta: "Città di residenza", fonte: "iscritti.citta_residenza", predefinito: true },
-      { chiave: "tutor", etichetta: "Tutor", fonte: "iscritti.tutor", predefinito: true },
-    ],
-  },
-  {
-    chiave: "corso",
-    titolo: "Il corso",
-    nota: "Presi dalla classe a cui l'allieva è iscritta, non riscritti a mano.",
-    campi: [
-      { chiave: "corso_nome", etichetta: "Corso", fonte: "corsi.nome", predefinito: true },
-      { chiave: "corso_data_inizio", etichetta: "Data inizio", fonte: "corsi_date.data_inizio", predefinito: true },
-      { chiave: "corso_data_fine", etichetta: "Data fine", fonte: "corsi_date.data_fine", predefinito: true },
-      { chiave: "corso_citta", etichetta: "Località del corso", fonte: "corsi_date.citta", predefinito: true },
-      { chiave: "corso_indirizzo", etichetta: "Indirizzo della sede", fonte: "corsi_date.indirizzo", predefinito: true },
-      { chiave: "corso_master", etichetta: "Master", fonte: "master.nome", predefinito: false },
-    ],
-  },
-  {
-    chiave: "acquisto",
-    titolo: "Che cosa ha preso",
-    nota: "Sezione Contabili della scheda.",
-    campi: [
-      { chiave: "pacchetto_kit", etichetta: "Pacchetto/Kit", fonte: "iscritti.pacchetto_kit", predefinito: true },
-      { chiave: "tipo_offerta", etichetta: "Tipo di offerta", fonte: "iscritti.tipo_offerta", predefinito: true },
-      { chiave: "dermografo", etichetta: "Dermografo", fonte: "iscritti.dermografo", predefinito: true },
-      { chiave: "taglia_divisa", etichetta: "Taglia divisa", fonte: "iscritti.taglia_divisa", predefinito: true },
-      { chiave: "totale_pattuito", etichetta: "Totale pattuito", fonte: "iscritti.totale_pattuito", predefinito: true },
-      { chiave: "accordi_commerciali", etichetta: "Accordi commerciali", fonte: "iscritti.accordi_commerciali", predefinito: false },
-      { chiave: "note", etichetta: "Note", fonte: "iscritti.note", predefinito: false },
-    ],
-  },
-  {
-    chiave: "pagamenti",
-    titolo: "Pagamenti",
-    nota: "Gli importi come stanno in scheda: sul modulo si leggono, non si cambiano.",
-    campi: [
-      { chiave: "acconto_totale", etichetta: "Acconto", fonte: "iscritti.acconto_totale", predefinito: true },
-      { chiave: "acconto_metodo", etichetta: "Come paga l'acconto", fonte: "iscritti.acconto_metodo", predefinito: true },
-      { chiave: "acconto_pagato_il", etichetta: "Data di pagamento dell'acconto", fonte: "iscritti.acconto_pagato_il", predefinito: true },
-      { chiave: "precorso_totale", etichetta: "Pre-corso", fonte: "iscritti.precorso_totale", predefinito: true },
-      { chiave: "precorso_metodo", etichetta: "Come paga il pre-corso", fonte: "iscritti.precorso_metodo", predefinito: true },
-      { chiave: "saldo_totale", etichetta: "Saldo", fonte: "iscritti.saldo_totale", predefinito: true },
-      { chiave: "saldo_metodo", etichetta: "Come paga il saldo", fonte: "iscritti.saldo_metodo", predefinito: true },
-    ],
-  },
-  {
-    chiave: "fatturazione",
-    titolo: "Fatturazione",
-    nota: "Compaiono solo se in scheda è spuntato «Richiede fattura».",
-    campi: [
-      { chiave: "richiede_fattura", etichetta: "Richiede fattura", fonte: "iscritti.richiede_fattura", predefinito: true },
-      { chiave: "fattura_ditta", etichetta: "Nome ditta", fonte: "iscritti.fattura_ditta", predefinito: true },
-      { chiave: "fattura_indirizzo", etichetta: "Indirizzo", fonte: "iscritti.fattura_indirizzo", predefinito: true },
-      { chiave: "fattura_civico", etichetta: "N. civico", fonte: "iscritti.fattura_civico", predefinito: true },
-      { chiave: "fattura_citta", etichetta: "Città", fonte: "iscritti.fattura_citta", predefinito: true },
-      { chiave: "fattura_prov", etichetta: "Prov.", fonte: "iscritti.fattura_prov", predefinito: true },
-      { chiave: "fattura_cap", etichetta: "Cap", fonte: "iscritti.fattura_cap", predefinito: true },
-      { chiave: "fattura_piva", etichetta: "P.IVA", fonte: "iscritti.fattura_piva", predefinito: true },
-      { chiave: "fattura_cod_dest", etichetta: "Cod. Dest.", fonte: "iscritti.fattura_cod_dest", predefinito: true },
-      { chiave: "fattura_pec", etichetta: "PEC", fonte: "iscritti.fattura_pec", predefinito: true },
-    ],
-  },
-  {
-    chiave: "modelle",
-    titolo: "Modelle",
-    nota: "Sezione Organizzativi della scheda.",
-    campi: [
-      { chiave: "richiede_modelle", etichetta: "Chiede le modelle all'accademia", fonte: "iscritti.richiede_modelle", predefinito: true },
-      { chiave: "numero_modelle", etichetta: "Quante modelle", fonte: "iscritti.numero_modelle", predefinito: true },
-      { chiave: "prezzo_speciale_modelle", etichetta: "Prezzo speciale", fonte: "iscritti.prezzo_speciale_modelle", predefinito: false },
-    ],
-  },
-];
-
-// Quello che l'allieva mette lei, e che noi non abbiamo: resta dal
-// modulo vecchio del sito perche' e' li' che veniva chiesto.
-export const CHIEDE_ALL_ALLIEVA = [
-  { chiave: "doc_tipo", etichetta: "Tipo documento", nota: "Carta di identità, patente o passaporto" },
+// `predefinito: false` vuol dire che parte spento perche' e' roba
+// nostra, non sua: quanto prende il venditore, gli accordi commerciali,
+// le note interne.
+export const CAMPI_MODULO = [
+  // Dati dell'allievo
+  { chiave: "nome", etichetta: "Nome" },
+  { chiave: "cognome", etichetta: "Cognome" },
+  // la residenza per intero, subito dopo nome e cognome: e' il blocco
+  // che va sul modulo dell'allieva, quindi dev'esserci tutto
+  { chiave: "indirizzo_residenza", etichetta: "Via" },
+  { chiave: "civico_residenza", etichetta: "Civico" },
+  { chiave: "interno_residenza", etichetta: "Interno" },
+  { chiave: "cap_residenza", etichetta: "CAP" },
+  { chiave: "citta_residenza", etichetta: "Città" },
+  { chiave: "prov_residenza", etichetta: "Provincia" },
+  { chiave: "stato_residenza", etichetta: "Stato" },
+  { chiave: "email", etichetta: "Email" },
+  { chiave: "telefono", etichetta: "Cellulare" },
+  { chiave: "tutor", etichetta: "Tutor" },
+  { chiave: "richiede_fattura", etichetta: "Richiede fattura" },
+  // Dati di fatturazione
+  { chiave: "fattura_ditta", etichetta: "Nome ditta" },
+  { chiave: "fattura_indirizzo", etichetta: "Indirizzo" },
+  { chiave: "fattura_civico", etichetta: "N. civico" },
+  { chiave: "fattura_citta", etichetta: "Città" },
+  { chiave: "fattura_prov", etichetta: "Prov." },
+  { chiave: "fattura_cap", etichetta: "Cap" },
+  { chiave: "fattura_piva", etichetta: "P.IVA" },
+  { chiave: "fattura_cod_dest", etichetta: "Cod. Dest." },
+  { chiave: "fattura_pec", etichetta: "PEC" },
+  // Il corso
+  { chiave: "corso_nome", etichetta: "Corso" },
+  { chiave: "corso_data_inizio", etichetta: "Data inizio" },
+  { chiave: "corso_data_fine", etichetta: "Data fine" },
+  { chiave: "corso_citta", etichetta: "Località" },
+  { chiave: "corso_indirizzo", etichetta: "Indirizzo della sede" },
+  { chiave: "corso_master", etichetta: "Master", predefinito: false },
+  // Dati di vendita
+  { chiave: "totale_pattuito", etichetta: "Totale pattuito (senza IVA)" },
+  { chiave: "quota_venditore", etichetta: "Quota venditore (7%)", predefinito: false },
+  { chiave: "quota_speciale", etichetta: "Quota speciale", predefinito: false },
+  // Pacchetto / Kit
+  { chiave: "pacchetto_kit", etichetta: "Pacchetto/Kit" },
+  { chiave: "tipo_offerta", etichetta: "Tipo di offerta" },
+  { chiave: "dermografo", etichetta: "Dermografo" },
+  // Presenza al corso
+  { chiave: "giorni_presenza", etichetta: "Corso parziale" },
+  // Quota acconto
+  { chiave: "acconto_imponibile", etichetta: "Imponibile", predefinito: false },
+  { chiave: "acconto_totale", etichetta: "Totale" },
+  { chiave: "acconto_pagato_il", etichetta: "Data" },
+  { chiave: "acconto_metodo", etichetta: "Metodo" },
+  { chiave: "acconto_pagato", etichetta: "Stato (pagato / da pagare)" },
+  // Quota pre corso
+  { chiave: "precorso_imponibile", etichetta: "Imponibile", predefinito: false },
+  { chiave: "precorso_totale", etichetta: "Totale" },
+  { chiave: "precorso_pagato_il", etichetta: "Data" },
+  { chiave: "precorso_metodo", etichetta: "Metodo" },
+  { chiave: "precorso_pagato", etichetta: "Stato (pagato / da pagare)" },
+  // Da avere al corso
+  { chiave: "saldo_imponibile", etichetta: "Imponibile", predefinito: false },
+  { chiave: "saldo_totale", etichetta: "Totale" },
+  { chiave: "saldo_metodo", etichetta: "Metodo" },
+  // Pagherà in totale
+  { chiave: "totale_senza_iva", etichetta: "Totale senza IVA" },
+  { chiave: "totale_con_interessi", etichetta: "Totale con interessi" },
+  // Dati organizzativi
+  { chiave: "accordi_commerciali", etichetta: "Accordi commerciali", predefinito: false },
+  { chiave: "richiede_modelle", etichetta: "Richiede modelle a pagamento?" },
+  { chiave: "numero_modelle", etichetta: "Quante modelle" },
+  { chiave: "prezzo_speciale_modelle", etichetta: "Prezzo speciale", predefinito: false },
+  { chiave: "taglia_divisa", etichetta: "Taglia divisa" },
+  { chiave: "note", etichetta: "Note", predefinito: false },
+  // Quello che mette lei: resta dal modulo del sito
+  { chiave: "doc_tipo", etichetta: "Tipo documento" },
   { chiave: "doc_numero", etichetta: "Numero documento" },
-  { chiave: "codice_fiscale", etichetta: "Codice Fiscale" },
-  { chiave: "doc_fronte", etichetta: "Foto del documento — fronte" },
-  { chiave: "doc_retro", etichetta: "Foto del documento — retro" },
+  { chiave: "codice_fiscale", etichetta: "Codice fiscale" },
+  { chiave: "doc_fronte", etichetta: "Foto documento — fronte" },
+  { chiave: "doc_retro", etichetta: "Foto documento — retro" },
 ];
 
-export const TUTTI_I_CAMPI = SEZIONI_SCHEDA.flatMap((s) => s.campi);
-
-export function etichettaFonte(fonte) {
-  if (!fonte) return null;
-  const [tabella] = String(fonte).split(".");
-  if (tabella === "iscritti") return "dalla scheda dell'allieva";
-  if (tabella === "corsi" || tabella === "corsi_date") return "dalla classe";
-  if (tabella === "location") return "dalla sede";
-  if (tabella === "master") return "dalla master";
-  return fonte;
-}
+export const PER_CHIAVE = Object.fromEntries(CAMPI_MODULO.map((c) => [c.chiave, c]));
+export const SUOI = ["doc_tipo", "doc_numero", "codice_fiscale", "doc_fronte", "doc_retro"];

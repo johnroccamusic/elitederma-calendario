@@ -1,88 +1,32 @@
 // SETTING > MODULO DI ISCRIZIONE.
 //
-// Qui si decide che cosa vedra' l'allieva sul modulo che le arriva.
+// E' il modulo di iscrizione del venditore, riprodotto tale e quale —
+// stessi riquadri crema col bordo oro, stesse righe, stesse etichette —
+// con accanto a ogni voce la spunta che dice se quel campo viene
+// trasferito sul modulo che riceve l'allieva.
 //
-// DA DOVE VIENE IL MODULO. Non piu' da quello vecchio del sito: di
-// quello restano solo le parti che l'allieva deve leggere o fornire —
-// regolamento, informativa privacy, consensi, documento d'identita' e
-// firma. Tutto il resto (chi e', che corso ha preso, quanto paga) e' lo
-// SPECCHIO della scheda che il venditore ha gia' compilato in Genyon,
-// con le stesse etichette che lui vede. Vedi campi-scheda.js.
+// NON E' UNA SOMIGLIANZA: i riquadri, i titoli e i campi sono gli stessi
+// mattoni della scheda vera (src/ui/scheda.jsx). Se un giorno cambia un
+// bordo o un colore nella scheda, cambia anche qui, da solo.
 //
-// IL REGOLAMENTO E' UN TASTO, non nove sottosezioni. Nessuno lo
-// configura e nessuno lo sfoglia da qui: si apre tutto intero quando lo
-// si vuole rileggere, come il consenso delle modelle.
+// Del modulo vecchio del sito resta solo quello che l'allieva deve
+// leggere o fornire: regolamento, privacy, documento e firma.
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
-import { Button } from "../ui/base.jsx";
+import { Button, Field } from "../ui/base.jsx";
+import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea, RigaLettura } from "../ui/scheda.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
 import { SEZIONI, CONSENSI, INTRO } from "./contenuto.js";
-import { SEZIONI_SCHEDA, CHIEDE_ALL_ALLIEVA, TUTTI_I_CAMPI, etichettaFonte } from "./campi-scheda.js";
+import { CAMPI_MODULO, PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { leggiScelte, salvaScelta } from "./campi.js";
 
 const REGOLAMENTO = SEZIONI.find((s) => s.tipo === "testo");
 
-function Apribile({ titolo, sottotitolo, aperto, onToccata, children }) {
-  return (
-    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginBottom: 8, background: "#fff", overflow: "hidden" }}>
-      <button
-        type="button" onClick={onToccata}
-        style={{
-          display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
-          background: aperto ? "#FAF7F1" : "#fff", border: "none", cursor: "pointer",
-          padding: "12px 14px", minHeight: 48,
-        }}
-      >
-        <span style={{ ...fontBody, fontSize: 13, color: MUTED, width: 14, flex: "0 0 14px", transform: aperto ? "rotate(90deg)" : "none" }}>▶</span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, display: "block" }}>{titolo}</span>
-          {sottotitolo && <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{sottotitolo}</span>}
-        </span>
-      </button>
-      {aperto && <div style={{ padding: "4px 14px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>{children}</div>}
-    </div>
-  );
-}
-
-// Una riga = un campo della scheda. A sinistra come si chiama e da dove
-// arriva, a destra l'interruttore. Niente caselle finte da riempire:
-// questa e' la pagina dove si sceglie, non dove si compila.
-function RigaCampo({ campo, incluso, salvando, onCambia }) {
-  return (
-    <div
-      style={{
-        display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-        padding: "9px 2px", borderBottom: `1px solid ${CREAM_BORDER}80`,
-      }}
-    >
-      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: incluso ? NAVY : MUTED, lineHeight: 1.3 }}>
-          {campo.etichetta}
-        </div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
-          {campo.fonte ? etichettaFonte(campo.fonte) : campo.nota || "la scrive l'allieva"}
-        </div>
-      </div>
-      <label
-        style={{
-          display: "flex", alignItems: "center", gap: 7, cursor: "pointer", flex: "0 0 auto",
-          ...fontBody, fontSize: 12, fontWeight: 700,
-          color: incluso ? "#1B7F4C" : MUTED,
-        }}
-      >
-        <input type="checkbox" checked={incluso} disabled={salvando} onChange={() => onCambia(!incluso)} />
-        {incluso ? "Sul modulo" : "Nascosto"}
-      </label>
-    </div>
-  );
-}
-
-export default function ModuloIscrizione() {
+export default function ModuloIscrizione({ icone = {} }) {
   const [scelte, setScelte] = useState({});
   const [errore, setErrore] = useState("");
   const [salvando, setSalvando] = useState("");
   const [chi, setChi] = useState("");
-  const [aperta, setAperta] = useState("allieva");
   const [regolamentoAperto, setRegolamentoAperto] = useState(false);
 
   useEffect(() => {
@@ -95,123 +39,237 @@ export default function ModuloIscrizione() {
     return () => { vivo = false; };
   }, []);
 
-  // Una chiave che non ha ancora una riga nel database vale quello che
-  // dice `predefinito`: cosi' un campo aggiunto al codice compare subito
-  // col suo stato giusto, senza bisogno di andare a scriverlo a mano.
-  function inclusoDi(campo) {
-    const r = scelte[campo.chiave];
+  // Una chiave senza riga nel database vale quello che dice il codice:
+  // cosi' un campo aggiunto domani compare subito col suo stato, senza
+  // che qualcuno debba andare a scriverlo a mano.
+  function acceso(chiave) {
+    const r = scelte[chiave];
     if (r) return r.incluso !== false;
-    return campo.predefinito !== false;
+    return PER_CHIAVE[chiave]?.predefinito !== false;
   }
 
-  async function cambia(campo, valore) {
-    const prima = scelte[campo.chiave];
-    setScelte((s) => ({ ...s, [campo.chiave]: { chiave: campo.chiave, incluso: valore, precompilato_da: campo.fonte || null } }));
-    setSalvando(campo.chiave);
-    const e = await salvaScelta(campo.chiave, { incluso: valore, precompilato_da: campo.fonte || null }, chi);
+  async function cambia(chiave) {
+    const valore = !acceso(chiave);
+    const prima = scelte[chiave];
+    setScelte((s) => ({ ...s, [chiave]: { chiave, incluso: valore } }));
+    setSalvando(chiave);
+    const e = await salvaScelta(chiave, { incluso: valore }, chi);
     setSalvando("");
-    if (e) {
-      setErrore(e);
-      setScelte((s) => ({ ...s, [campo.chiave]: prima }));
-    } else setErrore("");
+    if (e) { setErrore(e); setScelte((s) => ({ ...s, [chiave]: prima })); }
+    else setErrore("");
   }
 
-  const tutti = [...TUTTI_I_CAMPI, ...CHIEDE_ALL_ALLIEVA];
-  const accesi = tutti.filter(inclusoDi).length;
-  const dallaScheda = TUTTI_I_CAMPI.filter(inclusoDi).length;
+  // L'etichetta del campo con la spunta attaccata: e' la "voce" e il suo
+  // flag, uno accanto all'altra, come chiesto.
+  function Etichetta({ chiave }) {
+    const c = PER_CHIAVE[chiave];
+    const on = acceso(chiave);
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <input
+          type="checkbox" checked={on} disabled={salvando === chiave}
+          onChange={() => cambia(chiave)}
+          title={on ? "Va sul modulo dell'allieva" : "Non viene trasferito"}
+          style={{ cursor: "pointer", margin: 0 }}
+        />
+        <span style={{ color: on ? undefined : MUTED, textDecoration: on ? "none" : "line-through" }}>
+          {c?.etichetta || chiave}
+        </span>
+      </span>
+    );
+  }
+
+  // un campo del modulo: l'etichetta con la spunta, e sotto la casella
+  // vuota com'e' sul modulo del venditore
+  function Campo({ chiave, larghezza = "1 1 140px", minLabelHeight }) {
+    return (
+      <div style={{ flex: larghezza, minWidth: 0 }}>
+        <Field label={<Etichetta chiave={chiave} />} minLabelHeight={minLabelHeight}>
+          <input style={{ ...campoAreaScheda, background: acceso(chiave) ? "#fff" : "#F1EEE7" }} value="" disabled readOnly />
+        </Field>
+      </div>
+    );
+  }
+
+  const pannello = { ...areaSchedaIscritto, marginBottom: 15 };
+  const quantiAccesi = CAMPI_MODULO.filter((c) => acceso(c.chiave)).length;
+  const I = icone;
 
   return (
     <div style={{ ...fontBody }}>
       <div style={{
         border: `1px solid ${GOLD}`, background: "#FDF8EF", borderRadius: 12,
-        padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5,
+        padding: "10px 12px", marginBottom: 15, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5,
       }}>
-        Il modulo che riceve l'allieva è lo <b style={{ color: NAVY }}>specchio della scheda di iscrizione</b>:
-        i suoi dati e quelli del corso arrivano già compilati da quello che il venditore ha scritto.
-        Del vecchio modulo del sito restano solo il regolamento, la privacy, il documento e la firma.
-        <div style={{ marginTop: 8, fontWeight: 700, color: NAVY }}>
-          {accesi} camp{accesi === 1 ? "o" : "i"} sul modulo · {dallaScheda} pres{dallaScheda === 1 ? "o" : "i"} dalla scheda
-          {" · "}{CHIEDE_ALL_ALLIEVA.filter(inclusoDi).length} chiest{CHIEDE_ALL_ALLIEVA.filter(inclusoDi).length === 1 ? "o" : "i"} all'allieva
+        Questo è il modulo di iscrizione del venditore. <b style={{ color: NAVY }}>Spunta le voci che vuoi
+        trasferire</b> sul modulo che riceve l'allieva: quelle spuntate le arriveranno già compilate.
+        <div style={{ marginTop: 6, fontWeight: 700, color: NAVY }}>
+          {quantiAccesi} voci su {CAMPI_MODULO.length} vanno sul modulo
+        </div>
+      </div>
+      {errore && <div style={{ fontSize: 12.5, color: "#B3261E", marginBottom: 10 }}>Non riesco a salvare: {errore}</div>}
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.persona}>Dati dell'allievo</IntestazioneArea>
+        <RigaLettura><Campo chiave="nome" /><Campo chiave="cognome" /></RigaLettura>
+        <RigaLettura>
+          <Campo chiave="indirizzo_residenza" larghezza="1 1 200px" />
+          <Campo chiave="civico_residenza" larghezza="0 1 90px" />
+          <Campo chiave="interno_residenza" larghezza="0 1 90px" />
+        </RigaLettura>
+        <RigaLettura>
+          <Campo chiave="cap_residenza" larghezza="0 1 90px" />
+          <Campo chiave="citta_residenza" larghezza="1 1 140px" />
+          <Campo chiave="prov_residenza" larghezza="0 1 80px" />
+          <Campo chiave="stato_residenza" larghezza="1 1 120px" />
+        </RigaLettura>
+        <RigaLettura>
+          <Campo chiave="email" larghezza="1 1 200px" />
+          <Campo chiave="telefono" larghezza="1 1 150px" />
+        </RigaLettura>
+        <RigaLettura><Campo chiave="tutor" larghezza="1 1 180px" /></RigaLettura>
+        <RigaLettura><Campo chiave="richiede_fattura" larghezza="1 1 100%" /></RigaLettura>
+      </div>
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.ricevuta}>Dati di fatturazione</IntestazioneArea>
+        <RigaLettura><Campo chiave="fattura_ditta" larghezza="1 1 100%" /></RigaLettura>
+        <RigaLettura>
+          <Campo chiave="fattura_indirizzo" larghezza="1 1 200px" />
+          <Campo chiave="fattura_civico" larghezza="0 1 110px" />
+        </RigaLettura>
+        <RigaLettura>
+          <Campo chiave="fattura_citta" larghezza="1 1 140px" />
+          <Campo chiave="fattura_prov" larghezza="0 1 90px" />
+          <Campo chiave="fattura_cap" larghezza="0 1 90px" />
+        </RigaLettura>
+        <RigaLettura>
+          <Campo chiave="fattura_piva" /><Campo chiave="fattura_cod_dest" /><Campo chiave="fattura_pec" />
+        </RigaLettura>
+      </div>
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.calendario}>Il corso</IntestazioneArea>
+        <RigaLettura><Campo chiave="corso_nome" larghezza="1 1 100%" /></RigaLettura>
+        <RigaLettura>
+          <Campo chiave="corso_data_inizio" /><Campo chiave="corso_data_fine" /><Campo chiave="corso_master" />
+        </RigaLettura>
+        <RigaLettura>
+          <Campo chiave="corso_citta" larghezza="1 1 140px" />
+          <Campo chiave="corso_indirizzo" larghezza="1 1 200px" />
+        </RigaLettura>
+      </div>
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.ricevuta}>Dati di vendita</IntestazioneArea>
+        <RigaLettura>
+          <Campo chiave="totale_pattuito" minLabelHeight={34} />
+          <Campo chiave="quota_venditore" minLabelHeight={34} />
+          <Campo chiave="quota_speciale" minLabelHeight={34} />
+        </RigaLettura>
+      </div>
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.scatola}>Pacchetto / Kit</IntestazioneArea>
+        <RigaLettura><Campo chiave="pacchetto_kit" /><Campo chiave="tipo_offerta" /></RigaLettura>
+        <RigaLettura><Campo chiave="dermografo" larghezza="1 1 100%" /></RigaLettura>
+      </div>
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.calendario}>Presenza al corso</IntestazioneArea>
+        <RigaLettura><Campo chiave="giorni_presenza" larghezza="1 1 100%" /></RigaLettura>
+      </div>
+
+      {[
+        { chiave: "acconto", titolo: "Quota acconto", Icona: I.banconota },
+        { chiave: "precorso", titolo: "Quota pre corso", Icona: I.clipboard },
+      ].map((q) => (
+        <div key={q.chiave} style={pannello}>
+          <IntestazioneArea Icona={q.Icona}>{q.titolo}</IntestazioneArea>
+          <RigaLettura>
+            <Campo chiave={`${q.chiave}_imponibile`} larghezza="1 1 110px" />
+            <Campo chiave={`${q.chiave}_totale`} larghezza="1 1 110px" />
+          </RigaLettura>
+          <RigaLettura>
+            <Campo chiave={`${q.chiave}_pagato_il`} larghezza="1 1 120px" />
+            <Campo chiave={`${q.chiave}_metodo`} larghezza="1 1 150px" />
+            <Campo chiave={`${q.chiave}_pagato`} larghezza="1 1 150px" />
+          </RigaLettura>
+        </div>
+      ))}
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.portafoglio}>Da avere al corso</IntestazioneArea>
+        <RigaLettura>
+          <Campo chiave="saldo_imponibile" larghezza="1 1 110px" />
+          <Campo chiave="saldo_totale" larghezza="1 1 110px" />
+          <Campo chiave="saldo_metodo" larghezza="1 1 150px" />
+        </RigaLettura>
+      </div>
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.portafoglio}>Pagherà in totale</IntestazioneArea>
+        <RigaLettura>
+          <Campo chiave="totale_senza_iva" minLabelHeight={34} />
+          <Campo chiave="totale_con_interessi" minLabelHeight={34} />
+        </RigaLettura>
+      </div>
+
+      <div style={pannello}>
+        <IntestazioneArea Icona={I.clipboard}>Dati organizzativi</IntestazioneArea>
+        <RigaLettura><Campo chiave="accordi_commerciali" larghezza="1 1 100%" /></RigaLettura>
+        <RigaLettura>
+          <Campo chiave="richiede_modelle" larghezza="1 1 200px" minLabelHeight={34} />
+          <Campo chiave="numero_modelle" larghezza="1 1 120px" minLabelHeight={34} />
+          <Campo chiave="prezzo_speciale_modelle" larghezza="1 1 120px" minLabelHeight={34} />
+        </RigaLettura>
+        <RigaLettura><Campo chiave="taglia_divisa" larghezza="1 1 160px" /></RigaLettura>
+        <RigaLettura><Campo chiave="note" larghezza="1 1 100%" /></RigaLettura>
+      </div>
+
+      {/* Quello che il venditore non ha e chiede l'allieva: resta dal
+          modulo del sito, dove veniva gia' chiesto. */}
+      <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
+        <IntestazioneArea Icona={I.documento}>Lo compila l'allieva</IntestazioneArea>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
+          Le uniche cose che in scheda non ci sono. Arrivano dal modulo del sito.
+        </div>
+        <RigaLettura>
+          <Campo chiave="doc_tipo" /><Campo chiave="doc_numero" /><Campo chiave="codice_fiscale" />
+        </RigaLettura>
+        <RigaLettura>
+          <Campo chiave="doc_fronte" /><Campo chiave="doc_retro" />
+        </RigaLettura>
+        <div style={{ fontSize: 12.5, color: GRAFITE, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <b style={{ color: NAVY }}>{CONSENSI.firmaEtichetta}</b> — sempre presente e non si toglie: senza firma
+          il modulo non vale niente.
         </div>
       </div>
 
-      {errore && <div style={{ fontSize: 12.5, color: "#B3261E", marginBottom: 10 }}>Non riesco a salvare: {errore}</div>}
-
-      {/* Il regolamento: un tasto, come il consenso delle modelle. */}
-      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, marginBottom: 14, background: "#fff" }}>
-        <div style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY }}>Regolamento, privacy e consensi</div>
-        <div style={{ fontSize: 12, color: MUTED, margin: "4px 0 10px", lineHeight: 1.5 }}>
+      <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
+        <IntestazioneArea Icona={I.documento}>Regolamento, privacy e consensi</IntestazioneArea>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
           {REGOLAMENTO.blocchi.length} punti più l'informativa sul trattamento dei dati e l'autorizzazione alle
-          immagini. Vanno sempre sul modulo: sono la ragione per cui si firma.
+          immagini. Vanno sempre sul modulo.
         </div>
         <Button variant="ghost" onClick={() => setRegolamentoAperto((v) => !v)}>
           {regolamentoAperto ? "Chiudi il regolamento" : "Leggi il regolamento completo"}
         </Button>
         {regolamentoAperto && (
-          <div style={{
-            marginTop: 12, maxHeight: 420, overflowY: "auto",
-            border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, background: "#FCFBF8",
-          }}>
+          <div style={{ marginTop: 12, maxHeight: 420, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, background: "#fff" }}>
             <div style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{INTRO.titolo}</div>
             {REGOLAMENTO.blocchi.map((b) => (
               <div key={b.titolo} style={{ marginBottom: 16 }}>
                 <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{b.titolo}</div>
-                {b.punti.map((p, i) => (
-                  <p key={i} style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "8px 0" }}>{p}</p>
-                ))}
+                {b.punti.map((p, i) => <p key={i} style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "8px 0" }}>{p}</p>)}
               </div>
             ))}
-            <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, margin: "18px 0 6px" }}>
-              {CONSENSI.informativaEtichetta}
-            </div>
-            {CONSENSI.informativaTesto.map((p, i) => (
-              <p key={i} style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "8px 0" }}>{p}</p>
-            ))}
-            <p style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "14px 0 0", whiteSpace: "pre-line" }}>
-              {CONSENSI.immaginiTesto}
-            </p>
+            <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, margin: "18px 0 6px" }}>{CONSENSI.informativaEtichetta}</div>
+            {CONSENSI.informativaTesto.map((p, i) => <p key={i} style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "8px 0" }}>{p}</p>)}
+            <p style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, margin: "14px 0 0", whiteSpace: "pre-line" }}>{CONSENSI.immaginiTesto}</p>
           </div>
         )}
       </div>
-
-      {/* Lo specchio della scheda */}
-      {SEZIONI_SCHEDA.map((s) => {
-        const quanti = s.campi.filter(inclusoDi).length;
-        return (
-          <Apribile
-            key={s.chiave} titolo={s.titolo}
-            sottotitolo={`${quanti} di ${s.campi.length} sul modulo`}
-            aperto={aperta === s.chiave}
-            onToccata={() => setAperta(aperta === s.chiave ? null : s.chiave)}
-          >
-            {s.nota && <div style={{ fontSize: 12, color: MUTED, margin: "10px 0", lineHeight: 1.5 }}>{s.nota}</div>}
-            {s.campi.map((c) => (
-              <RigaCampo key={c.chiave} campo={c} incluso={inclusoDi(c)}
-                         salvando={salvando === c.chiave} onCambia={(v) => cambia(c, v)} />
-            ))}
-          </Apribile>
-        );
-      })}
-
-      {/* Quello che non sappiamo noi */}
-      <Apribile
-        titolo="Quello che chiede all'allieva"
-        sottotitolo={`${CHIEDE_ALL_ALLIEVA.filter(inclusoDi).length} di ${CHIEDE_ALL_ALLIEVA.length} sul modulo`}
-        aperto={aperta === "allieva_compila"}
-        onToccata={() => setAperta(aperta === "allieva_compila" ? null : "allieva_compila")}
-      >
-        <div style={{ fontSize: 12, color: MUTED, margin: "10px 0", lineHeight: 1.5 }}>
-          Le uniche cose che il venditore non ha in scheda. Restano dal modulo del sito, dove venivano già chieste.
-        </div>
-        {CHIEDE_ALL_ALLIEVA.map((c) => (
-          <RigaCampo key={c.chiave} campo={c} incluso={inclusoDi(c)}
-                     salvando={salvando === c.chiave} onCambia={(v) => cambia(c, v)} />
-        ))}
-        <div style={{ fontSize: 12, color: GRAFITE, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <b style={{ color: NAVY }}>{CONSENSI.firmaEtichetta}</b> — sempre presente, e non si toglie: senza firma
-          il modulo non vale niente.
-        </div>
-      </Apribile>
     </div>
   );
 }
