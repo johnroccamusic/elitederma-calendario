@@ -48,6 +48,26 @@ export default function ModuloIscrizione({ icone = {} }) {
     return PER_CHIAVE[chiave]?.predefinito !== false;
   }
 
+  // Obbligatorio vuol dire: se il venditore l'ha lasciato vuoto, l'allieva
+  // DEVE riempirlo o non puo' spedire. Non tutti i campi lo sopportano —
+  // l'interno non ce l'hanno tutti, la PEC serve solo a chi fattura — e
+  // per questo si decide campo per campo invece di dedurlo dal vuoto.
+  function obbligatorio(chiave) {
+    const r = scelte[chiave];
+    return r ? r.obbligatorio !== false : true;
+  }
+
+  async function cambiaObbligo(chiave) {
+    const valore = !obbligatorio(chiave);
+    const prima = scelte[chiave];
+    setScelte((s) => ({ ...s, [chiave]: { ...(prima || { chiave, incluso: true }), obbligatorio: valore } }));
+    setSalvando(chiave);
+    const e = await salvaScelta(chiave, { incluso: acceso(chiave), obbligatorio: valore }, chi);
+    setSalvando("");
+    if (e) { setErrore(e); setScelte((s) => ({ ...s, [chiave]: prima })); }
+    else setErrore("");
+  }
+
   async function cambia(chiave) {
     const valore = !acceso(chiave);
     const prima = scelte[chiave];
@@ -75,6 +95,21 @@ export default function ModuloIscrizione({ icone = {} }) {
         <span style={{ color: on ? undefined : MUTED, textDecoration: on ? "none" : "line-through" }}>
           {c?.etichetta || chiave}
         </span>
+        {on && (
+          <span
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); cambiaObbligo(chiave); }}
+            title={obbligatorio(chiave)
+              ? "Obbligatorio: se il venditore lo lascia vuoto, l'allieva deve riempirlo per poter spedire"
+              : "Facoltativo: può restare vuoto e il modulo si spedisce lo stesso"}
+            style={{
+              cursor: "pointer", fontSize: 14, lineHeight: 1,
+              color: obbligatorio(chiave) ? "#B3261E" : CREAM_BORDER,
+              fontWeight: 700, userSelect: "none", paddingLeft: 2,
+            }}
+          >
+            *
+          </span>
+        )}
       </span>
     );
   }
@@ -93,6 +128,7 @@ export default function ModuloIscrizione({ icone = {} }) {
 
   const pannello = { ...areaSchedaIscritto, marginBottom: 15 };
   const quantiAccesi = CAMPI_MODULO.filter((c) => acceso(c.chiave)).length;
+  const quantiObbligatori = CAMPI_MODULO.filter((c) => acceso(c.chiave) && obbligatorio(c.chiave)).length;
   const I = icone;
 
   return (
@@ -103,8 +139,13 @@ export default function ModuloIscrizione({ icone = {} }) {
       }}>
         Questo è il modulo di iscrizione del venditore. <b style={{ color: NAVY }}>Spunta le voci che vuoi
         trasferire</b> sul modulo che riceve l'allieva: quelle spuntate le arriveranno già compilate.
+        <div style={{ marginTop: 6, lineHeight: 1.5 }}>
+          Quello che il venditore ha gia' scritto l'allieva lo legge e basta, non lo puo' cambiare.
+          L'asterisco <b style={{ color: "#B3261E" }}>*</b> accanto a una voce vuol dire che, se il venditore
+          la lascia vuota, lei deve riempirla per poter spedire: toccalo per renderla facoltativa.
+        </div>
         <div style={{ marginTop: 6, fontWeight: 700, color: NAVY }}>
-          {quantiAccesi} voci su {CAMPI_MODULO.length} vanno sul modulo
+          {quantiAccesi} voci su {CAMPI_MODULO.length} vanno sul modulo · {quantiObbligatori} obbligatorie
         </div>
       </div>
       {errore && <div style={{ fontSize: 12.5, color: "#B3261E", marginBottom: 10 }}>Non riesco a salvare: {errore}</div>}

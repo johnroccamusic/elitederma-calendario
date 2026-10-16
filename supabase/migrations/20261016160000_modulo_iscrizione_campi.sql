@@ -36,3 +36,12 @@ create policy "staff autenticato modulo_iscrizione_campi"
 -- 18 dei 24 precompilati dalla scheda, 6 lasciati all'allieva — documento
 -- fronte e retro, tipo e numero del documento, codice fiscale e la scelta
 -- modelle della tricopigmentazione.
+
+-- 16/10/2026: `obbligatorio`. Un campo sul modulo che il venditore ha
+-- lasciato vuoto tocca all'allieva, e senza di lui il modulo non parte.
+-- Ma non tutti i vuoti si possono riempire — l'interno non ce l'hanno
+-- tutti, la PEC serve solo a chi fattura — e se "vuoto" bastasse a
+-- renderli obbligatori chi abita in una villetta non riuscirebbe a
+-- spedire e non capirebbe perche'. Quindi lo si decide campo per campo.
+alter table public.modulo_iscrizione_campi
+  add column if not exists obbligatorio boolean not null default true;
