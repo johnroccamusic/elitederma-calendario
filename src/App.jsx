@@ -30166,6 +30166,21 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // dati di fatturazione: spuntando "Richiede fattura" compaiono i campi
   // sotto; deflaggando spariscono E si azzerano (nessun dato residuo)
   const [richiedeFattura, setRichiedeFattura] = useState(false);
+  // PRIVATO o AZIENDA, dal 16/10/2026. Prima c'era una spunta "Richiede
+  // fattura" e basta, che non diceva a chi la si intesta. Adesso e' una
+  // scelta fra due: privato (nessun dato di fatturazione da chiedere) e
+  // azienda (e allora i dati servono tutti, o la fattura non si emette).
+  //
+  // `richiede_fattura` resta e viene tenuta allineata: la leggono in
+  // diciassette punti, compreso lo scorporo dell'IVA sui contanti, e
+  // toglierla per rifare la stessa cosa con un altro nome avrebbe voluto
+  // dire rimettere mano a tutta la contabilita'.
+  const [tipoCliente, setTipoCliente] = useState("privato");
+  function scegliTipoCliente(valore) {
+    setTipoCliente(valore);
+    setRichiedeFattura(valore === "azienda");
+    if (valore !== "azienda") svuotaCampiFattura();
+  }
   const [fatturaDitta, setFatturaDitta] = useState("");
   const [fatturaIndirizzo, setFatturaIndirizzo] = useState("");
   const [fatturaCivico, setFatturaCivico] = useState("");
@@ -31063,6 +31078,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     });
     setAccordiCommerciali(i.accordi_commerciali || "");
     setRichiedeFattura(i.richiede_fattura === true);
+    setTipoCliente(i.tipo_cliente === "azienda" || i.richiede_fattura === true ? "azienda" : "privato");
     setFatturaDitta(i.fattura_ditta || "");
     setFatturaIndirizzo(i.fattura_indirizzo || "");
     setFatturaCivico(i.fattura_civico || "");
@@ -31226,6 +31242,27 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     // saltare la richiesta spuntando "Ora non ho il file", per caricarlo
     // più tardi ("Da avere al corso" non ha un interruttore pagato/da
     // pagare, quindi non lo richiede mai)
+    // AZIENDA vuol dire fattura, e una fattura senza questi dati non si
+    // emette. Si blocca qui invece di scoprirlo quando la fattura va
+    // rifatta: la partita IVA la si chiede all'allieva adesso, non fra
+    // tre settimane. Il civico resta fuori — ci sono indirizzi che non
+    // ce l'hanno — e fra codice destinatario e PEC ne basta uno, perche'
+    // sono due strade per la stessa cosa.
+    if (tipoCliente === "azienda") {
+      const mancanti = [];
+      if (!fatturaDitta.trim()) mancanti.push("Nome ditta");
+      if (!fatturaPiva.trim()) mancanti.push("P.IVA");
+      if (!fatturaIndirizzo.trim()) mancanti.push("Indirizzo");
+      if (!fatturaCitta.trim()) mancanti.push("Città");
+      if (!fatturaProv.trim()) mancanti.push("Prov.");
+      if (!fatturaCap.trim()) mancanti.push("Cap");
+      if (!fatturaCodDest.trim() && !fatturaPec.trim()) mancanti.push("Cod. Dest. oppure PEC");
+      if (mancanti.length) {
+        setMsg(`Hai scelto Azienda: per emettere la fattura servono ancora ${mancanti.join(", ")}.`);
+        return false;
+      }
+    }
+
     const fileBonificoMancanti = [];
     const serveFileBonifico = (q, pagato) => q.metodo === "Bonifico" && pagato && !q.bonificoFilePath && !q.bonificoFileNuovo && !q.bonificoSkip;
     if (serveFileBonifico(pagAcconto, pagAccontoPagato)) fileBonificoMancanti.push("quota acconto");
@@ -31374,6 +31411,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         saldo_bonifico_file: pathBonificoSaldo,
         accordi_commerciali: accordiCommerciali.trim() || null,
         richiede_fattura: richiedeFattura,
+        tipo_cliente: tipoCliente,
         fattura_ditta: richiedeFattura ? (fatturaDitta.trim() || null) : null,
         fattura_indirizzo: richiedeFattura ? (fatturaIndirizzo.trim() || null) : null,
         fattura_civico: richiedeFattura ? (fatturaCivico.trim() || null) : null,
@@ -32650,15 +32688,26 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       </select>
                     </Field>
                   </div>
-                  <div style={{ flex: "1 1 130px", marginBottom: 14 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>
-                      <input
-                        type="checkbox"
-                        checked={richiedeFattura}
-                        onChange={(e) => { setRichiedeFattura(e.target.checked); if (!e.target.checked) svuotaCampiFattura(); }}
-                      />
-                      Richiede fattura
-                    </label>
+                  <div style={{ flex: "1 1 220px" }}>
+                    <Field label="Intestazione">
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {[{ v: "privato", l: "Privato" }, { v: "azienda", l: "Azienda" }].map((o) => (
+                          <button
+                            key={o.v} type="button"
+                            onClick={() => { scegliTipoCliente(o.v); autosalva(); }}
+                            style={{
+                              ...fontBody, flex: 1, minHeight: 40, borderRadius: 10, cursor: "pointer",
+                              fontSize: 13, fontWeight: 700,
+                              background: tipoCliente === o.v ? NAVY : "#fff",
+                              color: tipoCliente === o.v ? "#fff" : NAVY,
+                              border: `1px solid ${tipoCliente === o.v ? NAVY : CREAM_BORDER}`,
+                            }}
+                          >
+                            {o.l}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
                   </div>
                 </div>
               </div>

@@ -169,11 +169,15 @@ export default function ModuloIscrizione({ icone = {} }) {
           <Campo chiave="telefono" larghezza="1 1 150px" />
         </RigaLettura>
         <RigaLettura><Campo chiave="tutor" larghezza="1 1 180px" /></RigaLettura>
-        <RigaLettura><Campo chiave="richiede_fattura" larghezza="1 1 100%" /></RigaLettura>
+        <RigaLettura><Campo chiave="tipo_cliente" larghezza="1 1 100%" /></RigaLettura>
       </div>
 
       <div style={pannello}>
         <IntestazioneArea Icona={I.ricevuta}>Dati di fatturazione</IntestazioneArea>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
+          Compaiono solo scegliendo <b style={{ color: NAVY }}>Azienda</b>. A un privato non vengono nemmeno
+          chiesti; a un'azienda servono tutti, o la fattura non si emette.
+        </div>
         <RigaLettura><Campo chiave="fattura_ditta" larghezza="1 1 100%" /></RigaLettura>
         <RigaLettura>
           <Campo chiave="fattura_indirizzo" larghezza="1 1 200px" />

@@ -34,9 +34,24 @@ export function campoVuoto(valore) {
 
 // Quali campi deve riempire lei: quelli sul modulo, non bloccati dal
 // venditore e dichiarati obbligatori.
-export function campiDaRiempire(campi, valoriScheda) {
+// Alcuni campi contano solo in un caso: i dati di fatturazione servono
+// se l'intestazione e' "azienda", e a un privato non vanno nemmeno
+// chiesti. `soloSe` dice da quale altra risposta dipendono — e guarda
+// prima quello che ha risposto l'allieva, poi quello che c'era in
+// scheda, perche' la scelta puo' cambiarla lei sul modulo.
+export function condizioneSoddisfatta(campo, valoriScheda, risposte) {
+  if (!campo?.soloSe) return true;
+  const { chiave, valore } = campo.soloSe;
+  const adesso = risposte && !campoVuoto(risposte[chiave]) ? risposte[chiave] : valoriScheda?.[chiave];
+  return adesso === valore;
+}
+
+export function campiDaRiempire(campi, valoriScheda, risposte) {
   return (campi || []).filter(
-    (c) => c.incluso !== false && c.obbligatorio !== false && !campoBloccato(valoriScheda?.[c.chiave]),
+    (c) => c.incluso !== false
+      && c.obbligatorio !== false
+      && condizioneSoddisfatta(c, valoriScheda, risposte)
+      && !campoBloccato(valoriScheda?.[c.chiave]),
   );
 }
 
@@ -44,7 +59,7 @@ export function campiDaRiempire(campi, valoriScheda) {
 // le etichette da mostrare, non le chiavi: il messaggio lo legge una
 // persona.
 export function puoSpedire(campi, valoriScheda, risposte) {
-  const mancanti = campiDaRiempire(campi, valoriScheda)
+  const mancanti = campiDaRiempire(campi, valoriScheda, risposte)
     .filter((c) => campoVuoto(risposte?.[c.chiave]))
     .map((c) => c.etichetta || c.chiave);
   return { puoi: mancanti.length === 0, mancanti };
