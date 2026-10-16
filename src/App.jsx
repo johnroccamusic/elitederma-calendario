@@ -18880,6 +18880,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
   // incassate o sul totale davvero incassato. Vedi il commento nella
   // scheda di iscrizione, dove il flag viene letto.
   const [modSaldoSuTotalePagato, setModSaldoSuTotalePagato] = useState(false);
+  const [modPrezzoIvaInclusa, setModPrezzoIvaInclusa] = useState(false);
   const [modDermografiSicurezza, setModDermografiSicurezza] = useState(false);
   const [vistaCorsiModal, setVistaCorsiModal] = useState("griglia"); // griglia | nuovo | modifica
   const [ricercaCorsi, setRicercaCorsi] = useState("");
@@ -18983,6 +18984,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
     setModPostiCorso(String(c.posti_max));
     setModCategoriaCorso(c.categoria || "");
     setModSaldoSuTotalePagato(!!c.saldo_su_totale_pagato);
+    setModPrezzoIvaInclusa(!!c.prezzo_iva_inclusa);
     setModDermografiSicurezza(!!c.prevede_dermografi_sicurezza);
     const giorniEsistenti = (corsiGiorni || []).filter((g) => g.corso_id === c.id).sort((a, b) => a.numero_giorno - b.numero_giorno);
     setDurataCorsoModifica(giorniEsistenti.length > 0 ? String(giorniEsistenti.length) : "");
@@ -19042,6 +19044,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       posti_max: Number(modPostiCorso) || 10,
       categoria: modCategoriaCorso.trim() || null,
       saldo_su_totale_pagato: modSaldoSuTotalePagato,
+      prezzo_iva_inclusa: modPrezzoIvaInclusa,
       prevede_dermografi_sicurezza: modDermografiSicurezza,
     };
     const { error } = await supabase.from("corsi").update(payload).eq("id", id);
@@ -19402,6 +19405,29 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
                   </select>
                   <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>
                     Riguarda “Restano da pagare” nella scheda di iscrizione. Senza IVA è la regola normale, giusta dove il prezzo pattuito è netto; con IVA serve dove il pattuito è già lordo.
+                  </div>
+                </Field>
+                {/* COME SI PATTUISCE IL PREZZO DI QUESTO CORSO.
+                    Quasi tutti si trattano al netto; l'hennè si vende a
+                    prezzo finito — "550 e basta" — e il venditore deve
+                    poterlo dire invece di dividere per 1,22 a mente.
+
+                    Decide solo da quale dei due flag parte una scheda
+                    NUOVA: non converte niente e non tocca nessun importo,
+                    ne' quelli gia' scritti ne' quelli futuri. Cambiarlo
+                    qui non modifica una sola cifra delle schede esistenti. */}
+                <Field label="Come si pattuisce il prezzo">
+                  <select
+                    style={inputStyle}
+                    value={modPrezzoIvaInclusa ? "lordo" : "netto"}
+                    onChange={(e) => setModPrezzoIvaInclusa(e.target.value === "lordo")}
+                  >
+                    <option value="netto">Prezzo netto senza IVA</option>
+                    <option value="lordo">Prezzo finale IVA inclusa</option>
+                  </select>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>
+                    È solo il punto di partenza del flag in "Dati di vendita": su ogni singola iscrizione il venditore
+                    può cambiarlo. Non converte importi — né quelli già registrati, né quelli nuovi.
                   </div>
                 </Field>
                 {/* I dermografi di riserva sono i pezzi piu' costosi del
