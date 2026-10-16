@@ -6,9 +6,15 @@
 // scorrimento una dentro l'altra. Qui invece si scorre come si scorre
 // una pagina.
 //
-// Due linguette:
+// Tre linguette:
 //   I campi      quali voci della scheda vanno sul modulo dell'allieva
 //   Il contratto regolamento, privacy e consensi, da leggere e correggere
+//   La mail      il testo che accompagna il modulo quando glielo si manda
+//
+// La mail sta QUI e non in Setting > Modelli email, dove pure si
+// potrebbe scrivere: chi prepara il modulo pensa al modulo, e la lettera
+// che lo accompagna e' parte di quello. Andarla a cercare in un'altra
+// pagina voleva dire dimenticarsela.
 //
 // Si decide qui, una volta per tutti, quali campi della scheda di
 // iscrizione finiscono sul modulo che riceve l'allieva.
@@ -43,6 +49,29 @@ import { leggiScelte, salvaScelta } from "./campi.js";
 import { AreaAnagrafica } from "./AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, CHIAVI_ANAGRAFICHE, GRUPPI_LETTURA as DA_TRASFERIRE } from "./disposizione.js";
 import TestoContratto from "./TestoContratto.jsx";
+import ModelliEmail from "../email/ModelliEmail.jsx";
+import { componiMailModulo, linkModulo } from "../iscrizioni/invio.js";
+import { valoriCorso } from "../../supabase/functions/_shared/email.js";
+
+// L'ANTEPRIMA DELLA MAIL, con la stessa funzione che la compone quando
+// parte per davvero: se fossero due scritture, un giorno l'anteprima
+// mostrerebbe una mail e l'allieva ne riceverebbe un'altra.
+//
+// Il link e' quello vero dell'iscritta scelta nell'anteprima, cosi' si
+// vede quanto e' lungo in mezzo al testo — che e' la cosa che si sbaglia
+// a immaginare scrivendo.
+function anteprimaMailModulo({ nome, corso, corsoData, loc, token, modello }) {
+  const valori = valoriCorso({
+    nome,
+    nomeCorso: corso?.nome,
+    dataInizio: corsoData?.data_inizio,
+    dataFine: corsoData?.data_fine,
+    citta: corsoData?.citta || loc?.citta || loc?.nome,
+    sede: loc?.nome_sede,
+    indirizzo: corsoData?.indirizzo || loc?.indirizzo,
+  });
+  return componiMailModulo({ valori, link: linkModulo(token || "IL-GETTONE-DI-QUESTA-ISCRIZIONE"), modello });
+}
 
 
 export default function ModuloIscrizione({ icone = {}, amministratore = true, onBack, titolo = "Modulo di iscrizione" }) {
@@ -176,6 +205,7 @@ export default function ModuloIscrizione({ icone = {}, amministratore = true, on
   const LINGUETTE = [
     { chiave: "campi", etichetta: "I campi del modulo" },
     { chiave: "contratto", etichetta: "Il contratto" },
+    { chiave: "mail", etichetta: "La mail che lo accompagna" },
   ];
 
   return (
@@ -207,6 +237,31 @@ export default function ModuloIscrizione({ icone = {}, amministratore = true, on
 
       {linguetta === "contratto" && (
         <TestoContratto Icona={I.documento} amministratore={amministratore} />
+      )}
+
+      {/* E' lo stesso editor di Setting > Modelli email, bloccato sul
+          modello "invio_modulo": una seconda schermata che scrive nella
+          stessa riga sarebbe il modo di avere due testi diversi con lo
+          stesso nome. */}
+      {linguetta === "mail" && (
+        <>
+          <div style={{
+            border: `1px solid ${GOLD}`, background: "#FDF8EF", borderRadius: 12,
+            padding: "10px 12px", marginBottom: 15, fontSize: 12.5, color: GRAFITE, lineHeight: 1.55,
+          }}>
+            È la lettera che l'allieva riceve <b style={{ color: NAVY }}>insieme al link del modulo</b>, quando
+            si preme «Invia modulo» sulla sua scheda.
+            <div style={{ marginTop: 6 }}>
+              Il segnaposto <b style={{ color: NAVY }}>{"{link}"}</b> è l'indirizzo del modulo. Mettilo dove
+              vuoi: se te ne dimentichi viene aggiunto in fondo lo stesso — una mail che dice «compila qui»
+              senza dire dove non servirebbe a niente.
+            </div>
+            <div style={{ marginTop: 6, color: MUTED }}>
+              Finché non scrivi niente parte il testo di serie, quello scritto nel codice.
+            </div>
+          </div>
+          <ModelliEmail soloChiave="invio_modulo" componi={anteprimaMailModulo} />
+        </>
       )}
 
       {linguetta === "campi" && <>

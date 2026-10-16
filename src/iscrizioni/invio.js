@@ -16,13 +16,38 @@
 import { supabase } from "../supabase.js";
 import { componiDaModello, modelloUsabile, valoriCorso } from "../../supabase/functions/_shared/email.js";
 
+// LA MAIL DEL MODULO, composta una volta sola.
+//
+// La usa l'invio vero e la usa l'anteprima in Impostazioni: se fossero
+// due scritture, un giorno l'anteprima mostrerebbe una mail e l'allieva
+// ne riceverebbe un'altra.
+export function componiMailModulo({ valori, link, modello = null }) {
+  if (modelloUsabile(modello)) {
+    const mail = componiDaModello(modello, { valori: { ...valori, link }, righe: [] });
+    // IL LINK DEVE ESSERCI COMUNQUE. Se chi scrive il testo si dimentica
+    // il segnaposto {link}, la mail arriverebbe senza il modulo: una
+    // lettera che dice "compila qui" e non dice dove.
+    if (!String(mail.testo || "").includes(link)) {
+      mail.testo = `${mail.testo}\n\n${link}`;
+      mail.html = `${mail.html}<p><a href="${link}">${link}</a></p>`;
+    }
+    return mail;
+  }
+  const d = diSerie({ valori, link });
+  return {
+    oggetto: d.oggetto,
+    testo: d.testo,
+    html: d.testo.split("\n").map((r) => (r ? `<p>${r}</p>` : "")).join(""),
+  };
+}
+
 export function linkModulo(token) {
   const base = typeof window !== "undefined" ? window.location.origin : "";
   return `${base}/?modulo=${token}`;
 }
 
 // il testo di serie, quello che parte se nessuno ne ha scritto uno
-function diSerie({ valori, link }) {
+export function diSerie({ valori, link }) {
   const oggetto = `Il tuo modulo di iscrizione — ${valori.corso}`;
   const testo = [
     `Ciao ${valori.nome},`,
@@ -70,19 +95,7 @@ export async function inviaModulo({ iscritto, corso, corsoData, loc, chi = "" })
   const { data: riga } = await supabase
     .from("email_modelli").select("*").eq("chiave", "invio_modulo").maybeSingle();
 
-  let mail;
-  if (modelloUsabile(riga)) {
-    mail = componiDaModello(riga, { valori: { ...valori, link }, righe: [] });
-    // il link deve esserci comunque: se chi ha scritto il modello si e'
-    // dimenticato il segnaposto, la mail arriverebbe senza il modulo
-    if (!String(mail.testo || "").includes(link)) {
-      mail.testo = `${mail.testo}\n\n${link}`;
-      mail.html = `${mail.html}<p><a href="${link}">${link}</a></p>`;
-    }
-  } else {
-    const d = diSerie({ valori, link });
-    mail = { oggetto: d.oggetto, testo: d.testo, html: d.testo.split("\n").map((r) => r ? `<p>${r}</p>` : "").join("") };
-  }
+  const mail = componiMailModulo({ valori, link, modello: riga });
 
   const { data, error } = await supabase.functions.invoke("invia-email", {
     body: { a: destinatario, oggetto: mail.oggetto, html: mail.html, testo: mail.testo },

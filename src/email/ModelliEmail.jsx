@@ -29,8 +29,12 @@ const riquadro = {
   border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, background: "#fff",
 };
 
-export default function ModelliEmail({ componi }) {
-  const [chiave, setChiave] = useState(MODELLI[0].chiave);
+// `soloChiave` lo blocca su un modello e nasconde il selettore: serve a
+// Impostazioni > Modulo di iscrizione, dove la mail che accompagna il
+// modulo si scrive li' accanto a tutto il resto del modulo invece che in
+// un'altra pagina.
+export default function ModelliEmail({ componi, soloChiave = null }) {
+  const [chiave, setChiave] = useState(soloChiave || MODELLI[0].chiave);
   const modello = MODELLI.find((m) => m.chiave === chiave) || MODELLI[0];
 
   const [oggetto, setOggetto] = useState("");
@@ -84,7 +88,7 @@ export default function ModelliEmail({ componi }) {
   useEffect(() => {
     let vivo = true;
     supabase.from("iscritti")
-      .select("id, nome, cognome, email, corso_data_id")
+      .select("id, nome, cognome, email, corso_data_id, token_modulo")
       .not("email", "is", null).not("corso_data_id", "is", null)
       .order("ts", { ascending: false }).limit(40)
       .then(({ data }) => {
@@ -104,14 +108,14 @@ export default function ModelliEmail({ componi }) {
     if (!isc) { setContesto(null); return; }
     (async () => {
       const { data: cd } = await supabase.from("corsi_date").select("*").eq("id", isc.corso_data_id).maybeSingle();
-      if (!cd) { if (vivo) setContesto({ nome: isc.nome, corso: null, corsoData: null, loc: null }); return; }
+      if (!cd) { if (vivo) setContesto({ nome: isc.nome, corso: null, corsoData: null, loc: null, token: isc.token_modulo || null }); return; }
       const [{ data: co }, { data: lo }] = await Promise.all([
         supabase.from("corsi").select("*").eq("id", cd.corso_id).maybeSingle(),
         cd.location_id
           ? supabase.from("location").select("*").eq("id", cd.location_id).maybeSingle()
           : Promise.resolve({ data: null }),
       ]);
-      if (vivo) setContesto({ nome: isc.nome, corso: co || null, corsoData: cd, loc: lo || null });
+      if (vivo) setContesto({ nome: isc.nome, corso: co || null, corsoData: cd, loc: lo || null, token: isc.token_modulo || null });
     })();
     return () => { vivo = false; };
   }, [iscrittoId, iscritti]);
@@ -180,7 +184,7 @@ export default function ModelliEmail({ componi }) {
         che mancano. Scrivendoli a mano, la punteggiatura attorno a un segnaposto vuoto resta scritta.
       </div>
 
-      {MODELLI.length > 1 && (
+      {MODELLI.length > 1 && !soloChiave && (
         <Field label="Modello">
           <select style={inputStyle} value={chiave} onChange={(e) => setChiave(e.target.value)}>
             {MODELLI.map((m) => <option key={m.chiave} value={m.chiave}>{m.titolo}</option>)}
